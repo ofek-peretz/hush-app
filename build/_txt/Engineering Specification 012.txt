@@ -1,0 +1,140 @@
+
+Engineering Specification 012
+Trust Measurement Framework v1
+Purpose
+Answer one question: how do we know Hush has earned the right to decide for an athlete? This spec defines trust as a measurable construct that cannot collapse to acceptance, distinguishes earned trust from passive compliance, and replaces the invalid North Star.
+Source of Truth
+Founder Package, ES-001 through ES-011. This spec explicitly invalidates and replaces metrics from prior specs (Section H).
+Core Principle
+Principle #61. Trust is revealed at the moment of costly compliance. An athlete who follows an easy recommendation tells you nothing; an athlete who follows a load decrease, or holds when they wanted more, after the system has been accurate — that is the only behavior that distinguishes trust from indifference.
+
+PART A — Trust Definition
+A.1 — What trust is
+Trust is the athlete's demonstrated deference in costly cases, conditioned on system accuracy. It is a joint construct over two parties: the system must be trustworthy (accurate) AND the athlete must defer (comply where it's hard). Either alone is not trust.
+A.2 — What trust is not
+Not acceptance — maximized by indifference and by a do-nothing recommender.
+Not compliance — compliance without accuracy is gullibility.
+Not reduced overrides — some overrides are productive and teach the model (ES-010).
+Not prediction accuracy alone — an accurate oracle nobody follows has earned nothing. Trust is the conjunction: accuracy × costly-deference.
+A.3 — Trust as a measurable construct
+Trust = Trustworthiness × CostlyDeference × DiscernmentRetained
+Trustworthiness = the system's de-biased prediction accuracy (ES-005.1, fatigue-adjusted ES-011) — did it deserve to be followed?
+CostlyDeference = compliance rate specifically on hard recommendations (decreases, holds-against-desire, counterintuitive) — did they follow when it was hard?
+DiscernmentRetained = evidence the athlete is still evaluating, not blindly executing (Section C.4) — are they following because it works, not because they quit? The product form is deliberate: trust collapses to zero if any factor is zero. A blindly-compliant athlete (DiscernmentRetained → 0) scores zero trust even at 100% acceptance. This is the structural defense against passive compliance.
+A.4 — Trust failure
+Trust fails when: costly recommendations are systematically overridden (deference gone), OR accuracy degrades while compliance persists (the athlete is being misled and doesn't know — the most dangerous failure), OR discernment collapses to pure automaticity with no retained evaluation (learned helplessness). The middle case is the one acceptance metrics can never catch and the one this framework exists to detect.
+
+PART B — Trust Signals
+For each signal: what it measures / strengths / weaknesses / failure modes.
+Recommendation Acceptance — fraction followed without LOAD_OVERRIDE (ES-010). Strength: cheap, continuous. Weakness: maximized by indifference and by conservative collapse. Failure mode: passive compliance reads as success. Demoted from North Star.
+Costly-Case Compliance — acceptance restricted to DECREASE_LOAD and hold-against-desire recommendations. Strength: the single highest-signal trust measure; can't be gamed by indifference because indifferent users also reject hard asks. Weakness: sparse (decreases are rare by design). Failure mode: small denominator → noisy early. The new core signal.
+Override Direction & Productivity — of overrides that occur, what fraction were wrong (athlete did worse than the recommendation predicted) vs productive (taught the model, ES-010). Strength: separates distrust from sophistication. Weakness: requires counterfactual estimate of what the recommendation would have yielded. Failure mode: if you can't estimate the counterfactual, productive and destructive overrides blur.
+Voluntary Adoption — athlete uses a recommendation feature without prompting (e.g. accepts an equipment-busy replacement rather than searching). Strength: unprompted behavior is hard to fake. Weakness: low frequency.
+Session Completion — completed/started (ES-009.1 adherence). Strength: robust adherence proxy. Weakness: confounded by life, not just trust. Failure mode: attributing life-driven dropout to trust loss.
+Consistency / Return — 8-week retention (Founder Ch9). Strength: the ultimate revealed preference. Weakness: slow, survivorship-biased. Failure mode: survivors' rising acceptance mistaken for growing trust when distrustful users simply left.
+Recovery Compliance — does the athlete accept fatigue-driven holds/decreases (ES-011)? Strength: a pure costly-deference signal — accepting "do less" is maximally counterintuitive. Weakness: only present when fatigue is detected. Failure mode: none significant; this is one of the cleanest signals.
+Voluntary Progression Restraint — does the athlete stop adding load beyond prescription once they trust the system's pacing (ES-010 VOLUNTARY_PROGRESSION declining over time)? Strength: trust in the system's restraint is rare and high-signal. Weakness: ambiguous early (could be disengagement).
+Discernment Signals — override variance, response latency to surprising recommendations, occasional productive disagreement. Strength: the only signals that detect blind compliance. Weakness: indirect, must be inferred. Failure mode: hard to distinguish "thoughtful and agreeing" from "not thinking."
+
+PART C — Trust Score
+C.1 — Components
+TrustScore = Trustworthiness^a · CostlyDeference^b · DiscernmentRetained^c
+Multiplicative (geometric), not additive — so no component can be compensated by another, and any zero zeroes the score. This is what prevents collapse to acceptance.
+Trustworthiness = de-biased, fatigue-adjusted prediction accuracy over the recent window (Part D.1). Uses ES-011's fatigue-removed S_obs_clean and ES-005.1 §4's effort_offset removal, so it measures the model, not the athlete's stopping point or recovery state.
+CostlyDeference = compliance on hard recommendations (decreases, holds-against-desire, recovery holds), Laplace-smoothed for sparsity.
+DiscernmentRetained = a penalty term that drops when override behavior becomes pathologically uniform (zero variance, instant acceptance of even large surprising changes) — the signature of blind following.
+C.2 — Weighting
+Exponents a, b, c weight the factors; default a=b=1, c smaller (discernment is a guardrail, not the main signal). CostlyDeference and Trustworthiness are co-equal and dominant — trust is accuracy times hard-compliance. Acceptance rate appears nowhere directly; it only enters as a denominator inside CostlyDeference's restriction to hard cases.
+C.3 — Confidence
+The TrustScore carries its own confidence, low when costly-case events are sparse (early, few decreases observed). Trust confidence rises as the athlete accumulates hard recommendation events — not merely sessions. A user with 50 easy sessions and zero decreases has a low-confidence trust score, correctly: we've never seen them tested.
+C.4 — Detecting blind compliance (the explicit requirement)
+DiscernmentRetained falls toward zero when: override rate → 0 AND acceptance includes large, surprising, or counterintuitive changes accepted with no latency and no variance. A discerning truster occasionally pauses, occasionally disagrees-and-is-right. A blind follower accepts everything uniformly. The score treats uniform total acceptance as suspicious, not ideal — directly inverting the Founder Package's stated success definition where it's wrong.
+C.5 — Update frequency
+TrustScore updates per session (cheap signals) with the costly-deference and discernment components recomputed only when a hard event occurs. Slow-moving by design — trust, like capability (ES-008 v2), should not swing on single events.
+
+PART D — Validation Framework
+D.1 — Prediction Quality
+De-biased prediction error: actual_reps − predicted_reps_to_failure, after removing effort_offset (ES-005.1 §4) and fatigue (ES-011). Replaces raw prediction error, which conflates model quality with effort and recovery. Report the de-biased series; it is the only honest model-quality signal.
+D.2 — Recommendation Quality
+Not "was it accepted" but "was it right": for accepted recommendations, did the outcome match the prediction; for overridden ones, did the override outperform the recommendation (counterfactual via ES-005.1 forward model). A recommendation can be accepted and wrong, or rejected and right — both are measured.
+D.3 — Learning Quality
+Does confidence rise for the right reason? Track whether confidence growth is accompanied by falling de-biased error (real learning) vs confidence rising while error is flat (false confidence) vs error falling only because capability variance collapsed (variance regression, not learning — flagged at ES-005.1). Learning quality = confidence growth conditional on error reduction conditional on sustained capability movement.
+D.4 — Trust Quality
+The TrustScore (Part C) and its trajectory, segmented by costly-case events. Trust quality is rising costly-deference with rising trustworthiness with retained discernment.
+D.5 — What success looks like
+1 week: not high accuracy — high completion and low failure-on-first-rep (ES-003/008 v2 conservative seeds working). Prediction error high and that's correct. Trust score low-confidence. Success = the athlete returns and didn't get hurt or humiliated.
+4 weeks: de-biased error declining; first costly-deference events appearing; calibration complete (confidence ≥ 70, ES-008 v2). Success = the model is measurably learning and the first hard recommendations are being followed.
+8 weeks: TrustScore rising with confidence; costly-case compliance clearly above an indifferent-user baseline; discernment retained. This is the Founder Package's headline window — success = trust is rising for the right reasons, not acceptance rising for any reason.
+12 weeks: TrustScore stable-high, retention strong, and critically — the model has correctly handled at least one decrease and one fatigue hold per athlete with compliance. Success = the system has been tested on hard calls and passed.
+
+PART E — False Positives & Safeguards
+Acceptance high, trust low (passive compliance / conservative collapse): Safeguard — DiscernmentRetained zeroes the score; conservative collapse is caught by D.3 (confidence not rising with learning) and by monitoring KEEP_LOAD fraction — a recommender that only holds is flagged.
+Trust high, acceptance low (productive disagreement): Safeguard — Override Productivity (Part B) credits overrides that taught the model; the TrustScore rises from sophisticated disagreement rather than falling. This is the explicit fix for the metric punishing the best users.
+Prediction error decreases but recommendations poor (variance regression, or error dropping while recommender does nothing useful): Safeguard — D.3 requires error reduction to coincide with sustained capability movement; flat-capability error collapse is not credited as learning.
+Recommendations accepted but outcomes worsen (the most dangerous — athlete misled and complying): Safeguard — Trustworthiness (de-biased accuracy) is a required multiplicative factor. If accuracy degrades, TrustScore falls even as acceptance stays high. This is the case acceptance metrics structurally cannot catch and the central reason the score is multiplicative. Additionally, an outcome-divergence monitor: if accepted-recommendation outcomes drift from predictions, raise an alarm independent of acceptance.
+
+PART F — Experimental Design (10–100 athletes, no RCT)
+F.1 — Baseline
+You cannot run a clean control arm at this N, but you must have a counterfactual or acceptance proves nothing (my original critique). Use a within-athlete baseline: a deterministic, non-learning progression policy (fixed linear progression with the same conservative seeds, ES-008 v2). For each recommendation, compute what the baseline would have recommended and what it would have predicted, via the ES-005.1 forward model. No athlete trains on the baseline; it's a shadow.
+F.2 — Comparison policy
+Hush vs its own shadow baseline, per athlete: does Hush's de-biased prediction error beat the non-learning baseline's? Does Hush's costly-deference exceed what a static policy would earn? The model must beat the dumb policy on accuracy — if a fixed linear progression predicts as well as Hush, Hush has learned nothing, regardless of acceptance.
+F.3 — Evaluation window
+Two phases mirroring Founder Ch9: Phase 1 (10–20 athletes, 8 weeks, qualitative + trust-score trajectory), Phase 2 (50–100, 8–12 weeks, quantitative). The first ~4 weeks are calibration (ES-003) and judged on safety/completion, not accuracy.
+F.4 — Stopping criteria (success)
+Stop and declare validation when, across Phase 2: de-biased error beats shadow baseline with margin; TrustScore rises with confidence and retained discernment; costly-case compliance exceeds indifferent-baseline; retention ≥ target. Crucially — at least one decrease and one fatigue-hold per athlete handled with compliance. Trust untested on hard cases is not validated.
+F.5 — Failure criteria
+Fail when: de-biased error does not beat the shadow baseline (no learning); OR TrustScore is high but driven by acceptance with collapsed discernment (passive compliance, not trust); OR costly-case compliance stays at indifferent-baseline (athletes defer on easy calls only); OR accuracy degrades while acceptance persists (dangerous compliance). Note: raw acceptance staying flat is not a failure criterion — it was the wrong target.
+
+PART G — Auditability
+G.1 — Trust audit chain
+TrustScore
+   → component (Trustworthiness | CostlyDeference | DiscernmentRetained)
+   → the specific recommendations counted (decision_type, was it a hard case, ES-006/011 reason)
+   → the overrides and their productivity (ES-010 override_type + counterfactual)
+   → the underlying de-biased observations (ES-011 fatigue-adjusted, ES-005.1 effort-adjusted)
+   → the decisions those observations drove
+Every trust conclusion decomposes to specific sessions, specific recommendations, specific costly-case events, and the de-biased observations behind them. A claim like "this athlete's trust is rising" must resolve to: which hard recommendations they complied with, that the system was accurate on, while retaining discernment. A TrustScore that cannot be decomposed this way is invalid (ES-006 audit-chain rule, extended to trust).
+
+PART H — Invalidated Metrics (explicit replacements)
+Spec
+Invalid metric
+Why
+Replacement
+Founder Package
+North Star = Recommendation Acceptance / % executed without override
+Maximized by passive compliance and conservative collapse; can't distinguish trust from indifference
+North Star = TrustScore (Trustworthiness × CostlyDeference × DiscernmentRetained)
+Founder Package
+Success = "athletes stop overriding and execute automatically"
+Conflates earned automaticity with learned helplessness
+Success = costly-case compliance rising with accuracy with retained discernment
+ES-009 Ch9 / ES-005.1
+Raw prediction error → 0
+Conflates model quality with effort + fatigue bias
+De-biased, fatigue-adjusted error (D.1)
+ES-006
+Override Rate decreasing (as goal)
+Penalizes productive disagreement
+Override Productivity (Part B) — destructive overrides down, productive ones neutral/positive
+Founder Ch9
+Acceptance thresholds 60/75/85% as success gates
+Same indifference confound
+Costly-case compliance vs indifferent baseline + beat-the-shadow-baseline on accuracy
+The acceptance-based metrics are not deleted — they remain useful diagnostics. They are demoted from success criteria to inputs, because as success criteria they reward the failure modes this framework exists to detect.
+Final Principle
+Principle #62. The question was never "will the athlete follow us?" — a frightened or indifferent athlete follows anything. The question is "will the athlete follow us when we tell them to do less, and were we right to tell them?" Trust is the rare conjunction of a system worth following and an athlete who follows it where it counts. Everything else is engagement wearing trust's clothes.
+
+The ruthless conclusion you asked for: the Founder Package's North Star is wrong, and I've replaced it. Recommendation Acceptance — the metric the entire company was oriented around, the one written into the founding document — is maximized by exactly the failure modes (passive compliance, conservative collapse, dangerous accepted-but-wrong recommendations) that destroy the product's actual thesis. I said this in my first review of the Founder Package; ES-012 is where it finally gets fixed structurally rather than just flagged.
+Two things to scrutinize. First, the multiplicative TrustScore is unforgiving by design — any zeroed component zeroes trust, which is correct for catching blind compliance but means a genuinely-trusting athlete who happens to never encounter a hard recommendation (no decreases, no fatigue holds) gets a low-confidence score, not a high one. That's honest (we haven't tested them) but it means trust validation requires the system to occasionally make hard calls — you cannot validate trust on a population the model only ever told to keep going. The experimental design's "at least one decrease and one fatigue-hold per athlete" stopping criterion exists precisely to force that test, and it's the most operationally demanding requirement in the spec.
+Second, the shadow baseline (F.1) is the part most likely to be skipped under time pressure and the part you most cannot skip. Without it, you are back to measuring acceptance and calling it trust. If Hush's de-biased error doesn't beat a dumb fixed-progression policy, the learning loop — every spec from ES-004 through ES-011 — has produced nothing, no matter how high acceptance climbs. That single comparison is the difference between validating the model and validating your users' willingness to defer.
+This closes the original roadmap's deepest gap — the one I opened the entire review with. The stack is now internally consistent and has an honest definition of its own success. The remaining unspecified items (plateau definition, goal-change transitions — roadmap Gaps 8 and the ES-011 forward-reference) are genuinely lower-stakes than this was.
+
+════════ RESTATEMENT ADDENDUM — DX-14 (2026-06-12) ════════
+ES-012 Trust Measurement — v1 SUCCESS is stagnation-detection + program value, not load-prediction.
+
+ES-012's machinery is retained in concept, but the v1 SUCCESS DEFINITION is reoriented. Hush v1 is NOT a load-authority system (Product Specification §1): it does not choose the working load, so 'getting the recommended load right' is no longer the success basis.
+v1 success = (a) the system maintains an accurate, honest picture of each capability over time from the athlete's REAL logged performance (M1), and (b) it DETECTS stagnation and surfaces useful, rare, advisory guidance (≤1 insight / ≤1 recommendation per week) and better future program structure — M5 (DX-09), Product Specification §12/§13.
+Demoted: 'minimize overrides' and acceptance-as-North-Star (already demoted to a diagnostic by ES-012 H). An override is a LEARNING INPUT (the logged actual_weight), not a failure to be minimized.
+Retained and BUILT (Sprint 4): the within-athlete shadow-baseline counterfactual and the de-biased (fatigue/effort-adjusted) error signal remain the Phase-0 model-quality instruments. AUTHORITY (the deeper 'decide on the athlete's behalf' claim) is explicitly DEFERRED to Phase 3 — it cannot be validated on a self-selected, short-horizon MVP cohort (Thesis v2).
+As-built sources: reviews/completion/DX-09_COMPLETION_REPORT.md, SPRINT_4_COMPLETION_REPORT.md; HUSH_V1_PRODUCT_SPECIFICATION.md §1/§12/§13; the Thesis v2 and Validation Architecture addenda (DX-14).
+

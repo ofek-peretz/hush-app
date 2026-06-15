@@ -1,0 +1,191 @@
+
+Hush v1 Technical Build Plan
+This is a build plan for 1–3 engineers, not an idealized architecture. The governing constraint shapes everything: a tiny team cannot afford speculative infrastructure, and the validation program has already told us the only thing that matters is producing honest data about the assumptions. So the build order is dictated by one rule — build the model package and the simulation harness before anything athlete-facing, because Phase 0 (offline) must pass before a single human touches the system, and because the model package is the one piece that, if wrong, makes everything downstream meaningless.
+I'll be concrete about what to skip. At 10–100 athletes, most "real" engineering is waste. The wins come from getting the math right and the instrumentation honest, not from scale.
+
+Guiding build principles
+Pure functions first, I/O last. The entire learning loop (predict, attribute, blend, fatigue-adjust, probe-decide) is pure computation over state. Build it as a standalone library with zero database or network dependency. This makes it unit-testable in isolation and reusable verbatim by both the live service and the simulation harness — which is what guarantees the simulation tests the real model, not a reimplementation.
+One service, one database, synchronous. No microservices, no message bus, no queue (per the ES-006 architecture review). The learning chain runs inside the request that reports a set. This is the single biggest scope saving.
+The simulation harness is a first-class deliverable, not a test fixture. It's the only access to the existential stability assumption (A2) and the only safe place to calibrate free parameters. It ships before the mobile app.
+Instrumentation is not optional and not deferred. Shadow-baseline logging, fresh-state-check scheduling, and probe data must be live from the first real session or the validation program is dead on arrival. Build the instrument before the trial, not during it.
+
+1. Build order (the critical path)
+Phase 0 (offline, no athletes):
+  [1] Model package (pure functions)        ← the keystone
+  [2] Simulation harness                     ← drives [1] with synthetic athletes
+  [3] Parameter calibration + stability runs ← A2, parameter defaults
+        │  GATE: model stable in sim, recovers synthetic capability
+        ▼
+Phase 1 prep (athlete-facing minimum):
+  [4] State schema + persistence
+  [5] Learning pipeline wiring (set → state, using [1])
+  [6] Session composition + recommendation surface
+  [7] Validation instrumentation (shadow baseline, fresh-state, override logging)
+  [8] Minimal API
+  [9] Minimal mobile app (the 6-screen athlete loop)
+        │  GATE: A7 seed safety, week 1
+        ▼
+Phase 2:
+  [10] Investigation/probe machinery (was stubbed)
+  [11] Trust metric computation + operator dashboard
+The ordering is forced: [1] is depended on by everything; [2] depends only on [1]; [4]–[6] depend on [1]; instrumentation [7] must precede the app [9] going live; the Investigation Engine [10] can be stubbed through Phase 1 and built for Phase 2 because no plateau can exist until athletes have trained for weeks anyway.
+
+2. MVP architecture
+[ Mobile app — 6 screens ]
+        │ HTTPS / JSON
+        ▼
+[ Single backend service ]
+   ├── Model package (pure lib)      ← [1], imported, no I/O
+   ├── Session/Workout module        ← ES-001/009/009.1
+   ├── Learning pipeline             ← Evidence→StateUpdate, synchronous, transactional
+   ├── Recommendation module         ← ES-006/005.1/011
+   ├── Investigation module          ← ES-013 (stubbed P1, live P2)
+   └── Instrumentation               ← shadow baseline, fresh-state, audit log
+        │
+        ▼
+[ PostgreSQL — single instance ]      ← immutable history + mutable state
+[ Operator dashboard (read-only) ]    ← reads metrics; trivial web page
+No load balancer, no autoscaling, no cache, no replicas. One container, one managed Postgres, daily snapshot. The whole system fits on the smallest production instance any host offers, with orders of magnitude of headroom for 100 athletes.
+
+3. Database implementation sequence
+Build tables in dependency order, not all at once. Three waves.
+Wave A — static/catalog (build first, needed by the model): exercise, exercise_relationship, athlete. The catalog is 40–60 hand-authored rows; seed it as data, not via UI. Complexity: low. The only subtlety is the per-capability anchor constants (A_c, k) and contribution weights live alongside the catalog and must match the model package exactly — single source, imported by both.
+Wave B — mutable state (the projection decisions read from): athlete_state, capability_state (with sum_w, per-capability fatigue), preference_state, strategy_state, fatigue_state. Complexity: medium. The one real design point: capability_state.sum_w materializes the precision accumulator so confidence/blend are O(1) per update — get this right and you never re-scan evidence.
+Wave C — immutable history (append-only): workout_session → exercise_block → set_record, then observation, evidence, recommendation, state_update_log, investigation records. Complexity: low (they're append-only — no update logic, no migrations of meaning). Stamp model_version and capability_model_version on every row from day one; it's free now and impossible to retrofit.
+What to skip: partitioning, sharding, read replicas, soft-delete frameworks, ORMs with heavy migration tooling. Use straight SQL with a thin migration runner. Indexes: just athlete_id on everything and the natural foreign keys. That's the entire indexing strategy for the life of the MVP.
+Test strategy: schema round-trip tests (write state, read it back identically) and a referential-integrity check that every observation traces to a set and every evidence row to an observation. The audit chain's validity is a testable invariant — write a test that reconstructs a recommendation from its evidence and fails if any link is missing.
+
+4. API implementation sequence
+The athlete-facing surface is deliberately tiny (Founder Workout-Engine). Build in this order:
+POST /sessions (start today's workout) — depends on session composition + recommendation.
+POST /sessions/{id}/sets (report a set, returns next action) — the core loop; depends on the entire learning pipeline.
+POST /blocks/{id}/skip, /replace — preference + equipment flows.
+POST /sessions/{id}/complete, GET /sessions/today.
+GET /recommendations/{id}/why — explainability.
+Internal/operator (built alongside, behind a single key): GET /internal/athletes/{id}/audit/{rec_id}, /state, /internal/metrics. These are not secondary — the audit and metrics endpoints are how the validation program reads its results. Build the metrics endpoint as soon as the learning pipeline produces data.
+Complexity: low. This is thin REST over the modules. No GraphQL, no versioning scheme, no rate limiting (100 known users). Token per athlete, one operator key. Test strategy: an end-to-end test that starts a session, reports a full workout of sets, and asserts the resulting state changes and audit rows — the API tests are the integration tests for the pipeline.
+
+5. State management
+The discipline that keeps the system correct: only the StateUpdate module writes to the mutable state tables. Enforce it with a single StateWriter class that every state mutation goes through — code review and one chokepoint, not distributed permissions (per the ES-006 architecture decision to make ES-007's ownership rules a code boundary, not a network one).
+The learning pipeline runs synchronously inside the set-report transaction: Set → Observation → de-fatigue → Evidence → StateUpdate → (Preference/Strategy if triggered), committing atomically. This is non-negotiable — the audit chain's "every link present" guarantee depends on the chain being transactional. A half-applied learning step corrupts state silently. At this scale the whole chain is sub-millisecond, so there is zero reason to make it async, and a strong reason (correctness) not to.
+State reads for decisions hit only the projection tables, never history (ES-Founder §34). Test strategy: a transactional-integrity test that injects a failure mid-chain and asserts complete rollback; an invariant test that no module except StateWriter touches state tables (enforceable by a simple static grep in CI).
+
+6. Model package implementation
+This is the keystone and deserves the most care. It is pure, deterministic, I/O-free, and shared by the service and the harness. Build sub-modules in dependency order:
+Constants & curves — per-capability (A_c, k), cohort multipliers, seeds (ES-008 v2), decay half-lives, κ, σ²_ref. One file, the single source of truth, imported everywhere. Complexity: low but high-stakes — every number traces to ES-005.1/008 v2.
+Strength/rep core — ReferenceStrength, its inverse, Epley forward/inverse (ES-005.1). Complexity: low; trivially unit-testable against the worked examples already computed (S=64→113kg, bench@82.5→11 reps).
+Prediction — score→predicted_reps_to_failure with fatigue adjustment (ES-004/005.1/011).
+Attribution — load-space split by w_c, per-capability conversion (ES-010). Complexity: medium; the ordering (de-fatigue before convert, in load space) is the subtle part — test against the weighted-dip worked example.
+Blend & confidence — precision-weighted update, variance-suppressed confidence (ES-005.1/010).
+Fatigue & recovery — generation, accumulation, decay (ES-011).
+Recommendation policy — decision rules, confidence gate, discount, progression guard (ES-006).
+Probe logic — pure functions for probe selection/interpretation (ES-013), consumed by the Investigation module.
+Test strategy — the most important in the whole plan: every worked example from the specs becomes a golden-value unit test. The forward/inverse round-trip (score → kg → reps → kg → score) must return the input — this single property test catches the Principle #43 consistency requirement automatically. Property-based tests for invariants: confidence ∈ [0,100], score moves gradually, fatigue ≥ 0, discount ∈ range, progression guard never silently decreases. This package should have near-total test coverage because everything else trusts it blindly.
+
+7. Simulation harness
+A first-class deliverable, built immediately after the model package, depending only on it.
+It drives the frozen model with synthetic athletes — each a known true capability vector + injected fatigue/effort behavior + a recovery profile — and runs them through simulated months-to-years of sessions. Because it imports the same model package the live service uses, it tests the real model, not a copy.
+Its three jobs:
+A2 (loop stability): run synthetic athletes with constant true capability and verify the inferred score doesn't oscillate/drift; sweep parameters and check sensitivity.
+A1 (offline recoverability): verify the model recovers the known synthetic true capability from confounded synthetic observations — the controlled test impossible with real athletes whose truth is unknown.
+Parameter calibration: tune κ, τ defaults, σ²_ref against synthetic data so they enter the trial as informed defaults.
+Complexity: medium-high — the synthetic athlete model (how true capability, fatigue, and effort generate reps) is itself a small model and must be plausible without being circular (don't generate observations with the same equations you're testing). Test strategy: sanity scenarios with known answers — a synthetic athlete who genuinely improves should show rising inferred score; one who is constant should show a flat, stable score; one who is fatigued should show suppressed-then-recovered performance. If the harness can't reproduce these, it's wrong before any real conclusion.
+
+8. Validation instrumentation
+Built before the mobile app goes live (Phase 1 prep), because the validation program is untestable by construction without it.
+Shadow baseline (A8): on every recommendation, also compute what the fixed linear-progression policy would have recommended and predicted, and store both alongside actuals. Pure computation using the model package; cheap. This is the within-athlete paired comparison that powers A8.
+Fresh-state check scheduling (A1): the mechanism to occasionally insert a standardized rested re-test and record predicted vs. observed. This requires session composition to support a "probe slot," so coordinate with module [6].
+Override-target logging (A9): record every override's target including off-catalog substitutions, and flag the attribution gap.
+Costly-case event tagging (A3): mark every DECREASE_LOAD, fatigue-hold, and challenge probe so the Trust metric can find them.
+Audit reconstruction (E in every spec): the /internal/audit endpoint that walks the full chain for any recommendation, including what it could not exclude.
+Complexity: low-medium (mostly logging + the shadow computation). Test strategy: assert that for a recorded session, the shadow prediction and Hush prediction are both present for every recommendation, and that the audit endpoint reconstructs a complete chain.
+
+9. Mobile app scope
+The smallest possible athlete loop — six screens, no more (Founder Workout-Engine: every screen justifies its existence):
+Home — today's workout, estimated duration, Start. Nothing else (no charts, feed, streaks — Anti-Requirements).
+Exercise — name, weight, reps, set N of M.
+Set completion — single question: how many reps? Submit.
+Rest — timer.
+Equipment-busy / skip — buttons that trigger replace/skip flows.
+Complete — "Well Done." Nothing else.
+Plus onboarding (the ES-Athlete fields) and an optional "why this weight?" explanation view.
+Scope decision: build it as a thin client — all logic server-side, the app just renders recommendations and posts sets. No offline mode, no local model, no client-side state beyond the current session. Complexity: medium (it's a real app, but a minimal one). Consider a cross-platform framework to ship one codebase. Test strategy: the app is mostly untestable in isolation usefully; rely on the API end-to-end tests for logic, and manual QA for the UX, since the entire product thesis is that the experience feels calm and frictionless.
+What to skip: notifications, social, analytics dashboards, account management beyond a login, settings beyond the essential. Every one of these is an Anti-Requirement or unnecessary at 100 users.
+
+10. Phase 0 requirements (the gate before any athlete)
+Phase 0 is offline and must pass before Phase 1 recruitment. It requires, in order:
+Model package complete and tested ([1], [6] in model order) — all golden-value and round-trip tests passing.
+Simulation harness operational ([2]) — reproduces the known-answer sanity scenarios.
+Stability runs (A2): synthetic athletes with constant true capability show stable, non-oscillating inferred scores across the parameter ranges; sensitivity sweep shows no knife-edge dependence.
+Recoverability runs (A1 offline): the model recovers known synthetic capability better than a naive baseline.
+Parameter defaults calibrated: κ, τ, σ²_ref set from simulation, entering the trial as informed values rather than guesses.
+Phase 0 gate: if the model oscillates in simulation or fails to recover synthetic capability, it does not touch a person. This gate is the cheapest place to catch the existential stability risk, and it costs only compute.
+
+Complexity, dependencies, and sequencing summary
+Subsystem
+Depends on
+Complexity
+Order
+Primary test
+Model package
+constants
+High-stakes, med size
+1
+Golden values + round-trip + property
+Simulation harness
+model pkg
+Med-high
+2
+Known-answer scenarios
+Stability/calibration
+harness
+Med
+3
+A2 sweeps, A1 recovery
+State schema
+—
+Low-med
+4
+Round-trip + referential integrity
+Learning pipeline
+model pkg, schema
+Med
+5
+Transactional rollback, audit chain
+Session + recommendation
+model pkg, schema
+Med
+6
+E2E session test
+Instrumentation
+pipeline
+Low-med
+7
+Shadow + audit completeness
+API
+all modules
+Low
+8
+E2E
+Mobile app
+API
+Med
+9
+Manual QA
+Investigation/probes
+model pkg (stub P1)
+Med
+10 (P2)
+Probe interpretation units
+Trust metric + dashboard
+instrumentation
+Low-med
+11 (P2)
+Metric reconstruction
+
+The execution roadmap for 1–3 engineers
+If one engineer: strictly serial down the critical path. Phase 0 (model + harness + gate) consumes the first stretch and is non-negotiable. Then the athlete-facing minimum through the A7 gate. Investigation and trust dashboard are Phase 2. Resist every temptation to build infrastructure — there are 100 users.
+If two engineers: one owns the model package + simulation harness + instrumentation (the correctness-critical, pure-computation spine); the other owns persistence + API + mobile app (the I/O shell). They meet at the learning-pipeline wiring. The model-package engineer's work gates the trial; the shell engineer's work can proceed against a stubbed model in parallel.
+If three: add a third on the mobile app and operator dashboard full-time, freeing the second engineer to deepen instrumentation and the Investigation Engine for Phase 2 earlier.
+The two things that must not be cut under pressure, restated as build commitments: the simulation harness ships before the app (it's the only access to A2 and the safe place to set parameters), and the instrumentation is live before the first real session (shadow baseline, fresh-state, override logging — without them the trial produces data that looks like validation and proves nothing). Everything else in this plan can flex. Those two are the difference between building Hush and building something that merely resembles it.
+The build is genuinely small. The model package is where the intellectual weight sits and where the test suite should be near-total; the rest is a thin, synchronous, single-database service and a six-screen app. A disciplined team of two can reach the Phase 1 safety gate without heroics — provided they build the math and the instruments first, and refuse to build anything the 100-athlete scale doesn't demand.

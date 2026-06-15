@@ -1,0 +1,1882 @@
+
+Founder Package v1
+פרק 1 — Executive Summary
+What is Hush?
+Hush is a training autopilot that learns the athlete over time and gradually earns the right to make training decisions on the athlete's behalf.
+The athlete's job is to train.
+Hush's job is to decide.
+
+Mission
+Reduce cognitive load from training.
+Athletes should focus on effort, not planning.
+
+Vision
+Build an Athletic Operating System that continuously learns an athlete and optimizes training decisions over years.
+
+One Sentence
+Hush learns the athlete so the athlete can stop managing training.
+
+Core Problem
+Most athletes do not struggle because they lack information.
+They struggle because they must repeatedly make training decisions:
+Which workout? 
+Which exercise? 
+Which weight? 
+When to progress? 
+When to deload? 
+When to change strategy? 
+The burden of decision-making grows over time.
+Hush exists to remove that burden.
+
+Product Definition
+Hush is NOT:
+Workout tracker 
+AI chatbot 
+Social fitness app 
+Program marketplace 
+Analytics platform 
+Hush IS:
+Decision Delegation System 
+Training Autopilot 
+Athletic Operating System 
+
+Success Definition
+Success is achieved when athletes stop overriding recommendations and begin executing them automatically.
+
+North Star Metric
+Percentage of workouts executed without recommendation override.
+
+Core Product Loop
+Workout   ↓Observation   ↓Evidence   ↓Athlete State   ↓Decision   ↓Workout
+
+Fundamental Principles
+Principle 1
+Trust is more important than optimization.
+
+Principle 2
+Patterns beat events.
+
+Principle 3
+Hush learns from prediction error.
+
+Principle 4
+When uncertain, preserve trust.
+
+Principle 5
+The first month is for learning.
+The following years are for optimizing.
+
+Principle 6
+Safe > Accurate
+For new athletes, underestimating capability is preferable to overestimating capability.
+
+Principle 7
+Hush learns the athlete, not the exercise.
+
+Principle 8
+Progress belongs to Hush.
+Training belongs to the athlete.
+
+Principle 9
+Individual intelligence before collective intelligence.
+
+Principle 10
+Reality beats theory.
+Founder Package v1
+Chapter 2 — Athlete State Specification
+
+Purpose
+Athlete State is the central asset of Hush.
+Everything in the system exists to either:
+Create Athlete State 
+Update Athlete State 
+Read Athlete State 
+No decision should be made directly from workout history.
+All decisions must be made from Athlete State.
+
+Design Philosophy
+Traditional fitness apps store workouts.
+Hush stores understanding.
+Workout history is evidence.
+Athlete State is knowledge.
+
+High-Level Structure
+Athlete    ↓AthleteState    ↓CapabilityStates    ↓PreferenceStates    ↓StrategyState
+
+Entity: Athlete
+Represents the human being.
+Mostly static information.
+
+Fields
+id: UUIDcreated_at: Timestampage: Integersex:  - male  - femaleexperience_level:  - beginner  - intermediate  - advancedprimary_goal:  - muscle_gain  - fat_loss  - general_fitnessworkouts_per_week: Integer
+
+Rules
+Created once during onboarding.
+Rarely changes.
+Does not contain performance data.
+Does not contain workout history.
+
+Entity: AthleteState
+Represents Hush's current understanding of the athlete.
+This is the primary object used by the Decision Engine.
+
+Fields
+athlete_id: UUIDglobal_confidence: Float# 0-100calibration_phase: Booleanworkout_count: Integercurrent_strategy_id: UUIDlast_workout_at: Timestampcreated_at: Timestampupdated_at: Timestamp
+
+Field Definitions
+global_confidence
+Represents overall confidence in Hush's understanding.
+Example:
+22
+New athlete.
+
+87
+Highly understood athlete.
+
+calibration_phase
+true
+Hush is still learning.
+Decision Engine remains conservative.
+
+false
+Normal operation.
+
+Entity: CapabilityState
+Most important object in the system.
+Represents estimated capability levels.
+Capabilities are stable.
+Exercises are interchangeable.
+
+Fields
+id: UUIDathlete_id: UUIDcapability_code: Stringscore: Floatconfidence: Floattrend: Floatevidence_count: Integerupdated_at: Timestamp
+
+Example
+capability_code: horizontal_pushscore: 63.5confidence: 78trend: +0.7evidence_count: 34
+
+Meaning
+score
+Current estimated capability.
+Not strength.
+Not one-rep-max.
+A normalized internal score.
+
+confidence
+How certain Hush is about the score.
+
+trend
+Direction of movement.
+positive
+Improving.
+
+negative
+Regressing.
+
+0
+Stable.
+
+Initial Capability Set (V1)
+Only seven capabilities.
+horizontal_pushhorizontal_pullvertical_pushvertical_pullknee_dominanthip_dominantcore_stability
+
+Explicit Rule
+Never store:
+bench_press_strength
+Always store:
+horizontal_push
+Capabilities are permanent.
+Exercises are implementation details.
+
+Entity: PreferenceState
+Represents learned preferences.
+Not declared preferences.
+Observed preferences.
+
+Fields
+id: UUIDathlete_id: UUIDexercise_family: Stringpreference_score: Floatconfidence: Floatobservation_count: Integerupdated_at: Timestamp
+
+Example
+exercise_family: dumbbell_presspreference_score: 91confidence: 82
+
+Purpose
+Allow Hush to adapt exercise selection naturally.
+Observed behavior always overrides onboarding answers.
+
+Entity: StrategyState
+Represents current training strategy.
+
+Fields
+athlete_id: UUIDstrategy_id: UUIDweekly_frequency: Integerweekly_volume: Stringprimary_focus: Stringsecondary_focus: Stringupdated_at: Timestamp
+
+Example
+weekly_frequency: 4weekly_volume: moderateprimary_focus: hypertrophysecondary_focus: strength
+
+Ownership Rules
+Athlete owns
+Athlete
+
+Learning Engine owns
+CapabilityStatePreferenceState
+
+Decision Engine owns
+StrategyState
+
+System owns
+AthleteState
+
+State Update Principles
+Principle A
+State changes slowly.
+
+Principle B
+Single workouts do not change identity.
+
+Principle C
+Patterns create state changes.
+
+Principle D
+Confidence grows through prediction accuracy.
+
+Principle E
+Recent evidence matters more than old evidence.
+
+Success Criteria
+After 8 weeks Hush should be able to answer:
+What is this athlete capable of? 
+What capabilities are improving? 
+Which exercises does the athlete prefer? 
+What is the next appropriate challenge? 
+How confident are we in those answers? 
+Without manually inspecting workout history.
+Founder Package v1
+Chapter 3 — Capability Model Specification
+Purpose
+The Capability Model is the abstraction layer between exercises and human performance.
+Hush does not learn:
+Bench PressSquatLat Pulldown
+Hush learns:
+Horizontal PushKnee DominantVertical Pull
+Exercises are temporary.
+Capabilities are durable.
+
+Core Principle
+Exercises are observations.
+Capabilities are understanding.
+
+Why This Exists
+Traditional fitness systems become dependent on exercises.
+Example:
+Bench Press removed↓Model breaks
+
+In Hush:
+Bench Press removed↓Dumbbell Press added↓Horizontal Push remains
+No knowledge is lost.
+
+V1 Capability Set
+The capability model must remain intentionally small.
+Horizontal Push
+Examples:
+Bench PressIncline Bench PressDumbbell Bench PressMachine Chest PressPush Ups
+
+Horizontal Pull
+Examples:
+Seated RowCable RowChest Supported RowMachine Row
+
+Vertical Push
+Examples:
+Shoulder PressDumbbell Shoulder PressMachine Shoulder Press
+
+Vertical Pull
+Examples:
+Pull UpsLat PulldownAssisted Pull Ups
+
+Knee Dominant
+Examples:
+SquatLeg PressHack SquatSplit Squat
+
+Hip Dominant
+Examples:
+Romanian DeadliftDeadliftHip ThrustBack Extension
+
+Core Stability
+Examples:
+PlankAb WheelPallof PressDead Bug
+
+Capability Mapping
+Every exercise must map to at least one capability.
+Example:
+exercise: bench_pressprimary_capability:  horizontal_pushsecondary_capability:  none
+
+More complex example:
+exercise: incline_dumbbell_pressprimary_capability:  horizontal_pushsecondary_capability:  vertical_push
+
+Contribution Weights
+Not all exercises contribute equally.
+Example:
+bench_press:  horizontal_push: 1.0
+
+incline_dumbbell_press:  horizontal_push: 0.8  vertical_push: 0.2
+
+These weights are system-defined.
+Athletes never see them.
+
+Capability Score
+Each capability maintains:
+scoreconfidencetrend
+
+Example:
+horizontal_push:score: 64confidence: 82trend: +0.7
+
+Important:
+Score is NOT kilograms.
+Score is NOT reps.
+Score is NOT 1RM.
+Score is an internal capability estimate.
+
+Capability Growth
+Capabilities do not grow directly from workouts.
+Capabilities grow from evidence.
+
+Flow:
+Workout↓Observation↓Evidence↓Capability Update
+
+Capability Confidence
+Confidence is independent from score.
+Example:
+score: 70confidence: 25
+Meaning:
+We think the athlete is strong.We are not yet certain.
+
+Another example:
+score: 70confidence: 90
+Meaning:
+We know this athlete very well.
+
+Capability Trend
+Trend tracks movement.
+Example:
++1.2
+Improving.
+
+0
+Stable.
+
+-0.8
+Declining.
+
+Trend is used heavily by the Decision Engine.
+
+Capability Independence
+Critical rule.
+Capabilities should remain independent whenever possible.
+Example:
+Improvement in:
+Horizontal Push
+must not automatically improve:
+Vertical Push
+
+The model may learn correlations in the future.
+V1 should not.
+
+Exercise Replacement Rule
+This is where the model becomes powerful.
+Example:
+Athlete performs:
+Bench Press
+for six weeks.
+
+Then:
+Machine Chest Press
+for four weeks.
+
+Traditional systems lose continuity.
+
+Hush continues tracking:
+Horizontal Push
+without interruption.
+
+This is one of the most important architectural advantages in the system.
+
+Future Expansion
+Not part of V1.
+Possible future capabilities:
+Explosive PowerWork CapacityGrip StrengthRotational StabilitySingle Leg Stability
+
+Explicit rule:
+Do not add capabilities until data proves necessity.
+
+Success Criteria
+The capability model is successful if:
+Exercise replacement does not lose knowledge. 
+Capability scores become more accurate over time. 
+Decisions improve prediction accuracy. 
+Athletes can progress without manual program management. 
+The model remains understandable by engineers and coaches. 
+
+Final Principle
+Hush learns capabilities because capabilities outlive exercises.
+
+Founder Package v1
+Chapter 4 — Evidence Engine Specification
+Purpose
+The Evidence Engine transforms workout outcomes into learning.
+Its responsibility is not to make decisions.
+Its responsibility is not to update training plans.
+Its responsibility is only:
+Convert observations into evidence.
+
+Core Principle
+Observations are facts.
+Evidence is interpretation.
+
+Example:
+Prediction:82.5kg × 8Actual:82.5kg × 11
+This is not evidence.
+This is only an observation.
+
+The system must first interpret what happened.
+Only then may it generate evidence.
+
+Learning Pipeline
+Workout    ↓Observation    ↓Evidence    ↓Evidence Pool    ↓State Update
+
+Observation
+The smallest factual unit in Hush.
+Observations contain no interpretation.
+
+Observation Schema
+id: UUIDathlete_id: UUIDexercise_id: UUIDcapability_id: UUIDpredicted_weight: Floatpredicted_reps: Integeractual_reps: Integerprediction_confidence: Floattimestamp: Timestamp
+
+Example
+predicted_weight: 82.5predicted_reps: 8actual_reps: 11
+
+The observation layer never says:
+StrongerWeakerImprovedDeclined
+Those are evidence concepts.
+
+Evidence
+Evidence represents belief updates.
+
+Evidence Schema
+id: UUIDathlete_id: UUIDcapability_id: UUIDsignal_type: Enumsignal_strength: Floatconfidence: Floatsource_observation_id: UUIDcreated_at: Timestamp
+
+Signal Types (V1)
+Only five signal types.
+
+Positive Performance
+Example:
+Performed above expectation
+
+Negative Performance
+Example:
+Performed below expectation
+
+Preference Signal
+Example:
+Repeatedly replacing exercise
+
+Consistency Signal
+Example:
+Consistently completing workouts
+
+Fatigue Signal
+Example:
+Performance decreasing across sessions
+
+No additional signal types in V1.
+
+Signal Strength
+Signal strength represents magnitude.
+Range:
+0.0 → 1.0
+
+Example:
+Predicted: 8Actual: 9
+May generate:
+signal_strength: 0.2
+
+Example:
+Predicted: 8Actual: 15
+May generate:
+signal_strength: 0.9
+
+Important:
+Signal strength is not linear.
+Large deviations should matter more.
+
+Confidence
+Evidence confidence represents certainty.
+
+Example:
+signal_strength: 0.8confidence: 0.25
+Meaning:
+Strong signal.Low certainty.
+
+Example:
+signal_strength: 0.8confidence: 0.90
+Meaning:
+Strong signal.High certainty.
+
+Evidence Pool
+Evidence should not immediately update Athlete State.
+
+Critical rule:
+Single events do not create understanding.
+
+Instead:
+Observation↓Evidence↓Evidence Pool
+
+The pool accumulates evidence over time.
+
+Example:
+horizontal_push+0.4+0.6+0.5+0.7
+
+Now a pattern exists.
+
+Only then should state update occur.
+
+State Update Threshold
+State updates require:
+minimum_evidence_countminimum_confidenceminimum_signal_strength
+
+Exact thresholds will be tuned experimentally.
+Not hardcoded philosophically.
+
+Evidence Decay
+Evidence becomes less important over time.
+
+Core Principle:
+Recent evidence matters more than old evidence.
+
+Example:
+Evidence from last week
+Weight:
+1.0
+
+Example:
+Evidence from 18 months ago
+Weight:
+0.1
+
+The athlete is always evolving.
+
+Contradictory Evidence
+Example:
+Three positive signals
+followed by:
+Three negative signals
+
+System behavior:
+Reduce confidence
+before making large changes.
+
+Important principle:
+When evidence conflicts,certainty should decrease.
+
+Evidence Quality
+Not all observations are equally valuable.
+
+Example:
+prediction_confidence: 20
+
+Poor prediction.
+Low learning value.
+
+Example:
+prediction_confidence: 90
+
+Strong prediction.
+High learning value.
+
+Therefore:
+Evidence generation should consider:
+prediction_confidence
+as an input.
+
+Preference Learning
+Evidence is also responsible for preference discovery.
+
+Example:
+Bench Press replaced
+once.
+
+No learning.
+
+Example:
+Bench Press replaced
+five times.
+
+Generate:
+Preference Signal
+
+Update:
+PreferenceState
+
+Observed behavior always wins.
+
+Calibration Phase Behavior
+During calibration:
+calibration_phase: true
+
+Evidence generation becomes more sensitive.
+Reason:
+The system is trying to learn quickly.
+
+After calibration:
+Evidence thresholds increase.
+
+Reason:
+Stability becomes more important than speed.
+
+Golden Rule
+Principle #11
+Evidence accumulates.
+Understanding emerges.
+
+Success Criteria
+The Evidence Engine succeeds if:
+Single workouts rarely cause large state changes. 
+Patterns reliably create state changes. 
+Prediction accuracy improves over time. 
+Preference learning happens automatically. 
+Confidence reflects actual certainty. 
+
+Final Summary
+Workout    ↓Observation    ↓Evidence    ↓Evidence Pool    ↓Capability Update    ↓Athlete State
+Founder Package v1
+Chapter 5 — Decision Engine Specification
+Purpose
+The Decision Engine converts understanding into action.
+The Evidence Engine learns.
+The Decision Engine acts.
+
+Mission
+The mission is NOT:
+maximize load 
+maximize volume 
+maximize progression speed 
+The mission is:
+Select the next challenge with the highest probability of success.
+
+Core Principle
+Confidence determines aggressiveness.
+
+High confidence:
+More decisive actions
+Low confidence:
+More conservative actions
+
+Decision Hierarchy
+Not all decisions are equal.
+
+Level 1
+Per-set decisions
+Examples:
+WeightRep Target
+Most frequent.
+
+Level 2
+Per-exercise decisions
+Examples:
+Keep ExerciseReplace Exercise
+Less frequent.
+
+Level 3
+Strategy decisions
+Examples:
+VolumeFrequencyTraining Split
+Rare.
+
+Level 4
+Identity decisions
+Examples:
+Goal ChangeAthlete Reclassification
+Very rare.
+
+Decision Types (V1)
+Only five decision types.
+KEEP_LOADINCREASE_LOADDECREASE_LOADREPLACE_EXERCISECHANGE_STRATEGY
+No additional decision types in V1.
+
+Rule 1 — KEEP_LOAD
+Default action.
+
+Principle:
+Understanding before change.
+
+Example rule:
+if:  confidence < 70then:  KEEP_LOAD
+
+Uncertainty should create stability.
+Not experimentation.
+
+Rule 2 — INCREASE_LOAD
+Increase challenge only when evidence is strong.
+
+Example:
+if:  confidence >= 80and:  positive_evidence >= thresholdand:  trend > 0then:  INCREASE_LOAD
+
+Important:
+One successful workout is insufficient.
+Patterns are required.
+
+Rule 3 — DECREASE_LOAD
+Most conservative rule in the system.
+
+Example:
+if:  negative_evidence_persistentand:  confidence >= 80and:  supported_by_multiple_sessionsthen:  DECREASE_LOAD
+
+Bad days happen.
+The system should not overreact.
+
+Rule 4 — REPLACE_EXERCISE
+Driven primarily by preference learning.
+
+Example:
+if:  preference_score < thresholdand:  replacement_behavior_repeatedthen:  REPLACE_EXERCISE
+
+The athlete teaches Hush.
+Not the opposite.
+
+Rule 5 — CHANGE_STRATEGY
+Highest-cost decision.
+Should occur rarely.
+
+Possible triggers:
+Plateau
+Long-term stagnation.
+
+Adherence Decline
+Workout completion falling.
+
+Capability Imbalance
+Large gaps between capabilities.
+
+Confidence Collapse
+Predictions becoming unreliable.
+
+Only then should strategy change.
+
+Confidence System
+Confidence is a first-class input.
+Not a side metric.
+
+Confidence Increase
+Occurs when:
+Prediction ≈ Reality
+Repeatedly.
+
+Confidence Decrease
+Occurs when:
+Prediction ≠ Reality
+Repeatedly.
+
+Behavioral Rule
+High confidence:
+Larger adjustments.
+
+Low confidence:
+Smaller adjustments.
+
+Never the opposite.
+
+Decision Explanation Layer
+Every decision must be explainable.
+
+Forbidden:
+AI decided.
+
+Required:
+Recommendation:Increase WeightReason:You exceeded the target across multiple recent sessions.Confidence:86%
+
+The athlete may not always view explanations.
+But explanations must always exist.
+
+Override Handling
+Athletes can override recommendations.
+
+Override is not failure.
+Override is evidence.
+
+Example:
+Suggested:80kgUsed:85kg
+
+This generates:
+Decision Feedback Evidence
+
+The system learns.
+
+Calibration Phase Rules
+During calibration:
+calibration_phase: true
+
+Decision Engine becomes conservative.
+
+Goals:
+Avoid failureCollect evidenceBuild trust
+
+Not:
+Maximize progress
+
+Global Safety Rule
+Principle #12
+Trust compounds.
+Broken trust compounds faster.
+
+Whenever a conflict exists between:
+Learning Speed
+and
+Athlete Trust
+Trust wins.
+
+Decision Audit Log
+Every decision generates:
+decision_iddecision_typeinputsreasonconfidencetimestamp
+
+Purpose:
+DebuggingAnalyticsFuture Model Training
+
+No decision should ever be untraceable.
+
+Success Criteria
+Decision Engine succeeds when:
+Recommendation acceptance increases over time. 
+Prediction accuracy improves over time. 
+Overrides decrease over time. 
+Athletes rarely feel surprised. 
+Athletes increasingly trust recommendations. 
+
+Final Principle
+The best decision is not the most optimal one.
+It is the one the athlete is most likely to successfully execute.
+Founder Package v1
+Chapter 6 — Workout Engine Specification
+Purpose
+The Workout Engine is the execution layer of Hush.
+Its responsibility is not learning.
+Its responsibility is not decision making.
+Its responsibility is:
+Deliver the next recommended action with minimal cognitive load.
+
+Core Principle
+Principle #13
+During training, the athlete should think about effort.
+Never about planning.
+
+Design Goal
+The workout experience should feel:
+CalmPredictableFocusedLightweight
+Not:
+AnalyticalData-heavyComplexGamified
+
+Workout Lifecycle
+Open App    ↓Today's Workout    ↓Start Workout    ↓Exercise    ↓Report Reps    ↓Rest    ↓Next Exercise    ↓Workout Complete
+
+Every screen must justify its existence.
+
+Home Screen
+The Home Screen is intentionally minimal.
+
+Display
+Today's WorkoutEstimated DurationStart Workout
+
+Nothing else is required.
+
+Explicitly excluded:
+ChartsAnalyticsLeaderboardFeedAchievementsStreaks
+
+Reason:
+The athlete came to train.
+Not browse.
+
+Workout Session
+A workout session is a sequence of recommended exercises.
+Each exercise contains:
+exercise_namerecommended_weighttarget_repstarget_sets
+
+Example:
+Bench Press82.5kg8 reps3 sets
+
+Exercise Screen
+Most important screen in the product.
+
+Display:
+Bench Press82.5kg8 Reps
+
+Optional:
+Set 1 of 3
+
+Nothing else.
+
+Do not display:
+VolumePRTrendStrength ScorePerformance Graphs
+
+Those belong to Hush.
+Not to the workout moment.
+
+Set Completion
+After each set:
+Single question:
+How many reps did you complete?
+
+Example:
+11
+
+Submit.
+Continue.
+
+No additional mandatory inputs.
+
+Explicitly Excluded Inputs (V1)
+No:
+RPE
+
+No:
+Rate Difficulty
+
+No:
+How did it feel?
+
+No:
+Energy Score
+
+Reason:
+Every additional input creates friction.
+
+Rest State
+Immediately after set submission:
+Rest01:30
+
+The athlete rests.
+The system waits.
+
+No educational content.
+No upsells.
+No engagement tricks.
+
+Equipment Busy Flow
+Real gyms are messy.
+The system must handle reality.
+
+Button:
+Equipment Busy
+
+Action:
+Replace Exercise
+
+The athlete should never need to search manually.
+
+Flow:
+Equipment Busy    ↓Recommended Alternative    ↓Continue Workout
+
+Skip Exercise Flow
+Button:
+Skip Exercise
+
+Important:
+Skip is allowed.
+
+The system should never punish the athlete.
+
+Instead:
+Skip    ↓Observation    ↓Preference Evidence
+
+The system learns.
+
+Mid-Workout Changes
+Athletes may:
+Use different weightUse different equipmentModify exercise
+
+These actions are allowed.
+
+Rule:
+Override ≠ Failure
+
+Override is learning data.
+
+Workout Completion
+Final screen:
+Workout CompleteWell Done.
+
+Nothing else required.
+
+No:
++2.4%Great Job!New Badge!XP Earned!
+
+Completion itself is the reward.
+
+Progress Visibility
+This is intentionally constrained.
+
+Allowed:
+Recent Workout HistoryCurrent Training GoalWorkout Frequency
+
+Not allowed in V1:
+Advanced AnalyticsPerformance DashboardsCapability ScoresInternal Confidence Scores
+
+The athlete should not need to understand the model.
+
+Explanation Layer
+The athlete may occasionally ask:
+Why this weight?
+or
+Why did this change?
+
+System provides:
+Human explanation.
+
+Example:
+You've consistently exceeded your target repetitions in recent sessions, so Hush slightly increased the challenge.
+
+Never:
+Capability Score Increased
+
+Never:
+Evidence Threshold Reached
+
+Internal concepts stay internal.
+
+Failure Handling
+When uncertainty is high:
+The system should simplify.
+
+Never expose uncertainty through complexity.
+
+Instead:
+Keep recommendation stable.
+
+UX Success Criteria
+A successful workout should require:
+Very few decisionsVery few inputsVery little thinking
+
+The athlete should finish and feel:
+"I just trained."
+Not:
+"I managed a training system."
+
+Final Principle
+Principle #14
+The best interface is the one the athlete barely notices.
+
+Summary
+The Workout Engine is not where Hush becomes intelligent.
+The Workout Engine is where Hush hides its intelligence.
+Founder Package v1
+Chapter 7 — User Experience Principles
+Purpose
+This document defines how Hush should feel.
+Not how it works.
+Not how it is implemented.
+How it feels.
+
+Core Principle
+Principle #15
+Reduce decisions.
+Not control.
+
+Hush is not trying to control the athlete.
+Hush is trying to remove unnecessary decisions.
+
+Design Philosophy
+Most fitness products assume:
+More Information=Better Decisions
+
+Hush assumes:
+Fewer Decisions=Better Adherence
+
+UX Goal
+The athlete should experience:
+ClarityTrustFocusMomentum
+
+The athlete should not experience:
+AnalysisOptimization AnxietyDecision FatigueInformation Overload
+
+Principle #16
+Every screen must answer one question.
+
+Bad:
+DashboardChartsGoalsNotificationsAchievementsRecommendations
+all on one screen.
+
+Good:
+What should I do next?
+One answer.
+
+Principle #17
+The next action should always be obvious.
+
+The athlete should never wonder:
+What now?
+
+The interface should always make the next step clear.
+
+Principle #18
+Explanation is optional.
+Action is mandatory.
+---Primary path:```textDo workout
+
+Secondary path:
+Understand workout
+
+Never reverse them.
+
+Principle #19
+Confidence should be earned silently.
+
+Hush should not constantly announce:
+AI LearningPersonalizationOptimization
+
+The athlete should simply notice:
+Recommendations feel right.
+
+Principle #20
+Progress should motivate.
+Not pressure.
+---Avoid:```textYou are behindMissed targetWeak performance
+
+Prefer:
+Ready for your next workout
+
+The athlete is not competing against the system.
+
+Principle #21
+The system should absorb complexity.
+
+Bad:
+RPEFatigue ScoresReadiness ScoresRecovery Scores
+
+Good:
+Recommended Weight:82.5kg
+
+The complexity exists.
+The athlete simply does not see it.
+
+Principle #22
+The athlete owes Hush nothing.
+
+This is important.
+The system serves the athlete.
+The athlete does not serve the system.
+
+Therefore:
+Allowed:
+Skip workoutSkip exerciseChange exerciseOverride recommendation
+
+Hush learns.
+Hush adapts.
+
+Principle #23
+Calm beats excitement.
+
+Most fitness apps optimize for stimulation.
+
+Hush should optimize for consistency.
+
+Avoid:
+ConfettiBadgesXPFlashy Celebrations
+
+Prefer:
+Well Done.
+
+Simple.
+Quiet.
+Respectful.
+
+Principle #24
+Trust grows through accuracy.
+Not persuasion.
+
+We do not convince athletes to trust Hush.
+
+We earn trust.
+One recommendation at a time.
+
+Principle #25
+The best compliment is:
+"I stopped thinking about it."
+
+If an athlete says:
+I just open the app and do the workout.
+That is success.
+
+Principle #26
+Human language.
+Not system language.
+
+Never show:
+Evidence ScoreCapability TrendConfidence Index
+
+Instead:
+You consistently exceeded your target, so we slightly increased the challenge.
+
+Humans first.
+Models second.
+
+Principle #27
+Reduce cognitive load at all costs.
+
+Every new field must justify itself.
+Every new screen must justify itself.
+Every new interaction must justify itself.
+
+Default answer:
+No
+Until proven necessary.
+
+Principle #28
+The interface should disappear.
+
+The athlete should remember:
+The workout
+Not:
+The app
+
+UX Success Test
+Ask an athlete after 8 weeks:
+How often did you think about what weight to use?
+
+Ideal answer:
+Almost never.
+
+Ask:
+How often did you question the recommendation?
+
+Ideal answer:
+Less and less over time.
+
+Final Statement
+Hush is not designed to maximize engagement.
+Hush is designed to maximize trust.
+Founder Package v1
+Chapter 8 — Anti-Requirements
+Purpose
+This document defines what Hush will explicitly refuse to build.
+These are not postponed features.
+These are features that actively conflict with the mission.
+
+Core Principle
+Principle #29
+Every feature must justify its existence against simplicity.
+
+The default answer to new features is:
+No
+Until proven necessary.
+
+Mission Filter
+Before building any feature, ask:
+Does this help Hush earn the right to make training decisions on behalf of the athlete?
+
+If the answer is unclear:
+Do not build it.
+
+Category 1 — Social Features
+Explicitly Excluded
+❌ Friends
+❌ Followers
+❌ Activity Feed
+❌ Likes
+❌ Comments
+❌ Sharing Workouts
+❌ Public Profiles
+
+Reason:
+Hush is a decision system.
+Not a social network.
+
+Social mechanics optimize for attention.
+Hush optimizes for trust.
+
+Category 2 — Gamification
+Explicitly Excluded
+❌ XP
+❌ Levels
+❌ Coins
+❌ Badges
+❌ Unlockables
+❌ Streaks
+❌ Daily Rewards
+
+Reason:
+External rewards often mask poor product value.
+
+If athletes trust Hush,
+they will return.
+
+If they do not trust Hush,
+badges will not save us.
+
+Category 3 — AI Chat
+Explicitly Excluded
+❌ Ask Hush
+❌ AI Coach Chat
+❌ Conversational Training Assistant
+
+Reason:
+The product is decision quality.
+Not conversation quality.
+
+Chat introduces complexity.
+The Decision Engine creates value.
+
+Category 4 — Program Marketplace
+Explicitly Excluded
+❌ Coach Programs
+❌ Marketplace
+❌ Purchased Training Plans
+❌ Influencer Programs
+
+Reason:
+Hush should generate recommendations.
+Not distribute templates.
+
+Category 5 — Advanced Analytics
+Explicitly Excluded
+❌ Volume Dashboard
+❌ Strength Dashboard
+❌ Fatigue Dashboard
+❌ Capability Dashboard
+❌ Confidence Dashboard
+❌ Performance Analytics Center
+
+Reason:
+Understanding belongs to Hush.
+Execution belongs to the athlete.
+
+Category 6 — Manual Programming
+Explicitly Excluded
+❌ Build Your Own Program
+❌ Choose Split
+❌ Weekly Exercise Designer
+❌ Manual Progression Rules
+
+Reason:
+The mission is delegation.
+Not tooling.
+
+Category 7 — Excessive Input Collection
+Explicitly Excluded
+Mandatory:
+❌ RPE
+❌ Readiness Score
+❌ Mood Score
+❌ Recovery Score
+❌ Energy Score
+
+Reason:
+Every input creates friction.
+
+The athlete should train.
+Not maintain a database.
+
+Category 8 — Engagement Optimization
+Explicitly Excluded
+❌ Endless Notifications
+❌ Re-engagement Loops
+❌ Artificial Urgency
+❌ Screen-Time Maximization
+
+Reason:
+Time spent in Hush is not value.
+Training completed is value.
+
+Metrics We Refuse To Optimize
+Explicitly Not North Stars
+❌ Daily Active Users
+❌ Session Length
+❌ Screen Time
+❌ Notification Open Rate
+❌ Feed Engagement
+
+These metrics may increase naturally.
+They are not goals.
+
+Metrics We Do Optimize
+✅ Recommendation Acceptance Rate
+✅ Workout Completion Rate
+✅ 8-Week Retention
+✅ Prediction Accuracy
+✅ Trust Score
+
+Product Expansion Rules
+Before adding any new feature:
+The proposer must answer:
+Question 1
+Does this reduce decision burden?
+
+Question 2
+Does this increase trust?
+
+Question 3
+Can the product succeed without it?
+
+If the answer to Question 3 is:
+Yes
+The default action is:
+Do not build.
+
+Future Feature Standard
+A feature is allowed only if it is:
+Simpler
+or
+More Trustworthy
+or
+More Accurate
+
+Not:
+More Interesting
+
+Interesting products are common.
+Trusted products are rare.
+
+Final Principle
+Principle #30
+The easiest feature to maintain is the one never built.
+
+Closing Statement
+Hush will succeed or fail based on:
+Learning quality 
+Decision quality 
+Trust quality 
+Not feature quantity.
+Founder Package v1
+Chapter 9 — Success Metrics & MVP Validation
+Purpose
+Define how Hush measures success.
+Not product activity.
+Not engagement.
+Not growth.
+Success.
+
+Core Principle
+Principle #31
+The purpose of measurement is learning.
+Not validation.
+
+Metrics exist to reveal truth.
+Not to confirm beliefs.
+
+Primary Hypothesis
+The core hypothesis of Hush is:
+Athletes are willing to delegate training decisions to a system that consistently earns trust.
+Everything in V1 exists to test this statement.
+
+MVP Goal
+The MVP is not intended to prove scalability.
+The MVP is intended to prove trust.
+
+Success Definition
+A successful MVP demonstrates:
+Athletes return consistently. 
+Athletes increasingly accept recommendations. 
+Prediction accuracy improves over time. 
+Decision overrides decrease over time. 
+
+North Star Metric
+Recommendation Acceptance Rate
+Definition:
+Accepted Recommendations/Total Recommendations
+
+Example:
+80 accepted100 recommended
+
+Result:
+80%
+
+Why it matters:
+Acceptance implies trust.
+Trust is the product.
+
+Metric 2
+Override Rate
+Definition:
+Overridden Recommendations/Total Recommendations
+
+Example:
+20 overrides100 recommendations
+
+Result:
+20%
+
+Goal:
+Decrease over time.
+
+Metric 3
+Prediction Error
+Definition:
+Difference between:
+Expected Outcome
+and
+Observed Outcome
+
+Example:
+Predicted:8 reps
+
+Actual:10 reps
+
+Error:
+2 reps
+
+Goal:
+Prediction error should decrease over time.
+
+This measures learning quality directly.
+
+Metric 4
+Workout Completion Rate
+Definition:
+Completed Workouts/Started Workouts
+
+Goal:
+Remain high.
+
+Reason:
+An intelligent system that people do not finish using has failed.
+
+Metric 5
+8-Week Retention
+Definition:
+Percentage of athletes still training after eight weeks.
+
+Reason:
+The product exists to support long-term adherence.
+
+This is one of the most important metrics in the company.
+
+Metric 6
+Trust Question
+Every few weeks ask:
+How often do you follow Hush recommendations without modification?
+
+Scale:
+NeverRarelySometimesOftenAlways
+
+This is subjective.
+That is okay.
+Trust itself is subjective.
+
+Learning Metrics
+Internal only.
+Not shown to athletes.
+
+Capability Confidence Growth
+Measures:
+How certain is the model becoming?
+
+Goal:
+Confidence should generally rise.
+
+Prediction Stability
+Measures:
+How volatile are recommendations?
+
+Goal:
+Reduce unnecessary changes.
+
+Decision Reversal Rate
+Measures:
+Increase↓Decrease↓Increase
+
+Frequent reversals indicate instability.
+
+Goal:
+Keep low.
+
+Metrics We Explicitly Ignore
+During MVP:
+❌ Revenue
+❌ DAU
+❌ Session Length
+❌ Screen Time
+❌ Notification Engagement
+❌ Social Engagement
+
+Reason:
+None of these validate the core hypothesis.
+
+MVP Test Structure
+Phase 1
+10–20 Athletes
+Duration:
+8 weeks
+
+Goal:
+Qualitative learning.
+
+Questions:
+Do they trust it?Do they follow it?Do they return?
+
+Phase 2
+50–100 Athletes
+Duration:
+8–12 weeks
+
+Goal:
+Quantitative validation.
+
+Questions:
+Can trust scale?Does learning improve?Do acceptance rates increase?
+
+MVP Success Criteria
+Minimum success:
+60%+ recommendation acceptance
+
+Strong success:
+75%+ recommendation acceptance
+
+Exceptional success:
+85%+ recommendation acceptance
+
+Retention target:
+70%+ at 8 weeks
+
+These are directional targets, not guarantees.
+
+Failure Criteria
+The MVP fails if:
+Recommendation acceptance remains flat. 
+Prediction error does not improve. 
+Athletes consistently override recommendations. 
+Athletes do not return. 
+
+Failure is not catastrophic.
+Failure reveals incorrect assumptions.
+
+Decision Rule
+If trust increases:
+Continue investing.
+
+If trust does not increase:
+Re-evaluate the model before adding features.
+
+Never solve trust problems with engagement features.
+
+Final Principle
+Principle #32
+Trust is the leading indicator.
+Everything else is downstream.
+
+Closing Statement
+The MVP is not trying to prove that Hush can train millions of athletes.
+The MVP is trying to prove one thing:
+Can a system earn the right to make training decisions on behalf of another human being?
+If the answer is yes, the rest becomes an execution problem.
+Founder Package v1
+Chapter 10 — Technical Architecture Principles
+Purpose
+Define the architectural rules that protect the product philosophy.
+Technology serves the product.
+The product does not serve the technology.
+
+Core Principle
+Principle #33
+Every component exists to improve decisions.
+
+If a component does not improve:
+Learning 
+Understanding 
+Decision quality 
+Trust 
+it should not exist.
+
+System Hierarchy
+The system hierarchy is fixed.
+Workout    ↓Observation    ↓Evidence    ↓Athlete State    ↓Decision    ↓Workout
+
+No shortcuts allowed.
+
+Forbidden:
+Workout History↓Decision
+
+Reason:
+Decisions must operate on understanding.
+Not raw events.
+
+Single Source of Truth
+Principle #34
+Athlete State is the source of truth.
+
+All decisions must read from:
+AthleteState
+
+Never directly from:
+WorkoutHistory
+
+Workout history is evidence storage.
+Not decision storage.
+
+Event-Driven Thinking
+The architecture should be event-driven.
+
+Examples:
+WorkoutCompletedSetCompletedExerciseSkippedExerciseReplacedRecommendationOverridden
+
+Events describe reality.
+State describes understanding.
+
+Immutable History
+Principle #35
+History is never edited.
+
+Observations:
+Immutable.
+
+Evidence:
+Immutable.
+
+Decisions:
+Immutable.
+
+Athlete State:
+Mutable.
+
+Reason:
+Understanding may change.
+History must not.
+
+Explainability First
+Every recommendation must be explainable.
+
+Required:
+decision:  increase_loadreason:  exceeded_target_across_recent_sessionsconfidence:  87
+
+Forbidden:
+decision:  increase_loadreason:  unknown
+
+No black-box decisions in V1.
+
+Confidence As Data
+Confidence is not metadata.
+Confidence is part of the model.
+
+Every major object should expose confidence.
+Examples:
+CapabilityStateEvidenceDecision
+
+Reason:
+Uncertainty must influence behavior.
+
+Conservative Defaults
+Principle #36
+When uncertain, do less.
+
+Examples:
+Prefer:
+KEEP_LOAD
+over:
+INCREASE_LOAD
+
+Prefer:
+INCREASE_LOAD
+over:
+DECREASE_LOAD
+unless evidence is strong.
+
+Trust is expensive to rebuild.
+
+Human Override Rule
+The athlete always wins.
+
+If:
+System Recommendation
+conflicts with:
+Athlete Action
+Reality wins.
+
+The system learns.
+
+The athlete is never forced.
+
+Domain Before Infrastructure
+The domain model is more important than infrastructure.
+
+Priority:
+Athlete State
+before:
+Microservices
+
+Priority:
+Decision Quality
+before:
+Scalability
+
+Priority:
+Learning Model
+before:
+Cloud Optimization
+
+V1 should optimize for learning.
+Not scale.
+
+Replaceability
+Every component should be replaceable.
+
+Examples:
+Replace:
+Evidence Engine
+without rewriting:
+Workout Engine
+
+Replace:
+Decision Engine
+without rewriting:
+Athlete State
+
+Loose coupling.
+Strong contracts.
+
+Auditability
+Every important action must be traceable.
+
+For every recommendation:
+We should know:
+inputsevidencestatedecisionresult
+
+If we cannot reconstruct a decision:
+The architecture is incomplete.
+
+Learning Over Optimization
+Principle #37
+Early architecture should optimize for learning speed.
+
+Not:
+Perfect Performance
+
+Not:
+Maximum Scalability
+
+Questions we need answered:
+Why did the athlete override?Why was the prediction wrong?Why did trust decrease?
+
+These are more valuable than milliseconds.
+
+V1 Architectural Goals
+The architecture succeeds if:
+Every recommendation is explainable. 
+Every decision is auditable. 
+Athlete State improves over time. 
+Prediction accuracy improves over time. 
+Components remain simple. 
+
+V1 Architectural Non-Goals
+Not goals:
+❌ Machine Learning Infrastructure
+❌ Real-Time Optimization
+❌ Reinforcement Learning
+❌ Distributed Intelligence
+❌ Multi-Agent Systems
+❌ Hyper-Personalized AI Stack
+
+Reason:
+None are required to validate trust.
+
+Final Principle
+Principle #38
+Complexity must be earned.
+
+Every new layer must justify itself.
+Every abstraction must solve a real problem.
+Every service must create real value.
+
+Final Statement
+Hush is not a fitness app with AI.
+Hush is a learning system that happens to operate in fitness.
+The architecture must reflect that distinction.

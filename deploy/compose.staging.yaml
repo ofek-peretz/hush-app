@@ -1,0 +1,43 @@
+# Hush v1 — staging-shaped local topology (BB-30). Brings up the SAME shape as prod on one host:
+# an ingress/TLS proxy in front of one Hush service over one SQLite/WAL volume. Use it to rehearse a
+# deploy, a migration, and the cross-tier contract test before touching real infrastructure.
+#
+#   docker build -f deploy/Dockerfile -t hush:local .
+#   cp deploy/.env.example deploy/.env.staging   # fill HUSH_OPERATOR_KEY + TOKEN_PEPPER (staging-only)
+#   docker compose -f deploy/compose.staging.yaml up
+#
+# This is a REHEARSAL environment: synthetic data only, NEVER real athlete data (DEPLOYMENT_ARCHITECTURE
+# §2). It is not a production manifest — prod uses managed infra for the proxy, secrets, encrypted
+# volume, and off-box backups (escalate; §7).
+services:
+  hush-app:
+    image: hush:local
+    # the prod entrypoint: backup-gated migrate -> verify -> serve (single writer)
+    entrypoint: ["/bin/sh", "/srv/deploy/entrypoint.sh"]
+    env_file: [./.env.staging]
+    environment:
+      HUSH_DB_PATH: /data/hush.db
+      HUSH_BACKUP_DIR: /backups
+      HUSH_AUTOCREATE_APP: "1"
+    volumes:
+      - hush-data:/data          # in prod: an ENCRYPTED-at-rest volume (BB-21)
+      - hush-backups:/backups    # in prod: off-box ENCRYPTED bucket, not a local volume (BB-3/21)
+      - ../deploy:/srv/deploy:ro  # entrypoint.sh (the image ships app/ only)
+    expose: ["8000"]             # private only — never published to the host's public interface
+    restart: unless-stopped
+
+  ingress:
+    image: caddy:2
+    depends_on: [hush-app]
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./ingress/Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+
+volumes:
+  hush-data:
+  hush-backups:
+  caddy-data:

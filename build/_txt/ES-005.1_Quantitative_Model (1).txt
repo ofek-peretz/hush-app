@@ -1,0 +1,148 @@
+Engineering Specification 005.1
+Quantitative Model — Concrete Equations, Constants & Worked Traces
+This addendum closes ES-005 from “conceptual” to “implementable.” It fixes the function shapes (not just coefficients), resolves the convergence and stability hazards, and supplies calibrated constants for one capability (horizontal_push) as the reference implementation. All numbers reproduce ES-005’s own anchor example (score 64 → 113 kg; bench @ 82.5 kg ≈ 11 reps-to-failure).
+Part A — Defects in ES-005 this addendum resolves
+§
+Defect
+Resolution
+2
+“Monotonic” underspecifies the score→kg shape; linear vs exponential change progression feel.
+Fix exponential form (§1).
+7
+Convergence to zero assumes unbiased prediction; sub-maximal effort + low-cal prediction bias cancel at a nonzero point.
+Define effort-adjusted target; track bias explicitly (§4).
+8
+“Inverse of prediction path” requires strict monotonicity + closed-form inverse; “monotonic” permits flats → non-invertible.
+Strictly increasing exp has closed inverse (§1, §5).
+9
+“Weighted blend” unstable if weight rises with surprise (positive feedback).
+Quality weight DECREASES with surprise; signal-strength routed to confidence only (§5).
+11
+Confidence arrow chain conflates aggregation with derivation.
+Three explicit formulas; global = aggregate, prediction = derivation (§6).
+12+13
+Discount × round-down stack → negative progression near plate boundaries.
+Single discount-then-floor + progression guard (§7).
+—
+Bodyweight uncollected but dominates pull/push loads; sex/age priors ignored.
+Cohort multiplier on prior; bodyweight flagged as residual defect (§8).
+Section 1 — Reference Strength (the score→kg decoder)
+Score maps to a reference 1RM-equivalent on the canonical exercise (difficulty_factor = 1.0) via a strictly increasing exponential. Exponential, not linear, so a fixed score step is a fixed PERCENTAGE of load — matching how strength actually scales. Strictly increasing guarantees the closed-form inverse §8 depends on.
+ReferenceStrength(S) = A · e^(k·S)        A = 40.0 kg,  k = 0.016227
+Constants pinned to ES-005: S=64 → 113 kg, and S=0 → 40 kg (beginner floor). Inverse:
+S(RM1) = ln(RM1 / A) / k
+Calibration table (horizontal_push, reference cohort):
+Score
+Ref strength (kg)
+0
+40.0
+40
+76.6
+55
+97.6
+64
+113.0
+70
+124.6
+100
+202.7
+Each capability gets its own (A, k) calibrated the same way against its canonical lift. Only horizontal_push is specified here; the other six follow the identical procedure.
+Section 2 — Exercise projection & the rep model
+Capability strength projects to a specific exercise by difficulty_factor, then Epley converts (load, RM1) to reps-to-failure. Epley is chosen because it is cleanly invertible in all three directions the loop needs.
+RM1_exercise   = ReferenceStrength(S) · difficulty_factor
+reps_to_failure(L)   = (RM1_exercise / L − 1) · 30        [forward / predict]
+load_for_reps(r)     = RM1_exercise / (1 + r/30)         [recommend]
+RM1_observed(L, r)   = L · (1 + r/30)                    [learn / inverse]
+Check: bench (df 1.0), S=64 → RM1 113. reps_to_failure(82.5) = (113/82.5 − 1)·30 = 11.1. Matches ES-005’s example of 11.
+Section 3 — Prediction is reps-to-failure; prescription is target reps
+These are different scales (ES-005 §4 is correct). The learning signal compares against reps-to-failure; the athlete is prescribed fewer reps, leaving reps-in-reserve (RIR).
+predicted_reps_to_failure = reps_to_failure(L)
+target_reps               = predicted_reps_to_failure − RIR     (RIR ≈ 2–3, strategy-set)
+prediction_error          = actual_reps − predicted_reps_to_failure   → must converge to 0
+Section 4 — The convergence hazard (effort bias)
+prediction_error converges to zero ONLY if actual_reps reflects true reps-to-failure. Two biases distort this: (a) calibration deliberately under-predicts; (b) athletes stop short of true failure. They push error in opposite directions, so the system converges to wherever they cancel — not necessarily zero, and the cancellation point drifts as confidence (hence the discount) changes.
+Mitigation: track effort separately from accuracy.
+Section 5 — Score update (stable Bayesian blend)
+Every completed set yields an observed score via the §2 inverse. The capability score is a precision-weighted blend. Critically, the weight DECREASES with surprise (quality), so a wild observation cannot hijack the estimate — this removes the positive-feedback instability latent in ES-005 §9.
+RM1_obs = actual_weight · (1 + actual_reps/30)        // uses ACTUAL weight (override-safe)
+S_obs   = ln(RM1_obs / A) / k
+
+w_i     = decay(Δt_i) · quality_i
+quality_i = (prediction_confidence_i/100) · error_class_weight_i
+   error_class_weight:  |err|≤1 → 1.0 ,  ≤3 → 0.6 ,  >3 → 0.3
+
+Σw-form (precision accumulator):
+  Σw_new = Σw_old + w_i
+  S_new  = (Σw_old·S_old + w_i·S_obs) / Σw_new
+Surprise (large |error|) lowers quality → lowers the weight on S_obs → the score moves little. Surprise is instead routed to confidence (§6), where it lowers certainty. This is the resolution of the signal-strength-vs-quality conflict: quality drives the SCORE, signal-strength drives CONFIDENCE.
+Section 6 — Confidence (three formulas, correct direction)
+Capability confidence is a saturating function of accumulated precision. Prediction confidence is DERIVED from capability confidence and recent accuracy. Global confidence is an AGGREGATE of capability confidences. Aggregation and derivation are distinct — global is not computed from prediction.
+c_cap   = 100 · (1 − e^(−Σw / 8))                 // 8 effective obs ≈ 63% conf; floor 10 at seed
+stability = max(0.2, 1 − mean(recent |error|)/5)
+c_pred  = c_cap · stability                       // derivation
+c_global = Σ_j(evidence_count_j · c_cap,j) / Σ_j evidence_count_j   // aggregation over 7 caps
+Because decay shrinks Σw over idle time, confidence falls when an athlete stops training — the “recent evidence matters” principle applied to certainty. Calibration ends when c_global ≥ 70 (a COMPUTED quantity, replacing the standalone boolean). The explicit “all capabilities observed” check is kept; the raw “≥50 observations” rule is redundant under this formula and dropped.
+Section 7 — Recommendation operator (discount, floor, guard)
+Order of operations matters: discounting then flooring can stack into a net decrease near plate boundaries. The operator applies a confidence-scaled discount, floors ONCE to equipment granularity, then applies a progression guard that forbids a silent decrease unless the evidence path itself called DECREASE_LOAD.
+safety_discount = 1 − 0.12 · (1 − c_pred/100)        // c_pred=20 → ×0.904 ; c_pred=90 → ×0.988
+L_ideal = load_for_reps(target_reps + RIR)
+L = floor( L_ideal · safety_discount / incr ) · incr   // incr: 2.5kg barbell / stack for machine
+if L below last_accepted_load AND evidence ≠ DECREASE:  L = last_accepted_load   // progression guard
+The guard converts the dangerous double-conservatism (which produced a load DECREASE for a ready athlete in testing) into a hold. A genuine decrease still flows when the Decision Engine emits DECREASE_LOAD on persistent negative evidence.
+Section 8 — Cohort priors & the bodyweight residual
+Onboarding already collects sex and age; the prior should use them. Apply a multiplier to the reference strength PRIOR only (observations override within ~5 sets).
+prior_multiplier  m(sex, age) = m_sex · (1 − 0.005 · max(0, age−30))
+   m_sex:  male 1.00 ,  female 0.60
+ReferenceStrength_prior(S) = A · e^(k·S) · m(sex, age)   // applied at seed only
+Unresolved (flagged, not fixed within the no-new-input constraint):
+Section 9 — Worked traces
+9.1 Beginner cold start (horizontal_push, machine press df 0.8)
+Step
+Value
+Seed score / confidence
+S = 40, c_cap = 10
+Reference strength
+40 · e^(0.016227·40) = 76.6 kg
+RM1_exercise (df 0.8)
+61.3 kg
+Target / RIR
+target 8 reps, RIR 3 → ideal at 11 reps-to-failure
+L_ideal
+load_for_reps(11) = 44.9 kg
+Discount (c_pred≈20)
+×0.904 → 40.6 kg
+Floor (machine, 5kg)
+40 kg recommended
+Athlete result
+actual 14 reps (positive surprise)
+Observed
+RM1_obs = 40·(1+14/30) = 58.7 → S_obs ≈ 38
+Update
+|err| 3 → quality 0.6·0.20; Σw small → S_new ≈ 39.7, c_cap → 11.3
+Interpretation: one surprising set barely moves the score (39.7 vs 40) but begins lifting confidence. Stability by design.
+9.2 Advanced steady state (bench, df 1.0)
+Step
+Value
+Score / confidence
+S = 70, c_pred = 85
+Reference strength
+124.6 kg
+L_ideal
+load_for_reps(11) = 91.6 kg
+Discount (×0.982)
+89.9 kg
+Floor (2.5kg)
+87.5 kg recommended
+Predicted reps-to-failure
+12.7 → prescribed target ≈ 9.7
+Same model, same constants, both directions consistent. Forward (recommend) and inverse (learn) are exact inverses of one another, satisfying Principle #43.
+Final Principle (Principle #44, made literal)
+Every recommendation is now reconstructable as an arithmetic chain: score → e^(kS) → ×df → Epley → discount → floor → guard. Every learning step is its exact inverse: actual → Epley⁻¹ → ln/k → precision-weighted blend. No step is a black box; every constant above is pinned to ES-005’s stated anchors.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-005.1 Quantitative Model — the math is unchanged; the recommendation/discount OUTPUT is ADVISORY.
+
+UNCHANGED and bit-for-bit preserved (no ① core-math change in any DX delta): ReferenceStrength (A_c·e^{kS}) and its inverse, Epley in three directions, the precision-weighted blend, decay, confidence saturation, the §7 safety discount, and §13 quantization. ES-005.1 remains the math source of truth.
+CHANGED is STATUS, not math: the §7 recommended load (discount + plate-floor) is an ADVISORY recommendation. The athlete owns the working load. Hush LEARNS from the logged actual_weight (M1/DX-01), evaluates prediction quality at the actual load (DX-02), and builds future programs from the score-derived target_load (DX-20) — mediated through the score, never anchored to a stale recommendation.
+As-built sources: reviews/completion/M1_COMPLETION_REPORT.md; API_CONTRACT_V1.md §0.5/§7.1/§16C; HUSH_V1_PRODUCT_SPECIFICATION.md §2/§7.
+

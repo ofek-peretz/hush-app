@@ -1,0 +1,785 @@
+
+Engineering Specification 001
+Workout Session Model v1
+Purpose
+Define the execution structure of a workout.
+This specification creates the canonical hierarchy from workout plan to observation.
+
+Core Principle
+Every observation must originate from a specific set.
+
+No observation should exist without a set.
+No set should exist without an exercise.
+No exercise should exist without a workout session.
+
+Hierarchy
+WorkoutSession    ↓ExerciseBlock    ↓Set    ↓Observation
+
+Entity: WorkoutSession
+Represents one training session.
+
+Schema
+id: UUIDathlete_id: UUIDstatus:  planned  active  completed  abandonedstarted_at: Timestampcompleted_at: Timestampstrategy_id: UUIDcreated_at: Timestamp
+
+Example
+id: ws_001athlete_id: athlete_123status: completedstarted_at: 2026-06-09T18:00completed_at: 2026-06-09T19:02
+
+Entity: ExerciseBlock
+Represents one exercise within a workout.
+
+Important:
+ExerciseBlock is not Exercise.
+Exercise is a catalog object.
+ExerciseBlock is a workout instance.
+
+Schema
+id: UUIDworkout_session_id: UUIDexercise_id: UUIDposition: Integerrecommended_weight: Floattarget_reps: Integertarget_sets: Integerstatus:  planned  active  completed  skipped
+
+Example
+exercise_id: bench_pressrecommended_weight: 82.5target_reps: 8target_sets: 3
+
+Entity: Set
+Represents a single execution attempt.
+
+This becomes the fundamental learning unit.
+
+Schema
+id: UUIDexercise_block_id: UUIDset_number: Integerrecommended_weight: Floattarget_reps: Integeractual_weight: Floatactual_reps: Integerstatus:  completed  skippedcompleted_at: Timestamp
+
+Example
+set_number: 1recommended_weight: 82.5target_reps: 8actual_weight: 82.5actual_reps: 11
+
+Critical Rule
+Store both:
+recommended_weight
+and
+actual_weight
+
+Reason:
+Overrides are evidence.
+
+Example:
+recommended_weight: 82.5actual_weight: 90
+
+This is meaningful learning data.
+
+Entity: Observation
+Represents interpreted execution data.
+
+Observation is generated automatically after set completion.
+
+Schema
+id: UUIDathlete_id: UUIDworkout_session_id: UUIDexercise_block_id: UUIDset_id: UUIDcapability_id: UUIDpredicted_reps: Integeractual_reps: Integerprediction_error: Floatcreated_at: Timestamp
+
+Example
+predicted_reps: 8actual_reps: 11prediction_error: 3
+
+Observation Generation
+Flow:
+Set Completed        ↓Observation Created        ↓Evidence Generated
+
+Observations are immutable.
+
+Exercise Skip Flow
+If:
+exercise_block.status = skipped
+
+Generate:
+Preference Signal Candidate
+
+Do not generate:
+Performance Evidence
+
+Because no performance occurred.
+
+Session Completion Rule
+A workout session is completed when:
+All ExerciseBlocks
+are:
+completed
+or
+skipped
+
+Abandoned Session Rule
+A workout session becomes:
+abandoned
+when:
+Session started
+but:
+No completion threshold reached
+
+Exact threshold can be configured later.
+
+Learning Ownership
+WorkoutSession owns:
+Execution Context
+
+Set owns:
+Actual Performance
+
+Observation owns:
+Prediction Comparison
+
+Evidence owns:
+Interpretation
+
+This separation is intentional.
+
+Audit Example
+Example:
+Bench Press82.5kgTarget: 8Actual: 11
+Trace:
+WorkoutSession↓ExerciseBlock↓Set↓Observation↓Evidence↓Capability Update↓Decision
+
+Every recommendation in the system should be traceable through this chain.
+
+Success Criteria
+The model succeeds if:
+Every rep belongs to a set. 
+Every set belongs to an exercise. 
+Every exercise belongs to a workout. 
+Every observation is traceable. 
+Every decision can be audited. 
+
+Why start here?
+כי עכשיו לראשונה יש לנו:
+Workout↓Exercise↓Set↓Observation
+כלומר יחידת אמת בסיסית.
+Engineering Specification 002
+Exercise Catalog v1
+
+Purpose
+The Exercise Catalog defines all exercises known to Hush.
+It acts as the translation layer between:
+Human Movements
+and
+Capability Model
+
+Core Principle
+Exercises are implementation.
+Capabilities are understanding.
+
+Exercises may change.
+Capabilities should remain stable.
+
+Entity: Exercise
+Represents a canonical exercise definition.
+
+Schema
+id: UUIDcode: Stringname: Stringstatus:  active  deprecatedprimary_capability: Stringsecondary_capability: String | nullprimary_weight: Floatsecondary_weight: Floatequipment_type: Enumdifficulty_factor: Floatreplacement_group: Stringcreated_at: Timestamp
+
+Example
+id: ex_bench_presscode: bench_pressname: Barbell Bench Pressprimary_capability: horizontal_pushsecondary_capability: nullprimary_weight: 1.0equipment_type: barbelldifficulty_factor: 1.0replacement_group: chest_press
+
+Capability Mapping
+Every exercise must map to at least one capability.
+
+Example:
+bench_presshorizontal_push
+
+Example:
+incline_dumbbell_presshorizontal_push: 0.8vertical_push: 0.2
+
+Rule:
+All contribution weights must sum to 1.0
+
+Equipment Types (V1)
+barbelldumbbellmachinecablebodyweight
+
+Purpose:
+Equipment replacement.
+
+Example:
+equipment_busy:barbell
+
+System can search:
+horizontal_pushmachine
+
+and find:
+machine_chest_press
+
+Difficulty Factor
+Important field.
+
+Example:
+bench_pressdifficulty_factor: 1.0
+
+Example:
+machine_chest_pressdifficulty_factor: 0.8
+
+Purpose:
+Translate capability estimates into exercise-specific recommendations.
+
+Claude correctly identified:
+Capability Score↓???↓82.5kg
+
+Difficulty Factor becomes one part of that bridge.
+
+Replacement Groups
+Exercises belong to replacement families.
+
+Example:
+replacement_group:chest_press
+
+Members:
+bench_pressdumbbell_pressmachine_presssmith_press
+
+Purpose:
+Equipment Busy flow.
+
+Example:
+Bench unavailable
+
+System finds:
+Nearest equivalent
+
+without user search.
+
+Entity: ExerciseRelationship
+Represents explicit exercise substitutions.
+
+Schema
+source_exercise_idtarget_exercise_idreplacement_score
+
+Example:
+bench_pressmachine_chest_press0.92
+
+Example:
+bench_presspushup0.41
+
+Purpose:
+Rank alternatives.
+
+Capability Coverage Rules
+Every capability must have:
+minimum_exercises: 5
+
+Reason:
+No capability should depend on a single exercise.
+
+Exercise Lifecycle
+States:
+activedeprecated
+
+Deprecated exercises:
+Remain in history
+
+But:
+Cannot appear in new recommendations
+
+Important for long-term consistency.
+
+Versioning Rule
+Claude found a subtle issue here.
+
+Contribution weights may change.
+
+Example:
+Today:
+incline_db_presshorizontal_push: 0.8vertical_push: 0.2
+
+Future:
+horizontal_push: 0.7vertical_push: 0.3
+
+Without versioning:
+Historical evidence changes meaning.
+
+Therefore:
+exercise_version
+must be stored on every Observation.
+
+History should never be reinterpreted.
+
+Ownership
+Exercise Catalog is:
+System-Owned
+
+Athletes cannot edit it.
+
+Coaches cannot edit it.
+
+Only product evolution changes it.
+
+V1 Exercise Count
+Not hundreds.
+
+Recommended:
+40–60 exercises
+
+Enough to cover:
+all capabilities 
+all common equipment constraints 
+all major gym setups 
+
+No more.
+
+Success Criteria
+The Exercise Catalog succeeds if:
+Every exercise maps to capabilities. 
+Every capability has multiple exercises. 
+Equipment replacement is possible. 
+Historical observations remain valid. 
+Capability learning survives exercise changes. 
+
+Final Principle
+Exercises are temporary.
+Capabilities are durable.
+Engineering Specification 003
+Initial Calibration Engine v1
+
+Purpose
+Generate safe and useful initial recommendations for new athletes.
+
+Mission
+The goal is NOT:
+Maximum Accuracy
+
+The goal is:
+Maximum Safety+Fast Learning+Trust Preservation
+
+Core Principle
+Principle #39
+The first recommendation should be too easy more often than too hard.
+
+A recommendation that is too light:
+Learning Opportunity
+
+A recommendation that is too heavy:
+Trust Destruction
+
+Calibration Phases
+Every athlete starts in:
+calibration_phase: true
+
+The phase ends when:
+global_confidence >= threshold
+
+Example:
+70
+
+Exact value configurable.
+
+Day 0 Inputs
+Collected during onboarding.
+
+Required
+agesexexperience_levelprimary_goalworkouts_per_week
+
+Optional
+gym_typeequipment_accesspreferred_exercises
+
+No strength estimates.
+No 1RM inputs.
+No self-assessment numbers.
+
+Reason:
+Most athletes are poor estimators.
+
+Initial Capability Seed
+Every athlete starts with:
+CapabilityState
+for all 7 capabilities.
+
+Example:
+horizontal_pushscore: seed_valueconfidence: 10
+
+Very low confidence.
+
+Reason:
+The system knows almost nothing.
+
+Experience-Based Seeding
+Initial scores depend on:
+experience_level
+
+Example:
+beginnerhorizontal_push:40
+
+intermediatehorizontal_push:55
+
+advancedhorizontal_push:70
+
+These are priors.
+Not truths.
+
+Conservative Bias
+After initial estimation:
+Apply safety discount.
+
+Example:
+estimated_load:80kg
+
+System recommendation:
+72.5kg
+
+Purpose:
+Avoid early failure.
+
+Calibration Workout Design
+During calibration:
+Exercises should maximize information gain.
+
+Goal:
+Learn capabilities quickly.
+
+Not:
+Optimize training.
+
+Capability Coverage Rule
+First 3–5 workouts should cover:
+horizontal_pushhorizontal_pullvertical_pushvertical_pullknee_dominanthip_dominantcore_stability
+
+At least once.
+
+Reason:
+The model needs observations.
+
+Calibration Recommendation Strategy
+During calibration:
+Use narrower progression.
+
+Example:
+normal_increment:5kg
+
+Calibration:
+2.5kg
+
+Reason:
+Reduce risk.
+
+Early Success Preference
+If uncertain:
+Prefer:
+Athlete exceeds target
+
+Over:
+Athlete fails target
+
+This is intentional.
+
+Calibration Signals
+Most valuable signals:
+
+Positive Surprise
+Example:
+predicted: 8actual: 13
+
+Very useful.
+
+Accurate Prediction
+Example:
+predicted: 8actual: 8
+
+Useful.
+
+Failure
+Example:
+predicted: 8actual: 4
+
+Useful for learning.
+Bad for trust.
+
+Therefore:
+Should be minimized.
+
+Calibration Completion Criteria
+Calibration ends when:
+Condition 1
+All capabilities observed.
+
+Condition 2
+Minimum evidence count reached.
+
+Example:
+50 observations
+
+Condition 3
+Global confidence threshold reached.
+
+Example:
+70
+
+All three required.
+
+Calibration UX Rules
+The athlete should never see:
+Calibration PhaseLearning ModeConfidence Score
+
+Internal concepts remain internal.
+
+The athlete experiences:
+Normal Training
+
+Nothing more.
+
+Override Interpretation
+Overrides during calibration are especially valuable.
+
+Example:
+recommended: 70actual: 80
+
+This generates:
+High Learning Value
+
+Reason:
+The model is still ignorant.
+
+Calibration Success Metrics
+The calibration engine succeeds if:
+Early workout completion is high. 
+Early recommendation acceptance is reasonable. 
+Prediction error decreases rapidly. 
+Confidence rises steadily. 
+Trust is preserved. 
+
+Failure Conditions
+Calibration fails when:
+Athletes repeatedly miss targets. 
+Athletes repeatedly reduce weight. 
+Override rate is extremely high. 
+Dropout occurs before confidence growth. 
+
+Final Principle
+Principle #40
+Day 1 is not about proving intelligence.
+Day 1 is about earning the opportunity to learn.
+Engineering Specification 004
+Prediction Engine v1
+Purpose
+Generate expected performance predictions for a specific athlete performing a specific exercise at a specific load.
+
+Mission
+The Prediction Engine answers one question:
+How many reps do we expect this athlete to complete?
+
+Not:
+What should they do? 
+What is their capability? 
+What strategy should they follow? 
+Those belong elsewhere.
+
+Core Principle
+Principle #41
+Prediction precedes learning.
+
+No prediction.
+No prediction error.
+No learning.
+
+Inputs
+Prediction Engine receives:
+athlete_statecapability_stateexerciserecommended_weightrecent_observations
+
+Example:
+exercise:  bench_pressrecommended_weight:  82.5kghorizontal_push:  score: 64  confidence: 82recent_observations:  [...]
+
+Output
+Single value.
+predicted_reps: Integer
+
+Example:
+predicted_reps: 8
+
+V1 Philosophy
+No machine learning.
+No neural networks.
+No black boxes.
+
+V1 should be deterministic.
+
+Reason:
+If predictions are wrong we must understand why.
+
+Prediction Layers
+Prediction is produced from three layers.
+
+Layer 1
+Capability Estimate
+
+Example:
+horizontal_push_score:  64
+
+This creates:
+capability_rep_estimate:  9
+
+At the selected difficulty.
+
+This is still exercise-agnostic.
+
+Layer 2
+Exercise Adjustment
+Different exercises produce different outputs.
+
+Example:
+bench_press:  difficulty_factor: 1.0
+
+Example:
+machine_press:  difficulty_factor: 0.8
+
+Adjustment modifies expected performance.
+
+Result:
+exercise_rep_estimate:  8.7
+
+Layer 3
+Recent Performance Adjustment
+The most recent observations matter.
+
+Example:
+Last 3 observations:
+8910
+
+Prediction should shift upward.
+
+Example:
+adjusted_prediction:  9.4
+
+Final:
+predicted_reps:  9
+
+Prediction Confidence
+Prediction must always include confidence.
+
+Output becomes:
+predicted_reps: 9prediction_confidence: 84
+
+Reason:
+The same prediction can mean different things.
+
+Example:
+9 repsconfidence: 25
+Meaning:
+Weak prediction.
+
+Example:
+9 repsconfidence: 90
+Meaning:
+Strong prediction.
+
+Confidence Sources
+Prediction confidence is derived from:
+Capability Confidence
+
+Example:
+horizontal_push:  confidence: 80
+
+Observation Count
+
+Example:
+observations: 50
+higher confidence than:
+observations: 3
+
+Prediction Stability
+
+If predictions have recently been accurate:
+Increase confidence.
+
+If predictions have recently been poor:
+Decrease confidence.
+
+Cold Start Prediction
+During calibration:
+calibration_phase: true
+
+Prediction confidence starts low.
+
+Example:
+predicted_reps: 8confidence: 20
+
+Important:
+The prediction still exists.
+The confidence reflects uncertainty.
+
+Prediction Error
+After set completion:
+
+Example:
+predicted_reps: 8actual_reps: 11
+
+Generate:
+prediction_error: +3
+
+Example:
+predicted_reps: 8actual_reps: 5
+
+Generate:
+prediction_error: -3
+
+Error Classification
+V1 should classify prediction quality.
+
+0-1 reps:  excellent
+
+2-3 reps:  acceptable
+
+4+ reps:  poor
+
+Used for confidence updates.
+
+Prediction Memory Window
+Predictions should prioritize recent behavior.
+
+Suggested:
+last_5_to_10_observations
+
+Reason:
+Recent capability matters more than old capability.
+
+Override Handling
+Example:
+recommended:  82.5actual:  90
+
+Prediction should be based on:
+actual_weight
+
+Not recommended weight.
+
+Reality always wins.
+
+Calibration Behavior
+During calibration:
+Predictions should be:
+Conservative
+
+Reason:
+Trust > precision.
+
+Example:
+If model uncertainty exists:
+Prefer:
+predicted_reps: 7
+over:
+predicted_reps: 10
+
+Because overestimation creates failure.
+
+Prediction Audit
+Every prediction should store:
+prediction_idinputspredicted_repsprediction_confidencetimestamp
+
+Reason:
+Future debugging.
+
+Success Criteria
+Prediction Engine succeeds if:
+Prediction error decreases over time. 
+Confidence increases over time. 
+Prediction stability improves. 
+Athletes experience fewer unexpected recommendations. 
+Evidence quality improves. 
+
+Final Principle
+Principle #42
+The goal is not perfect prediction.
+The goal is useful prediction.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-003 Calibration — the conservative bias is ADVISORY (this addendum concerns ES-003 only).
+
+The calibration coverage rules and the conservative-bias defaults (light seeds, round-DOWN loads, confidence-scaled safety discount) remain BUILT. As of the v1 product pivot they bias an ADVISORY recommendation: the athlete owns the working load and may accept, ignore, or override any recommended_weight (Product Specification §2/§7; API_CONTRACT_V1 §0).
+The calibration phase (global_confidence < 70) and its restraint on volume and exploration are unchanged and still active.
+Seeding scope note: the calibration SEED target is Option D (a bodyweight-keyed strength-standard table) — SPECIFIED but NOT YET IMPLEMENTED (DX-08 pending). As-built today the cold start uses the 3-bucket beginner/intermediate/advanced seed; bodyweight_kg is now collected (DX-07). See the ES-008 v2 addendum (DX-13).
+ES-001/002/004 in this combined document are otherwise unchanged by the v1 delta; ES-004's prediction math is sourced to ES-005.1 (advisory output — see its addendum).
+As-built sources: reviews/completion/DX-07 + M1 completion reports; HUSH_V1_PRODUCT_SPECIFICATION.md; HUSH_V1_DELTA_EXECUTION_PLAN.md (DX-08, pending).
+

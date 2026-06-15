@@ -1,0 +1,169 @@
+
+Engineering Specification 010
+Attribution & Override Framework v1
+Purpose
+Define the unresolved transition Observation → Evidence: how one observation becomes one or more capability evidence items (attribution), how athlete deviations become evidence (overrides), and how contradictory evidence is reconciled (conflict). This is the connective tissue between ES-001's observations and ES-007's state updates, constrained to be exactly consistent with the ES-005.1 quantitative model.
+Source of Truth
+ES-005.1 (the only sanctioned score↔load math), ES-008 v2 (per-capability anchors, classes, shared k), ES-006 (override-as-signal, three non-collapsed metrics), ES-007 (state-update ownership, conflict principle), ES-009.1 (multi-slot capabilities).
+Core Principle
+Principle #57. Attribution distributes load credit, not rep error. An observation is converted to capability evidence once per capability, each against that capability's own ES-008 v2 anchor. No quantity is ever split in rep space, and no S_obs is ever shared across capabilities with different anchors.
+
+PART A — Multi-Capability Attribution
+A.1 — The attribution unit is per-capability effective load
+ES-002 contribution weights (dip: horizontal_push 0.7, vertical_push 0.3) are reinterpreted: a weight w_c is the fraction of the exercise's external load that capability c is responsible for moving. They sum to 1.0 (ES-002 rule, preserved).
+For an observation with actual_weight and actual_reps:
+For each mapped capability c:
+   effective_load_c = actual_weight · w_c           ← split happens HERE, in load space
+   RM1_obs_c        = effective_load_c · (1 + actual_reps/30)     [Epley, ES-005.1]
+   S_obs_c          = ln(RM1_obs_c / A_c) / k                     [inverse, c's OWN anchor A_c]
+Each capability gets its own S_obs_c, computed against its own ES-008 v2 anchor. This resolves Contradictions 1 and 2 simultaneously: the split is in load space (linear, safe), and each conversion uses the correct per-capability curve.
+A.2 — Worked example (the weighted dip)
+actual_weight = (bodyweight·leverage + added)  [Class-B effective load, ES-008 v2 §3]
+assume effective external load = 100 kg, actual_reps = 11, predicted_to_failure = 8
+horizontal_push (w=0.7):
+   eff_load = 70 kg → RM1_obs = 70·(1+11/30) = 95.7 → S_obs = ln(95.7/40)/0.016227 = 53.9
+vertical_push (w=0.3):
+   eff_load = 30 kg → RM1_obs = 30·(1+11/30) = 41.0 → S_obs = ln(41.0/24.07)/0.016227 = 32.8
+The +3 rep error is never split. It is implicit: the high rep count drives both RM1_obs_c upward, producing two S_obs_c values that each feed their capability's blend. The error's magnitude survives (both capabilities see strong positive evidence); its direction is correct per capability (each judged on its own curve).
+A.3 — Attribution timing: where in the pipeline
+Answering the four-way question directly:
+After prediction error is observed, before evidence is created. Prediction error is computed once at the observation level (ES-004, against the predicted-reps-to-failure that ES-006 stored). Attribution then runs on the raw observation, not on the error.
+In load space for the split, then immediately into score space for the per-capability value. Never in rep space; never in evidence space (evidence is already per-capability by the time it exists).
+Observation (one, exercise-level)
+   → prediction_error computed once (audit/metrics only — NOT split)
+   → Attribution: split load by w_c, convert per capability to S_obs_c
+   → Evidence: one Evidence row per capability c
+   → ES-005.1 §5 blend per capability
+A.4 — Interaction with confidence
+Each per-capability evidence carries a quality weight, and the contribution weight scales it (ES-005.1 §5 w_i):
+w_i,c = decay(Δt) · quality_i · w_c
+   quality_i = (prediction_confidence/100) · error_class_weight   [ES-005.1 §5]
+A secondary capability (w=0.3) receives proportionally less blend weight and less confidence accrual — correct: the dip tells you more about horizontal_push than vertical_push, so vertical_push's sum_w (hence its confidence, ES-005.1 §6) grows slower. Confidence attribution is automatic; no separate rule needed.
+A.5 — Preventing double counting
+Three guarantees (resolving Contradiction 3):
+One Evidence row per (observation, capability) pair. A multi-capability exercise emits exactly N evidence rows for N mapped capabilities — never more, never a duplicate to the primary.
+Accumulation lives only in sum_w. When ES-009.1 puts two exercises on one capability in a session, each emits its own evidence; both flow into the same sum_w accumulator independently. They are not averaged before the blend — the blend's precision-weighting is the sanctioned (and only) accumulation point.
+The exercise-level prediction_error is metrics-only. It feeds ES-006's accuracy/acceptance metrics and the audit log. It is never itself converted to evidence — that role belongs exclusively to the per-capability S_obs_c. This prevents the error being counted once at exercise level and again at capability level.
+A.6 — Consistency with ES-005.1
+By construction: the per-capability path is literally Epley → ln/k with capability A_c, the same functions ES-005.1 §2/§5 define, inverted. Because all capabilities share k (ES-008 v2), the split is percentile-coherent. Forward (recommendation) and this inverse (attribution) remain exact inverses — Principle #43 holds across multi-capability exercises.
+
+PART B — Override Framework
+B.1 — Override taxonomy
+Six types, each routed to exactly one signal channel. The cardinal rule (ES-006): an override is never a failure; it is typed evidence or it is noise.
+Override type
+Trigger
+LOAD_OVERRIDE
+actual_weight ≠ recommended_weight beyond plate tolerance
+EXERCISE_REPLACEMENT
+athlete swaps exercise (not equipment-forced)
+EQUIPMENT_CONSTRAINT
+equipment-busy → forced replacement (ES-001)
+SET_SKIP
+a set within a block not performed
+SESSION_SKIP / ABANDON
+session not started, or abandoned below threshold (ES-001)
+VOLUNTARY_PROGRESSION
+athlete adds sets/reps/load beyond prescription
+B.2 — Per-type definition
+Type
+Evidence?
+Kind
+State(s) updated
+Confidence impact
+Trust impact
+LOAD_OVERRIDE
+Yes
+Capability (Type-A/B obs on actual_weight)
+CapabilityState, capability confidence
+Normal (treated as a real observation at the actual load)
+Neutral — reality wins (ES-007)
+EXERCISE_REPLACEMENT
+Yes
+Preference
+PreferenceState
+Slight ↓ on the capability if pattern (uncertainty about exercise fit)
+Neutral; signals model should adapt selection
+EQUIPMENT_CONSTRAINT
+No (situational)
+None (or weak preference if repeated)
+None directly
+None
+Neutral — environment, not athlete signal
+SET_SKIP
+Conditional
+Adherence (+ weak fatigue if late-set)
+AthleteState completion stats
+None on capability
+Mild negative if frequent
+SESSION_SKIP / ABANDON
+Yes
+Adherence
+AthleteState completion stats; Strategy eval input (ES-007)
+None on capability score
+Negative if pattern → CHANGE_STRATEGY trigger
+VOLUNTARY_PROGRESSION
+Yes
+Capability (positive)
+CapabilityState
+Normal
+Positive — athlete confident; but watch for overreach
+B.3 — Classification into the four categories
+Learning: LOAD_OVERRIDE, VOLUNTARY_PROGRESSION → capability evidence via the ES-005.1 path on actual_weight (ES-005.1 §5 override handling: "uses actual weight").
+Preference: EXERCISE_REPLACEMENT → PreferenceState (ES-007), slow-moving, pattern-gated (ES-006: replacement is preference-driven, never performance-driven).
+Adherence: SET_SKIP, SESSION_SKIP/ABANDON → completion-rate signal feeding Strategy Evaluation, never capability score.
+Noise: EQUIPMENT_CONSTRAINT (single occurrence) → discarded for learning; only escalates to preference if it forms a repeated pattern (ES-001's "repeated skip → preference candidate").
+B.4 — How overrides enter the Evidence Engine
+A LOAD_OVERRIDE is not a special path — it is an ordinary observation whose actual_weight differs from recommended_weight. It enters Part A attribution identically: split by w_c, convert per capability, emit evidence. This is the elegance of ES-005.1 §5 already using actual_weight: overrides need no separate machinery for the capability channel.
+The non-capability channels (preference, adherence) bypass attribution entirely — they were never load/rep observations, so they emit their evidence directly to PreferenceState / completion stats without touching the score blend. This is the clean separation ES-006 demands ("do not collapse them").
+The three ES-006 metrics fall out automatically: acceptance = fraction with no LOAD_OVERRIDE-beyond-tolerance and no ABANDON; accuracy = exercise-level prediction error (A.5 metrics-only value); override-learning-value = the sum_w contribution of override-sourced evidence. Three quantities, three sources, never collapsed.
+
+PART C — Conflict Resolution
+C.1 — The problem the blend doesn't solve alone
+The ES-005.1 §5 precision-weighted blend, given +3 +2 +3 −3 −2 −4, lands near the mean (~−0.2) with sum_w increasing — so confidence rises while the athlete is visibly unstable. This is the contradiction I flagged in the roadmap (Gap 4): ES-007's stated principle ("conflict → reduce confidence before changing score") is not implied by the blend math. ES-010 fixes it.
+C.2 — Variance-suppressed confidence
+Augment ES-005.1 §6 with a recent-evidence variance term. Alongside sum_w, track the weighted variance of recent S_obs_c:
+σ²_recent = weighted variance of last-N S_obs,c   (same decay weights as the blend)
+agreement = 1 − min(σ²_recent / σ²_ref, 1)        σ²_ref = a frozen scale constant
+c_cap = 100 · (1 − e^(−sum_w / 8)) · agreement     ← agreement multiplies the existing curve
+For the conflict example, the alternating signals produce high σ²_recent → agreement → low → c_cap is suppressed despite a healthy sum_w. When evidence later coheres, variance falls and confidence recovers. This makes ES-007's principle mechanically true with one multiplicative term — no new component, fully ES-005.1-consistent.
+C.3 — Effect on the three quantities
+Capability score: moves little during conflict — the blend already averages opposing signals toward the mean, and (C.4) the learning rate is variance-damped so it doesn't chase the swings.
+Capability confidence: suppressed by the agreement factor (C.2). This is the primary conflict response — "reduce confidence before changing score aggressively" (ES-007).
+Recommendation confidence: falls automatically — ES-005.1 §6 derives c_pred = c_cap · stability, and c_cap just dropped. ES-006's confidence gate then yields conservative recommendations (KEEP_LOAD), which is the correct behavior under genuine instability.
+C.4 — Uncertainty accumulation (learning-rate damping)
+To prevent score chasing during conflict, the ES-007 learning rate inherits the agreement factor:
+effective_learning_weight = w_i,c · agreement
+Low agreement → small effective weight → score barely moves even as observations accumulate. This is ES-007's "when evidence quality decreases, learning rate decreases" made literal, with conflict (variance) as the quality signal. Resolves Gap 4 fully.
+
+PART D — Auditability
+D.1 — The attribution audit chain
+Every evidence item is reconstructable along:
+Observation (exercise-level: actual_weight, actual_reps, predicted_to_failure, prediction_error)
+   → Attribution  (per capability c: w_c, effective_load_c, RM1_obs_c, S_obs_c, A_c, capability_model_version)
+   → Evidence     (per c: S_obs_c, quality, w_i,c, signal_type, override_type|null)
+   → State Update (per c: previous score/confidence, σ²_recent, agreement, effective_learning_weight, new score/confidence)
+Each arrow stores its inputs. The capability_model_version (ES-008 v2) and model_version (ES-005.1) are stamped at the Attribution step, so a historical evidence item is always interpretable under the curve and anchors in force when it was created — history is never reinterpreted (ES-008 v2 §7, ES-Founder immutability).
+D.2 — Reconstruction guarantee
+For any capability score at any time, the chain reconstructs: which observations contributed, how each was split, what each contributed to the blend, how variance suppressed confidence, and why the score moved as little as it did. A score change that cannot be traced to specific evidence rows with specific w_i,c is invalid (ES-006 audit-chain rule). Override-sourced evidence is tagged with override_type, so "did overrides drive this?" is directly answerable — feeding ES-006's override-learning-value metric.
+D.3 — Consistency confirmation
+ES-005.1: attribution uses only Epley + ln/k with per-capability A_c; conflict adds one multiplicative agreement term to the existing c_cap formula. No new math.
+ES-006: three metrics remain separable; override-driven recommendations gate on the suppressed c_pred.
+ES-007: the conflict principle and the learning-rate-follows-quality rule are now mechanically realized, not just asserted.
+ES-008 v2: per-capability anchors and shared k are what make load-space attribution percentile-coherent; classes route Type-A/B/C observations correctly before attribution.
+No new architectural components, no infrastructure, no APIs: every operation is a function over existing entities, written by the existing StateUpdate owner.
+Final Principle
+Principle #58. When an athlete does something the model didn't predict — a heavier load, a swapped exercise, a wild rep count, or six contradictory sets — the system's first move is never to change its mind quickly. It is to ask how much it should trust what it just saw. Attribution decides where the evidence goes; conflict decides how hard it pushes; confidence is the brake. The model earns the right to change by first measuring its own uncertainty.
+
+The three resolutions that matter most, restated plainly: the split is in load space, not rep space (Contradiction 1 — anything else violates ES-005.1's non-linearity); each capability converts against its own anchor (Contradiction 2 — a shared S_obs is the wrong percentile on every capability but one); and accumulation happens only in sum_w, with one evidence row per (observation, capability) (Contradiction 3 — ES-009.1's multi-slot capabilities make premature averaging a real and silent corruption).
+The one judgment call you should scrutinize is the agreement factor in Part C. I made it multiply the confidence curve, so high variance can drive confidence arbitrarily low — which is safe (conservative) but means a genuinely volatile athlete could get stuck at low confidence and perpetually conservative recommendations. The σ²_ref constant controls how punishing this is, and it's the single most important thing to tune in early trials. I'd watch it specifically for athletes whose "conflict" is just high natural day-to-day variance rather than a real model failure — for them, suppression is correct in the short run but shouldn't be permanent.
+This closes roadmap Gaps 1, 3, and 4. The remaining open P0 from the roadmap was session composition (ES-009, done) — so after ES-010 the four P0 gaps are all specified. The next unspecified tier is P1: the fatigue model (Gap 5), which ES-009.1's session ceiling and ES-010's "weak fatigue if late-set" both forward-reference but neither defines. That's the natural ES-011.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-010 Attribution & Override — a weight deviation is a LEARNING INPUT, not an override to suppress.
+
+As of M1 (DX-01 / DX-02) the athlete-logged actual_weight is a first-class LEARNING INPUT: the evidence engine learns from the REAL load, prediction quality is evaluated AT the actual load (rescuing an honest heavier-load/fewer-reps set from quality 0.3 to 1.0), and set_fatigue is costed at the lifted load.
+Therefore a load deviation is NOT categorized-and-discounted away from learning. It enters the SAME precision-weighted blend on actual_weight — consistent with this spec's B.4 (LOAD_OVERRIDE enters the same path on actual_weight). The override TAXONOMY (B.1), the learning/preference/adherence/noise categories (B.3), and the conflict → variance suppression (Part C) all remain VALID; what changes is that a load deviation is logged AND learned, not logged-and-discounted.
+The Part A multi-capability load-space attribution rules are unchanged; the ES-011 ordering amendment (de-fatigue in rep space before attribution) still governs.
+Assumption A9 (overrides interpretable) is re-annotated to 'deviation = input, not override' — see the Assumptions Register addendum (DX-16).
+As-built sources: reviews/completion/M1_COMPLETION_REPORT.md (DX-01/02); hush_model/persistence/pipeline.py, evidence.py; API_CONTRACT_V1.md §0.5/§7.
+

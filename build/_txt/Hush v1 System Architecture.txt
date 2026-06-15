@@ -1,0 +1,123 @@
+
+Hush v1 System Architecture
+This is the consolidated architecture of everything frozen across the Founder Package and ES-001 through ES-013. It is a description of one coherent machine, not a summary of thirteen documents. I have organized it so that an engineer or scientist new to the system could understand how an athlete completing a single set propagates through the entire model — and equally, where the system is load-bearing on assumptions it cannot verify.
+The whole architecture exists to serve one thesis (Hush Thesis v2): become the athlete's trusted default recommendation, earning — over years, not weeks — the standing to decide on their behalf. Every engine, state, and loop below is in service of that, and the safety and trust mechanisms exist because that standing can only be earned and is instantly lost.
+
+1. The engines
+The system is one deployable domain with seven internal engines, each owning a distinct transformation. They form a pipeline that is also a loop.
+Workout / Session Engine (ES-001, ES-009, ES-009.1) — assembles "today's workout." It selects which capabilities to train (session composition), which exercise fills each capability slot (selection, class-matched, preference-aware, with an exploration floor), how many slots and sets each gets (volume composition), and in what order (compound-first). It records sets and manages session lifecycle. It emits ordered ExerciseBlocks with no load — load belongs downstream. This is the only athlete-facing engine.
+Prediction Engine (ES-004, ES-005.1) — answers one question: how many reps to failure do we expect, for this athlete, on this exercise, at this load? It runs the forward path score → ReferenceStrength(S)=A·e^(kS) → ÷difficulty_factor → Epley, adjusted by ES-011 fatigue. Deterministic, no black box, invertible. Outputs predicted_reps_to_failure plus a prediction confidence.
+Evidence Engine (ES-004, ES-010) — converts observations into capability evidence. Per the resolved attribution model, it splits load (not rep error) by ES-002 contribution weights, converts per-capability against each capability's own anchor (S_obs_c = ln(RM1_obs_c/A_c)/k), and emits one Evidence row per (observation, capability) pair. It classifies override signals into the ES-010 taxonomy and routes capability/preference/adherence/noise to their proper channels.
+Athlete State Update Engine (ES-007, ES-005.1) — the only writer to capability/preference/strategy/confidence state. It runs the precision-weighted blend (S_new = (Σw_old·S_old + w·S_obs)/Σw_new), applies the variance-suppressed confidence model, and damps the learning rate under conflict. It enforces the gradual-change and immutable-audit rules.
+Recommendation Engine (ES-006, ES-005.1) — converts understanding into action. It chooses among KEEP_LOAD / INCREASE_LOAD / DECREASE_LOAD / REPLACE_EXERCISE / CHANGE_STRATEGY under a confidence gate and stability requirement, applies the conservative discount and progression guard, and produces an explainable recommendation. It prefers the lowest-cost decision that solves the problem.
+Fatigue & Recovery Engine (ES-011) — maintains the latent fatigue state (systemic + per-capability), generates fatigue from completed sets, decays it between sessions (recovery), and — critically — removes fatigue from observations before conversion so the learning loop stops attributing tiredness to capability change. It holds veto power over progression.
+Investigation Engine (ES-013) — the controller for plateau resolution. It transitions individual capabilities between Recommendation Mode and Investigation Mode, runs the probe cascade (deload → challenge → volume/exercise), maintains exclusion ledgers, and licenses CHANGE_STRATEGY only after experimental exhaustion. It is the system's experimentation layer.
+Standing over all of these as a measurement-and-governance layer, not a pipeline stage:
+Trust Measurement Framework (ES-012) — not a transformer of data but the system's self-evaluation. It computes the TrustScore (Trustworthiness × CostlyDeference × DiscernmentRetained), distinguishes earned trust from passive compliance, and governs whether trust-costly actions (probes) may proceed. It is the North Star metric and the arbiter of whether the system is succeeding.
+
+2. The states
+States divide into three zones by mutability and meaning.
+Static / catalog (rarely or never changes):
+Athlete — age, sex, experience, goal, frequency. Mostly static identity. (Bodyweight is required by ES-008 v2 but absent from the frozen Athlete entity — a known unresolved gap.)
+Exercise Catalog — 40–60 exercises, each with capability mappings, contribution weights, difficulty_factor, equipment_type, class, replacement_group, versioned.
+Immutable history (append-only, never edited — ES-Founder, ES-001):
+WorkoutSession → ExerciseBlock → Set — the execution hierarchy.
+Observation — the interpreted set, fatigue- and effort-adjusted, the fundamental learning unit.
+Evidence — per-capability belief updates, decay-anchored.
+Recommendation — every recommendation with its decision_reason, confidence, and the model versions in force.
+State Update Log — previous state, evidence used, new state, reason — for every mutation.
+Investigation records — probe history, exclusion ledgers, outcomes (ES-013).
+Mutable projection (the understanding decisions read from):
+AthleteState — global_confidence, calibration_phase, workout_count, effort_offset, current_strategy.
+CapabilityState ×7 — score, confidence, sum_w (precision accumulator), per-capability fatigue, last_trained. The central asset; everything exists to create, update, or read it.
+PreferenceState — learned (not declared) exercise preferences.
+StrategyState — frequency, volume band, focus.
+Fatigue state — systemic scalar + per-capability, time-decaying.
+Investigation state — which capabilities are under investigation, current probes, exclusion ledgers.
+The cardinal state rule (ES-Founder §34): decisions read only from AthleteState/CapabilityState, never from raw history. History is evidence storage; state is decision storage. Understanding may change; history must not.
+
+3. The decision layers
+Decisions are stratified by frequency and cost (ES-006), and the system always prefers the lowest layer that solves the problem:
+Layer 1 — Per-set load/reps (most frequent). Driven by Prediction + Recommendation, fatigue-adjusted.
+Layer 2 — Per-exercise (keep/replace). Preference-driven, never performance-driven.
+Layer 3 — Volume (rare). Strategy-level, changed only through evaluation cycles.
+Layer 4 — Strategy (very rare). Frequency/split/focus, licensed only by a completed investigation (ES-013).
+Layer 5 — Identity / goal (extremely rare, athlete-owned). Hush surfaces stalls; the athlete decides.
+The escalation up these layers is the spine of ES-013: a plateau opens an investigation that probes from the cheapest layer upward, and only an exhausted investigation licenses a Layer-4 change.
+
+4. The operating modes
+The system has two modes, scoped per-capability (ES-013's structural addition):
+Recommendation Mode (default) — the capability gets the normal pipeline: predict → fatigue-adjust → decide → conservative-discount.
+Investigation Mode — the capability is the subject of an active plateau investigation; the active probe's deviation replaces the baseline recommendation, while the baseline is retained for reversibility.
+Each capability is in exactly one mode. An athlete can have six capabilities recommending normally and one under investigation. Mode precedence is fixed:
+Fatigue/Safety  >  Investigation  >  Recommendation     (Trust governs throughout)
+This precedence is the most important control invariant in the system. Investigation is sanctioned risk, bounded above by safety and licensed by trust.
+
+5. The feedback loops
+The system is a set of nested controllers operating at different timescales. Understanding the architecture means understanding these loops and their speeds.
+The master loop (every set):
+Workout → Set → Observation
+  → [Fatigue removed]  → Evidence (attributed per-capability)
+  → State Update (capability score + confidence)
+  → Prediction → Recommendation → next Workout
+This is the closed learning loop. Each set the athlete completes feeds back into the understanding that shapes their next set.
+The confidence loop (every observation): prediction accuracy raises confidence; confidence raises the conservative discount toward 1.0 (less conservative); variance/conflict suppresses confidence and damps learning. Confidence is a first-class input, not metadata — it determines aggressiveness.
+The fatigue loop (within and across sessions): sets generate fatigue → fatigue suppresses predicted performance → recommendations auto-soften → between sessions, fatigue decays (recovery) → capacity returns. This loop is what prevents the master loop from mistaking tiredness for capability change.
+The preference loop (pattern-based): selection → behavior → preference evidence → selection. Self-reinforcing, with the exploration floor as the only counterweight.
+The investigation loop (when a plateau is suspected): flat trend → suspicion gate → probe → exclusion → escalate or resolve → mode return. This loop manufactures discriminating observations rather than waiting for them — the escape from the information desert.
+The trust loop (slow, governing): accuracy + costly-deference + discernment → TrustScore → governs whether probes fire → probes generate the costly-deference events trust needs to measure. Trust both gates the system's risk-taking and is fed by it.
+The architecturally critical fact: these loops run at different speeds and were tuned independently. Load adjusts fast, volume slowly, strategy rarely, trust slowest of all (Principle #56: load is the fast knob, volume the slow one). Their global composition's stability is assumed, not proven (Assumptions Register A2).
+
+6. The audit chains
+Every consequential output is reconstructable. The chains compose:
+Recommendation chain (ES-006, ES-010, ES-011):
+Capability → Fatigue/Recovery → de-fatigued Observation → Attribution (per w_c)
+  → Evidence → Prediction → Recommendation (with reason, confidence, model versions)
+Trust chain (ES-012):
+TrustScore → component → specific recommendations counted (hard cases flagged)
+  → overrides + productivity → de-biased observations → decisions they drove
+Investigation chain (ES-013):
+Trend (fatigue/effort-adjusted, CI, window) → suspicion gate → investigation opened
+  → probe → outcome → interpretation → exclusion ledger → resolution/abandonment
+  → mode return | strategy-change recommendation
+The non-negotiable property across all chains: every conclusion records not just what it concluded but what it could not exclude. Version stamps (capability_model_version, model_version) ensure history is interpreted under the model in force when written, never reinterpreted. A conclusion that cannot be reconstructed to specific evidence is invalid.
+
+End-to-end: one set, traced
+An athlete opens the app. The Session Engine composes today's workout — picks capabilities (favoring stale/low-confidence ones, or focus-aligned post-calibration), selects class-matched exercises honoring learned preference, allocates slots and sets by the volume band, orders compound-first. For each block the Recommendation Engine sets a load: it asks the Prediction Engine for reps-to-failure at candidate loads, which reads the CapabilityState score, decodes it through A·e^(kS), divides by difficulty_factor, applies Fatigue suppression, runs Epley. The Recommendation Engine subtracts RIR for a target, applies the confidence-scaled conservative discount, floors to the plate increment, and applies the progression guard. The athlete sees a weight.
+The athlete lifts and reports reps. The Session Engine records the Set. The Fatigue Engine estimates current fatigue and the system de-fatigues the observation in rep space, before conversion. The Evidence Engine splits the effective load by contribution weights, converts per-capability against each anchor, and emits per-capability evidence with quality and decay weights. The State Update Engine blends each capability's score (precision-weighted, gradual), updates confidence (raised by accuracy, suppressed by variance), and logs the mutation immutably. If the athlete used a different weight, that override flows through the same path (actual_weight) as capability evidence; if they skipped or swapped, it routes to preference or adherence channels instead.
+Meanwhile the Trust Engine notes whether this was a hard recommendation accepted, updating costly-deference. If this capability's trend has been flat with a narrow CI and a probe is licensable, the Investigation Engine opens an investigation, flips the capability to Investigation Mode, and — fatigue permitting, trust permitting — runs a deload or challenge probe whose response will rule a confound in or out. Every step writes its audit row.
+That is the whole machine: a set becomes understanding, understanding becomes the next recommendation, and the system continuously measures whether it has earned the right to be followed.
+
+Core invariants
+Decisions read from state, never from raw history. (ES-Founder §34)
+History is immutable; state is mutable. Understanding changes; the record does not.
+Recommendation and learning use the same model, inverted. Forward and inverse share A, k, Epley (Principle #43). The system cannot learn in a scale it can't recommend in.
+Observed performance = capability − fatigue. No observation is a clean capability readout (Principle #59).
+One capability, one mode. Investigation is per-capability scoped (ES-013).
+Safety > Investigation > Recommendation, governed by Trust. The fixed precedence.
+Every conclusion carries what it could not exclude. Auditability includes admitted uncertainty.
+Capabilities are durable; exercises are interchangeable; fatigue is transient. The three-tier ontology that makes the whole abstraction work.
+Confidence is data, not metadata. Uncertainty changes behavior at every layer.
+Conservative defaults. When uncertain, do less; prefer KEEP_LOAD; lean light (Safe > Accurate).
+Critical assumptions (from the Register, ranked)
+Existential, untestable in MVP: capability is recoverable from confounded observations (A1); the coupled loop converges (A2); trust is measurable through behavior (A3); athletes will delegate (A4). These four are the product's foundation and the MVP structurally cannot reach them — risk and testability are inversely correlated.
+High: effort/fatigue separability (A5, no RIR collected); per-athlete recovery learnability (A6, unidentifiable at MVP scale — ship fixed τ); seed safety across cohorts (A7, the most testable high-risk item — invest in week-1 cohort diversity); de-biased error as honest signal (A8, the shadow-baseline comparison is underpowered); override interpretability (A9, off-catalog overrides break attribution).
+Data the system needs but doesn't collect: bodyweight (dimensionally required for Class-B capabilities), proximity-to-failure/RIR (dominant fatigue input, refused by Anti-Requirements), off-catalog exercise identity, life context.
+Safety mechanisms
+Conservative seeds (ES-008 v2) — cohort-adjusted, discounted, lean-light first sessions; first-rep failure is the fastest trust killer.
+Conservative discount (ES-005.1 §7) — confidence-scaled, auto-removing as the model learns.
+Progression guard + round-down quantization — never silently decrease load on positive evidence; never round up.
+KEEP_LOAD default + confidence gate + stability requirement (ES-006) — uncertainty creates stability, not experimentation; patterns, not single events, drive change.
+Fatigue veto (ES-011) — blocks progression into fatigue; the deload probe both diagnoses and treats.
+Probe constraints (ES-013) — single-variable, reversible-within-session, confidence-gated magnitude, fatigue-gated.
+Gradual state change + update ceiling (ES-007) — one workout is not identity.
+Trust mechanisms
+TrustScore as North Star (ES-012) — multiplicative over Trustworthiness × CostlyDeference × DiscernmentRetained, structurally unable to collapse to acceptance, explicitly replacing the Founder Package's invalid acceptance-based North Star.
+Override as evidence, not failure (ES-010, ES-006) — three non-collapsed metrics: acceptance, accuracy, override-learning-value.
+Explainability everywhere (ES-006, ES-Founder §35) — no black-box decisions; human language to the athlete, internal concepts internal.
+Trust governs probing (ES-013×ES-012) — probes only fire if trust can bear them, and probe responses are the costly-deference events that let trust be measured at all.
+The athlete always wins (ES-Founder, ES-006) — reality beats recommendation; the human is never forced; investigation is always reversible.
+
+The architecture in one paragraph
+Hush is a per-athlete learning system whose central asset is a set of seven durable capability estimates, each carrying its own confidence. It observes performance, removes the transient fatigue that contaminates every observation, attributes the cleaned signal to capabilities through a shared-curve model that keeps recommendation and learning mathematically inverse, and updates its understanding gradually and conservatively. From that understanding it produces explainable, fatigue-aware, confidence-gated recommendations — leaning light, defaulting to stability, treating the athlete's overrides as data rather than disobedience. When progress appears to stop, it does not conclude; it experiments, ruling out fatigue, then under-challenge, then under-stimulus, cheapest and safest first, reversing anything that fails, and licensing a major change only when every cheaper explanation is experimentally dead. Above all of this sits a trust measurement that refuses to mistake compliance for trust, and that governs how much risk the system may take. The whole machine is built to become the athlete's trusted default — and every safety and audit mechanism exists because that trust is earned slowly, lost instantly, and, by the system's own honest accounting, rests on four foundational assumptions it cannot yet prove.
+That last clause is not a flaw in the architecture; it is the architecture being honest about itself. The most important thing this system does is carry, with every conclusion, an explicit record of what it could not rule out — which is the only posture under which a machine should ever be trusted to decide on a person's behalf.

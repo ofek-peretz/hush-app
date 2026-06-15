@@ -1,0 +1,172 @@
+{
+  "enrollment": {
+    "instruction": "Enter your invite to begin.",
+    "placeholder": "Invite code",
+    "continue": "Continue",
+    "legal": "Terms · Privacy",
+    "revoked": "This invite is no longer active."
+  },
+  "connectHealth": {
+    "_comment": "Provisional copy (user-approved 2026-06-13), refinable without architectural impact.",
+    "sentence": "Help Hush understand your training and recovery from day one.",
+    "continue": "Continue"
+  },
+  "goal": {
+    "getStronger": "Get Stronger",
+    "buildMuscle": "Build Muscle",
+    "generalFitness": "General Fitness"
+  },
+  "daysPerWeek": {
+    "continue": "Continue"
+  },
+  "aboutYou": {
+    "continue": "Continue"
+  },
+  "home": {
+    "startWorkout": "Start Workout",
+    "rest": "Rest. You need it after {{day}}."
+  },
+  "calibration": {
+    "framing": "The first few workouts are for me to learn you. Weights start light — that's deliberate.",
+    "stillLearning": "still learning this"
+  },
+  "workout": {
+    "bodyweight": "Bodyweight",
+    "completeSet": "Complete Set",
+    "editResult": "Edit result",
+    "equipmentOccupied": "Equipment occupied",
+    "reasonIncrease": "Up {{delta}} from last time. You earned it.",
+    "reasonHold": "Holding here — your recent sessions read as fatigue, not weakness.",
+    "reasonDecrease": "Down {{delta}} today. Three hard sessions in a row — this is the smart move.",
+    "forecastIncrease": "You'll get all {{reps}}.",
+    "forecastHold": "You'll pass it.",
+    "receiptClean": "Told you. {{weight}}, clean.",
+    "receiptWithReps": "Told you. {{weight}} × {{reps}}."
+  },
+  "reasonSheet": {
+    "header": "Why {{weight}}",
+    "dismiss": "Got it",
+    "increase": "Your last three top sets moved faster than the weight on the bar. That's room to grow.",
+    "_comment_holdDecrease": "Verbatim sheet sentences for hold/decrease not quoted in spec — reusing the one-line cause (not invented). Pending sign-off (content gap).",
+    "hold": "Holding here — your recent sessions read as fatigue, not weakness.",
+    "decrease": "Down {{delta}} today. Three hard sessions in a row — this is the smart move."
+  },
+  "editResult": {
+    "done": "Done"
+  },
+  "rest": {
+    "ready": "Ready"
+  },
+  "transition": {
+    "chooseAnother": "Tap to choose another",
+    "switchedTo": "Switched to {{exercise}}."
+  },
+  "pause": {
+    "resume": "Resume Workout",
+    "showExercise": "Technique notes",
+    "finishEarly": "Finish Early"
+  },
+  "finishConfirm": {
+    "finish": "Finish Workout",
+    "cancel": "Cancel"
+  },
+  "technique": {
+    "done": "Done"
+  },
+  "wellDone": {
+    "_comment": "Provisional copy (user-approved 2026-06-13), refinable without architectural impact.",
+    "message": "Well Done."
+  },
+  "portrait": {
+    "headline": "What your body can do",
+    "commitment": "Your {{strong}} is the strongest thing about you. Your {{weak}} is the most untapped. I'm building around closing that gap.",
+    "receiptClosed": "This was your weakest. Told you.",
+    "stillLearning": "still learning",
+    "start": "Start",
+    "compare": "Compare to when you started",
+    "compareProof": "Your {{capability}} went from your weakest to {{state}}.",
+    "seeYourBody": "See your body",
+    "later": "Later",
+    "thresholdOvertake": "Your {{a}} just caught your {{b}}.",
+    "thresholdReorder": "Your {{a}} moved ahead of your {{b}}.",
+    "stateStrongest": "your strongest",
+    "stateSecond": "your second strongest",
+    "stateMid": "the middle of the pack",
+    "stateFourth": "near the bottom",
+    "stateWeakest": "your weakest"
+  },
+  "capability": {
+    "horizontal_push": "horizontal push",
+    "horizontal_pull": "horizontal pull",
+    "vertical_push": "vertical push",
+    "knee_dominant": "squat",
+    "hip_dominant": "hip hinge"
+  },
+  "capabilityLoad": {
+    "horizontal_push": "chest load",
+    "horizontal_pull": "back load",
+    "vertical_push": "shoulder load",
+    "knee_dominant": "squat load",
+    "hip_dominant": "hinge load"
+  },
+  "replacement": {
+    "title": "Replace {{exercise}}",
+    "searchPlaceholder": "Search exercises",
+    "sectionRecommended": "Recommended",
+    "sectionYours": "Your exercises",
+    "sectionAll": "All {{capability}} exercises",
+    "noResults": "Nothing matches in this category.",
+    "use": "Use {{exercise}}",
+    "yoursNow": "{{exercise}} is yours now."
+  },
+  "program": {
+    "loadChange": "I increased your {{target}}.",
+    "undo": "Undo",
+    "frameChange": "Adding a set to {{capability}}.",
+    "gotIt": "Got it",
+    "keepAsIs": "Keep as is",
+    "forecastFrame": "You'll feel it.",
+    "frequency": "{{n}} days a week",
+    "restDay": "Rest",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
+  "history": {
+    "title": "History",
+    "annIncreased": "I increased your {{target}}.",
+    "annSwapped": "I swapped in {{exercise}} — the rack was taken.",
+    "annEndedEarly": "You ended this one early.",
+    "perSet": "{{weight}} × {{reps}}"
+  },
+  "profile": {
+    "program": "Program",
+    "history": "History",
+    "whatHushKnows": "What Hush knows",
+    "settings": "Settings",
+    "appleHealth": "Apple Health",
+    "healthConnect": "Health Connect",
+    "about": "About"
+  },
+  "settings": {
+    "units": "Units",
+    "unitsKg": "Kilograms",
+    "unitsLb": "Pounds",
+    "healthData": "Health Data",
+    "openSystemSettings": "Open System Settings",
+    "deleteAccount": "Delete Account",
+    "signOut": "Sign Out",
+    "deleteConfirm": "Delete your account and all data?",
+    "signOutConfirm": "Sign out?"
+  },
+  "gated": {
+    "takeTheWeights": "Take the weights",
+    "keepDeciding": "Keep deciding",
+    "switchOff": "Switch off"
+  },
+  "errors": {
+    "general": "Something went wrong. Try again."
+  },
+  "notifications": {
+    "weeklyReadyTitle": "Next week's program is ready."
+  }
+}

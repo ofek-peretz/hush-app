@@ -1,0 +1,78 @@
+
+Engineering Specification 009.1
+Volume Composition Engine v1
+Purpose
+Decide how much work each capability and each exercise receives in a session: the number of exercises per capability (slots) and the number of sets per exercise (target_sets). ES-009 decides what; ES-009.1 decides how much. Load and reps remain ES-006's; rep-to-failure prediction remains ES-004's.
+This engine is the sole owner of target_sets and the sole consumer of StrategyState.weekly_volume.
+Source of Truth
+ES-003 (calibration restraint), ES-006 (volume as Level-3/4 strategy concern, conservative defaults), ES-008 v2 (StrategyState fields), ES-009 (session template, capability slots, ordering).
+Core Principle
+Principle #55. Volume is allocated to capabilities on a weekly budget, then distributed across the week's sessions — never decided per-session in isolation. A session's workload is a slice of a weekly plan, so that total weekly stimulus per capability is the controlled quantity.
+
+Section 1 — Weekly Volume Budget
+StrategyState.weekly_volume is reinterpreted from free-text to an enumerated band mapping to weekly sets per capability:
+weekly_volume
+weekly sets / capability
+low
+8
+moderate
+12
+high
+18
+These bands sit within established effective-volume ranges (a floor for stimulus, a ceiling below typical overreaching). weekly_volume becomes an enum; the string form is deprecated. Each capability inherits the band, modified by focus (Section 3).
+Section 2 — Two-Lever Allocation
+Weekly per-capability volume is delivered through two levers, not one. Using only sets-per-exercise saturates at low frequency (every capability pins to the per-exercise ceiling and moderate becomes indistinguishable from high — verified failure mode). The two levers:
+Lever 1: slots_per_capability_per_session   (1–2 exercises for the capability)
+Lever 2: sets_per_slot                       (2–4 sets per exercise)
+Allocation per capability per session:
+times_trained        = how many sessions/week include this capability (from ES-009 template)
+per_session_sets      = weekly_sets / times_trained
+slots_per_session     = clamp( round(per_session_sets / 3), 1, 2 )
+sets_per_slot         = clamp( round(per_session_sets / slots_per_session), 2, 4 )
+Baseline of 3 sets/slot; a second slot (a second exercise for the same capability) opens only when one slot cannot hold the per-session volume. The second slot is filled by ES-009's selection rule (next-best exercise in the same capability, class-matched), so ES-009.1 never picks exercises — it only declares how many slots ES-009 must fill.
+Verified distinctness: frequency-2 totals 28 / 30 / 32 sets for low/moderate/high; frequency-4 totals 16 / 20 / 24. Volume bands now produce genuinely different sessions.
+Section 3 — Focus Weighting
+ES-009 honors primary_focus/secondary_focus for ordering; ES-009.1 honors them for volume:
+primary_focus capability:   weekly_sets × 1.25
+secondary_focus capability: weekly_sets × 1.00
+all others:                 weekly_sets × 0.75
+Multipliers apply to the weekly budget before Section 2 distribution, then re-clamp to the 2–4 / 1–2 lever bounds. This is the only place a capability's importance changes its workload; it resolves Gap 3.
+Section 4 — Total Session Volume Ceiling
+A hard cap bounds total working sets per session, independent of the per-capability math:
+MAX_SESSION_SETS = 24
+if Σ(slots × sets) > MAX_SESSION_SETS:
+    reduce sets_per_slot on lowest-focus capabilities first, then drop second slots,
+    until total ≤ ceiling
+Frequency-2 high-volume sessions exceed this (32 sets) and are trimmed to 24, protecting against the concentration hazard and against within-session fatigue corrupting later-block observations (forward reference to the fatigue model, Roadmap Gap 5). The ceiling is frozen; reduction order is deterministic for auditability.
+Section 5 — Calibration Volume Restraint
+During calibration (calibration_phase = true), volume is deliberately suppressed (ES-003):
+sets_per_slot      = 2          (fixed, regardless of band)
+slots_per_capability = 1        (no second exercise during calibration)
+Rationale: calibration seeks information gain, not stimulus. Fewer sets per capability means (a) less within-session fatigue distorting the canonical-exercise reference observation ES-008 v2 needs, and (b) broader capability coverage per unit of athlete effort, accelerating the all-seven-capabilities goal of ES-003. Full volume bands (Sections 1–4) activate only once global_confidence ≥ 70. The transition is gradual via the existing confidence mechanism — no hard jump in workload that the athlete would notice.
+Section 6 — Volume Progression (steady-state)
+Once calibrated, weekly volume is mostly static — it is a Level-3 strategy quantity (ES-006), changed rarely. ES-009.1 does not auto-progress volume per session. Volume bands change only through Strategy Evaluation (ES-007, every 10–20 workouts) on persistent signals:
+sustained high completion + rising confidence + plateauing capability trend → consider raising the band (under-stimulus);
+declining completion or adherence → consider lowering the band (over-reach).
+Per-session progression is load's job (ES-006), not volume's. This keeps volume stable and trust-preserving — volume swings are far more disruptive than load nudges. ES-009.1 emits a recommendation to ES-007; it does not change the band itself.
+Section 7 — Output
+For each capability slot ES-009 produced, ES-009.1 sets:
+ExerciseBlock.target_sets   ∈ [2,4]
+(and informs ES-009 how many slots each capability needs, before Stage 3 selection)
+ES-009.1 runs between ES-009 Stage 2 and Stage 3: priority resolved → volume allocates slots → ES-009 selects exercises for those slots → ES-009.1 sets target_sets per block → ES-006 sets load and reps.
+Section 8 — Auditability
+Every target_sets value traces to (weekly_volume band, focus multiplier, times_trained, calibration_phase, ceiling-trim). Identical inputs yield identical volume — fully deterministic (no exploration term here, unlike ES-009 selection). A volume allocation that cannot be reconstructed is invalid.
+Section 9 — Success Criteria
+Every block has a target_sets with a traceable derivation.
+Volume bands (low/moderate/high) produce distinguishable sessions at every frequency.
+Focus capabilities receive more volume than incidental ones.
+No session exceeds the total-volume ceiling.
+Calibration volume is suppressed; full volume activates only post-calibration.
+Volume changes rarely and only via Strategy Evaluation, never per-session.
+Final Principle
+Principle #56. Load is the fast knob; volume is the slow one. The athlete should feel load adjust often and gently, and feel volume change almost never. Stability of volume is itself a trust signal.
+
+Three decisions to ratify:
+I reinterpreted weekly_volume from string to enum with concrete set bands. The free-text field was unconsumable; without this, no volume math can run at all. If you have specific volume targets in mind, the 8/12/18 bands are the one set of numbers here I'd most expect you to want to tune — they're defensible defaults, not sacred.
+I introduced the two-lever model (slots × sets) rather than sets alone, because single-lever allocation provably can't distinguish moderate from high at low frequency — the bands would be cosmetic. The cost is that a capability can now occupy two exercise slots, which slightly complicates ES-009's selection (it must pick a second, distinct exercise). That coupling is why ES-009.1 runs inside the ES-009 pipeline rather than after it.
+I kept volume deliberately non-adaptive per-session (Section 6). This is the conservative choice and the one most aligned with the trust thesis: ES-009.1 can recommend a band change to ES-007 but never swings volume on its own. If you'd want faster volume autoregulation, that's a legitimate alternative — but it trades trust stability for adaptation speed, and the whole spec stack has consistently chosen trust.
+

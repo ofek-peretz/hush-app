@@ -1,0 +1,88 @@
+# ============================================================================
+# Hush — .gitignore
+# Goal: track all SOURCE OF TRUTH; exclude generated artifacts, caches,
+# dependencies, build outputs, local databases, secrets, and machine files.
+# ============================================================================
+
+# ---- Secrets / environment (NEVER commit) ----------------------------------
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.keystore
+secrets.*
+*.secret
+
+# ---- Local databases (regenerated from migrations) -------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ---- Python (backend / model source lives in implementation/) --------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+*.egg-info/
+.eggs/
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Generated build output (regenerable via build/_verify/assemble_and_test.py)
+/build/_assembled/
+
+# ---- Node / React Native / Expo (mobile) -----------------------------------
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+coverage/
+*.tsbuildinfo
+.metro-health-check*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Native build outputs (if generated later) -----------------------------
+code/mobile/android/
+code/mobile/ios/
+*.ipa
+*.apk
+*.aab
+
+# ---- Logs ------------------------------------------------------------------
+*.log
+logs/
+
+# ---- Editor / IDE ----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Claude Code local config (machine-specific) ---------------------------
+.claude/settings.local.json
+
+# ---- OS / machine-specific -------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/

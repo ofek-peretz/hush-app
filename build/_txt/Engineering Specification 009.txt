@@ -1,0 +1,96 @@
+
+Engineering Specification 009
+Session Composition Engine v1
+Purpose
+Define exactly how "today's workout" is assembled. This is the missing connective object identified in the Model Completion Roadmap (Gap 2): every downstream spec assumes an ordered list of ExerciseBlocks exists, but no spec produced it. ES-009 produces it.
+The Session Composition Engine is the only component allowed to answer: which exercises, in what order, appear in this session? It does not set loads (ES-006 Recommendation Engine), does not predict reps (ES-004), and does not update state (ES-007). It selects and orders; nothing more.
+Source of Truth
+ES-003 (calibration coverage and information-gain priority), ES-006 (recommendation hierarchy, preference-driven replacement, the rule "prefer the lowest level capable of solving the problem"), ES-008 v2 (capability classes, canonical exercises, shared-k comparability).
+Core Principle
+Principle #53. A session is composed from capabilities, never from exercises. The engine first decides which capabilities to train today, then selects one exercise per capability slot. This ordering is mandatory: it is what preserves the ES-008 v2 separation between durable capabilities and interchangeable exercises through the act of session assembly itself.
+
+Section 1 — Inputs
+strategy_state        (weekly_frequency, weekly_volume, primary_focus, secondary_focus)
+athlete_state         (calibration_phase, workout_count, last_workout_at)
+capability_states[7]  (score, confidence, last_trained_at)  per capability
+preference_states[]   (exercise_family, preference_score)
+exercise_catalog      (ES-002: capability mappings, difficulty_factor, equipment, class)
+session_index         (which session number within the weekly cycle)
+Section 2 — Output
+ExerciseBlock[]  ordered, each: { exercise_id, capability_code, position }
+The engine emits blocks with no weight, reps, or sets — those fields are populated immediately afterward by ES-006 per block. ES-009 hands ES-006 an ordered skeleton.
+
+Section 3 — Composition Pipeline
+Four stages, executed in order. No stage may be skipped.
+Stage 1: Select session template      (which capability slots today)
+Stage 2: Resolve capability priority  (calibration vs steady-state ordering)
+Stage 3: Select exercise per slot     (one exercise per capability)
+Stage 4: Order blocks                 (compound-first sequencing)
+
+Section 4 — Stage 1: Session Template Selection
+strategy_state.weekly_frequency selects a fixed split template. session_index mod len(template) selects today's capability slot-set. Templates are defined for the three V1 frequencies and are frozen:
+Frequency 2 — full-body ×2:
+Session A: horizontal_push, horizontal_pull, knee_dominant, core_stability
+Session B: vertical_push, vertical_pull, hip_dominant, core_stability
+Frequency 3 — full-body ×3:
+Session A: horizontal_push, horizontal_pull, knee_dominant
+Session B: vertical_push, vertical_pull, hip_dominant
+Session C: horizontal_push, hip_dominant, core_stability
+Frequency 4 — upper/lower ×2:
+Session A: horizontal_push, horizontal_pull, vertical_push
+Session B: knee_dominant, hip_dominant, core_stability
+Session C: vertical_pull, horizontal_pull, vertical_push
+Session D: knee_dominant, hip_dominant, core_stability
+Coverage guarantee (ES-003): each template achieves all-seven-capability coverage within the first 3–5 sessions — verified: frequency 2 covers 7/7 in 4 sessions, frequencies 3 and 4 in 5 sessions. This is a frozen property; any template edit must re-prove it.
+Frequencies outside {2, 3, 4} are clamped to the nearest defined template in V1.
+
+Section 5 — Stage 2: Capability Priority Resolution
+The template names the day's capability slots, but two behaviors reorder/weight them.
+During calibration (athlete_state.calibration_phase = true, i.e. global_confidence < 70 per ES-008 v2), slot priority maximizes information gain (ES-003):
+priority(cap) = staleness(cap) + uncertainty(cap)
+   staleness(cap)   = min(days_since_last_trained / 7, 2.0)
+   uncertainty(cap) = (100 − capability_confidence) / 100
+Capabilities with stale or low-confidence states are placed earlier and, where the template has fewer slots than capabilities needing coverage, are preferentially included. This is what drives the ES-003 mandate that calibration "maximize information gain, not optimize training."
+After calibration, priority follows strategy_state.primary_focus / secondary_focus: focus-aligned capabilities are ordered first; the rest fill remaining slots. Information-gain priority is retained only as a tie-breaker.
+Priority affects ordering and inclusion, never load — load is always ES-006's.
+
+Section 6 — Stage 3: Exercise Selection Per Slot
+For each capability slot, select exactly one exercise from the catalog entries mapped to that capability (ES-002). Selection rule depends on phase and respects ES-008 v2's class constraint.
+Class constraint (ES-008 v2, hard): an exercise may fill a slot only if its class matches the capability's class. A bodyweight exercise may not fill a Class-A external-load slot, and vice versa. Core_stability slots draw only Class-C (duration) exercises.
+During calibration: prefer the canonical exercise (difficulty_factor = 1.0). Rationale: the canonical lift produces the cleanest reference observation for ES-008 v2's anchor, accelerating confidence growth on the score that matters. Verified: horizontal_push → bench_press during calibration.
+After calibration: select by learned preference (ES-006: replacement is preference-driven, never performance-driven):
+score(exercise) = preference_state.preference_score   (default 50 if unobserved)
+select argmax;  tie-break by difficulty_factor (prefer canonical)
+Verified: with db_bench preference 88 vs bench_press 50, steady-state selects db_bench — the athlete's observed preference wins, exactly as ES-006 requires.
+Exploration floor (Roadmap Gap 7 mitigation, included here because it lives in selection): with low probability p_explore ≈ 0.10, a slot may select a non-top-preference exercise from the same capability, so a previously-dropped exercise is periodically re-tested and the model can detect preference change. This prevents the preference ratchet from permanently narrowing the exercise pool. Exploration never overrides the class constraint and never fires during calibration.
+Equipment-busy / replacement at execution time (ES-001) is not an ES-009 concern — it re-runs Stage 3 for the affected slot only, searching the same capability's replacement_group (ES-002), preserving the capability. ES-009 defines the selection function; ES-001 reuses it mid-session.
+
+Section 7 — Stage 4: Block Ordering
+Within the selected exercises, order by:
+Compound before isolation — multi-capability and canonical compound lifts (squat, deadlift, bench, row, press) precede single-joint or machine work. Heaviest neurological demand while fresh; this also keeps the highest-difficulty_factor exercises early, where fatigue (Roadmap Gap 5) least distorts their observations.
+Calibration priority (Section 5) as secondary sort during calibration.
+Core_stability (Class C) last — isometric/endurance work does not compete for the fresh-state window and conventionally closes a session.
+position is assigned by this final order, 0-indexed.
+
+Section 8 — Interaction with Fatigue (forward reference)
+ES-009 fixes block order; the order determines each block's position in the session, which the (future) fatigue model (Roadmap Gap 5) uses to set per-position expected-rep decay. ES-009's only obligation here is to emit a stable, deterministic position so that "set 3 of the 2nd exercise" is reproducible for fatigue-adjusted prediction. The ordering rule above satisfies this; no fatigue logic lives in ES-009.
+
+Section 9 — Determinism & Auditability
+Given identical inputs, ES-009 must emit an identical session, except for the exploration draw (Section 6), which must be logged with its seed so any session remains reconstructable. This preserves the ES-006 audit-chain requirement: every ExerciseBlock traces to (template, capability priority, selection rule, exploration seed). A session that cannot be reconstructed is invalid.
+
+Section 10 — Success Criteria
+The Session Composition Engine succeeds if:
+Every session is composed from capabilities, then exercises (Principle #53).
+Calibration sessions cover all seven capabilities within 3–5 workouts (ES-003).
+Calibration prefers canonical exercises; steady-state honors learned preference (ES-006).
+No exercise fills a slot of a mismatched class (ES-008 v2).
+The exercise pool does not permanently narrow (exploration floor).
+Every block is deterministic and reconstructable (audit chain).
+Final Principle
+Principle #54. The session is the first moment the model touches the athlete. It must express the system's understanding — train what is least understood, in the form the athlete most accepts — without ever exposing that it is doing so.
+
+Three decisions in here you should ratify, since they resolve ambiguities the source specs left open:
+I froze the split templates rather than deriving them dynamically. A dynamic splitter is more elegant but unverifiable against the ES-003 coverage guarantee — frozen templates let me prove 7/7 coverage, which a generative splitter can't promise. The cost is rigidity for unusual frequencies (clamped to {2,3,4}); acceptable for an MVP whose users are 10–100 beta athletes.
+I placed the exploration floor (Gap 7) inside Stage 3 rather than deferring it, because it's mechanically part of exercise selection and costs one line — leaving it out would let the preference ratchet start narrowing the pool from session one of the trial, contaminating the very preference data you're trying to validate.
+And I kept ES-009 strictly load-free — it emits skeletons, ES-006 fills them. This is the clean seam: composition decides what, recommendation decides how heavy. If you'd rather fuse them for the MVP, that's defensible, but the separation is what keeps "why this exercise" and "why this weight" as independently auditable answers.
+The two P0 gaps still open after this are compound-exercise evidence attribution (Gap 1) and the override taxonomy (Gap 3) — ES-009 assumes Gap 1's split when it allows multi-capability blocks, so that's the natural next spec. Want ES-010 to cover attribution and the override taxonomy together, since both feed the same ES-005.1 §5 blend?

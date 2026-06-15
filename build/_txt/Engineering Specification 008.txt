@@ -1,0 +1,266 @@
+
+Engineering Specification 008
+Capability Calibration Matrix v1
+Purpose
+Define the canonical meaning of every capability score.
+
+Core Principle
+Principle #49
+Every capability must have a real-world anchor.
+
+Capability Scores cannot be arbitrary numbers.
+Every score must correspond to a measurable physical performance.
+
+Capability Calibration Structure
+Every capability defines:
+capability_codecanonical_exercisereference_measurescore_curvebeginner_seedintermediate_seedadvanced_seed
+
+Capability 1
+Horizontal Push
+
+Canonical Exercise
+bench_press
+
+Reference Measure
+Estimated 1RM equivalent.
+
+Calibration Table
+Score
+Reference 1RM
+20
+40kg
+30
+55kg
+40
+70kg
+50
+85kg
+60
+100kg
+70
+115kg
+80
+130kg
+90
+145kg
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Capability 2
+Horizontal Pull
+
+Canonical Exercise
+barbell_row
+
+Reference Measure
+Estimated Barbell Row 1RM equivalent.
+
+Calibration Table
+Score
+Reference 1RM
+20
+35kg
+30
+50kg
+40
+65kg
+50
+80kg
+60
+95kg
+70
+110kg
+80
+125kg
+90
+140kg
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Capability 3
+Vertical Push
+
+Canonical Exercise
+standing_overhead_press
+
+Reference Measure
+Estimated OHP 1RM equivalent.
+
+Calibration Table
+Score
+Reference 1RM
+20
+20kg
+30
+30kg
+40
+40kg
+50
+50kg
+60
+60kg
+70
+70kg
+80
+80kg
+90
+90kg
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Capability 4
+Vertical Pull
+
+Canonical Exercise
+pull_up_equivalent
+
+Reference Measure
+Bodyweight-adjusted pull-up strength.
+
+Important
+This capability cannot be anchored directly to kilograms.
+
+Instead:
+reference_unit:pull_up_strength_index
+
+Calibration initially remains internal.
+
+Initial Seeds
+beginner: 35intermediate: 55advanced: 75
+
+Capability 5
+Knee Dominant
+
+Canonical Exercise
+back_squat
+
+Reference Measure
+Estimated Back Squat 1RM.
+
+Calibration Table
+Score
+Reference 1RM
+20
+50kg
+30
+70kg
+40
+90kg
+50
+110kg
+60
+130kg
+70
+150kg
+80
+170kg
+90
+190kg
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Capability 6
+Hip Dominant
+
+Canonical Exercise
+deadlift
+
+Reference Measure
+Estimated Deadlift 1RM.
+
+Calibration Table
+Score
+Reference 1RM
+20
+60kg
+30
+90kg
+40
+120kg
+50
+150kg
+60
+180kg
+70
+210kg
+80
+240kg
+90
+270kg
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Capability 7
+Core Stability
+
+Canonical Exercise
+plank_equivalent
+
+Reference Measure
+Core Stability Index.
+
+Important:
+Like Vertical Pull, this capability is not naturally represented by kilograms.
+
+Therefore:
+reference_unit:core_stability_index
+
+Initial Seeds
+beginner: 40intermediate: 55advanced: 70
+
+Cross-Capability Rule
+Scores are comparable.
+
+Example:
+horizontal_push: 65horizontal_pull: 40
+
+Interpretation:
+Push capability significantly exceeds pull capability.
+
+This enables:
+Capability Imbalance Detection
+which ES-006 uses for future strategy evaluation.
+
+Confidence Initialization
+Every seeded capability starts with:
+confidence: 10
+
+Regardless of score.
+
+Reason:
+We have a prior.
+Not knowledge.
+
+Calibration Philosophy
+Important:
+These tables are not truths.
+They are priors.
+
+The model is expected to move away from them as evidence accumulates.
+
+Versioning
+Capability calibration tables are versioned.
+
+capability_model_version
+must be stored on:
+recommendationsobservationsstate_updates
+
+Reason:
+Future calibration changes must not rewrite history.
+
+Success Criteria
+The calibration matrix succeeds if:
+Initial recommendations are reasonable. 
+Capability scores have consistent meaning. 
+Cross-capability comparisons are possible. 
+Confidence grows independently of score. 
+Future model versions remain auditable. 
+
+Final Principle
+Principle #50
+A capability score is only useful if it means the same thing today, tomorrow, and six months from now.

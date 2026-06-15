@@ -1,0 +1,202 @@
+
+Engineering Specification 008 (Rewrite)
+Capability Calibration Matrix v2 — Derived from ES-005.1
+Purpose
+Define the canonical, real-world meaning of every capability score, derived entirely from the ES-005.1 quantitative model. This version replaces ES-008 v1, which used linear calibration tables that contradicted ES-005.1's exponential model, seeded loads too heavy for real beginners, applied no cohort adjustment, and forced isometric and bodyweight capabilities into a kg/1RM pipeline they do not fit.
+Core Principle
+Principle #49 (restated): Every capability score must correspond to a measurable physical performance — but the mapping from score to performance is the ES-005.1 exponential, never a hand-authored table. Tables in this spec are generated, not asserted.
+Principle #51 (new): All external-load capabilities share a single growth constant k. Equal scores therefore denote equal population percentile by construction. Cross-capability comparison is valid only because of this shared k.
+
+Section 1 — Capability Classes
+The seven capabilities do not share one measurement model. They fall into three classes, and only Class A enters the ES-005.1 Epley pipeline. This is the central correction to v1.
+Class
+Capabilities
+Measured by
+Enters Epley/1RM loop?
+A — External-load
+horizontal_push, horizontal_pull, vertical_push, knee_dominant, hip_dominant
+external kg + reps
+Yes — full ES-005.1 model
+B — Bodyweight-load
+vertical_pull (pull-up), and any bodyweight movement (push-ups, dips)
+(bodyweight + added kg) + reps
+Yes, but load = bodyweight + external; requires bodyweight input
+C — Isometric/endurance
+core_stability
+time-to-failure (seconds)
+No — no reps, no 1RM; separate observation type
+A capability's class is fixed; an exercise's class must match the capability it maps to, or its observations are quarantined (Section 6).
+
+Section 2 — Calibration Curve (Class A)
+Every Class-A capability uses the ES-005.1 form with a shared k and a per-capability A:
+ReferenceStrength_c(S) = A_c · e^(k·S),     k = 0.016227  (locked, from ES-005.1)
+A_c is fitted by pinning score 64 to each lift's trained-intermediate adult-male 1RM landmark (horizontal_push's 113 kg is inherited unchanged from ES-005.1 as the reference cohort anchor).
+Capability
+Canonical exercise
+A_c
+k
+horizontal_push
+bench_press
+40.00
+0.016227
+horizontal_pull
+barbell_row
+35.40
+0.016227
+vertical_push
+strict_overhead_press
+24.07
+0.016227
+knee_dominant
+back_squat
+53.10
+0.016227
+hip_dominant
+deadlift
+63.72
+0.016227
+Generated calibration table (reference adult male, m = 1.0), kg:
+Score
+h_push
+h_pull
+v_push
+knee
+hip
+20
+55
+49
+33
+73
+88
+30
+65
+58
+39
+86
+104
+40
+76
+67
+46
+101
+122
+50
+90
+80
+54
+120
+143
+64
+113
+100
+68
+150
+180
+70
+125
+110
+75
+165
+199
+80
+147
+130
+88
+194
+234
+90
+172
+152
+104
+229
+274
+Each +10 score is ≈ +15% load at every point of the curve — the multiplicative behavior v1's linear tables destroyed. The inverse (S = ln(RM1/A_c)/k) is the learning path; identical to ES-005.1 §1.
+
+Section 3 — Observation Types
+v1 assumed one observation shape for all capabilities. There are three, one per class.
+Type A — LoadRepObservation (Class A): {exercise_id, actual_weight, actual_reps} → RM1_obs = actual_weight·(1+actual_reps/30) → S_obs. Standard ES-005.1.
+Type B — BodyweightRepObservation (Class B): {exercise_id, bodyweight, added_weight, actual_reps} → effective load = bodyweight·leverage_factor + added_weight, then Epley as Type A. leverage_factor (≈0.65 for pull-ups, the fraction of bodyweight actually lifted) lives on the exercise row. Requires a bodyweight field (Section 5). Without it, Class B cannot generate valid evidence — this is a hard dependency, not a degradation.
+Type C — DurationObservation (Class C): {exercise_id, hold_seconds}. No reps, no Epley, no 1RM. Core stability score maps to a hold-time curve, not a load curve:
+ReferenceHold_core(S) = T_min · e^(κ·S),   T_min = 10s, κ tuned so S=64 ≈ 60s
+"Prediction error" for Type C is (actual_seconds − predicted_seconds), fed through the same precision-weighted blend (ES-005.1 §5) in score space. The Recommendation engine prescribes a target hold time, not a load. Core stability never produces a kg recommendation.
+
+Section 4 — Initial Seeds (score space, cohort-independent)
+Seeds are defined in score, not kg, so one set of seeds serves all cohorts; kg is derived per athlete (Section 5). Lowered from v1 to honor ES-003 Principle #39 ("too easy more often than too hard").
+Experience
+Seed score
+beginner
+30
+intermediate
+48
+advanced
+64
+All seeds initialize confidence = 10 regardless of score (prior, not knowledge — unchanged from v1, correct). Class B/C seeds use the same scores against their own curves.
+Resulting safe first-session working loads (after cohort multiplier, the ES-005.1 §7 safety discount at conf=10 ≈ ×0.88, and plate floor):
+beginner ♂ / ♀
+intermediate ♂ / ♀
+advanced ♂ / ♀
+bench working set
+37.5 / 22.5
+52.5 / 32.5
+67.5 / 42.5
+deadlift working set
+62.5 / 37.5
+85.0 / 52.5
+110 / 67.5
+OHP working set
+22.5 / 12.5
+30.0 / 17.5
+40.0 / 25.0
+A beginner woman is no longer seeded at a 70 kg bench; she starts at 22.5 kg. A true-novice deadlift is 62.5 kg working, not v1's 120 kg.
+
+Section 5 — Cohort Adjustment
+Onboarding already collects sex and age (ES-003); v1 ignored both. Apply the ES-005.1 §8 multiplier to the prior seed only — observations override it within ~5 sets:
+m(sex, age) = m_sex · (1 − 0.005·max(0, age−30))
+   m_sex:  male 1.00,  female 0.62
+SeedStrength = A_c · e^(k·seed_score) · m(sex, age)
+Cohort
+multiplier
+male, 25
+1.00
+male, 40
+0.95
+male, 60
+0.85
+female, 25
+0.62
+female, 40
+0.59
+female, 60
+0.53
+New required onboarding field: bodyweight. This is unavoidable for Class B and improves Class A cohort priors. It is one number, collected once, and is the single highest-leverage input for first-session safety. (This is the one place I am recommending a new input — Class B is dimensionally impossible without it, as established in the ES-008 v1 attack.)
+The multiplier shifts the prior only. After calibration, m has no effect — the score reflects observed reality, so a strong woman and an average man at the same true strength converge to the same score. This is what makes Section 6 normalization honest.
+
+Section 6 — Normalization & Cross-Capability Comparison
+v1 claimed scores were comparable but each capability had a different curve, so they weren't. v2 makes them comparable by construction: because every Class-A capability shares k, the ratio between any two capabilities' reference strengths is constant at every score (e.g. hip/horizontal_push = 1.593 at score 20, 50, and 90 alike). Therefore:
+Equal score  ⇒  equal population percentile  ⇒  valid comparison.
+ES-006 imbalance detection may compare scores directly only across Class A. Cross-class comparison (e.g. core_stability score vs bench score) is forbidden — different units, different curves, no shared k. The imbalance detector must be scoped to within-class pairs.
+Exercise quarantine rule: an exercise may contribute to a capability's score only if its class matches the capability's class. A push-up (bodyweight) mapped to horizontal_push (Class A, external-load) is unit-incoherent and must be recorded as a Type B observation against a separate bodyweight sub-track, never blended into the barbell-anchored horizontal_push score. Mixing them is the silent corruption identified in the v1 attack.
+
+Section 7 — Versioning
+Unchanged from v1 and correct: capability_model_version is stored on recommendations, observations, and state_updates. Changing any A_c, k, seed, or cohort multiplier bumps the version; history is interpreted under the version it was written with, never rewritten (Principle #50).
+
+Section 8 — Success Criteria
+The matrix succeeds if: first-session loads are safe across all cohorts (lean light); equal scores denote equal percentile within a class; Class B/C never emit kg recommendations or kg-blended evidence; cohort priors vanish as evidence accumulates; and every score remains interpretable six months later under its stored version.
+Final Principle
+Principle #52: A capability score means the same thing across athletes only if every capability shares the same growth constant and every observation enters through the model that matches its physical class. Calibrate the curve once; never hand-author the numbers.
+
+Three things I changed from your framing that you should ratify or reject:
+The biggest is that I made k shared across all Class-A capabilities rather than fitting each independently. Independent fits would let each lift's curve bend differently, which re-breaks cross-capability comparison — the exact ES-006 failure from the v1 attack. Sharing k is what earns the comparability claim. The cost: individual lift curves are slightly less tailored, but at MVP fidelity that's invisible and observations correct it anyway.
+Second, I introduced one new onboarding input (bodyweight). I've otherwise held the no-new-feature line hard across this whole review, but Class B is not degradable without it — pull-up strength is dimensionally undefined without mass. Flagging rather than smuggling it.
+Third, core_stability leaves the kg pipeline entirely with its own time-based curve and observation type. If you'd rather drop core_stability from V1 than build a second observation path, that's a legitimate scope cut — it's one of seven capabilities and the least central to the trust thesis.
+Want the runnable constants file (all A_c, k, κ, seeds, cohort table, leverage factors) plus the quarantine check as code your engineers can drop into the model/ package from the ES-006 architecture?
+
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-008 v2 Capability Calibration — seeding TARGET is Option D (bodyweight-keyed); NOT YET BUILT.
+
+ACTIVE and BUILT (Class-A only): the capability-class scheme (A/B/C), the shared-k curves and per-capability A_c, percentile normalization, and the quarantine rule.
+The cold-start SEED is being moved to Option D: a bodyweight-keyed strength-standard table + prior generator (capped experience modifier, downward bias, floor/ceiling clamp, confidence cap 25), with a fallback when bodyweight is absent. This is DX-08 and is NOT YET IMPLEMENTED.
+AS-BUILT TODAY: bodyweight_kg IS collected (DX-07 — migration_007, schema v7; AthleteState field + onboard signature + profile contract), but SEEDING still uses the 3-bucket beginner/intermediate/advanced seed (SEED_SCORE 30/48/64) with the §5 cohort multiplier. The §4/§5 seed/cohort tables in this spec remain the current basis until DX-08 lands.
+As-built sources: reviews/completion/DX-07 completion; HUSH_V1_DELTA_EXECUTION_PLAN.md (DX-08, P1, pending); hush_model/seeding.py, constants.py (SEED_SCORE).
+

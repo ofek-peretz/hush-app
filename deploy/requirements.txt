@@ -1,0 +1,25 @@
+# Hush v1 service — PINNED runtime dependencies (BB-31).
+# The deployable is a generated artifact (the assembled tree); pin the full closure so the
+# build-of-record is reproducible. Direct deps + their transitive closure are pinned exactly.
+# Regenerate after any bump with: pip install -U <pkg> && pip freeze.
+
+# --- web framework + ASGI server ---
+fastapi==0.115.6
+starlette==0.41.3
+uvicorn==0.34.0
+click==8.4.1            # uvicorn CLI
+h11==0.16.0             # uvicorn HTTP/1.1
+
+# --- validation / DTOs ---
+pydantic==2.10.4
+pydantic-core==2.27.2
+annotated-types==0.7.0
+
+# --- async + typing transitives ---
+anyio==4.13.0
+sniffio==1.3.1
+idna==3.18
+typing_extensions==4.15.0
+
+# The model itself (hush_model/) has ZERO third-party runtime deps — it is pure stdlib Python
+# (the "one implementation of the math"); it is assembled into the image, not pip-installed.

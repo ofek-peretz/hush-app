@@ -1,0 +1,132 @@
+
+Engineering Specification 011
+Fatigue & Recovery Model v1
+Purpose
+Introduce fatigue as an explicit latent state that sits between true capability and observed performance, so that the ES-005.1 learning loop stops attributing recovery state to capability change. This is the correction to the infinite-recovery assumption that every prior spec implicitly made.
+Source of Truth & Required Amendments
+Consistent with ES-005.1, ES-006, ES-007, ES-008 v2, ES-009.1, ES-010 — with two explicit amendments, declared here rather than hidden:
+Amends ES-005.1 §4: effort_offset is redefined as the stable component of a joint correction term whose time-varying component is fatigue (Part C).
+Amends ES-010 Part A ordering: fatigue removal occurs in rep/load space before the ES-005.1 conversion and therefore before attribution (Part C.3).
+Core Principle
+Principle #59. Observed performance = capability − fatigue. The model never sees capability directly; it sees a fatigued shadow of it. Learning is the act of subtracting the estimated fatigue before believing what the reps say.
+
+PART A — Fatigue Model
+A.1 — Mathematical definition
+Fatigue is a non-negative quantity, expressed in score-space units (same units as capability score, so it subtracts cleanly), representing the transient suppression of performance below true capability:
+observed_capability(t) = true_capability − Fatigue(t)          [score space]
+Fatigue(t) ≥ 0
+Equivalently in performance space, fatigue reduces expected reps-to-failure at a given load. Fatigue is state-dependent and time-varying; capability is durable (ES-008 v2). The whole point is to keep these two separate.
+A.2 — Fatigue is layered: systemic + capability-specific
+Answering the four-way question: both global and capability-specific, not exercise-specific (exercise-specific fatigue would explode the state and isn't separable from capability-specific at MVP fidelity).
+Fatigue_c(t) = Fatigue_systemic(t) + Fatigue_capability,c(t)
+Systemic fatigue — whole-body, from total recent workload; affects every capability. This is why a heavy leg day suppresses bench performance.
+Capability fatigue — local, decays faster than systemic for small muscles, slower for large; affects one capability.
+No exercise-level fatigue store — it collapses into capability fatigue via the ES-010 contribution weights (a dip's fatigue cost splits to horizontal_push and vertical_push by the same w_c).
+A.3 — State stored
+Per athlete: Fatigue_systemic (one scalar, score units), last_workout_at. Per capability: Fatigue_capability,c, last_trained_at,c. No recovery_score is stored — recovery is derived from time + accumulated fatigue (Part D), not a separate state. Storing both fatigue and recovery would be the same double-representation error ES-008 v2 avoided with calibration_phase.
+A.4 — How a completed set generates fatigue
+Each completed set contributes a fatigue increment driven by the variables the prompt names, in score units:
+set_fatigue = κ · (relative_load) · (reps_performed) · proximity_to_failure · exercise_cost
+   relative_load      = effective_load / ReferenceStrength_c(score)     [how hard, as % of capacity]
+   proximity_to_failure = 1 − (RIR_observed / RIR_reference)            [closer to failure = more cost]
+   exercise_cost      = catalog factor (compound > isolation; large muscle > small)
+   κ                  = global scaling constant (tuned)
+Proximity to failure is the dominant term — a set taken to true failure costs far more than a set with 4 reps in reserve at the same load and reps. This matches the physiology and, critically, matches ES-005.1's existing RIR machinery (Part C reuses it).
+The set's fatigue splits to capabilities by the same ES-010 w_c used for attribution — one split rule, two uses (load credit and fatigue cost), preventing divergence.
+A.5 — Accumulation
+Fatigue is additive across sets within a session and across sessions, before decay:
+Fatigue_c(after set) = Fatigue_c(before) + w_c · set_fatigue
+Fatigue_systemic(after set) = Fatigue_systemic(before) + set_fatigue
+Within a session this produces the rising fatigue that explains why set 3 yields fewer reps than set 1 — the within-session decline ES-009.1 §4's ceiling was crudely approximating.
+A.6 — Decay (defined fully in Part D)
+Between sessions, both fatigue components decay exponentially toward zero with different half-lives (capability fatigue faster than systemic, large muscles slower than small). Decay is the mathematical form of recovery. Specified in Part D.
+
+PART B — Recommendation Interaction
+B.1 — Effect on each engine
+Prediction Engine (ES-004/005.1): predicts reps-to-failure from observed_capability = capability − Fatigue_c(t), not from capability alone. Same load on a fatigued day → lower predicted reps. This is the fix for the purest infinite-recovery assumption.
+Recommendation Engine (ES-006): the prediction it builds on is already fatigue-adjusted, so a recommended working load auto-scales down when the athlete is fatigued — without any new rule. The conservative discount (ES-005.1 §7) stacks on top.
+Session Composition (ES-009): adds a recovery gate — a capability whose Fatigue_capability,c exceeds a threshold is deprioritized or deferred to a later session, preventing consecutive-day overlap of a depleted capability.
+Volume Allocation (ES-009.1): the MAX_SESSION_SETS ceiling is replaced by a fatigue ceiling — sets are added until projected end-of-session Fatigue_systemic reaches a cap, which is volume-band-aware. This gives the arbitrary 24 a physiological rationale and makes high-volume bands self-limiting.
+B.2 — When fatigue reduces weight / reps / sets
+Reduce reps (target): first response. Fatigue lowers predicted reps-to-failure → target reps drop while load holds. Least disruptive, preserves the load the athlete expects.
+Reduce weight: only when fatigue is high enough that holding load would push below a minimum effective rep count. Load changes are more noticeable, so they come second.
+Reduce sets: the fatigue ceiling (B.1) trims sets prospectively, before the session, not reactively.
+Order matters: reps → sets → weight, mirroring the trust hierarchy (load is the most visible knob, touched last — Principle #56 from ES-009.1).
+B.3 — When fatigue triggers each decision
+KEEP_LOAD: when current fatigue is elevated but transient — never progress into fatigue. Fatigue elevated → INCREASE_LOAD is blocked even on positive evidence (closes the ES-006 infinite-recovery hole).
+DECREASE_LOAD: only when performance is suppressed and fatigue is low (i.e. the deficit is not explained by fatigue → it's likely real capability regression). Fatigue being high actually prevents DECREASE_LOAD, because the deficit is attributable to recovery state. This is Part C's discrimination rule applied to decisions.
+CHANGE_STRATEGY: when Fatigue_systemic is chronically elevated across an evaluation cycle (ES-007 cadence) — i.e. recovery is never completing between sessions. Chronic systemic fatigue is the upstream cause of the "plateau" and "adherence decline" triggers ES-006 listed without a cause. This makes overreaching a first-class, detectable strategy trigger.
+B.4 — Interaction with confidence
+Fatigue does not suppress confidence (unlike conflict). A fatigued observation is not an uncertain observation — it's a biased one, and once de-biased (Part C) it's fully usable. Critically, removing fatigue before the variance computation (Contradiction 4) means fatigue-driven swings no longer inflate ES-010's variance term, so confidence stabilizes for hard-training athletes. This is the resolution of Contradiction 4, realized as an ordering guarantee, not a new term.
+
+PART C — Observation Interpretation (the core of the spec)
+C.1 — Distinguishing true capability decrease from temporary fatigue
+This is the question fatigue exists to answer. The discriminator is the estimated fatigue state at the moment of observation:
+expected_observed_capability = current_capability_score − estimated_Fatigue_c(t)
+surprise = S_obs_raw − expected_observed_capability
+If the athlete underperforms but estimated_Fatigue_c(t) is high, the deficit is predicted → surprise ≈ 0 → no capability evidence of regression; it's fatigue, correctly anticipated.
+If the athlete underperforms and estimated_Fatigue_c(t) is low, the deficit is unexplained → surprise < 0 → genuine negative capability evidence.
+Fatigue converts an ambiguous "worse today" into a decision by asking: did we expect them to be tired? If yes, learn nothing about capability. If no, learn.
+C.2 — How fatigue-adjusted observations enter the Evidence Engine
+The ES-005.1 inverse runs on the de-fatigued observation:
+S_obs_clean = S_obs_raw + estimated_Fatigue_c(t)        [add fatigue back to recover capability]
+S_obs_clean is the capability estimate with fatigue removed; this is what enters the ES-010 evidence pipeline and the ES-005.1 §5 blend. The raw, fatigued value is never blended into the score — it would teach the model that the athlete is weak when they're merely tired.
+C.3 — Fatigue removal vs. attribution: the mandatory ordering (resolves Contradictions 1 & 2)
+Fatigue must be removed in rep/load space, before the ES-005.1 conversion, therefore before ES-010 attribution. The amended pipeline:
+Observation (raw: actual_weight, actual_reps)
+   → estimate Fatigue_c(t) from stored state (Part D)
+   → de-fatigue: adjust actual_reps upward to fatigue-free equivalent     [rep space]
+   → ES-005.1 conversion: RM1_obs, S_obs_clean per capability             [load→score space]
+   → ES-010 attribution: split by w_c                                     [score space]
+   → Evidence → blend
+Why this order, mathematically: fatigue suppresses reps, and the ES-005.1 conversion (ln) is non-linear. Removing fatigue after the ln would require knowing how a rep deficit maps through the log at the observed point — position-dependent and unstable. Removing it before, in rep space where fatigue actually acts, keeps the correction linear and physically meaningful. And it must precede attribution because the de-fatigued reps feed all mapped capabilities — de-fatiguing after the split would require re-deriving fatigue in each capability's score space, after mixing. Attribution-first (ES-010's implicit choice) is therefore overruled for fatigued observations.
+C.4 — Disentangling fatigue from effort_offset (resolves Contradiction 3)
+The total observation correction is joint, not two independent subtractions:
+correction(t) = effort_offset + Fatigue_c(t)
+   effort_offset   = STABLE bias (athlete's habitual sub-maximal stopping point) — slow EMA, ES-005.1 §4
+   Fatigue_c(t)    = TIME-VARYING deficit — decays between sessions (Part D)
+They are identified by their time signature: effort_offset is the constant floor of the correction (present even when fully rested); fatigue is everything above that floor that decays with rest. The fresh-state observation (long rest, Fatigue ≈ 0) is what calibrates effort_offset; the within/across-session decline calibrates fatigue. Computing them jointly prevents the double-correction that would otherwise inflate the score.
+
+PART D — Recovery Model
+D.1 — Recovery is fatigue decay (passive form + estimated correction)
+Fatigue_systemic(t)     = Fatigue_systemic(t₀) · e^(−(t−t₀)/τ_sys)
+Fatigue_capability,c(t) = Fatigue_capability,c(t₀) · e^(−(t−t₀)/τ_cap,c)
+τ_sys (systemic half-life, ~longer) and τ_cap,c (per-capability, shorter for small muscles). Recovery is the exponential return of fatigue to zero — the same mathematical family as ES-005.1's evidence decay, for consistency.
+D.2 — Signals contributing to recovery
+Time since last session → systemic recovery (primary).
+Time since capability last trained → capability recovery (per-capability).
+Accumulated fatigue magnitude → recovery is relative; more accumulated fatigue takes proportionally longer (the exponential handles this — larger Fatigue(t₀) means more absolute time to reach near-zero).
+No subjective recovery inputs (no readiness score, no sleep log) — those are Anti-Requirements (ES-Founder Ch8). Recovery is inferred from time and workload only.
+D.3 — Passive or estimated?
+Estimated, from a passive model. The decay curves run automatically from timestamps (passive), but the half-lives τ are estimated per athlete over time: if an athlete's de-fatigued observations consistently come in higher than predicted after a given rest interval, their τ is shortened (they recover fast); if lower, lengthened. Recovery rate becomes a learned per-athlete parameter — but a slow-moving one, gated like all identity-level learning.
+D.4 — Effect on recommendations
+Recovery state (low current fatigue) permits progression; high fatigue blocks it (B.3). A well-recovered capability with positive evidence is the only state in which INCREASE_LOAD fires confidently. Recovery is thus the gate between "the athlete is capable of more" and "the athlete can absorb more right now" — two things the infinite-recovery model conflated.
+
+PART E — Auditability
+E.1 — The fatigue-aware audit chain
+Capability (true score, confidence)
+   → Fatigue (Fatigue_systemic, Fatigue_capability,c at observation time, with τ and last_trained_at)
+   → Recovery (elapsed time, decay applied, estimated τ used)
+   → de-fatigued Observation (S_obs_raw, correction = effort_offset + Fatigue_c, S_obs_clean)
+   → Attribution (w_c split — ES-010)
+   → Prediction (fatigue-adjusted expected reps)
+   → Recommendation (load, reps, sets, decision_reason incl. fatigue state)
+Every recommendation stores the fatigue and recovery state it assumed. decision_reason gains fatigue-aware codes: fatigue_hold (KEEP_LOAD due to elevated fatigue), recovered_progression (INCREASE_LOAD permitted by recovery), unexplained_regression (DECREASE_LOAD with low fatigue → real). The model version and capability_model_version (ES-008 v2) continue to stamp the chain.
+E.2 — Reconstruction guarantee
+For any observation, the chain answers: what was the estimated fatigue, why (which prior sets, what decay), how much was added back to recover capability, and therefore why the score moved (or didn't). A "worse today" session that produced no score change is now fully explainable: fatigue was high, surprise was ~0, nothing learned. This is the auditability that distinguishes a principled fatigue model from an ad-hoc fudge factor.
+Final Principle
+Principle #60. The hardest thing for the system to know is whether a bad day means the athlete got weaker or just got tired. Every other capability in this model is durable; fatigue is the one state that lies to you on purpose, every session, and recovers on its own. The model earns trust not by reacting to bad days, but by correctly predicting them — and learning nothing from a deficit it already saw coming.
+
+The ruthless part, stated plainly: fatigue is not an additive feature — it retroactively changes what every prior observation meant. The frozen specs all assumed observation = capability; the truth is observation = capability − fatigue, and the model has been crediting fatigue to capability since ES-001. ES-011 cannot be made fully "consistent" with frozen ES-005.1 §4 and ES-010 Part A — it must amend both: effort_offset is redefined (Contradiction 3), and ES-010's attribution-first ordering is overruled for fatigued observations (Contradictions 1 & 2). I've declared those amendments at the top rather than smuggling them, because pretending fatigue composes cleanly with the frozen stack would itself be the contradiction you asked me to surface.
+The two judgment calls to scrutinize: fatigue lives in score-space units so it subtracts cleanly from capability — defensible, but it means κ (set→fatigue scaling) and the τ half-lives are pure free parameters with no anchor like ES-008 v2 gave the strength curves; they can only be tuned from trial data, and until then the whole fatigue correction is directional, not calibrated. And recovery half-lives are learned per athlete (D.3), which is powerful but is the riskiest learning in the whole system — if τ estimation goes wrong, the model will systematically mis-time progression for that athlete. I'd freeze τ at population defaults for the MVP and only turn on per-athlete τ learning once the fixed-default version is validated, exactly as I'd recommend freezing the ES-005.1 σ²_ref before trusting variance suppression.
+This closes roadmap Gap 5. The one remaining structural absence the stack now forward-references but doesn't define is the plateau definition that B.3's CHANGE_STRATEGY trigger and ES-006 both lean on — chronic fatigue is now a named cause, but "plateau" as distinct from "still recovering" still needs its own criterion. That, plus goal-change transitions (roadmap Gap 8), would be ES-012.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-011 Fatigue & Recovery — fatigue is built; its load-GATING of recommendations is ADVISORY.
+
+BUILT and active (Sprint 2): fatigue generation (A.4), fixed-τ recovery/decay (D), de-fatigue-before-attribution ordering (C.3, amends ES-010 Part A), fatigue-adjusted prediction (B.1), and ES-010 Part C variance-suppressed confidence. The 'observed = capability − fatigue' invariant is realized. No ① core-math change.
+CHANGED to advisory: the fatigue-aware RECOMMENDATION behavior (B.2/B.3 — hold-load, cut-reps first, drop-weight below the rep floor, and the INCREASE progression veto) no longer AUTO-APPLIES a load change. Consistent with the ES-006 governor demotion (DX-03), the recommendation engine emits the held/advised load; the athlete owns the working load.
+The session FATIGUE CEILING (SESSION_FATIGUE_CEILING = 24) and the trim-only recovery gate are LIVE (Sprint 3B-2) but PROVISIONAL / UNVALIDATED / CALIBRATION-REQUIRED, and effectively inert under Class-A. κ and the τ values remain PROVISIONAL — the 2026-06-10 parameter-adoption review adopted nothing (reviews/decisions/MODEL_REVIEW_PARAMETER_ADOPTION.md).
+'CHANGE_STRATEGY on chronic systemic fatigue' (B.3) is surfaced ADVISORILY via M5 (DX-09), not via an investigation (ES-013 retired).
+As-built sources: reviews/completion/SPRINT_2 / SPRINT_3B2 / DX-03 completion reports; hush_model/fatigue.py, recovery.py, prediction.py, composition.py.
+

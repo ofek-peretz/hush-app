@@ -1,0 +1,42 @@
+# Hush v1 — reference ingress / TLS-termination config (BB-30 §4, BB-22 §5).
+# Caddy is ONE reference proxy; nginx / Traefik / a cloud L7 LB satisfy the same three requirements:
+#   (1) terminate TLS 1.2+ for athlete traffic and speak plain HTTP to the app on the private network;
+#   (2) HSTS + :80 -> :443;
+#   (3) DO NOT route /internal/* from the public listener — the operator surface is private-only.
+# Replace hush.example.com with the real prod hostname. Caddy auto-provisions/renews the cert via ACME
+# (the certificate issuance itself is the infrastructure step DEPLOYMENT_ARCHITECTURE_V1 §4 calls out).
+
+{
+	# email for ACME / cert expiry notices
+	email ops@hush.example.com
+	# refuse TLS below 1.2 (athlete bearer tokens travel here — contract §1 / ATS)
+	servers {
+		protocols h1 h2
+	}
+}
+
+hush.example.com {
+	# --- BB-22: the operator surface is NOT reachable from the public internet ---
+	# Operators reach /internal/* over the private network / VPN / bastion only. Auth (operator key)
+	# and audit (operator_access WARNING on denial) are defense-in-depth behind this network block.
+	@internal path /internal/*
+	respond @internal 404
+
+	# --- HSTS on the public listener ---
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# --- reverse-proxy the athlete API to the app on the private network (plain HTTP) ---
+	reverse_proxy hush-app:8000 {
+		# fail fast; the app is synchronous and single-writer — do not let slow clients pile up
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 30s
+		}
+	}
+}
+
+# Caddy redirects :80 -> :443 automatically for a named site. If your environment terminates :80
+# elsewhere, ensure plain-HTTP athlete traffic is redirected or refused — never served.

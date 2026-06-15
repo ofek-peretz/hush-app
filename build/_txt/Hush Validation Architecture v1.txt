@@ -1,0 +1,171 @@
+
+Hush Validation Architecture v1
+The purpose of this program is to learn the truth about Hush as fast and as honestly as possible — not to confirm it works. The Assumptions Register already told us the hardest fact about validation: risk and testability are inversely correlated. The four assumptions that could kill the company (A1–A4) are precisely the ones the MVP cannot cleanly reach, and the assumptions the MVP can test thoroughly (A7, A9) are not the existential ones. A validation program that ignores this will validate the cheap things, declare success, and ship the expensive risks untested.
+So this program is built around a single discipline: test what you can decisively, instrument what you can only observe, and explicitly bound what you cannot test rather than pretending you did. And one structural commitment runs through all of it — without deliberate probing (the Investigation Engine's probes, plus deliberate rest-interval variation), three existential and two high-risk assumptions are untestable by construction. The validation program therefore requires the probe machinery to be live from early in the trial. Passive observation alone validates almost nothing that matters.
+
+Per-assumption validation design
+For each assumption: support evidence, falsifying evidence, data required, sample size, time horizon, and the honest MVP verdict.
+A1 — Capability is recoverable from confounded observations (Existential)
+The system infers a latent (capability) from a channel confounded by fatigue and effort, with two unknowns per observation. The question: are the capability estimates real, or self-consistent fiction?
+Supports: capability estimates predict out-of-sample fresh-state performance better than a naive "last working set" heuristic. Specifically: schedule occasional standardized fresh-state checks (same exercise, long rest, controlled) and test whether the model's predicted reps-to-failure matches the observed fresh-state result.
+Falsifies: predicted fresh-state performance no better than naive baseline; or capability trajectories that diverge depending on session ordering/spacing when true capability was constant (the signature of fatigue/effort leaking into the score).
+Data required: deliberately scheduled fresh-state probes — this data does not exist unless the program creates it. The Investigation Engine's challenge/deload probes and a small number of dedicated rested re-tests.
+Sample size: modest — even 10–20 athletes with regular fresh-state checks gives a per-athlete signal, since each athlete is their own control.
+Time horizon: 8+ weeks (needs enough fresh-state checks after calibration).
+MVP verdict: Partially testable, and ONLY with added fresh-state probes. Without them, untestable in principle (the model explains every deviation as fatigue/effort). The single highest-leverage instrumentation decision in the program: add fresh-state checks or A1 ships blind.
+A2 — The coupled learning loop converges (Existential)
+Supports: per-athlete capability and load trajectories that settle toward stable values; low sensitivity of long-run trajectory to small parameter perturbations (tested in offline simulation/replay).
+Falsifies: oscillation, ratcheting, or drift in score/load for an athlete whose true capability is stable; high sensitivity to parameter changes.
+Data required: long per-athlete trajectories + offline replay/simulation harness to perturb parameters against recorded data.
+Sample size: irrelevant to the core question — this is about time per athlete, not number of athletes.
+Time horizon: 6–18 months to observe drift; the evidence-decay half-life alone is 23 weeks.
+MVP verdict: Cannot test in MVP. The validation window is shorter than the system's own slowest time constant. Mitigation: run an offline simulation harness that drives the frozen model with synthetic and replayed athletes over simulated years to detect instability before it reaches a real person. This is the only access to A2 the MVP has, and it is mandatory.
+A3 — Trust is measurable through behavior (Existential)
+Supports: behavioral TrustScore (costly-deference, retained discernment) that correlates with retention and with independent trust measures; the score moving in response to costly-case events.
+Falsifies: TrustScore uncorrelated with retention or with periodic self-reported trust; inability to distinguish thoughtful agreement from disengagement in any behavioral signal.
+Data required: costly-case events (DECREASE_LOAD, fatigue holds, challenge probes) — which the conservative system rarely produces unless probing manufactures them; periodic lightweight self-reported trust question (ES-012 Metric 6); retention.
+Sample size: needs enough hard events, not athletes. An athlete with 50 easy sessions and zero hard recommendations provides zero trust signal.
+Time horizon: 8–12 weeks, contingent on probes generating hard events early.
+MVP verdict: Partially testable, contingent on probing. Without manufactured costly-case events, untestable for much of the cohort (their TrustScore stays low-confidence). DiscernmentRetained remains unobservable in principle — accept it as a guardrail, not a measured quantity. The program must drive probes specifically to populate this.
+A4 — Athletes will delegate decisions (Existential)
+Supports: sustained costly-deference in a non-self-selected sample; qualitative evidence that delegation (not novelty or compliance) drives retention.
+Falsifies: persistent override of consequential decisions even among engaged users; churn attributed to "I want control."
+Data required: retention, costly-deference, and exit interviews / churn-reason data distinguishing "it was wrong" from "I want control."
+Sample size: large and diverse to escape selection bias — the core problem is that beta users self-select into delegation.
+Time horizon: long; delegation as a durable disposition reveals over months.
+MVP verdict: Cannot test validly in MVP. Beta users are self-selected delegators; survivorship biases it further. The MVP measures the disposition of people already inclined to defer. Mitigation: reframe per Hush Thesis v2 — the MVP validates "good sticky default," not "delegation." A4 is explicitly deferred to post-MVP with a broader population. Recording churn reasons is the only partial signal available.
+A5 — effort_offset and fatigue are separately identifiable (High)
+Supports: the decomposition stable across athletes; effort_offset converging to a stable per-athlete floor while fatigue tracks rest intervals.
+Falsifies: the two corrections trading mass arbitrarily; an athlete whose effort drifts over weeks being indistinguishable from long-τ fatigue.
+Data required: an independent effort anchor — i.e. RIR/proximity-to-failure, which the product refuses to collect (Anti-Requirement).
+Sample size / horizon: moot.
+MVP verdict: Cannot test. Requires the exact input the product forbids. Mitigation: in the validation cohort only, optionally collect RIR on a subset as a research instrument (not a product feature) to anchor the decomposition offline. If RIR collection is refused even for research, A5 ships unidentified and must be flagged in every conclusion that depends on fatigue/effort separation.
+A6 — Per-athlete recovery rates (τ) are learnable (High)
+Supports: τ estimates that stabilize and predict post-rest performance better than fixed population τ.
+Falsifies: τ estimates that fail to stabilize / fit noise (high variance across re-fits).
+Data required: many observations per capability at varied rest intervals — requires deliberately varying rest intervals, which habitual schedules don't provide.
+Sample size: insufficient at MVP N regardless.
+Time horizon: long; needs varied-interval data accumulation.
+MVP verdict: Cannot identify in MVP. 8 decay constants from ~5 observations per capability at one or two habitual intervals is unidentifiable. Decision: ship FIXED population τ; do not enable per-athlete τ learning. The validation question reduces to "are fixed population τ adequate?" — testable as a special case of A8 (does the fatigue-adjusted prediction beat baseline). Per-athlete τ is a post-MVP research item requiring deliberate rest-interval variation.
+A7 — Conservative seeds are safe across all cohorts (High — most testable)
+Supports: low first-session failure-on-first-rep rate and high first-session completion across all cohorts, especially the tails (older, female, detrained, bodyweight movements).
+Falsifies: first-session failures or injuries concentrated in any cohort; seeds landing heavy for under-represented groups.
+Data required: first-session completion and first-rep-failure rates, segmented by cohort.
+Sample size: small per cohort, but cohort coverage matters far more than total N — a diverse N=20 tests A7 better than a homogeneous N=100. Recruit deliberately for tails.
+Time horizon: 1 week. This is the fastest decisive test in the program.
+MVP verdict: Fully testable, immediately. Highest-priority early test. Cheap, fast, and the failure mode (injury/humiliation on session one) is the most trust-destroying event possible.
+A8 — De-biased error is a valid model-quality signal (High — load-bearing under Thesis v2)
+Supports: fatigue/effort-adjusted prediction error beating the shadow baseline (a fixed, non-learning linear-progression policy) while capability is still moving (excluding variance-collapse).
+Falsifies: de-biased error no better than the shadow baseline (the learning loop added nothing); or error falling only because capability variance collapsed with flat true capability.
+Data required: per-recommendation, compute what the shadow policy would have predicted (via the frozen forward model) alongside Hush's prediction; track both against actuals. Track capability movement to exclude variance-regression.
+Sample size: the weak point — per-athlete significance is hopeless at N=10–100, and the per-athlete-model premise (Founder Principle 9) forbids naive pooling.
+Time horizon: 8–12 weeks (needs post-calibration learning).
+MVP verdict: Testable directionally, NOT to significance. This is the most important quality assumption under Thesis v2 (the product lives on recommendation quality), and it is underpowered. Mitigation: use the shadow baseline as a within-athlete paired comparison (each athlete is their own control on every recommendation), which is far more powerful than between-athlete; report effect sizes and directional consistency across athletes rather than a single significance test. Supplement with the offline replay harness.
+A9 — Overrides are interpretable (High — fully testable)
+Supports: low rate of off-catalog overrides; the catalog covering the substitutions athletes actually make.
+Falsifies: a material fraction of overrides to exercises with no catalog mapping / difficulty_factor (uninterpretable observations).
+Data required: log every override's target, including off-catalog; measure off-catalog fraction and the attribution gap it creates.
+Sample size: modest; this is a rate measurement.
+Time horizon: 4–8 weeks (need enough overrides).
+MVP verdict: Fully testable. Just instrument override targets. The 40–60 exercise catalog against real-gym variety makes a material off-catalog rate likely; better to know early.
+
+Summary verdict table
+Risk
+MVP testable?
+Decisive horizon
+Gating data the program must create
+A1 capability recoverable
+Existential
+Partial — needs fresh-state probes
+8+ wk
+Scheduled fresh-state checks
+A2 loop converges
+Existential
+No — offline sim only
+6–18 mo
+Simulation/replay harness
+A3 trust measurable
+Existential
+Partial — needs probes
+8–12 wk
+Manufactured costly-case events
+A4 athletes delegate
+Existential
+No — deferred
+months
+Churn-reason data (partial)
+A5 effort/fatigue split
+High
+No — needs RIR
+—
+Optional research-only RIR subset
+A6 per-athlete τ
+High
+No — ship fixed τ
+long
+Deliberate rest-interval variation (post-MVP)
+A7 seed safety
+High
+Yes, fully
+1 wk
+Cohort-segmented first-session data
+A8 de-biased error
+High
+Directional only
+8–12 wk
+Shadow-baseline paired comparison
+A9 override interpretable
+High
+Yes, fully
+4–8 wk
+Override-target logging
+The pattern is stark and must be stated to stakeholders: every existential assumption is, at best, partially testable; the only fully-testable assumptions (A7, A9) are operational, not existential. A successful MVP proves the system is safe, interpretable, and probably good — it does not prove the system is correct over the long run or that it has earned the right to decide. Those rest on A1–A4.
+
+The three-phase roadmap
+The phases are ordered to front-load the cheap decisive tests, build the instruments the hard tests need, and gate progression on safety first. No phase proceeds if the prior phase's gate fails.
+Phase 0 — Offline (before any athlete)
+Purpose: test what no live trial can — loop stability (A2) — and de-risk before exposing humans.
+Build a simulation/replay harness driving the frozen model with synthetic athletes (known true capability + injected fatigue/effort) over simulated months-to-years.
+A2: detect oscillation, drift, ratcheting; run parameter-sensitivity sweeps.
+A1 (offline portion): verify the model recovers known synthetic capability from confounded synthetic observations — a controlled test of recoverability impossible with real athletes (whose true capability is unknown).
+Calibrate the free parameters (κ, τ defaults, σ²_ref) against synthetic data so they enter the live trial as informed defaults, not guesses.
+Gate to Phase 1: the model is stable in simulation across the parameter ranges, and recovers synthetic capability. If it oscillates in simulation, it does not touch a person.
+Phase 1 — Safety & Coherence (10–20 athletes, ~4 weeks, calibration-focused)
+Purpose: prove the system is safe and behaves sanely on real, diverse athletes. This is the calibration window (ES-003), so it is judged on safety and completion, not accuracy.
+Recruit for cohort diversity above all — the tails are where A7 lives.
+A7 (week 1, decisive): first-session failure and completion by cohort. Hard gate.
+A9: begin override-target logging; measure off-catalog rate.
+Instrumentation live from day one: shadow-baseline computation (A8), fresh-state checks (A1), probe machinery (A3) — even if not yet analyzed, the data must accumulate.
+Qualitative: do athletes return? Do they feel safe? Early trust question.
+Gate to Phase 2: no cohort shows unsafe seeds (A7 passes); off-catalog override rate is manageable or catalog is patched (A9); athletes return. If seeds are unsafe for any cohort, stop and re-anchor ES-008 v2 before proceeding.
+Phase 2 — Learning & Trust (50–100 athletes, 8–12 weeks, post-calibration)
+Purpose: test whether the system actually learns and whether trust is measurable and earned. This is the heart of the program.
+A8 (primary): shadow-baseline paired comparison — does Hush's de-biased prediction beat fixed progression, within-athlete, while capability moves? Report effect sizes and directional consistency, not a single significance test.
+A1 (primary): fresh-state checks — does predicted fresh-state performance match observed, beating naive baseline?
+A3 (primary): drive probes to manufacture costly-case events; does TrustScore respond to them and correlate with retention and the self-report?
+A6 (as special case): are fixed population τ adequate — i.e. does the fatigue-adjusted prediction (A8) hold up? Do NOT enable per-athlete τ.
+A5 (optional research): if RIR collection on a subset is permitted, anchor the effort/fatigue decomposition offline.
+Stopping criteria (success): de-biased error beats shadow baseline with consistent direction across athletes; A1 fresh-state predictions beat naive; TrustScore rises with confidence and correlates with retention; at least one decrease and one fatigue-hold per athlete handled with compliance (the ES-012 requirement that forces hard events to exist); retention at target.
+Failure criteria: de-biased error does not beat baseline (no learning — return to the model, not to engagement features); TrustScore high but driven by acceptance with collapsed discernment (passive compliance); costly-deference stuck at indifferent baseline.
+Gate to Phase 3: the system demonstrably learns (A8) and trust is demonstrably measurable and earned for the cohort that experienced hard events (A3).
+Phase 3 — Durability & Delegation (post-MVP, longitudinal, broader population)
+Purpose: reach the assumptions the MVP structurally cannot — long-run convergence on real athletes (A2 live), durable delegation (A4), and per-athlete recovery learning (A6).
+A2 (live): 6–18 month trajectories on Phase 2 survivors — does the loop stay stable in reality, not just simulation?
+A4: broader, non-self-selected recruitment; churn-reason analysis; does delegation (not novelty) drive retention? This is where Thesis v2's deeper ambition (earning authority) first becomes testable.
+A6: with accumulated long-horizon, varied-interval data, attempt per-athlete τ — and only enable it in production if it beats fixed τ.
+A5: longitudinal effort-drift analysis to confirm the decomposition holds over time.
+Survivorship correction: model the dropout that Phases 1–2 could not, since trust failures churned out of the earlier sample.
+
+The program's honest contract with stakeholders
+This validation architecture will, by end of Phase 2, give you high-confidence answers on safety (A7), interpretability (A9), and — directionally, within-athlete — on whether the model learns (A8) and whether trust is real where it was tested (A1, A3). It will give you simulation-only assurance on stability (A2) and explicit deferral on long-run convergence and delegation (A2-live, A4) and on per-athlete recovery (A6) and effort identifiability (A5).
+What it will not do — and what no MVP can do — is prove that Hush has earned the right to decide for an athlete over years. That claim rests on A1–A4, three of which the MVP can only partially reach and one of which it cannot reach at all. The correct posture, consistent with Thesis v2, is: validate the trusted default in Phases 0–2; earn the right to test delegation in Phase 3. A program that promised more would be doing exactly what ES-012 exists to prevent — mistaking the measurable for the true.
+Two non-negotiables determine whether this program works at all. First, Phase 0's simulation harness is not optional — it is the only access to the existential stability question and the only safe place to calibrate the free parameters before they touch a person. Second, probing must be live from Phase 1 — fresh-state checks, shadow-baseline logging, and the Investigation Engine's probes are the instruments without which A1, A3, A8 are untestable by construction. Build the instruments first. A trial that observes passively will produce data that looks like validation and proves almost nothing that matters.
+
+════════ RESTATEMENT ADDENDUM — DX-14 (2026-06-12) ════════
+Validation Architecture — Phase-0 success criteria reoriented onto stagnation/program, off load-prediction.
+
+The Phase 0/1/2/3 structure and the per-assumption validation design (shadow baseline, fresh-state checks, cohort recruitment, fixed-τ decision) are unchanged and BUILT for Phase 0 (Sprint 4: sim harness, A8 shadow, A9 override logging, A1 offline recoverability, the gate).
+REORIENTED: the headline Phase-0 success question is no longer 'does the model predict the right LOAD'. It is: does the model (a) recover and hold an honest capability estimate from real logged performance, is it stable (no oscillation/drift/ratchet) and does it beat a no-learning shadow baseline; and (b) does the stagnation detector (M5) fire correctly and rarely — true Stalled/Regressing events surfaced, no false alarms, ≤1 surfacing/week with the 4-week cooldown.
+De-biased error and the shadow counterfactual remain the model-quality instruments (directional, per A8). κ/τ/σ²_ref stay PROVISIONAL — the 2026-06-10 review adopted nothing. The live fresh-state probe slots and the Investigation Engine are NOT in v1 (ES-013 retired; detection = M5).
+As-built sources: reviews/completion/SPRINT_4_COMPLETION_REPORT.md, DX-09_COMPLETION_REPORT.md; reviews/decisions/MODEL_REVIEW_PARAMETER_ADOPTION.md; sim/ (harness, shadow, metrics, gate).
+

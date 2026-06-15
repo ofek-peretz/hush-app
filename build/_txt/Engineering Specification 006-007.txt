@@ -1,0 +1,494 @@
+
+Engineering Specification 006
+Recommendation Engine v1
+
+Purpose
+Convert athlete understanding into actionable recommendations.
+
+The Recommendation Engine is the only component allowed to answer:
+What should the athlete do next?
+
+Everything else provides information.
+Recommendation Engine makes decisions.
+
+Core Principle
+Principle #45
+Recommendations are decisions under uncertainty.
+
+The engine should not seek perfection.
+It should seek the safest useful next step.
+
+Inputs
+athlete_statecapability_statesprediction_engineexercise_catalogrecent_observationsrecent_recommendationsconfidence
+
+Outputs
+exercise_idrecommended_weighttarget_repstarget_setsdecision_reasondecision_confidence
+
+Example:
+bench_press87.5kg8 reps3 setsreason:consistent_positive_evidenceconfidence:84
+
+Recommendation Hierarchy
+Not all decisions are equal.
+
+Level 1:
+Weight
+Most frequent.
+
+Level 2:
+Rep Target
+Occasional.
+
+Level 3:
+Exercise Replacement
+Rare.
+
+Level 4:
+Workout Structure
+Very rare.
+
+Level 5:
+Strategy Change
+Extremely rare.
+
+The engine should always prefer the lowest level capable of solving the problem.
+
+Decision Types
+Allowed:
+KEEP_LOADINCREASE_LOADDECREASE_LOADREPLACE_EXERCISECHANGE_STRATEGY
+
+Nothing else in V1.
+
+Default Behavior
+Most recommendations should be:
+KEEP_LOAD
+
+Reason:
+Human capability changes slowly.
+
+Trust is harmed more by unnecessary changes than by delayed changes.
+
+Decision Rule
+The engine evaluates:
+Prediction Error
+
+And:
+Confidence
+
+Together.
+
+Positive Evidence
+Example:
+predicted_failure:11actual_failure:14
+
+Error:
++3
+
+Repeated positive evidence:
+INCREASE_LOAD
+candidate.
+
+Negative Evidence
+Example:
+predicted_failure:11actual_failure:8
+
+Error:
+-3
+
+Repeated negative evidence:
+DECREASE_LOAD
+candidate.
+
+Stability Requirement
+Single observations should rarely trigger change.
+
+Minimum:
+2-3
+consistent observations.
+
+Reason:
+Avoid oscillation.
+
+Confidence Gate
+Even strong evidence should not trigger large changes when confidence is low.
+
+Example:
+positive evidenceconfidence:25
+
+Action:
+small increase
+
+Example:
+positive evidenceconfidence:85
+
+Action:
+normal increase
+
+Load Progression
+V1 progression steps:
+barbell:2.5kg
+
+machine:1 increment
+
+dumbbell:smallest available step
+
+Never exceed equipment granularity.
+
+Recommendation Memory
+Engine must remember:
+last_recommendationlast_accepted_recommendationoverride_history
+
+Reason:
+The same evidence should not trigger the same recommendation repeatedly.
+
+Override Interpretation
+Claude identified this tension correctly.
+
+Override is:
+Learning Signal
+
+NOT:
+Failure
+
+Therefore:
+Track separately.
+
+Metric A:
+Recommendation Acceptance
+
+Metric B:
+Recommendation Accuracy
+
+Metric C:
+Override Learning Value
+
+Do not collapse them.
+
+Exercise Replacement Logic
+Replacement should not occur due to performance.
+
+Only:
+equipment_constraintrepeated_skip_patternpreference_signal
+
+Reason:
+Capability learning should survive exercise changes.
+
+Recommendation Confidence
+Derived from:
+prediction_confidencecapability_confidenceevidence_consistency
+
+Output:
+0-100
+
+Displayed internally only.
+
+Explainability Requirement
+Every recommendation must generate:
+decision_reason
+
+Example:
+consistent_positive_evidence
+
+Example:
+low_confidence_hold
+
+Example:
+preference_based_replacement
+
+No unexplained decisions.
+
+Audit Chain
+Every recommendation must be reconstructable.
+
+Capability↓Prediction↓Observation↓Evidence↓Decision↓Recommendation
+
+If any link is missing:
+The recommendation is invalid.
+
+Safety Rules
+When uncertain:
+KEEP_LOAD
+
+When confidence is low:
+KEEP_LOAD
+
+When evidence conflicts:
+KEEP_LOAD
+
+The engine should earn the right to change recommendations.
+
+Success Criteria
+The Recommendation Engine succeeds if:
+Recommendations remain explainable. 
+Recommendation accuracy improves. 
+Prediction error decreases. 
+Override quality improves. 
+Athlete trust increases. 
+
+Final Principle
+Principle #46
+The Recommendation Engine is not trying to maximize performance.
+It is trying to maximize trust while improving performance.
+Engineering Specification 007
+Athlete State Update Engine v1
+Purpose
+Convert evidence into updated understanding.
+
+The Athlete State Update Engine is the only component allowed to modify:
+CapabilityStatePreferenceStateGlobalConfidenceStrategyState
+
+No other component may write directly to state.
+
+Core Principle
+Principle #47
+Observations do not change state.
+Evidence changes state.
+
+Example:
+Wrong:
+Workout↓Capability Update
+
+Correct:
+Workout↓Observation↓Evidence↓State Update
+
+Update Hierarchy
+State updates happen in layers.
+
+Observation↓Evidence↓Capability Update↓Confidence Update↓Preference Update↓Strategy Evaluation
+
+Not all layers execute every time.
+
+Capability Update
+Most common update.
+
+Input:
+current_scoreobserved_scoreevidence_weightprediction_confidencerecency_weight
+
+Output:
+new_score
+
+Update Rule
+Important:
+Capability score should move gradually.
+
+Example:
+Current:
+score: 64
+
+Observed:
+score: 72
+
+Result:
+new_score: 65
+
+Not:
+new_score: 72
+
+Reason:
+One workout is not identity.
+
+Learning Rate
+Every capability update uses:
+learning_rate
+
+Example:
+0.05
+
+Meaning:
+Move 5% toward new evidence.
+
+Exact value configurable.
+
+Evidence Weight
+Not all evidence is equal.
+
+Example:
+prediction_confidence: 90
+
+Weight:
+1.0
+
+Example:
+prediction_confidence: 20
+
+Weight:
+0.2
+
+Reason:
+Reliable observations should influence state more.
+
+Recency Weight
+Recent evidence matters more.
+
+Example:
+today:1.0
+
+Example:
+18_months:0.1
+
+Applied before update.
+
+Capability Confidence Update
+Capability confidence updates separately from score.
+
+Reason:
+Capability estimate and certainty are different things.
+
+Example:
+score: 70confidence: 25
+
+Perfectly valid.
+
+Confidence Increase Conditions
+Repeated:
+Prediction ≈ Reality
+
+Increase confidence.
+
+Confidence Decrease Conditions
+Repeated:
+Prediction ≠ Reality
+
+Decrease confidence.
+
+Confidence Boundaries
+Always:
+0 ≤ confidence ≤ 100
+
+Global Confidence
+Derived.
+Never directly edited.
+
+Formula concept:
+Aggregate Capability Confidence
+
+Not:
+Manual Variable
+
+Claude's observation was correct.
+Global confidence should emerge.
+
+Preference Update Engine
+Preference updates only from behavior.
+
+Never from onboarding.
+
+Example:
+Repeated Exercise Replacement
+
+Creates:
+Negative Preference Evidence
+
+Example:
+Repeated Voluntary Selection
+
+Creates:
+Positive Preference Evidence
+
+Preference Update Rule
+Preference score should move slowly.
+
+Reason:
+Temporary moods exist.
+
+Patterns matter.
+
+Strategy Evaluation
+Most infrequent update.
+
+Not every workout.
+
+Suggested cadence:
+every:10-20 workouts
+
+Reason:
+Strategy changes are expensive.
+
+Strategy Evaluation Inputs
+capability_trendscompletion_rateoverride_patternsprediction_accuracyconfidence
+
+Strategy Change Requirements
+Require:
+Persistent Pattern
+
+Require:
+High Confidence
+
+Require:
+Multiple Signals
+
+Never trigger from one workout.
+
+Contradictory Evidence Handling
+Claude hinted at this.
+
+Example:
+PositivePositivePositiveNegativeNegativeNegative
+
+System response:
+Reduce confidence
+before:
+Change score aggressively
+
+Reason:
+Conflict indicates uncertainty.
+
+State Update Frequency
+Capability State:
+every_observation
+
+Preference State:
+pattern_based
+
+Strategy State:
+evaluation_cycle
+
+Different state types evolve at different speeds.
+
+Immutable Audit Trail
+Every update generates:
+update_idprevious_stateevidence_usednew_statereasontimestamp
+
+Purpose:
+DebuggingTrustworthinessModel Improvement
+
+Update Constraints
+No update may:
+change_score_by:> threshold
+
+Example:
+>10%
+
+Reason:
+Prevent instability.
+
+Learning Stability Rule
+When evidence quality decreases:
+Learning rate decreases.
+
+When evidence quality increases:
+Learning rate may increase.
+
+This creates natural stability.
+
+Success Criteria
+The Athlete State Update Engine succeeds if:
+Scores become more accurate. 
+Confidence reflects certainty. 
+Preferences emerge automatically. 
+Strategy changes remain rare. 
+State remains stable but adaptable. 
+
+Final Principle
+Principle #48
+Learning is not reacting.
+Learning is updating beliefs.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-006 Recommendation Engine — the L1 governor is ADVISORY (DX-03 / M1·DX-20).
+
+The L1 decision governor (KEEP_LOAD / INCREASE_LOAD / DECREASE_LOAD) is RETAINED as a computation: it still produces a decision type + reason and surfaces them for audit. But as of DX-03 (Gap-Review M3) its one-equipment-step load move is NO LONGER APPLIED — a governed cycle emits the HELD load, not a stepped load.
+As of M1/DX-20 the program working load is the score-derived target_load (ES-005.1), built from learned capability, NOT the held anchor. govern() is consulted only for the advisory lean/direction; target_load carries the advised direction.
+Net: ES-006 load progression is ADVISORY. The athlete owns the working load (Product Specification §2/§7). Decision memory (streaks, reset-on-fire, last_decision, last_recommended_weight) is preserved for audit/history only; it no longer moves the emitted load.
+Superseded within this spec: any reading where INCREASE/DECREASE auto-adjusts the emitted working load, and the fatigue-driven progression veto as an APPLIED action (it is advisory; see ES-011 addendum). CHANGE_STRATEGY is an advisory surfacing via M5 (DX-09), not licensed by an investigation (ES-013 retired).
+As-built sources: reviews/completion/DX-03_COMPLETION_REPORT.md, M1_COMPLETION_REPORT.md; hush_model/decision.py (govern), recommendation.py; HUSH_V1_PRODUCT_SPECIFICATION.md §2/§5/§7.
+

@@ -1,0 +1,171 @@
+
+Engineering Specification 013
+Investigation & Plateau Resolution Framework v1
+Status
+Frozen specification. Integrates ES-006 (Recommendation), ES-007 (State Update), ES-011 (Fatigue & Recovery), ES-012 (Trust Measurement). Formalizes the Plateau Investigation Framework and Investigation Engine Specification into implementable rules.
+Purpose
+Define how Hush investigates a suspected plateau through bounded, reversible experiments rather than passive detection, and how it licenses high-cost decisions (strategy change) only after experimental exclusion of cheaper explanations. This specification adds a second operating mode to the system and governs the transition between modes.
+Source of Truth & Scope
+This spec governs the per-capability transition between Recommendation Mode and Investigation Mode, the probe lifecycle, and the licensing of CHANGE_STRATEGY. It does not modify the math of ES-005.1, the attribution of ES-010, or the fatigue model of ES-011 — it consumes them. It introduces no new capability classes and no new observation types.
+Core Principle
+Principle #63. A plateau is never detected; it is the residual that survives experiment. Hush does not conclude that progress has stopped — it deliberately attempts, in safe and reversible increments, to make progress happen, and declares a plateau only when every cheaper explanation has been experimentally excluded. The flatness is the prompt; the failed probes are the evidence; the un-excluded confounds are the permanent qualification on every conclusion.
+
+Section 1 — Recommendation Mode
+Recommendation Mode is the default operating mode for every capability. In this mode the capability receives recommendations from the standard pipeline: ES-005.1 prediction, ES-011 fatigue adjustment, ES-006 decision rules, ES-005.1 §7 conservative discount. This mode is unchanged from the frozen stack and is the behavior described by ES-001 through ES-012.
+A capability is in exactly one mode at any time: Recommendation or Investigation. Mode is per-capability, never global. The athlete may have six capabilities in Recommendation Mode and one in Investigation Mode simultaneously.
+
+Section 2 — Investigation Mode
+A capability enters Investigation Mode when it is the subject of an active investigation. In this mode, the standard Recommendation Engine still computes the normal recommendation (the baseline, retained for reversibility) but the active probe's prescribed deviation replaces the baseline as the value delivered to the athlete for that capability.
+Mode precedence is fixed and non-negotiable:
+Fatigue/Safety (ES-011)   >   Investigation (ES-013)   >   Recommendation (ES-006)
+                          governed throughout by Trust (ES-012)
+Safety outranks investigation: the Fatigue Engine may block, shrink, delay, or serialize any probe. Investigation outranks normal recommendation for the capability under test. Trust governs whether any trust-costly probe may proceed at all. Investigation is sanctioned, bounded risk — never a free hand.
+
+Section 3 — Investigation Lifecycle
+An investigation is a first-class, persistent object scoped to exactly one capability, surviving across sessions. Its lifecycle states are: opened → (escalated)* → resolved | abandoned.
+3.1 Stored state
+Each investigation persists:
+capability_under_investigation — exactly one capability code.
+plateau_hypothesis — trend estimate, slope confidence interval, observation window, suspicion strength.
+baseline — load, volume, exercise at investigation open (the reversibility anchor).
+active_probe — type, prescribed deviation, hypothesis tested, licensing evidence, sessions elapsed.
+exclusion_ledger — confounds ruled out by completed probes, AND confounds that could not be ruled out (e.g. bodyweight, effort).
+probe_history — every probe run, its outcome, its interpretation.
+investigation_confidence — bounded quantity per Section 6.
+novelty_window_marker — for probes whose results must be read past the novelty bump (volume, exercise).
+The investigation stores hypotheses and exclusions, never a "true plateau score." No such measurement exists; plateau is the most-derived inference in the system and is represented only as a surviving hypothesis until resolution.
+3.2 Opening
+A capability transitions from Recommendation to Investigation Mode when all of the following hold (the suspicion gate):
+Fatigue-adjusted, effort-adjusted capability trend is flat — the slope confidence interval excludes meaningful positive slope.
+The observation window is long enough that the slope CI is narrow, excluding "insufficient observations." A flat point estimate with a wide CI is not a plateau hypothesis; it is ignorance.
+At least one discriminating probe is licensable — a probe exists whose outcome would rule a confound in or out.
+If conditions 1–2 hold but condition 3 fails (no licensable probe — e.g. the athlete is too fatigued to challenge, a deload was just run, and nothing else discriminates), the capability remains in Recommendation Mode flagged suspected-but-uninvestigable, and observation continues. Entering Investigation Mode with no viable probe is forbidden.
+On open: record baseline and plateau_hypothesis; select the first probe per Section 5.
+3.3 Escalation
+When the active probe completes by excluding its confound without falsifying the plateau, the investigation escalates: the excluded confound is added to the exclusion_ledger, investigation_confidence rises (one explanation eliminated), and the next probe is selected per the Section 5 cascade. Escalation is the normal forward motion of a plateau that keeps surviving probes. It moves toward — but never reaches — strategy-change licensing until all applicable probes are exhausted.
+3.4 Resolution
+Resolved-falsified: a probe falsifies the plateau. The investigation closes, the real cause is recorded, and because the resolving probe is also the treatment (Section 4), the capability returns to Recommendation Mode at the improved state. This is the favorable and most common resolution.
+Resolved-confirmed: every applicable probe has run and the plateau survived all of them. The investigation closes with a plateau conclusion qualified as high-confidence-given-un-excluded-confounds, which becomes the licensed predicate for a strategy-change recommendation (Section 8). This is a recommendation surfaced to the athlete, not an autonomous change.
+3.5 Abandonment
+An investigation abandons, returning the capability to baseline and recording the reason, when:
+Trust breach — the athlete overrides the probe (declines a deload, refuses a challenge). The override ends the probe and is recorded as evidence (ES-010), not failure. You do not probe an athlete rejecting the probe.
+Safety block with no alternative — every remaining probe is blocked by fatigue and the fatigue will not clear within a reasonable window. Abandon to suspected-but-uninvestigable.
+Un-excludable confound — the only remaining probes cannot discriminate the live confounds. Abandon with the plateau marked suspected, confounds un-excluded.
+Premise void — the athlete's goal changes or the capability stops being trained.
+Abandonment always returns to the pre-investigation baseline and is as auditable as a resolution.
+
+Section 4 — Probe Framework
+A probe is a controlled, single-variable, reversible deviation whose response is diagnostic regardless of direction. Every probe obeys four constraints:
+One variable — changes exactly one of {load, volume, rest, exercise}, holding all else fixed.
+Reversibility — undoable within one session; the next recommendation can return to baseline.
+Invisibility — the athlete experiences a normal recommendation; the experimental nature is internal (Founder Workout-Engine principle).
+Confidence-gated magnitude — deviation scales inversely with confidence and with suspicion strength, never exceeding the conservative discount's own range. A probe reduces caution deliberately; it never abandons it.
+A valid probe has no "failed" outcome — every result rules a confound in or out.
+4.1 Deload Probe
+Hypothesis: the flat performance is accumulated fatigue, not a true plateau.
+Action: bounded reduction in load and/or volume for a short planned period, then return to pre-deload load and observe.
+Licensed when: flat trend + elevated estimated fatigue (ES-011). Skipped if fatigue is already low.
+Outcomes: performance returns to positive trend → fatigue confirmed, plateau falsified, probe was also the treatment (resolved-falsified). Performance returns to the same flat level → fatigue excluded, escalate. Performance worse → detraining/recovery issue, return to baseline, treat as recovery question.
+Role: highest information-gain-per-risk probe in the framework; the only probe that is also a treatment. Always considered first when fatigue is live.
+4.2 Challenge Probe
+Hypothesis: the athlete has genuinely stopped progressing — versus — the system stopped challenging them and they can still progress if pushed.
+Action: a single small, confidence-gated load increase above the held baseline, on a well-recovered capability.
+Licensed when: flat trend + low fatigue (deload probe excluded it, or it was never elevated) + complete recovery + recognition that recent recommendations were predominantly KEEP_LOAD.
+Outcomes: athlete meets/exceeds → under-challenge confirmed, not a plateau, resume progression at new level (resolved-falsified, trust gained). Athlete near target → ambiguous, return to baseline, gather more. Athlete well short → genuine ceiling, fatigue and under-challenge both excluded, escalate.
+Safety: the only probe that increases load; tightest magnitude gate; licensed only after fatigue is excluded, because challenging a fatigued athlete is unsafe and uninterpretable.
+4.3 Volume Probe
+Hypothesis: the plateau is under-stimulus (insufficient volume), not a wrong strategy.
+Action: bounded increase in sets for the plateaued capability, holding load and exercise fixed, sustained long enough to produce a stimulus response, bounded to prevent overreaching.
+Licensed when: plateau survived deload and challenge probes + low-to-moderate fatigue (headroom) + good adherence.
+Outcomes: positive trend resumes and outlasts the novelty window → under-stimulus confirmed, adopt new volume (resolved-falsified). Brief improvement decaying to flat → novelty bump only, escalate. Performance degrades / fatigue spikes → volume ceiling reached, back off (reversibility), points toward strategy or recovery-capacity issue.
+4.4 Exercise Probe
+Hypothesis: the plateau is exercise-specific (staleness, technique ceiling, poor fit), not capability-wide.
+Action: swap the plateaued exercise for another in the same capability and class (ES-008 v2), holding capability target and volume fixed.
+Licensed when: flat trend on one exercise while the capability across its other exercises is not flat — or the capability has only been trained through this one exercise and staleness is plausible; fatigue and under-challenge excluded.
+Outcomes: capability trend resumes on the new exercise and persists past novelty → exercise-specific issue confirmed (resolved-falsified). Novelty bump decaying to the same flat → capability-wide plateau, escalate (most dangerous to misread — read only past novelty). No improvement → exercise excluded, capability-wide plateau strengthened.
+
+Section 5 — Probe Sequencing
+Probes run as a decision cascade: cheapest, safest, most-likely-confound first; each probe licensed only by the exclusions prior probes achieved.
+Stage 0 — Suspicion gate (Section 3.2). Below gate: KEEP and keep observing. Do not probe noise.
+Stage 1 — Deload Probe, if fatigue elevated.
+            returns to progression → RESOLVED-FALSIFIED (fatigue)
+            stays flat            → fatigue excluded → Stage 2
+            (if fatigue not elevated, skip to Stage 2)
+Stage 2 — Challenge Probe.
+            athlete rises         → RESOLVED-FALSIFIED (under-challenge)
+            falls short           → under-challenge excluded → Stage 3
+Stage 3 — Branch on signal locality:
+            exercise-specific signal → Exercise Probe
+            capability-wide signal   → Volume Probe
+            (resolved-falsified if either restores sustained, post-novelty progress;
+             else exclude and proceed)
+Stage 4 — Strategy-change recommendation (Section 8), only if the plateau
+          survived every applicable probe.
+The ordering is forced simultaneously by cost (each stage more expensive), safety (the only load increase, Challenge, comes after fatigue is excluded), and information dependency (each probe is interpretable only given prior exclusions — a volume probe on a fatigued athlete is uninterpretable).
+Strategy change is not a probe: it is multi-variable and not reversible within a session, violating two probe constraints. It is the conclusion reached when probing is exhausted. Goal change is never reached by this cascade — goals belong to the athlete (Founder Principle 8).
+
+Section 6 — Investigation Confidence
+Investigation confidence answers: how much do we trust the investigation's current conclusion-in-progress? It is distinct from capability confidence and from the plateau hypothesis's trend confidence, and is built from two components:
+Exclusion completeness — rises as confounds are ruled out. An investigation that excluded fatigue and under-challenge is more confident than one that excluded only fatigue.
+Interpretive cleanliness — bounded by the least-clean probe relied upon. An investigation resolved by a deload probe (cleanly separated outcomes) carries higher confidence than one hinging on an exercise probe (novelty confound).
+Two hard caps apply:
+Inference ceiling — investigation confidence can never exceed the confidence of the fatigue-adjustment, effort-adjustment, and capability estimate it rests on. It cannot be more certain than its least-certain input.
+Un-excludable confound ceiling — an investigation that could not rule out bodyweight change or effort drift can never reach high confidence; those explanations remain live.
+Investigation confidence is therefore represented as a bounded value plus the explicit list of un-excluded confounds. Any conclusion is "high-confidence given these un-excluded confounds," never "high-confidence, full stop." Both must surface in every audit.
+
+Section 7 — Plateau Resolution
+A plateau resolves in exactly one of three terminal states:
+Falsified — a probe restored progress; the cause is identified and treated by the resolving probe; capability returns to Recommendation Mode improved.
+Confirmed (qualified) — survived all applicable probes; recorded as a high-confidence-given-un-excluded-confounds plateau; becomes the predicate for Section 8.
+Suspected-unresolved — abandoned without confirmation (trust breach, safety block, un-excludable confound, premise void); recorded as suspected with confounds un-excluded; capability returns to baseline.
+Resolution never produces an autonomous strategy change. Confirmation produces a recommendation, surfaced per Section 8.
+
+Section 8 — Strategy Change Licensing
+CHANGE_STRATEGY (ES-006 Level-5, ES-007 evaluation cycle) is licensed for a plateaued capability only when an investigation has reached Resolved-confirmed: every applicable probe ran, fatigue and under-challenge and (volume or exercise) were excluded, and the plateau survived with investigation confidence above the high-confidence threshold.
+The Strategy Engine may not reach around the Investigation Engine to change strategy on a raw flat trend. Investigation is the required evidentiary predicate that supplies ES-006's "all cheaper interventions excluded" condition and converts an unreliable raw signal into a licensed one. This resolves the cost/signal mismatch: the system's highest-cost decision now rests on experimentally excluded alternatives, not on the least-reliable raw inference.
+A licensed strategy change is surfaced to the athlete with its full exclusion ledger and un-excluded confounds. Because a strategy change is not reversible-within-session, it is enacted through the ES-007 evaluation cycle, not as a probe.
+
+Section 9 — Goal Transition Triggers
+Goal change is never system-initiated (Founder Principle 8: goals belong to the athlete). Hush may surface that progress toward the current goal has stalled despite a fully exhausted investigation, but it does not decide to change the goal.
+When an investigation reaches Resolved-confirmed and a subsequent strategy change also fails to restore progress over a further evaluation cycle, Hush surfaces a goal-stall notification: an explainable statement that the current goal's progress has plateaued despite full investigation and strategy adjustment. The athlete decides. On a goal change, capability scores and confidence persist (capability is goal-agnostic, Founder Principle 7); only StrategyState targets are revised; any open investigation on the affected capability abandons (premise void, Section 3.5).
+
+Section 10 — Integration Rules
+With ES-011 (Fatigue). Fatigue is an upstream gate on every probe and holds veto power. The Challenge and Volume probes are licensed only within the fatigue budget; the Challenge probe is forbidden on a fatigued capability. The Deload probe uses the Fatigue Engine as its instrument and reads post-deload fatigue state to interpret its result. Concurrent investigations across capabilities must jointly respect the systemic fatigue ceiling; when they would breach it or cross-contaminate each other's fatigue-adjustment, they serialize (default posture: serialize when independence cannot be proven).
+With ES-006 (Recommendation). For a capability in Investigation Mode, the active probe's deviation replaces the baseline recommendation; the Recommendation Engine continues computing the baseline for reversibility. On resolution or abandonment, the Recommendation Engine resumes control. Probed recommendations satisfy the ES-006 explainability requirement with a human reason; the experimental nature stays internal (probe invisibility).
+With ES-012 (Trust). Trust governs and is informed by investigation. Trust-costly probes (Challenge asking more, Deload asking less) are licensed only if the athlete's trust state can bear them; probing fragile or low-confidence trust risks an investigation-ending override. Conversely, probe responses are precisely the costly-deference events ES-012 requires and the conservative system otherwise rarely produces: an accepted Deload is a recovery-compliance signal; a met Challenge is a costly-deference signal. The Investigation Engine is the sanctioned manufacturer of the hard-case trust events, generated under trust's own governance.
+With ES-007 (State Update). Investigation outcomes are state-changing events written through the ES-007 owner: a Resolved-falsified investigation updates the capability via the resolving probe's observations through the normal ES-005.1 §5 blend; a Resolved-confirmed investigation writes the licensed strategy-change predicate to the evaluation cycle. Investigation never writes capability scores directly outside the ES-007 pipeline.
+
+Section 11 — Auditability
+Every mode transition, probe, and conclusion is reconstructable:
+Capability trend (fatigue/effort-adjusted, slope CI, window)
+  → Suspicion gate passed (why this qualified as a plateau hypothesis)
+  → Investigation opened (baseline, first probe, licensing evidence)
+  → Probe → outcome → interpretation → exclusion_ledger updated
+  → [Escalation: next probe + the exclusions that licensed it]
+  → Resolution (falsified + cause + treatment | confirmed + un-excluded confounds)
+     or Abandonment (trigger + return to baseline)
+  → Mode returned to Recommendation | strategy-change recommendation surfaced
+The non-negotiable audit property: every investigation records not only what it concluded but what it could not exclude. A plateau conclusion without its un-excluded confounds is invalid. Every probe stores its hypothesis, licensing evidence, outcome, and interpretation. A conclusion that cannot be reconstructed to specific probes and specific exclusions is invalid (ES-006 audit-chain rule, extended to investigations).
+
+Section 12 — Success Criteria
+The Investigation & Plateau Resolution Framework succeeds if:
+Plateaus are declared only as residuals surviving experimental exclusion, never as raw flat-trend detections.
+The Deload probe correctly distinguishes fatigue from plateau as the first and cheapest test, treating fatigue when that is the cause.
+The Challenge probe distinguishes genuine ceiling from system-induced flatness (the held-load confound).
+Strategy change is licensed only after all cheaper probes are exhausted, converting the highest-cost decision's predicate from unreliable to licensed.
+Every probe is reversible, single-variable, invisible to the athlete, and confidence-gated.
+Investigation confidence never exceeds its weakest input and always carries its un-excluded confounds.
+Probe responses feed the Trust Engine the costly-deference events it requires, under trust governance.
+Goal change remains athlete-owned; the system surfaces stalls but never decides goals.
+Final Principle
+Principle #64. The system earns the right to change an athlete's training the same way it earns the right to make any decision: not by concluding from a distance that something is wrong, but by acting carefully to find out — cheapest and safest first, one variable at a time, reversing anything that fails, and treating every result as evidence. A plateau is what remains after Hush has tried to break it and could not. Everything it could not rule out travels with that conclusion, permanently, as the measure of the system's honesty about what it does not know.
+
+════════ RESTATEMENT ADDENDUM — DX-13 (2026-06-12) ════════
+ES-013 Investigation & Plateau Resolution — RETIRED in v1; plateau/stagnation detection = M5 (DX-09).
+
+The active Investigation Engine, the mode controller, the probe sequencer (Deload / Challenge / Volume / Exercise), and the Fatigue > Investigation > Recommendation mode precedence described below are NOT implemented in Hush v1 and are RETIRED for v1.
+Plateau / stagnation DETECTION ships instead as M5 (DX-09): a read-only, advisory per-capability trend classifier (Progressing / Holding / Stalled / Regressing / Calibrating) plus an imbalance read over the learned score history, surfacing AT MOST one insight, one advisory CHANGE_STRATEGY recommendation, and one acceptance-gated volume option per week, with a 4-week cooldown. M5 applies nothing — it reads state and surfaces; it never acts.
+Consequently CHANGE_STRATEGY is an ADVISORY surfacing, NOT licensed by a completed investigation (there is no investigation). Goal change (L5) remains athlete-owned; the system surfaces a stall only.
+Retained as REFERENCE: the plateau-cause taxonomy and the principle 'a plateau is the residual that survives experiment' inform the M5 trend gates (confidence/agreement/variance-band). The probe/mode engine itself is not built.
+As-built sources: reviews/completion/DX-09_COMPLETION_REPORT.md; HUSH_V1_PRODUCT_SPECIFICATION.md §12 (Stagnation Detection) / §13 (volume-only lever); hush_model/stagnation.py, persistence/stagnation_service.py (migration_009, schema v9).
+

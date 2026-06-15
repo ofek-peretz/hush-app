@@ -1,0 +1,1053 @@
+{
+  "components": {
+    "schemas": {
+      "CompleteRequest": {
+        "description": "POST /sessions/{id}/complete \u2014 close (or finish-early). Idempotent on client_event_id.",
+        "properties": {
+          "client_event_id": {
+            "minLength": 1,
+            "title": "Client Event Id",
+            "type": "string"
+          },
+          "finished_early": {
+            "default": false,
+            "title": "Finished Early",
+            "type": "boolean"
+          },
+          "seq": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "client_event_id"
+        ],
+        "title": "CompleteRequest",
+        "type": "object"
+      },
+      "EnrollRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "age": {
+            "minimum": 0.0,
+            "title": "Age",
+            "type": "integer"
+          },
+          "athlete_id": {
+            "minLength": 1,
+            "title": "Athlete Id",
+            "type": "string"
+          },
+          "bodyweight_kg": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bodyweight Kg"
+          },
+          "experience": {
+            "title": "Experience",
+            "type": "string"
+          },
+          "sex": {
+            "title": "Sex",
+            "type": "string"
+          }
+        },
+        "required": [
+          "athlete_id",
+          "sex",
+          "age",
+          "experience"
+        ],
+        "title": "EnrollRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ProfilePatchRequest": {
+        "description": "PATCH /profile \u2014 correct an onboarding value. Only changed field(s) + client_request_id.",
+        "properties": {
+          "age": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "bodyweight_kg": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bodyweight Kg"
+          },
+          "client_request_id": {
+            "minLength": 1,
+            "title": "Client Request Id",
+            "type": "string"
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sex"
+          }
+        },
+        "required": [
+          "client_request_id"
+        ],
+        "title": "ProfilePatchRequest",
+        "type": "object"
+      },
+      "ReplaceRequest": {
+        "description": "POST /blocks/{id}/replace \u2014 L2 REPLACE (preference-driven, capability-preserving). Either\nin-catalog (to_exercise optional \u2192 server picks) or off-catalog (off_catalog_text, captured\nverbatim and losslessly for A9).",
+        "properties": {
+          "client_event_id": {
+            "minLength": 1,
+            "title": "Client Event Id",
+            "type": "string"
+          },
+          "from_exercise": {
+            "minLength": 1,
+            "title": "From Exercise",
+            "type": "string"
+          },
+          "off_catalog_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Catalog Text"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "to_exercise": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Exercise"
+          }
+        },
+        "required": [
+          "client_event_id",
+          "seq",
+          "from_exercise"
+        ],
+        "title": "ReplaceRequest",
+        "type": "object"
+      },
+      "RevokeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "RevokeRequest",
+        "type": "object"
+      },
+      "SessionStartRequest": {
+        "description": "POST /sessions \u2014 no athlete-supplied composition parameters (composition is server-owned\nand load-free; the client cannot influence it). Idempotent on client_request_id.",
+        "properties": {
+          "client_request_id": {
+            "minLength": 1,
+            "title": "Client Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_request_id"
+        ],
+        "title": "SessionStartRequest",
+        "type": "object"
+      },
+      "SetReportRequest": {
+        "additionalProperties": false,
+        "description": "POST /sessions/{id}/sets \u2014 the core learning input. `extra=\"forbid\"`: an unknown field\n(effort/RIR/proximity-to-failure) is a model-boundary violation \u2192 422 (contract \u00a77.1/\u00a716C).",
+        "properties": {
+          "actual_reps": {
+            "minimum": 0.0,
+            "title": "Actual Reps",
+            "type": "integer"
+          },
+          "actual_weight": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Weight"
+          },
+          "block_id": {
+            "minLength": 1,
+            "title": "Block Id",
+            "type": "string"
+          },
+          "client_event_id": {
+            "minLength": 1,
+            "title": "Client Event Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "set_number": {
+            "minimum": 1.0,
+            "title": "Set Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "client_event_id",
+          "seq",
+          "block_id",
+          "set_number",
+          "actual_reps"
+        ],
+        "title": "SetReportRequest",
+        "type": "object"
+      },
+      "SkipRequest": {
+        "description": "POST /blocks/{id}/skip \u2014 a welcomed first-class path (not a failure). `reason` is free-form\naudit text, NOT a model input.",
+        "properties": {
+          "client_event_id": {
+            "minLength": 1,
+            "title": "Client Event Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "client_event_id",
+          "seq"
+        ],
+        "title": "SkipRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "summary": "Hush v1 \u2014 advisory training intelligence. Hush recommends; the athlete decides.",
+    "title": "Hush v1 API",
+    "version": "v1",
+    "x-hush-schema-version": 11
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/blocks/{block_id}/replace": {
+      "post": {
+        "operationId": "replace_block_blocks__block_id__replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace Block",
+        "tags": [
+          "blocks"
+        ]
+      }
+    },
+    "/blocks/{block_id}/skip": {
+      "post": {
+        "operationId": "skip_block_blocks__block_id__skip_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "block_id",
+            "required": true,
+            "schema": {
+              "title": "Block Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Skip Block",
+        "tags": [
+          "blocks"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/internal/athletes": {
+      "post": {
+        "description": "Enroll an athlete and mint their bearer token. The athlete is created via the existing\nonboarding seed (ES-008 v2 / Option D); the token's hash is stored, the plaintext returned\nonce for the secure provisioning channel (BB-25).",
+        "operationId": "enroll_internal_athletes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enroll",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/athletes/{athlete_id}/erase": {
+      "post": {
+        "description": "Right-to-erasure (OD-2) \u2014 **logical deletion / anonymization**. Removes the athlete's\nauthentication data + precise personal identifiers and writes an erasure tombstone, while\n**retaining the append-only audit/history in anonymized form** (no destructive audit-chain\ndeletion). The external enrollment/consent record is deleted by Operations as the BB-33\ncomplement. Idempotent; operator-key only.",
+        "operationId": "erase_internal_athletes__athlete_id__erase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "athlete_id",
+            "required": true,
+            "schema": {
+              "title": "Athlete Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Erase",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/athletes/{athlete_id}/revoke": {
+      "post": {
+        "operationId": "revoke_internal_athletes__athlete_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "athlete_id",
+            "required": true,
+            "schema": {
+              "title": "Athlete Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/audit/sessions/{session_id}": {
+      "get": {
+        "description": "Full audit reconstruction (BB-12): composition + recommendation + shadow + observation for\nevery block. A session that cannot be reconstructed is invalid (ES-009 \u00a79).",
+        "operationId": "audit_session_internal_audit_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Session",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/gate/a7": {
+      "get": {
+        "description": "A7 week-1 seed-safety gate (BB-11) \u2014 the single hard Phase-1 gate. Computes per-cohort\nfirst-session completion + first-rep-failure rates and returns the per-cohort verdict + the overall\nPROCEED / PAUSE_AND_REANCHOR recommendation. Thresholds are RATIFIED (OD-8, V1) and the gate is\nARMED (status surfaced in the response); the only sanctioned response to an UNSAFE cohort is\nstop-and-re-anchor ES-008 v2, never a field parameter tweak (KL-9).",
+        "operationId": "a7_gate_internal_gate_a7_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "A7 Gate",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/metrics": {
+      "get": {
+        "description": "Trial-health + A7/A8/A9 validation-evidence export (BB-32; metrics half of BB-23). Read-only,\noperator-key only. The A7 cohort view is the DATA behind the week-1 seed-safety gate; its pass/fail\nthresholds are OD-8 and are not applied here (export, not verdict).",
+        "operationId": "metrics_internal_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/profile": {
+      "get": {
+        "operationId": "profile_get_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Profile Get",
+        "tags": [
+          "read"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_profile_profile_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Profile",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/recommendations/{recommendation_id}/why": {
+      "get": {
+        "operationId": "recommendation_why_recommendations__recommendation_id__why_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recommendation_id",
+            "required": true,
+            "schema": {
+              "title": "Recommendation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recommendation Why",
+        "tags": [
+          "read"
+        ]
+      }
+    },
+    "/sessions": {
+      "get": {
+        "operationId": "sessions_list_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sessions List",
+        "tags": [
+          "read"
+        ]
+      },
+      "post": {
+        "operationId": "start_session_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/sessions/today": {
+      "get": {
+        "operationId": "sessions_today_sessions_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sessions Today",
+        "tags": [
+          "read"
+        ]
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "operationId": "session_detail_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Detail",
+        "tags": [
+          "read"
+        ]
+      }
+    },
+    "/sessions/{session_id}/complete": {
+      "post": {
+        "operationId": "complete_session_sessions__session_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/sessions/{session_id}/sets": {
+      "post": {
+        "operationId": "report_set_sessions__session_id__sets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Set",
+        "tags": [
+          "sessions"
+        ]
+      }
+    }
+  }
+}
