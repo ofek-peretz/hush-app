@@ -25,7 +25,7 @@ import { Wheel } from '@/components/Wheel';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { exercisesForCapability } from '@/data/exercises';
+import { exercisesForCapability, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, space, tnum, heroNum, heroTitle, press } from '@/design/tokens';
 import { motion } from '@/design/motion';
@@ -124,7 +124,10 @@ function ActiveSet({
 
   const ex = session.currentExercise;
   const target = session.currentTarget;
-  if (!ex || !target) return <View style={styles.center} />;
+  // Only a truly absent target blanks the set; a missing catalog entry still shows
+  // a readable name (the set is a decision, never an empty screen — §7.9).
+  if (!target) return <View style={styles.center} />;
+  const exName = ex?.name ?? exerciseDisplayName(session.currentExerciseId);
 
   const weight = displayWeight(target.recommendedWeight, units);
   const isBodyweight = target.recommendedWeight == null;
@@ -150,7 +153,7 @@ function ActiveSet({
   return (
     <View style={styles.center}>
       <View style={styles.hero}>
-        <Text style={styles.exerciseName}>{ex.name}</Text>
+        <Text style={styles.exerciseName}>{exName}</Text>
         {isBodyweight ? (
           <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
         ) : (
@@ -174,7 +177,14 @@ function ActiveSet({
         {!confirming ? <Text style={styles.coaching}>{coaching}</Text> : null}
       </View>
 
+      {/* Spec §4.9: Edit result sits above the primary Complete-set button (which is
+          the bottom-most action). Edit is hidden during the confirmation morph. */}
       <View style={styles.actions}>
+        {!confirming ? (
+          <View style={styles.editRow}>
+            <TextAction label={t('workout.editResult')} onPress={onEdit} />
+          </View>
+        ) : null}
         <PrimaryButton
           variant="compact"
           label={confirming ? String(successReps) : t('workout.completeSet')}
@@ -182,9 +192,6 @@ function ActiveSet({
           disabled={confirming}
           onPress={onCompleteSet}
         />
-        <View style={styles.editRow}>
-          <TextAction label={t('workout.editResult')} onPress={onEdit} />
-        </View>
       </View>
     </View>
   );
@@ -205,6 +212,8 @@ function Rest({
   const session = useSession();
   const isTransition = session.displayPhase === 'REST_TRANSITION';
   const nextEx = session.nextExercise;
+  // Readable name even when the live id is absent from the local catalog (§7.9).
+  const nextName = exerciseDisplayName(session.nextExerciseId);
   const nextTarget = session.nextTarget;
   const nextWeight = displayWeight(nextTarget?.recommendedWeight ?? null, units);
   const nextReps = nextTarget?.recommendedReps ?? 0;
@@ -244,7 +253,7 @@ function Rest({
         {isTransition ? (
           <>
             <Text style={styles.restEyebrow}>{t('workout.nextExercise')}</Text>
-            {nextEx ? <Text style={styles.restExercise}>{nextEx.name}</Text> : null}
+            {nextName ? <Text style={styles.restExercise}>{nextName}</Text> : null}
             <Text style={styles.restSet}>{setLine}</Text>
           </>
         ) : (
@@ -254,7 +263,7 @@ function Rest({
                 {t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })}
               </Text>
             ) : null}
-            {nextEx ? <Text style={styles.restExerciseSm}>{nextEx.name}</Text> : null}
+            {nextName ? <Text style={styles.restExerciseSm}>{nextName}</Text> : null}
             <Text style={styles.restSet}>{setLine}</Text>
           </>
         )}
@@ -383,7 +392,7 @@ const styles = StyleSheet.create({
   restSet: { ...tnum, fontSize: 17, color: color.textSecondary, marginTop: 6 },
 
   actions: { alignSelf: 'stretch', position: 'absolute', bottom: 32, left: 0, right: 0, paddingHorizontal: space.gutter, alignItems: 'center' },
-  editRow: { marginTop: 14 },
+  editRow: { marginBottom: 10 },
   busyRow: { marginTop: 10 },
 
   // Pause sheet

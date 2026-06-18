@@ -4,7 +4,7 @@
  * next workout on focus and drains offline work. No auto-interrupts — the Portrait
  * appears (unlocked) only when its tab is opened (spec IA §3).
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HomeView } from '@/screens/home/HomeView';
@@ -12,6 +12,7 @@ import { useApp } from '@/state/stores/appStore';
 import { useSession } from '@/state/stores/sessionStore';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
+import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
@@ -29,6 +30,11 @@ export function Home({ navigation }: Props) {
 
   const isFocused = useIsFocused();
 
+  // Prefetched targets for the next workout, so Slide-to-start launches with no
+  // network wait (the round-trip happens while the athlete is on Home, not after
+  // they commit the slide). Keyed by day id; cleared when the day changes.
+  const prefetch = useRef<{ dayId: string; targets: SetTarget[] } | null>(null);
+
   // Session-at-a-time: re-resolve today's session on focus; drain offline work.
   const [startError, setStartError] = useState(false);
   useEffect(() => {
@@ -42,14 +48,36 @@ export function Home({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
+  // Warm the targets cache for the offered workout (best-effort, silent).
+  useEffect(() => {
+    if (!isFocused || !day) return;
+    if (prefetch.current?.dayId === day.id) return;
+    let cancelled = false;
+    void app.model
+      .sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions })
+      .then((targets) => {
+        if (!cancelled) prefetch.current = { dayId: day.id, targets };
+      })
+      .catch(() => {
+        /* fall back to fetching on demand in onStart */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, day?.id, app.modeState.completedSessions]);
+
   async function onStart() {
     if (!day) return;
     setStartError(false);
     try {
-      const targets = await app.model.sessionTargets({
-        programDayId: day.id,
-        completedSessions: app.modeState.completedSessions,
-      });
+      const targets =
+        prefetch.current?.dayId === day.id
+          ? prefetch.current.targets
+          : await app.model.sessionTargets({
+              programDayId: day.id,
+              completedSessions: app.modeState.completedSessions,
+            });
       await session.start(day, targets);
       navigation.navigate('SessionFlow');
     } catch {

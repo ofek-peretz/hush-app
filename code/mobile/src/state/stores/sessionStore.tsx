@@ -127,7 +127,12 @@ export interface SessionView {
   displayPhase: DisplayPhase;
   paused: boolean;
   currentExercise: Exercise | null;
+  /** Raw exercise id of the current step (a fallback when the local catalog lacks
+   *  the exercise, so the Active Set never renders blank — §7.9). */
+  currentExerciseId: string | null;
   currentTarget: SetTarget | null;
+  /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
+  nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
   globalProgress: { index: number; total: number } | null;
   nextExercise: Exercise | null; // for Rest preview (upcoming set/exercise)
@@ -343,10 +348,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       displayPhase,
       paused,
       currentExercise: current ? exerciseById(current.exerciseId) ?? null : null,
+      currentExerciseId: current?.exerciseId ?? null,
       currentTarget: current?.target ?? null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       nextExercise: resting && next ? exerciseById(next.exerciseId) ?? null : null,
+      nextExerciseId: resting ? next?.exerciseId ?? null : null,
       nextTarget: resting ? next?.target ?? null : null,
       nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
       restSeconds,

@@ -56,6 +56,22 @@ export function exerciseById(id: string): Exercise | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * A readable name for any exercise id, even one absent from the local catalog
+ * (the live backend uses bare ids like "overhead_press" where the catalog has
+ * "bb_overhead_press"). Returns the catalog name when known, otherwise humanizes
+ * the id ("overhead_press" → "Overhead Press"). Never returns a raw snake_case id.
+ */
+const EQUIP_PREFIX = new Set(['bb', 'db', 'kb', 'machine', 'cable', 'smith']);
+export function exerciseDisplayName(id: string | null | undefined): string {
+  if (!id) return '';
+  const ex = BY_ID.get(id);
+  if (ex) return ex.name;
+  const parts = id.split('_').filter(Boolean);
+  if (parts.length > 1 && EQUIP_PREFIX.has(parts[0])) parts.shift();
+  return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
 /** Class-matched candidates for a slot's capability (Replacement stays in-class, UX §1.2). */
 export function exercisesForCapability(capability: Capability): Exercise[] {
   return BY_CAPABILITY.get(capability) ?? [];

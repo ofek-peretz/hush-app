@@ -11,6 +11,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { TextAction } from '@/components/TextAction';
+import { track } from '@/platform/telemetry';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { color, space, heroTitle } from '@/design/tokens';
@@ -23,11 +25,24 @@ export function Consent({ navigation }: Props) {
   const app = useApp();
   const [busy, setBusy] = useState(false);
 
-  async function onAgree() {
+  function onAgree() {
     if (busy) return;
     setBusy(true);
-    await app.acceptConsent(); // best-effort; never blocks the flow
+    // Recording consent is best-effort and MUST NOT block the flow (the server
+    // record is idempotent and retried later). Fire it and advance immediately so
+    // "I agree" feels instant — awaiting a slow network here read as a dead button.
+    void app.acceptConsent();
     navigation.navigate('ConnectHealth');
+  }
+
+  // Consent is required to use Hush (OD-3 / BB-33). Declining can't proceed into
+  // the app, so it signs back out — RESET returns to the sign-in screen, where
+  // they can reconsider. No data was recorded (consent was never given).
+  function onDecline() {
+    if (busy) return;
+    setBusy(true);
+    void track('consent_declined', {});
+    void app.resetAccount();
   }
 
   return (
@@ -38,6 +53,9 @@ export function Consent({ navigation }: Props) {
       </View>
       <View style={styles.actions}>
         <PrimaryButton variant="compact" label={t('consent.agree')} onPress={onAgree} disabled={busy} />
+        <View style={styles.decline}>
+          <TextAction label={t('consent.decline')} onPress={onDecline} />
+        </View>
         <Text style={styles.legal}>{t('consent.legal')}</Text>
       </View>
     </SafeAreaView>
@@ -50,5 +68,6 @@ const styles = StyleSheet.create({
   title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', marginBottom: 16 },
   copy: { fontSize: 15, lineHeight: 15 * 1.6, color: color.textSecondary },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  legal: { marginTop: 24, fontSize: 12, color: color.textTertiary, textAlign: 'center' },
+  decline: { marginTop: 8, alignItems: 'center' },
+  legal: { marginTop: 16, fontSize: 12, color: color.textTertiary, textAlign: 'center' },
 });

@@ -8,7 +8,7 @@
  * actions behind a confirm sheet; the destructive one is clearly differentiated.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, ActionSheetIOS } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -49,6 +49,46 @@ export function ProfileSheet({ navigation }: Props) {
     void app.setUnits(units === 'kg' ? 'lb' : 'kg');
   }
 
+  // iOS: a native action sheet with a red destructive row + Cancel (the idiomatic
+  // confirm for Sign Out / Delete). Other platforms use the in-app confirm sheet.
+  function confirmSignOut() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: t('profile.signOutConfirm'),
+          options: [t('profile.cancel'), t('profile.signOut')],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 1,
+          userInterfaceStyle: 'dark',
+        },
+        (i) => {
+          if (i === 1) void app.resetAccount();
+        },
+      );
+    } else {
+      setOverlay('signout');
+    }
+  }
+
+  function confirmDelete() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: t('profile.deleteConfirm'),
+          options: [t('profile.cancel'), t('profile.deleteAccount')],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 1,
+          userInterfaceStyle: 'dark',
+        },
+        (i) => {
+          if (i === 1) void app.deleteAccount();
+        },
+      );
+    } else {
+      setOverlay('delete');
+    }
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -79,8 +119,8 @@ export function ProfileSheet({ navigation }: Props) {
           value={p?.healthConnected ? t('profile.connected') : t('profile.notConnected')}
           onPress={() => Linking.openSettings()}
         />
-        <Row label={t('profile.signOut')} chevron onPress={() => setOverlay('signout')} />
-        <Row label={t('profile.deleteAccount')} danger onPress={() => setOverlay('delete')} />
+        <Row label={t('profile.signOut')} chevron onPress={confirmSignOut} />
+        <Row label={t('profile.deleteAccount')} danger onPress={confirmDelete} />
 
         {/* Test harness — compiled out of release builds (__DEV__ only). */}
         {__DEV__ && !portraitUnlocked ? (

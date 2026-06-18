@@ -7,7 +7,18 @@
  * §4.3 is a single screen; spec wins, founder directive 2026-06-18).
  */
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Keyboard,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  InputAccessoryView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -17,6 +28,10 @@ import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
 type SexChoice = 'male' | 'female' | 'other';
+
+// iOS number-pad has no Return key, so it can't dismiss itself. A shared accessory
+// bar gives every numeric field an explicit "Done" above the keyboard.
+const ACCESSORY_ID = 'manualInfoDone';
 
 function toInt(s: string, fallback: number): number {
   const n = parseInt(s.replace(/[^0-9]/g, ''), 10);
@@ -42,28 +57,57 @@ export function ManualInfo({ navigation }: Props) {
     });
   }
 
+  function onContinuePress() {
+    Keyboard.dismiss();
+    onContinue();
+  }
+
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.body}>
-        <Text style={styles.title}>{t('manualInfo.title')}</Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Tap anywhere off a field to dismiss the keyboard (number-pad can't self-dismiss). */}
+        <TouchableWithoutFeedback accessible={false} onPress={Keyboard.dismiss}>
+          <View style={styles.body}>
+            <Text style={styles.title}>{t('manualInfo.title')}</Text>
 
-        <UnderlineField label={t('manualInfo.age')} value={age} onChange={setAge} />
+            <UnderlineField label={t('manualInfo.age')} value={age} onChange={setAge} />
 
-        <View style={styles.field}>
-          <Text style={styles.label}>{t('manualInfo.sex')}</Text>
-          <View style={styles.pills}>
-            {(['male', 'female', 'other'] as const).map((opt) => (
-              <Pill key={opt} label={t(`manualInfo.${opt}`)} selected={sex === opt} onPress={() => setSex(opt)} />
-            ))}
+            <View style={styles.field}>
+              <Text style={styles.label}>{t('manualInfo.sex')}</Text>
+              <View style={styles.pills}>
+                {(['male', 'female', 'other'] as const).map((opt) => (
+                  <Pill key={opt} label={t(`manualInfo.${opt}`)} selected={sex === opt} onPress={() => setSex(opt)} />
+                ))}
+              </View>
+            </View>
+
+            <UnderlineField label={t('manualInfo.height')} value={height} onChange={setHeight} suffix="cm" />
+            <UnderlineField label={t('manualInfo.weight')} value={weight} onChange={setWeight} suffix="kg" />
           </View>
+        </TouchableWithoutFeedback>
+        <View style={styles.actions}>
+          <PrimaryButton variant="compact" label={t('manualInfo.continue')} onPress={onContinuePress} />
         </View>
+      </KeyboardAvoidingView>
 
-        <UnderlineField label={t('manualInfo.height')} value={height} onChange={setHeight} suffix="cm" />
-        <UnderlineField label={t('manualInfo.weight')} value={weight} onChange={setWeight} suffix="kg" />
-      </View>
-      <View style={styles.actions}>
-        <PrimaryButton variant="compact" label={t('manualInfo.continue')} onPress={onContinue} />
-      </View>
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={ACCESSORY_ID}>
+          <View style={styles.accessory}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('manualInfo.continue')}
+              hitSlop={8}
+              onPress={Keyboard.dismiss}
+              style={({ pressed }) => [styles.accessoryBtn, { opacity: pressed ? press.opacity : 1 }]}
+            >
+              <Text style={styles.accessoryText}>{t('editResult.done')}</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -89,6 +133,9 @@ function UnderlineField({
           onChangeText={onChange}
           keyboardType="number-pad"
           maxLength={3}
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
+          inputAccessoryViewID={Platform.OS === 'ios' ? ACCESSORY_ID : undefined}
           selectionColor={color.textPrimary}
         />
         {suffix ? <Text style={styles.suffix}>{suffix}</Text> : null}
@@ -115,8 +162,12 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
+  root: { flex: 1, backgroundColor: color.bg },
+  flex: { flex: 1, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
+  accessory: { backgroundColor: color.surface2, alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingVertical: 8 },
+  accessoryBtn: { paddingVertical: 6, paddingHorizontal: 8 },
+  accessoryText: { color: color.accentBlue, fontSize: 16, fontWeight: '600' },
   title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', marginBottom: 28 },
   field: { marginBottom: 20 },
   label: { fontSize: 13, color: color.textSecondary, marginBottom: 6 },

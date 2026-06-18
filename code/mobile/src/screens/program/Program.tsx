@@ -44,14 +44,17 @@ export function Program({ navigation }: Props) {
   }
 
   // "Set as next": move this upcoming workout ahead of the others (Home shows the
-  // first unfinished workout). Persisted via the athlete-owned workout order.
-  function onSetAsNext(dayId: string) {
+  // first unfinished workout) and return to Home so the chosen workout is the one
+  // now offered. Persisted via the athlete-owned workout order (§4.19).
+  async function onSetAsNext(dayId: string) {
     if (!program) return;
     const from = program.days.findIndex((d) => d.id === dayId);
     const firstUpcoming = program.days.findIndex((d) => !d.isRest && !d.completed);
-    if (from < 0 || firstUpcoming < 0 || from === firstUpcoming) return;
     void track('set_as_next', { dayId });
-    void app.reorderWorkouts(from, firstUpcoming);
+    if (from >= 0 && firstUpcoming >= 0 && from !== firstUpcoming) {
+      await app.reorderWorkouts(from, firstUpcoming);
+    }
+    navigation.navigate('Home');
   }
 
   const workouts = (program?.days ?? []).filter((d) => !d.isRest);
@@ -106,7 +109,7 @@ export function Program({ navigation }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel={t('program.setAsNext')}
                   hitSlop={8}
-                  onPress={() => onSetAsNext(d.id)}
+                  onPress={() => void onSetAsNext(d.id)}
                   style={({ pressed }) => [styles.setNext, { opacity: pressed ? press.opacity : 1 }]}
                 >
                   <Text style={styles.setNextText}>{t('program.setAsNext')}</Text>

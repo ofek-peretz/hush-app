@@ -15,7 +15,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
-import { color, space, radius, press } from '@/design/tokens';
+import { color, space, radius, press, heroTitle } from '@/design/tokens';
 import type { Goal as GoalT } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -40,7 +40,7 @@ export function Goal({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.body}>
-        <Eyebrow label={t('goal.eyebrow')} size={13} trackingPx={2} align="center" style={styles.eyebrow} />
+        <Eyebrow label={t('goal.eyebrow')} size={16} trackingPx={1.5} align="center" style={styles.eyebrow} />
         <View style={styles.list}>
           {OPTIONS.map((o) => {
             const selected = o.goal === goal;
@@ -74,12 +74,14 @@ export function Goal({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
-  eyebrow: { marginBottom: 30 },
+  eyebrow: { marginBottom: 30, color: color.textSecondary },
   list: { gap: 12 },
-  option: { borderRadius: radius.card, paddingVertical: 15, alignItems: 'center' },
+  option: { borderRadius: radius.card, paddingVertical: 16, alignItems: 'center' },
   optionSelected: { backgroundColor: color.textPrimary },
   optionIdle: { borderWidth: 0.5, borderColor: color.border },
-  optionLabel: { fontSize: 19 },
+  // Premium display finish (§2.2): tight tracking on the choice labels. The selected
+  // option is the clear primary (white fill + 600); the rest recede (dim + 400).
+  optionLabel: { ...heroTitle(19), fontSize: 19, lineHeight: 24 },
   labelSelected: { color: color.bg, fontWeight: '600' },
   labelIdle: { color: color.textSecondary, fontWeight: '400' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },

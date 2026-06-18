@@ -6,12 +6,12 @@
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SlideToStart } from '@/components/SlideToStart';
 import { AppTabBar } from '@/components/AppTabBar';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { a11y, color, space, press, heroTitle } from '@/design/tokens';
+import { a11y, color, space, press, heroTitle, tabBar } from '@/design/tokens';
 
 export interface HomeViewProps {
   resting: boolean;
@@ -28,6 +28,7 @@ export interface HomeViewProps {
 
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
+  const insets = useSafeAreaInsets();
   const greeting = props.name
     ? t('home.greetingNamed', { part: t(`home.${props.greetingPart}`), name: props.name })
     : t('home.greeting', { part: t(`home.${props.greetingPart}`) });
@@ -57,6 +58,8 @@ export function HomeView(props: HomeViewProps) {
           </View>
         ) : (
           <>
+            {/* Title block centred at ~30% from top (prototype Screen 06). */}
+            <View style={styles.trainTop} />
             <View style={styles.trainCenter}>
               <Text style={styles.greeting}>{greeting}</Text>
               <Text
@@ -69,7 +72,8 @@ export function HomeView(props: HomeViewProps) {
               </Text>
               {props.muscles ? <Text style={styles.muscles}>{props.muscles}</Text> : null}
             </View>
-            <View style={styles.action}>
+            {/* SlideToStart sits just above the tab bar (clears its height + safe inset). */}
+            <View style={[styles.action, { paddingBottom: insets.bottom + tabBar.height + 16 }]}>
               {props.startError ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
               {props.dayName ? <SlideToStart label={t('home.slideToStart')} onStart={props.onStart} /> : null}
             </View>
@@ -91,15 +95,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 10,
   },
-  date: { fontSize: 12, color: color.textSecondary },
+  date: { fontSize: 15, color: color.textSecondary },
   menu: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center', marginRight: -10 },
 
-  // Training day: title block at ~30% from top, action pinned near the bottom.
-  trainCenter: { paddingTop: '24%', paddingHorizontal: space.gutter, alignItems: 'flex-start' },
-  greeting: { fontSize: 14, color: color.textSecondary, marginBottom: 24 },
-  name: { ...heroTitle(52), color: color.textPrimary, fontSize: 52, lineHeight: 52, fontWeight: '700' },
-  muscles: { marginTop: 18, fontSize: 14, color: color.textSecondary },
-  action: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: space.gutter, paddingBottom: 72 },
+  // Training day: title block centred at ~30% from top, action pinned above the tab bar.
+  trainTop: { height: '22%' },
+  trainCenter: { paddingHorizontal: space.gutter, alignItems: 'center' },
+  greeting: { fontSize: 14, color: color.textSecondary, marginBottom: 24, textAlign: 'center' },
+  name: { ...heroTitle(52), color: color.textPrimary, fontSize: 52, lineHeight: 52, fontWeight: '700', textAlign: 'center' },
+  muscles: { marginTop: 18, fontSize: 14, color: color.textSecondary, textAlign: 'center' },
+  action: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: space.gutter },
   error: { color: color.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' },
 
   // Rest day: everything centered.

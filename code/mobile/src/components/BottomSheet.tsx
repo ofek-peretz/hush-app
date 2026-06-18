@@ -67,7 +67,10 @@ export function BottomSheet({
 const styles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
   scrim: StyleSheet.absoluteFillObject,
-  anchor: { justifyContent: 'flex-end' },
+  // flex:1 gives the anchor a definite height so a sheet's `heightFraction`
+  // (percentage height) resolves — without it the sheet collapses to its content
+  // and appears to only partly rise. box-none still lets taps above it hit the scrim.
+  anchor: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
