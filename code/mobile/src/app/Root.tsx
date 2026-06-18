@@ -24,9 +24,11 @@ import type { MainParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { Consent } from '@/screens/onboarding/Consent';
+import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { Goal } from '@/screens/onboarding/Goal';
+import { Experience } from '@/screens/onboarding/Experience';
 import { DaysPerWeek } from '@/screens/onboarding/DaysPerWeek';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
@@ -58,9 +60,11 @@ function OnboardingNavigator() {
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
       <OnboardingStack.Screen name="Consent" component={Consent} />
+      <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />
       <OnboardingStack.Screen name="Goal" component={Goal} />
+      <OnboardingStack.Screen name="Experience" component={Experience} />
       <OnboardingStack.Screen name="DaysPerWeek" component={DaysPerWeek} />
       <OnboardingStack.Screen name="ProgramCreated" component={ProgramCreated} />
     </OnboardingStack.Navigator>

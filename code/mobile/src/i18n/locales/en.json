@@ -16,6 +16,13 @@
     "decline": "I don't agree",
     "legal": "Terms · Privacy"
   },
+  "nameEntry": {
+    "title": "What should we call you?",
+    "label": "Your name",
+    "placeholder": "Name",
+    "continue": "Continue",
+    "skip": "Skip"
+  },
   "connectHealth": {
     "title": "Connect Health",
     "body": "Hush builds your first program from it. Skip it and I'll ask you four quick things instead.",
@@ -42,6 +49,16 @@
     "continue": "Continue",
     "getStronger": "Get Stronger",
     "generalFitness": "General Fitness"
+  },
+  "experience": {
+    "eyebrow": "Your experience",
+    "beginner": "Beginner",
+    "beginnerDesc": "New to lifting, or just starting out.",
+    "intermediate": "Intermediate",
+    "intermediateDesc": "Training consistently, comfortable with the basics.",
+    "advanced": "Advanced",
+    "advancedDesc": "Experienced, with strong lifts across the board.",
+    "continue": "Continue"
   },
   "daysPerWeek": {
     "eyebrow": "How many days a week",

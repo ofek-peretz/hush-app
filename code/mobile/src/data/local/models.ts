@@ -17,6 +17,9 @@ export type Units = 'kg' | 'lb';
 
 export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness';
 
+/** Training experience — the single biggest input to the cold-start starting weight. */
+export type Experience = 'beginner' | 'intermediate' | 'advanced';
+
 /** Athlete-Model mode (spec §6.1). Gates whether Hush may speak. */
 export type AthleteMode =
   | 'UNAUTH'
@@ -36,6 +39,7 @@ export interface Profile {
   age?: number;
   units: Units;
   goal: Goal;
+  experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
   healthConnected: boolean;
   /** ISO date the account was created (Profile §4.28 "Member since"). App-layer. */
@@ -45,6 +49,7 @@ export interface Profile {
 /** Everything onboarding gathers before building the first program (§4.2–4.6). */
 export interface OnboardingInputs {
   goal: Goal;
+  experience?: Experience;
   daysPerWeek: number;
   units: Units;
   healthConnected: boolean;

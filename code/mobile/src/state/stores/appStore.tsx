@@ -165,6 +165,9 @@ interface AppApi extends AppState {
   /** Record affirmative consent (OD-3/BB-33) — the Consent screen's "I agree".
    *  Best-effort against the backend; the server record is idempotent. */
   acceptConsent: () => Promise<void>;
+  /** Store the athlete's chosen name (NameEntry screen) for the profile built at
+   *  completeOnboarding. Overrides any Apple-provided name. */
+  setPendingName: (name: string) => void;
   completeOnboarding: (inputs: OnboardingInputs) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   clearPortraitFlag: () => void;
@@ -377,6 +380,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
+      setPendingName(name) {
+        const trimmed = name.trim();
+        pendingNameRef.current = trimmed.length > 0 ? trimmed : null;
+      },
+
       async completeOnboarding(inputs) {
         const profile: Profile = {
           name: inputs.name ?? pendingNameRef.current ?? undefined,
@@ -386,6 +394,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           age: inputs.age,
           units: inputs.units,
           goal: inputs.goal,
+          experience: inputs.experience,
           daysPerWeek: inputs.daysPerWeek,
           healthConnected: inputs.healthConnected,
           memberSince: new Date().toISOString(),

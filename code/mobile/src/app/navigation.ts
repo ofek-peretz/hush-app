@@ -7,7 +7,7 @@
  *   → Goal → Days per week → Program Created → Home.
  * Invite-token enrollment is removed.
  */
-import type { Goal, OnboardingInputs } from '@/data/local/models';
+import type { Experience, Goal, OnboardingInputs } from '@/data/local/models';
 
 /** Profile fields gathered before Goal — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
@@ -21,11 +21,15 @@ export interface OnboardingProfileDraft {
 export type OnboardingParamList = {
   Authentication: undefined;
   Consent: undefined;
+  // "What should we call you?" — captures the name (fallback to the Apple-provided name).
+  NameEntry: undefined;
   ConnectHealth: undefined;
   // Single screen, four fields (§4.3) — only reached when Health is skipped.
   ManualInfo: undefined;
   Goal: { profile: OnboardingProfileDraft };
-  DaysPerWeek: { profile: OnboardingProfileDraft; goal: Goal };
+  // Experience drives the starting weights; sits between Goal and Days per week.
+  Experience: { profile: OnboardingProfileDraft; goal: Goal };
+  DaysPerWeek: { profile: OnboardingProfileDraft; goal: Goal; experience: Experience };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };

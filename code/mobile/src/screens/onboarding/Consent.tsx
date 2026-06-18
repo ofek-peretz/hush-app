@@ -32,7 +32,7 @@ export function Consent({ navigation }: Props) {
     // record is idempotent and retried later). Fire it and advance immediately so
     // "I agree" feels instant — awaiting a slow network here read as a dead button.
     void app.acceptConsent();
-    navigation.navigate('ConnectHealth');
+    navigation.navigate('NameEntry');
   }
 
   // Consent is required to use Hush (OD-3 / BB-33). Declining can't proceed into

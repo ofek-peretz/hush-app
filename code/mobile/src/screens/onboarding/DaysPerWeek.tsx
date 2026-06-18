@@ -31,7 +31,7 @@ const VISIBLE = 5; // rows in the wheel viewport
 
 export function DaysPerWeek({ navigation, route }: Props) {
   const { t } = useCopy();
-  const { profile, goal } = route.params;
+  const { profile, goal, experience } = route.params;
   const [index, setIndex] = useState(DEFAULT_INDEX);
   const scrollRef = useRef<ScrollView>(null);
   const days = DAYS[index];
@@ -53,6 +53,7 @@ export function DaysPerWeek({ navigation, route }: Props) {
     navigation.navigate('ProgramCreated', {
       inputs: {
         goal,
+        experience,
         daysPerWeek: days,
         units: 'kg',
         healthConnected: profile.healthConnected,

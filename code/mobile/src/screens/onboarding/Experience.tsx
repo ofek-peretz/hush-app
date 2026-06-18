@@ -1,11 +1,8 @@
 /**
- * 4.4 Goal — one choice. Eyebrow + three single-select options (Build Muscle
- * selected by default = white fill) + Continue. Stored; influences split
- * generation. Continue → Days per week.
- *
- * Spec labels map to the frozen model Goal values (training engine unchanged):
- * Build Muscle → build_muscle · Increase Strength → get_stronger ·
- * Stay Consistent → general_fitness.
+ * Experience — one choice between Goal and Days per week. Training experience is the
+ * single biggest input to the cold-start starting weight, so we ask it explicitly
+ * (one screen, low friction). Beginner / Intermediate / Advanced, each with a short
+ * description. Continue → Days per week, carrying the gathered draft.
  */
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -16,40 +13,40 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
 import { color, space, radius, press, heroTitle, s } from '@/design/tokens';
-import type { Goal as GoalT } from '@/data/local/models';
+import type { Experience as ExperienceT } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<OnboardingParamList, 'Goal'>;
+type Props = NativeStackScreenProps<OnboardingParamList, 'Experience'>;
 
-const OPTIONS: { goal: GoalT; key: string }[] = [
-  { goal: 'build_muscle', key: 'goal.buildMuscle' },
-  { goal: 'get_stronger', key: 'goal.increaseStrength' },
-  { goal: 'general_fitness', key: 'goal.stayConsistent' },
+const OPTIONS: { value: ExperienceT; key: string; descKey: string }[] = [
+  { value: 'beginner', key: 'experience.beginner', descKey: 'experience.beginnerDesc' },
+  { value: 'intermediate', key: 'experience.intermediate', descKey: 'experience.intermediateDesc' },
+  { value: 'advanced', key: 'experience.advanced', descKey: 'experience.advancedDesc' },
 ];
 
-export function Goal({ navigation, route }: Props) {
+export function Experience({ navigation, route }: Props) {
   const { t } = useCopy();
-  const { profile } = route.params;
-  const [goal, setGoal] = useState<GoalT>('build_muscle'); // default selected (§4.4)
+  const { profile, goal } = route.params;
+  const [experience, setExperience] = useState<ExperienceT>('intermediate');
 
   function onContinue() {
-    void track('goal_selected', { goal });
-    navigation.navigate('Experience', { profile, goal });
+    void track('experience_selected', { experience });
+    navigation.navigate('DaysPerWeek', { profile, goal, experience });
   }
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.body}>
-        <Eyebrow label={t('goal.eyebrow')} size={16} trackingPx={1.5} align="center" style={styles.eyebrow} />
+        <Eyebrow label={t('experience.eyebrow')} size={16} trackingPx={1.5} align="center" style={styles.eyebrow} />
         <View style={styles.list}>
           {OPTIONS.map((o) => {
-            const selected = o.goal === goal;
+            const selected = o.value === experience;
             return (
               <Pressable
-                key={o.goal}
+                key={o.value}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                onPress={() => setGoal(o.goal)}
+                onPress={() => setExperience(o.value)}
                 style={({ pressed }) => [
                   styles.option,
                   selected ? styles.optionSelected : styles.optionIdle,
@@ -59,13 +56,14 @@ export function Goal({ navigation, route }: Props) {
                 <Text style={[styles.optionLabel, selected ? styles.labelSelected : styles.labelIdle]}>
                   {t(o.key)}
                 </Text>
+                <Text style={styles.optionDesc}>{t(o.descKey)}</Text>
               </Pressable>
             );
           })}
         </View>
       </View>
       <View style={styles.actions}>
-        <PrimaryButton variant="compact" label={t('goal.continue')} onPress={onContinue} />
+        <PrimaryButton variant="compact" label={t('experience.continue')} onPress={onContinue} />
       </View>
     </SafeAreaView>
   );
@@ -76,14 +74,12 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
   eyebrow: { marginBottom: s(30), color: color.textSecondary },
   list: { gap: s(12) },
-  option: { borderRadius: radius.card, paddingVertical: s(18), alignItems: 'center' },
-  // Selected = a highlighted dark chip with a white outline (NOT a solid-white fill —
-  // that read as a second Continue button). Continue stays the only solid-white element.
+  option: { borderRadius: radius.card, paddingVertical: s(16), paddingHorizontal: s(18), alignItems: 'center' },
   optionSelected: { backgroundColor: color.surface2, borderWidth: 1.5, borderColor: color.textPrimary },
   optionIdle: { borderWidth: 0.5, borderColor: color.border },
-  // Premium display finish (§2.2): tight tracking on the choice labels.
   optionLabel: { ...heroTitle(s(19)), fontSize: s(19), lineHeight: s(24) },
   labelSelected: { color: color.textPrimary, fontWeight: '600' },
   labelIdle: { color: color.textSecondary, fontWeight: '400' },
+  optionDesc: { fontSize: s(13), color: color.textSecondary, marginTop: s(5), textAlign: 'center' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 });
