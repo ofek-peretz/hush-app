@@ -151,30 +151,32 @@ function ActiveSet({
   const confirming = successReps != null;
 
   return (
-    <View style={styles.center}>
-      <View style={styles.hero}>
-        <Text style={styles.exerciseName}>{exName}</Text>
-        {isBodyweight ? (
-          <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
-        ) : (
-          <View style={styles.weightRow}>
-            <Text
-              style={styles.weight}
-              accessibilityLabel={`${weight} ${units === 'kg' ? 'kilograms' : 'pounds'}`}
-            >
-              {weight}
+    <View style={styles.phaseRoot}>
+      <View style={styles.heroWrap}>
+        <View style={styles.hero}>
+          <Text style={styles.exerciseName}>{exName}</Text>
+          {isBodyweight ? (
+            <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
+          ) : (
+            <View style={styles.weightRow}>
+              <Text
+                style={styles.weight}
+                accessibilityLabel={`${weight} ${units === 'kg' ? 'kilograms' : 'pounds'}`}
+              >
+                {weight}
+              </Text>
+              <Text style={styles.unit}>{unitLabel(units)}</Text>
+            </View>
+          )}
+          <Text style={styles.reps}>{t('workout.reps', { reps: target.recommendedReps })}</Text>
+          {session.setLabel ? (
+            <Text style={styles.setLabel}>
+              {t('workout.setOfM', { n: session.setLabel.n, m: session.setLabel.m })}
             </Text>
-            <Text style={styles.unit}>{unitLabel(units)}</Text>
-          </View>
-        )}
-        <Text style={styles.reps}>{t('workout.reps', { reps: target.recommendedReps })}</Text>
-        {session.setLabel ? (
-          <Text style={styles.setLabel}>
-            {t('workout.setOfM', { n: session.setLabel.n, m: session.setLabel.m })}
-          </Text>
-        ) : null}
-        {/* Coaching line hidden during the confirmation morph (§4.10). */}
-        {!confirming ? <Text style={styles.coaching}>{coaching}</Text> : null}
+          ) : null}
+          {/* Coaching line hidden during the confirmation morph (§4.10). */}
+          {!confirming ? <Text style={styles.coaching}>{coaching}</Text> : null}
+        </View>
       </View>
 
       {/* Complete set is the primary action; "Edit result" is a quiet override BELOW
@@ -247,19 +249,21 @@ function Rest({
   }
 
   return (
-    <View style={styles.center}>
+    <View style={styles.phaseRoot}>
       {/* Exercise comes first and prominent (founder note), then the rest time,
           then the supporting detail. Same structure for both rest types. */}
-      <View style={styles.hero}>
-        {isTransition ? <Text style={styles.restEyebrow}>{t('workout.nextExercise')}</Text> : null}
-        {nextName ? <Text style={styles.restName}>{nextName}</Text> : null}
-        <Text style={styles.timer}>{fmt(remaining)}</Text>
-        {!isTransition && session.nextSetLabel ? (
-          <Text style={styles.restSetLabel}>
-            {t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })}
-          </Text>
-        ) : null}
-        <Text style={styles.restSet}>{setLine}</Text>
+      <View style={styles.heroWrap}>
+        <View style={styles.hero}>
+          {isTransition ? <Text style={styles.restEyebrow}>{t('workout.nextExercise')}</Text> : null}
+          {nextName ? <Text style={styles.restName}>{nextName}</Text> : null}
+          <Text style={styles.timer}>{fmt(remaining)}</Text>
+          {!isTransition && session.nextSetLabel ? (
+            <Text style={styles.restSetLabel}>
+              {t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })}
+            </Text>
+          ) : null}
+          <Text style={styles.restSet}>{setLine}</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -372,18 +376,22 @@ function rangeStep(a: number, b: number, step: number): number[] {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
+  // Phase layout: hero centered in the space ABOVE the actions (not over the whole
+  // screen) so the top isn't left empty while the middle/bottom feel crammed.
+  phaseRoot: { flex: 1, paddingHorizontal: space.gutter },
+  heroWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   hero: { alignItems: 'center' },
   exerciseName: { ...heroTitle(s(22)), color: color.textDim, fontSize: s(22), fontWeight: '600' },
-  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: s(10) },
+  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: s(22) },
   // lineHeight ≥ fontSize so the big numeral is never clipped at the top (the
   // prototype's 0.85 line-height is a CSS overflow-visible trick that clips in RN).
   weight: { ...heroNum(s(76)), color: color.textPrimary, fontSize: s(76), lineHeight: s(84), fontWeight: '700' },
   unit: { fontSize: s(16), fontWeight: '500', color: color.textSecondary, marginLeft: s(5) },
-  bodyweight: { ...heroTitle(s(40)), color: color.textPrimary, fontSize: s(40), fontWeight: '700', marginTop: s(10) },
-  reps: { ...tnum, fontSize: s(30), fontWeight: '500', color: color.textPrimary, marginTop: s(6), letterSpacing: -0.3 },
-  setLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(16) },
-  coaching: { fontSize: s(13), lineHeight: s(13) * 1.4, color: color.textDim, textAlign: 'center', marginTop: s(12), paddingHorizontal: s(22) },
+  bodyweight: { ...heroTitle(s(40)), color: color.textPrimary, fontSize: s(40), fontWeight: '700', marginTop: s(22) },
+  reps: { ...tnum, fontSize: s(30), fontWeight: '500', color: color.textPrimary, marginTop: s(16), letterSpacing: -0.3 },
+  setLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(24) },
+  coaching: { fontSize: s(13), lineHeight: s(13) * 1.4, color: color.textDim, textAlign: 'center', marginTop: s(20), paddingHorizontal: s(22) },
 
   // Rest — exercise name leads (prominent), then the countdown, then detail.
   restName: { ...heroTitle(s(26)), fontSize: s(26), fontWeight: '700', color: color.textPrimary, textAlign: 'center' },
@@ -392,7 +400,7 @@ const styles = StyleSheet.create({
   restSetLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(14) },
   restSet: { ...tnum, fontSize: s(15), color: color.textSecondary, marginTop: s(6) },
 
-  actions: { alignSelf: 'stretch', position: 'absolute', bottom: s(32), left: 0, right: 0, paddingHorizontal: space.gutter, alignItems: 'center' },
+  actions: { alignSelf: 'stretch', paddingBottom: s(32), alignItems: 'center' },
   editRow: { marginTop: s(12) },
   busyRow: { marginTop: s(10) },
 
