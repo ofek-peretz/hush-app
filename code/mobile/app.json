@@ -19,7 +19,7 @@
       "userInterfaceStyle": "dark",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your weight and walks to learn your body faster.",
