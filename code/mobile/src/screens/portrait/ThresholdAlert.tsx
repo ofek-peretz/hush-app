@@ -8,7 +8,7 @@
  * The push-notification trigger that opens this is a deferred native surface;
  * the event detection + copy + routing are complete here.
  */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -27,6 +27,13 @@ export function ThresholdAlert({ navigation }: Props) {
   const app = useApp();
   const ev = app.pendingThreshold;
   const copy = ev ? line(thresholdLine(ev)) : null;
+
+  // Reached via a stale notification tap (the crossing was already dismissed)?
+  // There is nothing to show — fall back to Home rather than a blank dead end.
+  const hadThreshold = useRef(ev != null);
+  useEffect(() => {
+    if (!hadThreshold.current) navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+  }, [navigation]);
 
   function dismiss(toPortrait: boolean) {
     app.clearThreshold();

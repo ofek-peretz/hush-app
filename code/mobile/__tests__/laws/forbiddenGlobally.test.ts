@@ -30,6 +30,13 @@ const DENYLIST: { re: RegExp; why: string }[] = [
   { re: /give me\s+\w+\s+weeks?/i, why: 'no timing promise (Decision 1)' },
 ];
 
+// HUSH_BUILD_SPEC §4.27 introduces the quarterly Then·Now retrospective, which
+// legitimately states a 3-month timeframe ("Three months", "three months ago").
+// These specific copy keys are exempt from the Decision-1 horizon ban; the ban
+// still guards forecast/horizon copy everywhere else (the model stays horizonless).
+const TIMEFRAME_EXEMPT = new Set(['portrait.threeMonths', 'portrait.compareThreeMonths']);
+const isDecision1 = (why: string) => why.includes('Decision 1');
+
 function values(node: unknown, out: { path: string; v: string }[], path = ''): void {
   if (typeof node === 'string') {
     if (!path.split('.').pop()?.startsWith('_comment')) out.push({ path, v: node });
@@ -48,7 +55,9 @@ describe('forbidden vocabulary never appears in copy', () => {
 
   for (const { re, why } of DENYLIST) {
     it(why, () => {
-      const hits = all.filter((x) => re.test(x.v));
+      const hits = all.filter(
+        (x) => re.test(x.v) && !(isDecision1(why) && TIMEFRAME_EXEMPT.has(x.path)),
+      );
       expect(hits.map((h) => `${h.path}: "${h.v}"`)).toEqual([]);
     });
   }

@@ -1,57 +1,43 @@
 /**
- * 1.6 Home — Workout Day / 1.7 Rest Day. The only free-navigation landing point.
- * Resting state, no self-animation. Single CTA on a workout day; none on rest.
- * Profile circle -> Profile Sheet (spec §1.6/§1.7, §3.2).
+ * Home — container. Wires app/session state + navigation to the pure HomeView.
+ * Home answers one question (§4.7/§4.8): what do I do today? It re-resolves the
+ * next workout on focus and drains offline work. No auto-interrupts — the Portrait
+ * appears (unlocked) only when its tab is opened (spec IA §3).
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { WorkoutCard } from '@/components/WorkoutCard';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { useCopy } from '@/i18n/useCopy';
+import { HomeView } from '@/screens/home/HomeView';
 import { useApp } from '@/state/stores/appStore';
 import { useSession } from '@/state/stores/sessionStore';
 import { flush as flushTelemetry } from '@/platform/telemetry';
-import { todayDay } from '@/domain/schedule';
-import { color, layout, press, type as typo } from '@/design/tokens';
+import { nextWorkout } from '@/domain/schedule';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
 
 export function Home({ navigation }: Props) {
-  const { t } = useCopy();
   const app = useApp();
   const session = useSession();
   const program = app.program;
-  const day = program ? todayDay(program) : null;
-  // Weekly Program Container: when the week is complete the athlete is in Rest — REUSE the
-  // existing Home Rest state (no new screen). Otherwise the day's own rest/workout variant.
-  const resting = app.weekRest || !!day?.isRest;
+  // WEEKLY model: Home offers the next UNFINISHED workout in the week (any order, no calendar).
+  const day = program ? nextWorkout(program) : null;
+  // A complete week REUSES the existing Home Rest state: the backend Rest flag, OR every workout
+  // in a loaded program is done (no next workout to offer).
+  const resting =
+    app.weekRest || (!!program && program.days.length > 0 && !day);
 
-  // A resolved (HIT) Portrait forecast resurfaces the Portrait automatically in
-  // Compare mode (revised design). This is the ONLY automatic resurfacing — no
-  // schedule, no reminder, no periodic check-in (§7.10, §8.6). Only fires while
-  // Home is the focused surface.
   const isFocused = useIsFocused();
-  useEffect(() => {
-    if (isFocused && app.pendingPortraitReceipt) {
-      navigation.navigate('PortraitRevisit', { receipt: true });
-    }
-  }, [isFocused, app.pendingPortraitReceipt, navigation]);
 
-  // Session-at-a-time: re-resolve today's session whenever Home is focused, so a
-  // just-completed session gives way to the next one the backend composed. Also
-  // drain any offline-completed sessions to the backend (reconcile on reconnect).
+  // Session-at-a-time: re-resolve today's session on focus; drain offline work.
   const [startError, setStartError] = useState(false);
   useEffect(() => {
     if (isFocused) {
       setStartError(false);
       void app.refreshProgram();
-      void app.syncCalibration(); // reconcile calibration to backend truth
-      void app.syncPending(); // drain offline-completed sessions
-      void flushTelemetry(); // ship buffered telemetry
+      void app.syncCalibration();
+      void app.syncPending();
+      void flushTelemetry();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
@@ -60,7 +46,6 @@ export function Home({ navigation }: Props) {
     if (!day) return;
     setStartError(false);
     try {
-      // Resolve targets BEFORE entering the workout (instant landing, UX §4.2).
       const targets = await app.model.sessionTargets({
         programDayId: day.id,
         completedSessions: app.modeState.completedSessions,
@@ -68,59 +53,30 @@ export function Home({ navigation }: Props) {
       await session.start(day, targets);
       navigation.navigate('SessionFlow');
     } catch {
-      // Starting a fresh session requires the server (§5.4). One calm line; the
-      // button returns to default and retries on the next tap.
       setStartError(true);
     }
   }
 
-  const initial = app.profile?.name?.[0]?.toUpperCase() ?? '·';
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const hour = now.getHours();
+  const greetingPart: 'morning' | 'afternoon' | 'evening' =
+    hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  // Weekly model: completed (non-rest) workouts in the current program week.
+  const trainedThisWeek = program ? program.days.filter((d) => d.completed && !d.isRest).length : 0;
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.top}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          onPress={() => navigation.navigate('ProfileSheet')}
-          style={({ pressed }) => [styles.circle, { opacity: pressed ? press.opacity : 1 }]}
-        >
-          <Text style={styles.initial}>{initial}</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.center}>
-        {resting ? (
-          <WorkoutCard name={t('home.rest', { day: day?.name ?? '' })} metadata="" />
-        ) : (
-          <WorkoutCard name={day?.name ?? ''} metadata={(day?.muscleGroups ?? []).join(' · ')} />
-        )}
-      </View>
-
-      <View style={styles.actions}>
-        {startError ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
-        {day && !resting ? (
-          <PrimaryButton variant="home" label={t('home.startWorkout')} onPress={onStart} />
-        ) : null}
-      </View>
-    </SafeAreaView>
+    <HomeView
+      resting={resting}
+      dayName={day?.name ?? null}
+      muscles={day?.muscleGroups.join(' · ') ?? ''}
+      greetingPart={greetingPart}
+      name={app.profile?.name ?? null}
+      trainedThisWeek={trainedThisWeek}
+      startError={startError}
+      dateLabel={dateLabel}
+      onStart={onStart}
+      onProfile={() => navigation.navigate('ProfileSheet')}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bgBase, justifyContent: 'space-between' },
-  top: { flexDirection: 'row', justifyContent: 'flex-end', padding: layout.screenMargin },
-  circle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initial: { color: color.textSecondary, fontSize: typo.bodyM.size },
-  center: { flex: 1, justifyContent: 'center', paddingHorizontal: layout.screenMargin },
-  actions: { paddingHorizontal: layout.screenMargin, paddingBottom: 32, minHeight: 60 },
-  error: { color: color.textSecondary, fontSize: typo.bodyM.size, textAlign: 'center', marginBottom: 16 },
-});

@@ -61,4 +61,17 @@ describe('pause freezes exactly and resumes to the prior state', () => {
     const resumed = sessionReducer(paused, { type: 'RESUME' });
     expect(resumed.phase).toBe('REST_INTER');
   });
+
+  // Pause/Complete-Set race (audit defect 8): a COMPLETE_SET that arrives while
+  // PAUSED must NOT log or advance — the workout is frozen. The store also guards
+  // this via a live machine ref + cancels the success timer; this asserts the
+  // reducer-level invariant the guard relies on.
+  it('a COMPLETE_SET while PAUSED is a no-op (frozen)', () => {
+    let s = initialSessionMachine(false);
+    s = sessionReducer(s, { type: 'PAUSE' });
+    expect(s.phase).toBe('PAUSED');
+    const after = sessionReducer(s, { type: 'COMPLETE_SET', restSeconds: 90, lastSetOfExercise: false });
+    expect(after).toBe(s); // unchanged — no advance, no save
+    expect(after.setIndex).toBe(0);
+  });
 });

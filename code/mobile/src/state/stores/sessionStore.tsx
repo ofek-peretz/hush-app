@@ -10,10 +10,14 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useRe
 import type { ForecastRecord, ProgramDay, Session, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
-import { liveActivityStub, type LiveActivityHost } from '@/platform/liveActivity';
+import { liveActivity } from '@/platform/liveActivity';
+import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
+import { WatchSession } from '@/platform/watch/watchBridge';
+import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
   sessionReducer,
+  type SessionEvent,
   type SessionMachine,
 } from '@/state/machines/sessionState';
 import { resolveIncrease } from '@/domain/receiptRules';
@@ -21,6 +25,7 @@ import type { Line } from '@/domain/voice';
 import { canSpeak } from '@/domain/modeGate';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
+import { LIVE_ACTIVITY_EVENTS, NOTIFICATION_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
 /** True if a failed sync is worth queuing for retry (transient), not a doomed payload. */
@@ -31,9 +36,6 @@ function worthQueuing(e: unknown): boolean {
 const REST_INTER_S = 90; // between sets of the same exercise (Hush-owned)
 const REST_TRANSITION_S = 120; // between exercises (Hush-owned)
 
-// Read-only Live Activity / Dynamic Island / Lock Screen mirror (spec §8.5).
-// Stub now; swap for the native ActivityHost on a dev build (see NATIVE_SURFACES).
-const liveActivity: LiveActivityHost = liveActivityStub;
 
 export interface Step {
   exerciseId: string;
@@ -128,8 +130,10 @@ export interface SessionView {
   currentTarget: SetTarget | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
   globalProgress: { index: number; total: number } | null;
-  nextExercise: Exercise | null; // for Transition Rest preview
+  nextExercise: Exercise | null; // for Rest preview (upcoming set/exercise)
   nextTarget: SetTarget | null;
+  /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
+  nextSetLabel: { n: number; m: number } | null;
   restSeconds: number;
   /** Receipt to show on the CURRENT set (earned by the previous set), once. */
   receiptLine: Line | null;
@@ -189,27 +193,80 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Keep the latest session for synchronous persistence inside actions.
   const sessionRef = useRef<Session | null>(null);
   sessionRef.current = state.session;
+  // Latest machine, read by deferred callbacks (e.g. the 400ms Complete-Set
+  // success timer) so they see a PAUSE that landed AFTER they were scheduled.
+  const machineRef = useRef<SessionMachine>(state.machine);
+  machineRef.current = state.machine;
   // Temporal telemetry: when the current rest/pause began (ms epoch).
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
+  // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
+  const laStartedRef = useRef(false);
+  // Watch action handlers, refreshed each render so a (native) watch intent runs the
+  // EXACT same action an in-app tap would. The stub transport delivers none in v1.
+  const watchActionsRef = useRef<Partial<Record<SessionEvent['type'], () => void>>>({});
+  // Exercise Busy is a session-store action (not a machine event); kept in its own ref.
+  const watchBusyRef = useRef<() => void>(() => {});
+  // Set completion from the watch, carrying reported actual reps (omitted = target).
+  const watchCompleteRef = useRef<(actualReps?: number) => void>(() => {});
+  // The phone-authority watch bridge. Constructed once; reads the action ref so it
+  // never closes over stale actions. Transport is a no-op until the watchOS target
+  // exists — all authority/validation/telemetry runs regardless.
+  const watchRef = useRef<WatchSession | null>(null);
+  if (!watchRef.current) {
+    watchRef.current = new WatchSession({
+      transport: watchTransport,
+      now: Date.now,
+      track: (type, data) => void track(type, data),
+      completeSet: (actualReps) => watchCompleteRef.current(actualReps),
+      dispatch: (event) => watchActionsRef.current[event.type]?.(),
+      markEquipmentOccupied: () => watchBusyRef.current(),
+    });
+  }
 
-  // Mirror session state to the Live Activity / Dynamic Island / Lock Screen —
-  // READ-ONLY, timer is the hero, no completion controls from outside (§8.5).
+  // Mirror session state to BOTH the Live Activity / Dynamic Island / Lock Screen
+  // AND the Apple Watch — from ONE canonical projection (§8.5; no duplicate state).
+  // READ-ONLY, timer is the hero, no completion controls from outside the app.
   useEffect(() => {
     const { plan, machine } = state;
-    const ended = plan.length === 0 || machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE';
-    if (ended) {
-      void liveActivity.end();
+    const steps: MirrorStep[] = plan.map((st) => ({
+      exerciseName: exerciseById(st.exerciseId)?.name ?? '',
+      setIndexInExercise: st.exerciseSetIndex,
+      totalSetsInExercise: st.totalSetsInExercise,
+      globalIndex: st.globalIndex,
+      targetWeight: st.target.recommendedWeight,
+      targetReps: st.target.recommendedReps,
+    }));
+    const mirror = projectSessionMirror({
+      steps,
+      total: plan.length,
+      machine,
+      restInterS: REST_INTER_S,
+      restTransitionS: REST_TRANSITION_S,
+      restStartedAtMs: restStartedAtRef.current,
+      nowMs: Date.now(),
+    });
+
+    // One projection → both surfaces. The watch receives the full mirror (incl. the
+    // terminal "complete" frame so it can show Workout Complete, then tear down).
+    watchRef.current?.publish(mirror);
+
+    // The Live Activity renders its subset; it ends on no-session / complete.
+    if (!mirror || mirror.phase === 'complete') {
+      if (laStartedRef.current) {
+        laStartedRef.current = false;
+        void liveActivity.end();
+        void track(LIVE_ACTIVITY_EVENTS.ended);
+      }
       return;
     }
-    const cur = plan[machine.setIndex];
-    const ex = cur ? exerciseById(cur.exerciseId) : null;
-    const resting = machine.phase === 'REST_INTER' || machine.phase.startsWith('REST_TRANSITION');
-    void liveActivity.update({
-      exerciseName: ex?.name ?? '',
-      restRemainingS: resting ? (machine.phase === 'REST_INTER' ? REST_INTER_S : REST_TRANSITION_S) : null,
-      setLabel: cur ? `Set ${cur.exerciseSetIndex + 1} of ${cur.totalSetsInExercise}` : '',
-    });
+    if (!laStartedRef.current) {
+      laStartedRef.current = true;
+      void track(LIVE_ACTIVITY_EVENTS.started);
+      void liveActivity.start(mirror).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'start' }));
+    } else {
+      void liveActivity.update(mirror).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'update' }));
+    }
   }, [state]);
 
   const view = useMemo<SessionView>(() => {
@@ -291,6 +348,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       nextExercise: resting && next ? exerciseById(next.exerciseId) ?? null : null,
       nextTarget: resting ? next?.target ?? null : null,
+      nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
       restSeconds,
       // Show the earned receipt only on a presented set (never over rest).
       receiptLine: displayPhase === 'SET_PRESENTED' ? state.pendingReceipt : null,
@@ -306,6 +364,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const session: Session = {
           id: `sess_${Date.now()}`,
           programDayId: day.id,
+          programDayName: day.name, // captured now so History stays stable across regenerations
           startedAt: new Date().toISOString(),
           state: 'ACTIVE',
           earlyFinish: false,
@@ -313,13 +372,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         };
         await db.saveActiveSession(session);
         void track('session_started', { sessionId: session.id, programDayId: day.id, blockCount: day.slots.length });
-        const first = plan2[0];
-        const firstEx = first ? exerciseById(first.exerciseId) : null;
-        void liveActivity.start({
-          exerciseName: firstEx?.name ?? '',
-          restRemainingS: null,
-          setLabel: first ? `Set 1 of ${first.totalSetsInExercise}` : '',
-        });
+        // The Live Activity + Watch surfaces start/update from the canonical mirror
+        // projection (the [state] effect) — START flips state and the effect fires.
         dispatch({
           type: 'START',
           plan: plan2,
@@ -331,6 +385,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       async completeSet(override): Promise<CompleteResult> {
         const session = sessionRef.current;
         if (!current || !session) return { ended: false, unlockedPortrait: false };
+        // Race guard: a Pause may have landed after the 400ms success timer was
+        // scheduled. A paused session never logs a set — the workout is frozen
+        // (§7.2). The set logs on Resume → Complete Set, not behind the overlay.
+        if (machineRef.current.phase === 'PAUSED') return { ended: false, unlockedPortrait: false };
         const setLog: SetLog = {
           exerciseId: current.exerciseId,
           setIndex: current.exerciseSetIndex,
@@ -386,6 +444,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
         // At most one receipt surfaces per set; the same-session increase wins ties.
         const pendingReceipt: Line | null = increaseReceipt ?? holdReceipt;
+        // Dataset capture: a receipt was earned + will surface in-session (receipts
+        // are NEVER notifications, §8.6 — captured here so delivery is in the dataset).
+        if (pendingReceipt) {
+          void track(NOTIFICATION_EVENTS.receiptSurfaced, {
+            sessionId: session.id,
+            capability,
+            kind: increaseReceipt ? 'increase' : 'hold',
+          });
+        }
 
         // Decision + trust telemetry (alpha): structured per-set decision context,
         // outcome, and override — enough to answer "was the model right?" later.
@@ -495,6 +562,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
     };
   }, [state, app]);
+
+  // Map watch intents → the same view actions a tap fires. A watch Complete Set
+  // accepts the recommended target (no override) — editing stays phone-only.
+  watchActionsRef.current = {
+    REST_ELAPSED: () => view.endRest(),
+    PAUSE: () => view.pause(),
+    RESUME: () => view.resume(),
+    FINISH_EARLY: () => void view.finishEarly(),
+  };
+  // Set completion from the watch. Reported reps (from the rep-adjustment screen)
+  // become an edited actual; weight stays the recommended target. Processed
+  // identically to an on-phone entry — the phone is the source of truth.
+  watchCompleteRef.current = (actualReps) =>
+    void view.completeSet(
+      actualReps == null
+        ? undefined
+        : { weight: view.currentTarget?.recommendedWeight ?? null, reps: actualReps },
+    );
+  // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
+  watchBusyRef.current = () => view.markEquipmentOccupied();
 
   return <Ctx.Provider value={view}>{children}</Ctx.Provider>;
 }

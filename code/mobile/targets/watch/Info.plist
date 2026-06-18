@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  watchOS app Info.plist. apple-targets returns {} for the "watch" type, so we
+	  declare the required keys here. WKApplication=YES marks this as a modern
+	  single-target SwiftUI watch app; WKCompanionAppBundleIdentifier links it to the
+	  canonical iPhone app (set explicitly so it holds regardless of build-setting
+	  injection). CFBundle* inherit from the target's build settings.
+	-->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Hush</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<!-- Inherit the main app's version/build number. apple-targets sets both build
+	     settings on the watch target (CURRENT_PROJECT_VERSION = ios.buildNumber;
+	     MARKETING_VERSION synced to the app version every prebuild), so these are
+	     never empty AND always match the companion — App Store validation REQUIRES
+	     the watch app's CFBundleVersion + CFBundleShortVersionString to equal the
+	     main app's, or the TestFlight upload is rejected. -->
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.hushfitness.app</string>
+</dict>
+</plist>

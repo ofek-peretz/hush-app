@@ -14,7 +14,7 @@ export const motion = {
   sheetDismissMax: 200,
   successPulse: { from: 1.0, mid: 1.03, to: 1.0, durationMs: 120 }, // timer 00:00 ONLY
   digitRollMs: 200, // per-digit roll on timers
-  completeSetSuccessMs: 400, // "[reps] ✓" success state before rest
+  completeSetSuccessMs: 800, // "{reps} ✓" confirmation morph before rest (~0.8s, §4.10/§6)
 } as const;
 
 /**

@@ -108,6 +108,7 @@ def session_to_dict(conn, session_row) -> dict:
     ]
     return {
         "id": session_row["id"],
+        "name": session_row["name"],
         "status": session_row["status"],
         "week": session_row["week"],
         "session_index": session_row["session_index"],

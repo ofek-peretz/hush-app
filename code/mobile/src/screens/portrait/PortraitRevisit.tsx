@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CapabilityPortrait } from '@/components/CapabilityPortrait';
 import { TextAction } from '@/components/TextAction';
+import { BackButton } from '@/components/BackButton';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { commitmentLine, compareProof } from '@/domain/portrait';
@@ -26,7 +27,7 @@ import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'PortraitRevisit'>;
 
-export function PortraitRevisit({ route }: Props) {
+export function PortraitRevisit({ navigation, route }: Props) {
   const { t, line } = useCopy();
   const app = useApp();
   const snapshot = app.currentSnapshot;
@@ -49,7 +50,11 @@ export function PortraitRevisit({ route }: Props) {
   }, []);
 
   if (!snapshot) {
-    return <SafeAreaView style={styles.root} />;
+    return (
+      <SafeAreaView style={styles.root}>
+        <BackButton onPress={() => navigation.goBack()} />
+      </SafeAreaView>
+    );
   }
 
   const commitment = line(commitmentLine(snapshot));
@@ -59,6 +64,7 @@ export function PortraitRevisit({ route }: Props) {
 
   return (
     <SafeAreaView style={styles.root}>
+      <BackButton onPress={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.headline} accessibilityRole="header">{t('portrait.headline')}</Text>
         <View style={styles.bars}>

@@ -113,6 +113,83 @@ def test_profile_get_and_patch(ctx):
     assert r.json()["bodyweight_kg"] == 85.0 and r.json()["age"] == 31
 
 
+# ----------------------------- athlete self-erase (OD-2, in-app Delete Account) -----------------------------
+
+def test_me_erase_anonymizes_caller_and_invalidates_token(ctx):
+    c = ctx["client"]
+    t = enroll(c, athlete_id="ath_erase", bw=80.0)
+    assert c.get("/profile", headers=auth_headers(t)).status_code == 200
+    r = c.post("/me/erase", headers=auth_headers(t))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["athlete_id"] == "ath_erase"
+    assert body["method"] == "logical_anonymization"
+    assert body["tokens_removed"] >= 1
+    # The auth token was deleted by erasure → it no longer authenticates.
+    assert c.get("/profile", headers=auth_headers(t)).status_code == 401
+
+
+def test_me_erase_requires_auth(ctx):
+    assert ctx["client"].post("/me/erase").status_code == 401
+
+
+def test_me_erase_only_affects_the_caller_no_idor(ctx):
+    c = ctx["client"]
+    t1 = enroll(c, athlete_id="ath_e1")
+    t2 = enroll(c, athlete_id="ath_e2")
+    assert c.post("/me/erase", headers=auth_headers(t1)).status_code == 200
+    # A token can only erase ITS OWN athlete — the other athlete is untouched.
+    assert c.get("/profile", headers=auth_headers(t2)).status_code == 200
+
+
+# ----------------------------- consent (OD-3 / BB-33) -----------------------------
+
+def test_consent_requires_token(ctx):
+    r = ctx["client"].post("/consent", json={"version": "v1"})
+    assert r.status_code == 401
+
+
+def test_consent_record_and_read(ctx):
+    t = enroll(ctx["client"], athlete_id="ath_1")
+    # none yet
+    g0 = ctx["client"].get("/consent", headers=auth_headers(t))
+    assert g0.status_code == 200 and g0.json()["version"] is None
+    # record (the affirmative act); server_ts is the authoritative legal timestamp
+    r = ctx["client"].post("/consent", headers=auth_headers(t),
+                           json={"version": "v1", "accepted_at": "2026-06-17T10:00:00Z"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["recorded"] is True and body["version"] == "v1" and body["server_ts"]
+    # read back
+    g = ctx["client"].get("/consent", headers=auth_headers(t)).json()
+    assert g["version"] == "v1" and g["accepted_at"] == "2026-06-17T10:00:00Z"
+
+
+def test_consent_append_only_idempotent_per_version(ctx):
+    """Re-accepting the SAME version is exactly-once (one row); a new version adds a row."""
+    t = enroll(ctx["client"], athlete_id="ath_1")
+    for _ in range(3):
+        assert ctx["client"].post("/consent", headers=auth_headers(t),
+                                  json={"version": "v1"}).status_code == 200
+    ctx["client"].post("/consent", headers=auth_headers(t), json={"version": "v2"})
+    conn = sqlite3.connect(ctx["db_path"])
+    try:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM athlete_event WHERE type='consent_accepted'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert n == 2  # v1 collapsed to one row (idempotent) + v2
+
+
+def test_consent_is_athlete_scoped(ctx):
+    """Token-derived identity: one athlete's consent is never visible to another."""
+    t1 = enroll(ctx["client"], athlete_id="ath_1")
+    t2 = enroll(ctx["client"], athlete_id="ath_2")
+    ctx["client"].post("/consent", headers=auth_headers(t1), json={"version": "v1"})
+    assert ctx["client"].get("/consent", headers=auth_headers(t2)).json()["version"] is None
+
+
 def test_capabilities_get(ctx):
     t = enroll(ctx["client"], athlete_id="ath_caps")
     r = ctx["client"].get("/capabilities", headers=auth_headers(t))
@@ -257,6 +334,9 @@ def test_compose_session_shape_and_versions(ctx):
     s = r.json()
     assert s["id"].startswith("ws_")
     assert s["status"] in ("active", "planned")
+    # Founder decision: a composed session carries a real, structure-derived workout name
+    # (never a generic placeholder like "Today"/"Session").
+    assert s["name"] and s["name"] not in ("Today", "Session", "Workout")
     assert s["model_version"] and s["capability_model_version"] and s["catalog_version"]
     assert len(s["blocks"]) >= 1
     b = s["blocks"][0]
@@ -925,6 +1005,37 @@ def test_why_view(ctx):
     assert body["prediction_confidence"] in ("low", "medium", "high")
     assert body["what_it_could_not_exclude"]  # the honesty clause is required
     assert body["decision_type"] in ("KEEP_LOAD", "INCREASE_LOAD", "DECREASE_LOAD", "REPLACE_EXERCISE")
+    assert "previous_weight" in body and body["previous_weight"] is None  # first rec for this exercise
+
+
+def test_why_previous_weight_from_prior_recommendation(ctx):
+    """C3: /why reports the authoritative previous load = the prior recommendation's recommended
+    weight for the same exercise (so the client renders Δ from the model, not local history)."""
+    t = enroll(ctx["client"], athlete_id="ath_1")
+    s = _start(ctx, t)
+    b = s["blocks"][0]
+    why0 = ctx["client"].get(f"/recommendations/{b['recommendation_id']}/why",
+                             headers=auth_headers(t)).json()
+    assert why0["previous_weight"] is None
+    # Insert a synthetic EARLIER recommendation for the SAME exercise → becomes the measured-against prior.
+    conn = sqlite3.connect(ctx["db_path"])
+    try:
+        conn.execute(
+            "INSERT INTO recommendation (id, athlete_id, exercise_block_id, capability, exercise,"
+            " difficulty_factor, recommended_weight, target_reps, predicted_reps_to_failure,"
+            " prediction_confidence, decision_reason, decision_type, target_load, model_version,"
+            " capability_model_version, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("rec_prior", "ath_1", None, why0["capability"], why0["exercise"],
+             1.0, why0["recommended_weight"] - 2.5, why0["target_reps"], 5.0,
+             50.0, "increase_load:test", "INCREASE_LOAD", 0.0, "vtest", "vtest",
+             "2000-01-01T00:00:00+00:00"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    why1 = ctx["client"].get(f"/recommendations/{b['recommendation_id']}/why",
+                             headers=auth_headers(t)).json()
+    assert why1["previous_weight"] == why0["recommended_weight"] - 2.5
 
 
 # ----------------------------- history (§10) -----------------------------

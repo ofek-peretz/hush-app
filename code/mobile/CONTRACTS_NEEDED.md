@@ -50,9 +50,15 @@ chosen; `generateProgram` currently presents the composed session as a single "T
 
 ## C3 — Reason-line delta (precise value for the increase/decrease line)
 
-The reason copy is "Up [Δ] from last week." The client currently derives Δ from
+**RESOLVED 2026-06-17.** `GET /recommendations/{id}/why` now returns `previous_weight` =
+the recommended weight of the PRIOR recommendation for the same athlete+exercise (null when
+none). The client (`httpClient.sessionTargets`) now computes Δ = `recommended_weight −
+previous_weight` from this authoritative value, falling back to local last-logged weight only
+when the model has no prior. The N+1 `/why` inlining note below remains a future optimization.
+
+The reason copy is "Up [Δ] from last week." The client previously derived Δ from
 its own local history (the athlete's last logged weight). The authoritative Δ
-should come from the model. Add to `GET /recommendations/{id}/why`:
+now comes from the model. `GET /recommendations/{id}/why` returns:
 
 ```
 "previous_weight": float | null     // the load this is measured against; Δ = recommended_weight − previous_weight

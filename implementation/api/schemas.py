@@ -172,6 +172,18 @@ class ProfilePatchRequest(BaseModel):
     bodyweight_kg: float | None = Field(default=None, gt=0)
 
 
+class ConsentRequest(BaseModel):
+    """POST /consent — record the athlete's affirmative consent to a VERSIONED agreement. Enrollment
+    is operator-mediated (an operator cannot consent on the athlete's behalf), so the athlete records
+    consent IN-APP (pressing Continue on Enrollment is the affirmative act). Append-only + idempotent
+    on a deterministic id; the server_ts is the authoritative legal timestamp, `accepted_at` is the
+    client wall-clock kept for audit."""
+    model_config = ConfigDict(extra="ignore")
+    version: str = Field(min_length=1, max_length=64)
+    accepted_at: str | None = Field(default=None, max_length=40)
+    client_event_id: str | None = Field(default=None, max_length=64)
+
+
 # ----------------------------- responses (wire DTOs, contract §3) -----------------------------
 
 class BlockOut(BaseModel):

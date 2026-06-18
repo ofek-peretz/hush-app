@@ -15,7 +15,11 @@ import type {
   Profile,
   Program,
   Session,
+  ThresholdEvent,
 } from './models';
+// Type-only import (erased at runtime → no layering cycle). The Health connection
+// record is persisted local state, stored behind this repo like everything else.
+import type { HealthState } from '@/platform/health/healthModel';
 
 const K = {
   profile: 'hush.profile',
@@ -27,13 +31,16 @@ const K = {
   forecasts: 'hush.forecasts',
   recents: 'hush.exercise.recents',
   pendingSync: 'hush.sync.pending',
+  pendingThreshold: 'hush.portrait.threshold',
   telemetry: 'hush.telemetry.buffer',
   firsts: 'hush.telemetry.firsts',
+  health: 'hush.health.state',
   schemaVersion: 'hush.schema.version',
 } as const;
 
-/** Bump when a persisted shape changes incompatibly; boot guards against drift. */
-export const SCHEMA_VERSION = 1;
+/** Bump when a persisted shape changes incompatibly; boot guards against drift.
+ *  v2: added the Health connection record (hush.health.state) — additive. */
+export const SCHEMA_VERSION = 2;
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
 export interface PendingSync {
@@ -132,6 +139,11 @@ export const db = {
     await this.setPendingSync([...all.filter((p) => p.sessionId !== item.sessionId), item]);
   },
 
+  // ---- Pending threshold alert (durable; survives relaunch until surfaced §7.10) ----
+  loadPendingThreshold: () => getJSON<ThresholdEvent>(K.pendingThreshold),
+  savePendingThreshold: (ev: ThresholdEvent) => setJSON(K.pendingThreshold, ev),
+  clearPendingThreshold: () => AsyncStorage.removeItem(K.pendingThreshold),
+
   // ---- Telemetry (durable buffer + first-event registry; alpha hardening) ----
   async loadTelemetry<T>(): Promise<T[]> {
     return (await getJSON<T[]>(K.telemetry)) ?? [];
@@ -149,6 +161,10 @@ export const db = {
     const all = await this.loadFirsts();
     if (!all.includes(name)) await setJSON(K.firsts, [...all, name]);
   },
+
+  // ---- Health connection record (convenience-only; never a model input) ----
+  loadHealthState: () => getJSON<HealthState>(K.health),
+  saveHealthState: (s: HealthState) => setJSON(K.health, s),
 
   // ---- Schema version (detect persisted-shape drift on boot) ----
   async getSchemaVersion(): Promise<number | null> {

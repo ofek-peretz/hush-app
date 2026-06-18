@@ -20,7 +20,7 @@ from fastapi import FastAPI
 
 from . import deps, errors, observability
 from .connection import init_database
-from .routers import sessions, blocks, reads, profile, telemetry, preferences, weeks
+from .routers import sessions, blocks, reads, profile, telemetry, preferences, weeks, consent
 from .internal import operator
 
 
@@ -54,6 +54,7 @@ def create_app(db_path: str | None = None, operator_key: str | None = None) -> F
     app.include_router(telemetry.router, tags=["telemetry"])
     app.include_router(preferences.router, tags=["preferences"])
     app.include_router(weeks.router, tags=["weeks"])
+    app.include_router(consent.router, tags=["consent"])
     # operator surface — separate scope (§16A), never reachable from an athlete token
     app.include_router(operator.router, tags=["internal"])
 

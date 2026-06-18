@@ -456,7 +456,8 @@ class SessionRepository:
                        capability_model_version: str | None = None,
                        status: str = "active",
                        week_plan_id: str | None = None,
-                       position_in_week: int | None = None) -> str:
+                       position_in_week: int | None = None,
+                       name: str | None = None) -> str:
         """Open a session. The Sprint 3B-2 composition audit fields default to None, so the
         pre-3B-2 single-block path is unchanged; the composition driver passes them so the
         session reconstructs its template + exploration draw (ES-009 §9).
@@ -471,12 +472,12 @@ class SessionRepository:
             "(id, athlete_id, status, week, started_at, completed_at, "
             " exploration_seed, session_index, weekly_frequency, weekly_volume, "
             " calibration_phase, primary_focus, secondary_focus, catalog_version, "
-            " model_version, capability_model_version, week_plan_id, position_in_week, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " model_version, capability_model_version, week_plan_id, position_in_week, name, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sid, athlete_id, status, week, (now_iso() if status == "active" else None), None,
              exploration_seed, session_index, weekly_frequency, weekly_volume,
              calib, primary_focus, secondary_focus, catalog_version,
-             model_version, capability_model_version, week_plan_id, position_in_week, now_iso()),
+             model_version, capability_model_version, week_plan_id, position_in_week, name, now_iso()),
         )
         return sid
 

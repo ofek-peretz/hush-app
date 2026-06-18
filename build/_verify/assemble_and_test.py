@@ -63,6 +63,7 @@ MAP = {
     "hush_model/persistence/migrations/migration_014_composition_audit.py": "api/migration_014_composition_audit.py",
     "hush_model/persistence/migrations/migration_015_preference_events.py": "api/migration_015_preference_events.py",
     "hush_model/persistence/migrations/migration_016_week_plan.py": "api/migration_016_week_plan.py",
+    "hush_model/persistence/migrations/migration_017_workout_name.py": "api/migration_017_workout_name.py",
     # ---- Wave-2 web shell (BB-13/14): the additive API layer beside the frozen model ----
     "app/__init__.py": None,
     "app/connection.py": "api/connection.py",
@@ -86,6 +87,7 @@ MAP = {
     "app/routers/telemetry.py": "api/routers/telemetry.py",
     "app/routers/preferences.py": "api/routers/preferences.py",
     "app/routers/weeks.py": "api/routers/weeks.py",
+    "app/routers/consent.py": "api/routers/consent.py",
     "app/internal/__init__.py": None,
     "app/internal/operator.py": "api/internal/operator.py",
     "sim/__init__.py": None,

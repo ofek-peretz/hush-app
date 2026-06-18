@@ -25,6 +25,9 @@ export interface WhyResponse {
   capability: string;
   exercise: string;
   recommended_weight: number;
+  /** C3: authoritative load this recommendation is measured against (prior recommended weight for
+   *  the same exercise). null when no prior exists. Δ = recommended_weight − previous_weight. */
+  previous_weight?: number | null;
   target_reps: number;
   predicted_reps_to_failure: number;
   prediction_confidence: 'low' | 'medium' | 'high';

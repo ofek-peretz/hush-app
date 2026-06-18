@@ -8,25 +8,70 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#000000",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#08080E"
+    },
     "ios": {
       "supportsTablet": false,
       "userInterfaceStyle": "dark",
-      "bundleIdentifier": "com.hush.app",
+      "bundleIdentifier": "com.hushfitness.app",
+      "appleTeamId": "T6ZRTBRT2U",
+      "buildNumber": "4",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your weight and walks to learn your body faster.",
-        "NSHealthUpdateUsageDescription": "Hush does not write to Health."
+        "NSHealthUpdateUsageDescription": "Hush does not write any data to Apple Health.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "com.apple.developer.healthkit": true
       }
     },
     "android": {
-      "userInterfaceStyle": "dark"
+      "userInterfaceStyle": "dark",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#08080E"
+      }
     },
     "plugins": [
       "expo-localization",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-notifications",
+      "expo-dev-client",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Hush reads your weight and walks to learn your body faster.",
+          "NSHealthUpdateUsageDescription": "Hush does not write any data to Apple Health."
+        }
+      ],
+      "@bacons/apple-targets"
+    ],
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.hushfitness.app.widget",
+                  "targetName": "HushWidget"
+                },
+                {
+                  "bundleIdentifier": "com.hushfitness.app.watch",
+                  "targetName": "HushWatch"
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "b838bf79-c406-4628-9098-2e5d809a9894"
+      }
+    },
+    "owner": "ofekperetz1"
   }
 }

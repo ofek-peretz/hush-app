@@ -13,8 +13,10 @@ from fastapi import APIRouter, Depends
 
 from hush_model.constants import MODEL_VERSION, CAPABILITY_MODEL_VERSION
 from hush_model.persistence.db import now_iso
+from hush_model.persistence.service import HushService
 
 from .. import errors
+from ..connection import write_serialized
 from ..deps import require_athlete, get_request_db
 from ..schemas import ProfilePatchRequest
 from ..idempotency import handle_idempotent
@@ -63,3 +65,19 @@ def patch_profile(
         lambda conn: _apply_patch(conn, athlete_id, body),
     )
     return response
+
+
+@router.post("/me/erase")
+def erase_me(
+    athlete_id: str = Depends(require_athlete),
+    db=Depends(get_request_db),
+):
+    """Athlete-initiated right-to-erasure (OD-2) — the in-app "Delete Account" action. Logical
+    deletion / anonymization of the CALLER (athlete_id derived from the bearer token, so a token can
+    only ever erase its OWN data — never another athlete's). Reuses the exact operator erase
+    mechanism (`erase_athlete`): removes auth tokens + precise identifiers, writes the erasure
+    tombstone, retains the anonymized append-only audit. Because the auth token is deleted, the token
+    is invalid immediately after; the client then clears local state. Idempotent."""
+    with write_serialized():
+        result = HushService(db).erase_athlete(athlete_id)
+    return result

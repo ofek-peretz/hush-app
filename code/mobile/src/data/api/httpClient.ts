@@ -1,20 +1,25 @@
 /**
  * HTTP ModelClient — adapts the real backend (implementation/api) to the client's
- * ModelClient interface. The backend is SESSION-AT-A-TIME (it composes
- * /sessions/today with blocks, learns from per-set reports, and pre-composes the
- * next session on complete) — see API contract §5/§6/§7.
+ * ModelClient interface. Per-set reports learn; complete pre-composes next.
  *
- * Cleanly mapped here: session compose → blocks-as-targets, per-set report,
- * complete, profile, history, block replace.
+ * Cleanly mapped here: blocks-as-targets, per-set report, complete, profile,
+ * history, block replace, preferences, capabilities (Portrait), weekly rest.
  *
- * STRUCTURAL GAPS surfaced as blockers (NOT silently invented — see the
- * connect-backend report):
- *  - B1 week-program / day-list: the backend has no multi-day program; it composes
- *    one session. generateProgram wraps the composed session as a single "day".
- *  - B2 Capability Portrait: capability_state exists server-side but is NOT exposed
- *    by any athlete read endpoint → portraitSnapshot cannot be fulfilled.
- *  - B4 program-change card / forecast-receipt: no weekly-change or forecast surface;
- *    decisions live per-block (decision_type / predicted_reps / confidence).
+ * WEEKLY-PROGRAM MODEL (ratified — consumed since 2026-06-17). The backend is the
+ * weekly-program model: migration_016 `week_plan` + `POST /weeks` / `GET /weeks/current`
+ * compose N unscheduled workouts as a UNIT and return `{week, rest, workouts[]}`
+ * (per-workout status/blocks/name). The product (see memory hush-weekly-program-model)
+ * is a weekly BUCKET of N workouts — no calendar/day-assignment, done in any order, Rest
+ * only after ALL complete. `generateProgram` reads `/weeks/current` (composing the week
+ * via `POST /weeks` only if none exists) and maps `workouts[]` → `Program.days[]`, each
+ * day carrying its backend session id, name, blocks, the athlete-ownership ordering key
+ * (`str(session_index % weekly_frequency)`), and a `completed` flag (status). The Program
+ * screen renders completed workouts green; Home advances to the next unfinished workout;
+ * `weeklyRest()` reports the Rest flag. Each workout's own `session id` is the `programDayId`
+ * the client then uses for `sessionTargets` (GET /sessions/{id}) and `recordSession`.
+ *
+ * Historical resolved blockers (kept for context): B2 Portrait → `GET /capabilities`
+ * (done); B4 program-change → C5 telemetry pipeline (done, see programChanges below).
  */
 import type {
   Capability,
@@ -55,9 +60,21 @@ interface BlockOut {
 }
 interface SessionOut {
   id: string;
+  name: string | null; // stable, structure-derived workout name (e.g. "Upper A"); migration 017
   status: string;
   week: number;
   blocks: BlockOut[];
+}
+// A workout in the weekly payload = a SessionOut plus its in-week positioning fields.
+interface WeekWorkout extends SessionOut {
+  session_index: number;
+  position_in_week: number;
+}
+// GET /weeks/current and POST /weeks both return this shape (lifecycle._week_to_dict).
+interface WeekResponse {
+  week: { id: string; weekly_frequency: number } | null;
+  rest?: boolean;
+  workouts?: WeekWorkout[];
 }
 
 /** Map a backend capability string to the client's Capability enum (1:1 names). */
@@ -65,7 +82,7 @@ function toCapability(c: string): Capability {
   return c as Capability;
 }
 
-/** Muscle-group display nouns for the Home "Today" card metadata (content). */
+/** Muscle-group display nouns for the workout-card metadata (content). */
 const CAPABILITY_MUSCLE: Record<Capability, string> = {
   horizontal_push: 'Chest',
   horizontal_pull: 'Back',
@@ -132,41 +149,68 @@ export class HttpModelClient implements ModelClient {
     };
   }
 
+  async recordConsent({ version, acceptedAt }: { version: string; acceptedAt: string }): Promise<void> {
+    // Append-only + idempotent server-side on a deterministic id (consent:{athlete}:{version}),
+    // so a retry never doubles the record; the server stamps the authoritative legal timestamp.
+    await this.request('POST', '/consent', { version, accepted_at: acceptedAt });
+  }
+
+  async eraseAccount(): Promise<void> {
+    // OD-2 athlete self-erase: anonymizes this athlete server-side and deletes the token. The token
+    // is invalid immediately after, so the caller MUST wipe local state right after this resolves.
+    await this.request('POST', '/me/erase');
+  }
+
   async sessionsCompleted(): Promise<number | null> {
     const strat = await this.request<{ sessions_completed?: number }>('GET', '/strategy');
     return typeof strat.sessions_completed === 'number' ? strat.sessions_completed : null;
   }
 
   async generateProgram(_profile: Profile): Promise<Program> {
-    // Session-at-a-time (ratified 2026-06-14): "the athlete opens Hush and
-    // receives today's session." READ-FIRST so this returns the CURRENT session
-    // (and, after a completion pre-composes the next, that next one) — composing
-    // only when none exists yet. Safe to call on every Home focus (a read unless
-    // awaiting_compose). No calendar, no multi-day plan.
-    const today = await this.request<{ today: SessionOut | null }>('GET', '/sessions/today');
-    const session =
-      today.today ??
-      (await this.request<SessionOut>('POST', '/sessions', { client_request_id: `compose_${Date.now()}` }));
-
-    let frequency = 0;
-    try {
-      const strat = await this.request<{ weekly_frequency: number }>('GET', '/strategy');
-      frequency = strat.weekly_frequency;
-    } catch {
-      // strategy unreadable → frequency unknown; the loop still works.
+    // WEEKLY-PROGRAM model: read the current week; compose it (POST /weeks, idempotent) only
+    // when none exists yet. Read-first so a routine Home refresh never writes. The backend
+    // returns the N workouts in the athlete's owned order; we map them as the week's bucket.
+    let week = await this.request<WeekResponse>('GET', '/weeks/current');
+    if (!week || week.week == null) {
+      week = await this.request<WeekResponse>('POST', '/weeks', { client_request_id: `week_${Date.now()}` });
     }
+    return this.weekToProgram(week);
+  }
 
-    const slots = this.blocksToSlots(session);
-    const muscleGroups = [...new Set(slots.map((s) => CAPABILITY_MUSCLE[s.capability]))];
-    const day: ProgramDay = { id: session.id, name: 'Today', muscleGroups, isRest: false, slots, key: '0' };
-    return { id: session.id, frequency, days: [day] };
+  /** Map a `{week, rest, workouts[]}` payload to the client Program (the weekly bucket of N
+   *  workouts). Each workout becomes a non-rest ProgramDay carrying its backend session id (the
+   *  `programDayId` used for targets/reporting), structure-derived name, the athlete-ownership
+   *  ordering key (`str(session_index % weekly_frequency)`, matching compose_week), and a
+   *  `completed` flag derived from status. */
+  private weekToProgram(week: WeekResponse): Program {
+    const workouts = week.workouts ?? [];
+    const frequency = week.week?.weekly_frequency ?? workouts.length;
+    const days: ProgramDay[] = workouts.map((w) => {
+      const slots = this.blocksToSlots(w);
+      const muscleGroups = [...new Set(slots.map((s) => CAPABILITY_MUSCLE[s.capability]))];
+      // Workout-ordering identity = the template index the backend keys workout_order on; falls
+      // back to in-week position if frequency is unknown. Stable across regeneration + reordering.
+      const templateIndex = frequency > 0 ? w.session_index % frequency : w.position_in_week;
+      return {
+        id: w.id,
+        // Real, structure-derived name (migration 017); muscle-group line only as a pre-017
+        // fallback — never the generic "Today".
+        name: w.name ?? muscleGroups.join(' · '),
+        muscleGroups,
+        isRest: false,
+        slots,
+        key: String(templateIndex),
+        completed: w.status === 'completed' || w.status === 'skipped',
+      };
+    });
+    return { id: week.week?.id ?? 'week', frequency, days };
   }
 
   async sessionTargets({ programDayId }: { programDayId: string; completedSessions: number }): Promise<SetTarget[]> {
-    void programDayId;
-    // The composed session's blocks ARE the targets. Re-read today's session.
-    const data = await this.request<{ today: SessionOut | null }>('GET', '/sessions/today');
-    const session = data.today;
+    // WEEKLY model: `programDayId` IS the chosen workout's backend session id. Read THAT
+    // session (not "today") so the athlete can start any of the week's workouts in any order.
+    // The session's blocks ARE the targets.
+    const session = await this.request<SessionOut>('GET', `/sessions/${programDayId}`);
     if (!session) return [];
 
     // The athlete's last logged weight per exercise (for the reason-line delta).
@@ -205,10 +249,10 @@ export class HttpModelClient implements ModelClient {
             };
           }
           if (reasonType === 'increase' || reasonType === 'decrease') {
-            const prev = lastWeight.get(b.exercise);
-            // Δ from the athlete's own last comparable set; omit the reason if no
-            // prior exists (cannot render "Up [Δ]" honestly). Backend `delta`
-            // would be authoritative — see CONTRACTS_NEEDED.
+            // C3: prefer the model's AUTHORITATIVE previous load (Δ = recommended − previous_weight);
+            // fall back to the athlete's own last logged weight only when the model has no prior.
+            // Omit the reason if neither exists (cannot render "Up [Δ]" honestly).
+            const prev = why.previous_weight ?? lastWeight.get(b.exercise);
             if (prev != null) reasonDelta = Math.round((b.recommended_weight - prev) * 10) / 10;
             else reasonType = undefined;
           }
@@ -358,7 +402,10 @@ export class HttpModelClient implements ModelClient {
 
   async weeklyRest(): Promise<boolean> {
     try {
-      const data = await this.request<{ rest?: boolean; week?: unknown }>('GET', '/weeks/current');
+      // The Rest flag from the weekly payload (Rest begins only after ALL of the week's
+      // workouts complete). `generateProgram` consumes the `workouts[]` from the same endpoint
+      // separately; this read is just the boolean the Home Rest state reuses.
+      const data = await this.request<WeekResponse>('GET', '/weeks/current');
       return data.rest === true;
     } catch {
       return false; // no week yet / backend unreachable → not resting

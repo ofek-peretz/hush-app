@@ -5,15 +5,17 @@
  */
 import React from 'react';
 import { Pressable, Text, StyleSheet } from 'react-native';
-import { button, press } from '@/design/tokens';
+import { button, color, press } from '@/design/tokens';
 
 interface Props {
   label: string;
   onPress: () => void;
+  /** 'secondary' (default, #A1A1AA) or 'primary' (white) per spec §2.6.3. */
+  tone?: 'secondary' | 'primary';
   accessibilityLabel?: string;
 }
 
-export function TextAction({ label, onPress, accessibilityLabel }: Props) {
+export function TextAction({ label, onPress, tone = 'secondary', accessibilityLabel }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -22,7 +24,7 @@ export function TextAction({ label, onPress, accessibilityLabel }: Props) {
       onPress={onPress}
       style={({ pressed }) => [styles.tap, { opacity: pressed ? press.opacity : 1 }]}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, tone === 'primary' ? styles.primary : null]}>{label}</Text>
     </Pressable>
   );
 }
@@ -39,4 +41,5 @@ const styles = StyleSheet.create({
     fontWeight: button.textAction.fontWeight,
     textAlign: 'center',
   },
+  primary: { color: color.textPrimary },
 });

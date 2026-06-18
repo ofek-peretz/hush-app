@@ -23,7 +23,7 @@ the persistence layer; placed beside the service for that reason.
 from __future__ import annotations
 from dataclasses import dataclass
 
-from ..composition import compose_session, SessionPlan
+from ..composition import compose_session, SessionPlan, workout_name
 from ..recommendation import recommend
 from ..domain import default_strategy_state
 from ..constants import MODEL_VERSION, CAPABILITY_MODEL_VERSION
@@ -87,6 +87,10 @@ class SessionEngine:
                 capability_model_version=CAPABILITY_MODEL_VERSION,
                 # Weekly Program Container: this workout's week + athlete-owned position.
                 status=status, week_plan_id=week_plan_id, position_in_week=position_in_week,
+                # Stable, structure-derived workout name (founder decision). The template index =
+                # session_index % weekly_frequency is the workout's invariant identity, so the name
+                # survives weekly regeneration and athlete reordering (which moves position only).
+                name=workout_name(plan.weekly_frequency, session_index % plan.weekly_frequency),
             )
             block_ids: list[str] = []
             for bp in plan.blocks:

@@ -12,6 +12,7 @@
  */
 import type { Line } from '@/domain/voice';
 import type {
+  Capability,
   ForecastRecord as Rec,
   ForecastState,
   PortraitSnapshot,
@@ -77,6 +78,37 @@ export function resolvePortrait(rec: Rec, snapshot: PortraitSnapshot): Resolutio
   const closed = snapshot.perCapability[rec.capability] >= rec.predictedValue;
   if (!closed) return { state: 'PENDING', receipt: null }; // not yet — stays pending, silent
   return { state: 'HIT', receipt: { key: 'portrait.receiptClosed' } };
+}
+
+export interface PortraitResolution {
+  forecasts: Rec[];
+  /** The capability of a just-HIT portrait forecast (resurfaces the Portrait), or null. */
+  receipt: { capability: Capability } | null;
+  changed: boolean;
+}
+
+/**
+ * Resolve EVERY pending Portrait commitment against a freshly-captured snapshot
+ * (the production resolver — runs at each program construction). Preserves the
+ * asymmetry: a HIT yields a single receipt and flips state to HIT; a VOID retires
+ * silently; an unclosed gap stays PENDING (no receipt). Pure over the forecast
+ * list so it is unit-testable and immune to stale closures.
+ */
+export function resolvePortraitForecasts(
+  forecasts: Rec[],
+  snapshot: PortraitSnapshot,
+): PortraitResolution {
+  let changed = false;
+  let receipt: { capability: Capability } | null = null;
+  const next = forecasts.map((f) => {
+    if (!(f.type === 'portrait' && f.state === 'PENDING')) return f;
+    const res = resolvePortrait(f, snapshot);
+    if (res.state === 'PENDING') return f; // gap still open — silent
+    changed = true;
+    if (res.state === 'HIT' && !receipt) receipt = { capability: f.capability };
+    return { ...f, state: res.state };
+  });
+  return { forecasts: next, receipt, changed };
 }
 
 /** Receipt copy (§4.6). "Told you. [weight], clean." or "Told you. [weight] × [reps]." */

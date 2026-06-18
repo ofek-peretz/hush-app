@@ -1,40 +1,44 @@
 /**
- * 1.20 Program Detail. The day's exercises as PLANNED, and the place an athlete
- * deliberately replaces a slot's exercise (UX §1). On a deliberate replacement,
- * a single confirming line appears: "[exercise] is yours now." (§1.10, §1.13).
- * No volume totals, tonnage, or progression curves (spec §4.2).
+ * 4.20 Workout Edit. The day's exercises as planned: each row has a reorder
+ * handle, the exercise name, its "weight · sets × reps", and a swap icon that
+ * opens the Swap sheet (§4.21). Reorder + swap persist to the program (athlete
+ * owns exercise selection + order; the frozen model owns load/sets/reps).
+ *
+ * Drag-to-reorder is provided as accessible up/down controls (functionally
+ * equivalent; a pan-draggable list is a later visual refinement).
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ReplacementSheet } from '@/components/ReplacementSheet';
+import { SwapSheet } from '@/components/SwapSheet';
+import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { exerciseById } from '@/data/exercises';
+import { displayWeight, unitLabel } from '@/domain/schedule';
 import type { Capability, SetTarget } from '@/data/local/models';
-import { color, layout, press, type as typo } from '@/design/tokens';
+import { color, space, heroTitle, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
 
-interface Replacing {
+interface Swapping {
   slotIndex: number;
   currentExerciseId: string;
   capability: Capability;
-  target: { weight: number | null; reps: number };
 }
 
-export function ProgramDetail({ route }: Props) {
+export function ProgramDetail({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
   const day = app.program?.days.find((d) => d.id === route.params.dayId);
 
   const [targets, setTargets] = useState<SetTarget[]>([]);
-  const [replacing, setReplacing] = useState<Replacing | null>(null);
-  const [yoursNow, setYoursNow] = useState<string | null>(null); // confirming line copy
+  const [swapping, setSwapping] = useState<Swapping | null>(null);
+  const [yoursNow, setYoursNow] = useState<string | null>(null);
 
   useEffect(() => {
     if (!day) return;
@@ -52,79 +56,93 @@ export function ProgramDetail({ route }: Props) {
     [targets],
   );
 
-  if (!day) return <SafeAreaView style={styles.root} />;
-
-  async function onUse(exerciseId: string) {
-    if (!replacing || !day) return;
-    await app.replaceSlotExercise(day.id, replacing.slotIndex, exerciseId);
+  async function onSelectSwap(exerciseId: string) {
+    if (!swapping || !day) return;
+    await app.replaceSlotExercise(day.id, swapping.slotIndex, exerciseId);
     setYoursNow(exerciseById(exerciseId)?.name ?? '');
-    setReplacing(null);
+    setSwapping(null);
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>{day.name}</Text>
-        {/* Said once, never repeated, after a deliberate replacement (§1.13). */}
-        {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <View style={styles.headerRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          hitSlop={10}
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
+        >
+          <Icon name="chevronLeft" size={22} color={color.textSecondary} strokeWidth={2} />
+        </Pressable>
+        <Text style={styles.title} accessibilityRole="header">{day?.name ?? ''}</Text>
+      </View>
 
-        {day.slots.map((slot, i) => {
-          const ex = exerciseById(slot.exerciseId);
-          return (
-            <View key={`${slot.exerciseId}_${i}`} style={styles.row}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  setReplacing({
-                    slotIndex: i,
-                    currentExerciseId: slot.exerciseId,
-                    capability: slot.capability,
-                    target: targetFor(slot.exerciseId),
-                  })
-                }
-                style={({ pressed }) => [styles.rowMain, { opacity: pressed ? press.opacity : 1 }]}
-              >
-                <Text style={styles.exName}>{ex?.name ?? slot.exerciseId}</Text>
-                <Text style={styles.sets}>{`${slot.setCount} sets`}</Text>
-              </Pressable>
-              {/* Athlete-owned exercise order (Athlete > Model; persists across weeks). */}
-              <View style={styles.reorder}>
-                {i > 0 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('program.moveUp')}
-                    onPress={() => void app.reorderExercise(day.id, i, i - 1)}
-                    style={({ pressed }) => [styles.arrow, { opacity: pressed ? press.opacity : 1 }]}
-                  >
-                    <Text style={styles.arrowText}>↑</Text>
-                  </Pressable>
-                ) : null}
-                {i < day.slots.length - 1 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('program.moveDown')}
-                    onPress={() => void app.reorderExercise(day.id, i, i + 1)}
-                    style={({ pressed }) => [styles.arrow, { opacity: pressed ? press.opacity : 1 }]}
-                  >
-                    <Text style={styles.arrowText}>↓</Text>
-                  </Pressable>
-                ) : null}
+      {!day ? null : (
+        <ScrollView contentContainerStyle={styles.body}>
+          {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
+
+          {day.slots.map((slot, i) => {
+            const ex = exerciseById(slot.exerciseId);
+            const tg = targetFor(slot.exerciseId);
+            const w = displayWeight(tg.weight, units);
+            const detail =
+              w != null
+                ? t('program.perExercise', { weight: `${w} ${unitLabel(units)}`, sets: slot.setCount, reps: tg.reps })
+                : t('program.perExerciseBw', { sets: slot.setCount, reps: tg.reps });
+            return (
+              <View key={`${slot.exerciseId}_${i}`} style={styles.row}>
+                {/* Reorder controls (accessible equivalent of drag). */}
+                <View style={styles.grip}>
+                  <Icon name="grip" size={18} color={color.textTertiary} strokeWidth={2} />
+                  <View style={styles.arrows}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('program.moveUp')}
+                      disabled={i === 0}
+                      onPress={() => void app.reorderExercise(day.id, i, i - 1)}
+                      style={({ pressed }) => [styles.arrow, { opacity: i === 0 ? 0.25 : pressed ? press.opacity : 1 }]}
+                    >
+                      <Icon name="chevronUp" size={16} color={color.textSecondary} strokeWidth={2} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('program.moveDown')}
+                      disabled={i === day.slots.length - 1}
+                      onPress={() => void app.reorderExercise(day.id, i, i + 1)}
+                      style={({ pressed }) => [styles.arrow, { opacity: i === day.slots.length - 1 ? 0.25 : pressed ? press.opacity : 1 }]}
+                    >
+                      <Icon name="chevronDown" size={16} color={color.textSecondary} strokeWidth={2} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.rowMain}>
+                  <Text style={styles.exName}>{ex?.name ?? slot.exerciseId}</Text>
+                  <Text style={styles.detail}>{detail}</Text>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('swap.title')}
+                  hitSlop={8}
+                  onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId, capability: slot.capability })}
+                  style={({ pressed }) => [styles.swap, { opacity: pressed ? press.opacity : 1 }]}
+                >
+                  <Icon name="swap" size={20} color={color.textSecondary} strokeWidth={2} />
+                </Pressable>
               </View>
-            </View>
-          );
-        })}
-      </ScrollView>
+            );
+          })}
+        </ScrollView>
+      )}
 
-      {replacing ? (
-        <ReplacementSheet
-          capability={replacing.capability}
-          currentExerciseId={replacing.currentExerciseId}
-          target={replacing.target}
-          units={units}
-          recents={app.recents}
-          mode="deliberate"
-          onUse={onUse}
-          onDismiss={() => setReplacing(null)}
+      {swapping ? (
+        <SwapSheet
+          capability={swapping.capability}
+          currentExerciseId={swapping.currentExerciseId}
+          onSelect={onSelectSwap}
+          onClose={() => setSwapping(null)}
         />
       ) : null}
     </SafeAreaView>
@@ -132,15 +150,19 @@ export function ProgramDetail({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bgBase },
-  body: { paddingTop: 24, paddingHorizontal: layout.screenMargin, paddingBottom: 48 },
-  title: { color: color.textPrimary, fontSize: typo.titleL.size, fontWeight: typo.titleL.weight, marginBottom: 16 },
-  yoursNow: { color: color.textSecondary, fontSize: typo.bodyM.size, marginBottom: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.borderSubtle },
+  root: { flex: 1, backgroundColor: color.bg },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: 6, gap: 6 },
+  back: { width: 36, height: 44, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
+  title: { ...heroTitle(24), color: color.textPrimary, fontSize: 24, fontWeight: '600' },
+  body: { paddingTop: 24, paddingHorizontal: space.gutter, paddingBottom: 48 },
+  yoursNow: { fontSize: 14, color: color.textSecondary, marginBottom: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: color.border },
+  grip: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
+  arrows: { marginLeft: 4 },
+  arrow: { width: 28, height: 22, alignItems: 'center', justifyContent: 'center' },
+  arrowText: { color: color.textSecondary, fontSize: 14 },
   rowMain: { flex: 1 },
-  exName: { color: color.textPrimary, fontSize: typo.bodyL.size },
-  sets: { color: color.textSecondary, fontSize: typo.caption.size, marginTop: 4 },
-  reorder: { flexDirection: 'row', alignItems: 'center' },
-  arrow: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  arrowText: { color: color.textSecondary, fontSize: typo.titleM.size },
+  exName: { fontSize: 16, fontWeight: '500', color: color.textPrimary },
+  detail: { fontSize: 13, color: color.textSecondary, marginTop: 3 },
+  swap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,51 +1,86 @@
 /**
- * 1.3 Goal. Capture intent in one tap. No Continue button — selection is the
- * action (spec §1.3, §3.2). Rows (frozen, user-ratified): Get Stronger /
- * Build Muscle / General Fitness. No selected resting state; tap fades forward.
+ * 4.4 Goal — one choice. Eyebrow + three single-select options (Build Muscle
+ * selected by default = white fill) + Continue. Stored; influences split
+ * generation. Continue → Days per week.
+ *
+ * Spec labels map to the frozen model Goal values (training engine unchanged):
+ * Build Muscle → build_muscle · Increase Strength → get_stronger ·
+ * Stay Consistent → general_fitness.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { Eyebrow } from '@/components/Eyebrow';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
-import { color, layout, press, type as typo } from '@/design/tokens';
+import { color, space, radius, press } from '@/design/tokens';
 import type { Goal as GoalT } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Goal'>;
 
-const ROWS: { goal: GoalT; key: string }[] = [
-  { goal: 'get_stronger', key: 'goal.getStronger' },
+const OPTIONS: { goal: GoalT; key: string }[] = [
   { goal: 'build_muscle', key: 'goal.buildMuscle' },
-  { goal: 'general_fitness', key: 'goal.generalFitness' },
+  { goal: 'get_stronger', key: 'goal.increaseStrength' },
+  { goal: 'general_fitness', key: 'goal.stayConsistent' },
 ];
 
 export function Goal({ navigation, route }: Props) {
   const { t } = useCopy();
-  const { healthConnected } = route.params;
+  const { profile } = route.params;
+  const [goal, setGoal] = useState<GoalT>('build_muscle'); // default selected (§4.4)
+
+  function onContinue() {
+    void track('goal_selected', { goal });
+    navigation.navigate('DaysPerWeek', { profile, goal });
+  }
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.list}>
-        {ROWS.map((r) => (
-          <Pressable
-            key={r.goal}
-            accessibilityRole="button"
-            onPress={() => { void track('goal_selected', { goal: r.goal }); navigation.navigate('DaysPerWeek', { healthConnected, goal: r.goal }); }}
-            style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
-          >
-            <Text style={styles.label}>{t(r.key)}</Text>
-          </Pressable>
-        ))}
+      <View style={styles.body}>
+        <Eyebrow label={t('goal.eyebrow')} size={13} trackingPx={2} align="center" style={styles.eyebrow} />
+        <View style={styles.list}>
+          {OPTIONS.map((o) => {
+            const selected = o.goal === goal;
+            return (
+              <Pressable
+                key={o.goal}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setGoal(o.goal)}
+                style={({ pressed }) => [
+                  styles.option,
+                  selected ? styles.optionSelected : styles.optionIdle,
+                  { opacity: pressed ? press.opacity : 1 },
+                ]}
+              >
+                <Text style={[styles.optionLabel, selected ? styles.labelSelected : styles.labelIdle]}>
+                  {t(o.key)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+      <View style={styles.actions}>
+        <PrimaryButton variant="compact" label={t('goal.continue')} onPress={onContinue} />
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bgBase, justifyContent: 'center' },
-  list: { paddingHorizontal: layout.screenMargin },
-  row: { minHeight: 64, justifyContent: 'center' },
-  label: { color: color.textPrimary, fontSize: typo.titleL.size, fontWeight: typo.titleL.weight },
+  root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
+  eyebrow: { marginBottom: 30 },
+  list: { gap: 12 },
+  option: { borderRadius: radius.card, paddingVertical: 15, alignItems: 'center' },
+  optionSelected: { backgroundColor: color.textPrimary },
+  optionIdle: { borderWidth: 0.5, borderColor: color.border },
+  optionLabel: { fontSize: 19 },
+  labelSelected: { color: color.bg, fontWeight: '600' },
+  labelIdle: { color: color.textSecondary, fontWeight: '400' },
+  actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 });

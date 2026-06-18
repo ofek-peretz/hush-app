@@ -7,32 +7,70 @@
  *  - Denial is NOT a failure: the flow routes through About You; the path is
  *    visually identical to granted (§7.11).
  *  - HealthKit is NOT a model input (ratified OD); bodyweight updates flow
- *    silently if connected, no UI (§10.3).
+ *    silently to the Profile if connected, no UI (§10.3).
+ *  - The iPhone Profile is the source of truth — Health only proposes values.
+ *
+ * The CONTRACT lives here; the ingestion pipeline that consumes it (silent
+ * bodyweight adoption + telemetry) is health/healthIngestion.ts, and the data
+ * model is health/healthModel.ts. This file imports nothing native so it loads
+ * everywhere (Expo Go / Windows / test).
  */
+import { Platform } from 'react-native';
+import type { BodyweightSample, HealthPermissionState, WalkSample } from './health/healthModel';
 
 export interface HealthGate {
-  /** Request permission; resolves to whether Health is available to read. */
+  /** Request read permission. Resolves true iff Health is readable afterward.
+   *  Denial resolves false (never throws) — denial is a routed path, not an error. */
   requestPermission(): Promise<boolean>;
+  /** Current permission state WITHOUT prompting (re-check on a later launch so a
+   *  revoke-in-Settings is observable). */
+  permissionState(): Promise<HealthPermissionState>;
   /** Latest bodyweight in kg if connected, else null. Never blocks the UI. */
   latestBodyweightKg(): Promise<number | null>;
+  /** Most-recent bodyweight sample (with timestamp) if connected, else null. */
+  latestBodyweight(): Promise<BodyweightSample | null>;
+  /** Recent walk/run samples for History → Walk Detail; empty when none/unavailable. */
+  recentWalks(): Promise<WalkSample[]>;
 }
 
-/** v1 stub: always reports unavailable, so onboarding routes through About You. */
+/** v1 stub: reports unavailable, so onboarding routes through About You and the
+ *  denied/unavailable path is the one exercised until the native gate is added. */
 export const healthStub: HealthGate = {
   async requestPermission() {
     return false;
   },
+  async permissionState() {
+    return 'unavailable';
+  },
   async latestBodyweightKg() {
     return null;
+  },
+  async latestBodyweight() {
+    return null;
+  },
+  async recentWalks() {
+    return [];
   },
 };
 
 /**
- * Active Health provider — the single swap point. Stub today (Expo Go / no
- * native build); on a Mac/EAS dev build, replace with the HealthKit-backed gate
- * (see NATIVE_SURFACES.md: read-only quantityType bodyMass + step/walk samples,
- * `com.apple.developer.healthkit` entitlement, NSHealthShareUsageDescription).
- * Do NOT statically import an uninstalled native module here — it breaks the
- * Metro bundle; the real gate is added alongside the dev-build dependency.
+ * Active Health provider — the single swap point.
+ *
+ * On iOS the HealthKit-backed gate (`health/healthKitGate.ts`, read-only bodyMass +
+ * distanceWalkingRunning) is selected via a LAZY require so its native module is
+ * only loaded on the platform that has it — web / Expo Go / test never touch it,
+ * and a load failure (no native module / dev client without the build) falls back
+ * to the stub. Everywhere else the stub is used, so onboarding routes through the
+ * identical denied/unavailable path (§7.11).
  */
-export const health: HealthGate = healthStub;
+function selectHealthGate(): HealthGate {
+  if (Platform.OS !== 'ios') return healthStub;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return (require('./health/healthKitGate') as { healthKitGate: HealthGate }).healthKitGate;
+  } catch {
+    return healthStub; // native module absent (Expo Go / build without HealthKit)
+  }
+}
+
+export const health: HealthGate = selectHealthGate();

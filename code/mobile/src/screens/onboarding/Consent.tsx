@@ -1,0 +1,54 @@
+/**
+ * Consent — affirmative agreement after sign-in, before onboarding (founder
+ * directive 2026-06-18; OD-3 / BB-33). One calm statement; "I agree" records the
+ * consent (versioned, server-idempotent) and advances to Connect Health.
+ *
+ * Not one of the 31 prototype screens, so it follows the spec's design system
+ * (true black, one statement, the single white button) rather than a bespoke look.
+ */
+import React, { useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { useCopy } from '@/i18n/useCopy';
+import { useApp } from '@/state/stores/appStore';
+import { color, space, heroTitle } from '@/design/tokens';
+import type { OnboardingParamList } from '@/app/navigation';
+
+type Props = NativeStackScreenProps<OnboardingParamList, 'Consent'>;
+
+export function Consent({ navigation }: Props) {
+  const { t } = useCopy();
+  const app = useApp();
+  const [busy, setBusy] = useState(false);
+
+  async function onAgree() {
+    if (busy) return;
+    setBusy(true);
+    await app.acceptConsent(); // best-effort; never blocks the flow
+    navigation.navigate('ConnectHealth');
+  }
+
+  return (
+    <SafeAreaView style={styles.root}>
+      <View style={styles.body}>
+        <Text style={styles.title}>{t('consent.title')}</Text>
+        <Text style={styles.copy}>{t('consent.body')}</Text>
+      </View>
+      <View style={styles.actions}>
+        <PrimaryButton variant="compact" label={t('consent.agree')} onPress={onAgree} disabled={busy} />
+        <Text style={styles.legal}>{t('consent.legal')}</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
+  title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', marginBottom: 16 },
+  copy: { fontSize: 15, lineHeight: 15 * 1.6, color: color.textSecondary },
+  actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  legal: { marginTop: 24, fontSize: 12, color: color.textTertiary, textAlign: 'center' },
+});

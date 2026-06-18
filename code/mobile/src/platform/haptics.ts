@@ -1,11 +1,11 @@
 /**
- * Haptics — spec §8.3 (final, EXHAUSTIVE). These are the ONLY two haptics in Hush.
+ * Haptics (Living Dark direction, founder 2026-06-16). Haptics are part of the
+ * app feeling alive — each is a single, intentional impact (never a pattern,
+ * never layered on system wheel pickers):
  *
- *  - Light Impact (single) on timer 00:00.
- *  - Success Haptic (single, no pattern) on Well Done.
- *
- * Nothing else triggers haptics. No haptics layered on system wheel pickers.
- * Adding any other haptic is a defect.
+ *  - Light Impact on timer 00:00.
+ *  - Success Haptic on Well Done.
+ *  - Medium Impact on the Home Start press (the one moment of anticipation).
  */
 import * as Haptics from 'expo-haptics';
 
@@ -17,4 +17,9 @@ export function timerComplete(): void {
 /** Fired once on the Well Done screen. */
 export function wellDone(): void {
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+}
+
+/** Fired on the Home Start press — the moment of anticipation before a workout. */
+export function startWorkout(): void {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 }

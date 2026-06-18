@@ -117,11 +117,22 @@ def recommendation_why(
     ).fetchone()
     if row is None:
         raise errors.not_found("recommendation not found")
+    # C3: the authoritative load this recommendation is measured against — the recommended weight of
+    # the PRIOR recommendation for the same athlete+exercise. Lets the client render "Up [Δ] from last
+    # week" from the model's own progression (Δ = recommended_weight − previous_weight) instead of
+    # deriving Δ from local history. None when there is no prior (first time this exercise appears).
+    prior = db.conn.execute(
+        "SELECT recommended_weight FROM recommendation "
+        "WHERE athlete_id=? AND exercise=? AND created_at < ? AND id != ? "
+        "ORDER BY created_at DESC LIMIT 1",
+        (athlete_id, row["exercise"], row["created_at"], row["id"]),
+    ).fetchone()
     return {
         "recommendation_id": row["id"],
         "capability": row["capability"],
         "exercise": row["exercise"],
         "recommended_weight": row["recommended_weight"],
+        "previous_weight": prior["recommended_weight"] if prior is not None else None,
         "target_reps": row["target_reps"],
         "predicted_reps_to_failure": row["predicted_reps_to_failure"],
         "prediction_confidence": _conf_label(row["prediction_confidence"]),

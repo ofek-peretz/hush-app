@@ -22,6 +22,7 @@ from hush_model.volume import allocate, times_trained, clamp_frequency, focus_mu
 from hush_model.composition import (
     compose_session, resolve_priority, SELECT_CANONICAL, SELECT_PREFERENCE,
     SELECT_EXPLORATION, SELECT_SECOND_SLOT, _trim_to_ceiling,
+    workout_name, _base_workout_name,
 )
 from hush_model.catalog import CATALOG, Exercise, ExerciseCatalog
 from hush_model.persistence.db import Database
@@ -63,6 +64,29 @@ def test_class_a_templates_are_7cap_minus_inactive():
                              if c not in ("vertical_pull", "core_stability"))
             assert session == expected
             assert "vertical_pull" not in session and "core_stability" not in session
+
+
+def test_workout_name_is_structure_derived_and_stable():
+    # Founder decision: every workout has a real, structure-derived name (never "Today"/"Session").
+    # freq 4 splits Upper/Lower; the recurring base gets a canonical-order letter suffix.
+    assert [workout_name(4, i) for i in range(4)] == ["Upper A", "Lower A", "Upper B", "Lower B"]
+    # freq 2/3 are full-body splits.
+    assert [workout_name(2, i) for i in range(2)] == ["Full Body A", "Full Body B"]
+    assert [workout_name(3, i) for i in range(3)] == ["Full Body A", "Full Body B", "Full Body C"]
+    # Pure base classification: a no-letter base when it does not recur.
+    assert _base_workout_name(("horizontal_push", "vertical_push")) == "Push"
+    assert _base_workout_name(("horizontal_pull",)) == "Pull"
+    assert _base_workout_name(("horizontal_push", "horizontal_pull")) == "Upper"
+    assert _base_workout_name(("knee_dominant", "hip_dominant")) == "Lower"
+    assert _base_workout_name(("knee_dominant", "horizontal_push")) == "Full Body"
+    # Stable identity: the name is a function of (frequency, template_index) ONLY — it does not
+    # depend on the athlete's owned position, so reordering the week never renames a workout.
+    canonical = {i: workout_name(4, i) for i in range(4)}
+    athlete_order = [2, 0, 3, 1]  # athlete reorders the week's positions
+    for position, template_index in enumerate(athlete_order):
+        assert workout_name(4, template_index) == canonical[template_index]
+    # Out-of-range index falls back, never a fabricated label.
+    assert workout_name(4, 99) == "Workout"
 
 
 def test_class_a_coverage_5_of_5_within_two_sessions():

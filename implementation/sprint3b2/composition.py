@@ -292,3 +292,55 @@ def compose_session(
         primary_focus=primary, secondary_focus=secondary,
         catalog_version=getattr(catalog, "version", ""),
     )
+
+
+# ----------------------------- workout naming (stable, structure-derived) -----------------------------
+# A workout's NAME is part of the athlete's mental model of their week (founder decision: workout
+# names are required). It is a PURE function of the workout's STRUCTURAL identity — its template
+# index within the frequency's frozen split — so it is invariant across weekly generation,
+# regeneration of future weeks, and athlete reordering (reordering moves a workout's POSITION in
+# the week, never its template / capability frame). The letter suffix disambiguates workouts that
+# share a base name, assigned in CANONICAL template order (not the athlete's reordered position),
+# so "Upper A" denotes the same workout every week. Names derive from the template's capability set,
+# never a generic placeholder ("Today"/"Session"/"Workout" is a last-resort fallback only).
+
+_LOWER_CAPS = frozenset({"knee_dominant", "hip_dominant"})
+_PUSH_CAPS = frozenset({"horizontal_push", "vertical_push"})
+_PULL_CAPS = frozenset({"horizontal_pull", "vertical_pull"})
+
+
+def _base_workout_name(capabilities) -> str:
+    """Classify a template's capability set into a base name (no letter)."""
+    caps = set(capabilities)
+    has_lower = bool(caps & _LOWER_CAPS)
+    has_push = bool(caps & _PUSH_CAPS)
+    has_pull = bool(caps & _PULL_CAPS)
+    has_upper = has_push or has_pull
+    if has_lower and has_upper:
+        return "Full Body"
+    if has_lower:
+        return "Lower"
+    if has_push and has_pull:
+        return "Upper"
+    if has_push:
+        return "Push"
+    if has_pull:
+        return "Pull"
+    return "Workout"
+
+
+def workout_name(weekly_frequency: int, template_index: int) -> str:
+    """Stable, structure-derived workout name for the template at `template_index` in the given
+    frequency's split. A letter suffix (A, B, …) is added only when the same base name recurs in
+    the week, assigned in canonical template order so the name is invariant under athlete
+    reordering and weekly regeneration. Falls back to "Workout" only for an out-of-range index."""
+    freq = clamp_frequency(weekly_frequency)
+    templates = TEMPLATES_CLASS_A.get(freq)
+    if not templates or not (0 <= template_index < len(templates)):
+        return "Workout"
+    bases = [_base_workout_name(t) for t in templates]
+    base = bases[template_index]
+    same = [i for i, b in enumerate(bases) if b == base]  # canonical-order indices sharing this base
+    if len(same) <= 1:
+        return base
+    return f"{base} {chr(ord('A') + same.index(template_index))}"

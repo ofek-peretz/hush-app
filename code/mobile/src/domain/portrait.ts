@@ -9,8 +9,12 @@
  * the data threshold is "still learning" and is excluded from commitments and
  * median/imbalance math (spec §5.7, §7.9).
  */
-import type { Capability, ForecastRecord, PortraitSnapshot } from '@/data/local/models';
+import type { Capability, ForecastRecord, PortraitSnapshot, ThresholdEvent, ThresholdKind } from '@/data/local/models';
 import type { Line } from '@/domain/voice';
+
+// Persisted threshold shape lives in models (it is durable); re-exported here so
+// existing importers (state, screens, tests) keep their import path.
+export type { ThresholdEvent, ThresholdKind } from '@/data/local/models';
 
 /** Fixed render order, top to bottom (bars draw in this sequence). */
 export const CAPABILITY_ORDER: Capability[] = [
@@ -177,13 +181,6 @@ export function compareProof(baseline: PortraitSnapshot, current: PortraitSnapsh
       state: '$t(' + stateKeyFor(current, baselineWeakest) + ')',
     },
   };
-}
-
-export type ThresholdKind = 'overtake' | 'reorder';
-export interface ThresholdEvent {
-  a: Capability; // the capability that rose
-  b: Capability; // the capability it caught / passed
-  kind: ThresholdKind;
 }
 
 /**

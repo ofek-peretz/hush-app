@@ -176,6 +176,10 @@ CREATE TABLE IF NOT EXISTS workout_session (
     -- owned position within the week (0-based). NULL on the legacy session-at-a-time path.
     week_plan_id             TEXT REFERENCES week_plan(id),
     position_in_week         INTEGER,
+    -- Migration 017: stable, structure-derived workout name (e.g. "Upper A", "Full Body B").
+    -- Derived from the template index within the frequency split, so it is invariant across
+    -- weekly regeneration and athlete reordering. NULL only on pre-017 rows not yet backfilled.
+    name                     TEXT,
     created_at    TEXT NOT NULL
 );
 

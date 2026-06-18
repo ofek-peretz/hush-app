@@ -1,20 +1,25 @@
 /**
- * 1.20 Program. Shows Hush's output: frequency, the day list, and — only when
- * something material changed — the applied-change line (Undo) and/or the
- * frame-change decision (veto). No line when nothing changed (spec §3.6, §5.5 R7).
- *
- * Reached from Profile -> Program and from the Weekly Program Ready notification.
+ * 4.19 Program · Weekly View. The week's plan grouped by status:
+ *  - COMPLETED THIS WEEK: finished workouts, each with the weekday it was done
+ *    (derived from history) and a grey DONE chip.
+ *  - UP NEXT: upcoming workouts (no weekday) with a "Set as next" action that
+ *    makes Home show that workout next (athlete-owned order; §4.19 / §5.8).
+ * Tapping a row body opens Workout Edit (ProgramDetail). Rest is a Home state,
+ * not a row here (weekly model).
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ProgramChangeCard } from '@/components/ProgramChangeCard';
+import { AppTabBar, TAB_BAR_SPACE } from '@/components/AppTabBar';
+import { Eyebrow } from '@/components/Eyebrow';
+import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
-import type { ProgramChange } from '@/data/local/models';
-import { color, layout, press, type as typo } from '@/design/tokens';
+import type { ProgramDay, Session } from '@/data/local/models';
+import { color, space, heroTitle, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Program'>;
@@ -23,129 +28,130 @@ export function Program({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const program = app.program;
-  const [changes, setChanges] = useState<ProgramChange[] | null>(null);
+  const [history, setHistory] = useState<Session[]>([]);
 
   useEffect(() => {
     void track('program_viewed', {});
-    app.model
-      .programChanges({ completedSessions: app.modeState.completedSessions })
-      .then(setChanges);
-  }, [app.model, app.modeState.completedSessions]);
+    db.loadHistory().then(setHistory);
+  }, []);
 
-  // C5 (ratified 2026-06-15): a program change may be ACKNOWLEDGED, VETOED, or IGNORED.
-  // EVERY response is stored as DATA for learning + trust measurement and must NEVER alter
-  // model state or future recommendations (not user-controlled progression). So each response
-  // is a research event (telemetry → athlete_event); the card removal below is purely cosmetic
-  // (dismisses the line) and changes no program. `respondedRef`/`changesRef` let us also record
-  // the IGNORED case — a change shown but left un-acted-upon when the athlete leaves the screen.
-  const respondedRef = useRef<Set<string>>(new Set());
-  const changesRef = useRef<ProgramChange[]>([]);
-  changesRef.current = changes ?? [];
+  // Weekday a completed workout was performed (most-recent matching session).
+  function weekdayFor(day: ProgramDay): string | null {
+    const s =
+      history.find((h) => h.programDayId === day.id) ??
+      history.find((h) => h.programDayName === day.name);
+    return s ? new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short' }) : null;
+  }
 
-  const removeCard = (id: string) => setChanges((cs) => (cs ?? []).filter((c) => c.id !== id));
+  // "Set as next": move this upcoming workout ahead of the others (Home shows the
+  // first unfinished workout). Persisted via the athlete-owned workout order.
+  function onSetAsNext(dayId: string) {
+    if (!program) return;
+    const from = program.days.findIndex((d) => d.id === dayId);
+    const firstUpcoming = program.days.findIndex((d) => !d.isRest && !d.completed);
+    if (from < 0 || firstUpcoming < 0 || from === firstUpcoming) return;
+    void track('set_as_next', { dayId });
+    void app.reorderWorkouts(from, firstUpcoming);
+  }
 
-  const record = (id: string, action: 'acknowledged' | 'vetoed' | 'ignored') => {
-    const c = changesRef.current.find((x) => x.id === id);
-    void track('program_change_response', {
-      changeId: id,
-      kind: c?.kind,
-      target: c?.capabilityOrTarget,
-      action,
-    });
-  };
-
-  const respond = (id: string, action: 'acknowledged' | 'vetoed') => {
-    respondedRef.current.add(id);
-    record(id, action);
-    removeCard(id);
-  };
-  const onUndo = (id: string) => respond(id, 'vetoed'); // rejecting a load change
-  const onGotIt = (id: string) => respond(id, 'acknowledged'); // frame acknowledged
-  const onKeepAsIs = (id: string) => respond(id, 'vetoed'); // frame vetoed
-
-  // IGNORED: on leaving the screen, record any change that was shown but never acted upon.
-  // Mounted once — reads the latest changes/responded via refs (no stale closure).
-  useEffect(
-    () => () => {
-      for (const c of changesRef.current) {
-        if (!respondedRef.current.has(c.id)) record(c.id, 'ignored');
-      }
-    },
-    [],
-  );
-
-  if (!program) return <SafeAreaView style={styles.root} />;
+  const workouts = (program?.days ?? []).filter((d) => !d.isRest);
+  const completed = workouts.filter((d) => d.completed);
+  const upcoming = workouts.filter((d) => !d.completed);
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.frequency}>{t('program.frequency', { n: program.frequency })}</Text>
+        <Text style={styles.header} accessibilityRole="header">{t('program.title')}</Text>
+        {program ? <Text style={styles.sub}>{t('program.perWeek', { n: program.frequency })}</Text> : null}
 
-        {/* Intelligence line(s) appear ONLY when material — never "no changes". */}
-        {(changes ?? []).map((c) => (
-          <ProgramChangeCard key={c.id} change={c} onUndo={onUndo} onGotIt={onGotIt} onKeepAsIs={onKeepAsIs} />
-        ))}
+        {completed.length > 0 ? (
+          <View style={styles.group}>
+            <Eyebrow label={t('program.completedThisWeek')} size={11} trackingPx={1.5} />
+            {completed.map((d) => (
+              <Pressable
+                key={d.id}
+                accessibilityRole="button"
+                onPress={() => navigation.navigate('ProgramDetail', { dayId: d.id })}
+                style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
+              >
+                <View style={styles.rowMain}>
+                  {weekdayFor(d) ? <Text style={styles.weekday}>{weekdayFor(d)}</Text> : null}
+                  <Text style={styles.name}>{d.name}</Text>
+                  <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
+                </View>
+                <View style={styles.doneChip}>
+                  <Icon name="check" size={11} color={color.doneText} strokeWidth={2.4} />
+                  <Text style={styles.doneText}>{t('program.doneChip')}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
-        <View style={styles.days}>
-          {program.days.map((d, i) =>
-            d.isRest ? (
-              <View key={d.id} style={styles.dayRow}>
-                <Text style={styles.restName}>{t('program.restDay')}</Text>
-              </View>
-            ) : (
-              <View key={d.id} style={styles.dayRowWrap}>
+        {upcoming.length > 0 ? (
+          <View style={styles.group}>
+            <Eyebrow label={t('program.upNext')} size={11} trackingPx={1.5} />
+            {upcoming.map((d) => (
+              <Pressable
+                key={d.id}
+                accessibilityRole="button"
+                onPress={() => navigation.navigate('ProgramDetail', { dayId: d.id })}
+                style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
+              >
+                <View style={styles.rowMain}>
+                  <Text style={styles.name}>{d.name}</Text>
+                  <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
+                </View>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => navigation.navigate('ProgramDetail', { dayId: d.id })}
-                  style={({ pressed }) => [styles.dayMain, { opacity: pressed ? press.opacity : 1 }]}
+                  accessibilityLabel={t('program.setAsNext')}
+                  hitSlop={8}
+                  onPress={() => onSetAsNext(d.id)}
+                  style={({ pressed }) => [styles.setNext, { opacity: pressed ? press.opacity : 1 }]}
                 >
-                  <Text style={styles.dayName}>{d.name}</Text>
-                  <Text style={styles.dayMeta}>{d.muscleGroups.join(' · ')}</Text>
+                  <Text style={styles.setNextText}>{t('program.setAsNext')}</Text>
+                  <Icon name="chevronRight" size={14} color={color.accentBlue} strokeWidth={2} />
                 </Pressable>
-                {/* Athlete-owned workout order (Athlete > Model; persists across weeks). */}
-                <View style={styles.reorder}>
-                  {i > 0 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('program.moveUp')}
-                      onPress={() => void app.reorderWorkouts(i, i - 1)}
-                      style={({ pressed }) => [styles.arrow, { opacity: pressed ? press.opacity : 1 }]}
-                    >
-                      <Text style={styles.arrowText}>↑</Text>
-                    </Pressable>
-                  ) : null}
-                  {i < program.days.length - 1 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('program.moveDown')}
-                      onPress={() => void app.reorderWorkouts(i, i + 1)}
-                      style={({ pressed }) => [styles.arrow, { opacity: pressed ? press.opacity : 1 }]}
-                    >
-                      <Text style={styles.arrowText}>↓</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            ),
-          )}
-        </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
+      <AppTabBar active="program" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bgBase },
-  body: { paddingTop: 24, paddingHorizontal: layout.screenMargin, paddingBottom: 48 },
-  frequency: { color: color.textSecondary, fontSize: typo.bodyM.size, marginBottom: 24 },
-  days: { marginTop: 8 },
-  dayRow: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.borderSubtle },
-  dayRowWrap: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.borderSubtle },
-  dayMain: { flex: 1, paddingVertical: 16 },
-  dayName: { color: color.textPrimary, fontSize: typo.titleM.size },
-  dayMeta: { color: color.textSecondary, fontSize: typo.caption.size, marginTop: 4 },
-  restName: { color: color.textTertiary, fontSize: typo.titleM.size },
-  reorder: { flexDirection: 'row', alignItems: 'center' },
-  arrow: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  arrowText: { color: color.textSecondary, fontSize: typo.titleM.size },
+  root: { flex: 1, backgroundColor: color.bg },
+  body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
+  header: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600' },
+  sub: { fontSize: 13, color: color.textSecondary, marginTop: 6 },
+  group: { marginTop: 28 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: color.border,
+  },
+  rowMain: { flex: 1, marginRight: 12 },
+  weekday: { fontSize: 12, color: color.textSecondary, marginBottom: 2 },
+  name: { fontSize: 18, fontWeight: '600', color: color.textPrimary },
+  muscles: { fontSize: 12, color: color.textSecondary, marginTop: 2 },
+  doneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: color.surface2,
+    borderWidth: 0.5,
+    borderColor: color.doneBorder,
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  doneText: { fontSize: 10, fontWeight: '600', letterSpacing: 0.6, color: color.doneText },
+  setNext: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  setNextText: { fontSize: 13, fontWeight: '500', color: color.accentBlue },
 });

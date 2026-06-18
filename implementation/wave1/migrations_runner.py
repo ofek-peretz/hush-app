@@ -33,6 +33,7 @@ from . import (
     migration_014_composition_audit,
     migration_015_preference_events,
     migration_016_week_plan,
+    migration_017_workout_name,
 )
 
 # The ordered migration chain. SINGLE SOURCE OF TRUTH for the chain: the fresh-DB version
@@ -54,11 +55,12 @@ MIGRATIONS = [
     migration_014_composition_audit,   # Reconstruction: full composition audit on session (v14)
     migration_015_preference_events,   # Ownership: append-only athlete-preference event log (v15)
     migration_016_week_plan,           # Weekly Program Container: week entity + workout grouping (v16)
+    migration_017_workout_name,        # Workout names: stable structure-derived name on workout_session (v17)
 ]
 
 # The schema version a fresh SCHEMA_SQL database already embodies (the head of the chain).
 # Single source for db.py's fresh-DB stamp and any "current version" question.
-SCHEMA_VERSION = MIGRATIONS[-1].VERSION  # == 16
+SCHEMA_VERSION = MIGRATIONS[-1].VERSION  # == 17
 
 
 def migration_versions() -> list[int]:

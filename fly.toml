@@ -1,0 +1,55 @@
+# Hush v1 API — Fly.io deployment (Mac-independent: builds from deploy/Dockerfile,
+# one machine, one SQLite/WAL volume, single write worker — the frozen topology).
+#
+# This file lives at the repo ROOT so Fly's build context is the repo root, which the
+# Dockerfile needs (it COPYs build/_assembled/* and deploy/requirements.txt).
+#
+# Before first deploy: run the canonical gate so the assembled tree is green:
+#   python build/_verify/assemble_and_test.py
+# Then see deploy/fly/README.md for the exact deploy sequence.
+
+app = "hush-api"            # change to a globally-unique name (fly will tell you if taken)
+primary_region = "iad"     # pick the region nearest your athletes (fra, lhr, ams, ...)
+
+[build]
+  dockerfile = "deploy/Dockerfile"
+
+[env]
+  HUSH_DB_PATH = "/data/hush.db"
+  HUSH_AUTOCREATE_APP = "1"   # uvicorn imports a built app (init_database brings DB to head)
+  HUSH_BACKUP_DIR = "/data/backups"
+
+# One SQLite/WAL DB on a persistent volume. SQLite is single-writer, so this app MUST
+# run as exactly ONE machine (`fly scale count 1`). The volume cannot be mounted by two
+# machines at once, which also enforces the invariant physically.
+[[mounts]]
+  source = "hush_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000          # the app speaks plain HTTP; Fly terminates TLS at the edge
+  force_https = true            # real HTTPS on https://<app>.fly.dev with zero DNS/cert work
+  auto_stop_machines = "stop"   # alpha: scale to zero between requests to save cost...
+  auto_start_machines = true    # ...and wake on the next request (all work is request-driven)
+  min_machines_running = 0      # set to 1 if you prefer no cold-start during testing
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 80
+
+  # Liveness/readiness on the existing health endpoint (schema-version stamped).
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+# Single machine + one volume => Fly must replace (not run two side-by-side) on deploy.
+[deploy]
+  strategy = "immediate"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

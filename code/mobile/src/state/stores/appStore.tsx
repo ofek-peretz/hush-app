@@ -3,10 +3,12 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Capability, ForecastRecord, Goal, PortraitSnapshot, Profile, Program, SetLog, Units } from '@/data/local/models';
+import type { Capability, ForecastRecord, OnboardingInputs, PortraitSnapshot, Profile, Program, SetLog, Units } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { buildPortraitForecast, detectThreshold, type ThresholdEvent } from '@/domain/portrait';
-import { resolveHold, resolvePortrait } from '@/domain/receiptRules';
+import { resolveHold, resolvePortrait, resolvePortraitForecasts } from '@/domain/receiptRules';
+import { shouldReanchorWeekly } from '@/domain/schedule';
+import { CONSENT_VERSION } from '@/domain/consent';
 import type { Line } from '@/domain/voice';
 import {
   athleteModeReducer,
@@ -23,7 +25,11 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
-import { notifierStub as notifier } from '@/platform/notifications';
+import { notifier } from '@/platform/notifications';
+import { health } from '@/platform/health';
+import { ingestHealth } from '@/platform/health/healthIngestion';
+import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
+import { signInWith, type AuthProvider } from '@/platform/auth';
 
 /** Derive the calibration mode from the backend's completed-session count
  *  (source of truth, §2.3). Reinstall/device-change safe. */
@@ -73,11 +79,11 @@ interface AppState {
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; recents: string[] }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; recents: string[]; pendingThreshold: ThresholdEvent | null }
   | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[] }
   | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[] }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
-  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[]; pendingThreshold: ThresholdEvent | null }
+  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; pendingThreshold: ThresholdEvent | null; portraitReceipt: { capability: Capability } | null }
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
   | { type: 'FORECASTS'; forecasts: ForecastRecord[] }
   | { type: 'PORTRAIT_RESOLVED'; forecasts: ForecastRecord[]; snapshots: PortraitSnapshot[]; receipt: { capability: Capability } | null }
@@ -106,7 +112,7 @@ const initial: AppState = {
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, forecasts: a.forecasts, recents: a.recents };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, forecasts: a.forecasts, recents: a.recents, pendingThreshold: a.pendingThreshold };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents };
     case 'ONBOARDED':
@@ -114,7 +120,15 @@ function reducer(s: AppState, a: Action): AppState {
     case 'PROFILE_UPDATED':
       return { ...s, profile: a.profile };
     case 'SESSION_COMPLETED':
-      return { ...s, modeState: a.mode, justUnlockedPortrait: a.unlocked, snapshots: a.snapshots, pendingThreshold: a.pendingThreshold ?? s.pendingThreshold };
+      return {
+        ...s,
+        modeState: a.mode,
+        justUnlockedPortrait: a.unlocked,
+        snapshots: a.snapshots,
+        forecasts: a.forecasts,
+        pendingThreshold: a.pendingThreshold ?? s.pendingThreshold,
+        pendingPortraitReceipt: a.portraitReceipt ?? s.pendingPortraitReceipt,
+      };
     case 'CALIBRATION_SYNCED':
       // Reconcile to backend truth WITHOUT firing the one-time unlock animation
       // (that is a live-session moment, not a boot/reconcile moment).
@@ -142,23 +156,15 @@ function reducer(s: AppState, a: Action): AppState {
   }
 }
 
-export interface OnboardingInputs {
-  goal: Goal;
-  daysPerWeek: number;
-  units: Units;
-  healthConnected: boolean;
-  name?: string;
-  sex?: 'male' | 'female';
-  heightCm?: number;
-  weightKg?: number;
-  age?: number;
-}
-
 interface AppApi extends AppState {
-  /** Operator-mediated enrollment: intake an issued invite token (no public
-   *  registration / self-service / social login). Validates against the backend,
-   *  then enters the athlete. Throws if the token is invalid/unreachable. */
-  enrollWithToken: (token: string) => Promise<void>;
+  /** Front door (HUSH_BUILD_SPEC §4.1): Apple/Google sign-in. Establishes the
+   *  session (sets the backend token when the provider returns one) but does NOT
+   *  create a profile — the athlete proceeds through Consent → onboarding, which
+   *  ends in completeOnboarding. Throws if sign-in is cancelled/fails. */
+  signIn: (provider: AuthProvider) => Promise<void>;
+  /** Record affirmative consent (OD-3/BB-33) — the Consent screen's "I agree".
+   *  Best-effort against the backend; the server record is idempotent. */
+  acceptConsent: () => Promise<void>;
   completeOnboarding: (inputs: OnboardingInputs) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   clearPortraitFlag: () => void;
@@ -196,7 +202,10 @@ interface AppApi extends AppState {
   reorderExercise: (dayId: string, fromIndex: number, toIndex: number) => Promise<void>;
   /** Athlete-owned workout order within the weekly plan (Athlete > Model). Durable + preserved. */
   reorderWorkouts: (fromIndex: number, toIndex: number) => Promise<void>;
+  /** Sign Out: clear the local identity + token (the server data is retained). */
   resetAccount: () => Promise<void>;
+  /** Delete Account: erase (anonymize) the athlete SERVER-SIDE (OD-2), then wipe local state. */
+  deleteAccount: () => Promise<void>;
   /** __DEV__-only test harness: jump straight to the Portrait unlock state. */
   devUnlockPortrait: () => Promise<void>;
   /** __DEV__-only test harness: resolve the pending Portrait forecast hit/miss. */
@@ -222,22 +231,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   enrolledRef.current = !!state.profile;
   const revokingRef = useRef(false);
 
-  // A 401 on an authenticated request = revoked invite (founder decision). Clear
-  // the identity + ALL local state and return to Enrollment. Guarded so a 401
-  // DURING enrollment validation (not yet enrolled) is just a bad invite, handled
-  // inline by enrollWithToken — not a revocation.
+  // A 401 on an authenticated request = the session is no longer valid (signed out
+  // elsewhere / token expired). Clear the identity + ALL local state and return to
+  // the Authentication front door. Guarded so it fires once per session and is a
+  // no-op before the athlete has a profile (pre-onboarding sign-in failures are
+  // handled inline by the Authentication screen).
   useEffect(() => {
     setUnauthorizedHandler(() => {
       if (!enrolledRef.current || revokingRef.current) return;
       revokingRef.current = true;
       (async () => {
-        void track('invite_revoked');
+        void track('session_invalidated');
         await flushTelemetry(); // ship before the wipe
+        await notifier.cancelAll(); // no scheduled notes survive an invalidated session
         await db.clearAll();
         await clearToken();
         resetModelSelection();
         modelRef.current = await selectModel();
-        dispatch({ type: 'REVOKED' });
+        dispatch({ type: 'RESET' });
       })();
     });
     return () => setUnauthorizedHandler(null);
@@ -280,18 +291,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
       }
 
-      const [profile, program, persistedMode, snapshots, forecasts, recents] = await Promise.all([
+      const [profile, program, persistedMode, snapshots, forecasts, recents, pendingThreshold] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadForecasts(),
         db.loadRecents(),
+        db.loadPendingThreshold(),
       ]);
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, forecasts, recents });
+      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, forecasts, recents, pendingThreshold });
+
+      // HealthKit (convenience-only) — silent bodyweight ingestion on boot. It is
+      // NEVER a model input (it only proposes a value for the local Profile, which
+      // stays the source of truth); a denied/unavailable/errored read is a clean
+      // no-op. Best-effort and fully isolated so it can never break boot.
+      void (async () => {
+        try {
+          const prevHealth = (await db.loadHealthState()) ?? INITIAL_HEALTH_STATE;
+          const res = await ingestHealth({
+            health,
+            prevState: prevHealth,
+            profileWeightKg: profile?.weightKg ?? null,
+            now: () => Date.now(),
+            track: (type, data) => void track(type, data),
+          });
+          await db.saveHealthState(res.state);
+          if (res.adoptedBodyweightKg != null && profile) {
+            const updated: Profile = { ...profile, weightKg: res.adoptedBodyweightKg, healthConnected: true };
+            await db.saveProfile(updated);
+            dispatch({ type: 'PROFILE_UPDATED', profile: updated });
+          }
+        } catch {
+          /* health ingestion must never break boot */
+        }
+      })();
     })();
   }, []);
 
@@ -308,62 +345,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       currentSnapshot: state.snapshots.length > 0 ? state.snapshots[state.snapshots.length - 1] : null,
       baselineSnapshot: state.snapshots.length > 0 ? state.snapshots[0] : null,
 
-      async enrollWithToken(token) {
-        const trimmed = token.trim();
-        if (!trimmed) throw new Error('empty_token');
-        await setToken(trimmed);
-        resetModelSelection();
-        const client = await selectModel();
-        modelRef.current = client;
-
-        let backend;
-        try {
-          backend = await client.getProfile(); // 200 ⇒ valid, active athlete
-        } catch (e) {
-          // Invalid/unreachable invite — revert cleanly, surface the one error line.
-          await clearToken();
+      async signIn(provider) {
+        // Apple/Google sign-in (the stub seam in platform/auth resolves locally
+        // until the native providers + Apple Developer infra land). On a real
+        // identity token, establish the backend session so the rest of the app
+        // talks to the server; otherwise the local fixture model serves dev/offline.
+        const result = await signInWith(provider); // throws on cancel/error → screen stays
+        if (result.identityToken) {
+          await setToken(result.identityToken);
           resetModelSelection();
           modelRef.current = await selectModel();
-          throw new Error('enroll_failed');
         }
+        void track('signed_in', { provider });
+        revokingRef.current = false; // re-arm the session-invalidation guard
+        // No profile yet → Root keeps the onboarding stack (Consent → … → Program Created).
+      },
 
-        // The backend owns composition/strategy; the athlete enters straight to
-        // Home (no in-app Goal/Days/About — that data is server-side at enrollment).
-        const program = await client.generateProgram({
-          units: 'kg', goal: 'general_fitness', daysPerWeek: 0, healthConnected: false,
-        });
-        const profile: Profile = {
-          sex: backend.sex,
-          weightKg: backend.bodyweightKg ?? undefined,
-          age: backend.age,
-          units: 'kg', // client-side display preference; server has no units
-          goal: 'general_fitness', // vestigial for the backend path (focus is server-owned)
-          daysPerWeek: program.frequency || 0,
-          healthConnected: false,
-        };
-
-        // Calibration mode from backend truth (a returning athlete past 7 sessions
-        // lands in ADVISORY, not re-calibration). Defaults to calibrating offline.
-        let completed = 0;
+      async acceptConsent() {
+        void track('consent_accepted', { version: CONSENT_VERSION });
         try {
-          completed = (await client.sessionsCompleted()) ?? 0;
+          await modelRef.current.recordConsent({ version: CONSENT_VERSION, acceptedAt: new Date().toISOString() });
         } catch {
-          completed = 0;
+          // Best-effort; the server record is idempotent and safely retried later.
+          void track('consent_record_failed', { version: CONSENT_VERSION });
         }
-        const m = deriveCalibrationMode(completed);
-        void track('enrolled', { sessionsCompleted: completed });
-        // A fresh install enrolling onto an athlete with backend history = reinstall/device change.
-        if (completed > 0) void track('reinstall_or_device_change', { sessionsCompleted: completed });
-
-        const baseline = await tryPortraitSnapshot(client, completed);
-        const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
-        if (baseline) emitCapabilitySnapshot(baseline, 'enrollment', completed);
-
-        await Promise.all([db.saveProfile(profile), db.saveProgram(program), persistMode(m)]);
-        revokingRef.current = false; // re-armed for any future revocation
-        dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots });
-        // Weekly plan ready → wire the existing Weekly Program Ready notification (20:00 local).
-        void notifier.scheduleWeeklyProgramReady();
       },
 
       async completeOnboarding(inputs) {
@@ -377,6 +382,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           goal: inputs.goal,
           daysPerWeek: inputs.daysPerWeek,
           healthConnected: inputs.healthConnected,
+          memberSince: new Date().toISOString(),
         };
         // Program generated BEFORE Home renders (spec flow §2.1).
         const program = await model.generateProgram(profile);
@@ -396,7 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots });
         // Weekly Program Container: the weekly plan is ready — wire the EXISTING Weekly Program
         // Ready notification (20:00 local; no second flow). Stub is a no-op; native build delivers.
-        void notifier.scheduleWeeklyProgramReady();
+        void notifier.scheduleWeeklyProgramReady(program.frequency);
       },
 
       async recordSessionCompleted() {
@@ -406,22 +412,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await persistMode(next);
 
         let snapshots = state.snapshots;
+        // Read forecasts from the DB (source of truth), not the in-memory closure:
+        // completeSet may have just resolved/issued a hold this same set, and that
+        // write must not be clobbered by a stale list (matches the hold loop, #9).
+        let forecasts = await db.loadForecasts();
         let pendingThreshold: ThresholdEvent | null = null;
-        if (unlocked) {
-          // Portrait unlock is a program construction — capture the snapshot the
-          // unlock screen reveals (§2.4, §8.4). Tolerates the B2 gap.
+        let portraitReceipt: { capability: Capability } | null = null;
+
+        // A snapshot is captured at EVERY program construction once the Portrait
+        // is live — the unlock session AND every session after it (§8.4). This is
+        // what gives the asymmetry engine the continuity to (a) resolve the
+        // standing gap-closing commitment and (b) detect threshold crossings on
+        // an ongoing basis — not just at unlock. Tolerates the B2 gap (no snap).
+        if (next.portrait === 'PORTRAIT_UNLOCKED') {
+          const prevSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
           const snap = await tryPortraitSnapshot(model, next.completedSessions);
           if (snap) {
             snapshots = await db.appendSnapshot(snap);
-            emitCapabilitySnapshot(snap, 'unlock', next.completedSessions);
-            // Detect a threshold crossing vs the prior snapshot (coalesced).
-            if (snapshots.length >= 2 && !state.pendingThreshold) {
-              pendingThreshold = detectThreshold(snapshots[snapshots.length - 2], snap);
-              if (pendingThreshold) void track('threshold_crossed', { a: pendingThreshold.a, b: pendingThreshold.b, kind: pendingThreshold.kind });
+            emitCapabilitySnapshot(snap, unlocked ? 'unlock' : 'session', next.completedSessions);
+
+            // Resolve the standing Portrait commitment against the fresh snapshot
+            // (the production resolver). Loud once on a HIT — the receipt resurfaces
+            // the Portrait in Compare; silent on PENDING/VOID (the asymmetry).
+            const res = resolvePortraitForecasts(forecasts, snap);
+            if (res.changed) {
+              forecasts = res.forecasts;
+              await db.saveForecasts(forecasts);
+              if (res.receipt) {
+                portraitReceipt = res.receipt;
+                void track('forecast_resolved', { forecastType: 'portrait', capability: res.receipt.capability, hit: true });
+              }
+            }
+
+            // Detect a single threshold crossing vs the prior snapshot (coalesced —
+            // at most one outstanding). Fire the calm alert + persist it so it
+            // survives until the athlete sees it, including across a relaunch.
+            if (prevSnap && !state.pendingThreshold) {
+              pendingThreshold = detectThreshold(prevSnap, snap);
+              if (pendingThreshold) {
+                void track('threshold_crossed', { a: pendingThreshold.a, b: pendingThreshold.b, kind: pendingThreshold.kind });
+                await db.savePendingThreshold(pendingThreshold);
+                void notifier.fireThresholdAlert();
+              }
             }
           }
         }
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots, pendingThreshold });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots, forecasts, pendingThreshold, portraitReceipt });
         return { unlockedPortrait: unlocked };
       },
 
@@ -430,6 +466,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
 
       clearThreshold() {
+        void db.clearPendingThreshold(); // durable clear so it never re-surfaces after dismissal
         dispatch({ type: 'CLEAR_THRESHOLD' });
       },
 
@@ -557,20 +594,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async refreshProgram() {
         if (!state.profile) return;
+        // Resolve rest FIRST so we never regenerate/compose a session during a rest
+        // week (state consistency, §1.7). Best-effort; defaults to last-known offline.
+        let resting = state.weekRest;
+        try {
+          const rest = await model.weeklyRest();
+          resting = rest;
+          if (rest !== state.weekRest) {
+            dispatch({ type: 'WEEK_REST', weekRest: rest });
+            // A fresh trainable week just became ready → re-anchor the Weekly Program
+            // Ready note to today, so the weekly cadence tracks real readiness (§8.6).
+            if (shouldReanchorWeekly(state.weekRest, rest)) void notifier.scheduleWeeklyProgramReady(state.program?.frequency);
+          }
+        } catch {
+          /* offline — keep the last-known rest state */
+        }
+        if (resting) return; // resting → keep the last-known session, do not regenerate
         try {
           const program = await model.generateProgram(state.profile);
           await db.saveProgram(program);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
         } catch {
           // Backend unreachable → keep the last-known session (degrade quietly, §5.3).
-        }
-        // Weekly Program Container: reflect week completion in the EXISTING Home Rest state
-        // (no new screen). Best-effort; defaults to not-resting offline.
-        try {
-          const rest = await model.weeklyRest();
-          if (rest !== state.weekRest) dispatch({ type: 'WEEK_REST', weekRest: rest });
-        } catch {
-          /* offline — keep the last-known rest state */
         }
       },
 
@@ -658,7 +703,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const pendingThreshold =
           snapshots.length >= 2 ? detectThreshold(snapshots[snapshots.length - 2], snap) : null;
         await persistMode(next);
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots, pendingThreshold });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots, forecasts: state.forecasts, pendingThreshold, portraitReceipt: null });
       },
 
       // Test harness only — never reachable in release. Fabricates a post-due
@@ -695,8 +740,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async resetAccount() {
         void track('signed_out');
         await flushTelemetry(); // ship before the wipe
+        await notifier.cancelAll(); // cancel the weekly note so a signed-out device stays silent
         await db.clearAll();
         await clearToken(); // sign out of the issued invite
+        resetModelSelection();
+        modelRef.current = await selectModel();
+        dispatch({ type: 'RESET' });
+      },
+
+      async deleteAccount() {
+        void track('account_deleted');
+        await flushTelemetry(); // ship telemetry while the token is still VALID (erase invalidates it)
+        // Erase (anonymize) server-side FIRST, while the token is present (OD-2). Best-effort: a
+        // transient/offline failure must not strand the athlete on a half-deleted device, so we
+        // still wipe locally and telemeter the failure (the operator can complete erasure
+        // out-of-band). In the normal online case this genuinely deletes the athlete server-side.
+        try {
+          await model.eraseAccount();
+        } catch (e) {
+          void track('account_erase_failed', { kind: e instanceof HttpError ? e.kind : 'unknown' });
+        }
+        await notifier.cancelAll();
+        await db.clearAll();
+        await clearToken();
         resetModelSelection();
         modelRef.current = await selectModel();
         dispatch({ type: 'RESET' });

@@ -1,0 +1,765 @@
+
+<h2 class="sr-only">Hush fitness app interactive screen showcase — 26 screens covering onboarding, home, workout, history, program, portrait and profile flows</h2>
+
+<style>
+  :root {
+    --ph-bg: #000;
+    --ph-w: #fff;
+    --ph-g: #A1A1AA;
+    --ph-t: #71717A;
+    --ph-dim: #D4D4D8;
+    --ph-bd: #2C2C2E;
+  }
+  .hush-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .hush-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .hush-nav-btn {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--color-text-primary);
+  }
+  .hush-nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .hush-nav-btn:not(:disabled):hover { background: var(--color-background-secondary); }
+  .hush-screen-num {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    min-width: 40px;
+    text-align: center;
+  }
+  .hush-screen-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  .hush-tag {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: var(--border-radius-md);
+    font-weight: 500;
+  }
+  .hush-main {
+    display: grid;
+    grid-template-columns: 260px minmax(0,1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .hush-device-wrap {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-xl);
+    padding: 14px;
+    display: flex;
+    justify-content: center;
+  }
+  .hush-device {
+    width: 232px;
+    height: 500px;
+    background: #000;
+    border-radius: 32px;
+    border: 0.5px solid var(--color-border-secondary);
+    overflow: hidden;
+    position: relative;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01";
+  }
+  .hush-screen { position: absolute; inset: 0; }
+  /* Big numerals: tabular figures + optical tightening */
+  .hush-device .hero-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+  }
+  .hush-device .hero-title {
+    letter-spacing: -0.02em;
+  }
+  .hush-device .tnum { font-variant-numeric: tabular-nums; }
+  .hush-info { display: flex; flex-direction: column; gap: 10px; }
+  .hush-role {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+  }
+  .hush-says-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 9px 12px;
+  }
+  .hush-says-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .hush-says-text {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-text-primary);
+    font-style: italic;
+  }
+  .hush-cols {
+    display: flex;
+    gap: 8px;
+  }
+  .hush-col {
+    flex: 1;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 11px;
+  }
+  .hush-col-label {
+    font-size: 10px;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .hush-col-text {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+  .hush-dots {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .hush-dot {
+    height: 4px;
+    flex: 1;
+    min-width: 8px;
+    border-radius: 2px;
+    background: var(--color-border-tertiary);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .hush-dot.active { background: #378add; }
+  .hush-section-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .hush-sec-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    cursor: pointer;
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+  }
+  .hush-sec-btn.active {
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  @keyframes hushShine {
+    0% { background-position: 120% 0; }
+    100% { background-position: -120% 0; }
+  }
+  @keyframes hushNudge {
+    0%, 72%, 100% { transform: translateX(0); }
+    84% { transform: translateX(5px); }
+  }
+  @keyframes hushPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+</style>
+
+<div class="hush-wrap">
+  <div class="hush-section-tabs" id="secTabs"></div>
+
+  <div class="hush-nav">
+    <button class="hush-nav-btn" id="prevBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="11 18 5 12 11 6"/></svg></button>
+    <span class="hush-screen-num" id="screenNum">1/26</span>
+    <button class="hush-nav-btn" id="nextBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg></button>
+    <span class="hush-screen-name" id="screenName"></span>
+    <span class="hush-tag" id="screenTag"></span>
+  </div>
+
+  <div class="hush-main">
+    <div class="hush-device-wrap">
+      <div class="hush-device">
+        <div class="hush-screen" id="phoneScreen"></div>
+      </div>
+    </div>
+    <div class="hush-info">
+      <div class="hush-role" id="roleText"></div>
+      <div class="hush-says-card">
+        <div class="hush-says-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;"><path d="M8 9h8M8 13h5"/><path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H8l-4 3V6a1 1 0 0 1 1-1z"/></svg> מה Hush אומר</div>
+        <div class="hush-says-text" id="saysText"></div>
+      </div>
+      <div class="hush-cols">
+        <div class="hush-col">
+          <div class="hush-col-label" style="color:#1d9e75;">הספורטאי שולט</div>
+          <div class="hush-col-text" id="colA"></div>
+        </div>
+        <div class="hush-col">
+          <div class="hush-col-label" style="color:#378add;">Hush שולט</div>
+          <div class="hush-col-text" id="colB"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hush-dots" id="dotsRow"></div>
+</div>
+
+<script>
+const W='#fff',G='#A1A1AA',T='#71717A',DIM='#D4D4D8',BD='#2C2C2E';
+
+// Inline SVG icons — self-contained, always render, pixel-crisp.
+const _svg=(p,o={})=>{const s=o.size||20,c=o.color||'currentColor',sw=o.sw||1.75;return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" style="display:block;${o.style||''}">${p}</svg>`;};
+const icon={
+  menu:(o)=>_svg('<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>',o),
+  chevronR:(o)=>_svg('<polyline points="9 6 15 12 9 18"/>',o),
+  chevronL:(o)=>_svg('<polyline points="15 6 9 12 15 18"/>',o),
+  pause:(o)=>_svg('<rect x="7" y="5" width="3.2" height="14" rx="1"/><rect x="13.8" y="5" width="3.2" height="14" rx="1"/>',{...o,sw:0}),
+  grip:(o)=>_svg('<circle cx="9" cy="6" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/><circle cx="9" cy="12" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/><circle cx="9" cy="18" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/><circle cx="15" cy="6" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/><circle cx="15" cy="12" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/><circle cx="15" cy="18" r="1.1" fill="'+(o&&o.color||'currentColor')+'" stroke="none"/>',o),
+  swap:(o)=>_svg('<polyline points="7 4 4 7 7 10"/><path d="M4 7h11a4 4 0 0 1 4 4"/><polyline points="17 20 20 17 17 14"/><path d="M20 17H9a4 4 0 0 1-4-4"/>',o),
+  check:(o)=>_svg('<polyline points="5 12.5 10 17.5 19 7"/>',o),
+  close:(o)=>_svg('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',o),
+  // Tab bar icons (SF Symbol-style)
+  tHome:(o)=>_svg('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/>',o),
+  tProgram:(o)=>_svg('<rect x="4" y="4" width="16" height="16" rx="3"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/>',o),
+  tHistory:(o)=>_svg('<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><polyline points="3 4 3 8 7 8"/><polyline points="12 7.5 12 12 15 14"/>',o),
+  tPortrait:(o)=>_svg('<line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="18" y1="20" x2="18" y2="9"/>',o),
+};
+
+const wb=(t,b)=>`<div style="position:absolute;left:18px;right:18px;${b};background:#fff;color:#000;text-align:center;padding:13px;border-radius:14px;font-size:15px;font-weight:500;">${t}</div>`;
+const sb=(t,b)=>`<div style="position:absolute;left:18px;right:18px;${b};border:1px solid ${BD};color:#fff;text-align:center;padding:12px;border-radius:14px;font-size:14px;">${t}</div>`;
+const tx=(t,b,col)=>`<div style="position:absolute;left:18px;right:18px;${b};text-align:center;color:${col||G};font-size:14px;font-weight:500;">${t}</div>`;
+const bar=(l,r)=>`<div style="position:absolute;top:22px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:center;"><span class="tnum" style="font-size:13px;color:${G};letter-spacing:-0.01em;">${l}</span><span style="cursor:pointer;">${icon.pause({size:18,color:DIM})}</span></div>`;
+const _tab=(name,ic,active)=>{const col=active?'#fff':'#6d6d72';return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">${ic({size:23,color:col,sw:active?2:1.8})}<div style="font-size:10px;letter-spacing:0.1px;color:${col};font-weight:${active?'500':'400'};">${name}</div></div>`;};
+const _tabbar=(act)=>`<div style="position:absolute;bottom:0;left:0;right:0;height:62px;display:flex;align-items:flex-start;padding-top:8px;background:rgba(10,10,10,0.72);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:0.5px solid rgba(255,255,255,0.08);">${_tab('Home',icon.tHome,act==='Home')}${_tab('Program',icon.tProgram,act==='Program')}${_tab('History',icon.tHistory,act==='History')}${_tab('Portrait',icon.tPortrait,act==='Portrait')}</div>`;
+const tabs=_tabbar('Home');
+const tabsProgram=_tabbar('Program');
+const tabsHistory=_tabbar('History');
+const tabsPortrait=_tabbar('Portrait');
+const capbar=(name,pct,ghost)=>`<div style="margin-bottom:22px;"><div style="font-size:13px;color:${DIM};margin-bottom:9px;letter-spacing:.1px;">${name}</div><div style="height:6px;background:#1a1a1a;border-radius:3px;position:relative;">${ghost?`<div style="position:absolute;left:0;top:0;height:6px;width:${ghost}%;background:#3a3a3c;border-radius:3px;"></div>`:''}<div style="position:absolute;left:0;top:0;height:6px;width:${pct}%;background:#fff;border-radius:3px;"></div></div></div>`;
+// iOS lock-screen wallpaper + status bar
+const wall=`background:radial-gradient(130% 100% at 50% 0%,#1a2535 0%,#0f1620 45%,#070a0f 100%);`;
+const statusbar=(dark)=>{const c=dark?'#fff':'#fff';return `<div style="position:absolute;top:0;left:0;right:0;height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:5;"><span class="tnum" style="font-size:13px;font-weight:600;color:${c};letter-spacing:0.2px;">9:41</span><span style="display:flex;align-items:center;gap:5px;">
+  <svg width="16" height="11" viewBox="0 0 18 12" fill="${c}"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+  <svg width="16" height="11" viewBox="0 0 18 13" fill="none" stroke="${c}" stroke-width="1.4"><path d="M2 5.5 A11 11 0 0 1 16 5.5" stroke-linecap="round"/><path d="M4.5 8 A7 7 0 0 1 13.5 8" stroke-linecap="round"/><circle cx="9" cy="11" r="1.1" fill="${c}" stroke="none"/></svg>
+  <svg width="24" height="12" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="21" height="12" rx="3.5" stroke="${c}" stroke-opacity="0.5"/><rect x="2" y="2" width="17" height="9" rx="2" fill="${c}"/><rect x="23" y="4" width="1.6" height="5" rx="0.8" fill="${c}" fill-opacity="0.5"/></svg>
+</span></div>`;};
+const slider=(t,b)=>`<div style="position:absolute;left:18px;right:18px;${b};height:58px;border-radius:29px;background:linear-gradient(180deg,#161616,#0e0e0e);border:0.5px solid #2a2a2a;box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;overflow:hidden;">
+  <div style="position:absolute;left:62px;right:18px;text-align:center;font-size:14px;font-weight:500;letter-spacing:.2px;background:linear-gradient(90deg,#5a5a5e 0%,#9b9b9f 45%,#fafafa 50%,#9b9b9f 55%,#5a5a5e 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:hushShine 2.6s linear infinite;">${t}</div>
+  <div style="position:absolute;left:5px;top:5px;width:48px;height:48px;border-radius:24px;background:linear-gradient(180deg,#ffffff,#ececec);box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;animation:hushNudge 2.6s ease-in-out infinite;">
+    <span style="display:flex;align-items:center;color:#0a0a0a;"><span style="font-size:17px;line-height:1;">›</span><span style="font-size:17px;line-height:1;margin-left:-7px;opacity:.45;">›</span></span>
+  </div>
+</div>`;
+
+const SCREENS=[
+  {
+    section:"Onboarding",
+    nm:"01 · Authentication",
+    tag:["כניסה","#0f6e56","#E1F5EE"],
+    role:"דלת הכניסה. לא שואל כלום, לא מוכר כלום. הריסון כאן מרוויח את השקט שאחריו.",
+    says:"Train. Quietly.",
+    oa:"להחליט אם להתחיל.",
+    ob:"נתיב אחד קדימה.",
+    s:`<div style="position:absolute;left:18px;right:18px;top:33%;text-align:center;"><div class="hero-title" style="font-size:54px;font-weight:700;">Hush</div><div style="font-size:21px;color:${G};margin-top:18px;line-height:1.35;letter-spacing:-0.01em;">Train.<br>Quietly.</div></div>
+    <div style="position:absolute;left:18px;right:18px;bottom:90px;background:#fff;color:#000;border-radius:14px;height:48px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#000" style="display:block;margin-top:-2px;"><path d="M17.05 12.04c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.77 0-1.97-.88-3.24-.86-1.67.03-3.21.97-4.07 2.46-1.73 3.01-.44 7.46 1.24 9.9.82 1.2 1.8 2.53 3.08 2.48 1.24-.05 1.7-.8 3.2-.8 1.49 0 1.91.8 3.21.77 1.33-.02 2.17-1.21 2.98-2.41.94-1.38 1.33-2.72 1.35-2.79-.03-.01-2.59-.99-2.62-3.94zM14.6 4.7c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.17.65-2.88 1.48-.63.73-1.18 1.9-1.03 3.02 1.09.08 2.21-.55 2.9-1.37z"/></svg>Continue with Apple</div>
+    <div style="position:absolute;left:18px;right:18px;bottom:40px;border:0.5px solid ${BD};color:#fff;border-radius:14px;height:48px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;"><svg width="16" height="16" viewBox="0 0 24 24" style="display:block;"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z"/></svg>Continue with Google</div>
+    <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:12px;color:${T};">Terms · Privacy</div>`
+  },
+  {
+    section:"Onboarding",
+    nm:"02 · Connect Health",
+    tag:["אונבורדינג","#854f0b","#FAEEDA"],
+    role:"Hush בונה — לדחות זה חינם. קובע את הטון של override-not-permission.",
+    says:"Hush builds your first program from it. Skip it and I'll ask you four quick things instead.",
+    oa:"אם לשתף Health.",
+    ob:"בניית התוכנית הראשונה.",
+    s:`<div style="position:absolute;left:18px;right:18px;top:42%;transform:translateY(-50%);text-align:center;"><div class="hero-title" style="font-size:28px;font-weight:600;">Connect Health</div><div style="font-size:15px;margin-top:28px;line-height:1.6;">Hush builds your first program from it. Skip it and I'll ask you four quick things instead.</div><div style="font-size:13px;color:${G};margin-top:24px;">Optional. You can change this anytime.</div></div>${wb("Continue","bottom:52px")}<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;font-size:14px;color:${G};cursor:pointer;">Skip</div>`
+  },
+  {
+    section:"Onboarding",
+    nm:"03 · Manual Info",
+    tag:["רק אם דילגו","#854f0b","#FAEEDA"],
+    role:"ארבעה שדות. מסך אחד. נקי.",
+    says:"A few quick things.",
+    oa:"להזין את הפרטים.",
+    ob:"לבנות את הפרופיל הפיזיולוגי.",
+    s:`<div style="position:absolute;left:18px;right:18px;top:46%;transform:translateY(-50%);"><div class="hero-title" style="font-size:28px;font-weight:600;">A few quick things.</div><div style="margin-top:34px;display:flex;flex-direction:column;gap:20px;">
+    <div><div style="font-size:13px;color:${G};margin-bottom:6px;">Age</div><div style="border-bottom:0.5px solid ${BD};padding-bottom:10px;font-size:18px;">28</div></div>
+    <div><div style="font-size:13px;color:${G};margin-bottom:8px;">Sex</div><div style="display:flex;gap:10px;"><span style="border:1px solid #fff;border-radius:20px;padding:5px 14px;font-size:13px;">Male</span><span style="border:0.5px solid ${BD};border-radius:20px;padding:5px 14px;font-size:13px;color:${G};">Female</span><span style="border:0.5px solid ${BD};border-radius:20px;padding:5px 14px;font-size:13px;color:${G};">Other</span></div></div>
+    <div><div style="font-size:13px;color:${G};margin-bottom:6px;">Height</div><div style="border-bottom:0.5px solid ${BD};padding-bottom:10px;font-size:18px;">178 cm</div></div>
+    <div><div style="font-size:13px;color:${G};margin-bottom:6px;">Weight</div><div style="border-bottom:0.5px solid ${BD};padding-bottom:10px;font-size:18px;">82 kg</div></div>
+    </div></div>${wb("Continue","bottom:40px")}`
+  },
+  {
+    section:"Onboarding",
+    nm:"04 · Goal",
+    tag:["אונבורדינג","#0f6e56","#E1F5EE"],
+    role:"מסך אחד: מטרה. בחירה אחת. כפתור אחד.",
+    says:"Goal.",
+    oa:"כוונה.",
+    ob:"עיצוב הספליט לפי הבחירה.",
+    s:`<div style="position:absolute;left:18px;right:18px;top:40%;transform:translateY(-50%);text-align:center;"><div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:${T};margin-bottom:30px;">What are you training for</div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+    ${['Build Muscle','Increase Strength','Stay Consistent'].map((g,i)=>i===0
+      ?`<div style="text-align:center;font-size:19px;font-weight:600;color:#000;background:#fff;padding:15px 0;border-radius:14px;">${g}</div>`
+      :`<div style="text-align:center;font-size:19px;font-weight:400;color:${G};padding:15px 0;border:0.5px solid ${BD};border-radius:14px;">${g}</div>`).join('')}
+    </div></div>
+    ${wb("Continue","bottom:40px")}`
+  },
+  {
+    section:"Onboarding",
+    nm:"04b · Days per week",
+    tag:["אונבורדינג","#0f6e56","#E1F5EE"],
+    role:"מסך אחד: תדירות. בורר אנכי. כפתור אחד.",
+    says:"Days per week.",
+    oa:"תדירות.",
+    ob:"עיצוב הספליט לפי הבחירה.",
+    s:`<div style="position:absolute;left:18px;right:18px;top:40%;transform:translateY(-50%);text-align:center;"><div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:${T};margin-bottom:30px;">How many days a week</div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:0;flex-direction:column;"><div class="tnum" style="font-size:20px;color:#46464a;">2</div><div class="tnum" style="font-size:22px;color:#6a6a6e;margin:10px 0;">3</div><div class="hero-num" style="font-size:48px;font-weight:600;">4</div><div class="tnum" style="font-size:22px;color:#6a6a6e;margin:10px 0;">5</div><div class="tnum" style="font-size:20px;color:#46464a;">6</div></div></div>
+    ${wb("Continue","bottom:40px")}`
+  },
+  {
+    section:"First-Time",
+    nm:"05 · Program Created",
+    tag:["רגע ראשון","#185fa5","#E6F1FB"],
+    role:"2 שניות. שחור מלא. אחר כך Home. לא כפתור, לא סיכום.",
+    says:"Program Created.",
+    oa:"ממתין.",
+    ob:"בונה את התוכנית לפני שמסך זה נעלם.",
+    s:`<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;"><div class="hero-title" style="font-size:36px;font-weight:600;line-height:1.12;">Program<br>Created</div><div style="font-size:14px;color:${G};margin-top:16px;">4 days · built for you.</div></div>`
+  },
+  {
+    section:"Home",
+    nm:"06 · Home · יום אימון",
+    tag:["Home","#0f6e56","#E1F5EE"],
+    role:"שאלה אחת: מה אני עושה היום? שם האימון בענק, זהו.",
+    says:"Upper A.",
+    oa:"להחליט אם להתחיל.",
+    ob:"בחירת הסשן של היום.",
+    s:`<div style="position:absolute;top:18px;left:18px;font-size:12px;color:${G};">Jun 17</div><div style="position:absolute;top:14px;right:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;">${icon.menu({size:21,color:'#fff'})}</div>
+    <div style="position:absolute;left:18px;right:18px;top:30%;text-align:center;"><div style="font-size:14px;color:${G};margin-bottom:24px;">Good morning, Alex.</div><div class="hero-title" style="font-size:52px;font-weight:700;line-height:1;">Upper A</div><div style="font-size:14px;color:${G};margin-top:18px;">Chest · Shoulders · Triceps</div></div>
+    ${slider("Slide to start","bottom:72px")}${tabs}`
+  },
+  {
+    section:"Home",
+    nm:"07 · Home · יום מנוחה",
+    tag:["Home","#0f6e56","#E1F5EE"],
+    role:"שחור מלא. 'Rest.' בענק. אין הצעות, אין כפתורים.",
+    says:"Rest.",
+    oa:"כלום.",
+    ob:"מחשב את השבוע הבא.",
+    s:`<div style="position:absolute;top:18px;left:18px;font-size:12px;color:${G};">Jun 18</div><div style="position:absolute;top:14px;right:14px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;">${icon.menu({size:21,color:'#fff'})}</div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;"><div style="font-size:14px;color:${G};margin-bottom:24px;">Good morning, Alex.</div><div class="hero-title" style="font-size:62px;font-weight:700;">Rest.</div><div style="font-size:14px;color:${G};margin-top:16px;">You trained 4 days this week.</div></div>
+    ${tabs}`
+  },
+  {
+    section:"Workout",
+    nm:"08 · Active Set",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"המשקל בטיפוגרפיה ענקית. תביעה תחת counter הסט. כפתור Complete set.",
+    says:"Up 2.5 from last week. You're ready for it.",
+    oa:"המשקל בפועל.",
+    ob:"בחירת העומס, הצהרת תביעה.",
+    s:`${bar('31m left')}<div style="position:absolute;left:0;right:0;top:47%;transform:translateY(-50%);text-align:center;"><div class="hero-title" style="font-size:22px;font-weight:600;color:${DIM};">Bench Press</div><div style="display:flex;align-items:baseline;justify-content:center;gap:5px;margin-top:10px;"><span class="hero-num" style="font-size:76px;font-weight:700;line-height:.85;">82.5</span><span style="font-size:16px;color:${G};font-weight:500;letter-spacing:-0.01em;">kg</span></div><div class="tnum" style="font-size:30px;font-weight:500;margin-top:6px;letter-spacing:-0.01em;">× 8</div><div style="font-size:13px;color:${G};margin-top:16px;">Set 1 of 3</div><div style="font-size:13px;color:${DIM};margin-top:12px;padding:0 22px;line-height:1.4;">Up 2.5 from last week. You're ready for it.</div></div>${tx('Edit result','bottom:90px')}${wb("Complete set","bottom:32px")}`
+  },
+  {
+    section:"Workout",
+    nm:"09 · Set Confirmation",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"כפתור הופך ל-'8 ✓' ל-0.8 שניות, ואז מעבר למנוחה.",
+    says:"8 ✓",
+    oa:"ביצע.",
+    ob:"שמירת הסט ומעבר לטיימר.",
+    s:`${bar('31m left')}<div style="position:absolute;left:0;right:0;top:47%;transform:translateY(-50%);text-align:center;"><div class="hero-title" style="font-size:22px;font-weight:600;color:${DIM};">Bench Press</div><div style="display:flex;align-items:baseline;justify-content:center;gap:5px;margin-top:10px;"><span class="hero-num" style="font-size:76px;font-weight:700;line-height:.85;">82.5</span><span style="font-size:16px;color:${G};font-weight:500;letter-spacing:-0.01em;">kg</span></div><div class="tnum" style="font-size:30px;font-weight:500;margin-top:6px;letter-spacing:-0.01em;">× 8</div><div style="font-size:13px;color:${G};margin-top:16px;">Set 1 of 3</div></div>${tx('Edit result','bottom:90px')}<div style="position:absolute;left:18px;right:18px;bottom:32px;background:#fff;color:#000;text-align:center;padding:13px;border-radius:14px;font-size:18px;font-weight:600;"><span style="display:inline-flex;align-items:center;justify-content:center;gap:7px;">8 ${icon.check({size:18,color:'#000',sw:2.4})}</span></div>`
+  },
+  {
+    section:"Workout",
+    nm:"10 · Inter-set Rest",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"הטיימר הוא המוצר. 'Ready' כטקסט, לא כפתור.",
+    says:"Next set · Bench Press · 82.5 × 8",
+    oa:"מתי לדלג על המנוחה.",
+    ob:"שמירת חלון ההתאוששות.",
+    s:`${bar('31m left')}<div style="position:absolute;left:0;right:0;top:41%;transform:translateY(-50%);text-align:center;"><div style="font-size:62px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;">02:14</div><div style="font-size:13px;color:${G};margin-top:18px;">Set 2 of 3</div><div style="font-size:14px;color:${G};margin-top:8px;">Bench Press</div><div style="font-size:22px;font-weight:500;margin-top:6px;">82.5 × 8</div></div>${tx('Ready','bottom:52px','#fff')}<div style="position:absolute;bottom:28px;left:0;right:0;text-align:center;font-size:12px;color:${T};cursor:pointer;">Exercise Busy</div>`
+  },
+  {
+    section:"Workout",
+    nm:"11 · Transition Rest",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"מעבר בין תרגילים. Hush כבר החליף אם נדרש.",
+    says:"Next exercise · Romanian Deadlift · 100 kg",
+    oa:"לבחור תרגיל אחר.",
+    ob:"זיהוי קונפליקט, החלפה אוטומטית.",
+    s:`${bar('26m left')}<div style="position:absolute;left:0;right:0;top:37%;transform:translateY(-50%);text-align:center;"><div style="font-size:58px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;">01:30</div></div><div style="position:absolute;left:18px;right:18px;top:58%;text-align:center;"><div style="font-size:13px;color:${G};">Next exercise</div><div style="font-size:22px;font-weight:600;margin-top:8px;">Romanian Deadlift</div><div style="font-size:17px;color:${G};margin-top:6px;">100 × 8</div></div>${tx('Ready','bottom:52px','#fff')}<div style="position:absolute;bottom:28px;left:0;right:0;text-align:center;font-size:12px;color:${T};cursor:pointer;">Exercise Busy</div>`
+  },
+  {
+    section:"Workout",
+    nm:"12 · Edit Result Sheet",
+    tag:["Bottom Sheet","#185fa5","#E6F1FB"],
+    role:"שני גלגלים. Weight | Reps. ברירת מחדל = ערכים נוכחיים. Save.",
+    says:"—",
+    oa:"לעדכן משקל/חזרות.",
+    ob:"שמירת הבחירה.",
+    s:`<div style="position:absolute;left:0;right:0;top:18%;text-align:center;opacity:.25;"><span class="hero-num" style="font-size:70px;font-weight:700;">82.5</span></div><div style="position:absolute;left:0;right:0;bottom:0;height:48%;background:#111;border-radius:24px 24px 0 0;padding:22px 20px 0;">
+    <div style="display:flex;justify-content:space-around;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${G};margin-bottom:6px;"><div style="flex:1;text-align:center;">Weight</div><div style="flex:1;text-align:center;">Reps</div></div>
+    <div style="position:relative;height:160px;overflow:hidden;">
+      <div style="position:absolute;left:12px;right:12px;top:62px;height:36px;border-top:0.5px solid #3a3a3c;border-bottom:0.5px solid #3a3a3c;background:rgba(255,255,255,.03);border-radius:8px;"></div>
+      <div style="position:absolute;left:0;right:0;top:0;height:60px;background:linear-gradient(180deg,#111 10%,rgba(17,17,17,0));pointer-events:none;z-index:2;"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(0deg,#111 10%,rgba(17,17,17,0));pointer-events:none;z-index:2;"></div>
+      <div style="display:flex;justify-content:space-around;position:relative;z-index:1;">
+      <div class="tnum" style="flex:1;text-align:center;line-height:32px;"><div style="font-size:17px;color:#46464a;">77.5</div><div style="font-size:19px;color:#6a6a6e;">80</div><div style="font-size:26px;font-weight:600;color:#fff;">82.5</div><div style="font-size:19px;color:#6a6a6e;">85</div><div style="font-size:17px;color:#46464a;">87.5</div></div>
+      <div class="tnum" style="flex:1;text-align:center;line-height:32px;"><div style="font-size:17px;color:#46464a;">6</div><div style="font-size:19px;color:#6a6a6e;">7</div><div style="font-size:26px;font-weight:600;color:#fff;">8</div><div style="font-size:19px;color:#6a6a6e;">9</div><div style="font-size:17px;color:#46464a;">10</div></div>
+      </div>
+    </div>
+    </div>${wb("Save","bottom:28px")}`
+  },
+  {
+    section:"Workout",
+    nm:"13 · Pause Sheet",
+    tag:["Bottom Sheet","#0f6e56","#E1F5EE"],
+    role:"שלושה אפשרויות. אין היררכיה. Hush לא עורך.",
+    says:"Workout paused.",
+    oa:"לחדש, לראות תרגיל, או לסיים.",
+    ob:"הקפאת מצב בדיוק.",
+    s:`<div style="position:absolute;left:0;right:0;top:24%;text-align:center;opacity:.3;"><div style="font-size:62px;font-weight:700;">82.5</div></div><div style="position:absolute;left:0;right:0;bottom:0;height:44%;background:#111;border-radius:24px 24px 0 0;padding-top:28px;text-align:center;"><div style="font-size:22px;font-weight:600;margin-bottom:32px;">Workout paused</div><div style="font-size:16px;padding:12px;cursor:pointer;">${'Resume workout'}</div><div style="font-size:16px;color:${G};padding:12px;cursor:pointer;">Show exercise</div><div style="font-size:16px;color:${G};padding:12px;cursor:pointer;">Finish early</div></div>`
+  },
+  {
+    section:"Workout",
+    nm:"14 · Exercise Demo",
+    tag:["Bottom Sheet","#0f6e56","#E1F5EE"],
+    role:"לולאת grayscale שקטה. עד 3 cues. 'Done.' להחזיר.",
+    says:"Shoulder blades back · Feet planted · Full range.",
+    oa:"מתי לחזור.",
+    ob:"הצגת פורמה נכונה, ללא דיבור.",
+    s:`<div style="position:absolute;left:0;right:0;bottom:0;height:66%;background:#111;border-radius:24px 24px 0 0;padding:22px 18px;"><div style="width:36px;height:4px;background:#3a3a3c;border-radius:2px;margin:-8px auto 16px;"></div><div class="hero-title" style="text-align:center;font-size:21px;font-weight:600;">Bench Press</div>
+    <div style="position:relative;margin:16px 0;aspect-ratio:16/10;background:radial-gradient(120% 140% at 50% 20%,#202022 0%,#161618 55%,#0c0c0d 100%);border:0.5px solid #262628;border-radius:14px;overflow:hidden;">
+      <svg viewBox="0 0 320 200" style="position:absolute;inset:0;width:100%;height:100%;" preserveAspectRatio="xMidYMid meet">
+        <defs><linearGradient id="figG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a6a70"/><stop offset="1" stop-color="#46464c"/></linearGradient></defs>
+        <!-- bench -->
+        <rect x="84" y="150" width="150" height="9" rx="4" fill="#2f2f33"/>
+        <rect x="96" y="159" width="8" height="26" fill="#2a2a2e"/><rect x="214" y="159" width="8" height="26" fill="#2a2a2e"/>
+        <!-- body lying down -->
+        <path d="M70 150 q4-14 20-14 l40 0 q10 0 16-6 l6-6 q6-6 14-6 l34 0 q10 0 10 10 0 8-8 10 l-30 4 q-8 1-13 7 l-7 7 q-7 7-18 7 l-40 0 q-16 0-20-14 z" fill="url(#figG)"/>
+        <!-- head -->
+        <circle cx="78" cy="138" r="12" fill="url(#figG)"/>
+        <!-- upper arms raised to bar -->
+        <path d="M150 138 l24-30 M186 132 l16-24" stroke="#5a5a60" stroke-width="11" stroke-linecap="round" fill="none"/>
+        <!-- barbell -->
+        <line x1="120" y1="92" x2="230" y2="92" stroke="#8a8a90" stroke-width="6" stroke-linecap="round"/>
+        <rect x="116" y="80" width="9" height="24" rx="3" fill="#9a9aa0"/><rect x="225" y="80" width="9" height="24" rx="3" fill="#9a9aa0"/>
+        <rect x="108" y="84" width="8" height="16" rx="2" fill="#76767c"/><rect x="234" y="84" width="8" height="16" rx="2" fill="#76767c"/>
+      </svg>
+      <div style="position:absolute;left:10px;bottom:9px;display:flex;align-items:center;gap:6px;font-size:10px;color:#8a8a90;letter-spacing:0.3px;"><span style="width:6px;height:6px;border-radius:50%;background:#9a9aa0;display:inline-block;animation:hushPulse 1.8s ease-in-out infinite;"></span>Form guide</div>
+    </div>
+    <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${T};margin-bottom:9px;">Focus on</div><div style="font-size:14px;line-height:1.95;">Shoulder blades back<br>Feet planted<br>Full range of motion</div><div style="text-align:center;margin-top:16px;"><span style="font-size:15px;color:#fff;font-weight:500;cursor:pointer;padding:8px 24px;">Done</span></div></div>`
+  },
+  {
+    section:"Workout",
+    nm:"15 · Active Set · Held",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"שבוע ללא העלאה (או הורדה). רק עידוד חיובי — 'You can do it.'",
+    says:"You can do it.",
+    oa:"המשקל בפועל.",
+    ob:"בחירת העומס, עידוד חיובי.",
+    s:`${bar('29m left')}<div style="position:absolute;left:0;right:0;top:47%;transform:translateY(-50%);text-align:center;"><div class="hero-title" style="font-size:22px;font-weight:600;color:${DIM};">Back Squat</div><div style="display:flex;align-items:baseline;justify-content:center;gap:5px;margin-top:10px;"><span class="hero-num" style="font-size:76px;font-weight:700;line-height:.85;">80</span><span style="font-size:16px;color:${G};font-weight:500;letter-spacing:-0.01em;">kg</span></div><div class="tnum" style="font-size:30px;font-weight:500;margin-top:6px;letter-spacing:-0.01em;">× 5</div><div style="font-size:13px;color:${G};margin-top:16px;">Set 1 of 3</div><div style="font-size:13px;color:${DIM};margin-top:12px;padding:0 22px;line-height:1.4;">You can do it.</div></div>${tx('Edit result','bottom:90px')}${wb("Complete set","bottom:32px")}`
+  },
+  {
+    section:"Workout",
+    nm:"16 · Active Set · Up",
+    tag:["Workout","#0f6e56","#E1F5EE"],
+    role:"שבוע שהעלינו משקל. עידוד חיובי בסגנון מסך 08.",
+    says:"Up 2.5 from last week. You're ready for it.",
+    oa:"המשקל בפועל.",
+    ob:"בחירת העומס, עידוד חיובי.",
+    s:`${bar('26m left')}<div style="position:absolute;left:0;right:0;top:47%;transform:translateY(-50%);text-align:center;"><div class="hero-title" style="font-size:22px;font-weight:600;color:${DIM};">Back Squat</div><div style="display:flex;align-items:baseline;justify-content:center;gap:5px;margin-top:10px;"><span class="hero-num" style="font-size:76px;font-weight:700;line-height:.85;">82.5</span><span style="font-size:16px;color:${G};font-weight:500;letter-spacing:-0.01em;">kg</span></div><div class="tnum" style="font-size:30px;font-weight:500;margin-top:6px;letter-spacing:-0.01em;">× 5</div><div style="font-size:13px;color:${G};margin-top:16px;">Set 1 of 3</div><div style="font-size:13px;color:${DIM};margin-top:12px;padding:0 22px;line-height:1.4;">Up 2.5 from last week. You're ready for it.</div></div>${tx('Edit result','bottom:90px')}${wb("Complete set","bottom:32px")}`
+  },
+  {
+    section:"Workout",
+    nm:"17 · Well Done",
+    tag:["רגע","#0f6e56","#E1F5EE"],
+    role:"2 שניות. טיפוגרפיה ענקית. ואחר כך — Home.",
+    says:"Well Done.",
+    oa:"כלום.",
+    ob:"שמירת הסשן לפני שמסך זה מוצג.",
+    s:`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div class="hero-title" style="font-size:40px;font-weight:600;letter-spacing:-0.035em;line-height:1;white-space:nowrap;">Well done<span style="color:${T};">.</span></div></div>`
+  },
+  {
+    section:"Program",
+    nm:"18 · Program · Weekly View",
+    tag:["Program","#854f0b","#FAEEDA"],
+    role:"תוכנית שבועית. לחיצה על אימון פותחת את תוכנו.",
+    says:"4 days / week — your current split.",
+    oa:"לחיצה על אימון לפרטים.",
+    ob:"ניהול התוכנית לאורך זמן.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;bottom:66px;overflow:hidden;"><div class="hero-title" style="font-size:28px;font-weight:600;">Program</div><div style="font-size:13px;color:${G};margin-top:6px;">4 days / week</div>
+    <div style="margin-top:22px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${T};margin-bottom:4px;">Completed this week</div>
+    ${[['Mon','Upper A','Chest · Shoulders'],['Wed','Lower A','Quads · Glutes']].map(([day,name,muscles])=>`<div style="padding:13px 0;border-bottom:0.5px solid ${BD};display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;"><div style="min-width:0;flex:1;"><div style="font-size:12px;color:${G};margin-bottom:3px;">${day}</div><div style="font-size:18px;font-weight:600;">${name}</div><div style="font-size:12px;color:${G};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${muscles}</div></div><div style="flex-shrink:0;display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:0.6px;color:#8a8a8e;background:#1c1c1e;border:0.5px solid #38383a;border-radius:10px;padding:3px 8px 3px 6px;">${icon.check({size:11,color:'#8a8a8e',sw:2.4})}DONE</div></div>`).join('')}
+    <div style="margin-top:22px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${T};margin-bottom:4px;">Up next</div>
+    ${[['Upper B','Back · Biceps'],['Lower B','Hamstrings']].map(([name,muscles])=>`<div style="padding:13px 0;border-bottom:0.5px solid ${BD};display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;"><div style="min-width:0;flex:1;"><div style="font-size:18px;font-weight:600;">${name}</div><div style="font-size:12px;color:${G};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${muscles}</div></div><div style="flex-shrink:0;display:flex;align-items:center;gap:2px;font-size:13px;font-weight:500;color:#2d9cdb;cursor:pointer;">Set as next${icon.chevronR({size:15,color:'#2d9cdb'})}</div></div>`).join('')}
+    </div>${tabsProgram}`
+  },
+  {
+    section:"Program",
+    nm:"19 · Workout Edit",
+    tag:["Program","#854f0b","#FAEEDA"],
+    role:"רשימת תרגילים. אייקון החלפה. גרירה לסדר מחדש. נקי לחלוטין.",
+    says:"Chest Day.",
+    oa:"לשנות סדר, להחליף תרגיל.",
+    ob:"שמירת הבחירות.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;"><div style="display:flex;align-items:center;gap:12px;"><span style="display:flex;cursor:pointer;">${icon.chevronL({size:20,color:G})}</span><div class="hero-title" style="font-size:24px;font-weight:600;">Upper A</div></div>
+    <div style="margin-top:24px;display:flex;flex-direction:column;gap:0;">
+    ${[['Bench Press','82.5 kg','3 × 8'],['Incline DB Press','32 kg','3 × 10'],['Shoulder Press','52.5 kg','3 × 8'],['Lateral Raise','14 kg','3 × 15'],['Tricep Pushdown','25 kg','3 × 12'],].map(ex=>`<div style="padding:14px 0;border-bottom:0.5px solid ${BD};display:flex;align-items:center;justify-content:space-between;"><span style="margin-right:12px;cursor:grab;display:flex;">${icon.grip({size:18,color:T})}</span><div style="flex:1;"><div style="font-size:16px;font-weight:500;">${ex[0]}</div><div style="font-size:13px;color:${G};margin-top:2px;">${ex[1]} · ${ex[2]}</div></div><span style="display:flex;cursor:pointer;">${icon.swap({size:18,color:G})}</span></div>`).join('')}
+    </div></div>`
+  },
+  {
+    section:"Program",
+    nm:"19b · Swap Exercise",
+    tag:["Bottom Sheet","#185fa5","#E6F1FB"],
+    role:"נפתח מאייקון ההחלפה. אלטרנטיבות לאותה קבוצת שרירים. הנוכחי מסומן.",
+    says:"Swap Bench Press.",
+    oa:"לבחור תרגיל חלופי.",
+    ob:"שמירה על אותו דפוס תנועה.",
+    s:`<div style="position:absolute;inset:0;background:#000;"></div><div style="position:absolute;top:22px;left:18px;right:18px;opacity:0.32;"><div class="hero-title" style="font-size:24px;font-weight:600;color:#fff;">Upper A</div><div style="margin-top:20px;">${['Bench Press','Incline DB Press','Shoulder Press'].map(n=>`<div style="padding:13px 0;border-bottom:0.5px solid ${BD};font-size:16px;color:#fff;">${n}</div>`).join('')}</div></div><div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);"></div><div style="position:absolute;left:0;right:0;bottom:0;height:74%;background:#1c1c1e;border-radius:24px 24px 0 0;padding:0 16px;box-shadow:0 -8px 30px rgba(0,0,0,0.5);">
+    <div style="width:36px;height:5px;background:#3a3a3c;border-radius:3px;margin:10px auto 14px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;"><div><div class="hero-title" style="font-size:21px;font-weight:600;">Swap exercise</div><div style="font-size:13px;color:${G};margin-top:2px;">Horizontal push · same pattern</div></div><div style="width:30px;height:30px;border-radius:15px;background:#2c2c2e;display:flex;align-items:center;justify-content:center;cursor:pointer;">${icon.close({size:16,color:DIM})}</div></div>
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+    ${[['Bench Press','Barbell · current',true],['Dumbbell Press','Greater range of motion',false],['Incline Bench Press','Upper chest focus',false],['Machine Chest Press','Stable · rack-free',false],['Push-up','Bodyweight',false]].map(([name,desc,cur])=>`<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;background:${cur?'#fff':'#2c2c2e'};cursor:pointer;"><div style="flex:1;"><div style="font-size:16px;font-weight:500;color:${cur?'#000':'#fff'};">${name}</div><div style="font-size:12px;margin-top:2px;color:${cur?'#6d6d72':G};">${desc}</div></div>${cur?icon.check({size:20,color:'#000',sw:2.2}):`<span style="display:flex;">${icon.chevronR({size:18,color:T})}</span>`}</div>`).join('')}
+    </div></div>`
+  },
+  {
+    section:"History",
+    nm:"20 · History · Empty",
+    tag:["History","#0f6e56","#E1F5EE"],
+    role:"ריק. שורה אחת. אין מוטיבציה.",
+    says:"Your first session will appear here.",
+    oa:"כלום.",
+    ob:"מחכה לסשן הראשון.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;"><div class="hero-title" style="font-size:28px;font-weight:600;">History</div></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-bottom:60px;"><div style="font-size:14px;color:${G};">Your first session will appear here.</div></div>${tabsHistory}`
+  },
+  {
+    section:"History",
+    nm:"21 · History · Populated",
+    tag:["History","#0f6e56","#E1F5EE"],
+    role:"רשומות כרונולוגיות. תאריך + שם + הערת Hush בגוף ראשון. לחיצה → פירוט.",
+    says:"I increased your chest load. — I swapped in machine press — rack was taken.",
+    oa:"מה לבחון.",
+    ob:"תיעוד מה שעשה, כעובדה.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;bottom:66px;overflow:hidden;"><div class="hero-title" style="font-size:28px;font-weight:600;">History</div><div style="font-size:13px;color:${G};margin-top:6px;">You completed 47 sessions.</div>
+    <div style="margin-top:20px;">
+    ${[['Jun 17','Upper A','I increased your chest load.'],['Jun 15','Lower B',''],['Jun 13','Upper B','I swapped in machine press — rack was taken.'],['Jun 10','Lower A','You ended this one early.'],['Jun 08','Upper A',''],].map(([d,n,a])=>`<div style="padding:13px 0;border-bottom:0.5px solid ${BD};cursor:pointer;"><div style="font-size:12px;color:${G};">${d}</div><div style="font-size:18px;font-weight:600;margin-top:3px;">${n}</div>${a?`<div style="font-size:12px;color:${G};margin-top:5px;line-height:1.4;">${a}</div>`:''}</div>`).join('')}
+    </div></div>${tabsHistory}`
+  },
+  {
+    section:"History",
+    nm:"22 · Workout Detail",
+    tag:["History","#0f6e56","#E1F5EE"],
+    role:"פירוט מלא של אימון: תרגיל, סטים, חזרות, ק\"ג.",
+    says:"Jun 17 · Upper A",
+    oa:"לבחון ביצועים.",
+    ob:"תיעוד מדויק.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;bottom:0;overflow:hidden;"><div style="display:flex;align-items:center;gap:10px;"><span style="display:flex;cursor:pointer;">${icon.chevronL({size:20,color:G})}</span><div><div class="hero-title" style="font-size:22px;font-weight:600;">Upper A</div><div style="font-size:13px;color:${G};">Jun 17 · 52 min</div></div></div>
+    <div style="margin-top:22px;display:flex;flex-direction:column;gap:20px;">
+    ${[['Bench Press',[['82.5','8'],['82.5','8'],['80','7']]],['Incline DB Press',[['32','10'],['32','10'],['30','9']]],['Shoulder Press',[['52.5','8'],['52.5','7'],['50','8']]],].map(([ex,sets])=>`<div><div style="font-size:17px;font-weight:500;margin-bottom:8px;">${ex}</div>${sets.map((s,i)=>`<div style="display:flex;justify-content:space-between;font-size:14px;color:${G};padding:3px 0;"><span>Set ${i+1}</span><span>${s[0]} kg × ${s[1]}</span></div>`).join('')}</div>`).join('')}
+    </div></div>`
+  },
+  {
+    section:"Portrait",
+    nm:"23 · Portrait · Locked",
+    tag:["Portrait","#185fa5","#E6F1FB"],
+    role:"לפני אימון 7. פשוט. מונה על האייקון.",
+    says:"Four more sessions until your Portrait.",
+    oa:"ממתין.",
+    ob:"מצבר נתונים.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;"><div class="hero-title" style="font-size:28px;font-weight:600;">Portrait</div></div><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 30px 70px;text-align:center;gap:20px;"><div style="font-size:21px;font-weight:600;line-height:1.3;">Still taking shape.</div><div style="font-size:14px;color:${G};line-height:1.55;">I'm learning how your body moves. Four more sessions and I'll show you what I see.</div><div style="display:flex;gap:7px;margin-top:8px;">${[1,1,1,0,0,0,0].map(f=>`<div style="width:7px;height:7px;border-radius:50%;background:${f?'#fff':'#2c2c2e'};"></div>`).join('')}</div><div style="font-size:12px;color:${T};letter-spacing:.3px;">3 of 7 sessions</div></div>${tabsPortrait}`
+  },
+  {
+    section:"Portrait",
+    nm:"24 · Portrait · Unlocked",
+    tag:["Portrait","#185fa5","#E6F1FB"],
+    role:"5 יכולות, לא הרמות. Bar גרפי. משפט אחד. ללא מספרים.",
+    says:"I'm building around your hinge. It's your strongest.",
+    oa:"מתבונן.",
+    ob:"מציג את המצב הנוכחי.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;bottom:66px;"><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${T};">What your body can do</div><div style="margin-top:26px;">${capbar('Hip hinge',88)}${capbar('Squat',72)}${capbar('Horizontal push',64)}${capbar('Vertical push',58)}${capbar('Horizontal pull',41)}</div><div style="font-size:14px;color:${DIM};margin-top:8px;line-height:1.5;">I'm building around your hinge. It's your strongest.</div></div>${tabsPortrait}`
+  },
+  {
+    section:"Portrait",
+    nm:"25 · Portrait · Then · Now",
+    tag:["Portrait · 3 חודשים","#185fa5","#E6F1FB"],
+    role:"אירוע כל 3 חודשים. אותם bars + ghost bar אפור מאחורי. משפט אחד.",
+    says:"Three months. Your pulling went from your weakest to even with your press.",
+    oa:"'Got it'.",
+    ob:"מחשב שינוי יחסי.",
+    s:`<div style="position:absolute;top:22px;left:18px;right:18px;"><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${T};">Three months</div><div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:${G};"><span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:6px;border-radius:3px;background:#3a3a3c;display:inline-block;"></span>Then</span><span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:6px;border-radius:3px;background:#fff;display:inline-block;"></span>Now</span></div><div style="margin-top:22px;">${capbar('Hip hinge',88,80)}${capbar('Squat',72,66)}${capbar('Horizontal push',64,60)}${capbar('Vertical push',58,50)}${capbar('Horizontal pull',62,33)}</div><div style="font-size:14px;color:${DIM};margin-top:8px;line-height:1.5;">Your pulling went from your weakest to even with your press.</div></div>${wb("Got it","bottom:40px")}`
+  },
+  {
+    section:"Profile",
+    nm:"26 · Profile",
+    tag:["Profile","#854f0b","#FAEEDA"],
+    role:"נפתח מהמבורגר. פרטי משתמש + הגדרות.",
+    says:"—",
+    oa:"שינוי הגדרות, יציאה, מחיקה.",
+    ob:"שמירת בחירות.",
+    s:`<div style="position:absolute;top:30px;left:18px;right:18px;bottom:24px;display:flex;flex-direction:column;"><div class="hero-title" style="font-size:32px;font-weight:600;">Alex</div><div style="font-size:14px;color:${G};margin-top:6px;">Male · 29 · 178 cm · 82 kg</div><div style="margin-top:34px;border-top:0.5px solid ${BD};">
+    ${[['Units','kg / lb toggle'],['Membership','Member since\nJun 2024'],['Health Access','Connected'],['Sign Out',''],].map(([label,val])=>`<div style="padding:18px 0;border-bottom:0.5px solid ${BD};display:flex;justify-content:space-between;align-items:center;gap:16px;"><span style="font-size:16px;flex-shrink:0;">${label}</span>${val?`<span style="font-size:13px;color:${G};text-align:right;line-height:1.5;white-space:pre-line;">${val}</span>`:`<span style="display:flex;">${icon.chevronR({size:17,color:G})}</span>`}</div>`).join('')}
+    <div style="padding:18px 0;border-bottom:0.5px solid ${BD};"><span style="font-size:16px;color:#ef4444;">Delete Account</span></div>
+    </div><div style="margin-top:auto;text-align:center;font-size:11px;color:${T};">Hush v1.0.0</div></div>`
+  },
+  {
+    section:"iOS",
+    nm:"27 · Dynamic Island",
+    tag:["iOS","#185fa5","#E6F1FB"],
+    role:"אימון פעיל מוצג ב-Dynamic Island. הטיימר חי. מבט חטוף בלי לפתוח את האפליקציה.",
+    says:"Bench Press · 02:14",
+    oa:"מבט חטוף, הקשה להרחבה.",
+    ob:"שידור מצב האימון בזמן אמת.",
+    s:`<div style="position:absolute;inset:0;${wall}"></div>
+    <!-- split status bar around the island -->
+    <div style="position:absolute;top:0;left:0;right:0;height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:5;"><span class="tnum" style="font-size:13px;font-weight:600;color:#fff;letter-spacing:0.2px;">9:41</span><span style="display:flex;align-items:center;gap:5px;">
+      <svg width="16" height="11" viewBox="0 0 18 12" fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+      <svg width="24" height="12" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="21" height="12" rx="3.5" stroke="#fff" stroke-opacity="0.5"/><rect x="2" y="2" width="17" height="9" rx="2" fill="#fff"/><rect x="23" y="4" width="1.6" height="5" rx="0.8" fill="#fff" fill-opacity="0.5"/></svg>
+    </span></div>
+    <div style="position:absolute;top:84px;left:0;right:0;text-align:center;color:#fff;"><div class="tnum" style="font-size:64px;font-weight:300;letter-spacing:-1.5px;line-height:1;">9:41</div><div style="font-size:15px;color:rgba(255,255,255,0.7);margin-top:8px;">Thursday, June 18</div></div>
+    <!-- Dynamic Island (expanded compact) -->
+    <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#000;border-radius:21px;height:38px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 13px;width:178px;box-shadow:0 2px 10px rgba(0,0,0,0.5);z-index:8;">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#2d7dd2,#185fa5);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;">H</div>
+        <div class="tnum" style="font-size:17px;font-weight:600;color:#3db48c;">02:14</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;"><span style="font-size:9px;color:#8a8a90;">Set 2/3</span><span style="font-size:10px;color:#fff;font-weight:500;">Rest</span></div>
+        <div style="width:24px;height:24px;border-radius:12px;border:1.5px solid #3db48c;display:flex;align-items:center;justify-content:center;">${icon.pause({size:11,color:'#3db48c'})}</div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,0.45);">Tap the island to return to your set</div>`
+  },
+  {
+    section:"iOS",
+    nm:"28 · Live Activity",
+    tag:["iOS","#185fa5","#E6F1FB"],
+    role:"כרטיס Live Activity במסך הנעילה. התקדמות האימון, הסט הנוכחי, וטיימר מנוחה חי.",
+    says:"Upper A · 6 of 12 sets",
+    oa:"מעקב מבלי לפתוח את האפליקציה.",
+    ob:"עדכון רציף של מצב האימון.",
+    s:`<div style="position:absolute;inset:0;${wall}"></div>${statusbar(true)}
+    <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:84px;height:26px;background:#000;border-radius:14px;z-index:8;"></div>
+    <div style="position:absolute;top:48px;left:0;right:0;text-align:center;color:#fff;"><div class="tnum" style="font-size:50px;font-weight:300;letter-spacing:-1px;line-height:1;">9:41</div><div style="font-size:13px;color:rgba(255,255,255,0.65);margin-top:4px;">Thursday, June 18</div></div>
+    <!-- Live Activity card -->
+    <div style="position:absolute;top:128px;left:14px;right:14px;background:rgba(28,28,30,0.78);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:0.5px solid rgba(255,255,255,0.1);border-radius:22px;padding:15px 16px;color:#fff;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#2d7dd2,#185fa5);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;">H</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:600;">Upper A</div><div style="font-size:12px;color:rgba(255,255,255,0.55);">Chest · Shoulders · Triceps</div></div>
+        <div class="tnum" style="text-align:right;"><div style="font-size:11px;color:rgba(255,255,255,0.55);">Elapsed</div><div style="font-size:15px;font-weight:600;">24:08</div></div>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:7px;"><span>6 of 12 sets</span><span class="tnum">50%</span></div>
+      <div style="height:6px;background:rgba(255,255,255,0.14);border-radius:3px;overflow:hidden;"><div style="height:6px;width:50%;background:#fff;border-radius:3px;"></div></div>
+      <div style="margin-top:15px;display:flex;align-items:center;gap:11px;padding-top:13px;border-top:0.5px solid rgba(255,255,255,0.1);">
+        <div style="width:34px;height:34px;border-radius:17px;border:2px solid #3db48c;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="tnum" style="font-size:10px;font-weight:600;color:#3db48c;">38</span></div>
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Resting</div><div style="font-size:12px;color:rgba(255,255,255,0.55);">Next · Incline DB Press · 32 kg</div></div>
+      </div>
+    </div>`
+  },
+  {
+    section:"iOS",
+    nm:"29 · Notification",
+    tag:["iOS","#185fa5","#E6F1FB"],
+    role:"התראה ב-20:00 בערב: תוכנית השבוע הבא מוכנה. מסך נעילה.",
+    says:"Next week's program is ready.",
+    oa:"הקשה לפתיחה.",
+    ob:"בניית התוכנית הושלמה ברקע.",
+    s:`<div style="position:absolute;inset:0;${wall}"></div>${statusbar(true)}
+    <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:84px;height:26px;background:#000;border-radius:14px;z-index:8;"></div>
+    <div style="position:absolute;top:46px;left:0;right:0;text-align:center;color:#fff;"><div style="font-size:14px;color:rgba(255,255,255,0.7);">Thursday, June 18</div><div class="tnum" style="font-size:62px;font-weight:300;letter-spacing:-1px;line-height:1.05;">8:00</div></div>
+    <!-- Notification banner -->
+    <div style="position:absolute;top:170px;left:12px;right:12px;background:rgba(40,40,42,0.7);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:0.5px solid rgba(255,255,255,0.08);border-radius:20px;padding:13px 14px;color:#fff;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2d7dd2,#185fa5);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">H</div>
+        <span style="font-size:12px;font-weight:600;letter-spacing:0.3px;color:rgba(255,255,255,0.75);">HUSH</span>
+        <span style="margin-left:auto;font-size:12px;color:rgba(255,255,255,0.5);">now</span>
+      </div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:3px;">Next week is ready</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.78);line-height:1.4;">I've built your program for next week. Four sessions, tuned to how you trained.</div>
+    </div>
+    <div style="position:absolute;bottom:22px;left:0;right:0;display:flex;justify-content:center;"><div style="width:128px;height:5px;border-radius:3px;background:rgba(255,255,255,0.5);"></div></div>`
+  }
+];
+
+const SECTIONS=[...new Set(SCREENS.map(s=>s.section))];
+let cur=0;
+
+const secTabsEl=document.getElementById('secTabs');
+const phoneScreen=document.getElementById('phoneScreen');
+const screenNum=document.getElementById('screenNum');
+const screenName=document.getElementById('screenName');
+const screenTag=document.getElementById('screenTag');
+const roleText=document.getElementById('roleText');
+const saysText=document.getElementById('saysText');
+const colA=document.getElementById('colA');
+const colB=document.getElementById('colB');
+const dotsRow=document.getElementById('dotsRow');
+const prevBtn=document.getElementById('prevBtn');
+const nextBtn=document.getElementById('nextBtn');
+
+SCREENS.forEach((_,k)=>{
+  const d=document.createElement('div');
+  d.className='hush-dot';
+  d.onclick=()=>{cur=k;render();};
+  dotsRow.appendChild(d);
+});
+
+SECTIONS.forEach(sec=>{
+  const b=document.createElement('button');
+  b.className='hush-sec-btn';
+  b.textContent=sec;
+  b.onclick=()=>{
+    const idx=SCREENS.findIndex(s=>s.section===sec);
+    if(idx>=0){cur=idx;render();}
+  };
+  secTabsEl.appendChild(b);
+});
+
+function render(){
+  const s=SCREENS[cur];
+  phoneScreen.innerHTML=s.s;
+  screenNum.textContent=`${cur+1}/${SCREENS.length}`;
+  screenName.textContent=s.nm;
+  screenTag.textContent=s.tag[0];
+  screenTag.style.color=s.tag[1];
+  screenTag.style.background=s.tag[2];
+  roleText.textContent=s.role;
+  saysText.textContent=`"${s.says}"`;
+  colA.textContent=s.oa;
+  colB.textContent=s.ob;
+  prevBtn.disabled=cur===0;
+  nextBtn.disabled=cur===SCREENS.length-1;
+  [...dotsRow.children].forEach((d,k)=>{
+    d.classList.toggle('active',k===cur);
+  });
+  const curSec=s.section;
+  [...secTabsEl.children].forEach(b=>{
+    b.classList.toggle('active',b.textContent===curSec);
+  });
+}
+
+prevBtn.onclick=()=>{if(cur>0){cur--;render();}};
+nextBtn.onclick=()=>{if(cur<SCREENS.length-1){cur++;render();}};
+
+render();
+</script>

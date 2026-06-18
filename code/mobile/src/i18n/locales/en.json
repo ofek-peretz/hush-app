@@ -1,30 +1,68 @@
 {
-  "enrollment": {
-    "instruction": "Enter your invite to begin.",
-    "placeholder": "Invite code",
-    "continue": "Continue",
-    "legal": "Terms · Privacy",
-    "revoked": "This invite is no longer active."
+  "common": {
+    "back": "Back"
+  },
+  "auth": {
+    "wordmark": "Hush",
+    "tagline": "Train.\nQuietly.",
+    "apple": "Continue with Apple",
+    "google": "Continue with Google",
+    "legal": "Terms · Privacy"
+  },
+  "consent": {
+    "title": "Before we start.",
+    "body": "Hush coaches you with data you log here. I keep it to run your training and improve how I coach. You can export or delete it anytime.",
+    "agree": "I agree",
+    "legal": "Terms · Privacy"
   },
   "connectHealth": {
-    "_comment": "Provisional copy (user-approved 2026-06-13), refinable without architectural impact.",
-    "sentence": "Help Hush understand your training and recovery from day one.",
+    "title": "Connect Health",
+    "body": "Hush builds your first program from it. Skip it and I'll ask you four quick things instead.",
+    "optional": "Optional. You can change this anytime.",
+    "continue": "Continue",
+    "skip": "Skip"
+  },
+  "manualInfo": {
+    "title": "A few quick things.",
+    "age": "Age",
+    "sex": "Sex",
+    "male": "Male",
+    "female": "Female",
+    "other": "Other",
+    "height": "Height",
+    "weight": "Weight",
     "continue": "Continue"
   },
   "goal": {
-    "getStronger": "Get Stronger",
+    "eyebrow": "What are you training for",
     "buildMuscle": "Build Muscle",
+    "increaseStrength": "Increase Strength",
+    "stayConsistent": "Stay Consistent",
+    "continue": "Continue",
+    "getStronger": "Get Stronger",
     "generalFitness": "General Fitness"
   },
   "daysPerWeek": {
+    "eyebrow": "How many days a week",
     "continue": "Continue"
+  },
+  "programCreated": {
+    "title": "Program\nCreated",
+    "subtitle": "{{days}} days · built for you."
   },
   "aboutYou": {
     "continue": "Continue"
   },
   "home": {
-    "startWorkout": "Start Workout",
-    "rest": "Rest. You need it after {{day}}."
+    "slideToStart": "Slide to start",
+    "greeting": "Good {{part}}.",
+    "greetingNamed": "Good {{part}}, {{name}}.",
+    "morning": "morning",
+    "afternoon": "afternoon",
+    "evening": "evening",
+    "restTitle": "Rest.",
+    "restSub": "You trained {{count}} days this week.",
+    "metadata": "{{exercises}} exercises · {{sets}} sets · ~{{min}} min"
   },
   "calibration": {
     "framing": "The first few workouts are for me to learn you. Weights start light — that's deliberate.",
@@ -32,8 +70,18 @@
   },
   "workout": {
     "bodyweight": "Bodyweight",
-    "completeSet": "Complete Set",
+    "completeSet": "Complete set",
     "editResult": "Edit result",
+    "reps": "× {{reps}}",
+    "setOfM": "Set {{n}} of {{m}}",
+    "coachingUp": "Up {{delta}} from last week. You're ready for it.",
+    "coachingHold": "You can do it.",
+    "exerciseBusy": "Exercise Busy",
+    "nextExercise": "Next exercise",
+    "focusOn": "Focus on",
+    "formGuide": "Form guide",
+    "ready": "Ready",
+    "demoDone": "Done",
     "equipmentOccupied": "Equipment occupied",
     "reasonIncrease": "Up {{delta}} from last time. You earned it.",
     "reasonHold": "Holding here — your recent sessions read as fatigue, not weakness.",
@@ -52,7 +100,16 @@
     "decrease": "Down {{delta}} today. Three hard sessions in a row — this is the smart move."
   },
   "editResult": {
-    "done": "Done"
+    "done": "Done",
+    "save": "Save",
+    "weight": "Weight",
+    "repsLabel": "Reps"
+  },
+  "pauseSheet": {
+    "title": "Workout paused",
+    "resume": "Resume workout",
+    "showExercise": "Show exercise",
+    "finishEarly": "Finish early"
   },
   "rest": {
     "ready": "Ready"
@@ -74,11 +131,20 @@
     "done": "Done"
   },
   "wellDone": {
-    "_comment": "Provisional copy (user-approved 2026-06-13), refinable without architectural impact.",
-    "message": "Well Done."
+    "message": "Well done"
   },
   "portrait": {
+    "tab": "Portrait",
+    "stillTakingShape": "Still taking shape.",
+    "lockedBody": "I'm learning how your body moves. {{remaining}} more sessions and I'll show you what I see.",
+    "sessionsCount": "{{done}} of {{total}} sessions",
     "headline": "What your body can do",
+    "threeMonths": "Three months",
+    "then": "Then",
+    "now": "Now",
+    "gotIt": "Got it",
+    "compareThreeMonths": "Compare to three months ago",
+    "insightStrongest": "I'm building around your {{pattern}}. It's your strongest.",
     "commitment": "Your {{strong}} is the strongest thing about you. Your {{weak}} is the most untapped. I'm building around closing that gap.",
     "receiptClosed": "This was your weakest. Told you.",
     "stillLearning": "still learning",
@@ -120,6 +186,12 @@
     "yoursNow": "{{exercise}} is yours now."
   },
   "program": {
+    "title": "Program",
+    "perWeek": "{{n}} days / week",
+    "completedThisWeek": "Completed this week",
+    "upNext": "Up next",
+    "setAsNext": "Set as next",
+    "doneChip": "DONE",
     "loadChange": "I increased your {{target}}.",
     "undo": "Undo",
     "frameChange": "Adding a set to {{capability}}.",
@@ -129,16 +201,49 @@
     "frequency": "{{n}} days a week",
     "restDay": "Rest",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "done": "Done",
+    "perExercise": "{{weight}} · {{sets}} × {{reps}}",
+    "perExerciseBw": "Bodyweight · {{sets}} × {{reps}}"
+  },
+  "swap": {
+    "title": "Swap exercise",
+    "samePattern": "{{pattern}} · same pattern",
+    "current": "{{equipment}} · current",
+    "close": "Close"
+  },
+  "equipment": {
+    "barbell": "Barbell",
+    "dumbbell": "Dumbbell",
+    "machine": "Machine",
+    "cable": "Cable",
+    "bodyweight": "Bodyweight"
   },
   "history": {
     "title": "History",
+    "empty": "Your first session will appear here.",
+    "count": "You completed {{n}} sessions.",
     "annIncreased": "I increased your {{target}}.",
     "annSwapped": "I swapped in {{exercise}} — the rack was taken.",
     "annEndedEarly": "You ended this one early.",
-    "perSet": "{{weight}} × {{reps}}"
+    "perSet": "{{weight}} × {{reps}}",
+    "setN": "Set {{n}}",
+    "dateDuration": "{{date}} · {{min}} min",
+    "minutesShort": "{{min}} min"
   },
   "profile": {
+    "units": "Units",
+    "membership": "Membership",
+    "memberSince": "Member since",
+    "healthAccess": "Health Access",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "signOut": "Sign Out",
+    "deleteAccount": "Delete Account",
+    "version": "Hush v1.0.0",
+    "deleteConfirm": "Delete your account and all data?",
+    "signOutConfirm": "Sign out?",
+    "cancel": "Cancel",
     "program": "Program",
     "history": "History",
     "whatHushKnows": "What Hush knows",
@@ -167,6 +272,27 @@
     "general": "Something went wrong. Try again."
   },
   "notifications": {
-    "weeklyReadyTitle": "Next week's program is ready."
+    "weeklyReadyTitle": "Next week is ready",
+    "weeklyReadyBody": "I've built your program for next week. {{count}} sessions, tuned to how you trained.",
+    "weeklyReadyBodyOne": "I've built your program for next week. One session, tuned to how you trained.",
+    "weeklyReadyBodyGeneric": "I've built your program for next week, tuned to how you trained.",
+    "thresholdTitle": "Your training picture changed."
+  },
+  "watch": {
+    "next": "Next:",
+    "interEncouragement": "You can do this.",
+    "transitionEncouragement": "Let's go.",
+    "exerciseComplete": "{{exercise}} Complete",
+    "pausedTitle": "Paused",
+    "finishPrompt": "Finish Workout?",
+    "finishYes": "Yes",
+    "finishNo": "No",
+    "couldntComplete": "Couldn't Complete",
+    "repAdjustTitle": "Actual reps",
+    "repAdjustTarget": "Target {{reps}}",
+    "confirm": "Confirm",
+    "workoutCompleteTitle": "Well Done.",
+    "reconnecting": "Reconnecting",
+    "continueOnPhone": "Continue on iPhone"
   }
 }

@@ -1,26 +1,67 @@
 /**
- * Hush design tokens — Production Implementation Spec §8.1 (final, frozen).
+ * Hush design tokens — HUSH_BUILD_SPEC §2 (final product spec, 2026-06-18).
  *
  * LAWS ENFORCED HERE:
- *  - Dark mode only, #000000 base. No light theme.
- *  - No red, no green, no accent color ANYWHERE. Meaning comes from type
- *    size/position only (UX Law 9, spec §8.1/§8.9).
- *  - Destructive actions use the identical white button (no danger color).
+ *  - Always dark. #000000 true-black base. No light theme.
+ *  - Premium Apple finish: tabular figures on numerals, tight tracking on
+ *    display type, translucent blurred bars. Typography is the UI.
+ *  - Restraint: white is the only "action" fill; `accentBlue` is the lone
+ *    interactive link color; `accentGreen` is reserved for live timers
+ *    (Dynamic Island / Live Activity); `danger` for destructive only.
  *
  * Nothing in the product may introduce a color outside this file.
+ *
+ * NOTE (2026-06-18): the earlier "Living Dark · Aurora" violet→cyan accent was
+ * superseded by HUSH_BUILD_SPEC. The `accent` export below is retained ONLY so
+ * not-yet-migrated screens keep compiling; it is removed as those screens are
+ * rebuilt to spec (StartOrb / AuroraBackground are being retired).
  */
 
 export const color = {
-  // Backgrounds
-  bgBase: '#000000', // canvas
-  bgSurface: '#111111', // sheets / raised surfaces
-  borderSubtle: '#2C2C2E',
+  // §2.1 — Backgrounds / surfaces
+  bg: '#000000', // app background (true black)
+  surface: '#111111', // bottom sheets, demo cards
+  surface2: '#1C1C1E', // swap sheet bg, raised rows, DONE chip bg
+  surface3: '#2C2C2E', // cards inside sheets, circular icon buttons
 
-  // Text
-  textPrimary: '#FFFFFF', // hero, receipts
-  textSecondary: '#A1A1AA', // errors, secondary/text actions, empty-state copy
-  textTertiary: '#71717A',
-  textDim: '#D4D4D8', // active-set exercise name, reason line
+  // §2.1 — Text
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA', // secondary text, captions (G)
+  textTertiary: '#71717A', // eyebrows, inactive (T)
+  textDim: '#D4D4D8', // cap-bar labels, coaching line (DIM)
+
+  // §2.1 — Lines / chrome
+  border: '#2C2C2E', // hairline dividers / borders (BD)
+  tabInactive: '#6D6D72', // inactive tab icon + label
+
+  // §2.1 — Accents (used sparingly, by role)
+  accentBlue: '#2D9CDB', // actionable links ("Set as next")
+  accentGreen: '#3DB48C', // live timer / rest ring (DI & Live Activity)
+  danger: '#EF4444', // destructive ("Delete Account")
+
+  // §2.1 — DONE chip
+  doneText: '#8A8A8E',
+  doneBorder: '#38383A',
+
+  // Logo gradient (135°) §9
+  logoGradStart: '#2D7DD2',
+  logoGradEnd: '#185FA5',
+
+  // ---- backward-compat aliases (retired as screens migrate to spec names) ----
+  bgBase: '#000000',
+  bgSurface: '#111111',
+  borderSubtle: '#2C2C2E',
+} as const;
+
+/**
+ * Accent — the single living color of Hush (Living Dark · Aurora). A violet→cyan
+ * gradient. Used ONLY for: the aurora glow behind Home content, the Start ring,
+ * and the session label. Restraint is the premium — one accent, nowhere else.
+ */
+export const accent = {
+  start: '#7C5CFF', // violet
+  end: '#22D3EE', // cyan
+  text: '#9D8CFF', // legible accent for small labels on pure black
 } as const;
 
 /**
@@ -61,10 +102,12 @@ export const button = {
     fontWeight: '500' as const,
     pressedOpacity: 0.95, // pressed -> 95% opacity, 150ms linear
   },
-  // Home CTA is the one exception to height/radius (§4.1, §8.1).
+  // Home CTA (Screen 01, canonical): 64px / 16px radius, 17px Semibold label.
   homeCta: {
-    height: 60,
-    radius: 18,
+    height: 64,
+    radius: 16,
+    fontSize: 17,
+    fontWeight: '600' as const,
   },
   // Secondary / text action: no bg/border/icon/chevron. Min 44pt tap height.
   textAction: {
@@ -93,3 +136,52 @@ export const a11y = {
   titleMaxScale: 1.5, // 48/32px titles, workout name
   bodyMaxScale: 1.8, // body/caption reflow freely
 } as const;
+
+/**
+ * Spacing & radii — HUSH_BUILD_SPEC §2.3.
+ * `gutter` is the standard 18pt screen horizontal padding (some sheets use 16).
+ */
+export const space = {
+  gutter: 18, // standard screen horizontal padding (§2.3)
+  sheetGutter: 16, // some sheets
+} as const;
+
+export const radius = {
+  card: 14, // buttons / cards
+  sheet: 24, // bottom sheets (top corners only)
+  done: 10, // DONE chip
+  pill: 20, // small segmented pills
+  full: 999, // circular icon buttons / knob
+} as const;
+
+export const hairline = { width: 0.5, color: color.border } as const;
+
+/**
+ * Translucent tab bar (§2.3): rgba(10,10,10,0.72) + backdrop blur 20pt,
+ * top border 0.5pt rgba(255,255,255,0.08), height 62pt above safe area.
+ */
+export const tabBar = {
+  height: 62,
+  bg: 'rgba(10,10,10,0.72)',
+  blur: 20,
+  topBorder: 'rgba(255,255,255,0.08)',
+} as const;
+
+/**
+ * Font-feature helpers (§2.2). RN equivalents of the spec's CSS modifiers.
+ *  - `tnum` → tabular figures (no width jitter on timers/counts/weights).
+ *  - `heroNum` → tabular + tight tracking for large numerals.
+ *  - `heroTitle` → tight tracking for display headings.
+ * `tracking(size, em)` converts an em tracking value to RN letterSpacing points.
+ */
+type FontVariant = NonNullable<import('react-native').TextStyle['fontVariant']>;
+const TABULAR: FontVariant = ['tabular-nums'];
+export const tnum = { fontVariant: TABULAR };
+export const tracking = (size: number, em: number) => size * em;
+export const heroNum = (size: number, em = -0.03) => ({
+  fontVariant: TABULAR,
+  letterSpacing: size * em,
+});
+export const heroTitle = (size: number, em = -0.02) => ({
+  letterSpacing: size * em,
+});

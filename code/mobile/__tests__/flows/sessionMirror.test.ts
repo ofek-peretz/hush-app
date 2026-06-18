@@ -1,0 +1,119 @@
+/**
+ * Canonical SessionMirror — the single projection for Live Activity / Dynamic
+ * Island / Apple Watch. Projection rules + drift-proof rest + wire serialization.
+ */
+import {
+  projectSessionMirror,
+  mirrorToWire,
+  mirrorFromWire,
+  MIRROR_SCHEMA_VERSION,
+  type MirrorInputs,
+  type MirrorStep,
+} from '@/platform/sessionMirror';
+import type { SessionMachine } from '@/state/machines/sessionState';
+
+const STEPS: MirrorStep[] = [
+  { exerciseName: 'Bench Press', setIndexInExercise: 0, totalSetsInExercise: 2, globalIndex: 0, targetWeight: 60, targetReps: 5 },
+  { exerciseName: 'Bench Press', setIndexInExercise: 1, totalSetsInExercise: 2, globalIndex: 1, targetWeight: 60, targetReps: 5 },
+  { exerciseName: 'Squat', setIndexInExercise: 0, totalSetsInExercise: 1, globalIndex: 2, targetWeight: 100, targetReps: 5 },
+];
+
+const NOW = Date.parse('2026-06-15T12:00:00.000Z');
+
+function machine(over: Partial<SessionMachine>): SessionMachine {
+  return { phase: 'SET_PRESENTED', resumePhase: null, setIndex: 0, isLastSetOfSession: false, earlyFinish: false, ...over };
+}
+
+function project(over: Partial<MirrorInputs>) {
+  return projectSessionMirror({
+    steps: STEPS,
+    total: STEPS.length,
+    machine: machine({}),
+    restInterS: 90,
+    restTransitionS: 120,
+    restStartedAtMs: null,
+    nowMs: NOW,
+    ...over,
+  });
+}
+
+describe('projectSessionMirror', () => {
+  it('returns null when there is no session (empty plan) → host tears down', () => {
+    expect(project({ steps: [], total: 0 })).toBeNull();
+  });
+
+  it('projects an active set with its target (watch renders this subset)', () => {
+    const m = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!;
+    expect(m.phase).toBe('active_set');
+    expect(m.exerciseName).toBe('Bench Press');
+    expect(m.setLabel).toBe('Set 1 of 2');
+    expect(m.globalIndex).toBe(0);
+    expect(m.totalSets).toBe(3);
+    expect(m.targetWeight).toBe(60);
+    expect(m.restEndsAt).toBeNull();
+  });
+
+  it('projects an inter-set rest with a drift-proof absolute end instant', () => {
+    const startedAt = NOW - 30_000; // rest began 30s ago
+    const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: startedAt })!;
+    expect(m.phase).toBe('rest_inter');
+    expect(m.restEndsAt).toBe(new Date(startedAt + 90_000).toISOString());
+    expect(m.restRemainingS).toBe(60); // 90 - 30 elapsed
+  });
+
+  it('projects a transition rest with the next exercise preview', () => {
+    const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), restStartedAtMs: NOW })!;
+    expect(m.phase).toBe('rest_transition');
+    expect(m.restRemainingS).toBe(120);
+    expect(m.nextExerciseName).toBe('Squat');
+  });
+
+  it('freezes the timer under pause (no live countdown)', () => {
+    const m = project({ machine: machine({ phase: 'PAUSED', resumePhase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW })!;
+    expect(m.phase).toBe('paused');
+    expect(m.restEndsAt).toBeNull();
+    expect(m.restRemainingS).toBeNull();
+  });
+
+  it('projects a terminal complete frame (watch shows Workout Complete)', () => {
+    const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
+    expect(m.phase).toBe('complete');
+    expect(m.restEndsAt).toBeNull();
+  });
+
+  it('offers Exercise Busy only at the start of an exercise with a later one', () => {
+    // idx 0 = Bench set 1 of 2, with Squat later → offerable
+    expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!.canMarkBusy).toBe(true);
+    // idx 1 = Bench set 2 of 2 (not the start) → not offerable
+    expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 1 }) })!.canMarkBusy).toBe(false);
+    // idx 2 = Squat set 1 of 1 (no later exercise) → not offerable
+    expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 2 }) })!.canMarkBusy).toBe(false);
+  });
+
+  it('names the just-finished exercise on a transition rest (Exercise Complete)', () => {
+    const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), restStartedAtMs: NOW })!;
+    expect(m.completedExerciseName).toBe('Bench Press');
+    expect(m.nextExerciseName).toBe('Squat');
+    expect(m.nextTargetWeight).toBe(100);
+    expect(m.nextTargetReps).toBe(5);
+  });
+
+  it('does not name a completed exercise during an inter-set rest', () => {
+    const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW })!;
+    expect(m.completedExerciseName).toBeNull();
+  });
+});
+
+describe('mirror wire serialization', () => {
+  it('round-trips a mirror through the wire form', () => {
+    const m = project({})!;
+    const back = mirrorFromWire(mirrorToWire(m));
+    expect(back).toEqual(m);
+  });
+
+  it('rejects an unknown schema and malformed input (no garbage rendered)', () => {
+    expect(mirrorFromWire({ schema: 999, phase: 'active_set', exerciseName: 'x' })).toBeNull();
+    expect(mirrorFromWire(null)).toBeNull();
+    expect(mirrorFromWire({ schema: MIRROR_SCHEMA_VERSION })).toBeNull();
+  });
+});

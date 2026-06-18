@@ -26,18 +26,18 @@ def test_runner_chain_is_ordered_and_single_source():
     # (re-gold: +8 session_progress (DX-11), +9 stagnation_marker (DX-09), +10 web-shell infra,
     #  +11 erasure_record (OD-2 right-to-erasure), +12 athlete_event, +13 off-policy sample,
     #  +14 composition audit (replayable candidate-selection).)
-    assert runner.migration_versions() == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert runner.migration_versions() == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     assert [m.VERSION for m in MIGRATIONS] == sorted(m.VERSION for m in MIGRATIONS)
-    assert SCHEMA_VERSION == 16
+    assert SCHEMA_VERSION == 17
 
 
 def test_runner_applies_in_order_and_is_idempotent():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     applied = run_migrations(conn)
-    assert applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]  # full chain, ascending
+    assert applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]  # full chain, ascending
     versions = sorted(r[0] for r in conn.execute("SELECT version FROM schema_version"))
-    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     assert run_migrations(conn) == []                       # idempotent: second run is a no-op
     conn.close()
 
@@ -48,7 +48,7 @@ def test_fresh_db_reports_full_schema_version():
     # Before ATD-12 a fresh DB had an EMPTY schema_version (MG1); now it records the full chain.
     db = Database(":memory:")
     versions = sorted(r[0] for r in db.conn.execute("SELECT version FROM schema_version"))
-    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]   # re-gold: +16 week_plan
+    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]   # re-gold: +17 workout name
     db.close()
 
 
@@ -358,3 +358,34 @@ def test_fresh_has_week_plan_and_columns_016():
     ws_cols = {r[1] for r in fresh.conn.execute("PRAGMA table_info(workout_session)")}
     fresh.close()
     assert "week_plan" in tables and {"week_plan_id", "position_in_week"} <= ws_cols
+
+
+def test_migration_017_adds_name_and_backfills():
+    from hush_model.persistence.migrations import migration_017_workout_name as m017
+    conn = sqlite3.connect(":memory:"); conn.row_factory = sqlite3.Row
+    # a pre-017 workout_session carrying the audit fields the name derives from
+    conn.execute(
+        "CREATE TABLE workout_session (id TEXT PRIMARY KEY, status TEXT, week REAL, "
+        "session_index INTEGER, weekly_frequency INTEGER)"
+    )
+    conn.execute("INSERT INTO workout_session VALUES ('ws_u', 'completed', 1.0, 0, 4)")  # Upper A
+    conn.execute("INSERT INTO workout_session VALUES ('ws_l', 'completed', 1.0, 1, 4)")  # Lower A
+    conn.execute("INSERT INTO workout_session VALUES ('ws_x', 'planned', 1.0, NULL, NULL)")  # no audit → NULL
+    assert m017.apply(conn) is True
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(workout_session)")}
+    assert "name" in cols
+    names = {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM workout_session")}
+    assert names["ws_u"] == "Upper A"
+    assert names["ws_l"] == "Lower A"
+    assert names["ws_x"] is None                               # un-derivable rows stay NULL (named at next compose)
+    ver = conn.execute("SELECT version FROM schema_version ORDER BY version DESC").fetchone()[0]
+    assert ver == 17
+    assert m017.apply(conn) is False                           # idempotent
+    conn.close()
+
+
+def test_fresh_has_workout_name_column_017():
+    fresh = Database(":memory:")
+    ws_cols = {r[1] for r in fresh.conn.execute("PRAGMA table_info(workout_session)")}
+    fresh.close()
+    assert "name" in ws_cols

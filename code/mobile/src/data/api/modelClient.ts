@@ -35,6 +35,22 @@ export interface ModelClient {
   getProfile(): Promise<BackendProfile>;
 
   /**
+   * Record the athlete's affirmative consent to a versioned agreement (OD-3/BB-33).
+   * Enrollment is operator-mediated, so consent is captured IN-APP (pressing Continue
+   * on Enrollment is the affirmative act). Durable + append-only server-side; the
+   * server stamps the authoritative timestamp. Fixture: no-op (offline/dev).
+   */
+  recordConsent(args: { version: string; acceptedAt: string }): Promise<void>;
+
+  /**
+   * Athlete-initiated right-to-erasure (OD-2) — the in-app "Delete Account" action. Logically
+   * erases (anonymizes) the CALLER server-side (`POST /me/erase`; athlete derived from the token,
+   * so it can only erase its own data). The token is invalidated by the call; the caller then wipes
+   * local state. Fixture: no-op (offline/dev has no server identity to erase).
+   */
+  eraseAccount(): Promise<void>;
+
+  /**
    * Server-side count of completed sessions — the SOURCE OF TRUTH for calibration
    * (spec §2.3). The client derives CALIBRATING/ADVISORY from this so a reinstall
    * or device change never resets calibration. null = no backend (fixture/dev).

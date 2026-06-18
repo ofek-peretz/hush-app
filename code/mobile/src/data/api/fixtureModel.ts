@@ -54,14 +54,18 @@ function trainingDay(id: string, name: string, muscleGroups: string[], exerciseI
   return { id, name, muscleGroups, isRest: false, slots };
 }
 
-function restDay(id: string, afterName: string): ProgramDay {
-  return { id, name: afterName, muscleGroups: [], isRest: true, slots: [] };
-}
-
 export const fixtureModel: ModelClient = {
   async getProfile() {
     // No server identity in the fixture; the dev/offline path uses About You.
     return {};
+  },
+
+  async recordConsent() {
+    // No backend in dev/offline — consent is recorded only on the enrolled HTTP path.
+  },
+
+  async eraseAccount() {
+    // No server identity in dev/offline — Delete Account just wipes local state (appStore).
   },
 
   async sessionsCompleted() {
@@ -69,29 +73,21 @@ export const fixtureModel: ModelClient = {
   },
 
   async generateProgram(profile: Profile): Promise<Program> {
-    // Two full-body templates rotated across the week (V1 barbell gym scope).
-    const fullA = ['bb_bench_press', 'bb_row', 'bb_back_squat'];
-    const fullB = ['bb_overhead_press', 'bb_rdl', 'bb_row'];
+    // WEEKLY-PROGRAM model (ratified): a BUCKET of exactly N workouts — no calendar, no rest
+    // days in the list, done in any order; Rest only after ALL N are done (weeklyRest()). Mirrors
+    // the /weeks payload shape: N non-rest ProgramDays, each with a stable ordering key and a
+    // `completed` flag. Dev/offline has no server completion source, so all start uncompleted.
+    // Two full-body templates rotated to fill N (V1 barbell gym scope).
     const templates = [
-      trainingDay('day_a', 'Full A', ['Chest', 'Back', 'Legs'], fullA),
-      trainingDay('day_b', 'Full B', ['Shoulders', 'Hamstrings', 'Back'], fullB),
+      trainingDay('day_a', 'Full A', ['Chest', 'Back', 'Legs'], ['bb_bench_press', 'bb_row', 'bb_back_squat']),
+      trainingDay('day_b', 'Full B', ['Shoulders', 'Hamstrings', 'Back'], ['bb_overhead_press', 'bb_rdl', 'bb_row']),
     ];
-
-    const days: ProgramDay[] = [];
     const n = Math.min(Math.max(profile.daysPerWeek, 1), 6);
-    let lastName = 'Full A';
-    for (let i = 0; i < 7; i++) {
-      const trainingSoFar = days.filter((d) => !d.isRest).length;
-      // Spread training days across the week, fill the rest with rest days.
-      const shouldTrain = trainingSoFar < n && (i % 2 === 0 || 7 - i <= n - trainingSoFar);
-      if (shouldTrain) {
-        const tpl = templates[trainingSoFar % templates.length];
-        // Workout key = the template index (athlete-owned workout-ordering identity).
-        days.push({ ...tpl, id: `${tpl.id}_${i}`, key: String(trainingSoFar % templates.length) });
-        lastName = tpl.name;
-      } else {
-        days.push(restDay(`rest_${i}`, lastName));
-      }
+    const days: ProgramDay[] = [];
+    for (let i = 0; i < n; i++) {
+      const templateIndex = i % templates.length;
+      const tpl = templates[templateIndex];
+      days.push({ ...tpl, id: `${tpl.id}_${i}`, key: String(templateIndex), completed: false });
     }
     return { id: 'program_v1', frequency: n, days };
   },
