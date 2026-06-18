@@ -177,14 +177,9 @@ function ActiveSet({
         {!confirming ? <Text style={styles.coaching}>{coaching}</Text> : null}
       </View>
 
-      {/* Spec §4.9: Edit result sits above the primary Complete-set button (which is
-          the bottom-most action). Edit is hidden during the confirmation morph. */}
+      {/* Complete set is the primary action; "Edit result" is a quiet override BELOW
+          it (founder note: above the button it read as just another caption). */}
       <View style={styles.actions}>
-        {!confirming ? (
-          <View style={styles.editRow}>
-            <TextAction label={t('workout.editResult')} onPress={onEdit} />
-          </View>
-        ) : null}
         <PrimaryButton
           variant="compact"
           label={confirming ? String(successReps) : t('workout.completeSet')}
@@ -192,6 +187,11 @@ function ActiveSet({
           disabled={confirming}
           onPress={onCompleteSet}
         />
+        {!confirming ? (
+          <View style={styles.editRow}>
+            <TextAction label={t('workout.editResult')} onPress={onEdit} />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -248,30 +248,25 @@ function Rest({
 
   return (
     <View style={styles.center}>
+      {/* Exercise comes first and prominent (founder note), then the rest time,
+          then the supporting detail. Same structure for both rest types. */}
       <View style={styles.hero}>
+        {isTransition ? <Text style={styles.restEyebrow}>{t('workout.nextExercise')}</Text> : null}
+        {nextName ? <Text style={styles.restName}>{nextName}</Text> : null}
         <Text style={styles.timer}>{fmt(remaining)}</Text>
-        {isTransition ? (
-          <>
-            <Text style={styles.restEyebrow}>{t('workout.nextExercise')}</Text>
-            {nextName ? <Text style={styles.restExercise}>{nextName}</Text> : null}
-            <Text style={styles.restSet}>{setLine}</Text>
-          </>
-        ) : (
-          <>
-            {session.nextSetLabel ? (
-              <Text style={styles.restSetLabel}>
-                {t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })}
-              </Text>
-            ) : null}
-            {nextName ? <Text style={styles.restExerciseSm}>{nextName}</Text> : null}
-            <Text style={styles.restSet}>{setLine}</Text>
-          </>
-        )}
+        {!isTransition && session.nextSetLabel ? (
+          <Text style={styles.restSetLabel}>
+            {t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })}
+          </Text>
+        ) : null}
+        <Text style={styles.restSet}>{setLine}</Text>
       </View>
 
       <View style={styles.actions}>
         <TextAction label={t('workout.ready')} tone="primary" onPress={() => session.endRest()} />
-        {nextEx && alt ? (
+        {/* Exercise Busy only when moving to the NEXT exercise — on an inter-set rest
+            you already hold the station, so it's not offered (founder note). */}
+        {isTransition && nextEx && alt ? (
           <View style={styles.busyRow}>
             <TextAction label={t('workout.exerciseBusy')} onPress={onExerciseBusy} />
           </View>
@@ -338,7 +333,10 @@ function EditResult({
     // Edited values log as actual (override recorded). Store back in kg.
     const kg = !hasWeight ? null : units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     const r = await session.completeSet({ weight: kg, reps });
-    onDone(r);
+    // Only finish the workout if this was the LAST set; otherwise just close the
+    // sheet and continue (rest / next set). Previously this always jumped to Well Done.
+    if (r.ended) onDone(r);
+    else onDismiss();
   }
 
   return (
@@ -387,16 +385,15 @@ const styles = StyleSheet.create({
   setLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(16) },
   coaching: { fontSize: s(13), lineHeight: s(13) * 1.4, color: color.textDim, textAlign: 'center', marginTop: s(12), paddingHorizontal: s(22) },
 
-  // Rest
-  timer: { ...heroNum(s(62), -0.02), fontSize: s(62), lineHeight: s(70), fontWeight: '600', color: color.textPrimary },
-  restEyebrow: { fontSize: s(13), color: color.textSecondary, marginTop: s(18) },
-  restExercise: { fontSize: s(22), fontWeight: '600', color: color.textPrimary, marginTop: s(8) },
-  restExerciseSm: { fontSize: s(14), color: color.textSecondary, marginTop: s(4) },
-  restSetLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(18) },
-  restSet: { ...tnum, fontSize: s(17), color: color.textSecondary, marginTop: s(6) },
+  // Rest — exercise name leads (prominent), then the countdown, then detail.
+  restName: { ...heroTitle(s(26)), fontSize: s(26), fontWeight: '700', color: color.textPrimary, textAlign: 'center' },
+  timer: { ...heroNum(s(58), -0.02), fontSize: s(58), lineHeight: s(66), fontWeight: '600', color: color.textPrimary, marginTop: s(14) },
+  restEyebrow: { fontSize: s(12), letterSpacing: 1, textTransform: 'uppercase', color: color.textTertiary, marginBottom: s(8) },
+  restSetLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(14) },
+  restSet: { ...tnum, fontSize: s(15), color: color.textSecondary, marginTop: s(6) },
 
   actions: { alignSelf: 'stretch', position: 'absolute', bottom: s(32), left: 0, right: 0, paddingHorizontal: space.gutter, alignItems: 'center' },
-  editRow: { marginBottom: s(10) },
+  editRow: { marginTop: s(12) },
   busyRow: { marginTop: s(10) },
 
   // Pause sheet

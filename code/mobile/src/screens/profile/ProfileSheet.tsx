@@ -34,14 +34,6 @@ export function ProfileSheet({ navigation }: Props) {
   const pendingPortraitForecast = app.forecasts.some((f) => f.type === 'portrait' && f.state === 'PENDING');
 
   const units = p?.units ?? 'kg';
-  const stats = [
-    p?.sex ? cap(p.sex) : null,
-    p?.age != null ? String(p.age) : null,
-    p?.heightCm != null ? `${p.heightCm} cm` : null,
-    p?.weightKg != null ? `${p.weightKg} kg` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
   const memberSince = p?.memberSince
     ? new Date(p.memberSince).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null;
@@ -113,10 +105,12 @@ export function ProfileSheet({ navigation }: Props) {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
-        <View style={styles.identity}>
-          {p?.name ? <Text style={styles.name} accessibilityRole="header">{p.name}</Text> : null}
-          {stats.length > 0 ? <Text style={styles.stats}>{stats}</Text> : null}
-        </View>
+        {/* Identity = the athlete's name only (no body stats per founder). */}
+        {p?.name ? (
+          <View style={styles.identity}>
+            <Text style={styles.name} accessibilityRole="header">{p.name}</Text>
+          </View>
+        ) : null}
 
         <Divider05 />
         <Row label={t('profile.units')} value={units} onPress={toggleUnits} />
@@ -173,10 +167,6 @@ export function ProfileSheet({ navigation }: Props) {
       ) : null}
     </SafeAreaView>
   );
-}
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function Row({

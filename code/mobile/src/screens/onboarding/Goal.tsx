@@ -77,12 +77,13 @@ const styles = StyleSheet.create({
   eyebrow: { marginBottom: s(30), color: color.textSecondary },
   list: { gap: s(12) },
   option: { borderRadius: radius.card, paddingVertical: s(18), alignItems: 'center' },
-  optionSelected: { backgroundColor: color.textPrimary },
+  // Selected = a highlighted dark chip with a white outline (NOT a solid-white fill —
+  // that read as a second Continue button). Continue stays the only solid-white element.
+  optionSelected: { backgroundColor: color.surface2, borderWidth: 1.5, borderColor: color.textPrimary },
   optionIdle: { borderWidth: 0.5, borderColor: color.border },
-  // Premium display finish (§2.2): tight tracking on the choice labels. The selected
-  // option is the clear primary (white fill + 600); the rest recede (dim + 400).
+  // Premium display finish (§2.2): tight tracking on the choice labels.
   optionLabel: { ...heroTitle(s(19)), fontSize: s(19), lineHeight: s(24) },
-  labelSelected: { color: color.bg, fontWeight: '600' },
+  labelSelected: { color: color.textPrimary, fontWeight: '600' },
   labelIdle: { color: color.textSecondary, fontWeight: '400' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 });

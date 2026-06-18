@@ -28,7 +28,7 @@ import { Dimensions } from 'react-native';
  */
 const DESIGN_WIDTH = 232;
 const _screenW = Dimensions.get('window').width;
-const _scaleFactor = Math.min(Math.max(_screenW / DESIGN_WIDTH, 1.45), 1.7);
+const _scaleFactor = Math.min(Math.max(_screenW / DESIGN_WIDTH, 1.3), 1.5);
 export const s = (n: number) => Math.round(n * _scaleFactor);
 export const scaleFactor = _scaleFactor;
 

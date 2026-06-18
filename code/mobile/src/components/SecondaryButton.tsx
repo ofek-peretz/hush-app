@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { Pressable, Text, View, StyleSheet, type ViewStyle } from 'react-native';
-import { color, radius, press } from '@/design/tokens';
+import { color, radius, press, s } from '@/design/tokens';
 
 interface Props {
   label: string;
@@ -35,7 +35,7 @@ export function SecondaryButton({ label, onPress, leading, disabled, style }: Pr
 const styles = StyleSheet.create({
   base: {
     alignSelf: 'stretch',
-    height: 48,
+    height: s(48), // match PrimaryButton (compact) so Apple/Google are identical size
     borderRadius: radius.card,
     borderWidth: 0.5,
     borderColor: color.border,
@@ -44,5 +44,5 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center' },
   leading: { marginRight: 8 },
-  label: { color: color.textPrimary, fontSize: 15, fontWeight: '500' },
+  label: { color: color.textPrimary, fontSize: s(15), fontWeight: '500' },
 });
