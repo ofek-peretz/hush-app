@@ -230,6 +230,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const enrolledRef = useRef(false);
   enrolledRef.current = !!state.profile;
   const revokingRef = useRef(false);
+  // Name captured from Apple at sign-in (returned only on first authorization) —
+  // applied to the profile at completeOnboarding. No PII is persisted before that.
+  const pendingNameRef = useRef<string | null>(null);
 
   // A 401 on an authenticated request = the session is no longer valid (signed out
   // elsewhere / token expired). Clear the identity + ALL local state and return to
@@ -350,7 +353,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // until the native providers + Apple Developer infra land). On a real
         // identity token, establish the backend session so the rest of the app
         // talks to the server; otherwise the local fixture model serves dev/offline.
-        const result = await signInWith(provider); // throws on cancel/error → screen stays
+        const result = await signInWith(provider); // throws on cancel → screen stays
+        // Capture the provider name (Apple returns it on first sign-in only) for the
+        // profile created later at completeOnboarding.
+        if (result.name) pendingNameRef.current = result.name;
         if (result.identityToken) {
           await setToken(result.identityToken);
           resetModelSelection();
@@ -373,7 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async completeOnboarding(inputs) {
         const profile: Profile = {
-          name: inputs.name,
+          name: inputs.name ?? pendingNameRef.current ?? undefined,
           sex: inputs.sex,
           heightCm: inputs.heightCm,
           weightKg: inputs.weightKg,

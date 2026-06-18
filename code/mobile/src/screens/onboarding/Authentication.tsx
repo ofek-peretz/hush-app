@@ -16,7 +16,7 @@ import { SecondaryButton } from '@/components/SecondaryButton';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { color, space, heroTitle, s } from '@/design/tokens';
-import type { AuthProvider } from '@/platform/auth';
+import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Authentication'>;
@@ -34,8 +34,9 @@ export function Authentication({ navigation }: Props) {
     try {
       await app.signIn(provider);
       navigation.navigate('Consent');
-    } catch {
-      setError(true); // the one sanctioned error line (§5.1)
+    } catch (e) {
+      // A user-cancelled Apple sheet isn't an error — just stay put, silently.
+      if (!(e instanceof SignInCanceledError)) setError(true); // the one sanctioned error line (§5.1)
     } finally {
       setBusy(false);
     }
