@@ -384,6 +384,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           healthConnected: inputs.healthConnected,
           memberSince: new Date().toISOString(),
         };
+        // Carry the chosen weekly frequency into the server strategy BEFORE composing
+        // the first week (compose is idempotent — frequency can't change after). Best-
+        // effort: a failure here must not strand onboarding (the week then falls back to
+        // the strategy default); generateProgram below would surface a real outage anyway.
+        try {
+          await model.setWeeklyFrequency(inputs.daysPerWeek);
+        } catch {
+          /* non-fatal — proceed; the composed week uses the default frequency */
+        }
         // Program generated BEFORE Home renders (spec flow §2.1).
         const program = await model.generateProgram(profile);
 

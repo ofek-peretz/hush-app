@@ -941,6 +941,29 @@ def test_week_generates_N_workouts_and_is_idempotent(ctx):
     assert _compose_week(ctx, t)["week"]["id"] == w["week"]["id"]
 
 
+def test_weekly_frequency_patch_drives_composed_workout_count(ctx):
+    """Onboarding days-per-week (PATCH /profile weekly_frequency) is carried into the strategy
+    BEFORE the first week is composed, so the week has that many workouts — not the default 3."""
+    t = enroll(ctx["client"], athlete_id="wk_freq")
+    r = ctx["client"].patch("/profile", headers=auth_headers(t),
+                            json={"client_request_id": _uid(), "weekly_frequency": 4})
+    assert r.status_code == 200, r.text
+    assert r.json()["weekly_frequency"] == 4
+    assert ctx["client"].get("/strategy", headers=auth_headers(t)).json()["weekly_frequency"] == 4
+    w = _compose_week(ctx, t)
+    assert w["week"]["weekly_frequency"] == 4
+    assert len(w["workouts"]) == 4
+
+
+def test_weekly_frequency_clamps_to_supported_template(ctx):
+    """A frequency outside the supported templates (2-4) clamps to the nearest (ES-009 §4)."""
+    t = enroll(ctx["client"], athlete_id="wk_freq_clamp")
+    r = ctx["client"].patch("/profile", headers=auth_headers(t),
+                            json={"client_request_id": _uid(), "weekly_frequency": 6})
+    assert r.status_code == 200, r.text
+    assert r.json()["weekly_frequency"] == 4   # clamped to max supported template
+
+
 def test_workout_order_is_consumed_by_the_weekly_container(ctx):
     """Audit #4: athlete-owned workout order is consumed by the weekly container (athlete > model)."""
     t = enroll(ctx["client"], athlete_id="wk_b")

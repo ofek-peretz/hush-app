@@ -166,6 +166,16 @@ export class HttpModelClient implements ModelClient {
     return typeof strat.sessions_completed === 'number' ? strat.sessions_completed : null;
   }
 
+  async setWeeklyFrequency(daysPerWeek: number): Promise<void> {
+    // PATCH /profile carries the chosen frequency into the server strategy (the sole
+    // strategy writer) so compose_week builds that many workouts. Must run BEFORE the
+    // first POST /weeks (compose is idempotent — frequency can't change after).
+    await this.request('PATCH', '/profile', {
+      client_request_id: `freq_${daysPerWeek}_${Date.now()}`,
+      weekly_frequency: daysPerWeek,
+    });
+  }
+
   async generateProgram(_profile: Profile): Promise<Program> {
     // WEEKLY-PROGRAM model: read the current week; compose it (POST /weeks, idempotent) only
     // when none exists yet. Read-first so a routine Home refresh never writes. The backend

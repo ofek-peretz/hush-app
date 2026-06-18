@@ -170,6 +170,9 @@ class ProfilePatchRequest(BaseModel):
     age: int | None = Field(default=None, ge=0)
     experience: str | None = None
     bodyweight_kg: float | None = Field(default=None, gt=0)
+    # Chosen weekly training frequency (onboarding days-per-week). Written into the
+    # strategy projection; the server clamps to a supported template (2–4).
+    weekly_frequency: int | None = Field(default=None, ge=2, le=6)
 
 
 class ConsentRequest(BaseModel):

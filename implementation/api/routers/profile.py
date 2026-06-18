@@ -13,7 +13,9 @@ from fastapi import APIRouter, Depends
 
 from hush_model.constants import MODEL_VERSION, CAPABILITY_MODEL_VERSION
 from hush_model.persistence.db import now_iso
+from hush_model.persistence.repositories import StateRepository
 from hush_model.persistence.service import HushService
+from hush_model.volume import clamp_frequency
 
 from .. import errors
 from ..connection import write_serialized
@@ -46,12 +48,26 @@ def _apply_patch(conn, athlete_id: str, body: ProfilePatchRequest) -> dict:
         params.append(athlete_id)
         conn.execute(f"UPDATE athlete SET {', '.join(sets)} WHERE id=?", params)
 
+    # Chosen weekly frequency → strategy projection (the sole strategy writer). Carries
+    # the onboarding days-per-week so compose_week builds that many workouts. Clamped to
+    # a supported template (2–4); preserves the rest of the strategy projection.
+    freq_out = None
+    if body.weekly_frequency is not None:
+        repo = StateRepository(conn)
+        strat = repo.get_strategy_state(athlete_id)
+        strat.weekly_frequency = clamp_frequency(body.weekly_frequency)
+        repo.write_strategy_state(athlete_id, strat)
+        freq_out = strat.weekly_frequency
+
     updated = conn.execute("SELECT * FROM athlete WHERE id=?", (athlete_id,)).fetchone()
-    return {
+    result = {
         "id": updated["id"], "sex": updated["sex"], "age": updated["age"],
         "experience": updated["experience"], "bodyweight_kg": updated["bodyweight_kg"],
         "model_version": MODEL_VERSION, "capability_model_version": CAPABILITY_MODEL_VERSION,
     }
+    if freq_out is not None:
+        result["weekly_frequency"] = freq_out
+    return result
 
 
 @router.patch("/profile")

@@ -57,6 +57,14 @@ export interface ModelClient {
    */
   sessionsCompleted(): Promise<number | null>;
 
+  /**
+   * Persist the athlete's chosen weekly training frequency (onboarding days-per-week)
+   * into the server strategy BEFORE the first week is composed, so the generated week
+   * has the chosen number of workouts. The server clamps to a supported template
+   * (2–4). Best-effort; fixture honors it via the profile in generateProgram.
+   */
+  setWeeklyFrequency(daysPerWeek: number): Promise<void>;
+
   /** Generate the program before Home renders (spec §1.4/§4.1, flow §2.1). */
   generateProgram(profile: Profile): Promise<Program>;
 

@@ -72,6 +72,10 @@ export const fixtureModel: ModelClient = {
     return null; // no backend — the client's local count is authoritative in dev
   },
 
+  async setWeeklyFrequency() {
+    // No-op: the fixture's generateProgram already honors profile.daysPerWeek directly.
+  },
+
   async generateProgram(profile: Profile): Promise<Program> {
     // WEEKLY-PROGRAM model (ratified): a BUCKET of exactly N workouts — no calendar, no rest
     // days in the list, done in any order; Rest only after ALL N are done (weeklyRest()). Mirrors
