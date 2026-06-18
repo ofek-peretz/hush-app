@@ -86,3 +86,7 @@ logs/
 Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
+
+# local review scratch
+/attachments.zip
+/attachments_extracted/
