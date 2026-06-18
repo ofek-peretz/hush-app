@@ -16,7 +16,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import { sessionDayName } from '@/domain/schedule';
-import { color, space, heroTitle, press } from '@/design/tokens';
+import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'History'>;
@@ -90,13 +90,13 @@ export function History({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   headerWrap: { paddingTop: 22, paddingHorizontal: space.gutter },
-  header: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600' },
-  sub: { fontSize: 13, color: color.textSecondary, marginTop: 6 },
+  header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
+  sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
-  empty: { fontSize: 14, color: color.textSecondary, textAlign: 'center' },
+  empty: { fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
   list: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: TAB_BAR_SPACE },
-  row: { paddingVertical: 13, borderBottomWidth: 0.5, borderBottomColor: color.border },
-  date: { fontSize: 12, color: color.textSecondary },
-  name: { fontSize: 18, fontWeight: '600', color: color.textPrimary, marginTop: 3 },
-  note: { fontSize: 12, lineHeight: 12 * 1.4, color: color.textSecondary, marginTop: 5 },
+  row: { paddingVertical: s(13), borderBottomWidth: 0.5, borderBottomColor: color.border },
+  date: { fontSize: s(12), color: color.textSecondary },
+  name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary, marginTop: s(3) },
+  note: { fontSize: s(12), lineHeight: s(12) * 1.4, color: color.textSecondary, marginTop: s(5) },
 });

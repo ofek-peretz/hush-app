@@ -15,7 +15,7 @@ import { TextAction } from '@/components/TextAction';
 import { track } from '@/platform/telemetry';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, heroTitle } from '@/design/tokens';
+import { color, space, heroTitle, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Consent'>;
@@ -40,9 +40,13 @@ export function Consent({ navigation }: Props) {
   // they can reconsider. No data was recorded (consent was never given).
   function onDecline() {
     if (busy) return;
-    setBusy(true);
     void track('consent_declined', {});
+    // Consent is required: declining signs back out AND returns to the sign-in
+    // screen. resetAccount alone doesn't move the navigator (no profile exists yet,
+    // so Root stays on the onboarding stack) — that left the screen "stuck", so we
+    // explicitly pop to the first onboarding screen (Authentication).
     void app.resetAccount();
+    navigation.popToTop();
   }
 
   return (
@@ -65,9 +69,9 @@ export function Consent({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', marginBottom: 16 },
-  copy: { fontSize: 15, lineHeight: 15 * 1.6, color: color.textSecondary },
+  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', marginBottom: s(16) },
+  copy: { fontSize: s(15), lineHeight: s(15) * 1.6, color: color.textSecondary },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  decline: { marginTop: 8, alignItems: 'center' },
-  legal: { marginTop: 16, fontSize: 12, color: color.textTertiary, textAlign: 'center' },
+  decline: { marginTop: s(8), alignItems: 'center' },
+  legal: { marginTop: s(16), fontSize: s(12), color: color.textTertiary, textAlign: 'center' },
 });

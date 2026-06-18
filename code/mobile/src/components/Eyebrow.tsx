@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { Text, StyleSheet, type TextStyle } from 'react-native';
-import { color } from '@/design/tokens';
+import { color, s } from '@/design/tokens';
 
 interface Props {
   label: string;
@@ -19,7 +19,7 @@ export function Eyebrow({ label, size = 12, trackingPx = 2, align = 'left', styl
     <Text
       style={[
         styles.base,
-        { fontSize: size, letterSpacing: trackingPx, textAlign: align },
+        { fontSize: s(size), letterSpacing: trackingPx, textAlign: align },
         style,
       ]}
     >

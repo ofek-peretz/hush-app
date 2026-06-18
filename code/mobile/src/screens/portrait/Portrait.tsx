@@ -28,7 +28,7 @@ import {
 import { PORTRAIT_DISPLAY_ORDER, capLabel } from '@/screens/portrait/portraitDisplay';
 import { CALIBRATION_SESSIONS } from '@/state/machines/athleteMode';
 import { track, trackFirst } from '@/platform/telemetry';
-import { color, space, heroTitle } from '@/design/tokens';
+import { color, space, heroTitle, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Portrait'>;
@@ -114,18 +114,18 @@ export function Portrait({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
-  header: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600' },
+  header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
 
   unlocked: { marginTop: 26 },
-  insight: { marginTop: 26, fontSize: 14, lineHeight: 14 * 1.5, color: color.textDim },
+  insight: { marginTop: s(26), fontSize: s(14), lineHeight: s(14) * 1.5, color: color.textDim },
   compareRow: { marginTop: 28, alignItems: 'flex-start' },
 
   locked: { marginTop: 80, alignItems: 'center', paddingHorizontal: 12 },
-  lockedTitle: { fontSize: 21, fontWeight: '600', color: color.textPrimary, textAlign: 'center', marginBottom: 20 },
-  lockedBody: { fontSize: 14, lineHeight: 14 * 1.55, color: color.textSecondary, textAlign: 'center', marginBottom: 20 },
+  lockedTitle: { fontSize: s(21), fontWeight: '600', color: color.textPrimary, textAlign: 'center', marginBottom: s(20) },
+  lockedBody: { fontSize: s(14), lineHeight: s(14) * 1.55, color: color.textSecondary, textAlign: 'center', marginBottom: s(20) },
   dots: { flexDirection: 'row', gap: 7, marginBottom: 16 },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
   dotFilled: { backgroundColor: color.textPrimary },
   dotEmpty: { backgroundColor: color.surface3 },
-  count: { fontSize: 12, letterSpacing: 0.3, color: color.textTertiary },
+  count: { fontSize: s(12), letterSpacing: 0.3, color: color.textTertiary },
 });

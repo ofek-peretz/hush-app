@@ -10,7 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { wellDone as wellDoneHaptic } from '@/platform/haptics';
-import { color, heroTitle } from '@/design/tokens';
+import { color, heroTitle, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
@@ -42,6 +42,6 @@ export function WellDone({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center' },
-  message: { ...heroTitle(40, -0.035), color: color.textPrimary, fontSize: 40, fontWeight: '600' },
+  message: { ...heroTitle(s(40), -0.035), color: color.textPrimary, fontSize: s(40), fontWeight: '600' },
   period: { color: color.textTertiary },
 });

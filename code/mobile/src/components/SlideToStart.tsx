@@ -22,11 +22,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Icon } from '@/components/Icon';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color } from '@/design/tokens';
+import { color, s } from '@/design/tokens';
 
-const HEIGHT = 58;
-const KNOB = 48;
-const INSET = 5;
+const HEIGHT = s(58);
+const KNOB = s(48);
+const INSET = s(5);
 const THRESHOLD = 0.6; // fraction of travel that commits the start
 
 export function SlideToStart({ label, onStart }: { label: string; onStart: () => void }) {
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   label: {
     textAlign: 'center',
     color: color.textSecondary,
-    fontSize: 14,
+    fontSize: s(15),
     fontWeight: '500',
     marginLeft: KNOB / 2, // offset right to clear the knob (§4.7)
   },

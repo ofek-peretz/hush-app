@@ -27,7 +27,7 @@ import { useApp } from '@/state/stores/appStore';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { exercisesForCapability, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { color, space, tnum, heroNum, heroTitle, press } from '@/design/tokens';
+import { color, space, tnum, heroNum, heroTitle, press, s } from '@/design/tokens';
 import { motion } from '@/design/motion';
 import type { MainParamList } from '@/app/navigation';
 
@@ -293,8 +293,10 @@ function PauseSheet({
 }) {
   const { t } = useCopy();
   // Scrim tap resumes (the workout stays frozen until an explicit choice).
+  // Content-sized (no heightFraction) so the three options sit snugly — a fixed
+  // 44% left a large dead gap under "Finish early" on tall devices.
   return (
-    <BottomSheet onClose={onResume} background={color.surface} heightFraction={0.44}>
+    <BottomSheet onClose={onResume} background={color.surface}>
       <Text style={styles.pauseTitle}>{t('pauseSheet.title')}</Text>
       <View style={styles.pauseOpt}>
         <TextAction label={t('pauseSheet.resume')} tone="primary" onPress={onResume} />
@@ -374,30 +376,32 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
 
   hero: { alignItems: 'center' },
-  exerciseName: { ...heroTitle(22), color: color.textDim, fontSize: 22, fontWeight: '600' },
-  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 10 },
-  weight: { ...heroNum(76), color: color.textPrimary, fontSize: 76, lineHeight: 76 * 0.85, fontWeight: '700' },
-  unit: { fontSize: 16, fontWeight: '500', color: color.textSecondary, marginLeft: 5 },
-  bodyweight: { ...heroTitle(40), color: color.textPrimary, fontSize: 40, fontWeight: '700', marginTop: 10 },
-  reps: { ...tnum, fontSize: 30, fontWeight: '500', color: color.textPrimary, marginTop: 6, letterSpacing: -0.3 },
-  setLabel: { fontSize: 13, color: color.textSecondary, marginTop: 16 },
-  coaching: { fontSize: 13, lineHeight: 13 * 1.4, color: color.textDim, textAlign: 'center', marginTop: 12, paddingHorizontal: 22 },
+  exerciseName: { ...heroTitle(s(22)), color: color.textDim, fontSize: s(22), fontWeight: '600' },
+  weightRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: s(10) },
+  // lineHeight ≥ fontSize so the big numeral is never clipped at the top (the
+  // prototype's 0.85 line-height is a CSS overflow-visible trick that clips in RN).
+  weight: { ...heroNum(s(76)), color: color.textPrimary, fontSize: s(76), lineHeight: s(84), fontWeight: '700' },
+  unit: { fontSize: s(16), fontWeight: '500', color: color.textSecondary, marginLeft: s(5) },
+  bodyweight: { ...heroTitle(s(40)), color: color.textPrimary, fontSize: s(40), fontWeight: '700', marginTop: s(10) },
+  reps: { ...tnum, fontSize: s(30), fontWeight: '500', color: color.textPrimary, marginTop: s(6), letterSpacing: -0.3 },
+  setLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(16) },
+  coaching: { fontSize: s(13), lineHeight: s(13) * 1.4, color: color.textDim, textAlign: 'center', marginTop: s(12), paddingHorizontal: s(22) },
 
   // Rest
-  timer: { ...heroNum(62, -0.02), fontSize: 62, fontWeight: '600', color: color.textPrimary },
-  restEyebrow: { fontSize: 13, color: color.textSecondary, marginTop: 18 },
-  restExercise: { fontSize: 22, fontWeight: '600', color: color.textPrimary, marginTop: 8 },
-  restExerciseSm: { fontSize: 14, color: color.textSecondary, marginTop: 4 },
-  restSetLabel: { fontSize: 13, color: color.textSecondary, marginTop: 18 },
-  restSet: { ...tnum, fontSize: 17, color: color.textSecondary, marginTop: 6 },
+  timer: { ...heroNum(s(62), -0.02), fontSize: s(62), lineHeight: s(70), fontWeight: '600', color: color.textPrimary },
+  restEyebrow: { fontSize: s(13), color: color.textSecondary, marginTop: s(18) },
+  restExercise: { fontSize: s(22), fontWeight: '600', color: color.textPrimary, marginTop: s(8) },
+  restExerciseSm: { fontSize: s(14), color: color.textSecondary, marginTop: s(4) },
+  restSetLabel: { fontSize: s(13), color: color.textSecondary, marginTop: s(18) },
+  restSet: { ...tnum, fontSize: s(17), color: color.textSecondary, marginTop: s(6) },
 
-  actions: { alignSelf: 'stretch', position: 'absolute', bottom: 32, left: 0, right: 0, paddingHorizontal: space.gutter, alignItems: 'center' },
-  editRow: { marginBottom: 10 },
-  busyRow: { marginTop: 10 },
+  actions: { alignSelf: 'stretch', position: 'absolute', bottom: s(32), left: 0, right: 0, paddingHorizontal: space.gutter, alignItems: 'center' },
+  editRow: { marginBottom: s(10) },
+  busyRow: { marginTop: s(10) },
 
   // Pause sheet
-  pauseTitle: { fontSize: 22, fontWeight: '600', color: color.textPrimary, textAlign: 'center', marginBottom: 24 },
-  pauseOpt: { paddingVertical: 6, alignItems: 'center' },
+  pauseTitle: { fontSize: s(22), fontWeight: '600', color: color.textPrimary, textAlign: 'center', marginBottom: s(24) },
+  pauseOpt: { paddingVertical: s(10), alignItems: 'center' },
 
   // Edit Result
   editHeader: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 4 },

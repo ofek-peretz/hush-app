@@ -15,7 +15,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { SecondaryButton } from '@/components/SecondaryButton';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, heroTitle } from '@/design/tokens';
+import { color, space, heroTitle, s } from '@/design/tokens';
 import type { AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -94,17 +94,17 @@ function GoogleG({ size = 16 }: { size?: number }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: '30%', paddingHorizontal: space.gutter },
-  wordmark: { ...heroTitle(54), color: color.textPrimary, fontSize: 54, fontWeight: '700' },
+  wordmark: { ...heroTitle(s(54)), color: color.textPrimary, fontSize: s(54), fontWeight: '700' },
   tagline: {
-    marginTop: 14,
-    fontSize: 21,
-    lineHeight: 21 * 1.35,
+    marginTop: s(14),
+    fontSize: s(21),
+    lineHeight: s(21) * 1.35,
     letterSpacing: -0.21,
     color: color.textSecondary,
     textAlign: 'center',
   },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
   gap: { height: 12 },
-  error: { color: color.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 16 },
-  legal: { marginTop: 24, fontSize: 12, color: color.textTertiary, textAlign: 'center' },
+  error: { color: color.textSecondary, fontSize: s(14), textAlign: 'center', marginBottom: s(16) },
+  legal: { marginTop: 24, fontSize: s(12), color: color.textTertiary, textAlign: 'center' },
 });

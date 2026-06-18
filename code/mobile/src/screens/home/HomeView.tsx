@@ -11,7 +11,7 @@ import { SlideToStart } from '@/components/SlideToStart';
 import { AppTabBar } from '@/components/AppTabBar';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { a11y, color, space, press, heroTitle, tabBar } from '@/design/tokens';
+import { a11y, color, space, press, heroTitle, tabBar, s } from '@/design/tokens';
 
 export interface HomeViewProps {
   resting: boolean;
@@ -67,6 +67,8 @@ export function HomeView(props: HomeViewProps) {
                 accessibilityRole="header"
                 allowFontScaling
                 maxFontSizeMultiplier={a11y.titleMaxScale}
+                numberOfLines={2}
+                adjustsFontSizeToFit
               >
                 {props.dayName}
               </Text>
@@ -95,20 +97,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 10,
   },
-  date: { fontSize: 15, color: color.textSecondary },
+  date: { fontSize: s(13), color: color.textSecondary },
   menu: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center', marginRight: -10 },
 
   // Training day: title block centred at ~30% from top, action pinned above the tab bar.
-  trainTop: { height: '22%' },
+  trainTop: { height: '20%' },
   trainCenter: { paddingHorizontal: space.gutter, alignItems: 'center' },
-  greeting: { fontSize: 14, color: color.textSecondary, marginBottom: 24, textAlign: 'center' },
-  name: { ...heroTitle(52), color: color.textPrimary, fontSize: 52, lineHeight: 52, fontWeight: '700', textAlign: 'center' },
-  muscles: { marginTop: 18, fontSize: 14, color: color.textSecondary, textAlign: 'center' },
+  greeting: { fontSize: s(14), color: color.textSecondary, marginBottom: s(24), textAlign: 'center' },
+  name: { ...heroTitle(s(52)), color: color.textPrimary, fontSize: s(52), lineHeight: s(56), fontWeight: '700', textAlign: 'center' },
+  muscles: { marginTop: s(18), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
   action: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: space.gutter },
-  error: { color: color.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' },
+  error: { color: color.textSecondary, fontSize: s(14), marginBottom: s(16), textAlign: 'center' },
 
   // Rest day: everything centered.
   restCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
-  restTitle: { ...heroTitle(62), color: color.textPrimary, fontSize: 62, fontWeight: '700' },
-  meta: { marginTop: 16, fontSize: 14, color: color.textSecondary, textAlign: 'center' },
+  restTitle: { ...heroTitle(s(62)), color: color.textPrimary, fontSize: s(62), lineHeight: s(68), fontWeight: '700' },
+  meta: { marginTop: s(16), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
 });

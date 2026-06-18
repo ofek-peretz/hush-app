@@ -18,7 +18,8 @@ import { Icon } from '@/components/Icon';
 import { Divider05 } from '@/components/Divider05';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, heroTitle, press } from '@/design/tokens';
+import { health } from '@/platform/health';
+import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProfileSheet'>;
@@ -47,6 +48,14 @@ export function ProfileSheet({ navigation }: Props) {
 
   function toggleUnits() {
     void app.setUnits(units === 'kg' ? 'lb' : 'kg');
+  }
+
+  // Open the HealthKit permission flow (the system Health sheet) — not the app's
+  // generic Settings page. iOS only shows the sheet while authorization is still
+  // undetermined; once decided it can't be reshown, so we fall back to Settings.
+  async function onHealthAccess() {
+    const granted = await health.requestPermission();
+    if (!granted) void Linking.openSettings();
   }
 
   // iOS: a native action sheet with a red destructive row + Cancel (the idiomatic
@@ -117,7 +126,7 @@ export function ProfileSheet({ navigation }: Props) {
         <Row
           label={t('profile.healthAccess')}
           value={p?.healthConnected ? t('profile.connected') : t('profile.notConnected')}
-          onPress={() => Linking.openSettings()}
+          onPress={onHealthAccess}
         />
         <Row label={t('profile.signOut')} chevron onPress={confirmSignOut} />
         <Row label={t('profile.deleteAccount')} danger onPress={confirmDelete} />
@@ -225,16 +234,16 @@ const styles = StyleSheet.create({
   back: { width: 36, height: 40, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 24, paddingBottom: 24 },
-  identity: { marginBottom: 34 },
-  name: { ...heroTitle(32), color: color.textPrimary, fontSize: 32, fontWeight: '600' },
-  stats: { fontSize: 14, color: color.textSecondary, marginTop: 6 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18 },
-  rowLabel: { fontSize: 16, color: color.textPrimary },
-  rowValue: { fontSize: 13, color: color.textSecondary },
+  identity: { marginBottom: s(34) },
+  name: { ...heroTitle(s(32)), color: color.textPrimary, fontSize: s(32), fontWeight: '600' },
+  stats: { fontSize: s(14), color: color.textSecondary, marginTop: s(6) },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(18) },
+  rowLabel: { fontSize: s(16), color: color.textPrimary },
+  rowValue: { fontSize: s(13), color: color.textSecondary },
   twoLine: { alignItems: 'flex-end' },
   danger: { color: color.danger },
   dev: { marginTop: 24, gap: 8, alignItems: 'flex-start' },
-  version: { fontSize: 11, color: color.textTertiary, textAlign: 'center', paddingVertical: 12 },
-  confirm: { fontSize: 18, color: color.textPrimary, textAlign: 'center', marginBottom: 24 },
+  version: { fontSize: s(11), color: color.textTertiary, textAlign: 'center', paddingVertical: s(12) },
+  confirm: { fontSize: s(18), color: color.textPrimary, textAlign: 'center', marginBottom: s(24) },
   cancelRow: { marginTop: 8, alignItems: 'center' },
 });

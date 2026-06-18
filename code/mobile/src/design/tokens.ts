@@ -17,6 +17,21 @@
  * rebuilt to spec (StartOrb / AuroraBackground are being retired).
  */
 
+import { Dimensions } from 'react-native';
+
+/**
+ * Responsive scale (HUSH_BUILD_SPEC §2.4). The prototype + the §2.2 type scale are
+ * authored on a 232pt-wide device frame; on a real iPhone every size must scale by
+ * `deviceWidth / 232` (≈1.6 on a 375pt phone, capped at 1.7). The app previously
+ * used the raw 232-based values, so all type/spacing read ~1.7× too small.
+ * `s(n)` scales a prototype pt value to the current device.
+ */
+const DESIGN_WIDTH = 232;
+const _screenW = Dimensions.get('window').width;
+const _scaleFactor = Math.min(Math.max(_screenW / DESIGN_WIDTH, 1.45), 1.7);
+export const s = (n: number) => Math.round(n * _scaleFactor);
+export const scaleFactor = _scaleFactor;
+
 export const color = {
   // §2.1 — Backgrounds / surfaces
   bg: '#000000', // app background (true black)
@@ -112,7 +127,7 @@ export const button = {
   // Secondary / text action: no bg/border/icon/chevron. Min 44pt tap height.
   textAction: {
     color: color.textSecondary, // #A1A1AA
-    fontSize: 16,
+    fontSize: s(16),
     fontWeight: '500' as const,
     minTapHeight: 44,
   },
@@ -142,8 +157,8 @@ export const a11y = {
  * `gutter` is the standard 18pt screen horizontal padding (some sheets use 16).
  */
 export const space = {
-  gutter: 18, // standard screen horizontal padding (§2.3)
-  sheetGutter: 16, // some sheets
+  gutter: Math.round(18 * _scaleFactor), // standard screen horizontal padding (§2.3), scaled to device
+  sheetGutter: Math.round(16 * _scaleFactor), // some sheets
 } as const;
 
 export const radius = {
@@ -174,6 +189,7 @@ export const tabBar = {
  *  - `heroTitle` → tight tracking for display headings.
  * `tracking(size, em)` converts an em tracking value to RN letterSpacing points.
  */
+
 type FontVariant = NonNullable<import('react-native').TextStyle['fontVariant']>;
 const TABULAR: FontVariant = ['tabular-nums'];
 export const tnum = { fontVariant: TABULAR };

@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { Eyebrow } from '@/components/Eyebrow';
 import { TextAction } from '@/components/TextAction';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, heroTitle } from '@/design/tokens';
+import { color, heroTitle, s } from '@/design/tokens';
 
 interface Props {
   title: string;
@@ -69,7 +69,7 @@ export function ExerciseDemo({ title, cues, focusLabel, formGuideLabel, doneLabe
 }
 
 const styles = StyleSheet.create({
-  title: { ...heroTitle(21), color: color.textPrimary, fontSize: 21, fontWeight: '600', textAlign: 'center', marginBottom: 16 },
+  title: { ...heroTitle(s(21)), color: color.textPrimary, fontSize: s(21), fontWeight: '600', textAlign: 'center', marginBottom: 16 },
   frame: {
     aspectRatio: 16 / 10,
     borderRadius: 14,
@@ -82,6 +82,6 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9A9AA0', marginRight: 6 },
   guideLabel: { fontSize: 10, letterSpacing: 0.3, color: '#8A8A90' },
   focus: { marginBottom: 10 },
-  cue: { fontSize: 14, lineHeight: 14 * 1.95, color: color.textPrimary },
+  cue: { fontSize: s(14), lineHeight: s(14) * 1.95, color: color.textPrimary },
   doneRow: { marginTop: 12, alignItems: 'center' },
 });

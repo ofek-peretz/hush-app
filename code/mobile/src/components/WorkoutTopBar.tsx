@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Icon } from '@/components/Icon';
-import { color, space, tnum, press } from '@/design/tokens';
+import { color, space, tnum, press, s } from '@/design/tokens';
 
 interface Props {
   minutesLeft: number;
@@ -23,7 +23,7 @@ export function WorkoutTopBar({ minutesLeft, onPause }: Props) {
         onPress={onPause}
         style={({ pressed }) => [styles.pause, { opacity: pressed ? press.opacity : 1 }]}
       >
-        <Icon name="pause" size={20} color={color.textDim} />
+        <Icon name="pause" size={s(20)} color={color.textDim} />
       </Pressable>
     </View>
   );
@@ -37,6 +37,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 6,
   },
-  left: { ...tnum, color: color.textSecondary, fontSize: 14 },
+  left: { ...tnum, color: color.textSecondary, fontSize: s(14) },
   pause: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center', marginRight: -10 },
 });

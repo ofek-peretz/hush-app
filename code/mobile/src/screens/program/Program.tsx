@@ -19,7 +19,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import type { ProgramDay, Session } from '@/data/local/models';
-import { color, space, heroTitle, press } from '@/design/tokens';
+import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Program'>;
@@ -43,9 +43,10 @@ export function Program({ navigation }: Props) {
     return s ? new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short' }) : null;
   }
 
-  // "Set as next": move this upcoming workout ahead of the others (Home shows the
-  // first unfinished workout) and return to Home so the chosen workout is the one
-  // now offered. Persisted via the athlete-owned workout order (§4.19).
+  // "Set as next": Home should immediately offer THIS workout. We pass it to Home as
+  // `focusDayId` (survives Home's program refetch, which was reverting a local
+  // reorder), and also persist the athlete's workout order so FUTURE weeks keep it
+  // (the current week is already composed server-side — §4.19 / §5.8).
   async function onSetAsNext(dayId: string) {
     if (!program) return;
     const from = program.days.findIndex((d) => d.id === dayId);
@@ -54,7 +55,7 @@ export function Program({ navigation }: Props) {
     if (from >= 0 && firstUpcoming >= 0 && from !== firstUpcoming) {
       await app.reorderWorkouts(from, firstUpcoming);
     }
-    navigation.navigate('Home');
+    navigation.navigate('Home', { focusDayId: dayId });
   }
 
   const workouts = (program?.days ?? []).filter((d) => !d.isRest);
@@ -128,9 +129,9 @@ export function Program({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
-  header: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600' },
-  sub: { fontSize: 13, color: color.textSecondary, marginTop: 6 },
-  group: { marginTop: 28 },
+  header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
+  sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
+  group: { marginTop: s(28) },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -140,9 +141,9 @@ const styles = StyleSheet.create({
     borderBottomColor: color.border,
   },
   rowMain: { flex: 1, marginRight: 12 },
-  weekday: { fontSize: 12, color: color.textSecondary, marginBottom: 2 },
-  name: { fontSize: 18, fontWeight: '600', color: color.textPrimary },
-  muscles: { fontSize: 12, color: color.textSecondary, marginTop: 2 },
+  weekday: { fontSize: s(12), color: color.textSecondary, marginBottom: 2 },
+  name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary },
+  muscles: { fontSize: s(12), color: color.textSecondary, marginTop: s(2) },
   doneChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  doneText: { fontSize: 10, fontWeight: '600', letterSpacing: 0.6, color: color.doneText },
+  doneText: { fontSize: s(10), fontWeight: '600', letterSpacing: 0.6, color: color.doneText },
   setNext: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  setNextText: { fontSize: 13, fontWeight: '500', color: color.accentBlue },
+  setNextText: { fontSize: s(13), fontWeight: '500', color: color.accentBlue },
 });

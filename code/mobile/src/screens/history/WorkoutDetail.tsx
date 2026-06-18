@@ -17,7 +17,7 @@ import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
 import type { Session, SetLog } from '@/data/local/models';
-import { color, space, tnum, heroTitle, press } from '@/design/tokens';
+import { color, space, tnum, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WorkoutDetail'>;
@@ -107,12 +107,12 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: 6, gap: 6 },
   back: { width: 36, height: 44, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
   headerText: { flex: 1 },
-  title: { ...heroTitle(22), color: color.textPrimary, fontSize: 22, fontWeight: '600' },
-  meta: { fontSize: 13, color: color.textSecondary, marginTop: 2 },
+  title: { ...heroTitle(s(22)), color: color.textPrimary, fontSize: s(22), fontWeight: '600' },
+  meta: { fontSize: s(13), color: color.textSecondary, marginTop: 2 },
   body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: 48 },
-  exercise: { marginBottom: 20 },
-  exName: { fontSize: 17, fontWeight: '500', color: color.textPrimary, marginBottom: 8 },
-  setRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  setN: { fontSize: 14, color: color.textSecondary },
-  setVal: { ...tnum, fontSize: 14, color: color.textSecondary },
+  exercise: { marginBottom: s(20) },
+  exName: { fontSize: s(17), fontWeight: '500', color: color.textPrimary, marginBottom: s(8) },
+  setRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(4) },
+  setN: { fontSize: s(14), color: color.textSecondary },
+  setVal: { ...tnum, fontSize: s(14), color: color.textSecondary },
 });

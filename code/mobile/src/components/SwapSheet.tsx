@@ -12,7 +12,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { exerciseById, exercisesForCapability } from '@/data/exercises';
 import { capabilityNameKey } from '@/domain/portrait';
 import type { Capability } from '@/data/local/models';
-import { color, radius, space, heroTitle, press } from '@/design/tokens';
+import { color, radius, space, heroTitle, press, s } from '@/design/tokens';
 
 interface Props {
   capability: Capability;
@@ -78,16 +78,16 @@ export function SwapSheet({ capability, currentExerciseId, onSelect, onClose }: 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   headerText: { flex: 1 },
-  title: { ...heroTitle(21), color: color.textPrimary, fontSize: 21, fontWeight: '600' },
-  subtitle: { fontSize: 13, color: color.textSecondary, marginTop: 4 },
+  title: { ...heroTitle(s(21)), color: color.textPrimary, fontSize: s(21), fontWeight: '600' },
+  subtitle: { fontSize: s(13), color: color.textSecondary, marginTop: 4 },
   close: { width: 30, height: 30, borderRadius: 15, backgroundColor: color.surface3, alignItems: 'center', justifyContent: 'center' },
   list: { paddingBottom: 12, gap: 8 },
   card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: radius.card },
   cardText: { flex: 1, marginRight: 12 },
   currentCard: { backgroundColor: color.textPrimary },
-  currentName: { fontSize: 16, fontWeight: '500', color: color.bg },
-  currentSub: { fontSize: 12, color: '#6D6D72', marginTop: 2 },
+  currentName: { fontSize: s(16), fontWeight: '500', color: color.bg },
+  currentSub: { fontSize: s(12), color: '#6D6D72', marginTop: 2 },
   altCard: { backgroundColor: color.surface3 },
-  altName: { fontSize: 16, fontWeight: '500', color: color.textPrimary },
-  altSub: { fontSize: 12, color: color.textSecondary, marginTop: 2 },
+  altName: { fontSize: s(16), fontWeight: '500', color: color.textPrimary },
+  altSub: { fontSize: s(12), color: color.textSecondary, marginTop: 2 },
 });

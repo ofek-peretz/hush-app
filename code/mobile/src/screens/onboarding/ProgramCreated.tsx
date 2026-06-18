@@ -12,7 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, heroTitle } from '@/design/tokens';
+import { color, space, heroTitle, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ProgramCreated'>;
@@ -51,6 +51,6 @@ export function ProgramCreated({ route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(36), color: color.textPrimary, fontSize: 36, lineHeight: 36 * 1.12, fontWeight: '600', textAlign: 'center' },
-  subtitle: { marginTop: 14, fontSize: 14, color: color.textSecondary, textAlign: 'center' },
+  title: { ...heroTitle(s(36)), color: color.textPrimary, fontSize: s(36), lineHeight: s(36) * 1.12, fontWeight: '600', textAlign: 'center' },
+  subtitle: { marginTop: s(14), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
 });

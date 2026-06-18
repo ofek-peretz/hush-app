@@ -19,14 +19,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, heroNum, tnum } from '@/design/tokens';
+import { color, space, heroNum, tnum, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'DaysPerWeek'>;
 
 const DAYS = [2, 3, 4, 5, 6];
 const DEFAULT_INDEX = 2; // value 4
-const ITEM_HEIGHT = 56;
+const ITEM_HEIGHT = s(56);
 const VISIBLE = 5; // rows in the wheel viewport
 
 export function DaysPerWeek({ navigation, route }: Props) {
@@ -113,13 +113,13 @@ export function DaysPerWeek({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.gutter },
-  eyebrow: { marginBottom: 30, color: color.textSecondary },
+  eyebrow: { marginBottom: s(30), color: color.textSecondary },
   wheel: { height: ITEM_HEIGHT * VISIBLE, alignSelf: 'stretch', justifyContent: 'center' },
   // Pad so the first/last value can rest at the vertical centre of the viewport.
   content: { paddingVertical: ITEM_HEIGHT * ((VISIBLE - 1) / 2) },
   item: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   num: { ...tnum, textAlign: 'center' },
-  selected: { ...heroNum(48, -0.02), fontSize: 48, fontWeight: '600' },
-  idle: { fontSize: 26, fontWeight: '500' },
+  selected: { ...heroNum(s(48), -0.02), fontSize: s(48), fontWeight: '600' },
+  idle: { fontSize: s(26), fontWeight: '500' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 });

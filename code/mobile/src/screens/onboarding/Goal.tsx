@@ -15,7 +15,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Eyebrow } from '@/components/Eyebrow';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
-import { color, space, radius, press, heroTitle } from '@/design/tokens';
+import { color, space, radius, press, heroTitle, s } from '@/design/tokens';
 import type { Goal as GoalT } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -74,14 +74,14 @@ export function Goal({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
-  eyebrow: { marginBottom: 30, color: color.textSecondary },
-  list: { gap: 12 },
-  option: { borderRadius: radius.card, paddingVertical: 16, alignItems: 'center' },
+  eyebrow: { marginBottom: s(30), color: color.textSecondary },
+  list: { gap: s(12) },
+  option: { borderRadius: radius.card, paddingVertical: s(18), alignItems: 'center' },
   optionSelected: { backgroundColor: color.textPrimary },
   optionIdle: { borderWidth: 0.5, borderColor: color.border },
   // Premium display finish (§2.2): tight tracking on the choice labels. The selected
   // option is the clear primary (white fill + 600); the rest recede (dim + 400).
-  optionLabel: { ...heroTitle(19), fontSize: 19, lineHeight: 24 },
+  optionLabel: { ...heroTitle(s(19)), fontSize: s(19), lineHeight: s(24) },
   labelSelected: { color: color.bg, fontWeight: '600' },
   labelIdle: { color: color.textSecondary, fontWeight: '400' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },

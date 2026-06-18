@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Pressable, Text, View, StyleSheet, type ViewStyle } from 'react-native';
-import { button, color, radius as radii } from '@/design/tokens';
+import { button, color, radius as radii, s } from '@/design/tokens';
 
 interface Props {
   label: string;
@@ -22,9 +22,9 @@ interface Props {
 export function PrimaryButton({ label, onPress, variant = 'default', leading, trailing, disabled, style }: Props) {
   const home = variant === 'home';
   const compact = variant === 'compact';
-  const height = compact ? 48 : home ? button.homeCta.height : button.primary.height;
+  const height = compact ? s(48) : home ? button.homeCta.height : button.primary.height;
   const radius = compact ? radii.card : home ? button.homeCta.radius : button.primary.radius;
-  const fontSize = compact ? 15 : home ? button.homeCta.fontSize : button.primary.fontSize;
+  const fontSize = compact ? s(15) : home ? button.homeCta.fontSize : button.primary.fontSize;
   const fontWeight = compact ? ('500' as const) : home ? button.homeCta.fontWeight : button.primary.fontWeight;
   return (
     <Pressable

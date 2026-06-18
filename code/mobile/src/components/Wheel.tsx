@@ -11,9 +11,9 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
-import { color, type as typo } from '@/design/tokens';
+import { color, type as typo, s } from '@/design/tokens';
 
-const ITEM_HEIGHT = 44; // 44pt rows — also meets the min tap target law
+const ITEM_HEIGHT = s(44); // 44pt rows — also meets the min tap target law
 
 interface Props {
   values: number[];
@@ -44,6 +44,9 @@ export function Wheel({ values, selected, onChange, format }: Props) {
         contentOffset={{ x: 0, y: initialIndex * ITEM_HEIGHT }}
         contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
         onMomentumScrollEnd={onMomentumEnd}
+        // Also commit on a slow drag with no fling — otherwise the first gentle
+        // drag (no momentum) never fires onMomentumScrollEnd and the wheel "sticks".
+        onScrollEndDrag={onMomentumEnd}
       >
         {values.map((v) => (
           <View key={v} style={styles.row}>
@@ -70,6 +73,6 @@ const styles = StyleSheet.create({
     borderColor: color.borderSubtle,
   },
   row: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: typo.titleM.size, color: color.textTertiary },
+  label: { fontSize: s(typo.titleM.size), color: color.textTertiary },
   labelSelected: { color: color.textPrimary },
 });

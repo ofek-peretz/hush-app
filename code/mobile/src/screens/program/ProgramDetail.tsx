@@ -20,13 +20,13 @@ import { track } from '@/platform/telemetry';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import type { Capability, SetTarget } from '@/data/local/models';
-import { color, space, heroTitle, press } from '@/design/tokens';
+import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
 
 // Fixed row height — the draggable list positions rows absolutely by slot index.
-const ROW_HEIGHT = 64;
+const ROW_HEIGHT = s(64);
 
 interface Swapping {
   slotIndex: number;
@@ -162,16 +162,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: 6, gap: 6 },
   back: { width: 36, height: 44, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
-  title: { ...heroTitle(24), color: color.textPrimary, fontSize: 24, fontWeight: '600' },
-  body: { paddingTop: 24, paddingHorizontal: space.gutter, paddingBottom: 48 },
-  yoursNow: { fontSize: 14, color: color.textSecondary, marginBottom: 16 },
+  title: { ...heroTitle(s(24)), color: color.textPrimary, fontSize: s(24), fontWeight: '600' },
+  body: { paddingTop: s(24), paddingHorizontal: space.gutter, paddingBottom: 48 },
+  yoursNow: { fontSize: s(14), color: color.textSecondary, marginBottom: s(16) },
   row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, borderBottomWidth: 0.5, borderBottomColor: color.border, backgroundColor: color.bg },
   grip: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
   arrows: { marginLeft: 4 },
   arrow: { width: 28, height: 22, alignItems: 'center', justifyContent: 'center' },
   arrowText: { color: color.textSecondary, fontSize: 14 },
   rowMain: { flex: 1 },
-  exName: { fontSize: 16, fontWeight: '500', color: color.textPrimary },
-  detail: { fontSize: 13, color: color.textSecondary, marginTop: 3 },
+  exName: { fontSize: s(16), fontWeight: '500', color: color.textPrimary },
+  detail: { fontSize: s(13), color: color.textSecondary, marginTop: s(3) },
   swap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

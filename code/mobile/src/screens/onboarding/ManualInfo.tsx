@@ -12,10 +12,10 @@ import {
   Text,
   TextInput,
   Pressable,
+  ScrollView,
   StyleSheet,
   Keyboard,
   KeyboardAvoidingView,
-  TouchableWithoutFeedback,
   InputAccessoryView,
   Platform,
 } from 'react-native';
@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, radius, heroTitle, press } from '@/design/tokens';
+import { color, space, radius, heroTitle, press, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
@@ -68,26 +68,32 @@ export function ManualInfo({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Tap anywhere off a field to dismiss the keyboard (number-pad can't self-dismiss). */}
-        <TouchableWithoutFeedback accessible={false} onPress={Keyboard.dismiss}>
-          <View style={styles.body}>
-            <Text style={styles.title}>{t('manualInfo.title')}</Text>
+        {/* ScrollView gives the native iOS gestures: swipe/drag down dismisses the
+            keyboard ("interactive"), and a tap on empty space dismisses it too
+            ("handled"). The number-pad's Done accessory remains as a backup. */}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollBody}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>{t('manualInfo.title')}</Text>
 
-            <UnderlineField label={t('manualInfo.age')} value={age} onChange={setAge} />
+          <UnderlineField label={t('manualInfo.age')} value={age} onChange={setAge} />
 
-            <View style={styles.field}>
-              <Text style={styles.label}>{t('manualInfo.sex')}</Text>
-              <View style={styles.pills}>
-                {(['male', 'female', 'other'] as const).map((opt) => (
-                  <Pill key={opt} label={t(`manualInfo.${opt}`)} selected={sex === opt} onPress={() => setSex(opt)} />
-                ))}
-              </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>{t('manualInfo.sex')}</Text>
+            <View style={styles.pills}>
+              {(['male', 'female', 'other'] as const).map((opt) => (
+                <Pill key={opt} label={t(`manualInfo.${opt}`)} selected={sex === opt} onPress={() => setSex(opt)} />
+              ))}
             </View>
-
-            <UnderlineField label={t('manualInfo.height')} value={height} onChange={setHeight} suffix="cm" />
-            <UnderlineField label={t('manualInfo.weight')} value={weight} onChange={setWeight} suffix="kg" />
           </View>
-        </TouchableWithoutFeedback>
+
+          <UnderlineField label={t('manualInfo.height')} value={height} onChange={setHeight} suffix="cm" />
+          <UnderlineField label={t('manualInfo.weight')} value={weight} onChange={setWeight} suffix="kg" />
+        </ScrollView>
         <View style={styles.actions}>
           <PrimaryButton variant="compact" label={t('manualInfo.continue')} onPress={onContinuePress} />
         </View>
@@ -164,21 +170,21 @@ function Pill({ label, selected, onPress }: { label: string; selected: boolean; 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   flex: { flex: 1, justifyContent: 'space-between' },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
+  scrollBody: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space.gutter, paddingVertical: s(24) },
   accessory: { backgroundColor: color.surface2, alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingVertical: 8 },
   accessoryBtn: { paddingVertical: 6, paddingHorizontal: 8 },
-  accessoryText: { color: color.accentBlue, fontSize: 16, fontWeight: '600' },
-  title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', marginBottom: 28 },
-  field: { marginBottom: 20 },
-  label: { fontSize: 13, color: color.textSecondary, marginBottom: 6 },
-  underline: { flexDirection: 'row', alignItems: 'baseline', borderBottomWidth: 0.5, borderBottomColor: color.border, paddingBottom: 6 },
-  input: { flex: 1, fontSize: 18, color: color.textPrimary, padding: 0 },
-  suffix: { fontSize: 15, color: color.textSecondary, marginLeft: 6 },
-  pills: { flexDirection: 'row', gap: 8 },
-  pill: { borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 14 },
+  accessoryText: { color: color.accentBlue, fontSize: s(16), fontWeight: '600' },
+  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', marginBottom: s(28) },
+  field: { marginBottom: s(20) },
+  label: { fontSize: s(13), color: color.textSecondary, marginBottom: s(6) },
+  underline: { flexDirection: 'row', alignItems: 'baseline', borderBottomWidth: 0.5, borderBottomColor: color.border, paddingBottom: s(8) },
+  input: { flex: 1, fontSize: s(18), color: color.textPrimary, padding: 0 },
+  suffix: { fontSize: s(15), color: color.textSecondary, marginLeft: 6 },
+  pills: { flexDirection: 'row', gap: s(10) },
+  pill: { borderRadius: radius.pill, paddingVertical: s(6), paddingHorizontal: s(14) },
   pillSelected: { borderWidth: 1, borderColor: color.textPrimary },
   pillIdle: { borderWidth: 0.5, borderColor: color.border },
-  pillLabel: { fontSize: 13 },
+  pillLabel: { fontSize: s(13) },
   pillLabelSelected: { color: color.textPrimary },
   pillLabelIdle: { color: color.textSecondary },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },

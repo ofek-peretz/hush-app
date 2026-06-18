@@ -33,7 +33,9 @@ export type OnboardingParamList = {
 export type MainParamList = {
   // Four tab roots (spec §3). Flat stack + persistent TabBar overlay; tab taps
   // navigate by name (deduped) so switching feels like tabs.
-  Home: undefined;
+  // `focusDayId` = the workout chosen via "Set as next"; Home offers it (if still
+  // unfinished) instead of the default next workout (§4.19 / §5.8).
+  Home: { focusDayId?: string } | undefined;
   Program: undefined;
   History: undefined;
   Portrait: undefined;

@@ -13,7 +13,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { TextAction } from '@/components/TextAction';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, heroTitle } from '@/design/tokens';
+import { color, space, heroTitle, s } from '@/design/tokens';
 import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
@@ -59,9 +59,9 @@ export function ConnectHealth({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   body: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(28), color: color.textPrimary, fontSize: 28, fontWeight: '600', textAlign: 'center', marginBottom: 16 },
-  copy: { fontSize: 15, lineHeight: 15 * 1.6, color: color.textPrimary, textAlign: 'center' },
-  optional: { marginTop: 16, fontSize: 13, color: color.textSecondary, textAlign: 'center' },
+  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', textAlign: 'center', marginBottom: s(16) },
+  copy: { fontSize: s(15), lineHeight: s(15) * 1.6, color: color.textPrimary, textAlign: 'center' },
+  optional: { marginTop: s(16), fontSize: s(13), color: color.textSecondary, textAlign: 'center' },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 26 },
   gap: { height: 8 },
 });

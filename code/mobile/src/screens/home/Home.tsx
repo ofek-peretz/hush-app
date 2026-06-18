@@ -17,12 +17,19 @@ import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
 
-export function Home({ navigation }: Props) {
+export function Home({ navigation, route }: Props) {
   const app = useApp();
   const session = useSession();
   const program = app.program;
   // WEEKLY model: Home offers the next UNFINISHED workout in the week (any order, no calendar).
-  const day = program ? nextWorkout(program) : null;
+  // "Set as next" passes `focusDayId` — honor it while that workout is still unfinished
+  // (survives the program refetch on focus, which would otherwise revert the choice).
+  const focusDayId = route.params?.focusDayId;
+  const focusDay =
+    focusDayId && program
+      ? program.days.find((d) => d.id === focusDayId && !d.isRest && !d.completed) ?? null
+      : null;
+  const day = focusDay ?? (program ? nextWorkout(program) : null);
   // A complete week REUSES the existing Home Rest state: the backend Rest flag, OR every workout
   // in a loaded program is done (no next workout to offer).
   const resting =
