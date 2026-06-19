@@ -85,7 +85,8 @@ const MEN_SPLITS: Record<number, string[]> = {
   2: ['Full Body A', 'Full Body B'],
   3: ['Full Body A', 'Full Body B', 'Full Body C'],
   4: ['Upper A', 'Lower A', 'Upper B', 'Lower B'],
-  5: ['Push A', 'Pull A', 'Legs A', 'Upper A', 'Lower A'],
+  // Upper-forward (founder): 2 push + 2 pull + 1 legs — chest/back lead, not legs.
+  5: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B'],
   6: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'],
 };
 const WOMEN_SPLITS: Record<number, string[]> = {

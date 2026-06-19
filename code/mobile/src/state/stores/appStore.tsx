@@ -205,6 +205,8 @@ interface AppApi extends AppState {
   reorderExercise: (dayId: string, fromIndex: number, toIndex: number) => Promise<void>;
   /** Athlete-owned workout order within the weekly plan (Athlete > Model). Durable + preserved. */
   reorderWorkouts: (fromIndex: number, toIndex: number) => Promise<void>;
+  /** Mark a workout finished for the week (DONE chip + Home advances). Local, idempotent. */
+  markWorkoutCompleted: (programDayId: string) => Promise<void>;
   /** Sign Out: clear the local identity + token (the server data is retained). */
   resetAccount: () => Promise<void>;
   /** Delete Account: erase (anonymize) the athlete SERVER-SIDE (OD-2), then wipe local state. */
@@ -710,6 +712,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             .setOrder({ scope: 'workout', order })
             .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'workout' }));
         }
+      },
+
+      async markWorkoutCompleted(programDayId) {
+        if (!state.program) return;
+        const days = state.program.days.map((d) =>
+          d.id === programDayId ? { ...d, completed: true } : d,
+        );
+        if (days.every((d, i) => d.completed === state.program!.days[i].completed)) return; // no change
+        const program: Program = { ...state.program, days };
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
       },
 
       // Test harness only — never reachable in a release build. Simulates having

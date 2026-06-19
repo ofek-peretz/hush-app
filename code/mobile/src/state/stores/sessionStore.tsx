@@ -311,6 +311,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await db.appendCompletedSession(saved);
       await db.clearActiveSession();
       const { unlockedPortrait } = await app.recordSessionCompleted();
+      // Mark this workout DONE for the week so Program shows the green DONE chip and
+      // Home advances to the next unfinished workout (Rest once all are done).
+      await app.markWorkoutCompleted(session.programDayId);
       dispatch({ type: 'END' });
 
       void track('session_completed', {
