@@ -30,6 +30,7 @@ function harness() {
   const dispatched: SessionEvent[] = [];
   const busy: number[] = [];
   const completed: (number | undefined)[] = [];
+  const completedWeights: (number | null | undefined)[] = [];
 
   const transport: WatchTransport = {
     isReachable: () => reachable,
@@ -42,13 +43,13 @@ function harness() {
     transport,
     now: () => NOW,
     track: (type, data) => void events.push({ type, data }),
-    completeSet: (reps) => void completed.push(reps),
+    completeSet: (reps, weight) => { completed.push(reps); completedWeights.push(weight); },
     dispatch: (e) => void dispatched.push(e),
     markEquipmentOccupied: () => void busy.push(1),
   });
 
   return {
-    session, sent, events, dispatched, busy, completed,
+    session, sent, events, dispatched, busy, completed, completedWeights,
     types: () => events.map((e) => e.type),
     emitIntent: (raw: unknown) => intentCb?.(raw),
     setReachable: (r: boolean) => { reachable = r; reachCb?.(r); },
@@ -108,16 +109,25 @@ describe('WatchSession intent handling (phone authority)', () => {
     expect(h.completed).toEqual([undefined]); // no adjusted reps = target reps
     expect(h.dispatched).toHaveLength(0);
     const received = h.events.find((e) => e.type === WATCH_EVENTS.actionReceived);
-    expect(received?.data).toMatchObject({ action: 'complete_set', repsAdjusted: false, latencyMs: 100 });
+    expect(received?.data).toMatchObject({ action: 'complete_set', adjusted: false, latencyMs: 100 });
   });
 
-  it('completes with adjusted actual reps (the Couldn\'t Complete result)', () => {
+  it('completes with adjusted actual reps (the Edit Result reps)', () => {
     const h = harness();
     h.session.publish(activeMirror({ targetReps: 8 }));
     h.emitIntent(intent({ actualReps: 6, intentId: 'r1' }));
     expect(h.completed).toEqual([6]);
     const received = h.events.find((e) => e.type === WATCH_EVENTS.actionReceived);
-    expect(received?.data).toMatchObject({ action: 'complete_set', repsAdjusted: true });
+    expect(received?.data).toMatchObject({ action: 'complete_set', adjusted: true });
+  });
+
+  it('completes with adjusted actual weight from the watch Edit Result', () => {
+    const h = harness();
+    h.session.publish(activeMirror({ targetWeight: 60 }));
+    h.emitIntent(intent({ actualWeight: 62.5, intentId: 'w1' }));
+    expect(h.completedWeights).toEqual([62.5]);
+    const received = h.events.find((e) => e.type === WATCH_EVENTS.actionReceived);
+    expect(received?.data).toMatchObject({ action: 'complete_set', adjusted: true });
   });
 
   it('routes exercise_busy to the equipment-occupied reorder (not a completion)', () => {

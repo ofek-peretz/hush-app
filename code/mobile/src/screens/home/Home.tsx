@@ -29,7 +29,16 @@ export function Home({ navigation, route }: Props) {
     focusDayId && program
       ? program.days.find((d) => d.id === focusDayId && !d.isRest && !d.completed) ?? null
       : null;
-  const day = focusDay ?? (program ? nextWorkout(program) : null);
+  // "Choose workout" (top-right) swaps the workout shown on Home immediately. Local,
+  // session-scoped, takes priority over the default next workout (matches the prototype).
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const chosenDay =
+    chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
+  const day = chosenDay ?? focusDay ?? (program ? nextWorkout(program) : null);
+  // Every non-rest workout in the week, with its muscle groups, for the chooser.
+  const workouts = (program?.days ?? [])
+    .filter((d) => !d.isRest)
+    .map((d) => ({ id: d.id, name: d.name, muscles: d.muscleGroups.join(' · ') }));
   // A complete week REUSES the existing Home Rest state: the backend Rest flag, OR every workout
   // in a loaded program is done (no next workout to offer).
   const resting =
@@ -93,7 +102,7 @@ export function Home({ navigation, route }: Props) {
   }
 
   const now = new Date();
-  const dateLabel = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const dateLabel = now.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   const hour = now.getHours();
   const greetingPart: 'morning' | 'afternoon' | 'evening' =
     hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
@@ -111,7 +120,11 @@ export function Home({ navigation, route }: Props) {
       startError={startError}
       dateLabel={dateLabel}
       onStart={onStart}
-      onProfile={() => navigation.navigate('ProfileSheet')}
+      workouts={workouts}
+      onChooseWorkout={setChosenId}
+      onProgram={() => navigation.navigate('Program')}
+      onHistory={() => navigation.navigate('History')}
+      onSettings={() => navigation.navigate('ProfileSheet')}
     />
   );
 }

@@ -88,6 +88,7 @@ MAP = {
     "app/routers/preferences.py": "api/routers/preferences.py",
     "app/routers/weeks.py": "api/routers/weeks.py",
     "app/routers/consent.py": "api/routers/consent.py",
+    "app/routers/enroll.py": "api/routers/enroll.py",
     "app/internal/__init__.py": None,
     "app/internal/operator.py": "api/internal/operator.py",
     "sim/__init__.py": None,
@@ -101,6 +102,11 @@ MAP = {
     "sim/metrics.py": "sprint4/metrics.py",
     "sim/calibration.py": "sprint4/calibration.py",
     "sim/gate.py": "sprint4/gate.py",
+    # ---- Sprint 7 measurement instruments (Phase-0; read-only over the frozen model) ----
+    "sim/montecarlo.py": "sprint7/montecarlo.py",
+    "sim/forecast_calibration.py": "sprint7/forecast_calibration.py",
+    "sim/volatility.py": "sprint7/volatility.py",
+    "sim/counterfactual.py": "sprint7/counterfactual.py",
     "tests/test_sprint0.py": "sprint0/test_sprint0.py",
     "tests/test_seed_validation.py": "sprint0/test_seed_validation.py",
     "tests/test_equipment_coverage.py": "sprint3b2/test_equipment_coverage.py",
@@ -110,6 +116,7 @@ MAP = {
     "tests/test_sprint3b1.py": "sprint3b1/test_sprint3b1.py",
     "tests/test_sprint3b2.py": "sprint3b2/test_sprint3b2.py",
     "tests/test_sprint4.py": "sprint4/test_sprint4.py",
+    "tests/test_sprint7.py": "sprint7/test_sprint7.py",
     "tests/test_wave1.py": "wave1/test_wave1.py",
     "tests/test_sprint5.py": "sprint5/test_sprint5.py",
     "tests/test_sprint6.py": "sprint6/test_sprint6.py",
@@ -124,6 +131,7 @@ MAP = {
     "tests/test_api_migrate.py": "api/test_api_migrate.py",
     "tests/test_api_erasure.py": "api/test_api_erasure.py",
     "tests/test_api_ops_monitor.py": "api/test_api_ops_monitor.py",
+    "tests/test_api_enroll.py": "api/test_api_enroll.py",
 }
 
 # The API tests run under pytest (FastAPI TestClient + fixtures), not the plain-assert golden
@@ -138,6 +146,7 @@ API_TEST_FILES = [
     "tests/test_api_migrate.py",
     "tests/test_api_erasure.py",
     "tests/test_api_ops_monitor.py",
+    "tests/test_api_enroll.py",
 ]
 
 
@@ -159,7 +168,7 @@ def run():
     suites = ["tests.test_sprint0", "tests.test_seed_validation", "tests.test_sprint1",
               "tests.test_sprint2", "tests.test_sprint3a",
               "tests.test_sprint3b1", "tests.test_sprint3b2", "tests.test_equipment_coverage",
-              "tests.test_sprint4",
+              "tests.test_sprint4", "tests.test_sprint7",
               "tests.test_wave1", "tests.test_sprint5", "tests.test_sprint6"]
     total = passed = 0
     failures = []

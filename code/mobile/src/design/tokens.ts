@@ -32,40 +32,52 @@ const _scaleFactor = Math.min(Math.max(_screenW / DESIGN_WIDTH, 1.3), 1.5);
 export const s = (n: number) => Math.round(n * _scaleFactor);
 export const scaleFactor = _scaleFactor;
 
+/**
+ * MONOCHROME visual system (2026-06-19 founder direction — the "hush_iphone_v1"
+ * prototype is now the sole source of truth for visuals). Pure black, white, and
+ * white-with-opacity ONLY. No color, no semantic states, no decorative icons.
+ * Hierarchy is weight / size / opacity. Token NAMES are kept so existing screens
+ * keep compiling; the former blue/green/red accents now all resolve to white.
+ */
 export const color = {
-  // §2.1 — Backgrounds / surfaces
-  bg: '#000000', // app background (true black)
-  surface: '#111111', // bottom sheets, demo cards
-  surface2: '#1C1C1E', // swap sheet bg, raised rows, DONE chip bg
-  surface3: '#2C2C2E', // cards inside sheets, circular icon buttons
+  // Backgrounds / surfaces
+  bg: '#000000', // app background (true black), always
+  surface: '#161616', // bottom sheets (Pause, Edit Result, Menu)
+  surface2: '#161616', // raised rows / sheet bg (monochrome — was a gray)
+  surface3: '#1C1C1C', // cards inside sheets, circular icon buttons
 
-  // §2.1 — Text
+  // Text — white at descending opacity (prototype values)
   textPrimary: '#FFFFFF',
-  textSecondary: '#A1A1AA', // secondary text, captions (G)
-  textTertiary: '#71717A', // eyebrows, inactive (T)
-  textDim: '#D4D4D8', // cap-bar labels, coaching line (DIM)
+  textSecondary: 'rgba(255,255,255,0.45)', // labels, captions, set counters
+  textTertiary: 'rgba(255,255,255,0.28)', // eyebrows, dim context
+  textDim: 'rgba(255,255,255,0.5)', // coaching line, cap-bar labels
 
-  // §2.1 — Lines / chrome
-  border: '#2C2C2E', // hairline dividers / borders (BD)
-  tabInactive: '#6D6D72', // inactive tab icon + label
+  // Lines / chrome
+  border: 'rgba(255,255,255,0.1)', // hairline dividers / borders
+  tabInactive: 'rgba(255,255,255,0.28)', // (tab bar retired; kept for compat)
 
-  // §2.1 — Accents (used sparingly, by role)
-  accentBlue: '#2D9CDB', // actionable links ("Set as next")
-  accentGreen: '#3DB48C', // live timer / rest ring (DI & Live Activity)
-  danger: '#EF4444', // destructive ("Delete Account")
+  // Subtle white fills (slide track, picker pill, Choose-workout pill, step btns)
+  fillSubtle: 'rgba(255,255,255,0.12)',
+  fillSubtleStrong: 'rgba(255,255,255,0.14)',
 
-  // §2.1 — DONE chip
-  doneText: '#8A8A8E',
-  doneBorder: '#38383A',
+  // "Accents" — all monochrome now. White is the only action fill; destructive is
+  // bold white, not red (no color even on destructive — matches the reference).
+  accentBlue: '#FFFFFF', // actionable links ("Set as next") — white in monochrome
+  accentGreen: '#FFFFFF', // live timer / rest ring — white in monochrome
+  danger: '#FFFFFF', // destructive ("Delete Account") — bold white, not red
 
-  // Logo gradient (135°) §9
+  // DONE chip — monochrome
+  doneText: 'rgba(255,255,255,0.5)',
+  doneBorder: 'rgba(255,255,255,0.14)',
+
+  // Logo gradient (135°) §9 — kept (brand mark only, off the monochrome screens)
   logoGradStart: '#2D7DD2',
   logoGradEnd: '#185FA5',
 
   // ---- backward-compat aliases (retired as screens migrate to spec names) ----
   bgBase: '#000000',
-  bgSurface: '#111111',
-  borderSubtle: '#2C2C2E',
+  bgSurface: '#161616',
+  borderSubtle: 'rgba(255,255,255,0.1)',
 } as const;
 
 /**

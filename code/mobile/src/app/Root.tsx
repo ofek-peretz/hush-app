@@ -35,15 +35,11 @@ import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
-import { Portrait } from '@/screens/portrait/Portrait';
-import { PortraitUnlock } from '@/screens/portrait/PortraitUnlock';
-import { PortraitRevisit } from '@/screens/portrait/PortraitRevisit';
-import { PortraitThenNow } from '@/screens/portrait/PortraitThenNow';
-import { ThresholdAlert } from '@/screens/portrait/ThresholdAlert';
 import { Program } from '@/screens/program/Program';
 import { ProgramDetail } from '@/screens/program/ProgramDetail';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
+import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -85,16 +81,11 @@ function MainNavigator() {
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
-      {/* Portrait first-unlock fades in (the earned arrival, §2.7) and has no back. */}
-      <MainStack.Screen name="PortraitUnlock" component={PortraitUnlock} options={{ animation: 'fade', gestureEnabled: false }} />
-      <MainStack.Screen name="PortraitRevisit" component={PortraitRevisit} />
-      <MainStack.Screen name="PortraitThenNow" component={PortraitThenNow} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="ThresholdAlert" component={ThresholdAlert} options={{ animation: 'fade' }} />
       <MainStack.Screen name="Program" component={Program} />
       <MainStack.Screen name="ProgramDetail" component={ProgramDetail} />
       <MainStack.Screen name="History" component={History} />
-      <MainStack.Screen name="Portrait" component={Portrait} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
+      <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
     </MainStack.Navigator>
   );
 }
@@ -103,7 +94,10 @@ function MainNavigator() {
 function routeNotificationIntent(intent: NotificationIntent | null, enrolled: boolean): void {
   if (!intent || !enrolled) return;
   if (intent.kind === 'weekly_program_ready') navigateMain('Program'); // 1.20
-  else if (intent.kind === 'threshold_alert') navigateMain('ThresholdAlert'); // 1.10
+  else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
+  // threshold_alert no longer has a destination (the Portrait surfaces were removed);
+  // the intent map is retained for the notification layer + tests, but it deep-links
+  // nowhere now. Capability "training picture" alerts are not user-facing in V1.
 }
 
 export function Root() {

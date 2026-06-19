@@ -11,13 +11,14 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AppTabBar, TAB_BAR_SPACE } from '@/components/AppTabBar';
+import { BackBar } from '@/components/BackBar';
 import { Eyebrow } from '@/components/Eyebrow';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
+import { weekProgress, estimateMinutes } from '@/domain/schedule';
 import type { ProgramDay, Session } from '@/data/local/models';
 import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -64,9 +65,14 @@ export function Program({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <BackBar onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.header} accessibilityRole="header">{t('program.title')}</Text>
-        {program ? <Text style={styles.sub}>{t('program.perWeek', { n: program.frequency })}</Text> : null}
+        {program ? (
+          <Text style={styles.sub}>
+            {t('program.weekProgress', { done: weekProgress(program).done, total: weekProgress(program).total })}
+          </Text>
+        ) : null}
 
         {completed.length > 0 ? (
           <View style={styles.group}>
@@ -82,6 +88,7 @@ export function Program({ navigation }: Props) {
                   {weekdayFor(d) ? <Text style={styles.weekday}>{weekdayFor(d)}</Text> : null}
                   <Text style={styles.name}>{d.name}</Text>
                   <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
+                  <Text style={styles.dayMeta}>{t('program.dayMeta', { exercises: d.slots.length, min: estimateMinutes(d) })}</Text>
                 </View>
                 <View style={styles.doneChip}>
                   <Icon name="check" size={11} color={color.doneText} strokeWidth={2.4} />
@@ -105,6 +112,7 @@ export function Program({ navigation }: Props) {
                 <View style={styles.rowMain}>
                   <Text style={styles.name}>{d.name}</Text>
                   <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
+                  <Text style={styles.dayMeta}>{t('program.dayMeta', { exercises: d.slots.length, min: estimateMinutes(d) })}</Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -121,14 +129,13 @@ export function Program({ navigation }: Props) {
           </View>
         ) : null}
       </ScrollView>
-      <AppTabBar active="program" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
+  body: { paddingTop: 8, paddingHorizontal: space.gutter, paddingBottom: 40 },
   header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
   sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
   group: { marginTop: s(28) },
@@ -144,6 +151,7 @@ const styles = StyleSheet.create({
   weekday: { fontSize: s(12), color: color.textSecondary, marginBottom: 2 },
   name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary },
   muscles: { fontSize: s(12), color: color.textSecondary, marginTop: s(2) },
+  dayMeta: { fontSize: s(11), color: color.textTertiary, marginTop: s(3) },
   doneChip: {
     flexDirection: 'row',
     alignItems: 'center',

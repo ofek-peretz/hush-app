@@ -1,0 +1,360 @@
+<style>
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
+.stage{display:flex;flex-direction:column;align-items:center;gap:18px;padding:1rem 0;}
+.case{width:300px;height:650px;background:#131315;border:1px solid rgba(255,255,255,.07);border-radius:58px;padding:10px;box-sizing:border-box;position:relative;}
+.sb1{position:absolute;left:-3px;top:17%;width:4px;height:32px;background:#2b2c2f;border-radius:2px;}
+.sb2{position:absolute;left:-3px;top:25%;width:4px;height:56px;background:#2b2c2f;border-radius:2px;}
+.sb3{position:absolute;right:-3px;top:23%;width:4px;height:78px;background:#2b2c2f;border-radius:2px;}
+.screen{position:relative;width:100%;height:100%;background:#000;border-radius:48px;overflow:hidden;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",var(--font-sans),sans-serif;}
+.island{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:90px;height:26px;background:#050505;border:1px solid rgba(255,255,255,.05);border-radius:16px;z-index:5;}
+.homebar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:120px;height:4px;background:rgba(255,255,255,.35);border-radius:2px;z-index:5;}
+.state{position:absolute;inset:0;padding:28px 26px;box-sizing:border-box;display:flex;flex-direction:column;}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-top:18px;}
+.label-sm{font-size:13px;color:rgba(255,255,255,.45);}
+.label-md{font-size:18px;font-weight:700;color:rgba(255,255,255,.92);text-align:center;}
+.big{font-size:72px;font-weight:700;line-height:1;text-align:center;}
+.big.dim{color:rgba(255,255,255,.26);}
+.timer{font-size:62px;font-weight:700;font-variant-numeric:tabular-nums;text-align:center;}
+.coach{font-size:15px;color:#fff;line-height:1.4;margin-top:12px;max-width:230px;text-align:center;}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;}
+.footer{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;margin-top:auto;}
+.btn-primary{width:100%;background:#fff;color:#000;font-weight:700;font-size:17px;padding:15px 0;border-radius:22px;border:none;}
+.link{font-size:15px;color:rgba(255,255,255,.5);background:none;border:none;}
+.readyBtn{font-size:16px;font-weight:700;color:#fff;background:none;border:none;}
+.bpmrow{display:flex;gap:18px;font-size:14px;color:rgba(255,255,255,.4);justify-content:center;}
+.pausebtn{background:none;border:none;color:rgba(255,255,255,.8);font-size:18px;line-height:1;}
+.choosebtn{background:rgba(255,255,255,.14);color:#fff;font-size:13px;padding:7px 12px;border-radius:12px;border:none;}
+.slideTrack{position:relative;height:56px;border-radius:28px;background:rgba(255,255,255,.12);margin-top:auto;}
+.slideLabel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,.55);pointer-events:none;}
+.slideThumb{position:absolute;left:4px;top:4px;width:48px;height:48px;border-radius:50%;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;font-size:18px;}
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.97);padding:28px 26px;box-sizing:border-box;display:flex;flex-direction:column;padding-top:60px;}
+.ovItem{background:none;border:none;color:#fff;font-size:17px;text-align:left;padding:13px 2px;border-bottom:0.5px solid rgba(255,255,255,.1);}
+.dimtop{flex:1;display:flex;align-items:center;justify-content:center;}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#161616;border-radius:30px 30px 0 0;padding:22px 26px 26px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:14px;}
+.sheetItem{background:none;border:none;color:rgba(255,255,255,.55);font-size:17px;width:100%;text-align:center;padding:5px 0;}
+.sheetItem.primary{color:#fff;font-weight:700;}
+.wheelcol{display:flex;flex-direction:column;align-items:center;touch-action:none;cursor:grab;padding:0 14px;}
+.wheelrows{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:6px;}
+.wrow{font-size:17px;color:rgba(255,255,255,.4);padding:3px 0;}
+.wrow.mid{font-size:24px;font-weight:700;color:#fff;background:rgba(255,255,255,.12);border-radius:10px;padding:4px 18px;}
+.dot{display:inline-block;width:11px;height:11px;background:rgba(255,255,255,.4);border-radius:3px;margin-left:7px;vertical-align:middle;}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:480px;}
+.tab{font-size:12px;padding:5px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);}
+.tab.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-secondary);}
+.hint{font-size:12px;color:var(--color-text-secondary);text-align:center;max-width:280px;}
+</style>
+<h2 class="sr-only">Interactive prototype of the Hush iPhone workout app, now showing live heart rate and calories synced from a paired Apple Watch, matching the watch build: start screen, active set, set confirmation, inter-set rest, transition rest, edit result picker, pause menu, end workout confirmation, and well done screen.</h2>
+<div class="stage" id="widgetRoot3">
+  <div class="case">
+    <div class="sb1"></div><div class="sb2"></div><div class="sb3"></div>
+    <div class="screen">
+      <div class="island"></div>
+
+      <div class="state" id="q-start" style="display:flex;">
+        <div class="hdr">
+          <div>
+            <div class="label-sm">Fri, 19 Jun</div>
+            <div class="label-sm" style="opacity:.7;">Good morning</div>
+          </div>
+          <button class="choosebtn" id="q-chooseBtn">Choose workout</button>
+        </div>
+        <div class="center">
+          <div class="big" style="font-size:38px;" id="q-wname">Upper A</div>
+          <div class="label-sm" id="q-wmuscles" style="margin-top:6px;">Chest · Shoulders · Triceps</div>
+        </div>
+        <div class="slideTrack" id="q-slideTrack">
+          <div class="slideLabel">Slide to start</div>
+          <div class="slideThumb" id="q-slideThumb" role="button" tabindex="0" aria-label="Slide to start workout"><i class="ti ti-chevron-right" aria-hidden="true"></i></div>
+        </div>
+        <div class="overlay" id="q-overlay" style="display:none;">
+          <div class="label-md" style="margin-bottom:14px;">Choose workout</div>
+          <button class="ovItem" data-w="Upper A">Upper A</button>
+          <button class="ovItem" data-w="Upper B">Upper B</button>
+          <button class="ovItem" data-w="Lower A">Lower A</button>
+          <button class="ovItem" data-w="Lower B">Lower B</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-activeset" style="display:none;">
+        <div class="hdr"><span class="eta label-sm">32m left</span><button class="pausebtn" data-act="pause" aria-label="Pause workout"><i class="ti ti-player-pause" aria-hidden="true"></i></button></div>
+        <div class="center">
+          <div class="label-md" id="q-as-name">Bench press</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;justify-content:center;margin-top:10px;">
+            <span class="big" id="q-as-weight">80</span><span class="label-sm" style="font-size:18px;margin-bottom:12px;">kg</span>
+          </div>
+          <div style="font-size:20px;color:rgba(255,255,255,.8);margin-top:4px;" id="q-as-reps">× 8</div>
+          <div class="label-sm" style="margin-top:10px;" id="q-as-setlabel">Set 1 of 3</div>
+          <div class="coach" id="q-as-coach">You can do it.</div>
+        </div>
+        <div class="footer">
+          <button class="link" data-act="edit">Edit result</button>
+          <button class="btn-primary" data-act="complete">Complete set</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-confirm" style="display:none;">
+        <div class="hdr"><span class="eta label-sm">32m left</span><span style="width:18px;"></span></div>
+        <div class="center">
+          <div class="big" style="font-size:46px;" id="q-cf-text">82.5 × 8</div>
+        </div>
+      </div>
+
+      <div class="state" id="q-restinter" style="display:none;">
+        <div class="hdr"><span class="eta label-sm">26m left</span><button class="pausebtn" data-act="pause" aria-label="Pause workout"><i class="ti ti-player-pause" aria-hidden="true"></i></button></div>
+        <div class="center">
+          <div class="timer" id="q-ri-timer">01:30</div>
+          <div class="label-sm" style="margin-top:20px;" id="q-ri-setlabel">Set 2 of 3</div>
+          <div class="label-md" style="font-size:19px;" id="q-ri-name">Bench press</div>
+          <div class="label-sm" style="font-size:16px;color:rgba(255,255,255,.75);" id="q-ri-load">82.5 × 8</div>
+        </div>
+        <div class="footer" style="gap:10px;">
+          <div class="bpmrow"><span>118 bpm</span><span>142 kcal</span></div>
+          <button class="readyBtn" data-act="ready">Ready</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-resttrans" style="display:none;">
+        <div class="hdr"><span class="eta label-sm">26m left</span><button class="pausebtn" data-act="pause" aria-label="Pause workout"><i class="ti ti-player-pause" aria-hidden="true"></i></button></div>
+        <div class="center">
+          <div class="timer" id="q-rt-timer">02:00</div>
+          <div class="label-sm" style="margin-top:20px;">Next exercise</div>
+          <div class="label-md" style="font-size:19px;" id="q-rt-name">Romanian deadlift</div>
+          <div class="label-sm" style="font-size:16px;color:rgba(255,255,255,.75);" id="q-rt-load">100 × 8</div>
+        </div>
+        <div class="footer" style="gap:10px;">
+          <div class="bpmrow"><span>118 bpm</span><span>142 kcal</span></div>
+          <button class="readyBtn" data-act="ready">Ready</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-edit" style="display:none;">
+        <div class="dimtop"><span class="big dim" style="font-size:32px;" id="q-ed-context">82.5</span></div>
+        <div class="sheet">
+          <div style="display:flex;width:100%;justify-content:space-around;">
+            <div class="wheelcol" data-col="weight" id="q-col-weight" role="slider" tabindex="0" aria-label="Weight picker, drag to adjust">
+              <div class="label-sm" style="letter-spacing:1px;">WEIGHT</div>
+              <div class="wheelrows" id="q-rows-weight"></div>
+            </div>
+            <div class="wheelcol" data-col="reps" id="q-col-reps" role="slider" tabindex="0" aria-label="Reps picker, drag to adjust">
+              <div class="label-sm" style="letter-spacing:1px;">REPS</div>
+              <div class="wheelrows" id="q-rows-reps"></div>
+            </div>
+          </div>
+          <button class="btn-primary" data-act="save">Save</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-paused" style="display:none;">
+        <div class="dimtop"><span class="big dim" id="q-pa-weight">82.5</span></div>
+        <div class="sheet">
+          <div class="label-md" style="font-size:19px;">Workout paused</div>
+          <button class="sheetItem primary" data-act="resume">Resume workout</button>
+          <button class="sheetItem" data-act="showexercise">Show exercise</button>
+          <button class="sheetItem" data-act="finish">Finish early</button>
+        </div>
+      </div>
+
+      <div class="state" id="q-endconfirm" style="display:none;">
+        <div class="center">
+          <div class="label-md" style="font-size:20px;">End workout?</div>
+          <div class="footer" style="margin-top:22px;gap:12px;">
+            <button class="btn-primary" data-act="resume2">Resume workout</button>
+            <button class="link" data-act="end" style="color:#fff;font-weight:700;font-size:16px;">End workout</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="state" id="q-welldone" style="display:none;">
+        <div class="center">
+          <div class="big" style="font-size:40px;">Well done<span class="dot"></span></div>
+        </div>
+      </div>
+
+      <div class="homebar"></div>
+    </div>
+  </div>
+  <div class="tabs" id="q-tabs">
+    <button class="tab" data-state="start">1 · Start</button>
+    <button class="tab" data-state="activeset">2 · Active set</button>
+    <button class="tab" data-state="confirm">3 · Confirm</button>
+    <button class="tab" data-state="restinter">4 · Inter-set rest</button>
+    <button class="tab" data-state="resttrans">5 · Transition rest</button>
+    <button class="tab" data-state="edit">6 · Edit result</button>
+    <button class="tab" data-state="paused">7 · Paused</button>
+    <button class="tab" data-state="endconfirm">8 · End workout?</button>
+    <button class="tab" data-state="welldone">9 · Well done</button>
+  </div>
+  <div class="hint" id="q-hintText"></div>
+</div>
+<script>
+(function(){
+var data={workouts:{
+"Upper A":{muscles:"Chest · Shoulders · Triceps",exercises:[
+  {name:"Bench press",lastWeek:80,sets:[{w:80,r:8},{w:82.5,r:8},{w:82.5,r:8}]},
+  {name:"Romanian deadlift",lastWeek:100,sets:[{w:100,r:8}]}
+]},
+"Upper B":{muscles:"Back · Biceps",exercises:[
+  {name:"Pull-up",lastWeek:0,sets:[{w:0,r:8},{w:0,r:8}]},
+  {name:"Barbell row",lastWeek:60,sets:[{w:62.5,r:8}]}
+]},
+"Lower A":{muscles:"Quads · Glutes",exercises:[
+  {name:"Back squat",lastWeek:90,sets:[{w:92.5,r:6},{w:92.5,r:6}]}
+]},
+"Lower B":{muscles:"Hamstrings · Calves",exercises:[
+  {name:"Leg curl",lastWeek:40,sets:[{w:40,r:10},{w:40,r:10}]}
+]}
+}};
+var workoutName="Upper A",exIndex=0,setIndex=0,paused=false,prevState="activeset",current="start";
+var etaSeconds=32*60,restSeconds=90,editWeight=80,editReps=8;
+var hints={start:"Drag the slider to begin, or tap Choose workout to switch programs",activeset:"Tap Edit result to adjust, or Complete set to log it",confirm:"Confirms automatically, then moves to rest",restinter:"Counts down between sets, tap Ready to skip ahead",resttrans:"Rest before the next exercise, tap Ready to skip ahead",edit:"Drag each column up or down to adjust, independently",paused:"Workout paused, resume, peek the exercise, or finish early",endconfirm:"Confirm before ending the session",welldone:"Session complete, returns to start automatically"};
+function exs(){return data.workouts[workoutName].exercises;}
+function ex(){return exs()[exIndex];}
+function set(){return ex().sets[setIndex];}
+function fmtW(n){n=Math.round(n*10)/10;return (n%1===0)?String(n):n.toFixed(1);}
+function fmtClock(s){var m=Math.floor(s/60),ss=s%60;return m+":"+String(ss).padStart(2,"0");}
+function fmtEta(s){return Math.max(0,Math.round(s/60))+"m left";}
+function totalEta(){var t=0;exs().forEach(function(e){t+=e.sets.length;});return t*200;}
+function renderWheel(elId,center,step,fmt){
+  var el=document.getElementById(elId);el.innerHTML="";
+  for(var i=-2;i<=2;i++){
+    var v=Math.round((center+i*step)*10)/10;
+    var row=document.createElement("div");
+    row.className="wrow"+(i===0?" mid":"");
+    row.style.opacity=i===0?1:(Math.abs(i)===1?0.55:0.25);
+    row.textContent=fmt(v);
+    el.appendChild(row);
+  }
+}
+function renderStart(){
+  document.getElementById("q-wname").textContent=workoutName;
+  document.getElementById("q-wmuscles").textContent=data.workouts[workoutName].muscles;
+  document.getElementById("q-slideThumb").style.transform="translateX(0px)";
+}
+function renderActiveSet(){
+  var e=ex(),s=set();
+  document.getElementById("q-as-name").textContent=e.name;
+  document.getElementById("q-as-weight").textContent=fmtW(s.w);
+  document.getElementById("q-as-reps").textContent="× "+s.r;
+  document.getElementById("q-as-setlabel").textContent="Set "+(setIndex+1)+" of "+e.sets.length;
+  var diff=Math.round((s.w-e.lastWeek)*10)/10;
+  document.getElementById("q-as-coach").textContent=diff>0?("Up "+fmtW(diff)+" from last week. You're ready for it."):"You can do it.";
+}
+function renderRestInter(){
+  var e=ex(),s=set();
+  document.getElementById("q-ri-timer").textContent=fmtClock(restSeconds);
+  document.getElementById("q-ri-setlabel").textContent="Set "+(setIndex+1)+" of "+e.sets.length;
+  document.getElementById("q-ri-name").textContent=e.name;
+  document.getElementById("q-ri-load").textContent=fmtW(s.w)+" × "+s.r;
+}
+function renderRestTrans(){
+  var e=ex(),s=set();
+  document.getElementById("q-rt-timer").textContent=fmtClock(restSeconds);
+  document.getElementById("q-rt-name").textContent=e.name;
+  document.getElementById("q-rt-load").textContent=fmtW(s.w)+" × "+s.r;
+}
+function renderEdit(){
+  document.getElementById("q-ed-context").textContent=fmtW(set().w);
+  renderWheel("q-rows-weight",editWeight,2.5,fmtW);
+  renderWheel("q-rows-reps",editReps,1,function(v){return String(v);});
+}
+function renderPaused(){document.getElementById("q-pa-weight").textContent=fmtW(set().w);}
+var renderers={start:renderStart,activeset:renderActiveSet,restinter:renderRestInter,resttrans:renderRestTrans,edit:renderEdit,paused:renderPaused};
+function go(name){
+  current=name;
+  document.querySelectorAll("#widgetRoot3 .state").forEach(function(el){el.style.display=(el.id==="q-"+name)?"flex":"none";});
+  document.querySelectorAll("#widgetRoot3 .eta").forEach(function(el){el.textContent=fmtEta(etaSeconds);});
+  if(renderers[name])renderers[name]();
+  document.querySelectorAll("#widgetRoot3 .tab").forEach(function(b){b.classList.toggle("active",b.dataset.state===current);});
+  document.getElementById("q-hintText").textContent=hints[current]||"";
+  if(name==="confirm")setTimeout(afterConfirm,1100);
+  if(name==="welldone")setTimeout(function(){exIndex=0;setIndex=0;paused=false;etaSeconds=totalEta();go("start");},2600);
+}
+function enterState(name){
+  if(name==="restinter"&&restSeconds<=0)restSeconds=90;
+  if(name==="resttrans"&&restSeconds<=0)restSeconds=120;
+  if(name==="edit"){editWeight=set().w;editReps=set().r;}
+  if(name==="paused"&&current!=="paused"&&current!=="endconfirm")prevState=current;
+  go(name);
+}
+function startWorkout(){exIndex=0;setIndex=0;etaSeconds=totalEta();go("activeset");}
+function completeSet(){document.getElementById("q-cf-text").textContent=fmtW(set().w)+" × "+set().r;go("confirm");}
+function afterConfirm(){
+  if(setIndex+1<ex().sets.length){setIndex++;restSeconds=90;go("restinter");}
+  else if(exIndex+1<exs().length){exIndex++;setIndex=0;restSeconds=120;go("resttrans");}
+  else{go("welldone");}
+}
+function advanceFromRest(){restSeconds=0;go("activeset");}
+function pauseWorkout(){if(current==="paused"||current==="endconfirm")return;prevState=current;paused=true;go("paused");}
+function resumeWorkout(){paused=false;go(prevState||"activeset");}
+function saveEdit(){ex().sets[setIndex]={w:editWeight,r:editReps};enterState("activeset");}
+document.getElementById("widgetRoot3").addEventListener("click",function(e){
+  var tabBtn=e.target.closest(".tab");
+  if(tabBtn){enterState(tabBtn.dataset.state);return;}
+  var ov=e.target.closest(".ovItem");
+  if(ov){workoutName=ov.dataset.w;renderStart();document.getElementById("q-overlay").style.display="none";return;}
+  var t=e.target.closest("[data-act]");
+  if(!t)return;
+  var act=t.dataset.act;
+  if(act==="pause")pauseWorkout();
+  else if(act==="edit")enterState("edit");
+  else if(act==="complete")completeSet();
+  else if(act==="ready")advanceFromRest();
+  else if(act==="save")saveEdit();
+  else if(act==="resume"||act==="resume2")resumeWorkout();
+  else if(act==="finish")enterState("endconfirm");
+  else if(act==="end"){exIndex=0;setIndex=0;paused=false;go("welldone");}
+});
+document.getElementById("q-chooseBtn").addEventListener("click",function(){
+  var ov=document.getElementById("q-overlay");
+  ov.style.display=(ov.style.display==="flex")?"none":"flex";
+});
+function setupDrag(colId,getVal,setVal,step){
+  var el=document.getElementById(colId);
+  var dragging=false,startY=0,startVal=0;
+  el.addEventListener("pointerdown",function(e){dragging=true;startY=e.clientY;startVal=getVal();el.setPointerCapture(e.pointerId);});
+  el.addEventListener("pointermove",function(e){if(!dragging)return;var dy=startY-e.clientY;var steps=Math.round(dy/30);setVal(startVal+steps*step);renderEdit();});
+  el.addEventListener("pointerup",function(){dragging=false;});
+  el.addEventListener("pointercancel",function(){dragging=false;});
+  el.addEventListener("wheel",function(e){e.preventDefault();setVal(getVal()+(e.deltaY>0?-step:step));renderEdit();},{passive:false});
+  el.addEventListener("keydown",function(e){
+    if(e.key==="ArrowUp"){setVal(getVal()+step);renderEdit();}
+    else if(e.key==="ArrowDown"){setVal(getVal()-step);renderEdit();}
+  });
+}
+setupDrag("q-col-weight",function(){return editWeight;},function(v){editWeight=Math.min(250,Math.max(20,Math.round(v*10)/10));},2.5);
+setupDrag("q-col-reps",function(){return editReps;},function(v){editReps=Math.min(30,Math.max(1,Math.round(v)));},1);
+var thumb=document.getElementById("q-slideThumb"),track=document.getElementById("q-slideTrack");
+var dragging=false,dragMoved=false,startX=0,trackWidth=0;
+function curX(){var m=thumb.style.transform.match(/translateX\\(([-0-9.]+)px\\)/);return m?parseFloat(m[1]):0;}
+thumb.addEventListener("pointerdown",function(e){dragging=true;dragMoved=false;thumb.setPointerCapture(e.pointerId);trackWidth=track.clientWidth-48;startX=e.clientX-curX();});
+thumb.addEventListener("pointermove",function(e){if(!dragging)return;dragMoved=true;var x=e.clientX-startX;x=Math.max(0,Math.min(trackWidth,x));thumb.style.transform="translateX("+x+"px)";});
+function endDrag(){
+  if(!dragging)return;dragging=false;
+  if(!dragMoved){thumb.style.transform="translateX("+trackWidth+"px)";setTimeout(startWorkout,150);return;}
+  var x=curX();
+  if(x>trackWidth*0.7){thumb.style.transform="translateX("+trackWidth+"px)";setTimeout(startWorkout,150);}
+  else{thumb.style.transform="translateX(0px)";}
+}
+thumb.addEventListener("pointerup",endDrag);
+thumb.addEventListener("pointercancel",endDrag);
+thumb.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){startWorkout();}});
+track.addEventListener("click",function(e){if(e.target===thumb||thumb.contains(e.target))return;trackWidth=track.clientWidth-48;thumb.style.transform="translateX("+trackWidth+"px)";setTimeout(startWorkout,150);});
+setInterval(function(){
+  var activeStates=["activeset","confirm","restinter","resttrans"];
+  if(activeStates.indexOf(current)>-1&&!paused){
+    etaSeconds=Math.max(0,etaSeconds-1);
+    document.querySelectorAll("#widgetRoot3 .eta").forEach(function(el){el.textContent=fmtEta(etaSeconds);});
+    if(current==="restinter"){
+      restSeconds=Math.max(0,restSeconds-1);
+      document.getElementById("q-ri-timer").textContent=fmtClock(restSeconds);
+      if(restSeconds<=0)advanceFromRest();
+    }else if(current==="resttrans"){
+      restSeconds=Math.max(0,restSeconds-1);
+      document.getElementById("q-rt-timer").textContent=fmtClock(restSeconds);
+      if(restSeconds<=0)advanceFromRest();
+    }
+  }
+},1000);
+go("start");
+})();
+</script>

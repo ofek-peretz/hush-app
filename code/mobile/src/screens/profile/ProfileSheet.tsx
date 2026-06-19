@@ -31,8 +31,6 @@ export function ProfileSheet({ navigation }: Props) {
   const app = useApp();
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
-  const portraitUnlocked = app.modeState.portrait === 'PORTRAIT_UNLOCKED';
-  const pendingPortraitForecast = app.forecasts.some((f) => f.type === 'portrait' && f.state === 'PENDING');
 
   const units = p?.units ?? 'kg';
   const memberSince = p?.memberSince
@@ -111,6 +109,7 @@ export function ProfileSheet({ navigation }: Props) {
         >
           <Icon name="chevronLeft" size={22} color={color.textSecondary} strokeWidth={2} />
         </Pressable>
+        <Text style={styles.headerTitle} accessibilityRole="header">{t('profile.settings')}</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
@@ -138,25 +137,6 @@ export function ProfileSheet({ navigation }: Props) {
         />
         <Row label={t('profile.signOut')} chevron onPress={confirmSignOut} />
         <Row label={t('profile.deleteAccount')} danger onPress={confirmDelete} />
-
-        {/* Test harness — compiled out of release builds (__DEV__ only). */}
-        {__DEV__ && !portraitUnlocked ? (
-          <View style={styles.dev}>
-            <TextAction
-              label="DEV · jump to Portrait unlock"
-              onPress={async () => {
-                await app.devUnlockPortrait();
-                navigation.navigate('PortraitUnlock');
-              }}
-            />
-          </View>
-        ) : null}
-        {__DEV__ && pendingPortraitForecast ? (
-          <View style={styles.dev}>
-            <TextAction label="DEV · resolve forecast: success" onPress={async () => { await app.devResolvePortraitForecast(true); navigation.navigate('PortraitRevisit', { receipt: true }); }} />
-            <TextAction label="DEV · resolve forecast: fail (silent)" onPress={() => app.devResolvePortraitForecast(false)} />
-          </View>
-        ) : null}
       </ScrollView>
 
       <Text style={styles.version}>{t('profile.version')}</Text>
@@ -234,8 +214,9 @@ function Row({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  header: { paddingHorizontal: space.gutter, paddingTop: 6 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: s(4), paddingHorizontal: space.gutter, paddingTop: 6 },
   back: { width: 36, height: 40, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
+  headerTitle: { fontSize: s(17), fontWeight: '600', color: color.textPrimary },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 24, paddingBottom: 24 },
   identity: { marginBottom: s(34) },

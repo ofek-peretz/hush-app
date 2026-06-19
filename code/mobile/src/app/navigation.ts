@@ -37,24 +37,20 @@ export type OnboardingParamList = {
 };
 
 export type MainParamList = {
-  // Four tab roots (spec §3). Flat stack + persistent TabBar overlay; tab taps
-  // navigate by name (deduped) so switching feels like tabs.
+  // Home is the single root. Program · History · Portrait · Settings (ProfileSheet)
+  // are reached from the Home hamburger Menu (the Tab Bar was removed) and pushed
+  // onto this stack with a back affordance.
   // `focusDayId` = the workout chosen via "Set as next"; Home offers it (if still
   // unfinished) instead of the default next workout (§4.19 / §5.8).
   Home: { focusDayId?: string } | undefined;
   Program: undefined;
   History: undefined;
-  Portrait: undefined;
-  // Pushed / modal surfaces over the tabs.
+  // Pushed / modal surfaces.
   ProfileSheet: undefined;
   SessionFlow: undefined;
   WellDone: { unlockedPortrait: boolean };
-  PortraitUnlock: undefined;
-  // `receipt` => arrived via a resolved forecast: force Compare + show the receipt.
-  PortraitRevisit: { receipt?: boolean } | undefined;
-  // Then·Now quarterly comparison modal (§4.27).
-  PortraitThenNow: undefined;
-  ThresholdAlert: undefined;
   ProgramDetail: { dayId: string };
   WorkoutDetail: { sessionId: string };
+  // Quarterly peak-weight progress report (reached from History when it has data).
+  QuarterlyReport: undefined;
 };

@@ -1,19 +1,19 @@
 /**
- * 4.20 Workout Edit. The day's exercises as planned: each row has a reorder
- * handle, the exercise name, its "weight · sets × reps", and a swap icon that
- * opens the Swap sheet (§4.21). Reorder + swap persist to the program (athlete
- * owns exercise selection + order; the frozen model owns load/sets/reps).
+ * 4.20 Workout Edit. The day's exercises as planned: each row shows the exercise
+ * name, its "weight · sets × reps", a small ▲/▼ arrow when the model changed the
+ * load this week (#13), and a swap icon that opens the Swap sheet (§4.21).
  *
- * Reorder is drag-and-drop (long-press a row to lift, drag to a new slot — §4.20),
- * with accessible up/down controls kept as an equivalent for VoiceOver/Switch.
+ * Founder change (#11): exercise REORDER (drag + up/down handles) was removed —
+ * the athlete owns exercise SELECTION (swap/replace), the frozen model owns order,
+ * load, sets and reps. Replace-with-another stays; position-dragging is gone.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SwapSheet } from '@/components/SwapSheet';
-import { DraggableList } from '@/components/DraggableList';
 import { Icon } from '@/components/Icon';
+import { ProgressArrow, directionFromReason } from '@/components/ProgressArrow';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
@@ -24,9 +24,6 @@ import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
-
-// Fixed row height — the draggable list positions rows absolutely by slot index.
-const ROW_HEIGHT = s(64);
 
 interface Swapping {
   slotIndex: number;
@@ -55,7 +52,11 @@ export function ProgramDetail({ navigation, route }: Props) {
   const targetFor = useMemo(
     () => (exId: string) => {
       const t0 = targets.find((x) => x.exerciseId === exId && x.setIndex === 0);
-      return { weight: t0?.recommendedWeight ?? null, reps: t0?.recommendedReps ?? 8 };
+      return {
+        weight: t0?.recommendedWeight ?? null,
+        reps: t0?.recommendedReps ?? 8,
+        reason: t0?.reasonType,
+      };
     },
     [targets],
   );
@@ -86,63 +87,39 @@ export function ProgramDetail({ navigation, route }: Props) {
         <ScrollView contentContainerStyle={styles.body}>
           {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
 
-          <DraggableList
-            data={day.slots}
-            keyExtractor={(slot) => slot.exerciseId}
-            rowHeight={ROW_HEIGHT}
-            onReorder={(from, to) => void app.reorderExercise(day.id, from, to)}
-            renderItem={(slot, i) => {
-              const tg = targetFor(slot.exerciseId);
-              const w = displayWeight(tg.weight, units);
-              const detail =
-                w != null
-                  ? t('program.perExercise', { weight: `${w} ${unitLabel(units)}`, sets: slot.setCount, reps: tg.reps })
-                  : t('program.perExerciseBw', { sets: slot.setCount, reps: tg.reps });
-              return (
-                <View style={styles.row}>
-                  {/* Grip = drag affordance; arrows are the accessible equivalent. */}
-                  <View style={styles.grip}>
-                    <Icon name="grip" size={18} color={color.textTertiary} strokeWidth={2} />
-                    <View style={styles.arrows}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('program.moveUp')}
-                        disabled={i === 0}
-                        onPress={() => void app.reorderExercise(day.id, i, i - 1)}
-                        style={({ pressed }) => [styles.arrow, { opacity: i === 0 ? 0.25 : pressed ? press.opacity : 1 }]}
-                      >
-                        <Icon name="chevronUp" size={16} color={color.textSecondary} strokeWidth={2} />
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('program.moveDown')}
-                        disabled={i === day.slots.length - 1}
-                        onPress={() => void app.reorderExercise(day.id, i, i + 1)}
-                        style={({ pressed }) => [styles.arrow, { opacity: i === day.slots.length - 1 ? 0.25 : pressed ? press.opacity : 1 }]}
-                      >
-                        <Icon name="chevronDown" size={16} color={color.textSecondary} strokeWidth={2} />
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  <View style={styles.rowMain}>
-                    <Text style={styles.exName}>{exerciseDisplayName(slot.exerciseId)}</Text>
-                    <Text style={styles.detail}>{detail}</Text>
-                  </View>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('swap.title')}
-                    hitSlop={8}
-                    onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId, capability: slot.capability })}
-                    style={({ pressed }) => [styles.swap, { opacity: pressed ? press.opacity : 1 }]}
-                  >
-                    <Icon name="swap" size={20} color={color.textSecondary} strokeWidth={2} />
-                  </Pressable>
+          {day.slots.map((slot, i) => {
+            const tg = targetFor(slot.exerciseId);
+            const w = displayWeight(tg.weight, units);
+            const detail =
+              w != null
+                ? t('program.perExercise', { weight: `${w} ${unitLabel(units)}`, sets: slot.setCount, reps: tg.reps })
+                : t('program.perExerciseBw', { sets: slot.setCount, reps: tg.reps });
+            const direction = directionFromReason(tg.reason);
+            return (
+              <View key={`${slot.exerciseId}_${i}`} style={styles.row}>
+                <View style={styles.rowMain}>
+                  <Text style={styles.exName}>{exerciseDisplayName(slot.exerciseId)}</Text>
+                  <Text style={styles.detail}>{detail}</Text>
                 </View>
-              );
-            }}
-          />
+
+                {direction ? (
+                  <View style={styles.arrowSlot}>
+                    <ProgressArrow direction={direction} size={s(16)} />
+                  </View>
+                ) : null}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('swap.title')}
+                  hitSlop={8}
+                  onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId, capability: slot.capability })}
+                  style={({ pressed }) => [styles.swap, { opacity: pressed ? press.opacity : 1 }]}
+                >
+                  <Icon name="swap" size={20} color={color.textSecondary} strokeWidth={2} />
+                </Pressable>
+              </View>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -165,13 +142,16 @@ const styles = StyleSheet.create({
   title: { ...heroTitle(s(24)), color: color.textPrimary, fontSize: s(24), fontWeight: '600' },
   body: { paddingTop: s(24), paddingHorizontal: space.gutter, paddingBottom: 48 },
   yoursNow: { fontSize: s(14), color: color.textSecondary, marginBottom: s(16) },
-  row: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, borderBottomWidth: 0.5, borderBottomColor: color.border, backgroundColor: color.bg },
-  grip: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
-  arrows: { marginLeft: 4 },
-  arrow: { width: 28, height: 22, alignItems: 'center', justifyContent: 'center' },
-  arrowText: { color: color.textSecondary, fontSize: 14 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: s(15),
+    borderBottomWidth: 0.5,
+    borderBottomColor: color.border,
+  },
   rowMain: { flex: 1 },
   exName: { fontSize: s(16), fontWeight: '500', color: color.textPrimary },
   detail: { fontSize: s(13), color: color.textSecondary, marginTop: s(3) },
+  arrowSlot: { width: s(28), alignItems: 'center', justifyContent: 'center' },
   swap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

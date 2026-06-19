@@ -37,8 +37,8 @@ const ADVISORY_DECISION: Record<
   string,
   { kind: 'increase' | 'decrease' | 'hold'; delta?: number; weeks?: number }
 > = {
-  bb_bench_press: { kind: 'increase', delta: 2.5 },
-  bb_back_squat: { kind: 'decrease', delta: 5 },
+  bb_bench_press: { kind: 'increase', delta: 1 },
+  bb_back_squat: { kind: 'decrease', delta: 2 },
   bb_overhead_press: { kind: 'hold', weeks: 2 },
 };
 
@@ -133,7 +133,8 @@ function startingWeight(ex: Exercise, profile: Pick<Profile, 'sex' | 'weightKg' 
     profile.sex === 'female' ? (UPPER.includes(ex.capability) ? 0.62 : 0.72) : 1;
   let kg = ex.baseKg * bwFactor * sexFactor * exp;
   // Round to a loadable increment; barbell compounds never below an empty bar.
-  const step = kg >= 20 ? 2.5 : 1;
+  // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
+  const step = 1;
   kg = Math.round(kg / step) * step;
   if (ex.equipment === 'barbell' && ex.tier === 'compound') kg = Math.max(kg, 20);
   return Math.max(kg, step);
@@ -200,9 +201,9 @@ export const fixtureModel: ModelClient = {
         // Reason + forecast on the first working set of a changed exercise (post-calibration).
         if (decision && seed != null && s === 0) {
           if (decision.kind === 'increase') {
-            t.recommendedWeight = seed + (decision.delta ?? 2.5);
+            t.recommendedWeight = seed + (decision.delta ?? 1);
             t.reasonType = 'increase';
-            t.reasonDelta = decision.delta ?? 2.5;
+            t.reasonDelta = decision.delta ?? 1;
             t.forecast = {
               type: 'increase',
               capability: ex.capability,
@@ -211,9 +212,9 @@ export const fixtureModel: ModelClient = {
               dueSessionOrDate: 'same-session',
             };
           } else if (decision.kind === 'decrease') {
-            t.recommendedWeight = seed - (decision.delta ?? 5);
+            t.recommendedWeight = seed - (decision.delta ?? 2);
             t.reasonType = 'decrease';
-            t.reasonDelta = decision.delta ?? 5;
+            t.reasonDelta = decision.delta ?? 2;
           } else if (decision.kind === 'hold') {
             t.reasonType = 'hold';
             t.forecast = {
@@ -226,8 +227,8 @@ export const fixtureModel: ModelClient = {
           }
         }
         if (decision && seed != null && s > 0) {
-          if (decision.kind === 'increase') t.recommendedWeight = seed + (decision.delta ?? 2.5);
-          if (decision.kind === 'decrease') t.recommendedWeight = seed - (decision.delta ?? 5);
+          if (decision.kind === 'increase') t.recommendedWeight = seed + (decision.delta ?? 1);
+          if (decision.kind === 'decrease') t.recommendedWeight = seed - (decision.delta ?? 2);
         }
         out.push(t);
       }

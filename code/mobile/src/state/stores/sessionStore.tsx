@@ -45,6 +45,7 @@ export interface Step {
   target: SetTarget;
   lastSetOfExercise: boolean;
   lastSetOfSession: boolean;
+  edited?: boolean; // the athlete adjusted this set via Edit Result (logged as an override)
 }
 
 /** Contiguous same-exercise runs of a plan (each exercise's consecutive sets). */
@@ -140,11 +141,16 @@ export interface SessionView {
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
   nextSetLabel: { n: number; m: number } | null;
   restSeconds: number;
+  /** Epoch ms the active session started (for the rest-screen calorie estimate). */
+  startedAtMs: number | null;
   /** Receipt to show on the CURRENT set (earned by the previous set), once. */
   receiptLine: Line | null;
   // actions
   start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
+  /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
+   *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
+  editCurrentSet: (v: { weight: number | null; reps: number }) => void;
   endRest: () => void;
   pause: () => void;
   resume: () => void;
@@ -212,8 +218,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const watchActionsRef = useRef<Partial<Record<SessionEvent['type'], () => void>>>({});
   // Exercise Busy is a session-store action (not a machine event); kept in its own ref.
   const watchBusyRef = useRef<() => void>(() => {});
-  // Set completion from the watch, carrying reported actual reps (omitted = target).
-  const watchCompleteRef = useRef<(actualReps?: number) => void>(() => {});
+  // Set completion from the watch, carrying reported actual reps + weight (each
+  // omitted = target; weight null = bodyweight).
+  const watchCompleteRef = useRef<(actualReps?: number, actualWeight?: number | null) => void>(() => {});
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
   // never closes over stale actions. Transport is a no-op until the watchOS target
   // exists — all authority/validation/telemetry runs regardless.
@@ -223,7 +230,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       transport: watchTransport,
       now: Date.now,
       track: (type, data) => void track(type, data),
-      completeSet: (actualReps) => watchCompleteRef.current(actualReps),
+      completeSet: (actualReps, actualWeight) => watchCompleteRef.current(actualReps, actualWeight),
       dispatch: (event) => watchActionsRef.current[event.type]?.(),
       markEquipmentOccupied: () => watchBusyRef.current(),
     });
@@ -360,6 +367,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       nextTarget: resting ? next?.target ?? null : null,
       nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
       restSeconds,
+      startedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
       // Show the earned receipt only on a presented set (never over rest).
       receiptLine: displayPhase === 'SET_PRESENTED' ? state.pendingReceipt : null,
       // Equipment Occupied applies at the START of an exercise that has a later exercise to do.
@@ -407,7 +415,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           recommendedReps: current.target.recommendedReps,
           actualWeight: override ? override.weight : current.target.recommendedWeight,
           actualReps: override ? override.reps : current.target.recommendedReps,
-          edited: override != null,
+          edited: override != null || !!current.edited,
           persistedAt: new Date().toISOString(),
         };
         const updated: Session = { ...session, sets: [...session.sets, setLog] };
@@ -545,6 +553,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'MACHINE', machine: m });
         return finalize(true);
       },
+      editCurrentSet({ weight, reps }) {
+        const idx = machine.setIndex;
+        const cur = plan[idx];
+        if (!cur) return;
+        // Update only the current step's target + flag it edited. No log, no advance —
+        // Active Set re-renders with the new values; Complete Set logs them (as edited).
+        const newPlan = plan.map((st, i) =>
+          i === idx
+            ? { ...st, edited: true, target: { ...st.target, recommendedWeight: weight, recommendedReps: reps } }
+            : st,
+        );
+        dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+      },
       swapNextExercise(exerciseId) {
         const startIdx = machine.setIndex + 1; // the upcoming exercise
         const upcoming = plan[startIdx];
@@ -581,15 +602,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     RESUME: () => view.resume(),
     FINISH_EARLY: () => void view.finishEarly(),
   };
-  // Set completion from the watch. Reported reps (from the rep-adjustment screen)
-  // become an edited actual; weight stays the recommended target. Processed
-  // identically to an on-phone entry — the phone is the source of truth.
-  watchCompleteRef.current = (actualReps) =>
-    void view.completeSet(
-      actualReps == null
-        ? undefined
-        : { weight: view.currentTarget?.recommendedWeight ?? null, reps: actualReps },
-    );
+  // Set completion from the watch. Reported weight/reps (from the watch Edit Result)
+  // become an edited actual; each falls back to the recommended target when the watch
+  // didn't adjust it. Processed identically to an on-phone entry — phone is the truth.
+  watchCompleteRef.current = (actualReps, actualWeight) => {
+    const tgt = view.currentTarget;
+    if (actualReps == null && actualWeight === undefined) {
+      void view.completeSet(); // nothing adjusted → log the prescribed target
+      return;
+    }
+    void view.completeSet({
+      weight: actualWeight !== undefined ? actualWeight : tgt?.recommendedWeight ?? null,
+      reps: actualReps ?? tgt?.recommendedReps ?? 0,
+    });
+  };
   // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
   watchBusyRef.current = () => view.markEquipmentOccupied();
 

@@ -82,6 +82,16 @@
     "restSub": "התאמנת {{count}} ימים השבוע.",
     "metadata": "{{exercises}} תרגילים · {{sets}} סטים · ~{{min}} דק׳"
   },
+  "menu": {
+    "title": "תפריט",
+    "program": "תוכנית",
+    "history": "היסטוריה",
+    "settings": "הגדרות"
+  },
+  "choose": {
+    "title": "בחירת אימון",
+    "button": "בחירת אימון"
+  },
   "calibration": {
     "framing": "האימונים הראשונים הם בשבילי, כדי ללמוד אותך. המשקלים מתחילים קל — זה מכוון.",
     "stillLearning": "עדיין לומד את זה"
@@ -205,6 +215,8 @@
   "program": {
     "title": "תוכנית",
     "perWeek": "{{n}} ימים / שבוע",
+    "weekProgress": "{{done}} מתוך {{total}} השבוע",
+    "dayMeta": "{{exercises}} תרגילים · ~{{min}} דק׳",
     "completedThisWeek": "הושלמו השבוע",
     "upNext": "הבא בתור",
     "setAsNext": "הגדר כהבא",
@@ -235,6 +247,11 @@
     "machine": "מכונה",
     "cable": "כבל",
     "bodyweight": "משקל גוף"
+  },
+  "report": {
+    "title": "ההתקדמות שלך",
+    "subtitle": "ההרמות החזקות שלך, אז ועכשיו.",
+    "empty": "תמשיך להתאמן — ההתקדמות שלך תופיע כאן."
   },
   "history": {
     "title": "היסטוריה",
@@ -294,7 +311,8 @@
     "weeklyReadyBody": "בניתי את התוכנית שלך לשבוע הבא. {{count}} אימונים, מותאמים לאיך שהתאמנת.",
     "weeklyReadyBodyOne": "בניתי את התוכנית שלך לשבוע הבא. אימון אחד, מותאם לאיך שהתאמנת.",
     "weeklyReadyBodyGeneric": "בניתי את התוכנית שלך לשבוע הבא, מותאמת לאיך שהתאמנת.",
-    "thresholdTitle": "תמונת האימון שלך השתנתה."
+    "thresholdTitle": "תמונת האימון שלך השתנתה.",
+    "quarterlyReportTitle": "ההתקדמות שלך מוכנה."
   },
   "watch": {
     "next": "הבא:",

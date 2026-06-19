@@ -25,7 +25,8 @@ export type IconName =
   | 'home' // house / house.fill
   | 'program' // square.grid.2x2
   | 'history' // clock.arrow.circlepath
-  | 'portrait'; // chart.bar / chart.bar.fill
+  | 'portrait' // chart.bar / chart.bar.fill
+  | 'settings'; // gearshape
 
 interface Props {
   name: IconName;
@@ -146,6 +147,13 @@ function render(
           <Rect x="4" y="12" width="3.6" height="8" rx="1" />
           <Rect x="10.2" y="7" width="3.6" height="13" rx="1" />
           <Rect x="16.4" y="4" width="3.6" height="16" rx="1" />
+        </G>
+      );
+    case 'settings':
+      return (
+        <G {...common}>
+          <Circle cx="12" cy="12" r="3.2" />
+          <Path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" />
         </G>
       );
     default:

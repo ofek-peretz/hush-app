@@ -47,10 +47,10 @@ export const watchTransportStub: WatchTransport = {
 
 export interface WatchSessionDeps {
   transport: WatchTransport;
-  /** Complete the current set with the reported actual reps (omitted = target
-   *  reps). The phone logs it and runs its machine transition — exactly as an
-   *  on-phone entry would. Weight stays the recommended target (watch reports reps). */
-  completeSet: (actualReps?: number) => void;
+  /** Complete the current set with the reported actual reps + weight (each omitted =
+   *  prescribed target; weight null = bodyweight). The phone logs it and runs its
+   *  machine transition — exactly as an on-phone Edit Result + Complete set would. */
+  completeSet: (actualReps?: number, actualWeight?: number | null) => void;
   /** Dispatch a validated session event into the phone's session machine
    *  (end_rest / pause / resume / finish_early). */
   dispatch: (event: SessionEvent) => void;
@@ -150,14 +150,16 @@ export class WatchSession {
     const label = action.kind === 'session_event' ? action.event.type : action.kind;
     this.d.track(WATCH_EVENTS.actionReceived, {
       action: label,
-      // For a set completion, record whether reps were adjusted (a reported miss/
-      // overshoot vs the target) — the actual reps themselves land in the set log.
-      repsAdjusted: action.kind === 'complete_set' ? action.actualReps != null : undefined,
+      // For a set completion, record whether weight/reps were adjusted vs the target
+      // (the actual values themselves land in the set log).
+      adjusted: action.kind === 'complete_set'
+        ? action.actualReps != null || action.actualWeight !== undefined
+        : undefined,
       latencyMs: decision.latencyMs, // watch completion latency
     });
     switch (action.kind) {
       case 'complete_set':
-        this.d.completeSet(action.actualReps);
+        this.d.completeSet(action.actualReps, action.actualWeight);
         break;
       case 'session_event':
         this.d.dispatch(action.event);

@@ -31,6 +31,17 @@ export interface HealthGate {
   latestBodyweight(): Promise<BodyweightSample | null>;
   /** Recent walk/run samples for History → Walk Detail; empty when none/unavailable. */
   recentWalks(): Promise<WalkSample[]>;
+  /** Live workout vitals from the paired Apple Watch (heart rate + active energy),
+   *  shown on the rest screens (§3.4/§3.5; founder #7). OPTIONAL: requires a native
+   *  HealthKit workout session, so the stub + any build without it simply return
+   *  null and the rest screen hides the row. Never throws, never blocks the UI. */
+  workoutVitals?(): Promise<WorkoutVitals | null>;
+}
+
+/** A live vitals reading during an active workout (from the paired watch). */
+export interface WorkoutVitals {
+  heartRateBpm: number;
+  activeKcal: number;
 }
 
 /** v1 stub: reports unavailable, so onboarding routes through About You and the
@@ -50,6 +61,9 @@ export const healthStub: HealthGate = {
   },
   async recentWalks() {
     return [];
+  },
+  async workoutVitals() {
+    return null; // no live source until the native HealthKit workout session lands
   },
 };
 

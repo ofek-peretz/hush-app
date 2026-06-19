@@ -38,3 +38,26 @@ export async function clearToken(): Promise<void> {
     // already absent / keychain unavailable — nothing to do
   }
 }
+
+/**
+ * INTERNAL/TEST builds only: adopt an operator-minted test-athlete token baked into
+ * the build via `EXPO_PUBLIC_DEV_AUTH_TOKEN`, so a "connected" internal build talks
+ * to the real backend with ZERO extra screens or typing — open the app and you're a
+ * test athlete on the live model. Called once at boot, BEFORE selectModel().
+ *
+ * Safe + isolated by construction:
+ *  - the var is set ONLY on the internal `preview-connected` EAS profile; production
+ *    never carries it, so this is a no-op there and the app behaves exactly as before;
+ *  - it NEVER overrides a token already present (Sign In / a prior adopt win);
+ *  - a keychain failure is swallowed — worst case the app stays on the fixture.
+ */
+export async function adoptDevTokenIfPresent(): Promise<void> {
+  const devToken = process.env.EXPO_PUBLIC_DEV_AUTH_TOKEN;
+  if (!devToken) return;
+  try {
+    const existing = await SecureStore.getItemAsync(TOKEN_KEY);
+    if (!existing) await SecureStore.setItemAsync(TOKEN_KEY, devToken);
+  } catch {
+    // keychain unavailable → skip silently; falls back to the fixture, never crashes
+  }
+}

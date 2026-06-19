@@ -58,9 +58,10 @@ export function makeStateEnvelope(
 
 // ---- Watch → Phone ---------------------------------------------------------
 
-/** The actions the watch may propose. The watch reports actual REPS (via the
- *  rep-adjustment screen behind "Couldn't Complete"); weight stays phone-only.
- *  `exercise_busy` maps to the phone's equipment-occupied reorder. */
+/** The actions the watch may propose. The watch reports the actual WEIGHT and REPS
+ *  (via the Edit Result screen — Crown-driven weight + reps, §3.6); either omitted
+ *  falls back to the prescribed target. `exercise_busy` maps to the phone's
+ *  equipment-occupied reorder. */
 export type WatchIntentType =
   | 'complete_set'
   | 'end_rest'
@@ -79,9 +80,11 @@ export interface WatchIntent {
    *  complete_set is rejected if this no longer matches the phone's truth. */
   expectedGlobalIndex?: number;
   /** Actual reps performed (a complete_set carries this when the athlete adjusted
-   *  via the rep-adjustment screen). Omitted = the prescribed target reps. Weight
-   *  is never set from the watch (it stays the recommended target). */
+   *  via the Edit Result screen). Omitted = the prescribed target reps. */
   actualReps?: number;
+  /** Actual weight (kg) the athlete used, when adjusted on the watch's Edit Result.
+   *  Omitted = the recommended target weight; null = bodyweight. */
+  actualWeight?: number | null;
 }
 
 /** Why an intent was rejected (telemetered + useful in tests). */
@@ -99,7 +102,8 @@ export type WatchRejectReason =
  *  reported actual reps (the phone processes it exactly as an on-phone entry — the
  *  source of truth), a session-machine event, or the equipment-occupied reorder. */
 export type WatchPhoneAction =
-  | { kind: 'complete_set'; actualReps?: number } // actualReps omitted = target reps
+  // actualReps/actualWeight omitted = prescribed target; actualWeight null = bodyweight.
+  | { kind: 'complete_set'; actualReps?: number; actualWeight?: number | null }
   | { kind: 'session_event'; event: SessionEvent }
   | { kind: 'mark_equipment_occupied' };
 
@@ -131,9 +135,10 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
 function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
   switch (intent.type) {
     case 'complete_set':
-      // The phone logs the set with the reported reps (or the target reps when
-      // omitted) and runs its own machine transition — exactly like an on-phone entry.
-      return { kind: 'complete_set', actualReps: intent.actualReps };
+      // The phone logs the set with the reported weight + reps (each falling back to
+      // the target when omitted) and runs its own machine transition — exactly like
+      // an on-phone Edit Result + Complete set.
+      return { kind: 'complete_set', actualReps: intent.actualReps, actualWeight: intent.actualWeight };
     case 'end_rest':
       return { kind: 'session_event', event: { type: 'REST_ELAPSED' } };
     case 'pause':

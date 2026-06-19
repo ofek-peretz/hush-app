@@ -39,7 +39,14 @@ export default function App() {
           startError={false}
           dateLabel={dateLabel}
           onStart={() => {}}
-          onProfile={() => {}}
+          workouts={[
+            { id: 'd0', name: 'Upper A', muscles: 'Chest · Shoulders · Triceps' },
+            { id: 'd1', name: 'Lower A', muscles: 'Quads · Glutes' },
+          ]}
+          onChooseWorkout={() => {}}
+          onProgram={() => {}}
+          onHistory={() => {}}
+          onSettings={() => {}}
         />
       </View>
       <Pressable onPress={() => setResting((r) => !r)} style={styles.toggle}>

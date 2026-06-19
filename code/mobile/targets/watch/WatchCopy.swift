@@ -13,7 +13,11 @@ enum WatchCopy {
   static let finishYes = "Yes"
   static let finishNo = "No"
   static let completeSet = "Complete Set"
-  static let couldntComplete = "Couldn't Complete"
+  static let editResult = "Edit result"
+  static let save = "Save"
+  static let editWeightLabel = "Weight"
+  static let editRepsLabel = "Reps"
+  static let couldntComplete = "Couldn't Complete" // retained (unused) — superseded by editResult
   static let repAdjustTitle = "Actual reps"
   static let confirm = "Confirm"
   static let cancel = "Cancel"

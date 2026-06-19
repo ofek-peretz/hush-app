@@ -15,5 +15,11 @@ module.exports = {
   // Replace with the real brand icon before TestFlight.
   icon: './icon.png',
   deploymentTarget: '10.0',
-  frameworks: ['SwiftUI', 'WatchConnectivity', 'WatchKit'],
+  // HealthKit powers the rest-screen live heart rate + active calories (a watch-side
+  // HKLiveWorkoutBuilder). The companion iPhone app already has the HealthKit
+  // entitlement + usage strings; the watch target declares its own below + in Info.plist.
+  frameworks: ['SwiftUI', 'WatchConnectivity', 'WatchKit', 'HealthKit'],
+  entitlements: {
+    'com.apple.developer.healthkit': true,
+  },
 };

@@ -28,6 +28,12 @@ describe('intentFromNotificationData (pure routing map)', () => {
     });
   });
 
+  it('maps the quarterly payload → QuarterlyReport intent', () => {
+    expect(intentFromNotificationData({ intent: 'quarterly_report' })).toEqual({
+      kind: 'quarterly_report',
+    });
+  });
+
   it('is a safe no-op for unknown / missing payloads (no mis-route)', () => {
     expect(intentFromNotificationData({ intent: 'something_else' })).toBeNull();
     expect(intentFromNotificationData({})).toBeNull();

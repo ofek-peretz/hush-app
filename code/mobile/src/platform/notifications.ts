@@ -23,11 +23,12 @@ import i18next from 'i18next';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
-export type NotificationKind = 'weekly_program_ready' | 'threshold_alert';
+export type NotificationKind = 'weekly_program_ready' | 'threshold_alert' | 'quarterly_report';
 
 export type NotificationIntent =
   | { kind: 'weekly_program_ready' } // -> Program
-  | { kind: 'threshold_alert' }; // -> ThresholdAlert
+  | { kind: 'threshold_alert' } // -> (no destination; Portrait surfaces removed)
+  | { kind: 'quarterly_report' }; // -> QuarterlyReport
 
 /**
  * Notification payload schema (the `content.data` dictionary). Versioned so a
@@ -58,6 +59,7 @@ export function intentFromNotificationData(data: unknown): NotificationIntent | 
   const kind = (data as { [k: string]: unknown } | null | undefined)?.[INTENT_KEY];
   if (kind === 'weekly_program_ready') return { kind: 'weekly_program_ready' };
   if (kind === 'threshold_alert') return { kind: 'threshold_alert' };
+  if (kind === 'quarterly_report') return { kind: 'quarterly_report' };
   return null;
 }
 
@@ -74,6 +76,9 @@ export interface Notifier {
   scheduleWeeklyProgramReady(sessionCount?: number): Promise<void>;
   /** Fire a one-off threshold alert (coalesced upstream). */
   fireThresholdAlert(): Promise<void>;
+  /** Schedule the recurring quarterly progress report note (every ~3 months). A tap
+   *  opens the QuarterlyReport comparison screen. Idempotent. */
+  scheduleQuarterlyReport(): Promise<void>;
   /** Cancel everything (e.g. on sign-out). */
   cancelAll(): Promise<void>;
 }
@@ -81,7 +86,9 @@ export interface Notifier {
 /** Stable identifiers so re-scheduling is idempotent and cancel is targeted. */
 const WEEKLY_ID = 'hush.weekly_program_ready';
 const THRESHOLD_ID = 'hush.threshold_alert';
+const QUARTERLY_ID = 'hush.quarterly_report';
 const WEEKLY_HOUR = 20; // 20:00 local (§8.6)
+const QUARTERLY_INTERVAL_S = 12 * 7 * 24 * 60 * 60; // ~3 months, repeating
 
 /**
  * Calm foreground presentation: show the banner, but never play a sound or set
@@ -174,6 +181,28 @@ export const notifierExpo: Notifier = {
     }
   },
 
+  async scheduleQuarterlyReport() {
+    try {
+      if (!(await ensurePermission())) return;
+      // Idempotent: coalesce onto a stable id so re-scheduling never stacks.
+      await Notifications.cancelScheduledNotificationAsync(QUARTERLY_ID).catch(() => {});
+      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'quarterly_report' });
+      await Notifications.scheduleNotificationAsync({
+        identifier: QUARTERLY_ID,
+        // data carries the routing intent so a tap opens QuarterlyReport.
+        content: { title: i18next.t('notifications.quarterlyReportTitle'), body: '', data: buildPayload('quarterly_report') },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: QUARTERLY_INTERVAL_S,
+          repeats: true,
+        },
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'quarterly_report', seconds: QUARTERLY_INTERVAL_S });
+    } catch {
+      // never throw — a notification failure must not break onboarding
+    }
+  },
+
   async cancelAll() {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
@@ -188,6 +217,7 @@ export const notifierExpo: Notifier = {
 export const notifierStub: Notifier = {
   async scheduleWeeklyProgramReady() {},
   async fireThresholdAlert() {},
+  async scheduleQuarterlyReport() {},
   async cancelAll() {},
 };
 

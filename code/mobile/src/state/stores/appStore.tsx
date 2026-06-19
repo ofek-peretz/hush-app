@@ -19,7 +19,8 @@ import {
 } from '@/state/machines/athleteMode';
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { selectModel, resetModelSelection } from '@/data/api/selectModel';
-import { setToken, clearToken } from '@/data/api/config';
+import { selfEnroll } from '@/data/api/enroll';
+import { setToken, clearToken, adoptDevTokenIfPresent } from '@/data/api/config';
 import { setUnauthorizedHandler } from '@/data/api/authEvents';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
@@ -264,6 +265,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
+      // Internal "connected" builds: adopt a baked test-athlete token BEFORE model
+      // selection so selectModel() picks the real backend (HTTP) instead of the
+      // fixture. No-op in production (no token baked in). See config.adoptDevTokenIfPresent.
+      await adoptDevTokenIfPresent();
       modelRef.current = await selectModel();
 
       // Schema-version guard: detect persisted-shape drift (e.g. an upgrade/
@@ -401,17 +406,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           healthConnected: inputs.healthConnected,
           memberSince: new Date().toISOString(),
         };
+        // SELF-ENROLL (zero-friction): create the backend athlete from the onboarding
+        // stats + adopt its token, so the REAL model drives the program from the first
+        // workout — no extra screen, no operator step. Best-effort: on failure (no backend
+        // / offline) the app stays on the local fixture, still fully usable. Must run
+        // BEFORE the model calls below so they hit the backend; re-select the model after.
+        const enrolled = await selfEnroll({
+          sex: inputs.sex,
+          age: inputs.age,
+          experience: inputs.experience,
+          bodyweightKg: inputs.weightKg,
+        });
+        if (enrolled) {
+          resetModelSelection();
+          modelRef.current = await selectModel();
+        }
+        const live = modelRef.current; // the (possibly just-swapped) live model
+
         // Carry the chosen weekly frequency into the server strategy BEFORE composing
         // the first week (compose is idempotent — frequency can't change after). Best-
         // effort: a failure here must not strand onboarding (the week then falls back to
         // the strategy default); generateProgram below would surface a real outage anyway.
         try {
-          await model.setWeeklyFrequency(inputs.daysPerWeek);
+          await live.setWeeklyFrequency(inputs.daysPerWeek);
         } catch {
           /* non-fatal — proceed; the composed week uses the default frequency */
         }
         // Program generated BEFORE Home renders (spec flow §2.1).
-        const program = await model.generateProgram(profile);
+        const program = await live.generateProgram(profile);
 
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
@@ -420,7 +442,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // A snapshot is stored at each program construction (§8.4) — this is the
         // week-one baseline used later by Compare. It is NOT surfaced now
         // (Portrait stays locked through calibration; clean absence §2.9).
-        const baseline = await tryPortraitSnapshot(model, 0);
+        const baseline = await tryPortraitSnapshot(live, 0);
         const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
         if (baseline) emitCapabilitySnapshot(baseline, 'onboarding', 0);
 
@@ -429,6 +451,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Weekly Program Container: the weekly plan is ready — wire the EXISTING Weekly Program
         // Ready notification (20:00 local; no second flow). Stub is a no-op; native build delivers.
         void notifier.scheduleWeeklyProgramReady(program.frequency);
+        // Quarterly progress report — a recurring ~3-month note that opens the
+        // peak-weight comparison (founder). Stub is a no-op; native build delivers.
+        void notifier.scheduleQuarterlyReport();
       },
 
       async recordSessionCompleted() {
@@ -476,9 +501,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (prevSnap && !state.pendingThreshold) {
               pendingThreshold = detectThreshold(prevSnap, snap);
               if (pendingThreshold) {
+                // Telemetry + durable persistence are retained, but the user-facing
+                // ThresholdAlert surface was removed (Portrait feature retired), so we
+                // no longer fire a notification that would deep-link nowhere.
                 void track('threshold_crossed', { a: pendingThreshold.a, b: pendingThreshold.b, kind: pendingThreshold.kind });
                 await db.savePendingThreshold(pendingThreshold);
-                void notifier.fireThresholdAlert();
               }
             }
           }
@@ -622,6 +649,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!state.profile) return;
         // Resolve rest FIRST so we never regenerate/compose a session during a rest
         // week (state consistency, §1.7). Best-effort; defaults to last-known offline.
+        const wasResting = state.weekRest;
         let resting = state.weekRest;
         try {
           const rest = await model.weeklyRest();
@@ -636,6 +664,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           /* offline — keep the last-known rest state */
         }
         if (resting) return; // resting → keep the last-known session, do not regenerate
+        // WEEKLY model: the program is a STABLE weekly bucket of N workouts, not a
+        // per-focus recomposition. Regenerate ONLY when there is no program yet, or a
+        // fresh trainable week just began (rest→trainable transition, `wasResting`).
+        // Mid-week we MUST keep the existing program — otherwise a fresh generated week
+        // (all `completed: false`) clobbers finished workouts + athlete edits (order /
+        // replacements) on every Home refocus, so nextWorkout never empties and Rest is
+        // never reachable (the "endless workout loop").
+        if (state.program && !wasResting) return;
         try {
           const program = await model.generateProgram(state.profile);
           await db.saveProgram(program);

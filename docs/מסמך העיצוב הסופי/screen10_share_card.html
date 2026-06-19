@@ -1,0 +1,112 @@
+<style>
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
+.stage{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:40px;padding:1rem 0;}
+.deviceCol{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.deviceLabel{font-size:12px;color:var(--color-text-secondary);text-align:center;max-width:230px;}
+.wcase{width:250px;height:305px;background:#131315;border:1px solid rgba(255,255,255,.07);border-radius:60px;padding:12px;box-sizing:border-box;position:relative;}
+.wcrown{position:absolute;right:-4px;top:36%;width:7px;height:30px;background:#2b2c2f;border-radius:3px;}
+.wside{position:absolute;right:-3px;top:55%;width:5px;height:46px;background:#2b2c2f;border-radius:2px;}
+.wscreen{position:relative;width:100%;height:100%;background:#000;border-radius:48px;overflow:hidden;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",var(--font-sans),sans-serif;display:flex;flex-direction:column;padding:16px;box-sizing:border-box;}
+.pcase{width:300px;height:650px;background:#131315;border:1px solid rgba(255,255,255,.07);border-radius:58px;padding:10px;box-sizing:border-box;position:relative;}
+.psb1{position:absolute;left:-3px;top:17%;width:4px;height:32px;background:#2b2c2f;border-radius:2px;}
+.psb2{position:absolute;left:-3px;top:25%;width:4px;height:56px;background:#2b2c2f;border-radius:2px;}
+.psb3{position:absolute;right:-3px;top:23%;width:4px;height:78px;background:#2b2c2f;border-radius:2px;}
+.pscreen{position:relative;width:100%;height:100%;background:#000;border-radius:48px;overflow:hidden;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",var(--font-sans),sans-serif;display:flex;flex-direction:column;padding:30px 26px;box-sizing:border-box;}
+.island{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:90px;height:26px;background:#050505;border:1px solid rgba(255,255,255,.05);border-radius:16px;z-index:5;}
+.homebar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:120px;height:4px;background:rgba(255,255,255,.35);border-radius:2px;z-index:5;}
+.btn-primary{width:100%;background:#fff;color:#000;font-weight:700;border:none;border-radius:16px;}
+.btn-link{background:none;border:none;color:rgba(255,255,255,.5);}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#161616;box-sizing:border-box;display:none;flex-direction:column;z-index:10;}
+.sheetOpt{display:flex;align-items:center;gap:12px;background:none;border:none;color:#fff;width:100%;text-align:left;}
+.sheetIcon{border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cancelBtn{background:none;border:none;color:rgba(255,255,255,.45);width:100%;}
+</style>
+<h2 class="sr-only">Screen 10 of the Hush app: a post-workout social share card, shown in both its compact Watch form (which hands off to the iPhone for posting) and its full iPhone form (with a native-style share sheet).</h2>
+<div class="stage" id="s10root">
+
+  <div class="deviceCol">
+    <div class="wcase">
+      <div class="wcrown"></div><div class="wside"></div>
+      <div class="wscreen">
+        <div style="text-align:center;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.5);">HUSH</div>
+        <div style="text-align:center;font-size:13px;color:rgba(255,255,255,.6);margin-top:2px;">Upper A</div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div style="display:flex;align-items:flex-end;gap:4px;">
+            <span style="font-size:36px;font-weight:700;line-height:1;">6,450</span><span style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:4px;">kg</span>
+          </div>
+          <div style="font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.4);margin-top:2px;">TOTAL VOLUME</div>
+          <div style="display:flex;gap:16px;margin-top:10px;">
+            <div style="font-size:14px;font-weight:700;">47 min</div>
+            <div style="font-size:14px;font-weight:700;">412 kcal</div>
+          </div>
+          <div style="font-size:11px;color:#fff;text-align:center;margin-top:10px;max-width:170px;line-height:1.3;">New best on Bench Press.</div>
+        </div>
+        <button class="btn-primary" id="s10w-share" style="font-size:13px;padding:9px 0;">Share</button>
+        <button class="btn-link" id="s10w-done" style="font-size:11px;margin-top:6px;">Done</button>
+        <div class="sheet" id="s10w-sheet" style="border-radius:22px 22px 0 0;padding:12px;gap:4px;">
+          <div style="font-size:12px;font-weight:700;text-align:center;margin-bottom:6px;">Share</div>
+          <button class="sheetOpt s10-opt" style="font-size:13px;padding:7px 4px;"><span class="sheetIcon" style="width:26px;height:26px;"><i class="ti ti-message" aria-hidden="true" style="font-size:13px;"></i></span>Messages</button>
+          <button class="sheetOpt s10-opt" style="font-size:13px;padding:7px 4px;"><span class="sheetIcon" style="width:26px;height:26px;"><i class="ti ti-mail" aria-hidden="true" style="font-size:13px;"></i></span>Mail</button>
+          <button class="sheetOpt s10-opt" style="font-size:13px;padding:7px 4px;font-weight:700;"><span class="sheetIcon" style="width:26px;height:26px;"><i class="ti ti-device-mobile" aria-hidden="true" style="font-size:13px;"></i></span>Continue on iPhone</button>
+          <button class="cancelBtn s10-cancel" style="font-size:12px;padding:8px 0 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="deviceLabel">Watch — compact summary only. Rich posting hands off to the paired iPhone.</div>
+  </div>
+
+  <div class="deviceCol">
+    <div class="pcase">
+      <div class="psb1"></div><div class="psb2"></div><div class="psb3"></div>
+      <div class="pscreen">
+        <div class="island"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+          <div style="font-size:13px;letter-spacing:2px;color:rgba(255,255,255,.5);">HUSH</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.4);">Fri, 19 Jun</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div style="font-size:20px;font-weight:700;color:rgba(255,255,255,.85);">Upper A</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;margin-top:14px;">
+            <span style="font-size:68px;font-weight:700;line-height:1;">6,450</span><span style="font-size:18px;color:rgba(255,255,255,.5);margin-bottom:10px;">kg</span>
+          </div>
+          <div style="font-size:12px;letter-spacing:1.5px;color:rgba(255,255,255,.4);margin-top:4px;">TOTAL VOLUME</div>
+          <div style="display:flex;gap:34px;margin-top:26px;">
+            <div style="text-align:center;"><div style="font-size:19px;font-weight:700;">47 min</div><div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;">duration</div></div>
+            <div style="text-align:center;"><div style="font-size:19px;font-weight:700;">18</div><div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;">sets</div></div>
+            <div style="text-align:center;"><div style="font-size:19px;font-weight:700;">412</div><div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;">kcal</div></div>
+          </div>
+          <div style="font-size:15px;color:#fff;text-align:center;margin-top:26px;max-width:220px;line-height:1.4;">New best on Bench Press — up 2.5kg from last week.</div>
+        </div>
+        <button class="btn-primary" id="s10p-share" style="font-size:17px;padding:15px 0;border-radius:22px;">Share workout</button>
+        <button class="btn-link" id="s10p-done" style="font-size:14px;margin-top:10px;">Done</button>
+        <div style="text-align:center;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.25);margin-top:14px;">hush<span style="display:inline-block;width:4px;height:4px;background:rgba(255,255,255,.25);border-radius:1px;margin-left:3px;"></span></div>
+        <div class="homebar"></div>
+        <div class="sheet" id="s10p-sheet" style="border-radius:26px 26px 0 0;padding:18px 22px 22px;">
+          <div style="width:36px;height:4px;background:rgba(255,255,255,.25);border-radius:2px;margin:0 auto 16px;"></div>
+          <div style="display:flex;justify-content:space-around;margin-bottom:18px;">
+            <button class="s10-opt" style="background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;"><span class="sheetIcon" style="width:46px;height:46px;"><i class="ti ti-message" aria-hidden="true" style="font-size:20px;"></i></span>Messages</button>
+            <button class="s10-opt" style="background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;"><span class="sheetIcon" style="width:46px;height:46px;"><i class="ti ti-camera" aria-hidden="true" style="font-size:20px;"></i></span>Instagram</button>
+            <button class="s10-opt" style="background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;"><span class="sheetIcon" style="width:46px;height:46px;"><i class="ti ti-download" aria-hidden="true" style="font-size:20px;"></i></span>Save Image</button>
+            <button class="s10-opt" style="background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;"><span class="sheetIcon" style="width:46px;height:46px;"><i class="ti ti-link" aria-hidden="true" style="font-size:20px;"></i></span>Copy Link</button>
+          </div>
+          <button class="cancelBtn s10-cancel" style="font-size:15px;padding:10px 0 0;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="deviceLabel">iPhone — full card, native iOS share sheet.</div>
+  </div>
+
+</div>
+<script>
+(function(){
+  function wire(shareBtnId, sheetId, doneBtnId){
+    var shareBtn=document.getElementById(shareBtnId), sheet=document.getElementById(sheetId), doneBtn=document.getElementById(doneBtnId);
+    shareBtn.addEventListener("click",function(){ sheet.style.display="flex"; });
+    sheet.querySelectorAll(".s10-opt").forEach(function(b){ b.addEventListener("click",function(){ sheet.style.display="none"; }); });
+    sheet.querySelectorAll(".s10-cancel").forEach(function(b){ b.addEventListener("click",function(){ sheet.style.display="none"; }); });
+    doneBtn.addEventListener("click",function(){ sheet.style.display="none"; });
+  }
+  wire("s10w-share","s10w-sheet","s10w-done");
+  wire("s10p-share","s10p-sheet","s10p-done");
+})();
+</script>

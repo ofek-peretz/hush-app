@@ -79,6 +79,20 @@ export function SlideToStart({ label, onStart }: { label: string; onStart: () =>
       dragging.value = false;
     });
 
+  // The drag is no longer REQUIRED (founder: keep the design, drop the slider gate):
+  // a plain tap commits the start, the knob glides to the end and fires. Dragging
+  // still works for anyone who reaches for it. Tap loses to a real pan via Race.
+  const tap = Gesture.Tap().onEnd(() => {
+    if (travel > 0) {
+      x.value = withTiming(travel, { duration: 160 }, () => {
+        runOnJS(onStart)();
+      });
+    } else {
+      runOnJS(onStart)();
+    }
+  });
+  const gesture = Gesture.Race(pan, tap);
+
   const knobStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value + (dragging.value ? 0 : nudge.value * 5) }],
   }));
@@ -93,21 +107,21 @@ export function SlideToStart({ label, onStart }: { label: string; onStart: () =>
   }));
 
   return (
-    <View
-      style={styles.pill}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      accessibilityHint="Slide right to start your workout"
-    >
-      {!reduced ? (
-        <Animated.View pointerEvents="none" style={[styles.shimmer, shimmerStyle]} />
-      ) : null}
-      <Animated.Text style={[styles.label, labelStyle]} pointerEvents="none">
-        {label}
-      </Animated.Text>
-      <GestureDetector gesture={pan}>
-        <Animated.View style={[styles.knob, knobStyle]}>
+    <GestureDetector gesture={gesture}>
+      <View
+        style={styles.pill}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint="Tap to start your workout"
+      >
+        {!reduced ? (
+          <Animated.View pointerEvents="none" style={[styles.shimmer, shimmerStyle]} />
+        ) : null}
+        <Animated.Text style={[styles.label, labelStyle]} pointerEvents="none">
+          {label}
+        </Animated.Text>
+        <Animated.View style={[styles.knob, knobStyle]} pointerEvents="none">
           <View style={styles.chevrons}>
             <Icon name="chevronRight" size={18} color={color.bg} strokeWidth={2.4} />
             <View style={styles.chevron2}>
@@ -115,8 +129,8 @@ export function SlideToStart({ label, onStart }: { label: string; onStart: () =>
             </View>
           </View>
         </Animated.View>
-      </GestureDetector>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 

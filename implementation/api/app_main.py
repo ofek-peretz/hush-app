@@ -20,7 +20,7 @@ from fastapi import FastAPI
 
 from . import deps, errors, observability
 from .connection import init_database
-from .routers import sessions, blocks, reads, profile, telemetry, preferences, weeks, consent
+from .routers import sessions, blocks, reads, profile, telemetry, preferences, weeks, consent, enroll
 from .internal import operator
 
 
@@ -55,6 +55,8 @@ def create_app(db_path: str | None = None, operator_key: str | None = None) -> F
     app.include_router(preferences.router, tags=["preferences"])
     app.include_router(weeks.router, tags=["weeks"])
     app.include_router(consent.router, tags=["consent"])
+    # self-enrollment — closed-alpha zero-friction onboarding (public sibling of operator enroll)
+    app.include_router(enroll.router, tags=["enroll"])
     # operator surface — separate scope (§16A), never reachable from an athlete token
     app.include_router(operator.router, tags=["internal"])
 

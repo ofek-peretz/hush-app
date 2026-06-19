@@ -10,7 +10,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AppTabBar, TAB_BAR_SPACE } from '@/components/AppTabBar';
+import { BackBar } from '@/components/BackBar';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
@@ -52,6 +52,7 @@ export function History({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      <BackBar onBack={() => navigation.goBack()} />
       <View style={styles.headerWrap}>
         <Text style={styles.header} accessibilityRole="header">{t('history.title')}</Text>
         {sessions != null && sessions.length > 0 ? (
@@ -82,19 +83,18 @@ export function History({ navigation }: Props) {
           })}
         </ScrollView>
       )}
-      <AppTabBar active="history" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  headerWrap: { paddingTop: 22, paddingHorizontal: space.gutter },
+  headerWrap: { paddingTop: 8, paddingHorizontal: space.gutter },
   header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
   sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: TAB_BAR_SPACE },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
   empty: { fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
-  list: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: TAB_BAR_SPACE },
+  list: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: 40 },
   row: { paddingVertical: s(13), borderBottomWidth: 0.5, borderBottomColor: color.border },
   date: { fontSize: s(12), color: color.textSecondary },
   name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary, marginTop: s(3) },

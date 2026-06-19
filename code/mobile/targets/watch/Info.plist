@@ -37,5 +37,14 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.hushfitness.app</string>
+	<!-- HealthKit: the rest screens read live heart rate + active calories from a
+	     watch-side HKLiveWorkoutBuilder. The usage string is required for the read
+	     authorization prompt; workout-processing keeps the session alive wrist-down. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>Hush shows your live heart rate and calories during a workout.</string>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
 </dict>
 </plist>
