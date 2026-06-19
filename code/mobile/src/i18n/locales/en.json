@@ -25,7 +25,7 @@
   },
   "connectHealth": {
     "title": "Connect Health",
-    "body": "Hush builds your first program from it. Skip it and I'll ask you four quick things instead.",
+    "body": "Hush reads your steps and weight to round out your training picture. You'll answer a few quick things next either way.",
     "optional": "Optional. You can change this anytime.",
     "continue": "Continue",
     "skip": "Skip"
@@ -268,7 +268,8 @@
     "settings": "Settings",
     "appleHealth": "Apple Health",
     "healthConnect": "Health Connect",
-    "about": "About"
+    "about": "About",
+    "language": "Language"
   },
   "settings": {
     "units": "Units",
@@ -285,6 +286,12 @@
     "takeTheWeights": "Take the weights",
     "keepDeciding": "Keep deciding",
     "switchOff": "Switch off"
+  },
+  "language": {
+    "title": "Language",
+    "english": "English",
+    "hebrew": "עברית",
+    "restartNote": "Reopen the app to fully apply the writing direction (RTL)."
   },
   "errors": {
     "general": "Something went wrong. Try again."

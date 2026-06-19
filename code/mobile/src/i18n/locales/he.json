@@ -1,0 +1,322 @@
+{
+  "common": {
+    "back": "חזרה"
+  },
+  "auth": {
+    "wordmark": "Hush",
+    "tagline": "להתאמן.\nבשקט.",
+    "apple": "המשך עם Apple",
+    "google": "המשך עם Google",
+    "legal": "תנאים · פרטיות"
+  },
+  "consent": {
+    "title": "לפני שמתחילים.",
+    "body": "Hush מאמן אותך לפי הנתונים שתתעד כאן. אני שומר אותם כדי להפעיל את האימון שלך ולהשתפר. אפשר לייצא או למחוק אותם בכל רגע.",
+    "agree": "אני מסכים",
+    "decline": "אני לא מסכים",
+    "legal": "תנאים · פרטיות"
+  },
+  "nameEntry": {
+    "title": "איך לקרוא לך?",
+    "label": "השם שלך",
+    "placeholder": "שם",
+    "continue": "המשך",
+    "skip": "דילוג"
+  },
+  "connectHealth": {
+    "title": "חיבור ל-Health",
+    "body": "Hush קורא את הצעדים והמשקל שלך כדי להשלים את תמונת האימון. בכל מקרה תענה על כמה שאלות קצרות בהמשך.",
+    "optional": "אופציונלי. אפשר לשנות בכל עת.",
+    "continue": "המשך",
+    "skip": "דילוג"
+  },
+  "manualInfo": {
+    "title": "כמה פרטים מהירים.",
+    "age": "גיל",
+    "sex": "מין",
+    "male": "זכר",
+    "female": "נקבה",
+    "other": "אחר",
+    "height": "גובה",
+    "weight": "משקל",
+    "continue": "המשך"
+  },
+  "goal": {
+    "eyebrow": "למה אתה מתאמן",
+    "buildMuscle": "בניית שריר",
+    "increaseStrength": "הגדלת כוח",
+    "stayConsistent": "שמירה על עקביות",
+    "continue": "המשך",
+    "getStronger": "להתחזק",
+    "generalFitness": "כושר כללי"
+  },
+  "experience": {
+    "eyebrow": "הניסיון שלך",
+    "beginner": "מתחיל",
+    "beginnerDesc": "חדש באימוני כוח, או בתחילת הדרך.",
+    "intermediate": "בינוני",
+    "intermediateDesc": "מתאמן בעקביות, מכיר את הבסיס.",
+    "advanced": "מתקדם",
+    "advancedDesc": "מנוסה, עם הרמות חזקות.",
+    "continue": "המשך"
+  },
+  "daysPerWeek": {
+    "eyebrow": "כמה ימים בשבוע",
+    "continue": "המשך"
+  },
+  "programCreated": {
+    "title": "התוכנית\nמוכנה",
+    "subtitle": "{{days}} ימים · נבנתה עבורך."
+  },
+  "aboutYou": {
+    "continue": "המשך"
+  },
+  "home": {
+    "slideToStart": "החלק כדי להתחיל",
+    "greeting": "{{part}} טוב.",
+    "greetingNamed": "{{part}} טוב, {{name}}.",
+    "morning": "בוקר",
+    "afternoon": "צהריים",
+    "evening": "ערב",
+    "restTitle": "מנוחה.",
+    "restSub": "התאמנת {{count}} ימים השבוע.",
+    "metadata": "{{exercises}} תרגילים · {{sets}} סטים · ~{{min}} דק׳"
+  },
+  "calibration": {
+    "framing": "האימונים הראשונים הם בשבילי, כדי ללמוד אותך. המשקלים מתחילים קל — זה מכוון.",
+    "stillLearning": "עדיין לומד את זה"
+  },
+  "workout": {
+    "bodyweight": "משקל גוף",
+    "completeSet": "סיים סט",
+    "editResult": "עריכת תוצאה",
+    "reps": "× {{reps}}",
+    "setOfM": "סט {{n}} מתוך {{m}}",
+    "coachingUp": "עלייה של {{delta}} מהשבוע שעבר. אתה מוכן לזה.",
+    "coachingHold": "יש לך את זה.",
+    "exerciseBusy": "התרגיל תפוס",
+    "nextExercise": "התרגיל הבא",
+    "focusOn": "להתמקד ב",
+    "formGuide": "מדריך טכניקה",
+    "ready": "מוכן",
+    "demoDone": "סיום",
+    "equipmentOccupied": "הציוד תפוס",
+    "reasonIncrease": "עלייה של {{delta}} מהפעם הקודמת. הרווחת את זה.",
+    "reasonHold": "נשארים כאן — האימונים האחרונים שלך מעידים על עייפות, לא חולשה.",
+    "reasonDecrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה.",
+    "forecastIncrease": "תשלים את כל ה-{{reps}}.",
+    "forecastHold": "תעבור את זה.",
+    "receiptClean": "אמרתי לך. {{weight}}, נקי.",
+    "receiptWithReps": "אמרתי לך. {{weight}} × {{reps}}."
+  },
+  "reasonSheet": {
+    "header": "למה {{weight}}",
+    "dismiss": "הבנתי",
+    "increase": "שלושת הסטים העליונים האחרונים שלך זזו מהר יותר מהמשקל על המוט. זה מקום לצמוח.",
+    "hold": "נשארים כאן — האימונים האחרונים שלך מעידים על עייפות, לא חולשה.",
+    "decrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה."
+  },
+  "editResult": {
+    "done": "סיום",
+    "save": "שמירה",
+    "weight": "משקל",
+    "repsLabel": "חזרות"
+  },
+  "pauseSheet": {
+    "title": "האימון מושהה",
+    "resume": "המשך אימון",
+    "showExercise": "הצג תרגיל",
+    "finishEarly": "סיים מוקדם"
+  },
+  "rest": {
+    "ready": "מוכן"
+  },
+  "transition": {
+    "chooseAnother": "הקש כדי לבחור אחר",
+    "switchedTo": "הוחלף ל-{{exercise}}."
+  },
+  "pause": {
+    "resume": "המשך אימון",
+    "showExercise": "הערות טכניקה",
+    "finishEarly": "סיים מוקדם"
+  },
+  "finishConfirm": {
+    "finish": "סיים אימון",
+    "cancel": "ביטול"
+  },
+  "technique": {
+    "done": "סיום"
+  },
+  "wellDone": {
+    "message": "כל הכבוד"
+  },
+  "portrait": {
+    "tab": "דיוקן",
+    "stillTakingShape": "עדיין מתגבש.",
+    "lockedBody": "אני לומד איך הגוף שלך זז. עוד {{remaining}} אימונים ואראה לך מה אני רואה.",
+    "sessionsCount": "{{done}} מתוך {{total}} אימונים",
+    "headline": "מה הגוף שלך יכול",
+    "threeMonths": "שלושה חודשים",
+    "then": "אז",
+    "now": "עכשיו",
+    "gotIt": "הבנתי",
+    "compareThreeMonths": "השוואה לשלושה חודשים אחורה",
+    "insightStrongest": "אני בונה סביב ה{{pattern}} שלך. זה הכי חזק שלך.",
+    "commitment": "ה{{strong}} שלך הוא הכי חזק בך. ה{{weak}} שלך הוא הכי לא מנוצל. אני בונה סביב סגירת הפער הזה.",
+    "receiptClosed": "זה היה הכי חלש שלך. אמרתי לך.",
+    "stillLearning": "עדיין לומד",
+    "start": "התחלה",
+    "compare": "השוואה לנקודת ההתחלה",
+    "compareProof": "ה{{capability}} שלך עבר מהכי חלש ל{{state}}.",
+    "seeYourBody": "ראה את הגוף שלך",
+    "later": "אחר כך",
+    "thresholdOvertake": "ה{{a}} שלך בדיוק השיג את ה{{b}}.",
+    "thresholdReorder": "ה{{a}} שלך עקף את ה{{b}}.",
+    "stateStrongest": "הכי חזק שלך",
+    "stateSecond": "השני הכי חזק שלך",
+    "stateMid": "באמצע",
+    "stateFourth": "קרוב לתחתית",
+    "stateWeakest": "הכי חלש שלך"
+  },
+  "capability": {
+    "horizontal_push": "דחיפה אופקית",
+    "horizontal_pull": "משיכה אופקית",
+    "vertical_push": "דחיפה אנכית",
+    "knee_dominant": "סקוואט",
+    "hip_dominant": "מתיחת ירך"
+  },
+  "capabilityLoad": {
+    "horizontal_push": "עומס חזה",
+    "horizontal_pull": "עומס גב",
+    "vertical_push": "עומס כתפיים",
+    "knee_dominant": "עומס סקוואט",
+    "hip_dominant": "עומס ירך"
+  },
+  "replacement": {
+    "title": "החלפת {{exercise}}",
+    "searchPlaceholder": "חיפוש תרגילים",
+    "sectionRecommended": "מומלצים",
+    "sectionYours": "התרגילים שלך",
+    "sectionAll": "כל תרגילי ה{{capability}}",
+    "noResults": "אין התאמות בקטגוריה הזו.",
+    "use": "השתמש ב{{exercise}}",
+    "yoursNow": "{{exercise}} שלך עכשיו."
+  },
+  "program": {
+    "title": "תוכנית",
+    "perWeek": "{{n}} ימים / שבוע",
+    "completedThisWeek": "הושלמו השבוע",
+    "upNext": "הבא בתור",
+    "setAsNext": "הגדר כהבא",
+    "doneChip": "בוצע",
+    "loadChange": "העליתי לך את {{target}}.",
+    "undo": "ביטול",
+    "frameChange": "מוסיף סט ל{{capability}}.",
+    "gotIt": "הבנתי",
+    "keepAsIs": "השאר כמו שזה",
+    "forecastFrame": "תרגיש את זה.",
+    "frequency": "{{n}} ימים בשבוע",
+    "restDay": "מנוחה",
+    "moveUp": "הזז למעלה",
+    "moveDown": "הזז למטה",
+    "done": "בוצע",
+    "perExercise": "{{weight}} · {{sets}} × {{reps}}",
+    "perExerciseBw": "משקל גוף · {{sets}} × {{reps}}"
+  },
+  "swap": {
+    "title": "החלפת תרגיל",
+    "samePattern": "{{pattern}} · אותו דפוס",
+    "current": "{{equipment}} · נוכחי",
+    "close": "סגירה"
+  },
+  "equipment": {
+    "barbell": "מוט",
+    "dumbbell": "משקולות יד",
+    "machine": "מכונה",
+    "cable": "כבל",
+    "bodyweight": "משקל גוף"
+  },
+  "history": {
+    "title": "היסטוריה",
+    "empty": "האימון הראשון שלך יופיע כאן.",
+    "count": "השלמת {{n}} אימונים.",
+    "annIncreased": "העליתי לך את {{target}}.",
+    "annSwapped": "החלפתי ל{{exercise}} — המתקן היה תפוס.",
+    "annEndedEarly": "סיימת את זה מוקדם.",
+    "perSet": "{{weight}} × {{reps}}",
+    "setN": "סט {{n}}",
+    "dateDuration": "{{date}} · {{min}} דק׳",
+    "minutesShort": "{{min}} דק׳"
+  },
+  "profile": {
+    "units": "יחידות",
+    "membership": "מנוי",
+    "memberSince": "חבר מאז",
+    "healthAccess": "גישה ל-Health",
+    "connected": "מחובר",
+    "notConnected": "לא מחובר",
+    "signOut": "התנתקות",
+    "deleteAccount": "מחיקת חשבון",
+    "version": "Hush v1.0.0",
+    "deleteConfirm": "למחוק את החשבון וכל הנתונים?",
+    "signOutConfirm": "להתנתק?",
+    "cancel": "ביטול",
+    "program": "תוכנית",
+    "history": "היסטוריה",
+    "whatHushKnows": "מה Hush יודע",
+    "settings": "הגדרות",
+    "appleHealth": "Apple Health",
+    "healthConnect": "Health Connect",
+    "about": "אודות",
+    "language": "שפה"
+  },
+  "settings": {
+    "units": "יחידות",
+    "unitsKg": "קילוגרמים",
+    "unitsLb": "פאונד",
+    "healthData": "נתוני בריאות",
+    "openSystemSettings": "פתח הגדרות מערכת",
+    "deleteAccount": "מחיקת חשבון",
+    "signOut": "התנתקות",
+    "deleteConfirm": "למחוק את החשבון וכל הנתונים?",
+    "signOutConfirm": "להתנתק?"
+  },
+  "gated": {
+    "takeTheWeights": "קח את המשקולות",
+    "keepDeciding": "תמשיך להחליט",
+    "switchOff": "כבה"
+  },
+  "errors": {
+    "general": "משהו השתבש. נסה שוב."
+  },
+  "notifications": {
+    "weeklyReadyTitle": "השבוע הבא מוכן",
+    "weeklyReadyBody": "בניתי את התוכנית שלך לשבוע הבא. {{count}} אימונים, מותאמים לאיך שהתאמנת.",
+    "weeklyReadyBodyOne": "בניתי את התוכנית שלך לשבוע הבא. אימון אחד, מותאם לאיך שהתאמנת.",
+    "weeklyReadyBodyGeneric": "בניתי את התוכנית שלך לשבוע הבא, מותאמת לאיך שהתאמנת.",
+    "thresholdTitle": "תמונת האימון שלך השתנתה."
+  },
+  "watch": {
+    "next": "הבא:",
+    "interEncouragement": "יש לך את זה.",
+    "transitionEncouragement": "קדימה.",
+    "exerciseComplete": "{{exercise}} הושלם",
+    "pausedTitle": "מושהה",
+    "finishPrompt": "לסיים אימון?",
+    "finishYes": "כן",
+    "finishNo": "לא",
+    "couldntComplete": "לא הושלם",
+    "repAdjustTitle": "חזרות בפועל",
+    "repAdjustTarget": "יעד {{reps}}",
+    "confirm": "אישור",
+    "workoutCompleteTitle": "כל הכבוד.",
+    "reconnecting": "מתחבר מחדש",
+    "continueOnPhone": "המשך באייפון"
+  },
+  "language": {
+    "title": "שפה",
+    "english": "English",
+    "hebrew": "עברית",
+    "restartNote": "כדי להחיל את כיוון הכתב (RTL) במלואו, פתח מחדש את האפליקציה."
+  }
+}

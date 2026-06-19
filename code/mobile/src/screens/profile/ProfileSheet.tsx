@@ -8,7 +8,7 @@
  * actions behind a confirm sheet; the destructive one is clearly differentiated.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, ActionSheetIOS } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, ActionSheetIOS, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -19,6 +19,7 @@ import { Divider05 } from '@/components/Divider05';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { health } from '@/platform/health';
+import { setLocale, currentLocale } from '@/i18n';
 import { color, space, heroTitle, press, s } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -48,6 +49,14 @@ export function ProfileSheet({ navigation }: Props) {
   async function onHealthAccess() {
     const granted = await health.requestPermission();
     if (!granted) void Linking.openSettings();
+  }
+
+  // Toggle English ⇄ עברית. Text updates immediately; full RTL mirroring applies
+  // after the app is reopened (iOS limitation) — surfaced in the note.
+  const locale = currentLocale();
+  async function onLanguage() {
+    await setLocale(locale === 'he' ? 'en' : 'he');
+    Alert.alert(t('language.title'), t('language.restartNote'));
   }
 
   // iOS: a native action sheet with a red destructive row + Cancel (the idiomatic
@@ -114,6 +123,11 @@ export function ProfileSheet({ navigation }: Props) {
 
         <Divider05 />
         <Row label={t('profile.units')} value={units} onPress={toggleUnits} />
+        <Row
+          label={t('profile.language')}
+          value={locale === 'he' ? t('language.hebrew') : t('language.english')}
+          onPress={onLanguage}
+        />
         {memberSince ? (
           <Row label={t('profile.membership')} twoLine={{ top: t('profile.memberSince'), bottom: memberSince }} />
         ) : null}

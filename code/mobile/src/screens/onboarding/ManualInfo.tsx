@@ -6,7 +6,7 @@
  * Replaces the former two-screen AboutYou / AboutYouBody split (HUSH_BUILD_SPEC
  * §4.3 is a single screen; spec wins, founder directive 2026-06-18).
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useCopy } from '@/i18n/useCopy';
+import { health } from '@/platform/health';
 import { color, space, radius, heroTitle, press, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -38,17 +39,30 @@ function toInt(s: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export function ManualInfo({ navigation }: Props) {
+export function ManualInfo({ navigation, route }: Props) {
   const { t } = useCopy();
+  const healthConnected = route.params?.healthConnected ?? false;
   const [age, setAge] = useState('28');
   const [sex, setSex] = useState<SexChoice>('male');
   const [height, setHeight] = useState('178');
   const [weight, setWeight] = useState('82');
 
+  // If Health is connected, prefill the weight from HealthKit (best-effort, silent).
+  useEffect(() => {
+    if (!healthConnected) return;
+    let cancelled = false;
+    void health.latestBodyweightKg().then((kg) => {
+      if (!cancelled && kg && kg > 0) setWeight(String(Math.round(kg)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [healthConnected]);
+
   function onContinue() {
     navigation.navigate('Goal', {
       profile: {
-        healthConnected: false,
+        healthConnected,
         age: toInt(age, 28),
         sex: sex === 'other' ? undefined : sex,
         heightCm: toInt(height, 178),

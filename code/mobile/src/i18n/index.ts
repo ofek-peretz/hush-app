@@ -11,34 +11,73 @@
  * scripts/lint-copy.ts — so the laws are guaranteed at the copy source.
  */
 import { I18nManager } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import en from './locales/en.json';
+import he from './locales/he.json';
 
 export type Locale = 'en' | 'he';
 
-/** Locales known to be right-to-left. Hebrew is future scope. */
+/** Locales known to be right-to-left. */
 const RTL_LOCALES: ReadonlySet<Locale> = new Set<Locale>(['he']);
+
+/** Persisted language override (Profile → Language). Absent → follow the device. */
+const LOCALE_KEY = 'hush.locale';
 
 export const resources = {
   en: { translation: en },
+  he: { translation: he },
 } as const;
 
-/** v1 forces English. When `he` lands, switch to device detection here. */
-function resolveLocale(): Locale {
+async function getStoredLocale(): Promise<Locale | null> {
+  try {
+    const v = await AsyncStorage.getItem(LOCALE_KEY);
+    return v === 'he' || v === 'en' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stored override wins; otherwise follow the device language (he → Hebrew). */
+async function resolveLocale(): Promise<Locale> {
+  const stored = await getStoredLocale();
+  if (stored) return stored;
   const device = Localization.getLocales()[0]?.languageCode ?? 'en';
-  if (device === 'he' && 'he' in resources) return 'he';
-  return 'en';
+  return device === 'he' ? 'he' : 'en';
 }
 
 export function isRTL(locale: Locale): boolean {
   return RTL_LOCALES.has(locale);
 }
 
+export function currentLocale(): Locale {
+  return i18next.language === 'he' ? 'he' : 'en';
+}
+
+/**
+ * Switch language at runtime (Profile → Language). Text updates immediately; the
+ * RTL/LTR layout direction is flipped on the manager but iOS applies a full
+ * mirror only after the app is reopened (the caller surfaces that note).
+ */
+export async function setLocale(locale: Locale): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LOCALE_KEY, locale);
+  } catch {
+    /* best-effort persistence */
+  }
+  await i18next.changeLanguage(locale);
+  const rtl = isRTL(locale);
+  if (I18nManager.isRTL !== rtl) {
+    I18nManager.allowRTL(rtl);
+    I18nManager.forceRTL(rtl);
+  }
+}
+
 export async function initI18n(): Promise<typeof i18next> {
-  const locale = resolveLocale();
+  const locale = await resolveLocale();
 
   // RTL is a layout concern handled via logical start/end styles everywhere;
   // we only flip the manager so the platform mirrors navigation + text.

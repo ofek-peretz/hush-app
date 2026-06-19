@@ -24,8 +24,10 @@ export type OnboardingParamList = {
   // "What should we call you?" — captures the name (fallback to the Apple-provided name).
   NameEntry: undefined;
   ConnectHealth: undefined;
-  // Single screen, four fields (§4.3) — only reached when Health is skipped.
-  ManualInfo: undefined;
+  // Single screen, four fields (§4.3) — now shown to EVERYONE (sex/age/height/weight
+  // are needed for the program; HealthKit only reliably gives steps/weight). The flag
+  // records whether Health was connected (for weight prefill + the profile).
+  ManualInfo: { healthConnected: boolean } | undefined;
   Goal: { profile: OnboardingProfileDraft };
   // Experience drives the starting weights; sits between Goal and Days per week.
   Experience: { profile: OnboardingProfileDraft; goal: Goal };

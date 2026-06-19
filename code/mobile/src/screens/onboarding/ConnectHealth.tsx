@@ -27,17 +27,14 @@ export function ConnectHealth({ navigation }: Props) {
   async function onContinue() {
     const granted = await health.requestPermission();
     recordPermissionOutcome(granted, (type, data) => void track(type, data));
-    if (granted) {
-      // HealthKit prefills the profile → skip Manual Info (§4.2).
-      navigation.navigate('Goal', { profile: { healthConnected: true } });
-    } else {
-      navigation.navigate('ManualInfo');
-    }
+    // Everyone fills the quick details next (HealthKit gives steps/activity + a
+    // weight prefill, but not the sex the program needs). Carry the connection flag.
+    navigation.navigate('ManualInfo', { healthConnected: granted });
   }
 
   function onSkip() {
     void track('health_skipped', {});
-    navigation.navigate('ManualInfo');
+    navigation.navigate('ManualInfo', { healthConnected: false });
   }
 
   return (
