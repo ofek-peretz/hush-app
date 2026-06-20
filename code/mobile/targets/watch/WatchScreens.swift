@@ -44,22 +44,6 @@ private struct PauseGlyph: View {
   }
 }
 
-/// Live heart rate + active calories (rest screens). Renders nothing until the
-/// watch's HealthKit reader has a value (callers fall back to the encouragement).
-private struct VitalsLine: View {
-  @ObservedObject var vitals: WatchVitals
-  static func has(_ v: WatchVitals) -> Bool { v.heartRateBpm != nil || v.activeKcal != nil }
-  var body: some View {
-    HStack(spacing: 14) {
-      if let bpm = vitals.heartRateBpm { Text("\(bpm) bpm") }
-      if let kcal = vitals.activeKcal { Text("\(kcal) kcal") }
-    }
-    .font(.caption2)
-    .monospacedDigit()
-    .foregroundStyle(.white.opacity(0.45))
-  }
-}
-
 // MARK: Root
 
 struct WatchRootView: View {
@@ -84,19 +68,18 @@ struct WatchRootView: View {
       PausedView(mirror: m, onResume: model.resume, onFinish: model.openFinishConfirm)
     case .finishConfirm:
       FinishConfirmView(onNo: model.closeFinishConfirm, onYes: model.finishYes)
-    case let .editResult(m, weight, reps, active):
-      EditResultView(weight: weight, reps: reps, active: active, hasWeight: m.targetWeight != nil,
-                     onSetActive: model.setEditActive, onCrown: model.applyEditCrown,
-                     onSave: model.confirmEdit, onCancel: model.cancelEdit)
+    case let .repAdjust(m, reps):
+      RepAdjustView(targetReps: m.targetReps, actualReps: reps,
+                    onChange: model.setRepAdjust, onConfirm: model.confirmReps, onCancel: model.cancelRepAdjust)
     case let .activeSet(m):
-      ActiveSetView(mirror: m, onComplete: model.completeSet, onEdit: model.openEdit,
+      ActiveSetView(mirror: m, onComplete: model.completeSet, onCouldnt: model.openRepAdjust,
                     onBusy: model.markExerciseBusy, onPause: model.pause)
     case let .interRest(m):
-      InterRestView(mirror: m, vitals: model.vitals, onReady: model.endRest, onPause: model.pause)
+      InterRestView(mirror: m, onReady: model.endRest, onPause: model.pause)
     case let .exerciseComplete(m):
       ExerciseCompleteView(mirror: m, onElapsed: model.ackExerciseComplete)
     case let .transitionRest(m):
-      TransitionRestView(mirror: m, vitals: model.vitals, onReady: model.endRest, onPause: model.pause)
+      TransitionRestView(mirror: m, onReady: model.endRest, onPause: model.pause)
     }
   }
 }
@@ -112,7 +95,7 @@ struct IdleView: View {
 struct ActiveSetView: View {
   let mirror: WireMirror
   let onComplete: () -> Void
-  let onEdit: () -> Void
+  let onCouldnt: () -> Void
   let onBusy: () -> Void
   let onPause: () -> Void
 
@@ -131,7 +114,7 @@ struct ActiveSetView: View {
       Spacer(minLength: 2)
       Button(WatchCopy.completeSet, action: onComplete)
         .buttonStyle(.borderedProminent).tint(.white)
-      Button(WatchCopy.editResult, action: onEdit)
+      Button(WatchCopy.couldntComplete, action: onCouldnt)
         .buttonStyle(.bordered)
       if mirror.canMarkBusy {
         Button(WatchCopy.exerciseBusy, action: onBusy)
@@ -144,7 +127,6 @@ struct ActiveSetView: View {
 
 struct InterRestView: View {
   let mirror: WireMirror
-  @ObservedObject var vitals: WatchVitals
   let onReady: () -> Void
   let onPause: () -> Void
 
@@ -152,12 +134,7 @@ struct InterRestView: View {
     VStack(spacing: 6) {
       // No exercise name on inter-set rest (the athlete already knows it).
       RestCountdown(restEndsAt: mirror.restEndsAt)
-      // bpm + kcal when the watch has them; otherwise the quiet encouragement.
-      if VitalsLine.has(vitals) {
-        VitalsLine(vitals: vitals)
-      } else {
-        Text(WatchCopy.interEncouragement).font(.caption).foregroundStyle(.secondary)
-      }
+      Text(WatchCopy.interEncouragement).font(.caption).foregroundStyle(.secondary)
       Text(targetLine(weight: mirror.targetWeight, reps: mirror.targetReps))
         .font(.caption2).foregroundStyle(.white.opacity(0.7))
       Spacer(minLength: 2)
@@ -194,18 +171,13 @@ struct ExerciseCompleteView: View {
 
 struct TransitionRestView: View {
   let mirror: WireMirror
-  @ObservedObject var vitals: WatchVitals
   let onReady: () -> Void
   let onPause: () -> Void
 
   var body: some View {
     VStack(spacing: 5) {
       RestCountdown(restEndsAt: mirror.restEndsAt)
-      if VitalsLine.has(vitals) {
-        VitalsLine(vitals: vitals)
-      } else {
-        Text(WatchCopy.transitionEncouragement).font(.caption).foregroundStyle(.secondary)
-      }
+      Text(WatchCopy.transitionEncouragement).font(.caption).foregroundStyle(.secondary)
       if let next = mirror.nextExerciseName, !next.isEmpty {
         Text("\(WatchCopy.next) \(next)").font(.caption2).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
         Text(targetLine(weight: mirror.nextTargetWeight, reps: mirror.nextTargetReps ?? 0))
@@ -247,86 +219,38 @@ struct FinishConfirmView: View {
       Text(WatchCopy.finishPrompt).font(.headline).multilineTextAlignment(.center).foregroundStyle(.white)
       // No first — the destructive action is never the default.
       Button(WatchCopy.finishNo, action: onNo).buttonStyle(.borderedProminent).tint(.white)
-      // Monochrome: destructive is plain (bold), never red (founder no-color law; watch spec §3.8).
-      Button(WatchCopy.finishYes, action: onYes).buttonStyle(.bordered)
+      Button(WatchCopy.finishYes, action: onYes).buttonStyle(.bordered).tint(.red)
     }
     .padding(.horizontal, 8)
   }
 }
 
-// Edit Result (§3.6): adjust the current set's WEIGHT + REPS before logging. One
-// column is "active" (Crown-driven, full opacity); the other dims (the required
-// affordance for a single Crown). Tapping a column makes it active. 1-unit detents
-// (±1 kg / ±1 rep). Save sends the edited values; the phone logs them.
-struct EditResultView: View {
-  let weight: Double?
-  let reps: Int
-  let active: WatchEditColumn
-  let hasWeight: Bool
-  let onSetActive: (WatchEditColumn) -> Void
-  let onCrown: (Double) -> Void
-  let onSave: () -> Void
+struct RepAdjustView: View {
+  let targetReps: Int
+  let actualReps: Int
+  let onChange: (Int) -> Void
+  let onConfirm: () -> Void
   let onCancel: () -> Void
 
   @State private var crown = 0.0
 
-  private var activeValue: Double {
-    switch active {
-    case .weight: return weight ?? 0
-    case .reps: return Double(reps)
-    }
-  }
-
   var body: some View {
     VStack(spacing: 6) {
-      HStack(spacing: 10) {
-        if hasWeight {
-          EditCell(label: WatchCopy.editWeightLabel,
-                   value: weight.map { fmtKg($0) } ?? "—",
-                   isActive: active == .weight) { onSetActive(.weight) }
-        }
-        EditCell(label: WatchCopy.editRepsLabel,
-                 value: "\(reps)",
-                 isActive: active == .reps) { onSetActive(.reps) }
-      }
-      .focusable(true)
-      .digitalCrownRotation($crown, from: 0, through: 500, by: 1, sensitivity: .medium, isContinuous: false)
-      .onChange(of: crown) { _, newValue in onCrown(newValue) }
+      Text(WatchCopy.repAdjustTitle).font(.caption).foregroundStyle(.secondary)
+      Text("\(actualReps)")
+        .font(.system(size: 48, weight: .bold, design: .rounded))
+        .foregroundStyle(.white)
+        .focusable(true)
+        .digitalCrownRotation($crown, from: 0, through: 100, by: 1, sensitivity: .medium, isContinuous: false)
+        .onChange(of: crown) { _, newValue in onChange(Int(newValue.rounded())) }
+      Text(WatchCopy.repAdjustTarget(targetReps)).font(.caption2).foregroundStyle(.white.opacity(0.6))
       Spacer(minLength: 2)
-      Button(WatchCopy.save, action: onSave).buttonStyle(.borderedProminent).tint(.white)
+      Button(WatchCopy.confirm, action: onConfirm).buttonStyle(.borderedProminent).tint(.white)
       Button(WatchCopy.cancel, action: onCancel).buttonStyle(.bordered)
     }
     .padding(.horizontal, 8)
-    .onAppear { crown = activeValue }
-    // When the active column switches, re-seat the Crown on that column's value.
-    .onChange(of: active) { _, _ in crown = activeValue }
+    .onAppear { crown = Double(actualReps) }
   }
-}
-
-private struct EditCell: View {
-  let label: String
-  let value: String
-  let isActive: Bool
-  let onTap: () -> Void
-  var body: some View {
-    Button(action: onTap) {
-      VStack(spacing: 2) {
-        Text(label).font(.caption2).foregroundStyle(.secondary)
-        Text(value).font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(.white)
-      }
-      .padding(.vertical, 4)
-      .padding(.horizontal, 10)
-      .background(isActive ? Color.white.opacity(0.12) : Color.clear)
-      .clipShape(RoundedRectangle(cornerRadius: 10))
-      .opacity(isActive ? 1.0 : 0.4)
-      .scaleEffect(isActive ? 1.0 : 0.94)
-    }
-    .buttonStyle(.plain)
-  }
-}
-
-private func fmtKg(_ w: Double) -> String {
-  w.rounded() == w ? "\(Int(w))" : String(format: "%.1f", w)
 }
 
 struct WorkoutCompleteView: View {

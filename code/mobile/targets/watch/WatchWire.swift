@@ -50,9 +50,6 @@ struct WireIntent: Codable {
   var issuedAt: String
   var expectedGlobalIndex: Int?
   var actualReps: Int?
-  // Actual weight (kg) from the watch Edit Result; nil ⇒ omitted from the wire
-  // (Swift Codable encodeIfPresent), so the phone falls back to the target weight.
-  var actualWeight: Double?
 }
 
 enum WatchWire {

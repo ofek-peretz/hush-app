@@ -13,9 +13,6 @@ import SwiftUI
 
 enum ConnectionState { case connected, reconnecting }
 
-/// Which value the Digital Crown currently drives on the Edit Result screen (§3.6).
-enum WatchEditColumn: Equatable { case weight, reps }
-
 /// The screen to render, with the data each one needs.
 enum WatchScreen: Equatable {
   case idle
@@ -23,9 +20,7 @@ enum WatchScreen: Equatable {
   case workoutComplete
   case paused(WireMirror)
   case finishConfirm
-  // Edit Result: adjust the current set's weight + reps before logging (§3.6). `weight`
-  // is nil for a bodyweight movement (only the reps column shows).
-  case editResult(WireMirror, weight: Double?, reps: Int, active: WatchEditColumn)
+  case repAdjust(WireMirror, actualReps: Int)
   case activeSet(WireMirror)
   case interRest(WireMirror)
   case exerciseComplete(WireMirror)
@@ -42,18 +37,11 @@ final class WatchModel: ObservableObject {
   // Local UI (presentation only — never workout state).
   private var finishConfirm = false
   private var exerciseCompleteAck = false
-  // Edit Result draft: editReps != nil ⇒ the edit screen is open. editWeight is nil for
-  // a bodyweight movement. editActive = which column the Crown drives.
-  private var editReps: Int?
-  private var editWeight: Double?
-  private var editActive: WatchEditColumn = .reps
+  private var repAdjustReps: Int?
 
   private let manager = WatchSessionManager()
   /// Fired when a screen is entered, so the view can play the entry haptic.
   let onEntryHaptic = PassthroughSubject<HapticEvent, Never>()
-  /// Live heart rate + active calories for the rest screens (watch-only signal).
-  /// Owns no workout state — a read-only HealthKit live-workout reader.
-  let vitals = WatchVitals()
 
   func start() {
     manager.model = self
@@ -75,7 +63,7 @@ final class WatchModel: ObservableObject {
     let indexChanged = prev?.globalIndex != mirror?.globalIndex
     if phaseChanged || indexChanged {
       if mirror?.phase != "paused" { finishConfirm = false }
-      if mirror?.phase != "active_set" || indexChanged { editReps = nil; editWeight = nil }
+      if mirror?.phase != "active_set" || indexChanged { repAdjustReps = nil }
       // A fresh transition (new completed exercise) re-arms the interstitial.
       if mirror?.phase == "rest_transition" && (phaseChanged || indexChanged) {
         exerciseCompleteAck = false
@@ -104,45 +92,22 @@ final class WatchModel: ObservableObject {
   func openFinishConfirm() { finishConfirm = true; recompute() }
   func closeFinishConfirm() { finishConfirm = false; recompute() }
 
-  func openEdit() {
-    editReps = mirror?.targetReps ?? 0
-    editWeight = mirror?.targetWeight            // nil ⇒ bodyweight (reps-only edit)
-    editActive = (mirror?.targetWeight != nil) ? .weight : .reps
+  func openRepAdjust() {
+    repAdjustReps = mirror?.targetReps ?? 0
     recompute()
   }
-  func cancelEdit() { editReps = nil; editWeight = nil; recompute() }
-  func setEditActive(_ column: WatchEditColumn) {
-    // The Crown can only drive the weight column when there IS a weight.
-    editActive = (column == .weight && editWeight == nil) ? .reps : column
-    recompute()
-  }
-  /// Apply a Crown-driven absolute value to the active column (1-unit detents:
-  /// ±1 kg / ±1 rep — founder: 1 kg steps everywhere).
-  func applyEditCrown(_ value: Double) {
-    guard editReps != nil else { return }
-    switch editActive {
-    case .weight:
-      if editWeight != nil { editWeight = max(0, value.rounded()) }
-    case .reps:
-      editReps = max(0, Int(value.rounded()))
-    }
+  func cancelRepAdjust() { repAdjustReps = nil; recompute() }
+  func setRepAdjust(_ reps: Int) {
+    repAdjustReps = max(0, reps)
     recompute()
   }
 
   // MARK: Outbound intents (proposals — the phone validates + decides)
 
   func completeSet() { sendIntent(type: "complete_set", expectedIndex: mirror?.globalIndex) }
-  func confirmEdit() {
-    // Log the edited weight + reps (each rides through to the phone; weight nil for a
-    // bodyweight movement is omitted on the wire → phone keeps the target).
-    sendIntent(
-      type: "complete_set",
-      expectedIndex: mirror?.globalIndex,
-      actualReps: editReps,
-      actualWeight: editWeight
-    )
-    editReps = nil
-    editWeight = nil
+  func confirmReps() {
+    sendIntent(type: "complete_set", expectedIndex: mirror?.globalIndex, actualReps: repAdjustReps)
+    repAdjustReps = nil
     recompute()
   }
   func markExerciseBusy() { sendIntent(type: "exercise_busy", expectedIndex: mirror?.globalIndex) }
@@ -151,20 +116,14 @@ final class WatchModel: ObservableObject {
   func resume() { sendIntent(type: "resume") }
   func finishYes() { finishConfirm = false; sendIntent(type: "finish_early"); recompute() }
 
-  private func sendIntent(
-    type: String,
-    expectedIndex: Int? = nil,
-    actualReps: Int? = nil,
-    actualWeight: Double? = nil
-  ) {
+  private func sendIntent(type: String, expectedIndex: Int? = nil, actualReps: Int? = nil) {
     let intent = WireIntent(
       v: WATCH_PROTOCOL_VERSION,
       type: type,
       intentId: UUID().uuidString,
       issuedAt: ISO8601DateFormatter().string(from: Date()),
       expectedGlobalIndex: expectedIndex,
-      actualReps: actualReps,
-      actualWeight: actualWeight
+      actualReps: actualReps
     )
     if let json = WatchWire.encodeIntent(intent) { manager.send(intentJSON: json) }
   }
@@ -175,22 +134,8 @@ final class WatchModel: ObservableObject {
     let next = project()
     let kindChanged = !sameKind(next, screen)
     screen = next
-    manageVitals(next)
     if kindChanged, let haptic = entryHaptic(for: next) {
       onEntryHaptic.send(haptic)
-    }
-  }
-
-  /// Run the live-vitals workout while a workout is on screen; end it when the
-  /// session completes or we fall idle. A connection blip keeps the current state.
-  private func manageVitals(_ screen: WatchScreen) {
-    switch screen {
-    case .activeSet, .interRest, .transitionRest, .exerciseComplete, .paused, .editResult, .finishConfirm:
-      vitals.start()
-    case .workoutComplete, .idle:
-      vitals.stop()
-    case .connectionLost:
-      break
     }
   }
 
@@ -204,7 +149,7 @@ final class WatchModel: ObservableObject {
     case "paused":
       return finishConfirm ? .finishConfirm : .paused(m)
     case "active_set":
-      if let reps = editReps { return .editResult(m, weight: editWeight, reps: reps, active: editActive) }
+      if let reps = repAdjustReps { return .repAdjust(m, actualReps: reps) }
       return .activeSet(m)
     case "rest_inter":
       return .interRest(m)
@@ -231,7 +176,7 @@ final class WatchModel: ObservableObject {
   private func sameKind(_ a: WatchScreen, _ b: WatchScreen) -> Bool {
     switch (a, b) {
     case (.idle, .idle), (.connectionLost, .connectionLost), (.workoutComplete, .workoutComplete),
-         (.paused, .paused), (.finishConfirm, .finishConfirm), (.editResult, .editResult),
+         (.paused, .paused), (.finishConfirm, .finishConfirm), (.repAdjust, .repAdjust),
          (.activeSet, .activeSet), (.interRest, .interRest), (.exerciseComplete, .exerciseComplete),
          (.transitionRest, .transitionRest):
       return true
