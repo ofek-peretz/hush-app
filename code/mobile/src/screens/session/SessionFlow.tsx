@@ -28,7 +28,7 @@ import { ProgressArrow, directionFromReason } from '@/components/ProgressArrow';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { useWorkoutVitals, estimateActiveKcal } from '@/platform/health/useWorkoutVitals';
+import { useWorkoutVitals, estimateActiveKcal } from '@/platform/useWorkoutVitals';
 import { exercisesForCapability, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, space, tnum, heroNum, heroTitle, s } from '@/design/tokens';
