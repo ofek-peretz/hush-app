@@ -16,8 +16,7 @@ import { track } from '@/platform/telemetry';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useCopy } from '@/i18n/useCopy';
 import type { Capability, Units } from '@/data/local/models';
-import { exerciseById, type Exercise } from '@/data/exercises';
-import { capabilityNameKey } from '@/domain/portrait';
+import { exerciseById, muscleOf, type Exercise } from '@/data/exercises';
 import { allByEquipment, recentsForSlot, recommended, searchExercises } from '@/domain/replacement';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, layout, press, type as typo } from '@/design/tokens';
@@ -54,10 +53,12 @@ export function ReplacementSheet({ capability, currentExerciseId, target, units,
   };
 
   const currentName = exerciseById(currentExerciseId)?.name ?? '';
-  const results = useMemo(() => searchExercises(capability, currentExerciseId, query), [capability, currentExerciseId, query]);
-  const recs = useMemo(() => recommended(capability, currentExerciseId), [capability, currentExerciseId]);
-  const yours = useMemo(() => recentsForSlot(recents, capability, currentExerciseId), [recents, capability, currentExerciseId]);
-  const all = useMemo(() => allByEquipment(capability, currentExerciseId), [capability, currentExerciseId]);
+  const muscle = muscleOf(currentExerciseId);
+  const muscleLabel = muscle ? t(`muscle.${muscle}`) : '';
+  const results = useMemo(() => searchExercises(currentExerciseId, query), [currentExerciseId, query]);
+  const recs = useMemo(() => recommended(currentExerciseId), [currentExerciseId]);
+  const yours = useMemo(() => recentsForSlot(recents, currentExerciseId), [recents, currentExerciseId]);
+  const all = useMemo(() => allByEquipment(currentExerciseId), [currentExerciseId]);
 
   const targetStr = (ex: Exercise) => {
     const w = displayWeight(target.weight, units);
@@ -111,7 +112,7 @@ export function ReplacementSheet({ capability, currentExerciseId, target, units,
                   {yours.map((ex) => <Row key={ex.id} label={ex.name} onPress={() => pick(ex)} />)}
                 </Section>
               ) : null}
-              <Section title={t('replacement.sectionAll', { capability: t(capabilityNameKey(capability)) })}>
+              <Section title={t('replacement.sectionAll', { capability: muscleLabel })}>
                 {all.map((g) => (
                   <View key={g.family}>
                     <Text style={styles.subhead}>{g.family}</Text>

@@ -96,6 +96,10 @@ class AthleteState:
     capabilities: dict[str, CapabilityState] = field(default_factory=dict)
     # --- DX-07: onboarding bodyweight (kg). Captured, INERT until Option D (DX-08). ---
     bodyweight_kg: float | None = None
+    # --- Goal (training intent). Onboarding choice; shapes the composition's working-rep
+    # target via target_reps_for_goal (loads follow natively through the RIR model). None ==
+    # the historical default (8 reps), so a goal-less athlete is byte-for-byte unchanged. ---
+    goal: str | None = None
     # --- Sprint 2 (ES-011 A.3): systemic fatigue (one scalar, score units) ---
     fatigue_systemic: float = 0.0
     last_workout_at_week: float | None = None

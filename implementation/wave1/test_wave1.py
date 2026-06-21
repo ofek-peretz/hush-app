@@ -26,18 +26,18 @@ def test_runner_chain_is_ordered_and_single_source():
     # (re-gold: +8 session_progress (DX-11), +9 stagnation_marker (DX-09), +10 web-shell infra,
     #  +11 erasure_record (OD-2 right-to-erasure), +12 athlete_event, +13 off-policy sample,
     #  +14 composition audit (replayable candidate-selection).)
-    assert runner.migration_versions() == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    assert runner.migration_versions() == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
     assert [m.VERSION for m in MIGRATIONS] == sorted(m.VERSION for m in MIGRATIONS)
-    assert SCHEMA_VERSION == 17
+    assert SCHEMA_VERSION == 18
 
 
 def test_runner_applies_in_order_and_is_idempotent():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     applied = run_migrations(conn)
-    assert applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]  # full chain, ascending
+    assert applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]  # full chain, ascending
     versions = sorted(r[0] for r in conn.execute("SELECT version FROM schema_version"))
-    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
     assert run_migrations(conn) == []                       # idempotent: second run is a no-op
     conn.close()
 
@@ -48,7 +48,7 @@ def test_fresh_db_reports_full_schema_version():
     # Before ATD-12 a fresh DB had an EMPTY schema_version (MG1); now it records the full chain.
     db = Database(":memory:")
     versions = sorted(r[0] for r in db.conn.execute("SELECT version FROM schema_version"))
-    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]   # re-gold: +17 workout name
+    assert versions == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]   # re-gold: +18 goal
     db.close()
 
 
@@ -296,6 +296,69 @@ def test_migration_014_additive_and_idempotent():
     assert ver == 14
     assert m014.apply(conn) is False                           # idempotent: second apply is a no-op
     conn.close()
+
+
+# ----------------------------- Goal: training intent (migration 018) -----------------------------
+
+def _v17_like_athlete_conn() -> sqlite3.Connection:
+    """A pre-018 athlete table (no goal column) so migration 018 has work to do."""
+    conn = sqlite3.connect(":memory:"); conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE athlete (id TEXT PRIMARY KEY, sex TEXT NOT NULL, age INTEGER NOT NULL, "
+        "experience TEXT NOT NULL, created_at TEXT NOT NULL, bodyweight_kg REAL)")
+    return conn
+
+
+def test_migration_018_additive_and_idempotent():
+    from hush_model.persistence.migrations import migration_018_goal as m018
+    conn = _v17_like_athlete_conn()
+    assert m018.apply(conn) is True
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(athlete)")}
+    assert "goal" in cols
+    # existing athlete columns preserved (additive only)
+    assert {"id", "sex", "age", "experience", "bodyweight_kg"} <= cols
+    ver = conn.execute("SELECT version FROM schema_version ORDER BY version DESC").fetchone()[0]
+    assert ver == 18
+    assert m018.apply(conn) is False                           # idempotent: second apply is a no-op
+    conn.close()
+
+
+def test_fresh_vs_migrated_athlete_goal_column_match():
+    # the goal column exists on a fresh SCHEMA_SQL DB AND a migrated one (no drift).
+    fresh = Database(":memory:")
+    fresh_cols = {r[1] for r in fresh.conn.execute("PRAGMA table_info(athlete)")}
+    fresh.close()
+    from hush_model.persistence.migrations import migration_018_goal as m018
+    migrated = _v17_like_athlete_conn(); m018.apply(migrated)
+    mig_cols = {r[1] for r in migrated.execute("PRAGMA table_info(athlete)")}
+    migrated.close()
+    assert "goal" in fresh_cols and "goal" in mig_cols
+
+
+def test_goal_target_reps_mapping_and_parity():
+    from hush_model.constants import target_reps_for_goal, GOALS, GOAL_DEFAULT_TARGET_REPS
+    assert target_reps_for_goal("get_stronger") == 5
+    assert target_reps_for_goal("build_muscle") == 8
+    assert target_reps_for_goal("general_fitness") == 10
+    assert target_reps_for_goal("toning") == 12
+    # PARITY: absent / unknown goal both resolve to the historical default (8).
+    assert target_reps_for_goal(None) == GOAL_DEFAULT_TARGET_REPS == 8
+    assert target_reps_for_goal("nonsense") == 8
+    assert set(GOALS) == {"build_muscle", "get_stronger", "general_fitness", "toning"}
+
+
+def test_athlete_goal_round_trips_through_persistence():
+    from hush_model.seeding import seed_athlete
+    from hush_model.persistence.repositories import StateRepository
+    db = Database(":memory:")
+    with db.transaction() as conn:
+        StateRepository(conn).create_athlete(seed_athlete("a-goal", "male", 30, "intermediate", goal="toning"))
+        StateRepository(conn).create_athlete(seed_athlete("a-none", "female", 40, "beginner"))
+    with db.transaction() as conn:
+        repo = StateRepository(conn)
+        assert repo.load_athlete_state("a-goal").goal == "toning"
+        assert repo.load_athlete_state("a-none").goal is None   # parity: goal-less athlete
+    db.close()
 
 
 def test_fresh_vs_migrated_session_columns_match_014():

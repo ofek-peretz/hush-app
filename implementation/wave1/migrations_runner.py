@@ -34,6 +34,7 @@ from . import (
     migration_015_preference_events,
     migration_016_week_plan,
     migration_017_workout_name,
+    migration_018_goal,
 )
 
 # The ordered migration chain. SINGLE SOURCE OF TRUTH for the chain: the fresh-DB version
@@ -56,6 +57,7 @@ MIGRATIONS = [
     migration_015_preference_events,   # Ownership: append-only athlete-preference event log (v15)
     migration_016_week_plan,           # Weekly Program Container: week entity + workout grouping (v16)
     migration_017_workout_name,        # Workout names: stable structure-derived name on workout_session (v17)
+    migration_018_goal,                # Goal: training-intent column on athlete (rep-target selection) (v18)
 ]
 
 # The schema version a fresh SCHEMA_SQL database already embodies (the head of the chain).

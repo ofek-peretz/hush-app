@@ -1,26 +1,27 @@
 /**
- * 4.20 Workout Edit. The day's exercises as planned: each row shows the exercise
- * name, its "weight · sets × reps", a small ▲/▼ arrow when the model changed the
- * load this week (#13), and a swap icon that opens the Swap sheet (§4.21).
+ * Workout Edit (§4.20) — rebuilt 1:1 to the Claude Design "Design System" workout
+ * sheet (ui_kits/app/Program.jsx → WorkoutSheet). The day's exercises as planned:
+ * legend (muscle groups) → name → each exercise as an indexed ListRow (sets · reps)
+ * with a Swap action that opens the Swap sheet (§4.21). The athlete owns exercise
+ * SELECTION (swap/replace); the frozen model owns order, load, sets and reps.
  *
- * Founder change (#11): exercise REORDER (drag + up/down handles) was removed —
- * the athlete owns exercise SELECTION (swap/replace), the frozen model owns order,
- * load, sets and reps. Replace-with-another stays; position-dragging is gone.
+ * "Begin {name}" sets this workout as Home's offered workout (focusDayId) and
+ * returns to Home — so the actual start stays on the canonical, Sunday-04:00-gated
+ * Home path (identical to Home's "Choose another workout"), never bypassing it.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SwapSheet } from '@/components/SwapSheet';
 import { Icon } from '@/components/Icon';
-import { ProgressArrow, directionFromReason } from '@/components/ProgressArrow';
+import { Legend, ListRow, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { exerciseDisplayName } from '@/data/exercises';
-import { displayWeight, unitLabel } from '@/domain/schedule';
-import type { Capability, SetTarget } from '@/data/local/models';
-import { color, space, heroTitle, press, s } from '@/design/tokens';
+import type { SetTarget } from '@/data/local/models';
+import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
@@ -28,13 +29,11 @@ type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
 interface Swapping {
   slotIndex: number;
   currentExerciseId: string;
-  capability: Capability;
 }
 
 export function ProgramDetail({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const units = app.profile?.units ?? 'kg';
   const day = app.program?.days.find((d) => d.id === route.params.dayId);
 
   const [targets, setTargets] = useState<SetTarget[]>([]);
@@ -49,17 +48,7 @@ export function ProgramDetail({ navigation, route }: Props) {
       .then(setTargets);
   }, [app.model, app.modeState.completedSessions, day]);
 
-  const targetFor = useMemo(
-    () => (exId: string) => {
-      const t0 = targets.find((x) => x.exerciseId === exId && x.setIndex === 0);
-      return {
-        weight: t0?.recommendedWeight ?? null,
-        reps: t0?.recommendedReps ?? 8,
-        reason: t0?.reasonType,
-      };
-    },
-    [targets],
-  );
+  const repsFor = (exId: string) => targets.find((x) => x.exerciseId === exId && x.setIndex === 0)?.recommendedReps ?? 8;
 
   async function onSelectSwap(exerciseId: string) {
     if (!swapping || !day) return;
@@ -69,8 +58,8 @@ export function ProgramDetail({ navigation, route }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <View style={styles.headerRow}>
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
@@ -78,54 +67,54 @@ export function ProgramDetail({ navigation, route }: Props) {
           onPress={() => navigation.goBack()}
           style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
         >
-          <Icon name="chevronLeft" size={22} color={color.textSecondary} strokeWidth={2} />
+          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
         </Pressable>
-        <Text style={styles.title} accessibilityRole="header">{day?.name ?? ''}</Text>
+        <View style={styles.headTitles}>
+          {day?.muscleGroups?.length ? <Legend>{day.muscleGroups.join(' · ')}</Legend> : null}
+          <Text style={styles.title} accessibilityRole="header">{day?.name ?? ''}</Text>
+        </View>
       </View>
 
       {!day ? null : (
-        <ScrollView contentContainerStyle={styles.body}>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
 
-          {day.slots.map((slot, i) => {
-            const tg = targetFor(slot.exerciseId);
-            const w = displayWeight(tg.weight, units);
-            const detail =
-              w != null
-                ? t('program.perExercise', { weight: `${w} ${unitLabel(units)}`, sets: slot.setCount, reps: tg.reps })
-                : t('program.perExerciseBw', { sets: slot.setCount, reps: tg.reps });
-            const direction = directionFromReason(tg.reason);
-            return (
-              <View key={`${slot.exerciseId}_${i}`} style={styles.row}>
-                <View style={styles.rowMain}>
-                  <Text style={styles.exName}>{exerciseDisplayName(slot.exerciseId)}</Text>
-                  <Text style={styles.detail}>{detail}</Text>
-                </View>
-
-                {direction ? (
-                  <View style={styles.arrowSlot}>
-                    <ProgressArrow direction={direction} size={s(16)} />
-                  </View>
-                ) : null}
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('swap.title')}
-                  hitSlop={8}
-                  onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId, capability: slot.capability })}
-                  style={({ pressed }) => [styles.swap, { opacity: pressed ? press.opacity : 1 }]}
-                >
-                  <Icon name="swap" size={20} color={color.textSecondary} strokeWidth={2} />
-                </Pressable>
-              </View>
-            );
-          })}
+          {day.slots.map((slot, i) => (
+            <ListRow
+              key={`${slot.exerciseId}_${i}`}
+              index={i + 1}
+              title={exerciseDisplayName(slot.exerciseId)}
+              subtitle={t('program.setsReps', { sets: slot.setCount, reps: repsFor(slot.exerciseId) })}
+              last={i === day.slots.length - 1}
+              trailing={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  label={t('workout.swapAction')}
+                  leading={<Icon name="swap" size={16} color={color.textPrimary} strokeWidth={2} />}
+                  onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId })}
+                />
+              }
+            />
+          ))}
         </ScrollView>
       )}
 
+      {day ? (
+        <View style={styles.footer}>
+          <Button
+            variant="primary"
+            size="lg"
+            block
+            label={t('home.begin', { name: day.name })}
+            leading={<Icon name="play" size={18} color={color.onAccent} />}
+            onPress={() => navigation.navigate('Home', { focusDayId: day.id })}
+          />
+        </View>
+      ) : null}
+
       {swapping ? (
         <SwapSheet
-          capability={swapping.capability}
           currentExerciseId={swapping.currentExerciseId}
           onSelect={onSelectSwap}
           onClose={() => setSwapping(null)}
@@ -137,21 +126,11 @@ export function ProgramDetail({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: 6, gap: 6 },
-  back: { width: 36, height: 44, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
-  title: { ...heroTitle(s(24)), color: color.textPrimary, fontSize: s(24), fontWeight: '600' },
-  body: { paddingTop: s(24), paddingHorizontal: space.gutter, paddingBottom: 48 },
-  yoursNow: { fontSize: s(14), color: color.textSecondary, marginBottom: s(16) },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: s(15),
-    borderBottomWidth: 0.5,
-    borderBottomColor: color.border,
-  },
-  rowMain: { flex: 1 },
-  exName: { fontSize: s(16), fontWeight: '500', color: color.textPrimary },
-  detail: { fontSize: s(13), color: color.textSecondary, marginTop: s(3) },
-  arrowSlot: { width: s(28), alignItems: 'center', justifyContent: 'center' },
-  swap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
+  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
+  headTitles: { flex: 1, minWidth: 0 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  body: { paddingHorizontal: space.gutter, paddingBottom: 24 },
+  yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, paddingTop: 12, marginBottom: 4 },
+  footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
 });

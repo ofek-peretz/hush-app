@@ -346,3 +346,37 @@ STAGNATION_BAND_Z: float = 1.0              # variance band = Z·sqrt(sigma^2_re
 STAGNATION_BAND_FLOOR: float = 0.25         # score-unit floor so a zero-variance flat still has a band       [PROVISIONAL]
 IMBALANCE_MEDIAN_GAP: float = 5.0           # §12 "meaningfully below median" (score units)                  [PROVISIONAL]
 STAGNATION_COOLDOWN_WEEKS: float = 4.0      # §12 anti-repetition: no re-surface until state change or cooldown
+
+
+# =====================================================================
+# Goal (training intent) — additive lever over the working-rep target
+# =====================================================================
+#
+# The athlete's GOAL shapes the working-rep target that composition threads into every
+# block; loads then follow NATIVELY through the existing RIR model (recommendation.py —
+# a lower rep target yields a heavier load for the same capability score). No second load
+# formula, no template change, no seeding change.
+#
+# ADDITIVE / PARITY-PRESERVING (the same firewall discipline as Sprint 3B): an absent or
+# unknown goal AND 'build_muscle' both resolve to GOAL_DEFAULT_TARGET_REPS, which equals the
+# historical hard default (8). So every athlete enrolled before goals existed — and every
+# build_muscle athlete — composes byte-for-byte as before. Goal does NOT touch sex/age
+# seeding (cohort_multiplier already owns cold-start), the frozen templates, or the volume
+# bands. It is purely a per-session rep-target selection consumed at composition time.
+GOALS: tuple[str, ...] = ("build_muscle", "get_stronger", "general_fitness", "toning")
+GOAL_DEFAULT: str = "build_muscle"
+GOAL_DEFAULT_TARGET_REPS: int = 8           # == the historical DEFAULT_TARGET_REPS (parity)
+_GOAL_TARGET_REPS: dict[str, int] = {
+    "get_stronger": 5,
+    "build_muscle": 8,
+    "general_fitness": 10,
+    "toning": 12,
+}
+
+
+def target_reps_for_goal(goal: str | None) -> int:
+    """Working-rep target for a goal. Unknown/absent → the historical default (8), so the
+    composition is parity-preserving for any athlete without a goal. Pure."""
+    if goal is None:
+        return GOAL_DEFAULT_TARGET_REPS
+    return _GOAL_TARGET_REPS.get(goal, GOAL_DEFAULT_TARGET_REPS)

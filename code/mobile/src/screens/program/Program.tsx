@@ -1,26 +1,28 @@
 /**
- * 4.19 Program · Weekly View. The week's plan grouped by status:
- *  - COMPLETED THIS WEEK: finished workouts, each with the weekday it was done
- *    (derived from history) and a grey DONE chip.
- *  - UP NEXT: upcoming workouts (no weekday) with a "Set as next" action that
- *    makes Home show that workout next (athlete-owned order; §4.19 / §5.8).
- * Tapping a row body opens Workout Edit (ProgramDetail). Rest is a Home state,
- * not a row here (weekly model).
+ * Program · This week — rebuilt 1:1 to the Claude Design "Design System" Program
+ * (ui_kits/app/Program.jsx). The week's plan split by status:
+ *   header (Week N · freq) → Completed meter → Remaining → Completed.
+ * Each row opens the workout (ProgramDetail = the Workout Edit surface, where
+ * exercises are inspected / swapped / reordered). Rest is a Home state (weekly
+ * model), never a row here.
+ *
+ * (The design's inline workout sheet is consolidated into the dedicated
+ * ProgramDetail screen; "Set as next" lives on Home's "Choose another workout".)
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BackBar } from '@/components/BackBar';
-import { Eyebrow } from '@/components/Eyebrow';
 import { Icon } from '@/components/Icon';
+import { Legend, ProgressMeter, ListRow } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
-import { weekProgress, estimateMinutes } from '@/domain/schedule';
+import { weekProgress } from '@/domain/schedule';
+import { trainingWeekNumber } from '@/domain/weekCadence';
 import type { ProgramDay, Session } from '@/data/local/models';
-import { color, space, heroTitle, press, s } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Program'>;
@@ -36,7 +38,6 @@ export function Program({ navigation }: Props) {
     db.loadHistory().then(setHistory);
   }, []);
 
-  // Weekday a completed workout was performed (most-recent matching session).
   function weekdayFor(day: ProgramDay): string | null {
     const s =
       history.find((h) => h.programDayId === day.id) ??
@@ -44,87 +45,76 @@ export function Program({ navigation }: Props) {
     return s ? new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short' }) : null;
   }
 
-  // "Set as next": Home should immediately offer THIS workout. We pass it to Home as
-  // `focusDayId` (survives Home's program refetch, which was reverting a local
-  // reorder), and also persist the athlete's workout order so FUTURE weeks keep it
-  // (the current week is already composed server-side — §4.19 / §5.8).
-  async function onSetAsNext(dayId: string) {
-    if (!program) return;
-    const from = program.days.findIndex((d) => d.id === dayId);
-    const firstUpcoming = program.days.findIndex((d) => !d.isRest && !d.completed);
-    void track('set_as_next', { dayId });
-    if (from >= 0 && firstUpcoming >= 0 && from !== firstUpcoming) {
-      await app.reorderWorkouts(from, firstUpcoming);
-    }
-    navigation.navigate('Home', { focusDayId: dayId });
-  }
-
   const workouts = (program?.days ?? []).filter((d) => !d.isRest);
   const completed = workouts.filter((d) => d.completed);
   const upcoming = workouts.filter((d) => !d.completed);
+  const prog = program ? weekProgress(program) : { done: 0, total: 0 };
+  const weekNumber = trainingWeekNumber(app.profile?.memberSince, Date.now());
+
+  const openDay = (id: string) => navigation.navigate('ProgramDetail', { dayId: id });
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <BackBar onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.header} accessibilityRole="header">{t('program.title')}</Text>
-        {program ? (
-          <Text style={styles.sub}>
-            {t('program.weekProgress', { done: weekProgress(program).done, total: weekProgress(program).total })}
-          </Text>
-        ) : null}
+      {/* header */}
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          hitSlop={10}
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
+        >
+          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
+        </Pressable>
+        <View style={styles.headTitles}>
+          <Legend>{t('program.weekLegend', { n: weekNumber, freq: program?.frequency ?? workouts.length })}</Legend>
+          <Text style={styles.title} accessibilityRole="header">{t('program.thisWeek')}</Text>
+        </View>
+      </View>
 
-        {completed.length > 0 ? (
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ProgressMeter
+          label={t('program.completedMeter')}
+          valueLabel={`${prog.done} / ${prog.total}`}
+          value={prog.done}
+          max={prog.total || 1}
+          tone="signal"
+        />
+
+        {upcoming.length > 0 ? (
           <View style={styles.group}>
-            <Eyebrow label={t('program.completedThisWeek')} size={11} trackingPx={1.5} />
-            {completed.map((d) => (
-              <Pressable
+            <Legend style={styles.groupLegend}>{t('program.remaining')}</Legend>
+            {upcoming.map((d, i) => (
+              <ListRow
                 key={d.id}
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('ProgramDetail', { dayId: d.id })}
-                style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
-              >
-                <View style={styles.rowMain}>
-                  {weekdayFor(d) ? <Text style={styles.weekday}>{weekdayFor(d)}</Text> : null}
-                  <Text style={styles.name}>{d.name}</Text>
-                  <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
-                  <Text style={styles.dayMeta}>{t('program.dayMeta', { exercises: d.slots.length, min: estimateMinutes(d) })}</Text>
-                </View>
-                <View style={styles.doneChip}>
-                  <Icon name="check" size={11} color={color.doneText} strokeWidth={2.4} />
-                  <Text style={styles.doneText}>{t('program.doneChip')}</Text>
-                </View>
-              </Pressable>
+                title={d.name}
+                subtitle={d.muscleGroups.join(' · ')}
+                chevron
+                last={i === upcoming.length - 1}
+                onPress={() => openDay(d.id)}
+                leading={<Icon name="circle" size={20} color={color.textSecondary} strokeWidth={2} />}
+                trailing={<Text style={styles.meta}>{t('program.exCount', { n: d.slots.length })}</Text>}
+              />
             ))}
           </View>
         ) : null}
 
-        {upcoming.length > 0 ? (
+        {completed.length > 0 ? (
           <View style={styles.group}>
-            <Eyebrow label={t('program.upNext')} size={11} trackingPx={1.5} />
-            {upcoming.map((d) => (
-              <Pressable
+            <Legend style={styles.groupLegend}>{t('program.completedMeter')}</Legend>
+            {completed.map((d, i) => (
+              <ListRow
                 key={d.id}
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('ProgramDetail', { dayId: d.id })}
-                style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
-              >
-                <View style={styles.rowMain}>
-                  <Text style={styles.name}>{d.name}</Text>
-                  <Text style={styles.muscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
-                  <Text style={styles.dayMeta}>{t('program.dayMeta', { exercises: d.slots.length, min: estimateMinutes(d) })}</Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('program.setAsNext')}
-                  hitSlop={8}
-                  onPress={() => void onSetAsNext(d.id)}
-                  style={({ pressed }) => [styles.setNext, { opacity: pressed ? press.opacity : 1 }]}
-                >
-                  <Text style={styles.setNextText}>{t('program.setAsNext')}</Text>
-                  <Icon name="chevronRight" size={14} color={color.accentBlue} strokeWidth={2} />
-                </Pressable>
-              </Pressable>
+                title={d.name}
+                subtitle={d.muscleGroups.join(' · ')}
+                index={i + 1}
+                done
+                muted
+                chevron
+                last={i === completed.length - 1}
+                onPress={() => openDay(d.id)}
+                trailing={weekdayFor(d) ? <Text style={styles.meta}>{weekdayFor(d)}</Text> : undefined}
+              />
             ))}
           </View>
         ) : null}
@@ -135,35 +125,12 @@ export function Program({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  body: { paddingTop: 8, paddingHorizontal: space.gutter, paddingBottom: 40 },
-  header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
-  sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
-  group: { marginTop: s(28) },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 13,
-    borderBottomWidth: 0.5,
-    borderBottomColor: color.border,
-  },
-  rowMain: { flex: 1, marginRight: 12 },
-  weekday: { fontSize: s(12), color: color.textSecondary, marginBottom: 2 },
-  name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary },
-  muscles: { fontSize: s(12), color: color.textSecondary, marginTop: s(2) },
-  dayMeta: { fontSize: s(11), color: color.textTertiary, marginTop: s(3) },
-  doneChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: color.surface2,
-    borderWidth: 0.5,
-    borderColor: color.doneBorder,
-    borderRadius: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  doneText: { fontSize: s(10), fontWeight: '600', letterSpacing: 0.6, color: color.doneText },
-  setNext: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  setNextText: { fontSize: s(13), fontWeight: '500', color: color.accentBlue },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
+  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
+  headTitles: { flex: 1, minWidth: 0 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  body: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  group: { marginTop: 24 },
+  groupLegend: { marginBottom: 2 },
+  meta: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
 });

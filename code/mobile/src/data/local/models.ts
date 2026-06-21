@@ -15,7 +15,7 @@ export type Capability =
 
 export type Units = 'kg' | 'lb';
 
-export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness';
+export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning';
 
 /** Training experience — the single biggest input to the cold-start starting weight. */
 export type Experience = 'beginner' | 'intermediate' | 'advanced';
@@ -140,6 +140,15 @@ export interface SetLog {
 }
 
 export type SessionState = 'ACTIVE' | 'SAVED';
+
+/** Closing summary for the Complete screen, computed at finalize (§4.18 / design). */
+export interface SessionSummary {
+  workoutName: string;
+  sets: number; // sets logged this session
+  progressed: number; // distinct lifts whose load increased this session
+  durationMs: number; // start → finish
+  earlyFinish: boolean;
+}
 
 export interface Session {
   id: string;

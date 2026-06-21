@@ -1,21 +1,19 @@
 /**
- * Consent — affirmative agreement after sign-in, before onboarding (founder
- * directive 2026-06-18; OD-3 / BB-33). One calm statement; "I agree" records the
- * consent (versioned, server-idempotent) and advances to Connect Health.
- *
- * Not one of the 31 prototype screens, so it follows the spec's design system
- * (true black, one statement, the single white button) rather than a bespoke look.
+ * Consent — affirmative agreement after sign-in (OD-3 / BB-33), re-skinned to the
+ * design's onboarding step: legend → "Terms & privacy" → a reassurance Card →
+ * Accept & continue / Decline. "I agree" records consent (versioned, idempotent)
+ * and advances to NameEntry; Decline signs back out.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { TextAction } from '@/components/TextAction';
+import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { Card, Button } from '@/components/ds';
+import { Icon } from '@/components/Icon';
 import { track } from '@/platform/telemetry';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, heroTitle, s } from '@/design/tokens';
+import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Consent'>;
@@ -28,50 +26,40 @@ export function Consent({ navigation }: Props) {
   function onAgree() {
     if (busy) return;
     setBusy(true);
-    // Recording consent is best-effort and MUST NOT block the flow (the server
-    // record is idempotent and retried later). Fire it and advance immediately so
-    // "I agree" feels instant — awaiting a slow network here read as a dead button.
     void app.acceptConsent();
     navigation.navigate('NameEntry');
   }
-
-  // Consent is required to use Hush (OD-3 / BB-33). Declining can't proceed into
-  // the app, so it signs back out — RESET returns to the sign-in screen, where
-  // they can reconsider. No data was recorded (consent was never given).
   function onDecline() {
     if (busy) return;
     void track('consent_declined', {});
-    // Consent is required: declining signs back out AND returns to the sign-in
-    // screen. resetAccount alone doesn't move the navigator (no profile exists yet,
-    // so Root stays on the onboarding stack) — that left the screen "stuck", so we
-    // explicitly pop to the first onboarding screen (Authentication).
     void app.resetAccount();
     navigation.popToTop();
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.body}>
-        <Text style={styles.title}>{t('consent.title')}</Text>
-        <Text style={styles.copy}>{t('consent.body')}</Text>
-      </View>
-      <View style={styles.actions}>
-        <PrimaryButton variant="compact" label={t('consent.agree')} onPress={onAgree} disabled={busy} />
-        <View style={styles.decline}>
-          <TextAction label={t('consent.decline')} onPress={onDecline} />
+    <OnboardingScaffold
+      onBack={() => navigation.goBack()}
+      legend={t('ob.consentLegend')}
+      title={t('ob.consentTitle')}
+      sub={t('ob.consentSub')}
+      footer={
+        <>
+          <Button variant="primary" size="lg" block label={t('ob.consentAccept')} onPress={onAgree} disabled={busy} />
+          <Button variant="quiet" block label={t('ob.consentDecline')} onPress={onDecline} disabled={busy} />
+        </>
+      }
+    >
+      <Card pad="md">
+        <View style={styles.cardRow}>
+          <Icon name="shield" size={20} color={color.textSecondary} strokeWidth={2} />
+          <Text style={styles.cardText}>{t('ob.consentCard')}</Text>
         </View>
-        <Text style={styles.legal}>{t('consent.legal')}</Text>
-      </View>
-    </SafeAreaView>
+      </Card>
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', marginBottom: s(16) },
-  copy: { fontSize: s(15), lineHeight: s(15) * 1.6, color: color.textSecondary },
-  actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  decline: { marginTop: s(8), alignItems: 'center' },
-  legal: { marginTop: s(16), fontSize: s(12), color: color.textTertiary, textAlign: 'center' },
+  cardRow: { flexDirection: 'row', gap: 12 },
+  cardText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary },
 });

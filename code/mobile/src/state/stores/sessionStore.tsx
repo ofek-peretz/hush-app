@@ -7,7 +7,7 @@
  * defaults. "Ready" (endRest) is the only rest agency.
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { ForecastRecord, ProgramDay, Session, SetLog, SetTarget } from '@/data/local/models';
+import type { ForecastRecord, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
@@ -116,6 +116,8 @@ function reducer(s: InternalState, a: Action): InternalState {
 export interface CompleteResult {
   ended: boolean;
   unlockedPortrait: boolean;
+  /** Closing summary for the Complete screen — present when the session ended. */
+  summary?: SessionSummary;
 }
 
 /** What the SessionFlow renders underneath any overlay. */
@@ -136,6 +138,8 @@ export interface SessionView {
   nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
   globalProgress: { index: number; total: number } | null;
+  /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
+  exerciseProgress: { index: number; total: number } | null;
   nextExercise: Exercise | null; // for Rest preview (upcoming set/exercise)
   nextTarget: SetTarget | null;
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
@@ -158,6 +162,9 @@ export interface SessionView {
   /** Mid-session "choose another": swap the UPCOMING exercise in place (situational,
    *  not persisted — §7.3). Capability is preserved (Replacement stays in-class). */
   swapNextExercise: (exerciseId: string) => void;
+  /** Swap the CURRENT exercise in place (situational, not persisted). Only meaningful
+   *  before any of its sets are logged; capability/load progression are preserved. */
+  swapCurrentExercise: (exerciseId: string) => void;
   /** Equipment Occupied (V1): move the current exercise one position later in the workout
    *  (no replacement, no structure change). Only available at the start of an exercise. */
   markEquipmentOccupied: () => void;
@@ -349,7 +356,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           void track('sync_dropped', { sessionId: saved.id, kind: e instanceof HttpError ? e.kind : 'unknown' });
         }
       }
-      return { ended: true, unlockedPortrait };
+      // Closing summary for the Complete screen (computed from the saved session + plan).
+      const progressed = new Set(
+        plan.filter((s) => s.target.reasonType === 'increase').map((s) => s.exerciseId),
+      ).size;
+      const summary: SessionSummary = {
+        workoutName: saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? '',
+        sets: saved.sets.length,
+        progressed,
+        durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
+        earlyFinish,
+      };
+      return { ended: true, unlockedPortrait, summary };
     }
 
     return {
@@ -362,6 +380,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       currentTarget: current?.target ?? null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
+      exerciseProgress: current
+        ? (() => {
+            const runs = exerciseRuns(plan);
+            let acc = 0;
+            for (let r = 0; r < runs.length; r++) {
+              if (current.globalIndex < acc + runs[r].length) return { index: r, total: runs.length };
+              acc += runs[r].length;
+            }
+            return { index: 0, total: runs.length };
+          })()
+        : null,
       nextExercise: resting && next ? exerciseById(next.exerciseId) ?? null : null,
       nextExerciseId: resting ? next?.exerciseId ?? null : null,
       nextTarget: resting ? next?.target ?? null : null,
@@ -571,6 +600,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const upcoming = plan[startIdx];
         if (!upcoming) return;
         const oldId = upcoming.exerciseId;
+        const newPlan = plan.map((st) =>
+          st.exerciseId === oldId && st.globalIndex >= startIdx
+            ? { ...st, exerciseId, target: { ...st.target, exerciseId } }
+            : st,
+        );
+        dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+      },
+      swapCurrentExercise(exerciseId) {
+        const startIdx = machine.setIndex; // the current exercise
+        const cur = plan[startIdx];
+        if (!cur) return;
+        const oldId = cur.exerciseId;
         const newPlan = plan.map((st) =>
           st.exerciseId === oldId && st.globalIndex >= startIdx
             ? { ...st, exerciseId, target: { ...st.target, exerciseId } }

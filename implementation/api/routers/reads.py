@@ -309,5 +309,6 @@ def profile_get(athlete_id: str = Depends(require_athlete), db=Depends(get_reque
     return {
         "id": row["id"], "sex": row["sex"], "age": row["age"],
         "experience": row["experience"], "bodyweight_kg": row["bodyweight_kg"],
+        "goal": (row["goal"] if "goal" in row.keys() else None),
         "model_version": MODEL_VERSION, "capability_model_version": CAPABILITY_MODEL_VERSION,
     }

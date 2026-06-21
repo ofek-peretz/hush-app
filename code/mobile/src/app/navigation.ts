@@ -7,7 +7,7 @@
  *   → Goal → Days per week → Program Created → Home.
  * Invite-token enrollment is removed.
  */
-import type { Experience, Goal, OnboardingInputs } from '@/data/local/models';
+import type { Experience, Goal, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
 /** Profile fields gathered before Goal — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
@@ -48,9 +48,11 @@ export type MainParamList = {
   // Pushed / modal surfaces.
   ProfileSheet: undefined;
   SessionFlow: undefined;
-  WellDone: { unlockedPortrait: boolean };
+  WellDone: { unlockedPortrait: boolean; summary?: SessionSummary };
   ProgramDetail: { dayId: string };
   WorkoutDetail: { sessionId: string };
-  // Quarterly peak-weight progress report (reached from History when it has data).
+  // Quarterly peak-weight progress report — surfaced by the every-12-weeks notification.
   QuarterlyReport: undefined;
+  // All-time progression (founder, 2026-06-21) — reached from Home / Recovery hub.
+  Progress: undefined;
 };

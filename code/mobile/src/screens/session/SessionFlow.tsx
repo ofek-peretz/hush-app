@@ -1,55 +1,51 @@
 /**
- * Session Flow controller — rebuilt to the hush_iphone_v1 prototype + founder
- * corrections:
- *  - Header shows the LIVE clock time (#4), pause glyph on the right (#3).
- *  - Active Set: exercise name on top, hero weight, "× reps", "Set n of m", and a
- *    small ▲/▼ progression arrow (no spoken sentence — #13). Edit result · Complete set.
- *  - Set Confirmation (#6): after Complete set, the performed "{weight} × {reps}" is
- *    shown for ~1.1s (name on top) before advancing to rest / Well Done.
- *  - Inter-set / Transition Rest: exercise name on TOP (#8), countdown, load, and a
- *    bpm + kcal line from the paired watch (#7) above Ready.
- *  - Edit Result updates the CURRENT set only (#5) — Complete set is the sole logger.
+ * Session Flow — the live workout, rebuilt 1:1 to the Claude Design "Design
+ * System" LiveWorkout (ui_kits/app/LiveWorkout.jsx). The core of the product, on
+ * the inverted **stage**: the room disappears, one decision remains.
  *
- * The session engine (sessionStore) is unchanged except editCurrentSet; this screen
- * renders weight/reps/progression from the FROZEN model.
+ * A small state machine over the REAL session engine (sessionStore — unchanged):
+ *   set → logged (a capture beat) → rest / transition → … → Well Done.
+ * Overlays (bottom sheets): Form (demo), Swap, Pause, Finish.
+ *
+ * Everything the engine owns is preserved: targets/loads from the frozen model,
+ * per-set logging at Complete Set, the save-before-Well-Done invariant, rest
+ * timing, edit-result (now inline Steppers), swap (current + upcoming), finish.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { TextAction } from '@/components/TextAction';
+import { Icon, type IconName } from '@/components/Icon';
+import { Button, IconButton, RestRing, Card, LoadDelta, Legend, Stepper } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
-import { WorkoutTopBar } from '@/components/WorkoutTopBar';
-import { Eyebrow } from '@/components/Eyebrow';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
-import { Wheel } from '@/components/Wheel';
-import { ProgressArrow, directionFromReason } from '@/components/ProgressArrow';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { useWorkoutVitals, estimateActiveKcal } from '@/platform/useWorkoutVitals';
-import { exercisesForCapability, exerciseDisplayName } from '@/data/exercises';
+import { exercisesForMuscle, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { color, space, tnum, heroNum, heroTitle, s } from '@/design/tokens';
+import { color, space, stage, font, textScale, tracking, trackingPx, signal, up } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'edit' | 'demo';
-type Confirm = { weight: number | null; reps: number };
+type Overlay = 'none' | 'pause' | 'finish' | 'demo' | 'swap';
+type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
-const CONFIRM_DWELL_MS = 1100; // §3.3 — brief result acknowledgement
+const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
 
 export function SessionFlow({ navigation }: Props) {
   const { t } = useCopy();
   const session = useSession();
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [swapTarget, setSwapTarget] = useState<'current' | 'next'>('current');
   const units = useApp().profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
 
   function goWellDone(r: CompleteResult) {
-    navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait });
+    navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait, summary: r.summary });
   }
   function openPause() {
     session.pause();
@@ -59,13 +55,22 @@ export function SessionFlow({ navigation }: Props) {
     session.resume();
     setOverlay('none');
   }
+  async function finish() {
+    const r = await session.finishEarly();
+    goWellDone(r);
+  }
 
-  // Complete set → show the result briefly (#6), then log + advance. completeSet
-  // reads the live session/machine via refs, so the captured closure is safe.
+  // Complete set → the "Set logged" beat (§3.3), then log + advance.
   function onCompleteSet() {
     const tgt = session.currentTarget;
     if (!tgt || confirm) return;
-    setConfirm({ weight: tgt.recommendedWeight, reps: tgt.recommendedReps });
+    setEditing(false);
+    setConfirm({
+      weight: tgt.recommendedWeight,
+      reps: tgt.recommendedReps,
+      n: session.setLabel?.n ?? 1,
+      m: session.setLabel?.m ?? 1,
+    });
   }
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
@@ -80,157 +85,311 @@ export function SessionFlow({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirm]);
 
-  const showPause = !confirm; // the brief confirmation has no pause control (§3.3)
+  function openSwap(target: 'current' | 'next') {
+    setSwapTarget(target);
+    setOverlay('swap');
+  }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <WorkoutTopBar onPause={showPause ? openPause : undefined} />
-
-      {confirm ? (
-        <Confirmation units={units} confirm={confirm} />
-      ) : session.displayPhase === 'SET_PRESENTED' ? (
-        <ActiveSet units={units} onEdit={() => setOverlay('edit')} onComplete={onCompleteSet} />
-      ) : (
-        <Rest units={units} paused={session.paused} onComplete={goWellDone} />
-      )}
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {confirm ? (
+          <Logged units={units} confirm={confirm} />
+        ) : session.displayPhase === 'SET_PRESENTED' ? (
+          <ActiveSet
+            units={units}
+            editing={editing}
+            onToggleEdit={() => setEditing((v) => !v)}
+            onComplete={onCompleteSet}
+            onPause={openPause}
+            onFinish={() => setOverlay('finish')}
+            onDemo={() => setOverlay('demo')}
+            onSwap={() => openSwap('current')}
+          />
+        ) : (
+          <Rest
+            units={units}
+            paused={session.paused}
+            onPause={openPause}
+            onFinish={() => setOverlay('finish')}
+            onDemo={() => setOverlay('demo')}
+            onSwap={() => openSwap('next')}
+          />
+        )}
+      </SafeAreaView>
 
       {overlay === 'pause' ? (
-        <PauseSheet
-          onResume={resume}
-          onShowExercise={() => setOverlay('demo')}
-          onFinish={async () => {
-            const r = await session.finishEarly();
-            goWellDone(r);
-          }}
-        />
+        <BottomSheet onClose={resume}>
+          <Legend style={styles.sheetLegend}>{t('workout.paused')}</Legend>
+          <Text style={styles.sheetTitle}>{t('pauseSheet.title')}</Text>
+          <View style={styles.sheetActions}>
+            <Button variant="primary" block label={t('pauseSheet.resume')} onPress={resume} />
+            <Button variant="danger" block label={t('pauseSheet.endWorkout')} onPress={finish} />
+          </View>
+        </BottomSheet>
       ) : null}
+
+      {overlay === 'finish' ? (
+        <BottomSheet onClose={() => setOverlay('none')}>
+          <Legend style={styles.sheetLegend}>{t('finishSheet.legend')}</Legend>
+          <Text style={styles.sheetBody}>{t('finishSheet.body')}</Text>
+          <View style={styles.sheetActions}>
+            <Button variant="danger" block label={t('finishSheet.save')} onPress={finish} />
+            <Button variant="quiet" block label={t('finishSheet.keep')} onPress={() => setOverlay('none')} />
+          </View>
+        </BottomSheet>
+      ) : null}
+
+      {overlay === 'swap' ? (
+        <SwapSheet target={swapTarget} onClose={() => setOverlay('none')} />
+      ) : null}
+
       {overlay === 'demo' ? (
         <ExerciseDemo
-          title={session.currentExercise?.name ?? ''}
+          title={session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId)}
           cues={session.currentExercise?.cues ?? []}
           focusLabel={t('workout.focusOn')}
           formGuideLabel={t('workout.formGuide')}
           doneLabel={t('workout.demoDone')}
-          onDone={() => setOverlay('pause')}
+          onDone={() => setOverlay('none')}
         />
       ) : null}
-      {overlay === 'edit' ? (
-        <EditResult units={units} onDismiss={() => setOverlay('none')} />
-      ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
-// ----------------------------------------------------------------- Active Set
+/* --------------------------------------------------------------- Stage chrome */
+function StageBar({ center, onPause, onFinish }: { center: string; onPause: () => void; onFinish: () => void }) {
+  const { t } = useCopy();
+  return (
+    <View style={styles.stageBar}>
+      <View style={styles.stageBarSide}>
+        <IconButton onStage accessibilityLabel={t('pauseSheet.title')} onPress={onPause}>
+          <Icon name="pause" size={20} color={stage.ink1} />
+        </IconButton>
+      </View>
+      <Text style={styles.stageBarCenter}>{center}</Text>
+      <View style={[styles.stageBarSide, styles.stageBarRight]}>
+        <IconButton onStage accessibilityLabel={t('finishSheet.legend')} onPress={onFinish}>
+          <Icon name="close" size={20} color={stage.ink1} strokeWidth={2} />
+        </IconButton>
+      </View>
+    </View>
+  );
+}
+
+function SetDots({ total, index, done }: { total: number; index: number; done: number }) {
+  return (
+    <View style={styles.dots}>
+      {Array.from({ length: total }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.dot,
+            { width: i === index ? 22 : 7 },
+            i < done ? styles.dotDone : i === index ? styles.dotActive : styles.dotRest,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** A quiet ghost action on the inverted stage (icon + label). */
+function StageGhost({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
+    >
+      <Icon name={icon} size={16} color={stage.ink1} strokeWidth={2} />
+      <Text style={styles.ghostLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/* ----------------------------------------------------------------- Active Set */
 function ActiveSet({
   units,
-  onEdit,
+  editing,
+  onToggleEdit,
   onComplete,
+  onPause,
+  onFinish,
+  onDemo,
+  onSwap,
 }: {
   units: 'kg' | 'lb';
-  onEdit: () => void;
+  editing: boolean;
+  onToggleEdit: () => void;
   onComplete: () => void;
+  onPause: () => void;
+  onFinish: () => void;
+  onDemo: () => void;
+  onSwap: () => void;
 }) {
   const { t } = useCopy();
   const session = useSession();
-
   const ex = session.currentExercise;
   const target = session.currentTarget;
   if (!target) return <View style={styles.center} />;
   const exName = ex?.name ?? exerciseDisplayName(session.currentExerciseId);
+  const group = ex?.muscle ?? '';
+  const total = session.exerciseProgress?.total ?? 1;
+  const exNo = (session.exerciseProgress?.index ?? 0) + 1; // exercise ordinal among distinct exercises
+  const setN = session.setLabel?.n ?? 1;
+  const setM = session.setLabel?.m ?? 1;
 
-  const weight = displayWeight(target.recommendedWeight, units);
   const isBodyweight = target.recommendedWeight == null;
-  // #13: a silent ▲/▼ arrow instead of a coaching sentence (▲ up, ▼ down, none = same).
-  const direction = directionFromReason(target.reasonType);
+  const weight = displayWeight(target.recommendedWeight, units);
+  const reason = target.reasonType; // 'increase' | 'hold' | 'decrease' | undefined
+  const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
+
+  // Inline edit → write straight to the current step (engine re-renders).
+  const wStep = units === 'kg' ? 2.5 : 5;
+  const setWeight = (v: number) => {
+    const kg = units === 'lb' ? +(v / 2.2046226).toFixed(1) : v;
+    session.editCurrentSet({ weight: kg, reps: target.recommendedReps });
+  };
+  const setReps = (v: number) => session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
+
+  const canSwap = exNo === 1 && setN === 1; // first set of the first exercise
 
   return (
-    <View style={styles.phaseRoot}>
-      <View style={styles.heroWrap}>
-        <View style={styles.hero}>
-          <Text style={styles.exerciseName}>{exName}</Text>
-          {isBodyweight ? (
-            <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
-          ) : (
-            <View style={styles.weightRow}>
-              <Text
-                style={styles.weight}
-                accessibilityLabel={`${weight} ${units === 'kg' ? 'kilograms' : 'pounds'}`}
-              >
-                {weight}
+    <>
+      <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onPause={onPause} onFinish={onFinish} />
+      <View style={styles.stageBody}>
+        {group ? <Text style={styles.group}>{group.toUpperCase()}</Text> : null}
+        <Text style={styles.exName}>{exName}</Text>
+
+        {!editing ? (
+          <>
+            {isBodyweight ? (
+              <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
+            ) : (
+              <View style={styles.heroRow}>
+                <Text style={styles.hero} accessibilityLabel={`${weight} ${units}`}>{weight}</Text>
+                <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+              </View>
+            )}
+            {reason ? (
+              <View style={styles.deltaWrap}>
+                <LoadDelta
+                  direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
+                  value={deltaMag}
+                  unit={unitLabel(units)}
+                  size="lg"
+                  pill
+                />
+              </View>
+            ) : null}
+            {reason ? (
+              <Text style={styles.deltaCaption}>
+                {reason === 'hold' ? t('workout.holdingLast') : t('workout.vsLast')}
               </Text>
-              <Text style={styles.unit}>{unitLabel(units)}</Text>
-            </View>
-          )}
-          <Text style={styles.reps}>{t('workout.reps', { reps: target.recommendedReps })}</Text>
-          {session.setLabel ? (
-            <Text style={styles.setLabel}>
-              {t('workout.setOfM', { n: session.setLabel.n, m: session.setLabel.m })}
+            ) : null}
+            <Text style={styles.repsLine}>
+              × {target.recommendedReps} <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
             </Text>
-          ) : null}
-          {direction ? (
-            <View style={styles.arrowRow}>
-              <ProgressArrow direction={direction} />
+          </>
+        ) : (
+          <View style={styles.editBlock}>
+            {!isBodyweight ? (
+              <View style={styles.editRow}>
+                <Text style={styles.editLabel}>{t('workout.actualWeight')}</Text>
+                <Stepper value={weight ?? 0} onChange={setWeight} step={wStep} min={0} unit={unitLabel(units)} />
+              </View>
+            ) : null}
+            <View style={styles.editRow}>
+              <Text style={styles.editLabel}>{t('workout.actualReps')}</Text>
+              <Stepper value={target.recommendedReps} onChange={setReps} step={1} min={0} unit={t('workout.repsUnit')} />
             </View>
-          ) : null}
+          </View>
+        )}
+
+        <View style={styles.dotsWrap}>
+          <SetDots total={setM} index={setN - 1} done={setN - 1} />
+          <Text style={styles.setLabel}>{t('workout.setOfM', { n: setN, m: setM })}</Text>
         </View>
       </View>
 
-      <View style={styles.actions}>
-        <PrimaryButton variant="compact" label={t('workout.completeSet')} onPress={onComplete} />
-        <View style={styles.editRow}>
-          <TextAction label={t('workout.editResult')} onPress={onEdit} />
+      <View style={styles.stageFooter}>
+        <Button
+          variant="onstage"
+          size="lg"
+          block
+          label={editing ? t('workout.saveComplete') : t('workout.completeSet')}
+          onPress={onComplete}
+        />
+        <View style={styles.ghostRow}>
+          <StageGhost icon={editing ? 'check' : 'sliders'} label={editing ? t('workout.editDone') : t('workout.editResult')} onPress={onToggleEdit} />
+          <StageGhost icon="play" label={t('workout.form')} onPress={onDemo} />
+          {canSwap ? <StageGhost icon="swap" label={t('workout.swapAction')} onPress={onSwap} /> : null}
         </View>
       </View>
-    </View>
+    </>
   );
 }
 
-// ------------------------------------------------------------- Set Confirmation
-function Confirmation({ units, confirm }: { units: 'kg' | 'lb'; confirm: Confirm }) {
-  const session = useSession();
-  const exName = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
+/* ----------------------------------------------------------------- Logged beat */
+function Logged({ units, confirm }: { units: 'kg' | 'lb'; confirm: Confirm }) {
+  const { t } = useCopy();
   const w = displayWeight(confirm.weight, units);
-  const text = w != null ? `${w} × ${confirm.reps}` : `${confirm.reps}`;
   return (
-    <View style={styles.phaseRoot}>
-      <View style={styles.heroWrap}>
-        <View style={styles.hero}>
-          {exName ? <Text style={styles.exerciseName}>{exName}</Text> : null}
-          <Text style={styles.confirmText} accessibilityRole="text">{text}</Text>
-        </View>
+    <View style={styles.loggedRoot}>
+      <View style={styles.loggedHead}>
+        <Icon name="check" size={20} color={up[0]} strokeWidth={2.4} />
+        <Text style={styles.loggedLegend}>{t('workout.setLogged', { n: confirm.n, m: confirm.m }).toUpperCase()}</Text>
       </View>
+      <View style={styles.loggedValue}>
+        {w != null ? (
+          <>
+            <Text style={styles.loggedNum}>{w}</Text>
+            <Text style={styles.loggedUnit}>{unitLabel(units)}</Text>
+            <Text style={styles.loggedTimes}>×</Text>
+          </>
+        ) : null}
+        <Text style={styles.loggedNum}>{confirm.reps}</Text>
+      </View>
+      <Text style={styles.loggedCopy}>{t('workout.recorded')}</Text>
     </View>
   );
 }
 
-// ----------------------------------------------------------------------- Rest
+/* ----------------------------------------------------------------------- Rest */
 function Rest({
   units,
   paused,
-  onComplete,
+  onPause,
+  onFinish,
+  onDemo,
+  onSwap,
 }: {
   units: 'kg' | 'lb';
   paused: boolean;
-  onComplete: (r: CompleteResult) => void;
+  onPause: () => void;
+  onFinish: () => void;
+  onDemo: () => void;
+  onSwap: () => void;
 }) {
   const { t } = useCopy();
-  const app = useApp();
   const session = useSession();
-  // Watch users: live bpm + kcal from the paired watch (#7). Everyone else: an
-  // estimated calorie burn so watch-less athletes still see calories (founder #1).
-  const watchVitals = useWorkoutVitals(true);
-  const elapsedMin = session.startedAtMs ? (Date.now() - session.startedAtMs) / 60000 : 0;
-  const estKcal = estimateActiveKcal(app.profile?.weightKg, elapsedMin);
   const isTransition = session.displayPhase === 'REST_TRANSITION';
-  const nextEx = session.nextExercise;
-  const nextName = exerciseDisplayName(session.nextExerciseId);
+  const nextName = session.nextExercise?.name ?? exerciseDisplayName(session.nextExerciseId);
+  const nextGroup = session.nextExercise?.muscle ?? '';
   const nextTarget = session.nextTarget;
   const nextWeight = displayWeight(nextTarget?.recommendedWeight ?? null, units);
   const nextReps = nextTarget?.recommendedReps ?? 0;
+  const nextSet = session.nextSetLabel;
+  const nextDelta = nextTarget?.reasonType;
 
+  const [total, setTotal] = useState(session.restSeconds);
   const [remaining, setRemaining] = useState(session.restSeconds);
   useEffect(() => {
+    setTotal(session.restSeconds);
     setRemaining(session.restSeconds);
   }, [session.restSeconds, session.displayPhase]);
   useEffect(() => {
@@ -243,172 +402,255 @@ function Rest({
     return () => clearTimeout(id);
   }, [remaining, paused, session]);
 
-  void onComplete; // rest never ends the session directly; kept for signature parity
-
-  const setLine =
-    nextWeight != null ? `${nextWeight} ${unitLabel(units)} × ${nextReps}` : `${t('workout.bodyweight')} × ${nextReps}`;
-
-  // Exercise Busy (§5.5): auto-swap the upcoming exercise to a same-pattern alternative.
-  const alt = nextEx ? exercisesForCapability(nextEx.capability).find((e) => e.id !== nextEx.id) : undefined;
-  function onExerciseBusy() {
-    if (!nextEx || !alt) return;
-    if (nextTarget?.blockId) {
-      void app.model.replaceBlock({ blockId: nextTarget.blockId, fromExercise: nextEx.id, toExercise: alt.id });
-    }
-    session.swapNextExercise(alt.id);
-  }
-
   return (
-    <View style={styles.phaseRoot}>
-      <View style={styles.heroWrap}>
-        <View style={styles.hero}>
-          {/* #8: exercise name on TOP, like Active Set. */}
-          {nextName ? <Text style={styles.restName}>{nextName}</Text> : null}
-          <Text style={styles.restEyebrow}>
-            {isTransition
-              ? t('workout.nextExercise')
-              : session.nextSetLabel
-                ? t('workout.setOfM', { n: session.nextSetLabel.n, m: session.nextSetLabel.m })
-                : ''}
-          </Text>
-          <Text style={styles.timer}>{fmt(remaining)}</Text>
-          <Text style={styles.restSet}>{setLine}</Text>
+    <>
+      <StageBar
+        center={isTransition ? t('workout.nextExercise') : t('workout.rest')}
+        onPause={onPause}
+        onFinish={onFinish}
+      />
+      <View style={styles.stageBody}>
+        <RestRing
+          remaining={remaining}
+          total={total || 1}
+          size={196}
+          stroke={6}
+          onStage
+          label={remaining <= 0 ? t('workout.ready') : t('workout.rest')}
+        />
+
+        <View style={styles.upNext}>
+          <Legend tone="onStage" style={styles.upNextLegend}>{t('workout.upNext')}</Legend>
+          <Card stage pad="md">
+            <View style={styles.upRow}>
+              <View style={styles.upInfo}>
+                {isTransition && nextGroup ? <Text style={styles.upGroup}>{nextGroup.toUpperCase()}</Text> : null}
+                <Text style={styles.upName}>{nextName}</Text>
+                <Text style={styles.upMeta}>
+                  {isTransition
+                    ? t('workout.setsAnd', { sets: nextSet?.m ?? 1, reps: nextReps })
+                    : `${t('workout.setOfM', { n: nextSet?.n ?? 1, m: nextSet?.m ?? 1 })} · × ${nextReps}`}
+                </Text>
+              </View>
+              <View style={styles.upRight}>
+                <Text style={styles.upWeight}>
+                  {nextWeight != null ? nextWeight : t('workout.bodyweight')}
+                  {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
+                </Text>
+                {isTransition && nextDelta && nextDelta !== 'hold' ? (
+                  <View style={styles.upDelta}>
+                    <LoadDelta
+                      direction={nextDelta === 'increase' ? 'up' : 'down'}
+                      value={displayWeight(Math.abs(nextTarget?.reasonDelta ?? 0), units) ?? 0}
+                      unit={unitLabel(units)}
+                      size="sm"
+                    />
+                  </View>
+                ) : null}
+              </View>
+            </View>
+            {isTransition ? (
+              <View style={styles.upActions}>
+                <StageGhost icon="play" label={t('workout.form')} onPress={onDemo} />
+                <StageGhost icon="swap" label={t('workout.swapExercise')} onPress={onSwap} />
+              </View>
+            ) : null}
+          </Card>
         </View>
       </View>
 
-      <View style={styles.actions}>
-        <View style={styles.bpmRow}>
-          {watchVitals ? <Text style={styles.bpm}>{Math.round(watchVitals.heartRateBpm)} bpm</Text> : null}
-          <Text style={styles.bpm}>{watchVitals ? Math.round(watchVitals.activeKcal) : estKcal} kcal</Text>
-        </View>
-        <TextAction label={t('workout.ready')} tone="primary" onPress={() => session.endRest()} />
-        {isTransition && nextEx && alt ? (
-          <View style={styles.busyRow}>
-            <TextAction label={t('workout.exerciseBusy')} onPress={onExerciseBusy} />
+      <View style={styles.stageFooter}>
+        <Button
+          variant="onstage"
+          size="lg"
+          block
+          label={isTransition ? t('workout.startNamed', { name: nextName }) : t('workout.startNextSet')}
+          onPress={() => session.endRest()}
+        />
+        {remaining > 0 ? (
+          <View style={styles.ghostRow}>
+            <StageGhost
+              icon="chevronUp"
+              label={t('workout.addSeconds')}
+              onPress={() => {
+                setRemaining((r) => r + 15);
+                setTotal((tt) => tt + 15);
+              }}
+            />
           </View>
         ) : null}
       </View>
-    </View>
+    </>
   );
 }
 
-// -------------------------------------------------------------------- Pause sheet
-function PauseSheet({
-  onResume,
-  onShowExercise,
-  onFinish,
-}: {
-  onResume: () => void;
-  onShowExercise: () => void;
-  onFinish: () => void;
-}) {
+/* ---------------------------------------------------------------- Swap sheet */
+function SwapSheet({ target, onClose }: { target: 'current' | 'next'; onClose: () => void }) {
   const { t } = useCopy();
-  return (
-    <BottomSheet onClose={onResume} background={color.surface}>
-      <Text style={styles.pauseTitle}>{t('pauseSheet.title')}</Text>
-      <View style={styles.pauseOpt}>
-        <TextAction label={t('pauseSheet.resume')} tone="primary" onPress={onResume} />
-      </View>
-      <View style={styles.pauseOpt}>
-        <TextAction label={t('pauseSheet.showExercise')} onPress={onShowExercise} />
-      </View>
-      <View style={styles.pauseOpt}>
-        <TextAction label={t('pauseSheet.finishEarly')} onPress={onFinish} />
-      </View>
-    </BottomSheet>
-  );
-}
-
-// --------------------------------------------------------------- Edit Result sheet
-function EditResult({ units, onDismiss }: { units: 'kg' | 'lb'; onDismiss: () => void }) {
-  const { t } = useCopy();
+  const app = useApp();
   const session = useSession();
-  const target = session.currentTarget;
-  const recReps = target?.recommendedReps ?? 8;
-  const recWeight = displayWeight(target?.recommendedWeight ?? null, units);
-  const [reps, setReps] = useState(recReps);
-  const [weight, setWeight] = useState(recWeight ?? 0);
-  const hasWeight = target?.recommendedWeight != null;
+  const ex = target === 'current' ? session.currentExercise : session.nextExercise;
+  const exId = target === 'current' ? session.currentExerciseId : session.nextExerciseId;
+  const curName = ex?.name ?? exerciseDisplayName(exId);
+  const muscle = ex?.muscle ?? '';
+  const alts = (ex ? exercisesForMuscle(ex.muscle) : []).filter((e) => e.id !== ex?.id);
+  const nextTarget = session.nextTarget;
 
-  const repValues = rangeStep(1, 20, 1);
-  const base = recWeight ?? 0;
-  const weightValues = rangeStep(Math.max(0, base - 50), base + 50, 1); // 1 kg steps (founder)
-
-  function save() {
-    // #5: update the CURRENT set only (store back in kg). Does NOT log — Complete set
-    // remains the sole confirmer. Active Set re-renders with the new weight/reps.
-    const kg = !hasWeight ? null : units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
-    session.editCurrentSet({ weight: kg, reps });
-    onDismiss();
+  function choose(altId: string) {
+    if (target === 'current') {
+      session.swapCurrentExercise(altId);
+    } else {
+      // Keep the load progression; tell the backend if this block is known.
+      if (nextTarget?.blockId && ex) {
+        void app.model.replaceBlock({ blockId: nextTarget.blockId, fromExercise: ex.id, toExercise: altId });
+      }
+      session.swapNextExercise(altId);
+    }
+    onClose();
   }
 
   return (
-    <BottomSheet onClose={onDismiss} background={color.surface} heightFraction={0.48}>
-      <View style={styles.editHeader}>
-        {hasWeight ? <Eyebrow label={t('editResult.weight')} size={11} trackingPx={1} style={styles.editEyebrow} /> : <View />}
-        <Eyebrow label={t('editResult.repsLabel')} size={11} trackingPx={1} style={styles.editEyebrow} />
-      </View>
-      <View style={styles.wheelRow}>
-        {hasWeight ? (
-          <Wheel values={weightValues} selected={weight} onChange={setWeight} format={(v) => `${v}`} />
-        ) : null}
-        <Wheel values={repValues} selected={reps} onChange={setReps} format={(v) => `${v}`} />
-      </View>
-      <PrimaryButton variant="compact" label={t('editResult.save')} onPress={save} />
+    <BottomSheet onClose={onClose}>
+      <Legend style={styles.sheetLegend}>{t('swap.title')}</Legend>
+      <Text style={styles.sheetBody}>{t('swap.body')}</Text>
+      <SwapRow title={curName} subtitle={t('swap.currentSub')} currentBadge muted />
+      {alts.map((a, i) => (
+        <SwapRow
+          key={a.id}
+          title={a.name}
+          subtitle={muscle}
+          last={i === alts.length - 1}
+          onPress={() => choose(a.id)}
+        />
+      ))}
     </BottomSheet>
   );
 }
 
-function fmt(totalSeconds: number): string {
-  const sec = Math.max(0, totalSeconds);
-  const mm = Math.floor(sec / 60);
-  const ss = sec % 60;
-  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-}
-
-function rangeStep(a: number, b: number, step: number): number[] {
-  const out: number[] = [];
-  for (let v = a; v <= b + 1e-9; v += step) out.push(Math.round(v * 100) / 100);
-  return out;
+function SwapRow({
+  title,
+  subtitle,
+  currentBadge,
+  muted,
+  last,
+  onPress,
+}: {
+  title: string;
+  subtitle?: string;
+  currentBadge?: boolean;
+  muted?: boolean;
+  last?: boolean;
+  onPress?: () => void;
+}) {
+  const { t } = useCopy();
+  const body = (
+    <>
+      <View style={styles.swapInfo}>
+        <Text style={[styles.swapTitle, muted && styles.swapTitleMuted]} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={styles.swapSub} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
+      {currentBadge ? (
+        <View style={styles.swapBadge}>
+          <Text style={styles.swapBadgeText}>{t('swap.currentBadge').toUpperCase()}</Text>
+        </View>
+      ) : onPress ? (
+        <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+      ) : null}
+    </>
+  );
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [styles.swapRow, !last && styles.swapRowBorder, pressed && styles.swapRowPressed]}>
+        {body}
+      </Pressable>
+    );
+  }
+  return <View style={[styles.swapRow, !last && styles.swapRowBorder]}>{body}</View>;
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
-  phaseRoot: { flex: 1, paddingHorizontal: space.gutter },
-  heroWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1, backgroundColor: stage[0] },
+  safe: { flex: 1 },
+  center: { flex: 1 },
 
-  hero: { alignItems: 'center' },
-  exerciseName: { ...heroTitle(s(15)), color: color.textPrimary, fontSize: s(15), fontWeight: '700' },
-  weightRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: s(10) },
-  weight: { ...heroNum(s(50)), color: color.textPrimary, fontSize: s(50), lineHeight: s(56), fontWeight: '700' },
-  unit: { fontSize: s(13), fontWeight: '500', color: color.textSecondary, marginLeft: s(5), marginBottom: s(8) },
-  bodyweight: { ...heroTitle(s(34)), color: color.textPrimary, fontSize: s(34), fontWeight: '700', marginTop: s(12) },
-  reps: { ...tnum, fontSize: s(15), fontWeight: '500', color: color.textSecondary, marginTop: s(4) },
-  setLabel: { fontSize: s(11), color: color.textSecondary, marginTop: s(12) },
-  arrowRow: { marginTop: s(14), alignItems: 'center' },
+  // Stage chrome
+  stageBar: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
+  stageBarSide: { width: 44 },
+  stageBarRight: { alignItems: 'flex-end' },
+  stageBarCenter: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
-  // Set Confirmation
-  confirmText: { ...heroNum(s(34)), color: color.textPrimary, fontSize: s(34), lineHeight: s(40), fontWeight: '700', marginTop: s(14) },
+  stageBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
+  stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 14, gap: 10 },
 
-  // Rest — exercise name leads (on top, #8), then label, countdown, load.
-  restName: { ...heroTitle(s(18)), fontSize: s(18), fontWeight: '700', color: color.textPrimary, textAlign: 'center' },
-  restEyebrow: { fontSize: s(11), letterSpacing: 1, textTransform: 'uppercase', color: color.textTertiary, marginTop: s(8) },
-  timer: { ...heroNum(s(42), -0.02), fontSize: s(42), lineHeight: s(48), fontWeight: '700', color: color.textPrimary, marginTop: s(10) },
-  restSet: { ...tnum, fontSize: s(13), color: color.textSecondary, marginTop: s(8) },
+  // Active set
+  group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10 },
+  exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 38 },
+  hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: textScale.data * 0.95 },
+  heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginLeft: 6, marginBottom: 12 },
+  bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
+  deltaWrap: { marginTop: 16, height: 26, alignItems: 'center' },
+  deltaCaption: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 8 },
+  repsLine: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink1, marginTop: 30 },
+  repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2 },
 
-  actions: { alignSelf: 'stretch', paddingBottom: s(32), alignItems: 'center' },
-  editRow: { marginTop: s(12) },
-  busyRow: { marginTop: s(10) },
-  bpmRow: { flexDirection: 'row', gap: s(18), marginBottom: s(14) },
-  bpm: { ...tnum, fontSize: s(13), color: color.textSecondary },
+  // Inline edit
+  editBlock: { marginTop: 30, width: '100%', maxWidth: 300, gap: 16 },
+  editRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editLabel: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
-  // Pause sheet
-  pauseTitle: { fontSize: s(18), fontWeight: '700', color: color.textPrimary, textAlign: 'center', marginBottom: s(24) },
-  pauseOpt: { paddingVertical: s(10), alignItems: 'center' },
+  dotsWrap: { marginTop: 40, alignItems: 'center' },
+  dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
+  dot: { height: 7, borderRadius: 4 },
+  dotDone: { backgroundColor: up[0] },
+  dotActive: { backgroundColor: signal[0] },
+  dotRest: { backgroundColor: stage[2] },
+  setLabel: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, marginTop: 12 },
 
-  // Edit Result
-  editHeader: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 4 },
-  editEyebrow: { textAlign: 'center' },
-  wheelRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
+  // Ghost actions
+  ghostRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
+  ghost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
+  ghostPressed: { backgroundColor: stage[1] },
+  ghostLabel: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink1 },
+
+  // Logged beat
+  loggedRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  loggedHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  loggedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0] },
+  loggedValue: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 30 },
+  loggedNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['5xl'], color: stage.ink0, lineHeight: textScale['5xl'] * 0.9, letterSpacing: trackingPx(textScale['5xl'], tracking.display) },
+  loggedUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2 },
+  loggedTimes: { fontFamily: font.mono, fontSize: textScale['2xl'], color: stage.ink2, marginHorizontal: 4 },
+  loggedCopy: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 18, maxWidth: 260, textAlign: 'center' },
+
+  // Up next card
+  upNext: { marginTop: 40, width: '100%', maxWidth: 340 },
+  upNextLegend: { marginBottom: 12, textAlign: 'left' },
+  upRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  upInfo: { flex: 1, minWidth: 0 },
+  upGroup: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
+  upName: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: stage.ink0, marginTop: 3 },
+  upMeta: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, marginTop: 2 },
+  upRight: { alignItems: 'flex-end', marginLeft: 12 },
+  upWeight: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0 },
+  upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2 },
+  upDelta: { marginTop: 4 },
+  upActions: { flexDirection: 'row', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: stage[2] },
+
+  // Sheets
+  sheetLegend: { marginBottom: 4 },
+  sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 18 },
+  sheetBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 6, marginBottom: 18 },
+  sheetActions: { gap: 10 },
+
+  // Swap rows
+  swapRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
+  swapRowBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
+  swapRowPressed: { opacity: 0.55 },
+  swapInfo: { flex: 1, minWidth: 0 },
+  swapTitle: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary },
+  swapTitleMuted: { color: color.textSecondary },
+  swapSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
+  swapBadge: { backgroundColor: signal.wash, borderRadius: 4, paddingHorizontal: 8, height: 22, alignItems: 'center', justifyContent: 'center' },
+  swapBadgeText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText },
 });

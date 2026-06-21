@@ -40,6 +40,7 @@ import { ProgramDetail } from '@/screens/program/ProgramDetail';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
+import { Progress } from '@/screens/progress/Progress';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -86,6 +87,7 @@ function MainNavigator() {
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
+      <MainStack.Screen name="Progress" component={Progress} />
     </MainStack.Navigator>
   );
 }

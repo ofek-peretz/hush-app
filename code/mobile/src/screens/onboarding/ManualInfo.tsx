@@ -1,58 +1,33 @@
 /**
- * 4.3 Manual Info — four fields, one screen (only reached when Health is skipped).
- * Age / Sex / Height / Weight. Underline fields for the numerics, three segmented
- * pills for sex. Continue → Goal, carrying the gathered profile draft.
- *
- * Replaces the former two-screen AboutYou / AboutYouBody split (HUSH_BUILD_SPEC
- * §4.3 is a single screen; spec wins, founder directive 2026-06-18).
+ * Body data (§4.3) — re-skinned to the design onboarding step: legend → title →
+ * sub → four labelled controls (Sex via SegmentedControl, Age / Height / Weight
+ * via Steppers). Calibrates starting loads. Continue → Goal, carrying the draft.
+ * Progress 3 / 6.
  */
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Keyboard,
-  KeyboardAvoidingView,
-  InputAccessoryView,
-  Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { PrimaryButton } from '@/components/PrimaryButton';
+import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { Legend, SegmentedControl, Stepper, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { health } from '@/platform/health';
-import { color, space, radius, heroTitle, press, s } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
-type SexChoice = 'male' | 'female' | 'other';
-
-// iOS number-pad has no Return key, so it can't dismiss itself. A shared accessory
-// bar gives every numeric field an explicit "Done" above the keyboard.
-const ACCESSORY_ID = 'manualInfoDone';
-
-function toInt(s: string, fallback: number): number {
-  const n = parseInt(s.replace(/[^0-9]/g, ''), 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
 
 export function ManualInfo({ navigation, route }: Props) {
   const { t } = useCopy();
   const healthConnected = route.params?.healthConnected ?? false;
-  const [age, setAge] = useState('28');
-  const [sex, setSex] = useState<SexChoice>('male');
-  const [height, setHeight] = useState('178');
-  const [weight, setWeight] = useState('82');
+  const [sex, setSex] = useState<'female' | 'male'>('male');
+  const [age, setAge] = useState(28);
+  const [height, setHeight] = useState(178);
+  const [weight, setWeight] = useState(82);
 
-  // If Health is connected, prefill the weight from HealthKit (best-effort, silent).
   useEffect(() => {
     if (!healthConnected) return;
     let cancelled = false;
     void health.latestBodyweightKg().then((kg) => {
-      if (!cancelled && kg && kg > 0) setWeight(String(Math.round(kg)));
+      if (!cancelled && kg && kg > 0) setWeight(Math.round(kg));
     });
     return () => {
       cancelled = true;
@@ -61,145 +36,46 @@ export function ManualInfo({ navigation, route }: Props) {
 
   function onContinue() {
     navigation.navigate('Goal', {
-      profile: {
-        healthConnected,
-        age: toInt(age, 28),
-        sex: sex === 'other' ? undefined : sex,
-        heightCm: toInt(height, 178),
-        weightKg: toInt(weight, 82),
-      },
+      profile: { healthConnected, age, sex, heightCm: height, weightKg: weight },
     });
   }
 
-  function onContinuePress() {
-    Keyboard.dismiss();
-    onContinue();
-  }
-
   return (
-    <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* ScrollView gives the native iOS gestures: swipe/drag down dismisses the
-            keyboard ("interactive"), and a tap on empty space dismisses it too
-            ("handled"). The number-pad's Done accessory remains as a backup. */}
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollBody}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.title}>{t('manualInfo.title')}</Text>
-
-          <UnderlineField label={t('manualInfo.age')} value={age} onChange={setAge} />
-
-          <View style={styles.field}>
-            <Text style={styles.label}>{t('manualInfo.sex')}</Text>
-            <View style={styles.pills}>
-              {(['male', 'female', 'other'] as const).map((opt) => (
-                <Pill key={opt} label={t(`manualInfo.${opt}`)} selected={sex === opt} onPress={() => setSex(opt)} />
-              ))}
-            </View>
-          </View>
-
-          <UnderlineField label={t('manualInfo.height')} value={height} onChange={setHeight} suffix="cm" />
-          <UnderlineField label={t('manualInfo.weight')} value={weight} onChange={setWeight} suffix="kg" />
-        </ScrollView>
-        <View style={styles.actions}>
-          <PrimaryButton variant="compact" label={t('manualInfo.continue')} onPress={onContinuePress} />
-        </View>
-      </KeyboardAvoidingView>
-
-      {Platform.OS === 'ios' ? (
-        <InputAccessoryView nativeID={ACCESSORY_ID}>
-          <View style={styles.accessory}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('manualInfo.continue')}
-              hitSlop={8}
-              onPress={Keyboard.dismiss}
-              style={({ pressed }) => [styles.accessoryBtn, { opacity: pressed ? press.opacity : 1 }]}
-            >
-              <Text style={styles.accessoryText}>{t('editResult.done')}</Text>
-            </Pressable>
-          </View>
-        </InputAccessoryView>
-      ) : null}
-    </SafeAreaView>
-  );
-}
-
-function UnderlineField({
-  label,
-  value,
-  onChange,
-  suffix,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  suffix?: string;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.underline}>
-        <TextInput
-          style={styles.input}
-          value={value}
-          onChangeText={onChange}
-          keyboardType="number-pad"
-          maxLength={3}
-          returnKeyType="done"
-          onSubmitEditing={Keyboard.dismiss}
-          inputAccessoryViewID={Platform.OS === 'ios' ? ACCESSORY_ID : undefined}
-          selectionColor={color.textPrimary}
-        />
-        {suffix ? <Text style={styles.suffix}>{suffix}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-function Pill({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.pill,
-        selected ? styles.pillSelected : styles.pillIdle,
-        { opacity: pressed ? press.opacity : 1 },
-      ]}
+    <OnboardingScaffold
+      onBack={() => navigation.goBack()}
+      progress={{ index: 3, total: 6 }}
+      legend={t('ob.bodyLegend')}
+      title={t('ob.bodyTitle')}
+      sub={t('ob.bodySub')}
+      footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
-      <Text style={[styles.pillLabel, selected ? styles.pillLabelSelected : styles.pillLabelIdle]}>{label}</Text>
-    </Pressable>
+      <View style={styles.rows}>
+        <View style={styles.row}>
+          <Legend>{t('ob.sex')}</Legend>
+          <SegmentedControl
+            options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
+            value={sex}
+            onChange={(v) => setSex(v as 'female' | 'male')}
+          />
+        </View>
+        <View style={styles.row}>
+          <Legend>{t('ob.age')}</Legend>
+          <Stepper value={age} onChange={setAge} min={14} max={90} />
+        </View>
+        <View style={styles.row}>
+          <Legend>{t('ob.height')}</Legend>
+          <Stepper value={height} onChange={setHeight} min={120} max={220} unit="cm" />
+        </View>
+        <View style={styles.row}>
+          <Legend>{t('ob.weight')}</Legend>
+          <Stepper value={weight} onChange={setWeight} step={0.5} min={35} max={250} unit="kg" />
+        </View>
+      </View>
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg },
-  flex: { flex: 1, justifyContent: 'space-between' },
-  scrollBody: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space.gutter, paddingVertical: s(24) },
-  accessory: { backgroundColor: color.surface2, alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingVertical: 8 },
-  accessoryBtn: { paddingVertical: 6, paddingHorizontal: 8 },
-  accessoryText: { color: color.accentBlue, fontSize: s(16), fontWeight: '600' },
-  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', marginBottom: s(28) },
-  field: { marginBottom: s(20) },
-  label: { fontSize: s(13), color: color.textSecondary, marginBottom: s(6) },
-  underline: { flexDirection: 'row', alignItems: 'baseline', borderBottomWidth: 0.5, borderBottomColor: color.border, paddingBottom: s(8) },
-  input: { flex: 1, fontSize: s(18), color: color.textPrimary, padding: 0 },
-  suffix: { fontSize: s(15), color: color.textSecondary, marginLeft: 6 },
-  pills: { flexDirection: 'row', gap: s(10) },
-  pill: { borderRadius: radius.pill, paddingVertical: s(6), paddingHorizontal: s(14) },
-  pillSelected: { borderWidth: 1, borderColor: color.textPrimary },
-  pillIdle: { borderWidth: 0.5, borderColor: color.border },
-  pillLabel: { fontSize: s(13) },
-  pillLabelSelected: { color: color.textPrimary },
-  pillLabelIdle: { color: color.textSecondary },
-  actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  rows: { gap: 18 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

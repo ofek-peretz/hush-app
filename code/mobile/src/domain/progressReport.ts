@@ -68,6 +68,63 @@ export function quarterlyPeakProgress(sessions: Session[], nowMs: number): Quart
 }
 
 /**
+ * ALL-TIME peak progress (founder, 2026-06-21). Same comparison as the quarterly
+ * report — initial peak vs best peak reached since — but the window spans the
+ * athlete's ENTIRE history (first training week → now), so the Progress screen
+ * always shows cumulative progression. Gate: an exercise must have been trained
+ * in ≥2 distinct weeks, so there is a real "then vs now" to compare. Pure & I/O-free.
+ */
+export const ALL_TIME_MIN_WEEKS = 2;
+
+export function allTimePeakProgress(sessions: Session[], nowMs: number): QuarterlyProgressEntry[] {
+  // Origin = the earliest logged set with a load; weeks are counted from there.
+  let originMs = Number.POSITIVE_INFINITY;
+  for (const session of sessions) {
+    for (const log of session.sets) {
+      if (log.actualWeight == null) continue;
+      const tsMs = Date.parse(log.persistedAt || session.startedAt);
+      if (!Number.isNaN(tsMs) && tsMs < originMs) originMs = tsMs;
+    }
+  }
+  if (!Number.isFinite(originMs)) return [];
+
+  // exerciseId → (weekIndex from origin → max weight that week)
+  const byExercise = new Map<string, Map<number, number>>();
+  for (const session of sessions) {
+    for (const log of session.sets) {
+      if (log.actualWeight == null) continue;
+      const tsMs = Date.parse(log.persistedAt || session.startedAt);
+      if (Number.isNaN(tsMs) || tsMs < originMs || tsMs > nowMs) continue;
+      const week = Math.floor((tsMs - originMs) / WEEK_MS);
+      let weeks = byExercise.get(log.exerciseId);
+      if (!weeks) {
+        weeks = new Map();
+        byExercise.set(log.exerciseId, weeks);
+      }
+      const cur = weeks.get(week);
+      if (cur == null || log.actualWeight > cur) weeks.set(week, log.actualWeight);
+    }
+  }
+
+  const out: QuarterlyProgressEntry[] = [];
+  for (const [exerciseId, weeks] of byExercise) {
+    if (weeks.size < ALL_TIME_MIN_WEEKS) continue;
+    const earliestWeek = Math.min(...weeks.keys());
+    const initialPeakKg = weeks.get(earliestWeek)!;
+    const periodPeakKg = Math.max(...weeks.values());
+    out.push({
+      exerciseId,
+      initialPeakKg,
+      periodPeakKg,
+      deltaKg: Math.round((periodPeakKg - initialPeakKg) * 10) / 10,
+      weeksTrained: weeks.size,
+    });
+  }
+  out.sort((a, b) => b.deltaKg - a.deltaKg || b.weeksTrained - a.weeksTrained);
+  return out;
+}
+
+/**
  * Whether a quarterly report is due relative to an anchor (account creation, or the
  * last report). Retained for a future periodic notification trigger; the in-app
  * surface gates on `quarterlyPeakProgress(...).length` instead (data IS the cadence).

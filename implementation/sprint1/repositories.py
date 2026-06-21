@@ -162,9 +162,9 @@ class StateRepository:
     # athlete identity (written once at onboarding)
     def create_athlete(self, st: AthleteState) -> None:
         self.conn.execute(
-            "INSERT INTO athlete(id, sex, age, experience, bodyweight_kg, created_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (st.athlete_id, st.sex, st.age, st.experience, st.bodyweight_kg, now_iso()),
+            "INSERT INTO athlete(id, sex, age, experience, bodyweight_kg, goal, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (st.athlete_id, st.sex, st.age, st.experience, st.bodyweight_kg, st.goal, now_iso()),
         )
         self.conn.execute(
             "INSERT INTO athlete_state"
@@ -242,6 +242,7 @@ class StateRepository:
             athlete_id=athlete_id, sex=a["sex"], age=a["age"],
             experience=a["experience"], capabilities=caps,
             bodyweight_kg=a["bodyweight_kg"],
+            goal=(a["goal"] if "goal" in a.keys() else None),
             fatigue_systemic=(ast["fatigue_systemic"] if ast else 0.0),
             last_workout_at_week=(ast["last_workout_at_week"] if ast else None),
             # Sprint 3B-1: strategy (default-on-absence) + preference projections.

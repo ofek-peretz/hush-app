@@ -5,18 +5,18 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "hush",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#000000",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#fbfaf8",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#08080E"
+      "backgroundColor": "#fbfaf8"
     },
     "ios": {
       "supportsTablet": false,
-      "userInterfaceStyle": "dark",
+      "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
       "buildNumber": "14",
@@ -31,7 +31,7 @@
       }
     },
     "android": {
-      "userInterfaceStyle": "dark",
+      "userInterfaceStyle": "light",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#08080E"
@@ -49,7 +49,8 @@
           "NSHealthUpdateUsageDescription": "Hush does not write any data to Apple Health."
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-font"
     ],
     "extra": {
       "eas": {

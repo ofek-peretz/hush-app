@@ -1,29 +1,23 @@
 /**
- * HomeView — the pure presentational Home, rebuilt to the hush_iphone_v1 prototype
- * Start screen (§3.1):
- *  - top-left: live date + greeting (morning/afternoon/evening)
- *  - top-center: a pull handle — the navigation menu (Program · History · Settings)
- *    slides DOWN from the top (founder direction: replaces the hamburger). Opens on
- *    tap or a downward swipe on the header.
- *  - top-right: "Choose workout" pill → a full-screen list (each workout + its
- *    muscle groups). Tapping one swaps the Home workout immediately, no confirm.
- *  - center: workout name (large, bold) + muscle groups.
- *  - bottom: the start control — same pill design as before, but a TAP starts it
- *    (the slide gate was dropped; dragging still works).
+ * HomeView — the center of gravity, rebuilt 1:1 to the Claude Design "Design
+ * System" Home (ui_kits/app/Home.jsx).
  *
- * Rest day centers "Rest." The container (Home.tsx) wires state + navigation.
+ * Hub-and-spoke, no tab bar. A scrolling hub that answers one question on open —
+ * what do I do next? — and offers the one affordance to begin:
+ *   brand (hush·) + settings · Legend(NEXT WORKOUT) · workout name · muscle
+ *   groups · week ProgressMeter · Begin {name} · Choose another workout ·
+ *   hub rows (This week / History / Progress).
+ * Rest state centers "Recovery." with the completed-week meter and a locked next.
+ *
+ * The container (Home.tsx) wires state + navigation.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
-import { SlideToStart } from '@/components/SlideToStart';
-import { MenuSheet } from '@/components/MenuSheet';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
-import { Divider05 } from '@/components/Divider05';
+import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton, Metric } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { a11y, color, space, press, heroTitle, s } from '@/design/tokens';
+import { color, space, font, textScale, signal } from '@/design/tokens';
 
 export interface HomeWorkoutOption {
   id: string;
@@ -33,156 +27,185 @@ export interface HomeWorkoutOption {
 
 export interface HomeViewProps {
   resting: boolean;
-  dayName: string | null; // workout name (training day)
+  dayName: string | null;
   muscles: string; // "Chest · Shoulders · Triceps"
   greetingPart: 'morning' | 'afternoon' | 'evening';
   name: string | null;
-  trainedThisWeek: number; // rest-day subtitle count
+  trainedThisWeek: number;
   startError: boolean;
-  dateLabel: string; // "Fri, 19 Jun"
+  dateLabel: string;
+  weekNumber: number; // training-week counter ("Week N"), from memberSince
   onStart: () => void;
-  // Choose-workout: the week's workouts + the picker callback (swaps Home's workout).
   workouts: HomeWorkoutOption[];
   onChooseWorkout: (id: string) => void;
-  // Menu destinations (slide-down menu; the Tab Bar / hamburger are gone).
   onProgram: () => void;
   onHistory: () => void;
   onSettings: () => void;
+  onProgress?: () => void;
 }
 
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
-  const insets = useSafeAreaInsets();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [chooseOpen, setChooseOpen] = useState(false);
-  const greeting = props.name
-    ? t('home.greetingNamed', { part: t(`home.${props.greetingPart}`), name: props.name })
-    : t('home.greeting', { part: t(`home.${props.greetingPart}`) });
 
-  // Each menu pick dismisses the sheet first, then navigates.
-  const pick = (go: () => void) => () => {
-    setMenuOpen(false);
-    go();
-  };
-
-  // A downward swipe on the header opens the menu (it slides down from the top).
-  // Activates only after a real downward drag, so taps on the pill/handle still fire.
-  const openMenu = () => setMenuOpen(true);
-  const pullDown = Gesture.Pan()
-    .activeOffsetY(14)
-    .failOffsetY(-14)
-    .onEnd((e) => {
-      if (e.translationY > 36) runOnJS(openMenu)();
-    });
+  const total = props.workouts.length || 0;
+  const done = Math.min(props.trainedThisWeek, total);
+  const groups = props.muscles ? props.muscles.split(' · ').filter(Boolean) : [];
 
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <GestureDetector gesture={pullDown}>
-          <View style={styles.top}>
-            <View style={styles.topLeft}>
-              <Text style={styles.date}>{props.dateLabel}</Text>
-              <Text style={styles.greeting}>{greeting}</Text>
-            </View>
-
-            {/* Center pull handle — taps (or a downward swipe) open the slide-down menu. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('menu.title')}
-              hitSlop={12}
-              onPress={openMenu}
-              style={({ pressed }) => [styles.handle, { opacity: pressed ? press.opacity : 1 }]}
-            >
-              <Icon name="chevronDown" size={22} color={color.textSecondary} strokeWidth={2} />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('choose.title')}
-              hitSlop={8}
-              onPress={() => setChooseOpen(true)}
-              style={({ pressed }) => [styles.choose, { opacity: pressed ? press.opacity : 1 }]}
-            >
-              <Text style={styles.chooseText}>{t('choose.button')}</Text>
-            </Pressable>
+        {/* brand + account */}
+        <View style={styles.brandRow}>
+          <View style={styles.brand}>
+            <Text style={styles.wordmark}>hush</Text>
+            <View style={styles.dot} />
           </View>
-        </GestureDetector>
+          <IconButton accessibilityLabel={t('menu.title')} onPress={props.onSettings}>
+            <Icon name="sliders" size={20} color={color.textPrimary} strokeWidth={2} />
+          </IconButton>
+        </View>
 
-        {props.resting ? (
-          <View style={styles.restCenter}>
-            <Text style={styles.greetingCenter}>{greeting}</Text>
-            <Text style={styles.restTitle} accessibilityRole="header">{t('home.restTitle')}</Text>
-            <Text style={styles.meta}>{t('home.restSub', { count: props.trainedThisWeek })}</Text>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.legendTop}>
+            <Legend>{props.resting ? t('home.recovery') : t('home.nextWorkout')}</Legend>
           </View>
-        ) : (
-          <>
-            <View style={styles.trainTop} />
-            <View style={styles.trainCenter}>
-              <Text
-                style={styles.name}
-                accessibilityRole="header"
-                allowFontScaling
-                maxFontSizeMultiplier={a11y.titleMaxScale}
-                numberOfLines={2}
-                adjustsFontSizeToFit
-              >
-                {props.dayName}
-              </Text>
-              {props.muscles ? <Text style={styles.muscles}>{props.muscles}</Text> : null}
+
+          {props.resting ? (
+            <View style={styles.block}>
+              <Display>{t('home.restTitle')}</Display>
+              <BodyL tone="secondary" style={styles.restCopy}>
+                {t('home.restSub')}
+              </BodyL>
+              <View style={styles.meterWrap}>
+                <ProgressMeter
+                  label={t('home.weekComplete', { n: props.weekNumber })}
+                  valueLabel={`${total} / ${total}`}
+                  value={total}
+                  max={total || 1}
+                  tone="up"
+                  size="lg"
+                />
+              </View>
+              {/* two instrument stats: the week counter + when the next week opens (Sunday 04:00) */}
+              <View style={styles.statRow}>
+                <Metric value={props.weekNumber} label={t('home.weekStat')} size="sm" />
+                <Metric value={t('recovery.sunShort')} label={t('home.nextSessionOpens')} size="sm" />
+              </View>
+              {/* the next session, locked until Sunday 04:00 */}
+              <View style={styles.lockedWrap}>
+                <ListRow
+                  title={props.workouts[0]?.name ?? t('home.nextSession')}
+                  subtitle={props.workouts[0]?.muscles}
+                  muted
+                  last
+                  leading={<Icon name="lock" size={20} color={color.textTertiary} strokeWidth={2} />}
+                  trailing={<Text style={styles.lockedDay}>{t('recovery.sunday')}</Text>}
+                />
+              </View>
             </View>
-            <View style={[styles.action, { paddingBottom: insets.bottom + 28 }]}>
-              {props.startError ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
-              {props.dayName ? <SlideToStart label={t('home.slideToStart')} onStart={props.onStart} /> : null}
+          ) : (
+            <View style={styles.block}>
+              <Display>{props.dayName ?? ''}</Display>
+              {groups.length ? (
+                <View style={styles.groups}>
+                  {groups.map((g, i) => (
+                    <View key={g} style={styles.groupItem}>
+                      <Body tone="secondary">{g}</Body>
+                      {i < groups.length - 1 ? <Text style={styles.sep}>·</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <View style={styles.meterWrap}>
+                <ProgressMeter
+                  label={t('home.weekLabel', { n: props.weekNumber })}
+                  valueLabel={`${done} / ${total}`}
+                  value={done}
+                  max={total || 1}
+                  tone="signal"
+                />
+              </View>
+
+              {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
+
+              <View style={styles.cta}>
+                {props.dayName ? (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    block
+                    label={t('home.begin', { name: props.dayName })}
+                    onPress={props.onStart}
+                    leading={<Icon name="play" size={18} color={color.onAccent} />}
+                  />
+                ) : null}
+                <Button variant="quiet" block label={t('home.chooseAnother')} onPress={() => setChooseOpen(true)} />
+              </View>
             </View>
-          </>
-        )}
+          )}
+
+          {/* hub entries */}
+          <View style={styles.hub}>
+            <Legend style={styles.hubLegend}>{t('home.programLegend')}</Legend>
+            <ListRow
+              title={t('home.hubThisWeek')}
+              subtitle={t('home.hubThisWeekSub', { done, remaining: Math.max(0, total - done) })}
+              chevron
+              onPress={props.onProgram}
+              leading={<Icon name="calendar" size={20} color={color.textSecondary} strokeWidth={2} />}
+            />
+            <ListRow
+              title={t('home.hubHistory')}
+              subtitle={t('home.hubHistorySub')}
+              chevron
+              onPress={props.onHistory}
+              leading={<Icon name="history" size={20} color={color.textSecondary} strokeWidth={2} />}
+            />
+            {props.onProgress ? (
+              <ListRow
+                title={t('home.hubProgress')}
+                subtitle={t('home.hubProgressSub')}
+                chevron
+                last
+                onPress={props.onProgress}
+                leading={<Icon name="trendingUp" size={20} color={color.textSecondary} strokeWidth={2} />}
+              />
+            ) : null}
+          </View>
+        </ScrollView>
       </SafeAreaView>
 
-      {/* Choose-workout: full-screen near-opaque list, each row = name + muscles. */}
+      {/* Choose another workout — full-screen list, each row = name + muscles. */}
       {chooseOpen ? (
         <View style={styles.overlay}>
           <SafeAreaView edges={['top', 'bottom']} style={styles.overlaySafe}>
             <View style={styles.overlayHead}>
-              <Text style={styles.overlayTitle} accessibilityRole="header">{t('choose.title')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('common.back')}
-                hitSlop={12}
-                onPress={() => setChooseOpen(false)}
-                style={({ pressed }) => [styles.overlayClose, { opacity: pressed ? press.opacity : 1 }]}
-              >
+              <Text style={styles.overlayTitle} accessibilityRole="header">
+                {t('choose.title')}
+              </Text>
+              <IconButton accessibilityLabel={t('common.back')} onPress={() => setChooseOpen(false)}>
                 <Icon name="close" size={22} color={color.textSecondary} strokeWidth={2} />
-              </Pressable>
+              </IconButton>
             </View>
-            <ScrollView contentContainerStyle={styles.overlayList}>
-              {props.workouts.map((w) => (
-                <Pressable
+            <ScrollView contentContainerStyle={styles.overlayList} showsVerticalScrollIndicator={false}>
+              {props.workouts.map((w, i) => (
+                <ListRow
                   key={w.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${w.name}. ${w.muscles}`}
+                  title={w.name}
+                  subtitle={w.muscles}
+                  chevron
+                  last={i === props.workouts.length - 1}
                   onPress={() => {
                     props.onChooseWorkout(w.id);
                     setChooseOpen(false);
                   }}
-                  style={({ pressed }) => [styles.ovItem, { opacity: pressed ? press.opacity : 1 }]}
-                >
-                  <Text style={styles.ovName}>{w.name}</Text>
-                  {w.muscles ? <Text style={styles.ovMuscles}>{w.muscles}</Text> : null}
-                  <View style={styles.ovDivider}><Divider05 /></View>
-                </Pressable>
+                />
               ))}
             </ScrollView>
           </SafeAreaView>
         </View>
-      ) : null}
-
-      {menuOpen ? (
-        <MenuSheet
-          onClose={() => setMenuOpen(false)}
-          onProgram={pick(props.onProgram)}
-          onHistory={pick(props.onHistory)}
-          onSettings={pick(props.onSettings)}
-        />
       ) : null}
     </View>
   );
@@ -191,48 +214,39 @@ export function HomeView(props: HomeViewProps) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
-  top: {
+  brandRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     paddingHorizontal: space.gutter,
-    paddingTop: 12,
+    paddingTop: 4,
   },
-  topLeft: { flex: 1 },
-  date: { fontSize: s(13), color: color.textSecondary },
-  greeting: { fontSize: s(13), color: color.textTertiary, marginTop: 2 },
-  handle: { width: 56, height: 30, alignItems: 'center', justifyContent: 'center', marginTop: -2 },
-  choose: {
-    backgroundColor: color.fillSubtleStrong,
-    borderRadius: s(13),
-    paddingVertical: s(7),
-    paddingHorizontal: s(12),
-  },
-  chooseText: { fontSize: s(13), color: color.textPrimary, fontWeight: '500' },
+  brand: { flexDirection: 'row', alignItems: 'flex-end' },
+  wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 },
 
-  // Training day: title block centred at ~30% from top, action pinned near bottom.
-  trainTop: { height: '20%' },
-  trainCenter: { paddingHorizontal: space.gutter, alignItems: 'center' },
-  name: { ...heroTitle(s(40)), color: color.textPrimary, fontSize: s(40), lineHeight: s(46), fontWeight: '700', textAlign: 'center' },
-  muscles: { marginTop: s(14), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
-  action: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: space.gutter },
-  error: { color: color.textSecondary, fontSize: s(14), marginBottom: s(16), textAlign: 'center' },
+  scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
+  legendTop: { paddingTop: 26 },
+  block: { paddingTop: 14 },
+  restCopy: { marginTop: 14, maxWidth: 320 },
 
-  // Rest day
-  restCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
-  greetingCenter: { fontSize: s(14), color: color.textSecondary, marginBottom: s(24), textAlign: 'center' },
-  restTitle: { ...heroTitle(s(62)), color: color.textPrimary, fontSize: s(62), lineHeight: s(68), fontWeight: '700' },
-  meta: { marginTop: s(16), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
+  groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, alignItems: 'center' },
+  groupItem: { flexDirection: 'row', alignItems: 'center' },
+  sep: { marginHorizontal: 10, color: color.textTertiary, fontFamily: font.sans, fontSize: textScale.base },
 
-  // Choose-workout overlay
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.97)' },
+  meterWrap: { marginTop: 28 },
+  statRow: { flexDirection: 'row', gap: 28, marginTop: 24 },
+  lockedWrap: { marginTop: 20 },
+  lockedDay: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
+  error: { marginTop: 16 },
+  cta: { marginTop: 24, gap: 10 },
+
+  hub: { marginTop: 34 },
+  hubLegend: { marginBottom: 4 },
+
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: color.bg },
   overlaySafe: { flex: 1, paddingHorizontal: space.gutter },
-  overlayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 },
-  overlayTitle: { ...heroTitle(s(20)), fontSize: s(20), fontWeight: '700', color: color.textPrimary },
-  overlayClose: { width: 40, height: 40, alignItems: 'flex-end', justifyContent: 'center' },
-  overlayList: { paddingTop: 18, paddingBottom: 24 },
-  ovItem: { paddingVertical: s(14) },
-  ovName: { fontSize: s(18), fontWeight: '600', color: color.textPrimary },
-  ovMuscles: { fontSize: s(13), color: color.textSecondary, marginTop: s(3) },
-  ovDivider: { marginTop: s(14) },
+  overlayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, marginLeft: 4 },
+  overlayTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: -0.3, color: color.textPrimary },
+  overlayList: { paddingTop: 12, paddingBottom: 24 },
 });

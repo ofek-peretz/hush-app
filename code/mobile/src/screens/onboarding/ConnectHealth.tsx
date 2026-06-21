@@ -1,22 +1,20 @@
 /**
- * 4.2 Connect Health — offer HealthKit; declining is free (sets the
- * override-not-permission tone). Continue requests HealthKit: granted → prefill
- * and skip Manual Info (→ Goal); denied → Manual Info. Skip → Manual Info.
- *
- * Health is a deferred native surface (stubbed; requestPermission()=false in v1),
- * so the Manual Info path is the one exercised today.
+ * Connect Health (§4.2) — offer HealthKit, re-skinned to the design onboarding
+ * step: legend → title → sub → an Apple Health Card → Connect / Skip for now.
+ * Continue requests HealthKit and carries the outcome to Body data (ManualInfo).
+ * Progress 2 / 6.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { TextAction } from '@/components/TextAction';
+import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { Card, Button } from '@/components/ds';
+import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, heroTitle, s } from '@/design/tokens';
 import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
+import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
@@ -27,38 +25,44 @@ export function ConnectHealth({ navigation }: Props) {
   async function onContinue() {
     const granted = await health.requestPermission();
     recordPermissionOutcome(granted, (type, data) => void track(type, data));
-    // Everyone fills the quick details next (HealthKit gives steps/activity + a
-    // weight prefill, but not the sex the program needs). Carry the connection flag.
     navigation.navigate('ManualInfo', { healthConnected: granted });
   }
-
   function onSkip() {
     void track('health_skipped', {});
     navigation.navigate('ManualInfo', { healthConnected: false });
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.body}>
-        <Text style={styles.title}>{t('connectHealth.title')}</Text>
-        <Text style={styles.copy}>{t('connectHealth.body')}</Text>
-        <Text style={styles.optional}>{t('connectHealth.optional')}</Text>
-      </View>
-      <View style={styles.actions}>
-        <PrimaryButton variant="compact" label={t('connectHealth.continue')} onPress={onContinue} />
-        <View style={styles.gap} />
-        <TextAction label={t('connectHealth.skip')} onPress={onSkip} />
-      </View>
-    </SafeAreaView>
+    <OnboardingScaffold
+      onBack={() => navigation.goBack()}
+      progress={{ index: 2, total: 6 }}
+      legend={t('ob.healthLegend')}
+      title={t('ob.healthTitle')}
+      sub={t('ob.healthSub')}
+      footer={
+        <>
+          <Button variant="primary" size="lg" block label={t('ob.healthConnect')} onPress={onContinue} />
+          <Button variant="quiet" block label={t('ob.healthSkip')} onPress={onSkip} />
+        </>
+      }
+    >
+      <Card pad="md">
+        <View style={styles.row}>
+          <Icon name="heart" size={22} color={color.textSecondary} strokeWidth={2} />
+          <View style={styles.info}>
+            <Text style={styles.title}>{t('ob.healthCardTitle')}</Text>
+            <Text style={styles.sub}>{t('ob.healthCardSub')}</Text>
+          </View>
+          <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+        </View>
+      </Card>
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
-  body: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600', textAlign: 'center', marginBottom: s(16) },
-  copy: { fontSize: s(15), lineHeight: s(15) * 1.6, color: color.textPrimary, textAlign: 'center' },
-  optional: { marginTop: s(16), fontSize: s(13), color: color.textSecondary, textAlign: 'center' },
-  actions: { paddingHorizontal: space.gutter, paddingBottom: 26 },
-  gap: { height: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  info: { flex: 1 },
+  title: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary },
+  sub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
 });

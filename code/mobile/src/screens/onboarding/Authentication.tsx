@@ -1,21 +1,18 @@
 /**
- * 4.1 Authentication — the front door. Sells nothing. Apple / Google sign-in
- * (invite-token enrollment removed, founder directive 2026-06-18).
- *
- * Layout (§4.1): "Hush" wordmark + "Train. Quietly." centered ~33% from top;
- * Continue with Apple (PrimaryButton) + Continue with Google (SecondaryButton)
- * pinned to the bottom; "Terms · Privacy" footer. On success → Consent.
+ * Authentication (§4.1) — the front door, re-skinned to the design sign-in: the
+ * "hush·" wordmark centred with the product line, then Continue with Apple
+ * (primary) and Continue with Google (secondary), and a calm legal line. Sells
+ * nothing. On success → Consent.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { SecondaryButton } from '@/components/SecondaryButton';
+import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, heroTitle, s } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, signal } from '@/design/tokens';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -35,8 +32,7 @@ export function Authentication({ navigation }: Props) {
       await app.signIn(provider);
       navigation.navigate('Consent');
     } catch (e) {
-      // A user-cancelled Apple sheet isn't an error — just stay put, silently.
-      if (!(e instanceof SignInCanceledError)) setError(true); // the one sanctioned error line (§5.1)
+      if (!(e instanceof SignInCanceledError)) setError(true);
     } finally {
       setBusy(false);
     }
@@ -45,32 +41,39 @@ export function Authentication({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.hero}>
-        <Text style={styles.wordmark}>{t('auth.wordmark')}</Text>
-        <Text style={styles.tagline}>{t('auth.tagline')}</Text>
+        <View style={styles.brand}>
+          <Text style={styles.wordmark}>hush</Text>
+          <View style={styles.dot} />
+        </View>
+        <Text style={styles.tagline}>{t('ob.signinTagline')}</Text>
       </View>
       <View style={styles.actions}>
         {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
-        <PrimaryButton
-          variant="compact"
-          label={t('auth.apple')}
-          leading={<AppleLogo color={color.bg} />}
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          label={t('ob.apple')}
+          leading={<AppleLogo color={color.onAccent} />}
           onPress={() => onSignIn('apple')}
           disabled={busy}
         />
-        <View style={styles.gap} />
-        <SecondaryButton
-          label={t('auth.google')}
+        <Button
+          variant="secondary"
+          size="lg"
+          block
+          label={t('ob.google')}
           leading={<GoogleG />}
           onPress={() => onSignIn('google')}
           disabled={busy}
         />
-        <Text style={styles.legal}>{t('auth.legal')}</Text>
+        <Text style={styles.legal}>{t('ob.signinLegal')}</Text>
       </View>
     </SafeAreaView>
   );
 }
 
-function AppleLogo({ color: c, size = 16 }: { color: string; size?: number }) {
+function AppleLogo({ color: c, size = 18 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -81,7 +84,7 @@ function AppleLogo({ color: c, size = 16 }: { color: string; size?: number }) {
   );
 }
 
-function GoogleG({ size = 16 }: { size?: number }) {
+function GoogleG({ size = 18 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       <Path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
@@ -94,18 +97,12 @@ function GoogleG({ size = 16 }: { size?: number }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: '30%', paddingHorizontal: space.gutter },
-  wordmark: { ...heroTitle(s(54)), color: color.textPrimary, fontSize: s(54), fontWeight: '700' },
-  tagline: {
-    marginTop: s(14),
-    fontSize: s(21),
-    lineHeight: s(21) * 1.35,
-    letterSpacing: -0.21,
-    color: color.textSecondary,
-    textAlign: 'center',
-  },
-  actions: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  gap: { height: 12 },
-  error: { color: color.textSecondary, fontSize: s(14), textAlign: 'center', marginBottom: s(16) },
-  legal: { marginTop: 24, fontSize: s(12), color: color.textTertiary, textAlign: 'center' },
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  brand: { flexDirection: 'row', alignItems: 'flex-end' },
+  wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 },
+  tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },
+  actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
+  error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
+  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 6, lineHeight: 18 },
 });

@@ -17,7 +17,7 @@
     "legal": "Terms · Privacy"
   },
   "nameEntry": {
-    "title": "What should we call you?",
+    "title": "What can Hush call you?",
     "label": "Your name",
     "placeholder": "Name",
     "continue": "Continue",
@@ -48,7 +48,8 @@
     "stayConsistent": "Stay Consistent",
     "continue": "Continue",
     "getStronger": "Get Stronger",
-    "generalFitness": "General Fitness"
+    "generalFitness": "General Fitness",
+    "toning": "Get Lean"
   },
   "experience": {
     "eyebrow": "Your experience",
@@ -78,9 +79,96 @@
     "morning": "morning",
     "afternoon": "afternoon",
     "evening": "evening",
-    "restTitle": "Rest.",
-    "restSub": "You trained {{count}} days this week.",
-    "metadata": "{{exercises}} exercises · {{sets}} sets · ~{{min}} min"
+    "restTitle": "Recovery.",
+    "restSub": "Recovery is part of the program. Hush is holding so adaptation can catch up. Nothing to do today.",
+    "metadata": "{{exercises}} exercises · {{sets}} sets · ~{{min}} min",
+    "recovery": "Recovery",
+    "nextWorkout": "Next workout",
+    "weekLabel": "Week {{n}}",
+    "weekComplete": "Week {{n}} complete",
+    "weekStat": "Week",
+    "nextSessionOpens": "Next session opens",
+    "nextSession": "Next session",
+    "begin": "Begin {{name}}",
+    "chooseAnother": "Choose another workout",
+    "programLegend": "Program",
+    "hubThisWeek": "This week",
+    "hubThisWeekSub": "{{done}} done · {{remaining}} remaining",
+    "hubHistory": "History",
+    "hubHistorySub": "Every completed session",
+    "hubProgress": "Progress",
+    "hubProgressSub": "Since you started"
+  },
+  "recovery": {
+    "sunShort": "Sun",
+    "sunday": "Sunday"
+  },
+  "ob": {
+    "continue": "Continue",
+    "skip": "Skip",
+    "apple": "Continue with Apple",
+    "google": "Continue with Google",
+    "signinTagline": "A strength coach that owns the decisions, so you can own the work.",
+    "signinLegal": "By continuing you agree to begin setup. You can stop at any time.",
+    "consentLegend": "Before we begin",
+    "consentTitle": "Terms & privacy",
+    "consentSub": "Hush makes training decisions on your behalf. To do that responsibly, it needs your agreement on how your data is used.",
+    "consentCard": "Your training data is yours. It is used only to make your recommendations. It is never sold.",
+    "consentAccept": "Agree & continue",
+    "consentDecline": "Decline",
+    "nameLegend": "Optional",
+    "nameTitle": "What can Hush call you?",
+    "nameSub": "Used only to address you. Leave it blank to stay anonymous.",
+    "nameLabel": "Name",
+    "namePlaceholder": "Your name",
+    "healthLegend": "Optional",
+    "healthTitle": "Connect health data",
+    "healthSub": "Hush can read your weight and activity to sharpen fatigue management. This is optional and can be changed later.",
+    "healthCardTitle": "Apple Health",
+    "healthCardSub": "Weight · activity",
+    "healthConnect": "Connect",
+    "healthSkip": "Skip for now",
+    "bodyLegend": "About you",
+    "bodyTitle": "Body data",
+    "bodySub": "Hush needs these to calibrate starting loads. Numbers only — nothing public.",
+    "sex": "Sex",
+    "age": "Age",
+    "height": "Height",
+    "weight": "Weight",
+    "female": "Female",
+    "male": "Male",
+    "goalLegend": "Your intent",
+    "goalTitle": "What are you training for?",
+    "goalSub": "This sets how Hush prioritises load, volume and progression.",
+    "goalMuscle": "Build muscle",
+    "goalStrength": "Increase strength",
+    "goalLean": "Get lean",
+    "goalConsistent": "Stay consistent",
+    "expLegend": "Your background",
+    "expTitle": "How long have you trained?",
+    "expSub": "Honesty here makes the first weeks accurate. Hush adjusts quickly regardless.",
+    "expBeginner": "Beginner · under 1 year",
+    "expIntermediate": "Intermediate · 1–3 years",
+    "expAdvanced": "Advanced · 3+ years",
+    "daysLegend": "Your week",
+    "daysTitle": "How many sessions per week?",
+    "daysSub": "Hush will design a split that fits this exactly — no wasted days, no overreach.",
+    "daysUnit": "sessions / week",
+    "daysBuild": "Build my program",
+    "buildLegend": "One moment",
+    "buildTitle": "Building your program",
+    "buildStep1": "Calibrating starting loads",
+    "buildStep2": "Designing your split",
+    "buildStep3": "Distributing weekly volume",
+    "buildStep4": "Setting progression targets",
+    "readyLegend": "Ready",
+    "readyTitle": "Your program is built.",
+    "readySub": "{{focus}} focus · {{days}} sessions a week. From here, Hush decides the loads. You decide the lifts.",
+    "readyCta": "Go to my next workout",
+    "focusStrength": "Strength",
+    "focusHypertrophy": "Hypertrophy",
+    "focusConsistency": "Consistency",
+    "focusLean": "Lean"
   },
   "menu": {
     "title": "Menu",
@@ -117,7 +205,33 @@
     "forecastIncrease": "You'll get all {{reps}}.",
     "forecastHold": "You'll pass it.",
     "receiptClean": "Told you. {{weight}}, clean.",
-    "receiptWithReps": "Told you. {{weight}} × {{reps}}."
+    "receiptWithReps": "Told you. {{weight}} × {{reps}}.",
+    "exerciseCount": "Exercise {{n}} / {{N}}",
+    "rest": "Rest",
+    "paused": "Paused",
+    "setLogged": "Set {{n}} of {{m}} logged",
+    "recorded": "Recorded. Hush is updating your next recommendation.",
+    "vsLast": "vs. last session",
+    "holdingLast": "holding from last session",
+    "repsUnit": "reps",
+    "setsAnd": "{{sets}} sets · × {{reps}}",
+    "upNext": "Up next",
+    "form": "Form",
+    "swapAction": "Swap",
+    "swapExercise": "Swap exercise",
+    "startNextSet": "Start next set",
+    "startNamed": "Start {{name}}",
+    "addSeconds": "+15 sec",
+    "saveComplete": "Save & complete set",
+    "actualWeight": "Actual weight",
+    "actualReps": "Actual reps",
+    "editDone": "Done"
+  },
+  "finishSheet": {
+    "legend": "Finish early",
+    "body": "End this session now? Completed sets are saved. Hush will account for the shortened session in your next recommendation.",
+    "save": "Finish & save",
+    "keep": "Keep training"
   },
   "reasonSheet": {
     "header": "Why {{weight}}",
@@ -137,7 +251,8 @@
     "title": "Workout paused",
     "resume": "Resume workout",
     "showExercise": "Show exercise",
-    "finishEarly": "Finish early"
+    "finishEarly": "Finish early",
+    "endWorkout": "End workout"
   },
   "rest": {
     "ready": "Ready"
@@ -160,6 +275,20 @@
   },
   "wellDone": {
     "message": "Well done"
+  },
+  "complete": {
+    "saved": "Saved",
+    "completeWord": "complete.",
+    "savedWord": "saved.",
+    "body": "A clean session. {{count}} lifts progressed. Recovery noted — your next recommendation is already adjusted.",
+    "bodyOne": "A clean session. One lift progressed. Recovery noted — your next recommendation is already adjusted.",
+    "bodyZero": "A clean session. Recovery noted — your next recommendation is already adjusted.",
+    "bodyEarly": "Session saved. Hush will account for the shortened session in your next recommendation.",
+    "duration": "Duration",
+    "sets": "Sets",
+    "progressed": "Progressed",
+    "done": "Done",
+    "viewRecord": "View session record"
   },
   "portrait": {
     "tab": "Portrait",
@@ -203,6 +332,18 @@
     "knee_dominant": "squat load",
     "hip_dominant": "hinge load"
   },
+  "muscle": {
+    "Chest": "chest",
+    "Triceps": "triceps",
+    "Back": "back",
+    "Biceps": "biceps",
+    "Shoulders": "shoulder",
+    "Quads": "quad",
+    "Calves": "calf",
+    "Hamstrings": "hamstring",
+    "Glutes": "glute",
+    "Core": "core"
+  },
   "replacement": {
     "title": "Replace {{exercise}}",
     "searchPlaceholder": "Search exercises",
@@ -215,6 +356,12 @@
   },
   "program": {
     "title": "Program",
+    "thisWeek": "This week",
+    "weekLegend": "Week {{n}} · {{freq}}× / week",
+    "remaining": "Remaining",
+    "completedMeter": "Completed",
+    "exCount": "{{n}} ex",
+    "setsReps": "{{sets}} sets · {{reps}} reps",
     "perWeek": "{{n}} days / week",
     "weekProgress": "{{done}} of {{total}} this week",
     "dayMeta": "{{exercises}} exercises · ~{{min}} min",
@@ -240,7 +387,10 @@
     "title": "Swap exercise",
     "samePattern": "{{pattern}} · same pattern",
     "current": "{{equipment}} · current",
-    "close": "Close"
+    "close": "Close",
+    "body": "Equipment busy? Choose an alternative for the same muscle group. Hush keeps your load progression intact.",
+    "currentSub": "Current selection",
+    "currentBadge": "Current"
   },
   "equipment": {
     "barbell": "Barbell",
@@ -252,10 +402,24 @@
   "report": {
     "title": "Your progress",
     "subtitle": "Your strongest lifts, then and now.",
-    "empty": "Keep training — your progress will show here."
+    "empty": "Keep training — your progress will show here.",
+    "totalAdded": "Total strength added",
+    "acrossLifts": "across {{count}} lifts",
+    "initialPeak": "initial peak {{value}}",
+    "best": "best {{value}}",
+    "weekRange": "Weeks {{from}}–{{to}}"
+  },
+  "progress": {
+    "title": "Progress",
+    "legend": "All time"
   },
   "history": {
     "title": "History",
+    "legend": "Completed sessions",
+    "recordLegend": "{{date}} · read-only record",
+    "duration": "Duration",
+    "setsLabel": "Sets",
+    "volumeLabel": "Volume",
     "empty": "Your first session will appear here.",
     "count": "You completed {{n}} sessions.",
     "annIncreased": "I increased your {{target}}.",
@@ -286,7 +450,13 @@
     "appleHealth": "Apple Health",
     "healthConnect": "Health Connect",
     "about": "About",
-    "language": "Language"
+    "language": "Language",
+    "preferences": "Preferences",
+    "healthSection": "Health",
+    "account": "Account",
+    "bodyData": "Body data",
+    "goalExperience": "Goal & experience",
+    "healthConnectedSub": "Connected · weight, activity"
   },
   "settings": {
     "units": "Units",

@@ -30,8 +30,8 @@ class HushService:
     # ---------- onboarding ----------
 
     def onboard(self, athlete_id: str, sex: str, age: int, experience: str,
-                bodyweight_kg: float | None = None) -> None:
-        st = seed_athlete(athlete_id, sex, age, experience, bodyweight_kg)
+                bodyweight_kg: float | None = None, goal: str | None = None) -> None:
+        st = seed_athlete(athlete_id, sex, age, experience, bodyweight_kg, goal)
         with self.db.transaction() as conn:
             StateRepository(conn).create_athlete(st)
 

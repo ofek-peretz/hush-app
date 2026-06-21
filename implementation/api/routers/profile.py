@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from hush_model.constants import MODEL_VERSION, CAPABILITY_MODEL_VERSION
+from hush_model.constants import MODEL_VERSION, CAPABILITY_MODEL_VERSION, GOALS
 from hush_model.persistence.db import now_iso
 from hush_model.persistence.repositories import StateRepository
 from hush_model.persistence.service import HushService
@@ -37,9 +37,11 @@ def _apply_patch(conn, athlete_id: str, body: ProfilePatchRequest) -> dict:
         raise errors.unprocessable("sex must be male|female", "sex")
     if body.experience is not None and body.experience not in _ALLOWED_EXPERIENCE:
         raise errors.unprocessable("experience must be beginner|intermediate|advanced", "experience")
+    if body.goal is not None and body.goal not in GOALS:
+        raise errors.unprocessable("goal must be one of " + "|".join(GOALS), "goal")
 
     sets, params = [], []
-    for field in ("sex", "age", "experience", "bodyweight_kg"):
+    for field in ("sex", "age", "experience", "bodyweight_kg", "goal"):
         val = getattr(body, field)
         if val is not None:
             sets.append(f"{field}=?")
@@ -63,6 +65,7 @@ def _apply_patch(conn, athlete_id: str, body: ProfilePatchRequest) -> dict:
     result = {
         "id": updated["id"], "sex": updated["sex"], "age": updated["age"],
         "experience": updated["experience"], "bodyweight_kg": updated["bodyweight_kg"],
+        "goal": (updated["goal"] if "goal" in updated.keys() else None),
         "model_version": MODEL_VERSION, "capability_model_version": CAPABILITY_MODEL_VERSION,
     }
     if freq_out is not None:

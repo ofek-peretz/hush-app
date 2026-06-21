@@ -1,32 +1,47 @@
 /**
- * 4.22 / 4.23 History — the flight recorder. Reverse-chronological list of
- * completed sessions; empty state is a single quiet line. Each entry shows the
- * date, the workout name, and an optional first-person Hush note (only when Hush
- * acted or the athlete ended early). Records without interpreting — no
- * "Great session" / "PR" praise. Tapping a row opens the read-only detail.
+ * History (§4.22/§4.23) — the flight recorder, rebuilt 1:1 to the Claude Design
+ * "Design System" History (ui_kits/app/History.jsx). A reverse-chronological list
+ * of completed sessions; each row shows the workout, the date · duration, and the
+ * session volume. Tapping opens the read-only record (WorkoutDetail). Records
+ * without interpreting — no praise, no PRs.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BackBar } from '@/components/BackBar';
+import { Icon } from '@/components/Icon';
+import { Legend, ListRow } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
-import { sessionDayName } from '@/domain/schedule';
-import { color, space, heroTitle, press, s } from '@/design/tokens';
+import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
+import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'History'>;
 
+function sessionDurationLabel(s: Session): string {
+  const start = Date.parse(s.startedAt);
+  const ends = s.sets.map((x) => Date.parse(x.persistedAt)).filter((n) => !Number.isNaN(n));
+  const end = ends.length ? Math.max(...ends) : start;
+  const total = Math.max(0, Math.round((end - start) / 1000));
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function sessionVolumeKg(s: Session): number {
+  return s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
+}
+
 export function History({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const units = app.profile?.units ?? 'kg';
   const [sessions, setSessions] = useState<Session[] | null>(null); // null = loading
 
-  // Reload on focus so a session completed this run appears without a relaunch.
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
@@ -38,26 +53,25 @@ export function History({ navigation }: Props) {
   );
 
   const dayName = (s: Session) => sessionDayName(s, app.program);
-
-  function note(s: Session): string | null {
-    if (s.annotation === 'ended_early') return t('history.annEndedEarly');
-    if (s.annotation === 'increased' && s.annotationCapability) {
-      return t('history.annIncreased', { target: t(`capabilityLoad.${s.annotationCapability}`) });
-    }
-    if (s.annotation === 'swapped') return t('history.annSwapped', { exercise: '' });
-    return null;
-  }
-
   const isEmpty = sessions != null && sessions.length === 0;
+  const list = sessions ?? [];
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <BackBar onBack={() => navigation.goBack()} />
-      <View style={styles.headerWrap}>
-        <Text style={styles.header} accessibilityRole="header">{t('history.title')}</Text>
-        {sessions != null && sessions.length > 0 ? (
-          <Text style={styles.sub}>{t('history.count', { n: sessions.length })}</Text>
-        ) : null}
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          hitSlop={10}
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
+        >
+          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
+        </Pressable>
+        <View style={styles.headTitles}>
+          <Legend>{t('history.legend')}</Legend>
+          <Text style={styles.title} accessibilityRole="header">{t('history.title')}</Text>
+        </View>
       </View>
 
       {isEmpty ? (
@@ -65,20 +79,30 @@ export function History({ navigation }: Props) {
           <Text style={styles.empty}>{t('history.empty')}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {(sessions ?? []).map((s) => {
-            const n = note(s);
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {list.map((s, i) => {
+            const dateLabel = new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+            const volKg = sessionVolumeKg(s);
+            const vol = displayWeight(Math.round(volKg), units) ?? 0;
             return (
-              <Pressable
+              <ListRow
                 key={s.id}
-                accessibilityRole="button"
+                title={dayName(s)}
+                subtitle={`${dateLabel} · ${sessionDurationLabel(s)}`}
+                chevron
+                last={i === list.length - 1}
                 onPress={() => navigation.navigate('WorkoutDetail', { sessionId: s.id })}
-                style={({ pressed }) => [styles.row, { opacity: pressed ? press.opacity : 1 }]}
-              >
-                <Text style={styles.date}>{new Date(s.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
-                <Text style={styles.name}>{dayName(s)}</Text>
-                {n ? <Text style={styles.note}>{n}</Text> : null}
-              </Pressable>
+                leading={
+                  <View style={styles.iconBox}>
+                    <Icon name="dumbbell" size={16} color={color.textSecondary} strokeWidth={2} />
+                  </View>
+                }
+                trailing={
+                  <Text style={styles.vol}>
+                    {vol.toLocaleString()} {unitLabel(units)}
+                  </Text>
+                }
+              />
             );
           })}
         </ScrollView>
@@ -89,14 +113,22 @@ export function History({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  headerWrap: { paddingTop: 8, paddingHorizontal: space.gutter },
-  header: { ...heroTitle(s(28)), color: color.textPrimary, fontSize: s(28), fontWeight: '600' },
-  sub: { fontSize: s(13), color: color.textSecondary, marginTop: s(6) },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
+  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
+  headTitles: { flex: 1, minWidth: 0 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
-  empty: { fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
-  list: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: 40 },
-  row: { paddingVertical: s(13), borderBottomWidth: 0.5, borderBottomColor: color.border },
-  date: { fontSize: s(12), color: color.textSecondary },
-  name: { fontSize: s(18), fontWeight: '600', color: color.textPrimary, marginTop: s(3) },
-  note: { fontSize: s(12), lineHeight: s(12) * 1.4, color: color.textSecondary, marginTop: s(5) },
+  empty: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'center' },
+  list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: color.fillSubtle,
+    borderWidth: 1,
+    borderColor: color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vol: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
 });

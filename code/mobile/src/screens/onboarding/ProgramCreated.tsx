@@ -1,56 +1,118 @@
 /**
- * 4.6 Program Created — a ~2s confirmation, then auto-advance to Home. No button.
- * Builds the program (completeOnboarding), which sets the profile and flips Root
- * to the main app. A minimum dwell keeps the moment from flashing past when the
- * build is instant (fixture/offline).
+ * Program Created (§4.6) — re-skinned to the design's "build" step. A calm,
+ * sequenced "Building your program" with four steps, then a "Ready" confirmation:
+ * "{focus} focus · {days} sessions a week." The CTA runs completeOnboarding
+ * (selfEnroll + generateProgram + profile), which flips Root to Home.
  */
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Icon } from '@/components/Icon';
+import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, heroTitle, s } from '@/design/tokens';
+import type { Goal } from '@/data/local/models';
+import { color, space, font, textScale, tracking, trackingPx, up, signal } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ProgramCreated'>;
 
-const DWELL_MS = 1900;
+const FOCUS_KEY: Record<Goal, string> = {
+  build_muscle: 'focusHypertrophy',
+  get_stronger: 'focusStrength',
+  general_fitness: 'focusConsistency',
+  toning: 'focusLean',
+};
 
 export function ProgramCreated({ route }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const reduced = useReducedMotion();
   const { inputs } = route.params;
-  const fired = useRef(false);
+  const [phase, setPhase] = useState(0);
+  const [busy, setBusy] = useState(false);
 
+  // Cosmetic, sequenced reveal (the real build runs on the CTA → completeOnboarding).
   useEffect(() => {
-    // Build after a brief dwell so the confirmation is seen; completeOnboarding
-    // sets the profile → Root swaps to Home (this screen unmounts).
-    const id = setTimeout(() => {
-      if (fired.current) return;
-      fired.current = true;
-      void app.completeOnboarding(inputs);
-    }, DWELL_MS);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const marks = [700, 1400, 2100, 2800];
+    const timers = marks.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
+    return () => timers.forEach(clearTimeout);
   }, []);
 
+  const steps = [t('ob.buildStep1'), t('ob.buildStep2'), t('ob.buildStep3'), t('ob.buildStep4')];
+  const ready = phase >= 4;
+  const focus = t(`ob.${FOCUS_KEY[inputs.goal]}`);
+
+  function onDone() {
+    if (busy) return;
+    setBusy(true);
+    void app.completeOnboarding(inputs); // sets profile → Root swaps to Home
+  }
+
   return (
-    <SafeAreaView style={styles.root}>
-      <Animated.View entering={reduced ? FadeIn.duration(120) : FadeIn.duration(400)} style={styles.center}>
-        <Text style={styles.title}>{t('programCreated.title')}</Text>
-        <Text style={styles.subtitle}>{t('programCreated.subtitle', { days: inputs.daysPerWeek })}</Text>
-      </Animated.View>
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <View style={styles.body}>
+        {!ready ? (
+          <>
+            <Text style={styles.legend}>{t('ob.buildLegend')}</Text>
+            <Text style={styles.buildingTitle}>{t('ob.buildTitle')}</Text>
+            <View style={styles.steps}>
+              {steps.map((s, i) => (
+                <View key={i} style={[styles.stepRow, { opacity: i <= phase ? 1 : 0.32 }]}>
+                  <View style={styles.stepIcon}>
+                    {i < phase ? (
+                      <Icon name="check" size={18} color={up[0]} strokeWidth={2.4} />
+                    ) : i === phase ? (
+                      <ActivityIndicator size="small" color={signal[0]} />
+                    ) : (
+                      <View style={styles.dot} />
+                    )}
+                  </View>
+                  <Text style={[styles.stepText, { color: i <= phase ? color.textPrimary : color.textMuted }]}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.readyRow}>
+              <Icon name="check" size={20} color={up[0]} strokeWidth={2.4} />
+              <Text style={styles.readyLegend}>{t('ob.readyLegend')}</Text>
+            </View>
+            <Text style={styles.readyTitle}>{t('ob.readyTitle')}</Text>
+            <Text style={styles.readySub}>{t('ob.readySub', { focus, days: inputs.daysPerWeek })}</Text>
+          </>
+        )}
+      </View>
+      {ready ? (
+        <View style={styles.footer}>
+          <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={onDone} disabled={busy} />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
-  title: { ...heroTitle(s(36)), color: color.textPrimary, fontSize: s(36), lineHeight: s(36) * 1.12, fontWeight: '600', textAlign: 'center' },
-  subtitle: { marginTop: s(14), fontSize: s(14), color: color.textSecondary, textAlign: 'center' },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  legend: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale['2xs'],
+    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
+    textTransform: 'uppercase',
+    color: color.textMuted,
+  },
+  buildingTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: color.textPrimary, marginTop: 8, marginBottom: 28 },
+  steps: { gap: 16 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepIcon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.textTertiary },
+  stepText: { fontFamily: font.sans, fontSize: textScale.base },
+
+  readyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0] },
+  readyTitle: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], lineHeight: textScale['3xl'] * 1.05, letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: color.textPrimary, marginTop: 16 },
+  readySub: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, marginTop: 14, maxWidth: 300 },
+  footer: { paddingHorizontal: space.gutter, paddingBottom: 24 },
 });

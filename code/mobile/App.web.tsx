@@ -27,7 +27,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <View style={styles.phone}>
         <HomeView
           resting={resting}
@@ -38,6 +38,7 @@ export default function App() {
           trainedThisWeek={4}
           startError={false}
           dateLabel={dateLabel}
+          weekNumber={11}
           onStart={() => {}}
           workouts={[
             { id: 'd0', name: 'Upper A', muscles: 'Chest · Shoulders · Triceps' },

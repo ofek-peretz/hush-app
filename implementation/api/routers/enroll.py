@@ -23,6 +23,7 @@ import os
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from hush_model.constants import GOALS
 from hush_model.persistence.service import HushService
 
 from .. import auth, errors
@@ -39,6 +40,7 @@ class SelfEnrollRequest(BaseModel):
     age: int = Field(ge=0)
     experience: str
     bodyweight_kg: float | None = Field(default=None, gt=0)
+    goal: str | None = None
 
 
 @router.post("/enroll")
@@ -53,6 +55,8 @@ def self_enroll(body: SelfEnrollRequest, request: Request, db=Depends(get_reques
         raise errors.unprocessable("sex must be male|female", "sex")
     if body.experience not in {"beginner", "intermediate", "advanced"}:
         raise errors.unprocessable("experience must be beginner|intermediate|advanced", "experience")
+    if body.goal is not None and body.goal not in GOALS:
+        raise errors.unprocessable("goal must be one of " + "|".join(GOALS), "goal")
     with write_serialized():
         with db.transaction() as conn:
             existing = conn.execute(
@@ -61,7 +65,8 @@ def self_enroll(body: SelfEnrollRequest, request: Request, db=Depends(get_reques
             if existing is not None:
                 raise errors.conflict("athlete already enrolled")
         HushService(db).onboard(
-            body.athlete_id, body.sex, body.age, body.experience, body.bodyweight_kg
+            body.athlete_id, body.sex, body.age, body.experience, body.bodyweight_kg,
+            body.goal,
         )
         with db.transaction() as conn:
             token = auth.mint_token(conn, body.athlete_id)

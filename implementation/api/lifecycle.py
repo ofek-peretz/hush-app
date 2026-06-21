@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 from hush_model.constants import (
     MODEL_VERSION, CAPABILITY_MODEL_VERSION, CAPABILITY_PRIORITY_ORDER,
+    target_reps_for_goal,
 )
 from hush_model.catalog import CATALOG
 from hush_model.recommendation import recommend
@@ -173,11 +174,13 @@ def compose_session(db: RequestDatabase, athlete_id: str) -> dict:
             return session_to_dict(conn, existing)
         week = server_week(conn, athlete_id)
         session_index = _next_session_index(conn, athlete_id)
+        goal_row = conn.execute("SELECT goal FROM athlete WHERE id=?", (athlete_id,)).fetchone()
+        goal = (goal_row["goal"] if goal_row is not None and "goal" in goal_row.keys() else None)
 
     engine = SessionEngine(db)
     seed = session_index  # exploration is OFF (P_EXPLORE=0); seed is persisted for R4 reconstructability
     session_id, _plan, _block_ids = engine.compose_and_open(
-        athlete_id, week, session_index, seed, DEFAULT_TARGET_REPS
+        athlete_id, week, session_index, seed, target_reps_for_goal(goal)
     )
     _persist_block_recommendations(db, athlete_id, session_id)
 
@@ -261,12 +264,17 @@ def compose_week(db: RequestDatabase, athlete_id: str) -> dict:
     # athlete-owned workout order (athlete > model) → the position each template takes this week
     template_order = _ordered_template_indices(n, proj_workout_order)
 
+    # Goal → working-rep target for every workout this week (loads follow natively via RIR).
+    # Absent goal → the historical default (parity). Frozen within the week with the rest of
+    # the start-of-week strategy.
+    target_reps = target_reps_for_goal(state.goal)
+
     engine = SessionEngine(db)
     session_ids: list[str] = []
     for position, template_index in enumerate(template_order):
         session_index = week_number * n + template_index   # % n == template_index (right template)
         sid, _plan, _blocks = engine.compose_and_open(
-            athlete_id, week, session_index, seed=session_index, target_reps=DEFAULT_TARGET_REPS,
+            athlete_id, week, session_index, seed=session_index, target_reps=target_reps,
             week_plan_id=week_id, position_in_week=position, status="planned",
         )
         _persist_block_recommendations(db, athlete_id, sid)

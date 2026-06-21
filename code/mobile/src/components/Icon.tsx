@@ -26,7 +26,17 @@ export type IconName =
   | 'program' // square.grid.2x2
   | 'history' // clock.arrow.circlepath
   | 'portrait' // chart.bar / chart.bar.fill
-  | 'settings'; // gearshape
+  | 'settings' // gearshape
+  | 'play' // play.fill
+  | 'sliders' // sliders.horizontal
+  | 'calendar' // calendar-range
+  | 'trendingUp' // trending-up
+  | 'layers' // layers
+  | 'lock' // lock
+  | 'circle' // circle-dashed (remaining workout)
+  | 'dumbbell' // dumbbell (history)
+  | 'shield' // shield-check (consent)
+  | 'heart'; // heart-pulse (health)
 
 interface Props {
   name: IconName;
@@ -154,6 +164,69 @@ function render(
         <G {...common}>
           <Circle cx="12" cy="12" r="3.2" />
           <Path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" />
+        </G>
+      );
+    case 'play':
+      return <Path d="M7 5.5l11 6.5-11 6.5z" fill={stroke} stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />;
+    case 'sliders':
+      return (
+        <G {...common}>
+          <Line x1="4" y1="8" x2="20" y2="8" />
+          <Line x1="4" y1="16" x2="20" y2="16" />
+          <Circle cx="9" cy="8" r="2.4" fill="none" />
+          <Circle cx="15" cy="16" r="2.4" fill="none" />
+        </G>
+      );
+    case 'calendar':
+      return (
+        <G {...common}>
+          <Rect x="3.5" y="5" width="17" height="15" rx="2" />
+          <Line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
+          <Line x1="8" y1="3" x2="8" y2="6" />
+          <Line x1="16" y1="3" x2="16" y2="6" />
+        </G>
+      );
+    case 'trendingUp':
+      return (
+        <G {...common}>
+          <Path d="M3 17l6-6 4 4 8-8" />
+          <Path d="M15 7h6v6" />
+        </G>
+      );
+    case 'layers':
+      return (
+        <G {...common}>
+          <Path d="M12 3l9 5-9 5-9-5z" />
+          <Path d="M3 13l9 5 9-5" />
+        </G>
+      );
+    case 'lock':
+      return (
+        <G {...common}>
+          <Rect x="5" y="11" width="14" height="9" rx="2" />
+          <Path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </G>
+      );
+    case 'circle':
+      return <Circle cx="12" cy="12" r="8" {...common} strokeDasharray="3 3" />;
+    case 'dumbbell':
+      return (
+        <G {...common}>
+          <Path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11" />
+        </G>
+      );
+    case 'shield':
+      return (
+        <G {...common}>
+          <Path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+          <Path d="M9 12l2 2 4-4" />
+        </G>
+      );
+    case 'heart':
+      return (
+        <G {...common}>
+          <Path d="M12 20s-7-4.3-9.3-8.3C1.3 9 2.3 6 5.2 6c1.8 0 2.9 1 3.8 2.2C9.9 7 11 6 12.8 6c2.9 0 3.9 3 2.5 5.7" />
+          <Path d="M3 13h4l2-3 2 5 2-3h6" />
         </G>
       );
     default:

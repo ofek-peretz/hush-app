@@ -1,0 +1,67 @@
+/**
+ * All-time peak progress (the Progress screen's data): initial peak vs best peak
+ * across the athlete's entire history, gated at ≥2 distinct weeks per lift.
+ */
+import { allTimePeakProgress, ALL_TIME_MIN_WEEKS } from '@/domain/progressReport';
+import type { Session, SetLog } from '@/data/local/models';
+
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+const base = Date.parse('2026-01-05T10:00:00.000Z');
+
+function set(exerciseId: string, w: number, tsMs: number): SetLog {
+  return {
+    exerciseId,
+    setIndex: 0,
+    recommendedWeight: w,
+    recommendedReps: 8,
+    actualWeight: w,
+    actualReps: 8,
+    edited: false,
+    persistedAt: new Date(tsMs).toISOString(),
+  };
+}
+function session(id: string, tsMs: number, sets: SetLog[]): Session {
+  return { id, programDayId: 'd', startedAt: new Date(tsMs).toISOString(), state: 'SAVED', earlyFinish: false, sets };
+}
+
+describe('allTimePeakProgress', () => {
+  test('empty history → no entries', () => {
+    expect(allTimePeakProgress([], Date.now())).toEqual([]);
+  });
+
+  test('a single week does not qualify (needs ≥2 distinct weeks)', () => {
+    const sessions = [session('s1', base, [set('squat', 60, base)])];
+    expect(allTimePeakProgress(sessions, base + WEEK)).toHaveLength(0);
+    expect(ALL_TIME_MIN_WEEKS).toBe(2);
+  });
+
+  test('initial peak vs best peak across the full span', () => {
+    const sessions = [
+      session('s1', base, [set('squat', 60, base)]),
+      session('s2', base + WEEK, [set('squat', 70, base + WEEK)]),
+      session('s3', base + 5 * WEEK, [set('squat', 100, base + 5 * WEEK)]), // best, but a later dip must not hide it
+      session('s4', base + 6 * WEEK, [set('squat', 90, base + 6 * WEEK)]),
+    ];
+    const out = allTimePeakProgress(sessions, base + 7 * WEEK);
+    expect(out).toHaveLength(1);
+    expect(out[0].exerciseId).toBe('squat');
+    expect(out[0].initialPeakKg).toBe(60); // earliest week's peak
+    expect(out[0].periodPeakKg).toBe(100); // best ever (peak, not last)
+    expect(out[0].deltaKg).toBe(40);
+    expect(out[0].weeksTrained).toBe(4);
+  });
+
+  test('bodyweight sets (null load) are ignored; sorted by biggest gain', () => {
+    const sessions = [
+      session('s1', base, [set('bench', 40, base), { ...set('pullup', 0, base), actualWeight: null, recommendedWeight: null }]),
+      session('s2', base + WEEK, [set('bench', 55, base + WEEK)]),
+      session('s3', base, [set('row', 50, base)]),
+      session('s4', base + WEEK, [set('row', 52, base + WEEK)]),
+    ];
+    const out = allTimePeakProgress(sessions, base + 2 * WEEK);
+    const ids = out.map((e) => e.exerciseId);
+    expect(ids).not.toContain('pullup'); // bodyweight excluded
+    expect(ids[0]).toBe('bench'); // +15 sorts before row's +2
+    expect(out.find((e) => e.exerciseId === 'bench')!.deltaKg).toBe(15);
+  });
+});

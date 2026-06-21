@@ -12,7 +12,9 @@ import { useApp } from '@/state/stores/appStore';
 import { useSession } from '@/state/stores/sessionStore';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
-import type { SetTarget } from '@/data/local/models';
+import { trainingWeekNumber, isNextWeekLocked } from '@/domain/weekCadence';
+import { db } from '@/data/local/db';
+import type { SetTarget, Session } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
@@ -39,12 +41,41 @@ export function Home({ navigation, route }: Props) {
   const workouts = (program?.days ?? [])
     .filter((d) => !d.isRest)
     .map((d) => ({ id: d.id, name: d.name, muscles: d.muscleGroups.join(' · ') }));
-  // A complete week REUSES the existing Home Rest state: the backend Rest flag, OR every workout
-  // in a loaded program is done (no next workout to offer).
-  const resting =
-    app.weekRest || (!!program && program.days.length > 0 && !day);
-
   const isFocused = useIsFocused();
+
+  // History (for the all-time last-activity → Sunday-04:00 lock). Loaded on focus.
+  const [lastDoneMs, setLastDoneMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    db.loadHistory().then((sessions: Session[]) => {
+      if (cancelled) return;
+      const times = sessions.map((s) => Date.parse(s.startedAt)).filter((n) => !Number.isNaN(n));
+      setLastDoneMs(times.length ? Math.max(...times) : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused]);
+
+  // WEEK CADENCE (Sunday 04:00): the next week is genuinely locked until the first
+  // Sunday-04:00 after the last completed session. If the backend prepared a fresh
+  // week early (every workout un-started) we keep Recovery + block starting until
+  // it actually opens — the founder's hard gate.
+  const nowMs = Date.now();
+  const nonRest = program?.days.filter((d) => !d.isRest) ?? [];
+  const weekLocked = isNextWeekLocked(lastDoneMs, nowMs);
+  const freshWeek = nonRest.length > 0 && nonRest.every((d) => !d.completed);
+  const prematureNewWeek = freshWeek && weekLocked;
+
+  // A complete week REUSES the Home Rest/Recovery state: the backend Rest flag, OR
+  // every workout in a loaded program is done (no next workout to offer), OR a fresh
+  // week that has not opened yet (locked until Sunday 04:00).
+  const resting =
+    app.weekRest || (!!program && program.days.length > 0 && !day) || prematureNewWeek;
+
+  // Training-week counter ("Week N"), counted from account creation in Sunday-04:00 windows.
+  const weekNumber = trainingWeekNumber(app.profile?.memberSince, nowMs);
 
   // Prefetched targets for the next workout, so Slide-to-start launches with no
   // network wait (the round-trip happens while the athlete is on Home, not after
@@ -85,6 +116,7 @@ export function Home({ navigation, route }: Props) {
 
   async function onStart() {
     if (!day) return;
+    if (resting) return; // hard gate: the next week is locked until Sunday 04:00
     setStartError(false);
     try {
       const targets =
@@ -119,12 +151,14 @@ export function Home({ navigation, route }: Props) {
       trainedThisWeek={trainedThisWeek}
       startError={startError}
       dateLabel={dateLabel}
+      weekNumber={weekNumber}
       onStart={onStart}
       workouts={workouts}
       onChooseWorkout={setChosenId}
       onProgram={() => navigation.navigate('Program')}
       onHistory={() => navigation.navigate('History')}
       onSettings={() => navigation.navigate('ProfileSheet')}
+      onProgress={() => navigation.navigate('Progress')}
     />
   );
 }

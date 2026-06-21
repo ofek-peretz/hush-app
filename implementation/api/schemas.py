@@ -170,6 +170,9 @@ class ProfilePatchRequest(BaseModel):
     age: int | None = Field(default=None, ge=0)
     experience: str | None = None
     bodyweight_kg: float | None = Field(default=None, gt=0)
+    # Training intent (build_muscle|get_stronger|general_fitness|toning). Selects the
+    # composition's working-rep target; validated against constants.GOALS in the router.
+    goal: str | None = None
     # Chosen weekly training frequency (onboarding days-per-week). Written into the
     # strategy projection; the server clamps to a supported template (2–4).
     weekly_frequency: int | None = Field(default=None, ge=2, le=6)
@@ -236,5 +239,6 @@ class AthleteOut(BaseModel):
     age: int
     experience: str
     bodyweight_kg: float | None = None
+    goal: str | None = None
     model_version: str
     capability_model_version: str

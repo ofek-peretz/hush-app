@@ -1,26 +1,35 @@
 /**
- * 4.24 Workout Detail — read-only record of a logged session. Header shows the
- * workout name and "date · duration"; each exercise block lists its sets as
- * "Set N" + the ACTUAL "weight × reps" logged. Immutable; no targets, no editing.
- *
- * Duration is derived from the session span (start → last set logged), since the
- * session stores per-set timestamps rather than a duration field.
+ * Workout Detail (§4.24) — read-only record of a logged session, rebuilt 1:1 to
+ * the Claude Design "Design System" History record (ui_kits/app/History.jsx →
+ * Record). Legend "{date} · read-only record" → name → Duration / Sets / Volume →
+ * each exercise's ACTUAL logged sets as mono "weight × reps" chips. Immutable; no
+ * targets, no editing.
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
+import { Legend, Metric } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
 import type { Session, SetLog } from '@/data/local/models';
-import { color, space, tnum, heroTitle, press, s } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WorkoutDetail'>;
+
+function durationLabel(s: Session): string {
+  if (s.sets.length === 0) return '0:00';
+  const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
+  const total = Math.max(0, Math.round((last - Date.parse(s.startedAt)) / 1000));
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
 
 export function WorkoutDetail({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -36,13 +45,6 @@ export function WorkoutDetail({ navigation, route }: Props) {
     });
   }, [route.params.sessionId]);
 
-  function durationMin(s: Session): number {
-    if (s.sets.length === 0) return 0;
-    const last = s.sets[s.sets.length - 1].persistedAt;
-    const ms = Date.parse(last) - Date.parse(s.startedAt);
-    return Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.round(ms / 60000)) : 0;
-  }
-
   // Group logged sets by exercise, preserving order.
   const order: string[] = [];
   const byEx: Record<string, SetLog[]> = {};
@@ -55,8 +57,10 @@ export function WorkoutDetail({ navigation, route }: Props) {
   }
 
   const dateLabel = session
-    ? new Date(session.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    ? new Date(session.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
     : '';
+  const volumeKg = (session?.sets ?? []).reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
+  const volume = displayWeight(Math.round(volumeKg), units) ?? 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -68,34 +72,50 @@ export function WorkoutDetail({ navigation, route }: Props) {
           onPress={() => navigation.goBack()}
           style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
         >
-          <Icon name="chevronLeft" size={22} color={color.textSecondary} strokeWidth={2} />
+          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
         </Pressable>
-        {session ? (
-          <View style={styles.headerText}>
-            <Text style={styles.title} accessibilityRole="header">{sessionDayName(session, app.program)}</Text>
-            <Text style={styles.meta}>{t('history.dateDuration', { date: dateLabel, min: durationMin(session) })}</Text>
-          </View>
-        ) : null}
       </View>
 
       {loading || !session ? null : (
-        <ScrollView contentContainerStyle={styles.body}>
-          {order.map((exId) => (
-            <View key={exId} style={styles.exercise}>
-              <Text style={styles.exName}>{exerciseById(exId)?.name ?? exId}</Text>
-              {byEx[exId].map((set, i) => {
-                const w = displayWeight(set.actualWeight, units);
-                return (
-                  <View key={i} style={styles.setRow}>
-                    <Text style={styles.setN}>{t('history.setN', { n: i + 1 })}</Text>
-                    <Text style={styles.setVal}>
-                      {w == null ? `${set.actualReps} reps` : `${w} ${unitLabel(units)} × ${set.actualReps}`}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Legend>{t('history.recordLegend', { date: dateLabel })}</Legend>
+          <Text style={styles.title} accessibilityRole="header">{sessionDayName(session, app.program)}</Text>
+
+          <View style={styles.stats}>
+            <Metric value={durationLabel(session)} label={t('history.duration')} size="sm" />
+            <Metric value={session.sets.length} label={t('history.setsLabel')} size="sm" />
+            <Metric value={volume.toLocaleString()} unit={unitLabel(units)} label={t('history.volumeLabel')} size="sm" />
+          </View>
+
+          <View style={styles.exercises}>
+            {order.map((exId, idx) => (
+              <View key={exId} style={[styles.exercise, idx < order.length - 1 && styles.exerciseBorder]}>
+                <Text style={styles.exName}>{exerciseById(exId)?.name ?? exId}</Text>
+                <View style={styles.chips}>
+                  {byEx[exId].map((set, i) => {
+                    const w = displayWeight(set.actualWeight, units);
+                    return (
+                      <View key={i} style={styles.chip}>
+                        <Text style={styles.chipIdx}>{i + 1}</Text>
+                        {w == null ? (
+                          <>
+                            <Text style={styles.chipNum}>{set.actualReps}</Text>
+                            <Text style={styles.chipUnit}>{t('workout.repsUnit')}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.chipNum}>{w}</Text>
+                            <Text style={styles.chipUnit}>{unitLabel(units)} ×</Text>
+                            <Text style={styles.chipNum}>{set.actualReps}</Text>
+                          </>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -104,15 +124,26 @@ export function WorkoutDetail({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: 6, gap: 6 },
-  back: { width: 36, height: 44, alignItems: 'flex-start', justifyContent: 'center', marginLeft: -8 },
-  headerText: { flex: 1 },
-  title: { ...heroTitle(s(22)), color: color.textPrimary, fontSize: s(22), fontWeight: '600' },
-  meta: { fontSize: s(13), color: color.textSecondary, marginTop: 2 },
-  body: { paddingTop: 22, paddingHorizontal: space.gutter, paddingBottom: 48 },
-  exercise: { marginBottom: s(20) },
-  exName: { fontSize: s(17), fontWeight: '500', color: color.textPrimary, marginBottom: s(8) },
-  setRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: s(4) },
-  setN: { fontSize: s(14), color: color.textSecondary },
-  setVal: { ...tnum, fontSize: s(14), color: color.textSecondary },
+  headerRow: { paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 2 },
+  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
+  body: { paddingTop: 6, paddingHorizontal: space.gutter, paddingBottom: 48 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4 },
+  stats: { flexDirection: 'row', gap: 22, marginTop: 14 },
+  exercises: { marginTop: 18 },
+  exercise: { paddingVertical: 14 },
+  exerciseBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
+  exName: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, marginBottom: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: color.fillSubtle,
+    borderRadius: 4,
+  },
+  chipIdx: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary },
+  chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary },
+  chipUnit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
 });

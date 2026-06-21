@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS athlete (
     age           INTEGER NOT NULL,
     experience    TEXT NOT NULL,
     created_at    TEXT NOT NULL,
-    bodyweight_kg REAL                  -- DX-07: nullable; inert until Option D (DX-08)
+    bodyweight_kg REAL,                 -- DX-07: nullable; inert until Option D (DX-08)
+    goal          TEXT                  -- training intent; nullable (NULL == default 8-rep target)
 );
 
 CREATE TABLE IF NOT EXISTS athlete_state (

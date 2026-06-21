@@ -54,7 +54,7 @@ def seed_capability_prior_bw(capability: str, sex: str, bodyweight_kg: float,
 
 
 def seed_athlete(athlete_id: str, sex: str, age: int, experience: str,
-                 bodyweight_kg: float | None = None) -> AthleteState:
+                 bodyweight_kg: float | None = None, goal: str | None = None) -> AthleteState:
     use_option_d = _bodyweight_valid(bodyweight_kg)
     caps: dict[str, CapabilityState] = {}
     for capability in CLASS_A_CAPABILITIES:
@@ -72,4 +72,5 @@ def seed_athlete(athlete_id: str, sex: str, age: int, experience: str,
     return AthleteState(
         athlete_id=athlete_id, sex=sex, age=age,
         experience=experience, capabilities=caps, bodyweight_kg=bodyweight_kg,
+        goal=goal,
     )

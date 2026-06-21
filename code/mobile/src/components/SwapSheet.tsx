@@ -1,31 +1,29 @@
 /**
- * 4.21 Swap Exercise sheet — alternatives that hit the SAME movement pattern.
- * Current is a white card with a check (not re-selectable); alternatives are
- * surface3 cards with a chevron. Selecting one replaces the slot's exercise
- * (capability is fixed, so all options stay in-class).
+ * 4.21 Swap Exercise sheet — alternatives that hit the SAME muscle group. Current is a
+ * white card with a check (not re-selectable); alternatives are surface3 cards with a
+ * chevron. Selecting one replaces the slot's exercise (each muscle group is a subset of
+ * the slot's fixed capability, so all options stay in-class).
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { exerciseById, exercisesForCapability } from '@/data/exercises';
-import { capabilityNameKey } from '@/domain/portrait';
-import type { Capability } from '@/data/local/models';
+import { exerciseById, exercisesForMuscle, muscleOf } from '@/data/exercises';
 import { color, radius, space, heroTitle, press, s } from '@/design/tokens';
 
 interface Props {
-  capability: Capability;
   currentExerciseId: string;
   onSelect: (exerciseId: string) => void;
   onClose: () => void;
 }
 
-export function SwapSheet({ capability, currentExerciseId, onSelect, onClose }: Props) {
+export function SwapSheet({ currentExerciseId, onSelect, onClose }: Props) {
   const { t } = useCopy();
   const current = exerciseById(currentExerciseId);
-  const alternatives = exercisesForCapability(capability).filter((e) => e.id !== currentExerciseId);
-  const pattern = t(capabilityNameKey(capability));
+  const muscle = muscleOf(currentExerciseId);
+  const alternatives = (muscle ? exercisesForMuscle(muscle) : []).filter((e) => e.id !== currentExerciseId);
+  const pattern = muscle ? t(`muscle.${muscle}`) : '';
 
   return (
     <BottomSheet onClose={onClose} background={color.surface2} heightFraction={0.74} gutter={space.sheetGutter}>

@@ -64,6 +64,7 @@ MAP = {
     "hush_model/persistence/migrations/migration_015_preference_events.py": "api/migration_015_preference_events.py",
     "hush_model/persistence/migrations/migration_016_week_plan.py": "api/migration_016_week_plan.py",
     "hush_model/persistence/migrations/migration_017_workout_name.py": "api/migration_017_workout_name.py",
+    "hush_model/persistence/migrations/migration_018_goal.py": "api/migration_018_goal.py",
     # ---- Wave-2 web shell (BB-13/14): the additive API layer beside the frozen model ----
     "app/__init__.py": None,
     "app/connection.py": "api/connection.py",
@@ -132,6 +133,7 @@ MAP = {
     "tests/test_api_erasure.py": "api/test_api_erasure.py",
     "tests/test_api_ops_monitor.py": "api/test_api_ops_monitor.py",
     "tests/test_api_enroll.py": "api/test_api_enroll.py",
+    "tests/test_api_goal.py": "api/test_api_goal.py",
 }
 
 # The API tests run under pytest (FastAPI TestClient + fixtures), not the plain-assert golden
@@ -147,6 +149,7 @@ API_TEST_FILES = [
     "tests/test_api_erasure.py",
     "tests/test_api_ops_monitor.py",
     "tests/test_api_enroll.py",
+    "tests/test_api_goal.py",
 ]
 
 
