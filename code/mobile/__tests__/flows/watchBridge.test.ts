@@ -17,7 +17,8 @@ function activeMirror(over: Partial<SessionMirror> = {}): SessionMirror {
     globalIndex: 0, totalSets: 3, targetWeight: 60, targetReps: 5,
     restEndsAt: null, restRemainingS: null, nextExerciseName: null,
     nextTargetWeight: null, nextTargetReps: null, completedExerciseName: null,
-    canMarkBusy: false, ...over,
+    canMarkBusy: false, loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
+    workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [], ...over,
   };
 }
 
@@ -39,6 +40,11 @@ function harness() {
     onReachabilityChange: (cb) => { reachCb = cb; return () => { reachCb = undefined; }; },
   };
 
+  const selected: (string | undefined)[] = [];
+  const startedWorkouts: (string | undefined)[] = [];
+  const swapped: (string | undefined)[] = [];
+  const restAdded: number[] = [];
+
   const session = new WatchSession({
     transport,
     now: () => NOW,
@@ -46,10 +52,14 @@ function harness() {
     completeSet: (reps, weight) => { completed.push(reps); completedWeights.push(weight); },
     dispatch: (e) => void dispatched.push(e),
     markEquipmentOccupied: () => void busy.push(1),
+    selectWorkout: (id) => void selected.push(id),
+    startWorkout: (id) => void startedWorkouts.push(id),
+    swapExercise: (id) => void swapped.push(id),
+    addRest: (s) => void restAdded.push(s),
   });
 
   return {
-    session, sent, events, dispatched, busy, completed, completedWeights,
+    session, sent, events, dispatched, busy, completed, completedWeights, selected, startedWorkouts, swapped, restAdded,
     types: () => events.map((e) => e.type),
     emitIntent: (raw: unknown) => intentCb?.(raw),
     setReachable: (r: boolean) => { reachable = r; reachCb?.(r); },
@@ -154,6 +164,57 @@ describe('WatchSession intent handling (phone authority)', () => {
     h.session.publish(activeMirror({ phase: 'rest_inter' }));
     h.emitIntent(intent()); // complete_set during rest
     expect(h.completed).toHaveLength(0);
+    expect(h.events.some((e) => e.type === WATCH_EVENTS.actionIgnored && e.data?.reason === 'phase_mismatch')).toBe(true);
+  });
+});
+
+describe('WatchSession lobby (Start screen)', () => {
+  it('publishes a null-mirror lobby envelope and stays subscribed for proposals', () => {
+    const h = harness();
+    h.session.publishLobby({
+      workoutId: 'w1', workoutName: 'Upper A', muscles: 'Chest', resting: false,
+      workouts: [{ id: 'w1', name: 'Upper A' }, { id: 'w2', name: 'Lower A' }],
+    });
+    expect(h.sent).toHaveLength(1);
+    expect(h.sent[0]).toMatchObject({ mirror: null, lobby: { workoutName: 'Upper A' } });
+
+    // A Start-screen proposal arriving while idle is routed to the phone.
+    h.emitIntent({ v: WATCH_PROTOCOL_VERSION, type: 'select_workout', intentId: 's1', issuedAt: new Date(NOW - 50).toISOString(), workoutId: 'w2' });
+    expect(h.selected).toEqual(['w2']);
+
+    h.emitIntent({ v: WATCH_PROTOCOL_VERSION, type: 'start_workout', intentId: 's2', issuedAt: new Date(NOW - 50).toISOString(), workoutId: 'w2' });
+    expect(h.startedWorkouts).toEqual(['w2']);
+  });
+
+  it('rejects an in-workout intent while in the lobby (no active session)', () => {
+    const h = harness();
+    h.session.publishLobby({ workoutId: 'w1', workoutName: 'Upper A', muscles: '', workouts: [] });
+    h.emitIntent(intent()); // complete_set with no session
+    expect(h.completed).toHaveLength(0);
+    expect(h.events.some((e) => e.type === WATCH_EVENTS.actionIgnored && e.data?.reason === 'no_session')).toBe(true);
+  });
+});
+
+describe('WatchSession swap + add_rest (in-workout)', () => {
+  it('routes swap_exercise on Active Set to the phone swap', () => {
+    const h = harness();
+    h.session.publish(activeMirror());
+    h.emitIntent({ v: WATCH_PROTOCOL_VERSION, type: 'swap_exercise', intentId: 'sw1', issuedAt: new Date(NOW - 50).toISOString(), exerciseId: 'lat_pulldown' });
+    expect(h.swapped).toEqual(['lat_pulldown']);
+  });
+
+  it('routes add_rest during rest (default +15s)', () => {
+    const h = harness();
+    h.session.publish(activeMirror({ phase: 'rest_inter' }));
+    h.emitIntent({ v: WATCH_PROTOCOL_VERSION, type: 'add_rest', intentId: 'ar1', issuedAt: new Date(NOW - 50).toISOString() });
+    expect(h.restAdded).toEqual([15]);
+  });
+
+  it('rejects add_rest outside a rest (phase mismatch)', () => {
+    const h = harness();
+    h.session.publish(activeMirror()); // active_set
+    h.emitIntent({ v: WATCH_PROTOCOL_VERSION, type: 'add_rest', intentId: 'ar2', issuedAt: new Date(NOW - 50).toISOString() });
+    expect(h.restAdded).toHaveLength(0);
     expect(h.events.some((e) => e.type === WATCH_EVENTS.actionIgnored && e.data?.reason === 'phase_mismatch')).toBe(true);
   });
 });

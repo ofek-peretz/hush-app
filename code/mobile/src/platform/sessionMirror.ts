@@ -20,6 +20,7 @@
  * This module is PURE (no native imports) so it is unit-testable on any host.
  */
 import type { SessionMachine } from '@/state/machines/sessionState';
+import type { ReasonType } from '@/data/local/models';
 
 /** The mirror's coarse phase — the projection of the session machine an external
  *  surface needs (it never sees the machine's internal sub-states). */
@@ -38,11 +39,20 @@ export const MIRROR_SCHEMA_VERSION = 1 as const;
  *  from the session store's internal `Step` so this module stays pure. */
 export interface MirrorStep {
   exerciseName: string;
+  /** Primary muscle group label (Active Set legend). */
+  exerciseGroup?: string;
   setIndexInExercise: number; // 0-based within the exercise
   totalSetsInExercise: number;
   globalIndex: number; // 0-based within the whole session
   targetWeight: number | null; // null => bodyweight
   targetReps: number;
+  /** Advisory model reason for THIS set's load vs last comparable (§4.4). Carried so
+   *  the watch can render the LoadDelta mark; never authoritative. */
+  reasonType?: ReasonType;
+  /** Magnitude (kg) of the change, used by the LoadDelta value. */
+  reasonDelta?: number;
+  /** In-class alternatives the athlete may swap to (Swap overlay); empty = none. */
+  swapOptions?: { id: string; name: string }[];
 }
 
 /** The canonical mirror. Every surface renders a SUBSET of this — e.g. the Live
@@ -52,7 +62,14 @@ export interface SessionMirror {
   schema: typeof MIRROR_SCHEMA_VERSION;
   phase: MirrorPhase;
   exerciseName: string;
+  /** Primary muscle group of the current exercise (Active Set legend); '' if none. */
+  exerciseGroup: string;
   setLabel: string; // e.g. "Set 2 of 4"
+  /** Numeric set position within the current exercise (1-based) + total, for set dots. */
+  setNumber: number;
+  setsInExercise: number;
+  /** Total sets of the UPCOMING exercise (transition card "{n} sets"); 0 if none. */
+  nextSetsInExercise: number;
   globalIndex: number; // 0-based position within the session
   totalSets: number;
   targetWeight: number | null;
@@ -61,6 +78,9 @@ export interface SessionMirror {
   restEndsAt: string | null;
   /** Convenience snapshot derived from restEndsAt at projection time. */
   restRemainingS: number | null;
+  /** The full prescribed rest length (s) — the rest ring's denominator; null unless
+   *  resting. Optional/back-compatible. */
+  restTotalS?: number | null;
   /** Upcoming exercise name during a transition rest; else null. */
   nextExerciseName: string | null;
   /** Target of the upcoming exercise's first set during a transition rest. */
@@ -73,6 +93,25 @@ export interface SessionMirror {
    *  exercise to defer to — drives the Active Set "Exercise Busy" affordance
    *  (mirrors the phone's canMarkOccupied). */
   canMarkBusy: boolean;
+  /** Signed kg change of the CURRENT set's load vs last comparable: + increase,
+   *  − decrease, 0 hold. Drives the watch LoadDelta mark (sage ▲ / clay ▼ / hold).
+   *  Advisory, presentational only — never alters the prescribed target. */
+  loadDeltaKg: number;
+  /** Signed kg change of the UPCOMING exercise's first set (transition rest card). */
+  nextLoadDeltaKg: number;
+  /** The current lift's ordinal among the session's distinct exercises + the total
+   *  ("Lift 1/6") — ambient exercises-remaining context on the top strip. */
+  liftIndex: number;
+  liftCount: number;
+  /** The session's workout name (program day) — shown on the Complete screen. */
+  workoutName: string;
+  /** Complete-frame summary (only on the terminal frame): wall-clock time, total
+   *  sets logged, and lifts progressed (distinct exercises the model raised). */
+  summary: { timeLabel: string; sets: number; up: number } | null;
+  /** Swap alternatives for the CURRENT exercise (Active Set glyph → overlay). */
+  swapOptions: { id: string; name: string }[];
+  /** Swap alternatives for the UPCOMING exercise (Transition rest card glyph). */
+  nextSwapOptions: { id: string; name: string }[];
 }
 
 export interface MirrorInputs {
@@ -86,10 +125,42 @@ export interface MirrorInputs {
    *  absolute restEndsAt so the timer never drifts as the mirror is re-projected. */
   restStartedAtMs: number | null;
   nowMs: number;
+  /** The session's workout name (program day) — for the watch Complete screen. */
+  workoutName?: string;
+  /** When the session started (ms epoch) — drives the Complete summary time. */
+  sessionStartedAtMs?: number | null;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
   return phase === 'REST_INTER' || phase.startsWith('REST_TRANSITION');
+}
+
+/** Signed kg load change for a step: + increase, − decrease, 0 hold/unknown. */
+function signedDelta(step: MirrorStep | null | undefined): number {
+  if (!step || !step.reasonType) return 0;
+  const mag = step.reasonDelta ?? 0;
+  return step.reasonType === 'increase' ? mag : step.reasonType === 'decrease' ? -mag : 0;
+}
+
+function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
+ *  and the total number of runs ("Lift 1/6"). */
+function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
+  let runs = 0;
+  let curRun = 0;
+  let prev: string | null = null;
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].exerciseName !== prev) {
+      runs += 1;
+      prev = steps[i].exerciseName;
+    }
+    if (i === idx) curRun = runs;
+  }
+  return { index: curRun || 1, count: runs || 1 };
 }
 
 /**
@@ -104,20 +175,36 @@ function isResting(phase: SessionMachine['phase']): boolean {
  */
 export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const { steps, total, machine, restInterS, restTransitionS, restStartedAtMs, nowMs } = inp;
+  const workoutName = inp.workoutName ?? '';
   if (steps.length === 0) return null;
 
   const idx = machine.setIndex;
   // Clamp: at SESSION_SAVED/WELL_DONE the index may sit past the last step.
   const cur = steps[idx] ?? steps[steps.length - 1];
   const setLabel = `Set ${cur.setIndexInExercise + 1} of ${cur.totalSetsInExercise}`;
+  const lift = liftPosition(steps, Math.min(idx, steps.length - 1));
 
   // Terminal — a read-only "complete" frame. No rest, no next.
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
+    // Lifts progressed = distinct exercises the model raised this session.
+    const up = new Set(
+      steps.filter((s) => s.reasonType === 'increase').map((s) => s.exerciseName),
+    ).size;
+    const startedMs = inp.sessionStartedAtMs ?? null;
+    const summary = {
+      timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
+      sets: total,
+      up,
+    };
     return {
       schema: MIRROR_SCHEMA_VERSION,
       phase: 'complete',
       exerciseName: cur.exerciseName,
+      exerciseGroup: cur.exerciseGroup ?? '',
       setLabel,
+      setNumber: cur.setIndexInExercise + 1,
+      setsInExercise: cur.totalSetsInExercise,
+      nextSetsInExercise: 0,
       globalIndex: cur.globalIndex,
       totalSets: total,
       targetWeight: cur.targetWeight,
@@ -129,6 +216,14 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       nextTargetReps: null,
       completedExerciseName: null,
       canMarkBusy: false,
+      loadDeltaKg: 0,
+      nextLoadDeltaKg: 0,
+      liftIndex: lift.index,
+      liftCount: lift.count,
+      workoutName,
+      summary,
+      swapOptions: [],
+      nextSwapOptions: [],
     };
   }
 
@@ -140,8 +235,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
 
   let restEndsAt: string | null = null;
   let restRemainingS: number | null = null;
+  let restTotalS: number | null = null;
   if (resting && !paused) {
     const restS = effPhase === 'REST_INTER' ? restInterS : restTransitionS;
+    restTotalS = restS;
     const startMs = restStartedAtMs ?? nowMs;
     const endMs = startMs + restS * 1000;
     restEndsAt = new Date(endMs).toISOString();
@@ -170,19 +267,34 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     schema: MIRROR_SCHEMA_VERSION,
     phase,
     exerciseName: cur.exerciseName,
+    exerciseGroup: cur.exerciseGroup ?? '',
     setLabel,
+    setNumber: cur.setIndexInExercise + 1,
+    setsInExercise: cur.totalSetsInExercise,
+    nextSetsInExercise: next ? next.totalSetsInExercise : 0,
     globalIndex: cur.globalIndex,
     totalSets: total,
     targetWeight: cur.targetWeight,
     targetReps: cur.targetReps,
     restEndsAt,
     restRemainingS,
+    restTotalS,
     nextExerciseName: next ? next.exerciseName : null,
     nextTargetWeight: next ? next.targetWeight : null,
     nextTargetReps: next ? next.targetReps : null,
     // The just-finished exercise is the current step on a transition-rest frame.
     completedExerciseName: isTransition ? cur.exerciseName : null,
     canMarkBusy,
+    // Active set: the current set's signed load change (the LoadDelta mark).
+    loadDeltaKg: phase === 'active_set' ? signedDelta(cur) : 0,
+    // Transition rest: the upcoming exercise's first-set change (the card's delta).
+    nextLoadDeltaKg: isTransition ? signedDelta(next) : 0,
+    liftIndex: lift.index,
+    liftCount: lift.count,
+    workoutName,
+    summary: null,
+    swapOptions: phase === 'active_set' ? cur.swapOptions ?? [] : [],
+    nextSwapOptions: isTransition && next ? next.swapOptions ?? [] : [],
   };
 }
 

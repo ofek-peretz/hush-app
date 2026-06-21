@@ -21,6 +21,7 @@ import { WATCH_EVENTS } from '@/platform/events';
 import {
   decideWatchIntent,
   makeStateEnvelope,
+  type WatchLobby,
   type WatchStateEnvelope,
 } from './protocol';
 
@@ -57,6 +58,17 @@ export interface WatchSessionDeps {
   /** Apply an Exercise Busy (equipment-occupied) reorder — a phone session-store
    *  action, not a machine event. */
   markEquipmentOccupied: () => void;
+  /** Queue the workout the Start screen picked (lobby proposal). Optional — the
+   *  phone owns the program; absent = the proposal is accepted but no-op. */
+  selectWorkout?: (workoutId?: string) => void;
+  /** Start the queued workout from the Start screen (lobby proposal). Optional —
+   *  the phone (sole authority over the session lifecycle) performs the start. */
+  startWorkout?: (workoutId?: string) => void;
+  /** Swap the current/next exercise to the chosen one (the phone recalibrates the
+   *  load). Optional — absent = the proposal is accepted but no-op (documented seam). */
+  swapExercise?: (exerciseId?: string) => void;
+  /** Extend the running rest by N seconds (Rest screen "+15 sec"). Optional seam. */
+  addRest?: (seconds: number) => void;
   /** Telemetry sink (track) — every lifecycle/intent event lands in the dataset. */
   track: (type: string, data?: Record<string, unknown>) => void;
   now: () => number;
@@ -75,10 +87,22 @@ export class WatchSession {
   private reachable = false;
   private everDisconnected = false;
   private started = false;
+  private subscribed = false;
   private unsub: Array<() => void> = [];
 
   constructor(deps: WatchSessionDeps) {
     this.d = deps;
+  }
+
+  /** Subscribe to the transport once (idempotent). Used by both an active session
+   *  and the pre-session lobby so watch intents are always heard. */
+  private subscribe(): void {
+    if (this.subscribed) return;
+    this.subscribed = true;
+    this.unsub.push(this.d.transport.onIntent((raw) => this.handleIntent(raw)));
+    this.unsub.push(
+      this.d.transport.onReachabilityChange((r) => this.handleReachability(r)),
+    );
   }
 
   /** Begin mirroring: subscribe to the transport and emit session-started. */
@@ -88,10 +112,20 @@ export class WatchSession {
     this.reachable = this.d.transport.isReachable();
     this.d.track(WATCH_EVENTS.sessionStarted, { reachable: this.reachable });
     if (this.reachable) this.d.track(WATCH_EVENTS.connected);
-    this.unsub.push(this.d.transport.onIntent((raw) => this.handleIntent(raw)));
-    this.unsub.push(
-      this.d.transport.onReachabilityChange((r) => this.handleReachability(r)),
-    );
+    this.subscribe();
+  }
+
+  /**
+   * Publish the pre-session lobby (the Start screen). No active session — the
+   * envelope carries a null mirror + the lobby. Keeps the transport subscribed so
+   * the Start screen's select/start proposals are received and routed to the phone.
+   */
+  publishLobby(lobby: WatchLobby | null): void {
+    this.subscribe();
+    this.lastMirror = null;
+    const env = makeStateEnvelope(null, ++this.authoritySeq, this.d.now(), lobby);
+    this.d.transport.sendState(env);
+    this.d.track(WATCH_EVENTS.statePublished, { phase: 'lobby', seq: this.authoritySeq });
   }
 
   /**
@@ -119,6 +153,7 @@ export class WatchSession {
     this.started = false;
     for (const u of this.unsub) u();
     this.unsub = [];
+    this.subscribed = false;
     this.d.track(WATCH_EVENTS.sessionEnded);
   }
 
@@ -166,6 +201,18 @@ export class WatchSession {
         break;
       case 'mark_equipment_occupied':
         this.d.markEquipmentOccupied();
+        break;
+      case 'select_workout':
+        this.d.selectWorkout?.(action.workoutId);
+        break;
+      case 'start_workout':
+        this.d.startWorkout?.(action.workoutId);
+        break;
+      case 'swap_exercise':
+        this.d.swapExercise?.(action.exerciseId);
+        break;
+      case 'add_rest':
+        this.d.addRest?.(action.seconds);
         break;
     }
   }

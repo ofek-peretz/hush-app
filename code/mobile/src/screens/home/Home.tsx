@@ -114,6 +114,52 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused, day?.id, app.modeState.completedSessions]);
 
+  // Keep the Apple Watch Start screen in sync with the queued workout (read-only —
+  // the watch mirrors the iPhone home card). Starting a workout stays phone-initiated;
+  // this only publishes WHAT is queued. No-op while a session is active (the mirror
+  // drives the watch then). Re-publishes when the queued workout / list / lock changes.
+  useEffect(() => {
+    const lifts = day ? day.slots.length : undefined;
+    session.publishWatchLobby({
+      workoutId: day?.id ?? null,
+      workoutName: day?.name ?? '',
+      muscles: day?.muscleGroups.join(' · ') ?? '',
+      lifts,
+      // Rough estimate (no per-day duration on the model yet): ~8 min per lift.
+      durationLabel: lifts ? `~${lifts * 8} min` : undefined,
+      resting,
+      workouts: (program?.days ?? [])
+        .filter((d) => !d.isRest)
+        .map((d) => ({
+          id: d.id,
+          name: d.name,
+          lifts: d.slots.length,
+          muscles: d.muscleGroups.join(' · '),
+          done: d.completed,
+        })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day?.id, day?.name, resting, workouts.length]);
+
+  // While Home is focused, let the watch Start screen run the EXACT same Begin /
+  // Choose the phone does (start + navigate / queue another workout). Cleared on blur
+  // so a watch Begin never fires when the athlete isn't on Home. Re-binds when the
+  // queued day changes so onStart closes over the current workout.
+  useEffect(() => {
+    if (isFocused) {
+      session.setWatchHomeActions({
+        onBegin: () => {
+          if (!resting) void onStart();
+        },
+        onSelect: (id) => {
+          if (id) setChosenId(id);
+        },
+      });
+    }
+    return () => session.setWatchHomeActions(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, day?.id, resting]);
+
   async function onStart() {
     if (!day) return;
     if (resting) return; // hard gate: the next week is locked until Sunday 04:00

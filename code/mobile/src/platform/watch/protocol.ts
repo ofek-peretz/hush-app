@@ -36,6 +36,9 @@ export interface WatchStateEnvelope {
   type: 'session_state';
   /** Read-only projection; null = no active session (watch tears its UI down). */
   mirror: SessionMirror | null;
+  /** Pre-session lobby for the Start screen, populated ONLY when `mirror` is null
+   *  (no active session). Optional/back-compatible: an older watch ignores it. */
+  lobby?: WatchLobby | null;
   /** Monotonic authority sequence. The watch keeps the highest it has seen and
    *  ignores any envelope with a lower seq (last-write-wins, reorder-proof). */
   authoritySeq: number;
@@ -46,11 +49,13 @@ export function makeStateEnvelope(
   mirror: SessionMirror | null,
   authoritySeq: number,
   sentAtMs: number,
+  lobby: WatchLobby | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
     type: 'session_state',
     mirror,
+    lobby,
     authoritySeq,
     sentAt: new Date(sentAtMs).toISOString(),
   };
@@ -61,14 +66,49 @@ export function makeStateEnvelope(
 /** The actions the watch may propose. The watch reports the actual WEIGHT and REPS
  *  (via the Edit Result screen — Crown-driven weight + reps, §3.6); either omitted
  *  falls back to the prescribed target. `exercise_busy` maps to the phone's
- *  equipment-occupied reorder. */
+ *  equipment-occupied reorder. `select_workout` / `start_workout` are the Start
+ *  (lobby) proposals — the watch picks/starts the queued workout, the phone (sole
+ *  authority over the session lifecycle) validates and performs the actual start. */
 export type WatchIntentType =
   | 'complete_set'
   | 'end_rest'
   | 'pause'
   | 'resume'
   | 'finish_early'
-  | 'exercise_busy';
+  | 'exercise_busy'
+  | 'select_workout'
+  | 'start_workout'
+  | 'swap_exercise'
+  | 'add_rest';
+
+// ---- Pre-session lobby (the Start screen) ----------------------------------
+
+/** One selectable workout in the Start screen's "Choose workout" list. */
+export interface WatchLobbyWorkout {
+  id: string;
+  name: string;
+  /** Number of exercises ("{n} lifts") and the muscle groups, for the list card. */
+  lifts?: number;
+  muscles?: string;
+  /** Already completed this week (shows a "Done" tag). */
+  done?: boolean;
+}
+
+/** What the phone publishes to the watch when there is NO active session: the
+ *  queued workout (mirrors the iPhone home card) + the pickable list. The watch
+ *  renders the Start screen from this; it owns no program state. */
+export interface WatchLobby {
+  /** The currently-queued workout (the one "Begin" will start). */
+  workoutId: string | null;
+  workoutName: string;
+  muscles: string;
+  /** Exercise count + estimated duration label ("6 lifts" / "~48 min"). */
+  lifts?: number;
+  durationLabel?: string;
+  /** True when the week is locked (resting) — Begin is replaced by a recovery note. */
+  resting?: boolean;
+  workouts: WatchLobbyWorkout[];
+}
 
 export interface WatchIntent {
   v: number;
@@ -85,6 +125,12 @@ export interface WatchIntent {
   /** Actual weight (kg) the athlete used, when adjusted on the watch's Edit Result.
    *  Omitted = the recommended target weight; null = bodyweight. */
   actualWeight?: number | null;
+  /** The workout the Start screen selected/started (lobby proposals only). */
+  workoutId?: string;
+  /** The exercise the watch swapped to (swap_exercise). */
+  exerciseId?: string;
+  /** Seconds to add to the current rest (add_rest; default 15). */
+  seconds?: number;
 }
 
 /** Why an intent was rejected (telemetered + useful in tests). */
@@ -105,7 +151,15 @@ export type WatchPhoneAction =
   // actualReps/actualWeight omitted = prescribed target; actualWeight null = bodyweight.
   | { kind: 'complete_set'; actualReps?: number; actualWeight?: number | null }
   | { kind: 'session_event'; event: SessionEvent }
-  | { kind: 'mark_equipment_occupied' };
+  | { kind: 'mark_equipment_occupied' }
+  // Lobby proposals — the phone selects/starts the queued workout (it owns the
+  // session lifecycle and validates before acting). `workoutId` omitted = the
+  // workout the lobby already had queued.
+  | { kind: 'select_workout'; workoutId?: string }
+  | { kind: 'start_workout'; workoutId?: string }
+  // Swap the current/next exercise (the phone recalibrates the load); extend rest.
+  | { kind: 'swap_exercise'; exerciseId?: string }
+  | { kind: 'add_rest'; seconds: number };
 
 export interface WatchIntentDecision {
   accept: boolean;
@@ -118,7 +172,14 @@ export interface WatchIntentDecision {
 
 const INTENT_TYPES: WatchIntentType[] = [
   'complete_set', 'end_rest', 'pause', 'resume', 'finish_early', 'exercise_busy',
+  'select_workout', 'start_workout', 'swap_exercise', 'add_rest',
 ];
+
+/** The lobby proposals are valid only when there is NO active session (the Start
+ *  screen). They are handled before the active-session gates below. */
+function isLobbyIntent(t: WatchIntentType): boolean {
+  return t === 'select_workout' || t === 'start_workout';
+}
 
 /** Parse a wire-form intent defensively. Returns null on anything that is not a
  *  readable intent of a known type. */
@@ -149,6 +210,14 @@ function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
       return { kind: 'session_event', event: { type: 'FINISH_EARLY' } };
     case 'exercise_busy':
       return { kind: 'mark_equipment_occupied' };
+    case 'select_workout':
+      return { kind: 'select_workout', workoutId: intent.workoutId };
+    case 'start_workout':
+      return { kind: 'start_workout', workoutId: intent.workoutId };
+    case 'swap_exercise':
+      return { kind: 'swap_exercise', exerciseId: intent.exerciseId };
+    case 'add_rest':
+      return { kind: 'add_rest', seconds: intent.seconds ?? 15 };
     default:
       return null;
   }
@@ -179,8 +248,20 @@ export function decideWatchIntent(
   if (seenIntentIds.has(intent.intentId)) {
     return { accept: false, reason: 'duplicate', action: null, latencyMs };
   }
-  // No active session on the phone → nothing the watch can act on.
-  if (!mirror || mirror.phase === 'complete') {
+
+  const noActiveSession = !mirror || mirror.phase === 'complete';
+
+  // Lobby proposals (Start screen) are valid ONLY when there is no active session;
+  // the phone is the authority and performs the actual select/start.
+  if (isLobbyIntent(intent.type)) {
+    if (!noActiveSession) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    const action = intentToAction(intent);
+    if (!action) return { accept: false, reason: 'malformed', action: null, latencyMs };
+    return { accept: true, action, latencyMs };
+  }
+
+  // No active session on the phone → nothing else the watch can act on.
+  if (noActiveSession) {
     return { accept: false, reason: 'no_session', action: null, latencyMs };
   }
   // Stale: issued too long ago (e.g. delivered late after a reconnect).
@@ -213,6 +294,14 @@ export function decideWatchIntent(
     return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
   }
   if (intent.type === 'pause' && mirror.phase === 'paused') {
+    return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+  }
+  // Swap is offered on Active Set (current exercise) and Transition Rest (next).
+  if (intent.type === 'swap_exercise' && mirror.phase !== 'active_set' && mirror.phase !== 'rest_transition') {
+    return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+  }
+  // +15s only extends a running rest.
+  if (intent.type === 'add_rest' && !resting) {
     return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
   }
 

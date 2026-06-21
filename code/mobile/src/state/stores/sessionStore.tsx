@@ -8,11 +8,12 @@
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { ForecastRecord, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, type Exercise } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
 import { WatchSession } from '@/platform/watch/watchBridge';
+import type { WatchLobby } from '@/platform/watch/protocol';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
@@ -170,6 +171,16 @@ export interface SessionView {
   markEquipmentOccupied: () => void;
   /** True when Equipment Occupied applies (at the start of an exercise that isn't last). */
   canMarkOccupied: boolean;
+  /** Publish the pre-session lobby to the Apple Watch Start screen (the queued
+   *  workout + pickable list). Read-only/no-op while a session is active. The phone
+   *  remains the sole authority that actually starts a workout. */
+  publishWatchLobby: (lobby: WatchLobby) => void;
+  /** Register (or clear, with null) the Home screen's Begin/Choose handlers so the
+   *  watch Start screen can run the EXACT same path. Home sets these while focused
+   *  and clears them on blur, so a watch Begin only acts when the phone is on Home. */
+  setWatchHomeActions: (
+    handlers: { onBegin: () => void; onSelect: (workoutId?: string) => void } | null,
+  ) => void;
 }
 
 const Ctx = createContext<SessionView | null>(null);
@@ -228,6 +239,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Set completion from the watch, carrying reported actual reps + weight (each
   // omitted = target; weight null = bodyweight).
   const watchCompleteRef = useRef<(actualReps?: number, actualWeight?: number | null) => void>(() => {});
+  // Swap (in-session) from the watch — routed to swapCurrent/Next by the live phase.
+  const watchSwapRef = useRef<(exerciseId?: string) => void>(() => {});
+  // Start / Choose from the watch Start screen — provided by Home WHILE it is focused
+  // (so a watch Begin runs the exact same path the phone's Begin does), else no-op.
+  const watchStartRef = useRef<(workoutId?: string) => void>(() => {});
+  const watchSelectRef = useRef<(workoutId?: string) => void>(() => {});
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
   // never closes over stale actions. Transport is a no-op until the watchOS target
   // exists — all authority/validation/telemetry runs regardless.
@@ -240,6 +257,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       completeSet: (actualReps, actualWeight) => watchCompleteRef.current(actualReps, actualWeight),
       dispatch: (event) => watchActionsRef.current[event.type]?.(),
       markEquipmentOccupied: () => watchBusyRef.current(),
+      swapExercise: (exerciseId) => watchSwapRef.current(exerciseId),
+      startWorkout: (workoutId) => watchStartRef.current(workoutId),
+      selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
     });
   }
 
@@ -248,14 +268,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // READ-ONLY, timer is the hero, no completion controls from outside the app.
   useEffect(() => {
     const { plan, machine } = state;
-    const steps: MirrorStep[] = plan.map((st) => ({
-      exerciseName: exerciseById(st.exerciseId)?.name ?? '',
-      setIndexInExercise: st.exerciseSetIndex,
-      totalSetsInExercise: st.totalSetsInExercise,
-      globalIndex: st.globalIndex,
-      targetWeight: st.target.recommendedWeight,
-      targetReps: st.target.recommendedReps,
-    }));
+    const steps: MirrorStep[] = plan.map((st) => {
+      const ex = exerciseById(st.exerciseId);
+      // In-class swap alternatives — the SAME list the phone's Swap sheet shows
+      // (same muscle, different exercise). Only at the START of an exercise (the
+      // watch offers swap before you begin a station), capped for a small payload.
+      const swapOptions =
+        ex && st.exerciseSetIndex === 0
+          ? exercisesForMuscle(ex.muscle)
+              .filter((e) => e.id !== ex.id)
+              .slice(0, 8)
+              .map((e) => ({ id: e.id, name: e.name }))
+          : [];
+      return {
+        exerciseName: ex?.name ?? '',
+        exerciseGroup: ex?.muscle ?? '',
+        setIndexInExercise: st.exerciseSetIndex,
+        totalSetsInExercise: st.totalSetsInExercise,
+        globalIndex: st.globalIndex,
+        targetWeight: st.target.recommendedWeight,
+        targetReps: st.target.recommendedReps,
+        // Advisory — feeds the watch LoadDelta mark only.
+        reasonType: st.target.reasonType,
+        reasonDelta: st.target.reasonDelta,
+        swapOptions,
+      };
+    });
     const mirror = projectSessionMirror({
       steps,
       total: plan.length,
@@ -264,6 +302,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       restTransitionS: REST_TRANSITION_S,
       restStartedAtMs: restStartedAtRef.current,
       nowMs: Date.now(),
+      workoutName: state.session?.programDayName ?? '',
+      sessionStartedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
     });
 
     // One projection → both surfaces. The watch receives the full mirror (incl. the
@@ -405,6 +445,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         !!current &&
         current.exerciseSetIndex === 0 &&
         plan.some((s) => s.globalIndex > current.globalIndex && s.exerciseId !== current.exerciseId),
+
+      publishWatchLobby(lobby) {
+        // An active session drives the watch via the mirror; never overwrite it.
+        const sessionActive =
+          plan.length > 0 && machine.phase !== 'SESSION_SAVED' && machine.phase !== 'WELL_DONE';
+        if (sessionActive) return;
+        watchRef.current?.publishLobby(lobby);
+      },
+      setWatchHomeActions(handlers) {
+        watchStartRef.current = handlers ? () => handlers.onBegin() : () => {};
+        watchSelectRef.current = handlers ? (id) => handlers.onSelect(id) : () => {};
+      },
 
       async start(day, targets) {
         const plan2 = buildPlan(day, targets);
@@ -659,6 +711,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
   // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
   watchBusyRef.current = () => view.markEquipmentOccupied();
+  // Swap from the watch → the same swap a phone tap performs, routed by live phase
+  // (Active Set swaps the current exercise; Transition rest swaps the next).
+  watchSwapRef.current = (exerciseId) => {
+    if (!exerciseId) return;
+    if (view.displayPhase === 'REST_TRANSITION') view.swapNextExercise(exerciseId);
+    else view.swapCurrentExercise(exerciseId);
+  };
 
   return <Ctx.Provider value={view}>{children}</Ctx.Provider>;
 }

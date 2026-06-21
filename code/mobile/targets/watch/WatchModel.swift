@@ -3,41 +3,50 @@ import Foundation
 import SwiftUI
 
 // The watch's single source of *presentation* state. It holds the latest phone
-// mirror (advancing only on a higher authoritySeq), the connection state, and the
-// two transient LOCAL UI flags allowed by the spec (Finish confirmation open;
-// Exercise Complete interstitial elapsed) plus the rep-adjustment value.
+// mirror (advancing only on a higher authoritySeq), the pre-session lobby, the
+// connection state, and the transient LOCAL UI the design needs (a committed Edit
+// override shown until Complete Set; the Set Confirmation interstitial). Inline edit
+// mode, the Choose overlay, and the Swap overlay are VIEW-local (driven from the
+// lobby/mirror) and do not live here. The watch owns NO workout state.
 //
-// `currentScreen` is the Swift port of projectWatchScreen() (watchPresentation.ts):
-// connection-lost wins, then a finished session, then the live phase. The watch
-// owns NO workout state; it proposes intents and the phone decides.
+// `screen` is the Swift port of projectWatchScreen() (watchPresentation.ts):
+// connection-lost wins, then the Set Confirmation interstitial, then the live
+// phase / pre-session lobby.
 
 enum ConnectionState { case connected, reconnecting }
+
+/// A committed weight/reps override (from inline Edit) shown on Active Set until the
+/// set is completed; the Complete Set intent carries it.
+struct EditDraft: Equatable {
+  var weight: Double?
+  var reps: Int
+}
 
 /// The screen to render, with the data each one needs.
 enum WatchScreen: Equatable {
   case idle
+  case start(WireLobby)
   case connectionLost(mirror: WireMirror?)
-  case workoutComplete
-  case paused(WireMirror)
-  case finishConfirm
-  case repAdjust(WireMirror, actualReps: Int)
-  case activeSet(WireMirror)
+  case workoutComplete(WireMirror)
+  case setConfirmation(weight: Double?, reps: Int, index: Int, total: Int)
+  case activeSet(WireMirror, draft: EditDraft?)
   case interRest(WireMirror)
-  case exerciseComplete(WireMirror)
   case transitionRest(WireMirror)
+  case paused
 }
 
 final class WatchModel: ObservableObject {
   @Published private(set) var screen: WatchScreen = .idle
 
   private var mirror: WireMirror?
+  private var lobby: WireLobby?
   private var connection: ConnectionState = .reconnecting
   private var highestSeq = Int.min
 
   // Local UI (presentation only — never workout state).
-  private var finishConfirm = false
-  private var exerciseCompleteAck = false
-  private var repAdjustReps: Int?
+  private var editDraft: EditDraft?
+  private var setConfirm: (weight: Double?, reps: Int, index: Int, total: Int)?
+  private var setConfirmToken = 0
 
   private let manager = WatchSessionManager()
   /// Fired when a screen is entered, so the view can play the entry haptic.
@@ -57,18 +66,13 @@ final class WatchModel: ObservableObject {
 
     let prev = mirror
     mirror = envelope.mirror
+    lobby = envelope.lobby
 
-    // Reset transient local UI when the phase or set changes underneath us.
     let phaseChanged = prev?.phase != mirror?.phase
     let indexChanged = prev?.globalIndex != mirror?.globalIndex
     if phaseChanged || indexChanged {
-      if mirror?.phase != "paused" { finishConfirm = false }
-      if mirror?.phase != "active_set" || indexChanged { repAdjustReps = nil }
-      // A fresh transition (new completed exercise) re-arms the interstitial.
-      if mirror?.phase == "rest_transition" && (phaseChanged || indexChanged) {
-        exerciseCompleteAck = false
-      }
-      if mirror?.phase != "rest_transition" { exerciseCompleteAck = false }
+      // A new set invalidates any in-flight Edit override.
+      if mirror?.phase != "active_set" || indexChanged { editDraft = nil }
     }
     recompute()
   }
@@ -80,50 +84,89 @@ final class WatchModel: ObservableObject {
     recompute()
   }
 
-  /// The Exercise Complete interstitial elapsed → reveal the transition rest.
-  func ackExerciseComplete() {
-    guard !exerciseCompleteAck else { return }
-    exerciseCompleteAck = true
+  // MARK: Local UI — inline Edit (committed override) + Set Confirmation
+
+  /// Commit the inline Edit (load + reps): shown on Active Set until Complete logs it.
+  func saveEdit(weight: Double?, reps: Int) {
+    editDraft = EditDraft(weight: weight, reps: max(0, reps))
     recompute()
   }
 
-  // MARK: Local UI transitions
-
-  func openFinishConfirm() { finishConfirm = true; recompute() }
-  func closeFinishConfirm() { finishConfirm = false; recompute() }
-
-  func openRepAdjust() {
-    repAdjustReps = mirror?.targetReps ?? 0
-    recompute()
+  /// The current shown weight/reps (override if present, else the target) — the
+  /// inline editor seeds from this.
+  func currentDraft() -> EditDraft {
+    if let d = editDraft { return d }
+    return EditDraft(weight: mirror?.targetWeight, reps: mirror?.targetReps ?? 0)
   }
-  func cancelRepAdjust() { repAdjustReps = nil; recompute() }
-  func setRepAdjust(_ reps: Int) {
-    repAdjustReps = max(0, reps)
+
+  private func scheduleSetConfirmClear() {
+    setConfirmToken += 1
+    let token = setConfirmToken
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+      guard let self, self.setConfirmToken == token else { return }
+      self.setConfirm = nil
+      self.recompute()
+    }
+  }
+
+  /// Tap on the Set Confirmation advances immediately.
+  func dismissSetConfirm() {
+    guard setConfirm != nil else { return }
+    setConfirmToken += 1
+    setConfirm = nil
     recompute()
   }
 
   // MARK: Outbound intents (proposals — the phone validates + decides)
 
-  func completeSet() { sendIntent(type: "complete_set", expectedIndex: mirror?.globalIndex) }
-  func confirmReps() {
-    sendIntent(type: "complete_set", expectedIndex: mirror?.globalIndex, actualReps: repAdjustReps)
-    repAdjustReps = nil
+  func completeSet() {
+    guard let m = mirror else { return }
+    let weight = editDraft?.weight ?? m.targetWeight
+    let reps = editDraft?.reps ?? m.targetReps
+    let edited = editDraft != nil
+    sendIntent(
+      type: "complete_set",
+      expectedIndex: m.globalIndex,
+      actualReps: edited ? reps : nil,
+      actualWeight: edited ? weight : nil
+    )
+    setConfirm = (weight: weight, reps: reps, index: m.setNumber ?? 1, total: m.setsInExercise ?? 1)
+    editDraft = nil
     recompute()
+    scheduleSetConfirmClear()
   }
-  func markExerciseBusy() { sendIntent(type: "exercise_busy", expectedIndex: mirror?.globalIndex) }
-  func endRest() { sendIntent(type: "end_rest") }
+
+  func ready() { sendIntent(type: "end_rest") }
+  func addRest() { sendIntent(type: "add_rest", seconds: 15) }
   func pause() { sendIntent(type: "pause") }
   func resume() { sendIntent(type: "resume") }
-  func finishYes() { finishConfirm = false; sendIntent(type: "finish_early"); recompute() }
+  func endWorkout() { sendIntent(type: "finish_early") }
+  func dismissComplete() { /* the phone tears down; nothing to send */ }
 
-  private func sendIntent(type: String, expectedIndex: Int? = nil, actualReps: Int? = nil) {
+  func begin() { sendIntent(type: "start_workout", workoutId: lobby?.workoutId) }
+  func selectWorkout(_ id: String) { sendIntent(type: "select_workout", workoutId: id) }
+  func swap(_ exerciseId: String) { sendIntent(type: "swap_exercise", exerciseId: exerciseId) }
+
+  private func sendIntent(
+    type: String,
+    expectedIndex: Int? = nil,
+    actualReps: Int? = nil,
+    actualWeight: Double? = nil,
+    workoutId: String? = nil,
+    exerciseId: String? = nil,
+    seconds: Int? = nil
+  ) {
     let intent = WireIntent(
       v: WATCH_PROTOCOL_VERSION,
       type: type,
       intentId: UUID().uuidString,
       issuedAt: ISO8601DateFormatter().string(from: Date()),
       expectedGlobalIndex: expectedIndex,
-      actualReps: actualReps
+      actualReps: actualReps,
+      actualWeight: actualWeight,
+      workoutId: workoutId,
+      exerciseId: exerciseId,
+      seconds: seconds
     )
     if let json = WatchWire.encodeIntent(intent) { manager.send(intentJSON: json) }
   }
@@ -141,22 +184,23 @@ final class WatchModel: ObservableObject {
 
   private func project() -> WatchScreen {
     if connection == .reconnecting { return .connectionLost(mirror: mirror) }
-    guard let m = mirror else { return .idle }
-
+    if let sc = setConfirm {
+      return .setConfirmation(weight: sc.weight, reps: sc.reps, index: sc.index, total: sc.total)
+    }
+    guard let m = mirror else {
+      if let l = lobby { return .start(l) }
+      return .idle
+    }
     switch m.phase {
     case "complete":
-      return .workoutComplete
+      return .workoutComplete(m)
     case "paused":
-      return finishConfirm ? .finishConfirm : .paused(m)
+      return .paused
     case "active_set":
-      if let reps = repAdjustReps { return .repAdjust(m, actualReps: reps) }
-      return .activeSet(m)
+      return .activeSet(m, draft: editDraft)
     case "rest_inter":
       return .interRest(m)
     case "rest_transition":
-      if let done = m.completedExerciseName, !done.isEmpty, !exerciseCompleteAck {
-        return .exerciseComplete(m)
-      }
       return .transitionRest(m)
     default:
       return .idle
@@ -168,17 +212,17 @@ final class WatchModel: ObservableObject {
     case .connectionLost: return .connectionLost
     case .workoutComplete: return .workoutSaved
     case .paused: return .paused
-    case .exerciseComplete: return .exerciseBoundary
+    case .setConfirmation: return .setLogged
     default: return nil
     }
   }
 
   private func sameKind(_ a: WatchScreen, _ b: WatchScreen) -> Bool {
     switch (a, b) {
-    case (.idle, .idle), (.connectionLost, .connectionLost), (.workoutComplete, .workoutComplete),
-         (.paused, .paused), (.finishConfirm, .finishConfirm), (.repAdjust, .repAdjust),
-         (.activeSet, .activeSet), (.interRest, .interRest), (.exerciseComplete, .exerciseComplete),
-         (.transitionRest, .transitionRest):
+    case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
+         (.workoutComplete, .workoutComplete), (.setConfirmation, .setConfirmation),
+         (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
+         (.paused, .paused):
       return true
     default:
       return false

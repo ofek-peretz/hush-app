@@ -35,6 +35,8 @@ function mirror(over: Partial<SessionMirror> = {}): SessionMirror {
     nextTargetReps: null,
     completedExerciseName: null,
     canMarkBusy: false,
+    loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
+    workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [],
     ...over,
   };
 }
@@ -84,6 +86,33 @@ describe('decideWatchIntent — acceptance', () => {
     expect(d.action).toEqual({ kind: 'mark_equipment_occupied' });
   });
 
+  it('accepts a Start-screen select_workout / start_workout when there is NO active session', () => {
+    const sel = decideWatchIntent(intent({ type: 'select_workout', workoutId: 'w2', expectedGlobalIndex: undefined }), null, NOW, NONE);
+    expect(sel.accept).toBe(true);
+    expect(sel.action).toEqual({ kind: 'select_workout', workoutId: 'w2' });
+    const start = decideWatchIntent(intent({ type: 'start_workout', workoutId: 'w2', expectedGlobalIndex: undefined }), null, NOW, NONE);
+    expect(start.accept).toBe(true);
+    expect(start.action).toEqual({ kind: 'start_workout', workoutId: 'w2' });
+  });
+
+  it('also accepts a lobby proposal over a completed (torn-down) session', () => {
+    const d = decideWatchIntent(intent({ type: 'start_workout', expectedGlobalIndex: undefined }), mirror({ phase: 'complete' }), NOW, NONE);
+    expect(d.accept).toBe(true);
+    expect(d.action).toEqual({ kind: 'start_workout', workoutId: undefined });
+  });
+});
+
+describe('decideWatchIntent — lobby proposals are gated to the lobby', () => {
+  it('rejects a Start-screen proposal while a workout is ACTIVE (phone owns the lifecycle)', () => {
+    expect(decideWatchIntent(intent({ type: 'start_workout', expectedGlobalIndex: undefined }), mirror(), NOW, NONE))
+      .toMatchObject({ accept: false, reason: 'phase_mismatch' });
+    expect(decideWatchIntent(intent({ type: 'select_workout', expectedGlobalIndex: undefined }), mirror({ phase: 'rest_inter' }), NOW, NONE))
+      .toMatchObject({ accept: false, reason: 'phase_mismatch' });
+  });
+
+  it('still rejects an in-workout intent (complete_set) when there is no session', () => {
+    expect(decideWatchIntent(intent(), null, NOW, NONE)).toMatchObject({ accept: false, reason: 'no_session' });
+  });
 });
 
 describe('decideWatchIntent — the phone wins', () => {

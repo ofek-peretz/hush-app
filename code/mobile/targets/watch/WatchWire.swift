@@ -7,36 +7,86 @@ import Foundation
 //
 // Keep these shapes in lockstep with:
 //   - src/platform/sessionMirror.ts  (SessionMirror → WireMirror)
-//   - src/platform/watch/protocol.ts (WatchStateEnvelope / WatchIntent)
+//   - src/platform/watch/protocol.ts (WatchStateEnvelope / WatchIntent / WatchLobby)
 
 let WATCH_PROTOCOL_VERSION = 1
 let MIRROR_SCHEMA_VERSION = 1
 
-/// Read-only projection of the live session (subset rendered on the watch).
+struct WireSwapOption: Codable, Equatable {
+  var id: String
+  var name: String
+}
+
+struct WireSummary: Codable, Equatable {
+  var timeLabel: String
+  var sets: Int
+  var up: Int
+}
+
+/// Read-only projection of the live session (subset rendered on the watch). The
+/// fields added for the stage design are optional so a version-skewed frame still
+/// decodes; the model/views coalesce them.
 struct WireMirror: Codable, Equatable {
   var schema: Int
   var phase: String // active_set | rest_inter | rest_transition | paused | complete
   var exerciseName: String
+  var exerciseGroup: String?
   var setLabel: String
+  var setNumber: Int?
+  var setsInExercise: Int?
+  var nextSetsInExercise: Int?
   var globalIndex: Int
   var totalSets: Int
   var targetWeight: Double?
   var targetReps: Int
   var restEndsAt: String?
   var restRemainingS: Int?
+  var restTotalS: Int?
   var nextExerciseName: String?
   var nextTargetWeight: Double?
   var nextTargetReps: Int?
   var completedExerciseName: String?
   var canMarkBusy: Bool
+  /// Signed kg load change of the current set: + increase, − decrease, 0 hold.
+  var loadDeltaKg: Double?
+  var nextLoadDeltaKg: Double?
+  var liftIndex: Int?
+  var liftCount: Int?
+  var workoutName: String?
+  var summary: WireSummary?
+  var swapOptions: [WireSwapOption]?
+  var nextSwapOptions: [WireSwapOption]?
+}
+
+/// One pickable workout in the Start screen's "Choose workout" overlay.
+struct WireLobbyWorkout: Codable, Equatable {
+  var id: String
+  var name: String
+  var lifts: Int?
+  var muscles: String?
+  var done: Bool?
+}
+
+/// Pre-session lobby — what the phone publishes when there is NO active session, so
+/// the watch can render the Start screen (mirrors the iPhone home card).
+struct WireLobby: Codable, Equatable {
+  var workoutId: String?
+  var workoutName: String
+  var muscles: String
+  var lifts: Int?
+  var durationLabel: String?
+  var resting: Bool?
+  var workouts: [WireLobbyWorkout]
 }
 
 /// Phone → watch envelope. `authoritySeq` is monotonic; the watch keeps the highest
-/// it has seen and ignores any envelope with a lower seq (reorder-proof).
+/// it has seen and ignores any envelope with a lower seq (reorder-proof). `lobby` is
+/// populated only when `mirror` is nil (pre-session).
 struct WireEnvelope: Codable {
   var v: Int
   var type: String
   var mirror: WireMirror?
+  var lobby: WireLobby?
   var authoritySeq: Int
   var sentAt: String
 }
@@ -45,11 +95,17 @@ struct WireEnvelope: Codable {
 /// phase/wrong-index intents — so this is a PROPOSAL, never an authoritative action.
 struct WireIntent: Codable {
   var v: Int
-  var type: String // complete_set | end_rest | pause | resume | finish_early | exercise_busy
+  // complete_set | end_rest | pause | resume | finish_early | exercise_busy |
+  // select_workout | start_workout | swap_exercise | add_rest
+  var type: String
   var intentId: String
   var issuedAt: String
   var expectedGlobalIndex: Int?
   var actualReps: Int?
+  var actualWeight: Double?
+  var workoutId: String?
+  var exerciseId: String?
+  var seconds: Int?
 }
 
 enum WatchWire {

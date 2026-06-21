@@ -1,30 +1,31 @@
 /**
  * Watch presentation projection (non-native — the canonical spec the SwiftUI
  * layer conforms to). PURE: given the phone's latest mirror, the connection
- * state, and transient local UI flags, it produces the exact screen the watch
- * must render — every approved state from WATCH_EXPERIENCE_SPEC.md.
+ * state, the pre-session lobby, and the one transient local flag (the Set
+ * Confirmation interstitial), it produces the exact screen the watch must render.
  *
- * The watch owns no workout state. The only inputs that are not the phone's
- * mirror are (a) connection reachability and (b) two transient *presentation*
- * flags — the Finish confirmation being open, and the brief Exercise Complete
- * interstitial having elapsed. Neither is workout state; both are local UI.
+ * Source of truth for the visual + interaction design: the Claude Design project
+ * `ui_kits/watch` ("The same instrument, on the wrist") — the inverted "stage"
+ * surface, mono numbers, the giant load, the LoadDelta mark, the rest ring, and the
+ * six live-workout screens (Start · Active Set · Set Confirmation · Inter-Set Rest ·
+ * Transition Rest · Complete) plus the carried-over Choose / Pause / Edit / Swap.
  *
- * Screens covered: active_set · inter_set_rest · exercise_complete ·
- * transition_rest · paused · finish_confirm · workout_complete ·
- * connection_lost · idle.
+ * The watch owns no workout state. Choose-workout, inline Edit (load + reps), and
+ * the Swap overlay are LOCAL view modes the native layer drives from the lobby /
+ * mirror data; they are not separate projection states. Every action is a PROPOSAL
+ * the phone validates (the phone is the sole authority over the session lifecycle).
  */
 import type { SessionMirror } from '@/platform/sessionMirror';
-import type { WatchIntentType } from './protocol';
+import type { WatchIntentType, WatchLobby } from './protocol';
 import type { WatchHapticEvent } from './watchHaptics';
 
 export type WatchScreenKind =
+  | 'start'
   | 'active_set'
+  | 'set_confirmation'
   | 'inter_set_rest'
-  | 'exercise_complete'
   | 'transition_rest'
   | 'paused'
-  | 'finish_confirm'
-  | 'rep_adjust'
   | 'workout_complete'
   | 'connection_lost'
   | 'idle';
@@ -32,100 +33,152 @@ export type WatchScreenKind =
 /** Every action the watch can present. Maps to a watch intent or a local-only UI
  *  transition (see `actionToIntent`). */
 export type WatchActionId =
-  | 'complete_set'
-  | 'couldnt_complete' // local: open the rep-adjustment screen
-  | 'confirm_reps' // intent: complete_set with the adjusted actual reps
-  | 'cancel_reps' // local: back to Active Set without logging
-  | 'exercise_busy'
-  | 'ready'
-  | 'pause'
-  | 'resume'
-  | 'finish' // local: open the Finish confirmation
-  | 'finish_yes' // intent: finish_early
-  | 'finish_no' // local: close the confirmation
-  | 'dismiss'; // local: dismiss Workout Complete
+  | 'begin' // intent: start the queued workout
+  | 'choose_workout' // local: open the Choose Workout overlay
+  | 'select_workout' // intent: queue the picked workout
+  | 'edit_result' // local: enter inline Edit mode (load + reps)
+  | 'save_result' // local: leave Edit mode (the override rides Complete Set)
+  | 'complete_set' // intent: log the set (carries the Edit override if any)
+  | 'swap' // local: open the Swap overlay
+  | 'swap_pick' // intent: swap to the chosen exercise
+  | 'ready' // intent: end rest now (Start next set / lift / Skip rest)
+  | 'add_rest' // intent: +15s
+  | 'pause' // intent
+  | 'resume' // intent
+  | 'end_workout' // intent: finish_early (Pause → End workout, routes to Complete)
+  | 'dismiss'; // local: dismiss Complete
 
 /** i18n keys for the founder-locked watch copy (values live in en.json). */
 export const WATCH_COPY = {
+  nextWorkout: 'watch.nextWorkout',
+  begin: 'watch.begin',
+  chooseWorkout: 'watch.chooseWorkout',
+  recovery: 'watch.recovery',
+  upNext: 'watch.upNext',
+  startNextSet: 'watch.startNextSet',
+  skipRest: 'watch.skipRest',
+  startNextLift: 'watch.startNextLift',
+  addRest: 'watch.addRest',
+  ready: 'watch.ready',
+  rest: 'watch.rest',
   next: 'watch.next',
-  interEncouragement: 'watch.interEncouragement',
-  transitionEncouragement: 'watch.transitionEncouragement',
-  exerciseComplete: 'watch.exerciseComplete', // template: "{{exercise}} Complete"
+  completeSet: 'watch.completeSet',
+  save: 'watch.save',
+  editResult: 'watch.editResult',
+  crownToAdjust: 'watch.crownToAdjust',
+  setLogged: 'watch.setLogged', // "Set {{n}} of {{m}} logged"
+  recorded: 'watch.recorded',
+  workoutHeld: 'watch.workoutHeld',
   pausedTitle: 'watch.pausedTitle',
-  finishPrompt: 'watch.finishPrompt',
-  finishYes: 'watch.finishYes',
-  finishNo: 'watch.finishNo',
-  couldntComplete: 'watch.couldntComplete', // the Active Set action label
-  repAdjustTitle: 'watch.repAdjustTitle', // "Actual reps"
-  repAdjustTarget: 'watch.repAdjustTarget', // "Target {{reps}}"
-  confirm: 'watch.confirm', // "Confirm"
-  workoutCompleteTitle: 'watch.workoutCompleteTitle',
+  resume: 'watch.resume',
+  endWorkout: 'watch.endWorkout',
+  saved: 'watch.saved',
+  complete: 'watch.complete', // "{{name}} complete."
+  done: 'watch.done',
+  swapTitle: 'watch.swapTitle',
+  swapHint: 'watch.swapHint',
+  cancel: 'watch.cancel',
   reconnecting: 'watch.reconnecting',
   continueOnPhone: 'watch.continueOnPhone',
 } as const;
 
+export interface WatchScreenWorkout {
+  id: string;
+  name: string;
+  lifts?: number;
+  muscles?: string;
+  done?: boolean;
+}
+
+export interface WatchSwapOption {
+  id: string;
+  name: string;
+}
+
 export interface WatchScreen {
   kind: WatchScreenKind;
-  // ---- content (populated per kind) ----
+  // ---- Start (lobby) ----
+  workoutName?: string;
+  muscles?: string;
+  lifts?: number;
+  durationLabel?: string;
+  workouts?: WatchScreenWorkout[];
+  resting?: boolean;
+  // ---- Active Set ----
   exerciseName?: string;
+  exerciseGroup?: string;
   setLabel?: string;
+  setNumber?: number;
+  setsInExercise?: number;
+  /** "Lift i/n" — exercises-remaining context on the top strip. */
+  liftIndex?: number;
+  liftCount?: number;
   targetWeight?: number | null;
   targetReps?: number;
-  /** The live rep-adjustment value on the rep_adjust screen (Crown-driven). */
-  actualReps?: number;
+  /** Signed kg load change → the LoadDelta mark (sage ▲ / clay ▼ / hold). */
+  loadDeltaKg?: number;
+  /** In-class alternatives for the Swap overlay (empty/undefined = no swap glyph). */
+  swapOptions?: WatchSwapOption[];
+  // ---- Set Confirmation ----
+  confirmWeight?: number | null;
+  confirmReps?: number;
+  confirmIndex?: number;
+  confirmTotal?: number;
+  // ---- rests ----
   restEndsAt?: string | null;
   restRemainingS?: number | null;
   nextExerciseName?: string | null;
+  nextSetsInExercise?: number;
   nextTargetWeight?: number | null;
   nextTargetReps?: number | null;
-  completedExerciseName?: string | null;
-  /** i18n key for the encouragement line, when the screen has one. */
-  encouragementKey?: string;
-  /** i18n key for a title/prompt (Paused, Finish Workout?, Well Done., Reconnecting). */
+  nextLoadDeltaKg?: number;
+  // ---- Complete ----
+  summary?: { timeLabel: string; sets: number; up: number } | null;
+  // ---- shared ----
   titleKey?: string;
-  /** Phone-dependent actions are inert (connection lost). */
   disabled?: boolean;
-  /** Last-known content is shown dimmed behind a reconnecting overlay. */
   reconnecting?: boolean;
-  /** Actions to present, primary first. */
   actions: WatchActionId[];
-  /** Haptic event to fire when this screen is entered, if any. */
   entryHaptic?: WatchHapticEvent;
 }
 
 export type ConnectionState = 'connected' | 'reconnecting';
 
+export interface WatchEditDraft {
+  weight: number | null;
+  reps: number;
+}
+
 export interface WatchLocalUi {
-  /** The athlete tapped Finish in Paused → the confirmation dialog is open. */
-  finishConfirm?: boolean;
-  /** The Exercise Complete interstitial's brief timer has fired → show the rest. */
-  exerciseCompleteAck?: boolean;
-  /** The rep-adjustment screen is open (the athlete tapped Couldn't Complete).
-   *  `actualReps` is the live Crown value (initialized to the target reps). */
-  repAdjust?: { actualReps: number };
+  /** The Set Confirmation interstitial (`{weight} × {reps}`, "Set n of m logged"). */
+  setConfirm?: { weight: number | null; reps: number; index: number; total: number };
 }
 
 /** Map an action to the watch intent it sends, or null if it is local-only UI. */
 export function actionToIntent(id: WatchActionId): WatchIntentType | null {
   switch (id) {
+    case 'begin':
+      return 'start_workout';
+    case 'select_workout':
+      return 'select_workout';
     case 'complete_set':
       return 'complete_set';
-    case 'confirm_reps':
-      return 'complete_set'; // confirmed adjusted reps = a normal set completion
-    case 'exercise_busy':
-      return 'exercise_busy';
+    case 'swap_pick':
+      return 'swap_exercise';
     case 'ready':
       return 'end_rest';
+    case 'add_rest':
+      return 'add_rest';
     case 'pause':
       return 'pause';
     case 'resume':
       return 'resume';
-    case 'finish_yes':
+    case 'end_workout':
       return 'finish_early';
-    case 'couldnt_complete': // opens the rep-adjustment screen (local)
-    case 'cancel_reps':
-    case 'finish':
-    case 'finish_no':
+    case 'choose_workout':
+    case 'edit_result':
+    case 'save_result':
+    case 'swap':
     case 'dismiss':
       return null; // local UI transitions
     default:
@@ -136,14 +189,15 @@ export function actionToIntent(id: WatchActionId): WatchIntentType | null {
 /**
  * Project the screen to render. Total and pure; never throws.
  *
- * Precedence: a lost connection always wins (the watch becomes an honest viewer);
- * then a finished session; then the live phase. The Exercise Complete interstitial
- * and the Finish confirmation are the only two local presentation states.
+ * Precedence: a lost connection always wins (honest viewer); then the local Set
+ * Confirmation interstitial (it always shows its brief beat, even as the phone
+ * advances); then the live phase / pre-session lobby.
  */
 export function projectWatchScreen(
   mirror: SessionMirror | null,
   connection: ConnectionState,
   ui: WatchLocalUi = {},
+  lobby: WatchLobby | null = null,
 ): WatchScreen {
   // 1. Connection lost — honest viewer over the dimmed last-known context.
   if (connection === 'reconnecting') {
@@ -152,7 +206,6 @@ export function projectWatchScreen(
       titleKey: WATCH_COPY.reconnecting,
       exerciseName: mirror?.exerciseName,
       setLabel: mirror?.setLabel,
-      // A derived rest countdown stays live (it is safe — phone-supplied absolute end).
       restEndsAt: mirror?.restEndsAt ?? null,
       restRemainingS: mirror?.restRemainingS ?? null,
       disabled: true,
@@ -162,63 +215,73 @@ export function projectWatchScreen(
     };
   }
 
-  // 2. No session.
-  if (!mirror) return { kind: 'idle', actions: [] };
+  // 2. Set Confirmation interstitial — local, always shows its brief beat.
+  if (ui.setConfirm) {
+    return {
+      kind: 'set_confirmation',
+      confirmWeight: ui.setConfirm.weight,
+      confirmReps: ui.setConfirm.reps,
+      confirmIndex: ui.setConfirm.index,
+      confirmTotal: ui.setConfirm.total,
+      actions: [],
+      entryHaptic: 'set_logged',
+    };
+  }
 
-  // 3. Live phase.
-  switch (mirror.phase) {
-    case 'complete':
+  // 3. No active session → Complete, the Start (lobby) screen, or idle.
+  if (!mirror || mirror.phase === 'complete') {
+    if (mirror?.phase === 'complete') {
       return {
         kind: 'workout_complete',
-        titleKey: WATCH_COPY.workoutCompleteTitle,
+        workoutName: mirror.workoutName,
+        summary: mirror.summary,
         actions: ['dismiss'],
         entryHaptic: 'workout_saved',
       };
+    }
+    if (lobby) {
+      return {
+        kind: 'start',
+        workoutName: lobby.workoutName,
+        muscles: lobby.muscles,
+        lifts: lobby.lifts,
+        durationLabel: lobby.durationLabel,
+        workouts: lobby.workouts,
+        resting: !!lobby.resting,
+        disabled: !!lobby.resting,
+        actions: lobby.resting ? ['choose_workout'] : ['begin', 'choose_workout'],
+      };
+    }
+    return { kind: 'idle', actions: [] };
+  }
 
+  // 4. Live phase.
+  switch (mirror.phase) {
     case 'paused':
-      if (ui.finishConfirm) {
-        return {
-          kind: 'finish_confirm',
-          titleKey: WATCH_COPY.finishPrompt,
-          // No / Yes (No first — destructive action is never the default).
-          actions: ['finish_no', 'finish_yes'],
-        };
-      }
       return {
         kind: 'paused',
         titleKey: WATCH_COPY.pausedTitle,
-        exerciseName: mirror.exerciseName,
-        setLabel: mirror.setLabel,
-        actions: ['resume', 'finish'],
+        // Resume (primary) + End workout (routes straight to Complete — no extra step).
+        actions: ['resume', 'end_workout'],
         entryHaptic: 'paused',
       };
 
     case 'active_set': {
-      // Rep-adjustment screen (behind "Couldn't Complete"): the athlete reports the
-      // actual reps performed via the Crown, then confirms → a normal set completion.
-      if (ui.repAdjust) {
-        return {
-          kind: 'rep_adjust',
-          titleKey: WATCH_COPY.repAdjustTitle, // "Actual reps"
-          exerciseName: mirror.exerciseName,
-          targetReps: mirror.targetReps, // default + the "Target N" reference
-          actualReps: ui.repAdjust.actualReps, // live Crown value
-          actions: ['confirm_reps', 'cancel_reps'],
-        };
-      }
-      // No session/exercise progress is shown (founder spec §1) — only the next
-      // action and the set within the exercise. Exercise Busy appears only on the
-      // first set of a newly started exercise (mirrors the phone). Pause is a
-      // corner glyph, not a stacked row.
-      const actions: WatchActionId[] = ['complete_set', 'couldnt_complete'];
-      if (mirror.canMarkBusy) actions.push('exercise_busy');
-      actions.push('pause');
+      const actions: WatchActionId[] = ['edit_result', 'complete_set', 'pause'];
+      if (mirror.swapOptions.length > 0) actions.push('swap');
       return {
         kind: 'active_set',
-        exerciseName: mirror.exerciseName, // the only screen that states it
-        setLabel: mirror.setLabel, // "Set 3 of 4"
+        exerciseName: mirror.exerciseName,
+        exerciseGroup: mirror.exerciseGroup,
+        setLabel: mirror.setLabel,
+        setNumber: mirror.setNumber,
+        setsInExercise: mirror.setsInExercise,
+        liftIndex: mirror.liftIndex,
+        liftCount: mirror.liftCount,
         targetWeight: mirror.targetWeight,
         targetReps: mirror.targetReps,
+        loadDeltaKg: mirror.loadDeltaKg,
+        swapOptions: mirror.swapOptions,
         actions,
       };
     }
@@ -226,36 +289,35 @@ export function projectWatchScreen(
     case 'rest_inter':
       return {
         kind: 'inter_set_rest',
-        // No exercise name — the athlete already knows the exercise (founder spec §1).
         restEndsAt: mirror.restEndsAt,
         restRemainingS: mirror.restRemainingS,
-        nextTargetWeight: mirror.targetWeight, // same exercise, next set's load × reps
-        nextTargetReps: mirror.targetReps,
-        encouragementKey: WATCH_COPY.interEncouragement, // "You can do this."
-        setLabel: mirror.setLabel,
-        actions: ['ready', 'pause'],
+        // The same exercise; the upcoming set's load × reps (unchanged).
+        exerciseName: mirror.exerciseName,
+        setNumber: mirror.setNumber,
+        setsInExercise: mirror.setsInExercise,
+        liftIndex: mirror.liftIndex,
+        liftCount: mirror.liftCount,
+        targetWeight: mirror.targetWeight,
+        targetReps: mirror.targetReps,
+        actions: ['ready', 'add_rest', 'pause'],
       };
 
     case 'rest_transition':
-      // Brief Exercise Complete interstitial before the transition rest is shown.
-      if (mirror.completedExerciseName && !ui.exerciseCompleteAck) {
-        return {
-          kind: 'exercise_complete',
-          completedExerciseName: mirror.completedExerciseName,
-          nextExerciseName: mirror.nextExerciseName,
-          actions: [],
-          entryHaptic: 'exercise_boundary',
-        };
-      }
       return {
         kind: 'transition_rest',
         restEndsAt: mirror.restEndsAt,
         restRemainingS: mirror.restRemainingS,
-        nextExerciseName: mirror.nextExerciseName, // new exercise — name IS shown
+        nextExerciseName: mirror.nextExerciseName,
+        nextSetsInExercise: mirror.nextSetsInExercise,
         nextTargetWeight: mirror.nextTargetWeight,
         nextTargetReps: mirror.nextTargetReps,
-        encouragementKey: WATCH_COPY.transitionEncouragement, // "Let's go."
-        actions: ['ready', 'pause'],
+        nextLoadDeltaKg: mirror.nextLoadDeltaKg,
+        liftIndex: mirror.liftIndex,
+        liftCount: mirror.liftCount,
+        swapOptions: mirror.nextSwapOptions,
+        actions: mirror.nextSwapOptions.length > 0
+          ? ['ready', 'add_rest', 'pause', 'swap']
+          : ['ready', 'add_rest', 'pause'],
       };
 
     default:
