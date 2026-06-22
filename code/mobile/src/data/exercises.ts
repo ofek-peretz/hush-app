@@ -198,3 +198,37 @@ export function exercisesForCapability(capability: Capability): Exercise[] {
 export function exercisesForMuscle(muscle: MuscleGroup): Exercise[] {
   return BY_MUSCLE.get(muscle) ?? [];
 }
+
+/** Equipment / qualifier words that don't describe the training EFFECT. */
+const SWAP_STOPWORDS = new Set(['barbell', 'dumbbell', 'machine', 'cable', 'seated', 'standing', 'db', 'bb', 'the', 'a']);
+function movementTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/[\s-]+/)
+    .filter((t) => t && !SWAP_STOPWORDS.has(t));
+}
+
+/**
+ * Swap candidates for an exercise, ordered by how closely they MIMIC THE SAME
+ * EFFECT — same tier (compound/isolation) weighs most, then shared movement words
+ * in the name (e.g. "press", "row", "curl"). Always muscle-scoped (so the slot's
+ * capability contract holds). Pass `limit` to cap the list (the in-workout swap
+ * offers the best 2; the Program editor passes no limit to keep the full variety,
+ * still best-matched first).
+ */
+export function similarExercises(currentId: string, limit?: number): Exercise[] {
+  const current = BY_ID.get(currentId);
+  if (!current) return [];
+  const curTokens = new Set(movementTokens(current.name));
+  const pool = (BY_MUSCLE.get(current.muscle) ?? []).filter((e) => e.id !== currentId);
+  const scored = pool.map((e, i) => {
+    let score = e.tier === current.tier ? 10 : 0;
+    for (const tok of movementTokens(e.name)) if (curTokens.has(tok)) score += 3;
+    return { e, score, i };
+  });
+  // Highest score first; stable (catalog order) for ties.
+  scored.sort((a, b) => b.score - a.score || a.i - b.i);
+  const ordered = scored.map((s) => s.e);
+  return limit != null ? ordered.slice(0, limit) : ordered;
+}

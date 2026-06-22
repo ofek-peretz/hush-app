@@ -11,10 +11,11 @@
  *
  * The container (Home.tsx) wires state + navigation.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
+import { HushMark } from '@/components/HushMark';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton, Metric } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { color, space, font, textScale, signal } from '@/design/tokens';
@@ -35,6 +36,9 @@ export interface HomeViewProps {
   startError: boolean;
   dateLabel: string;
   weekNumber: number; // training-week counter ("Week N"), from memberSince
+  exerciseCount?: number; // next workout's exercise count (meta line)
+  loadsUp?: number; // how many lifts step up this session (meta line)
+  restDaysTaken?: number; // recovery stat
   onStart: () => void;
   workouts: HomeWorkoutOption[];
   onChooseWorkout: (id: string) => void;
@@ -46,7 +50,6 @@ export interface HomeViewProps {
 
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
-  const [chooseOpen, setChooseOpen] = useState(false);
 
   const total = props.workouts.length || 0;
   const done = Math.min(props.trainedThisWeek, total);
@@ -58,6 +61,7 @@ export function HomeView(props: HomeViewProps) {
         {/* brand + account */}
         <View style={styles.brandRow}>
           <View style={styles.brand}>
+            <HushMark size={26} />
             <Text style={styles.wordmark}>hush</Text>
             <View style={styles.dot} />
           </View>
@@ -87,9 +91,9 @@ export function HomeView(props: HomeViewProps) {
                   size="lg"
                 />
               </View>
-              {/* two instrument stats: the week counter + when the next week opens (Sunday 04:00) */}
+              {/* two instrument stats: rest days taken + when the next week opens (Sunday 04:00) */}
               <View style={styles.statRow}>
-                <Metric value={props.weekNumber} label={t('home.weekStat')} size="sm" />
+                <Metric value={props.restDaysTaken ?? 0} label={t('home.restDaysTaken')} size="sm" />
                 <Metric value={t('recovery.sunShort')} label={t('home.nextSessionOpens')} size="sm" />
               </View>
               {/* the next session, locked until Sunday 04:00 */}
@@ -103,6 +107,11 @@ export function HomeView(props: HomeViewProps) {
                   trailing={<Text style={styles.lockedDay}>{t('recovery.sunday')}</Text>}
                 />
               </View>
+              {props.onProgress ? (
+                <View style={styles.viewProgress}>
+                  <Button variant="secondary" block label={t('home.viewProgress')} onPress={props.onProgress} />
+                </View>
+              ) : null}
             </View>
           ) : (
             <View style={styles.block}>
@@ -115,6 +124,19 @@ export function HomeView(props: HomeViewProps) {
                       {i < groups.length - 1 ? <Text style={styles.sep}>·</Text> : null}
                     </View>
                   ))}
+                </View>
+              ) : null}
+
+              {props.exerciseCount ? (
+                <View style={styles.metaRow}>
+                  <Icon name="layers" size={15} color={color.textMuted} strokeWidth={2} />
+                  <Text style={styles.metaMono}>{t('home.exerciseCount', { n: props.exerciseCount })}</Text>
+                  {props.loadsUp ? (
+                    <>
+                      <Text style={styles.metaSep}>·</Text>
+                      <Text style={styles.metaText}>{t('home.loadsUp', { n: props.loadsUp })}</Text>
+                    </>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -141,7 +163,7 @@ export function HomeView(props: HomeViewProps) {
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : null}
-                <Button variant="quiet" block label={t('home.chooseAnother')} onPress={() => setChooseOpen(true)} />
+                <Button variant="quiet" block label={t('home.chooseAnother')} onPress={props.onProgram} />
               </View>
             </View>
           )}
@@ -176,37 +198,6 @@ export function HomeView(props: HomeViewProps) {
           </View>
         </ScrollView>
       </SafeAreaView>
-
-      {/* Choose another workout — full-screen list, each row = name + muscles. */}
-      {chooseOpen ? (
-        <View style={styles.overlay}>
-          <SafeAreaView edges={['top', 'bottom']} style={styles.overlaySafe}>
-            <View style={styles.overlayHead}>
-              <Text style={styles.overlayTitle} accessibilityRole="header">
-                {t('choose.title')}
-              </Text>
-              <IconButton accessibilityLabel={t('common.back')} onPress={() => setChooseOpen(false)}>
-                <Icon name="close" size={22} color={color.textSecondary} strokeWidth={2} />
-              </IconButton>
-            </View>
-            <ScrollView contentContainerStyle={styles.overlayList} showsVerticalScrollIndicator={false}>
-              {props.workouts.map((w, i) => (
-                <ListRow
-                  key={w.id}
-                  title={w.name}
-                  subtitle={w.muscles}
-                  chevron
-                  last={i === props.workouts.length - 1}
-                  onPress={() => {
-                    props.onChooseWorkout(w.id);
-                    setChooseOpen(false);
-                  }}
-                />
-              ))}
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -221,7 +212,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 4,
   },
-  brand: { flexDirection: 'row', alignItems: 'flex-end' },
+  brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary },
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 },
 
@@ -234,19 +225,19 @@ const styles = StyleSheet.create({
   groupItem: { flexDirection: 'row', alignItems: 'center' },
   sep: { marginHorizontal: 10, color: color.textTertiary, fontFamily: font.sans, fontSize: textScale.base },
 
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  metaText: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
+  metaSep: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary },
+
   meterWrap: { marginTop: 28 },
   statRow: { flexDirection: 'row', gap: 28, marginTop: 24 },
   lockedWrap: { marginTop: 20 },
   lockedDay: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
+  viewProgress: { marginTop: 20 },
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },
-
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: color.bg },
-  overlaySafe: { flex: 1, paddingHorizontal: space.gutter },
-  overlayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, marginLeft: 4 },
-  overlayTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: -0.3, color: color.textPrimary },
-  overlayList: { paddingTop: 12, paddingBottom: 24 },
 });

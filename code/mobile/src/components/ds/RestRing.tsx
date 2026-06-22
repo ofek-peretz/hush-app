@@ -3,12 +3,22 @@
  * The countdown between sets: a mechanical, LINEAR sweep — never eased, never
  * bouncing. Reads like an instrument winding down. Controlled: pass `remaining`
  * and `total` (seconds); the ring and the mono readout follow. `onStage` inverts.
+ *
+ * The web design gets its smoothness from `transition: stroke-dashoffset 1s
+ * linear`. RN SVG has no CSS transition, so without animation the arc snaps once
+ * per second (the "jumpy timer" defect). Here the dash offset is animated with
+ * Reanimated over 1s LINEAR between each integer second — and a +15s bump fills
+ * the same way (a quick, honest linear fill, not a teleport). A fresh period
+ * (remaining ≥ total) snaps to full with no sweep.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { color, font, textScale, signal, stage as stageC } from '@/design/tokens';
 import { Legend } from './Legend';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface Props {
   remaining?: number;
@@ -29,15 +39,31 @@ function fmt(sec: number): string {
 export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
-  const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
+  const target = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
   const timeSize = size >= 140 ? textScale['2xl'] : size >= 96 ? textScale.lg : textScale.base;
   const trackColor = onStage ? stageC[2] : color.fillSubtleStrong;
+
+  // Animated fraction of the ring that remains (1 = full, 0 = empty).
+  const frac = useSharedValue(target);
+  useEffect(() => {
+    // A fresh period (or a forward jump to/over full) snaps; everything else
+    // sweeps linearly over one second to mirror the design's mechanical fill.
+    if (remaining >= total) {
+      frac.value = target;
+    } else {
+      frac.value = withTiming(target, { duration: 1000, easing: Easing.linear });
+    }
+  }, [remaining, total, target, frac]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circ * (1 - frac.value),
+  }));
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
       <Svg width={size} height={size} style={styles.svg}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
-        <Circle
+        <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
           r={r}
@@ -46,7 +72,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
           fill="none"
           strokeLinecap="round"
           strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - frac)}
+          animatedProps={animatedProps}
         />
       </Svg>
       <View style={styles.readout}>

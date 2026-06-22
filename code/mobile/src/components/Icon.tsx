@@ -27,7 +27,11 @@ export type IconName =
   | 'history' // clock.arrow.circlepath
   | 'portrait' // chart.bar / chart.bar.fill
   | 'settings' // gearshape
-  | 'play' // play.fill
+  | 'play' // play (lucide outline triangle — Begin)
+  | 'playCircle' // circle-play (Form)
+  | 'repeat' // repeat (Swap)
+  | 'pencil' // pencil (Edit result)
+  | 'checkCircle' // circle-check (Ready)
   | 'sliders' // sliders.horizontal
   | 'calendar' // calendar-range
   | 'trendingUp' // trending-up
@@ -167,14 +171,52 @@ function render(
         </G>
       );
     case 'play':
-      return <Path d="M7 5.5l11 6.5-11 6.5z" fill={stroke} stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" />;
-    case 'sliders':
+      // lucide `play` — a clean rounded triangle (outline), used on Begin CTAs.
+      return <Path d="M8 5.2l11 6.8-11 6.8z" {...common} />;
+    case 'playCircle':
+      // lucide `circle-play` — Form action.
       return (
         <G {...common}>
-          <Line x1="4" y1="8" x2="20" y2="8" />
-          <Line x1="4" y1="16" x2="20" y2="16" />
-          <Circle cx="9" cy="8" r="2.4" fill="none" />
-          <Circle cx="15" cy="16" r="2.4" fill="none" />
+          <Circle cx="12" cy="12" r="9" />
+          <Path d="M10 8.5l5.5 3.5-5.5 3.5z" fill={stroke} />
+        </G>
+      );
+    case 'repeat':
+      // lucide `repeat` — Swap action (two looping arrows).
+      return (
+        <G {...common}>
+          <Path d="M17 2l4 4-4 4" />
+          <Path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+          <Path d="M7 22l-4-4 4-4" />
+          <Path d="M21 13v1a4 4 0 0 1-4 4H3" />
+        </G>
+      );
+    case 'pencil':
+      // lucide `pencil` — Edit result.
+      return (
+        <G {...common}>
+          <Path d="M12 20h9" />
+          <Path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+        </G>
+      );
+    case 'checkCircle':
+      // lucide `circle-check` — Ready confirmation.
+      return (
+        <G {...common}>
+          <Circle cx="12" cy="12" r="9" />
+          <Path d="M8.5 12.5l2.5 2.5 4.5-5" />
+        </G>
+      );
+    case 'sliders':
+      // lucide `sliders-horizontal` — three rows, each with a knob.
+      return (
+        <G {...common}>
+          <Line x1="4" y1="6" x2="20" y2="6" />
+          <Line x1="4" y1="12" x2="20" y2="12" />
+          <Line x1="4" y1="18" x2="20" y2="18" />
+          <Circle cx="15" cy="6" r="2.5" fill={stroke} stroke="none" />
+          <Circle cx="9" cy="12" r="2.5" fill={stroke} stroke="none" />
+          <Circle cx="15" cy="18" r="2.5" fill={stroke} stroke="none" />
         </G>
       );
     case 'calendar':
@@ -210,9 +252,10 @@ function render(
     case 'circle':
       return <Circle cx="12" cy="12" r="8" {...common} strokeDasharray="3 3" />;
     case 'dumbbell':
+      // lucide-style horizontal dumbbell: outer caps · plates · bar.
       return (
         <G {...common}>
-          <Path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11" />
+          <Path d="M4 9.5v5M7 7v10M17 7v10M20 9.5v5M7 12h10" />
         </G>
       );
     case 'shield':

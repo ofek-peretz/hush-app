@@ -9,7 +9,7 @@
  * system permission flow, Sign Out / Delete run behind a native confirm.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, ActionSheetIOS, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -58,21 +58,13 @@ export function ProfileSheet({ navigation }: Props) {
     if (!granted) void Linking.openSettings();
   }
 
+  // Both confirms use the in-theme BottomSheet (not the system ActionSheet's garish
+  // red), so the danger action reads in the same calm clay as "Delete account".
   function confirmSignOut() {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: t('profile.signOutConfirm'), options: [t('profile.cancel'), t('profile.signOut')], cancelButtonIndex: 0, destructiveButtonIndex: 1 },
-        (i) => { if (i === 1) void app.resetAccount(); },
-      );
-    } else setOverlay('signout');
+    setOverlay('signout');
   }
   function confirmDelete() {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: t('profile.deleteConfirm'), options: [t('profile.cancel'), t('profile.deleteAccount')], cancelButtonIndex: 0, destructiveButtonIndex: 1 },
-        (i) => { if (i === 1) void app.deleteAccount(); },
-      );
-    } else setOverlay('delete');
+    setOverlay('delete');
   }
 
   // Body data + Goal/experience summaries (only the parts we actually have).

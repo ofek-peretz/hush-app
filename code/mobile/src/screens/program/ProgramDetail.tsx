@@ -91,7 +91,7 @@ export function ProgramDetail({ navigation, route }: Props) {
                   variant="ghost"
                   size="sm"
                   label={t('workout.swapAction')}
-                  leading={<Icon name="swap" size={16} color={color.textPrimary} strokeWidth={2} />}
+                  leading={<Icon name="repeat" size={16} color={color.textPrimary} strokeWidth={2} />}
                   onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId })}
                 />
               }

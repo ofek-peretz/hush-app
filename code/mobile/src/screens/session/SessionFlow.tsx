@@ -11,8 +11,8 @@
  * per-set logging at Complete Set, the save-before-Well-Done invariant, rest
  * timing, edit-result (now inline Steppers), swap (current + upcoming), finish.
  */
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,7 +23,7 @@ import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { exercisesForMuscle, exerciseDisplayName } from '@/data/exercises';
+import { similarExercises, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -325,9 +325,9 @@ function ActiveSet({
           onPress={onComplete}
         />
         <View style={styles.ghostRow}>
-          <StageGhost icon={editing ? 'check' : 'sliders'} label={editing ? t('workout.editDone') : t('workout.editResult')} onPress={onToggleEdit} />
-          <StageGhost icon="play" label={t('workout.form')} onPress={onDemo} />
-          {canSwap ? <StageGhost icon="swap" label={t('workout.swapAction')} onPress={onSwap} /> : null}
+          <StageGhost icon={editing ? 'check' : 'pencil'} label={editing ? t('workout.editDone') : t('workout.editResult')} onPress={onToggleEdit} />
+          <StageGhost icon="playCircle" label={t('workout.form')} onPress={onDemo} />
+          {canSwap ? <StageGhost icon="repeat" label={t('workout.swapAction')} onPress={onSwap} /> : null}
         </View>
       </View>
     </>
@@ -386,21 +386,67 @@ function Rest({
   const nextSet = session.nextSetLabel;
   const nextDelta = nextTarget?.reasonType;
 
+  // The countdown is anchored to an ABSOLUTE end instant on the wall clock, NOT a
+  // per-second decrement. iOS suspends JS timers while backgrounded/locked, so a
+  // decrementing counter would freeze and resume mid-count — here we recompute
+  // `remaining` from `endAt - now` each tick AND on every return to foreground, so
+  // the real elapsed rest is always reflected (the timer keeps running while away).
   const [total, setTotal] = useState(session.restSeconds);
   const [remaining, setRemaining] = useState(session.restSeconds);
+  const endAtRef = useRef<number | null>(null);
+  const remainingRef = useRef(session.restSeconds);
+
+  const sync = useCallback(() => {
+    if (endAtRef.current == null) return;
+    const rem = Math.max(0, Math.round((endAtRef.current - Date.now()) / 1000));
+    remainingRef.current = rem;
+    setRemaining(rem);
+  }, []);
+
+  // A new rest period (duration changed / phase changed): reset and re-anchor.
   useEffect(() => {
     setTotal(session.restSeconds);
     setRemaining(session.restSeconds);
+    remainingRef.current = session.restSeconds;
+    endAtRef.current = paused ? null : Date.now() + session.restSeconds * 1000;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.restSeconds, session.displayPhase]);
+
+  // Pause freezes the value; resume re-anchors the end from the frozen remaining.
+  useEffect(() => {
+    if (paused) {
+      endAtRef.current = null;
+    } else {
+      endAtRef.current = Date.now() + remainingRef.current * 1000;
+      sync();
+    }
+  }, [paused, sync]);
+
+  // Lock-screen / background fix: JS timers suspend, so re-sync on foreground.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !paused) sync();
+    });
+    return () => subscription.remove();
+  }, [paused, sync]);
+
   useEffect(() => {
     if (paused) return;
     if (remaining <= 0) {
       session.endRest();
       return;
     }
-    const id = setTimeout(() => setRemaining((sec) => sec - 1), 1000);
+    const id = setTimeout(sync, 1000);
     return () => clearTimeout(id);
-  }, [remaining, paused, session]);
+  }, [remaining, paused, session, sync]);
+
+  // +15s: extend the absolute end and the total, then re-sync (the ring fast-fills).
+  const addFifteen = useCallback(() => {
+    setTotal((tt) => tt + 15);
+    remainingRef.current += 15;
+    endAtRef.current = (endAtRef.current ?? Date.now() + remainingRef.current * 1000) + 15000;
+    sync();
+  }, [sync]);
 
   return (
     <>
@@ -451,8 +497,8 @@ function Rest({
             </View>
             {isTransition ? (
               <View style={styles.upActions}>
-                <StageGhost icon="play" label={t('workout.form')} onPress={onDemo} />
-                <StageGhost icon="swap" label={t('workout.swapExercise')} onPress={onSwap} />
+                <StageGhost icon="playCircle" label={t('workout.form')} onPress={onDemo} />
+                <StageGhost icon="repeat" label={t('workout.swapExercise')} onPress={onSwap} />
               </View>
             ) : null}
           </Card>
@@ -469,14 +515,7 @@ function Rest({
         />
         {remaining > 0 ? (
           <View style={styles.ghostRow}>
-            <StageGhost
-              icon="chevronUp"
-              label={t('workout.addSeconds')}
-              onPress={() => {
-                setRemaining((r) => r + 15);
-                setTotal((tt) => tt + 15);
-              }}
-            />
+            <StageGhost icon="chevronUp" label={t('workout.addSeconds')} onPress={addFifteen} />
           </View>
         ) : null}
       </View>
@@ -493,7 +532,8 @@ function SwapSheet({ target, onClose }: { target: 'current' | 'next'; onClose: (
   const exId = target === 'current' ? session.currentExerciseId : session.nextExerciseId;
   const curName = ex?.name ?? exerciseDisplayName(exId);
   const muscle = ex?.muscle ?? '';
-  const alts = (ex ? exercisesForMuscle(ex.muscle) : []).filter((e) => e.id !== ex?.id);
+  // In-workout swap: the 2 closest-in-effect alternatives (current + 2 = 3 total).
+  const alts = ex ? similarExercises(ex.id, 2) : [];
   const nextTarget = session.nextTarget;
 
   function choose(altId: string) {
@@ -586,7 +626,9 @@ const styles = StyleSheet.create({
   group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10 },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 38 },
-  hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: textScale.data * 0.95 },
+  // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
+  // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
+  hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false },
   heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginLeft: 6, marginBottom: 12 },
   bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
   deltaWrap: { marginTop: 16, height: 26, alignItems: 'center' },
@@ -618,7 +660,7 @@ const styles = StyleSheet.create({
   loggedHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   loggedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0] },
   loggedValue: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 30 },
-  loggedNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['5xl'], color: stage.ink0, lineHeight: textScale['5xl'] * 0.9, letterSpacing: trackingPx(textScale['5xl'], tracking.display) },
+  loggedNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['5xl'], color: stage.ink0, lineHeight: Math.round(textScale['5xl'] * 1.06), letterSpacing: trackingPx(textScale['5xl'], tracking.display), includeFontPadding: false },
   loggedUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2 },
   loggedTimes: { fontFamily: font.mono, fontSize: textScale['2xl'], color: stage.ink2, marginHorizontal: 4 },
   loggedCopy: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 18, maxWidth: 260, textAlign: 'center' },

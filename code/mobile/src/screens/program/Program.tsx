@@ -42,10 +42,19 @@ export function Program({ navigation }: Props) {
     const s =
       history.find((h) => h.programDayId === day.id) ??
       history.find((h) => h.programDayName === day.name);
-    return s ? new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short' }) : null;
+    // Full "Mon 16 Jun" (the design shows the date, not a bare weekday).
+    return s
+      ? new Date(s.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+      : null;
   }
 
   const workouts = (program?.days ?? []).filter((d) => !d.isRest);
+  // Split label for the eyebrow (the model has no name field): unique base names
+  // (drop the trailing " A"/" B"/variant), joined — e.g. "Upper / Lower".
+  const splitLabel = workouts
+    .map((d) => d.name.replace(/\s+[A-Za-z0-9]$/, '').trim())
+    .filter((b, i, arr) => b && arr.indexOf(b) === i)
+    .join(' / ');
   const completed = workouts.filter((d) => d.completed);
   const upcoming = workouts.filter((d) => !d.completed);
   const prog = program ? weekProgress(program) : { done: 0, total: 0 };
@@ -67,7 +76,11 @@ export function Program({ navigation }: Props) {
           <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
         </Pressable>
         <View style={styles.headTitles}>
-          <Legend>{t('program.weekLegend', { n: weekNumber, freq: program?.frequency ?? workouts.length })}</Legend>
+          <Legend>
+            {splitLabel
+              ? t('program.weekLegendSplit', { n: weekNumber, split: splitLabel, freq: program?.frequency ?? workouts.length })
+              : t('program.weekLegend', { n: weekNumber, freq: program?.frequency ?? workouts.length })}
+          </Legend>
           <Text style={styles.title} accessibilityRole="header">{t('program.thisWeek')}</Text>
         </View>
       </View>

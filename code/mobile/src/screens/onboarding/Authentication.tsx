@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '@/components/ds';
+import { HushMark } from '@/components/HushMark';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { color, space, font, textScale, tracking, trackingPx, signal } from '@/design/tokens';
@@ -41,7 +42,8 @@ export function Authentication({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.hero}>
-        <View style={styles.brand}>
+        <HushMark size={46} />
+        <View style={[styles.brand, styles.brandSpacing]}>
           <Text style={styles.wordmark}>hush</Text>
           <View style={styles.dot} />
         </View>
@@ -99,6 +101,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   brand: { flexDirection: 'row', alignItems: 'flex-end' },
+  brandSpacing: { marginTop: 18 },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 },
   tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },

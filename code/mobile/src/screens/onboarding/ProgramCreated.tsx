@@ -76,7 +76,7 @@ export function ProgramCreated({ route }: Props) {
         ) : (
           <>
             <View style={styles.readyRow}>
-              <Icon name="check" size={20} color={up[0]} strokeWidth={2.4} />
+              <Icon name="checkCircle" size={20} color={up[0]} strokeWidth={2} />
               <Text style={styles.readyLegend}>{t('ob.readyLegend')}</Text>
             </View>
             <Text style={styles.readyTitle}>{t('ob.readyTitle')}</Text>

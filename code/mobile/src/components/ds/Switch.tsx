@@ -1,12 +1,14 @@
 /**
  * Switch — the design's pill toggle (one of the only pill shapes Hush allows).
- * On reads INK (a settled state), off reads a neutral well. The knob is paper;
- * it slides a short, decisive distance — confirms, never bounces (motion law).
+ * On uses the ACCENT (ochre) — turning something on is an action with a
+ * consequence (matches `components/forms/Switch.jsx` `is-on`). Off reads a
+ * neutral well. The knob is paper; it slides a short, decisive distance —
+ * confirms, never bounces (motion law).
  */
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
-import { color, paper, ink, motion } from '@/design/tokens';
+import { color, paper, signal, motion } from '@/design/tokens';
 
 const W = 46;
 const H = 28;
@@ -50,7 +52,7 @@ export function Switch({ checked, onChange, accessibilityLabel, disabled }: Prop
 const styles = StyleSheet.create({
   track: { width: W, height: H, borderRadius: H / 2, padding: PAD, justifyContent: 'center' },
   trackOff: { backgroundColor: color.fillSubtleStrong, borderWidth: 1, borderColor: color.borderControl },
-  trackOn: { backgroundColor: ink[0], borderWidth: 1, borderColor: ink[0] },
+  trackOn: { backgroundColor: signal[0], borderWidth: 1, borderColor: signal[0] },
   disabled: { opacity: 0.4 },
   knob: {
     width: KNOB,
