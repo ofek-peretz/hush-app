@@ -43,6 +43,7 @@ struct WireMirror: Codable, Equatable {
   var restRemainingS: Int?
   var restTotalS: Int?
   var nextExerciseName: String?
+  var nextExerciseGroup: String?
   var nextTargetWeight: Double?
   var nextTargetReps: Int?
   var completedExerciseName: String?

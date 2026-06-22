@@ -6,9 +6,9 @@
  * Rest is Hush-owned and not user-adjustable (UX §10.8); these are the fixed
  * defaults. "Ready" (endRest) is the only rest agency.
  */
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ForecastRecord, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, exercisesForMuscle, type Exercise } from '@/data/exercises';
+import { exerciseById, similarExercises, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
@@ -157,6 +157,9 @@ export interface SessionView {
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
   editCurrentSet: (v: { weight: number | null; reps: number }) => void;
   endRest: () => void;
+  /** Extend the running rest by N seconds ("+15 sec"). Re-publishes the longer rest
+   *  to the watch + Live Activity; the phone's own rest UI also reflects it. */
+  extendRest: (seconds: number) => void;
   pause: () => void;
   resume: () => void;
   finishEarly: () => Promise<CompleteResult>;
@@ -229,6 +232,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Temporal telemetry: when the current rest/pause began (ms epoch).
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
+  // Seconds added to the CURRENT rest via "+15 sec" (phone or watch). Reset when a new
+  // rest begins / ends. Bumping `restNonce` re-runs the mirror effect so the longer
+  // rest is republished to the watch + Live Activity.
+  const restExtraSecondsRef = useRef(0);
+  const [restNonce, setRestNonce] = useState(0);
   // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
   const laStartedRef = useRef(false);
   // Watch action handlers, refreshed each render so a (native) watch intent runs the
@@ -245,6 +253,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // (so a watch Begin runs the exact same path the phone's Begin does), else no-op.
   const watchStartRef = useRef<(workoutId?: string) => void>(() => {});
   const watchSelectRef = useRef<(workoutId?: string) => void>(() => {});
+  // "+15 sec" from a watch Rest screen — extends the running rest (the phone is the
+  // authority; the longer rest re-publishes to every surface).
+  const watchAddRestRef = useRef<(seconds: number) => void>(() => {});
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
   // never closes over stale actions. Transport is a no-op until the watchOS target
   // exists — all authority/validation/telemetry runs regardless.
@@ -260,6 +271,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       swapExercise: (exerciseId) => watchSwapRef.current(exerciseId),
       startWorkout: (workoutId) => watchStartRef.current(workoutId),
       selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
+      addRest: (seconds) => watchAddRestRef.current(seconds),
     });
   }
 
@@ -270,15 +282,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const { plan, machine } = state;
     const steps: MirrorStep[] = plan.map((st) => {
       const ex = exerciseById(st.exerciseId);
-      // In-class swap alternatives — the SAME list the phone's Swap sheet shows
-      // (same muscle, different exercise). Only at the START of an exercise (the
-      // watch offers swap before you begin a station), capped for a small payload.
+      // In-class swap alternatives — the SAME 2 closest-in-effect options the
+      // phone's in-workout Swap sheet shows (current + 2 = 3 total). Only at the
+      // START of an exercise (the watch offers swap before you begin a station).
       const swapOptions =
         ex && st.exerciseSetIndex === 0
-          ? exercisesForMuscle(ex.muscle)
-              .filter((e) => e.id !== ex.id)
-              .slice(0, 8)
-              .map((e) => ({ id: e.id, name: e.name }))
+          ? similarExercises(ex.id, 2).map((e) => ({ id: e.id, name: e.name }))
           : [];
       return {
         exerciseName: ex?.name ?? '',
@@ -300,6 +309,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       machine,
       restInterS: REST_INTER_S,
       restTransitionS: REST_TRANSITION_S,
+      restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
       nowMs: Date.now(),
       workoutName: state.session?.programDayName ?? '',
@@ -326,7 +336,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } else {
       void liveActivity.update(mirror).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'update' }));
     }
-  }, [state]);
+    // restNonce: re-publish when "+15 sec" extended the current rest (ref change alone
+    // would not re-run this effect).
+  }, [state, restNonce]);
 
   const view = useMemo<SessionView>(() => {
     const { plan, machine } = state;
@@ -599,6 +611,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
         if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {
           restStartedAtRef.current = Date.now();
+          restExtraSecondsRef.current = 0; // a fresh rest starts at its base length
         }
 
         if (m.phase === 'SESSION_SAVED') {
@@ -615,7 +628,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           void track('rest_completed', { sessionId: sessionRef.current?.id, restMs, plannedS: restSeconds, variant, early: restMs < restSeconds * 1000 });
           restStartedAtRef.current = null;
         }
+        restExtraSecondsRef.current = 0;
         dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'REST_ELAPSED' }) });
+      },
+      extendRest(seconds: number) {
+        if (restStartedAtRef.current == null) return; // only while resting
+        restExtraSecondsRef.current += seconds;
+        void track('rest_extended', { sessionId: sessionRef.current?.id, seconds });
+        setRestNonce((n) => n + 1); // re-run the mirror effect → republish the longer rest
       },
       pause() {
         pauseStartedAtRef.current = Date.now();
@@ -711,6 +731,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
   // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
   watchBusyRef.current = () => view.markEquipmentOccupied();
+  // "+15 sec" from the watch → extend the running rest (re-publishes to every surface).
+  watchAddRestRef.current = (seconds) => view.extendRest(seconds);
   // Swap from the watch → the same swap a phone tap performs, routed by live phase
   // (Active Set swaps the current exercise; Transition rest swaps the next).
   watchSwapRef.current = (exerciseId) => {

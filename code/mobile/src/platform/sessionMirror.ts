@@ -83,6 +83,8 @@ export interface SessionMirror {
   restTotalS?: number | null;
   /** Upcoming exercise name during a transition rest; else null. */
   nextExerciseName: string | null;
+  /** Upcoming exercise's muscle group (transition card legend); else null. */
+  nextExerciseGroup?: string | null;
   /** Target of the upcoming exercise's first set during a transition rest. */
   nextTargetWeight: number | null;
   nextTargetReps: number | null;
@@ -124,6 +126,9 @@ export interface MirrorInputs {
   /** When the current rest began (ms epoch), or null when not resting. Drives the
    *  absolute restEndsAt so the timer never drifts as the mirror is re-projected. */
   restStartedAtMs: number | null;
+  /** Seconds added to the current rest via "+15 sec" (phone or watch). Extends both
+   *  restEndsAt and restTotalS so every surface agrees on the longer rest. */
+  restExtraS?: number;
   nowMs: number;
   /** The session's workout name (program day) — for the watch Complete screen. */
   workoutName?: string;
@@ -237,7 +242,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   let restRemainingS: number | null = null;
   let restTotalS: number | null = null;
   if (resting && !paused) {
-    const restS = effPhase === 'REST_INTER' ? restInterS : restTransitionS;
+    const restS = (effPhase === 'REST_INTER' ? restInterS : restTransitionS) + (inp.restExtraS ?? 0);
     restTotalS = restS;
     const startMs = restStartedAtMs ?? nowMs;
     const endMs = startMs + restS * 1000;
@@ -280,6 +285,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     restRemainingS,
     restTotalS,
     nextExerciseName: next ? next.exerciseName : null,
+    nextExerciseGroup: next ? next.exerciseGroup ?? null : null,
     nextTargetWeight: next ? next.targetWeight : null,
     nextTargetReps: next ? next.targetReps : null,
     // The just-finished exercise is the current step on a transition-rest frame.

@@ -141,7 +141,14 @@ final class WatchModel: ObservableObject {
   func pause() { sendIntent(type: "pause") }
   func resume() { sendIntent(type: "resume") }
   func endWorkout() { sendIntent(type: "finish_early") }
-  func dismissComplete() { /* the phone tears down; nothing to send */ }
+  func dismissComplete() {
+    // The phone has already saved + torn down the watch session by the time the
+    // Complete frame arrives, so there's nothing to send. Clear the local mirror so
+    // Done leaves the Complete screen immediately (→ the Start lobby once the phone
+    // republishes it, else idle). Without this the Done button is inert (the defect).
+    mirror = nil
+    recompute()
+  }
 
   func begin() { sendIntent(type: "start_workout", workoutId: lobby?.workoutId) }
   func selectWorkout(_ id: String) { sendIntent(type: "select_workout", workoutId: id) }

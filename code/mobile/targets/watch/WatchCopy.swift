@@ -41,7 +41,9 @@ enum WatchCopy {
 
   // Complete
   static let saved = "Saved"
-  static func complete(_ name: String) -> String { "\(name) complete." }
+  // Forced break so the name and "complete." stack like the design (and never
+  // ellipsize on the smaller 41 mm case).
+  static func complete(_ name: String) -> String { "\(name)\ncomplete." }
   static let done = "Done"
   static let metricTime = "Time"
   static let metricSets = "Sets"

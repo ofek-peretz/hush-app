@@ -65,6 +65,10 @@ private struct TopStrip: View {
             Capsule().fill(Palette.ink1).frame(width: 3, height: 12)
             Capsule().fill(Palette.ink1).frame(width: 3, height: 12)
           }
+          // A real ~44pt hit target — the bare glyph was ~9pt, so the first taps
+          // missed (the "pause needs several taps" defect).
+          .frame(width: 40, height: 32, alignment: .leading)
+          .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
       } else {
@@ -190,6 +194,8 @@ private struct RestRing: View {
   let endsAt: String?
   let totalS: Int
   let diameter: CGFloat
+  /// The label under the time while counting (design: "REST" inter-set, "NEXT" on transition).
+  var restingLabel: String = "REST"
   var body: some View {
     let end = WatchWire.parseDate(endsAt)
     let stroke = max(6, diameter * 0.05)
@@ -206,7 +212,7 @@ private struct RestRing: View {
           Text(fmtTime(remaining))
             .font(.system(size: diameter * 0.23, weight: .semibold, design: .monospaced))
             .monospacedDigit().foregroundStyle(Palette.ink0)
-          Text(ready ? "READY" : "REST").font(.system(size: 9, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
+          Text(ready ? "READY" : restingLabel).font(.system(size: 9, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
         }
       }
     }
@@ -274,6 +280,8 @@ struct StartScreen: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       TopStrip()
+      // The whole text unit sits at the TOP (NEXT WORKOUT ~level with the clock),
+      // so the muscle line no longer hugs the Begin button — a Spacer opens the gap.
       VStack(alignment: .leading, spacing: 6) {
         Legend(WatchCopy.nextWorkout)
         Text(resting ? "Recovery" : lobby.workoutName)
@@ -293,7 +301,9 @@ struct StartScreen: View {
           Text(lobby.muscles).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(2)
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 2)
+      Spacer(minLength: 10)
       VStack(spacing: 6) {
         if !resting {
           StageButton(title: WatchCopy.begin, kind: .primary, height: 50, fontSize: 18, action: onBegin)
@@ -377,27 +387,32 @@ struct ActiveSetScreen: View {
     .digitalCrownRotation(
       $crown,
       from: 0, through: field == .weight ? 600 : 50,
-      by: field == .weight ? 2.5 : 1, sensitivity: .low, isContinuous: false
+      by: 1, sensitivity: .low, isContinuous: false
     )
     .onChange(of: crown) { _, v in
       guard editing else { return }
-      if field == .weight { if !bodyweight { w = max(0, v) } } else { r = max(0, v.rounded()) }
+      // Whole-number steps (kg + reps) — no decimal point, like the rest of the app.
+      if field == .weight { if !bodyweight { w = max(0, v.rounded()) } } else { r = max(0, v.rounded()) }
     }
     .onChange(of: field) { _, f in crown = f == .weight ? w : r }
     .sheet(isPresented: $showSwap) {
-      SwapOverlay(options: swaps) { id in onSwap(id); showSwap = false }
+      SwapOverlay(
+        currentName: mirror.exerciseName,
+        options: swaps,
+        onPick: { id in onSwap(id); showSwap = false },
+        onCancel: { showSwap = false }
+      )
     }
   }
 
   private var header: some View {
-    VStack(spacing: 2) {
-      if let g = mirror.exerciseGroup, !g.isEmpty { Legend(g, size: 10) }
-      HStack(spacing: 6) {
-        Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
-        if !swaps.isEmpty && !editing {
-          Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 13)) }
-            .buttonStyle(.plain).foregroundStyle(Palette.ink2)
-        }
+    // Muscle group intentionally omitted (founder: drop CHEST/BACK everywhere to
+    // open the small screen) — just the exercise name + the swap affordance.
+    HStack(spacing: 6) {
+      Text(mirror.exerciseName).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
+      if !swaps.isEmpty && !editing {
+        Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 13)) }
+          .buttonStyle(.plain).foregroundStyle(Palette.ink2)
       }
     }
   }
@@ -436,11 +451,15 @@ struct ActiveSetScreen: View {
           .overlay(alignment: .bottom) { underline(field == .reps) }
       }
       .buttonStyle(.plain)
-      HStack(spacing: 14) {
-        IconBtn(system: "minus", side: 40) { step(-1) }
-        Text(WatchCopy.crownToAdjust.uppercased()).font(.system(size: 9, weight: .medium)).tracking(0.6).foregroundStyle(Palette.signal).frame(width: 78)
-        IconBtn(system: "plus", side: 40) { step(1) }
+      // No −/+ buttons: the Digital Crown is the adjuster (whole steps), so the
+      // hint spans the full row and reads clearly instead of truncating to "CROWN TO AD…".
+      HStack(spacing: 5) {
+        Image(systemName: "digitalcrown.horizontal.press").font(.system(size: 12))
+        Text(WatchCopy.crownToAdjust).font(.system(size: 12, weight: .medium))
       }
+      .foregroundStyle(Palette.signal)
+      .frame(maxWidth: .infinity, alignment: .center)
+      .padding(.top, 4)
     }
   }
 
@@ -450,9 +469,18 @@ struct ActiveSetScreen: View {
 
   private var footer: some View {
     HStack(spacing: 8) {
-      IconBtn(system: editing ? "checkmark" : "pencil") {
+      // A bare glyph that sits ON the stage (no raised tile) — keeps a real tap
+      // target via contentShape, but reads as part of the black, not a button.
+      Button {
         if editing { commit() } else { enterEdit() }
+      } label: {
+        Image(systemName: editing ? "checkmark" : "pencil")
+          .font(.system(size: 18, weight: .semibold))
+          .foregroundStyle(Palette.ink1)
+          .frame(width: 38, height: 52)
+          .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
       StageButton(title: editing ? WatchCopy.save : WatchCopy.completeSet, kind: .primary, height: 52, fontSize: 17) {
         if editing { commit() } else { onComplete() }
       }
@@ -461,7 +489,7 @@ struct ActiveSetScreen: View {
   }
 
   private func enterEdit() {
-    w = shownWeight ?? 0
+    w = (shownWeight ?? 0).rounded() // whole kg — no decimals on the watch
     r = Double(shownReps)
     field = bodyweight ? .reps : .weight
     crown = field == .weight ? w : r
@@ -470,10 +498,6 @@ struct ActiveSetScreen: View {
   private func commit() {
     onSave(bodyweight ? nil : w, Int(r))
     editing = false
-  }
-  private func step(_ d: Int) {
-    if field == .weight { if !bodyweight { w = max(0, w + Double(d) * 2.5) } } else { r = max(0, r + Double(d)) }
-    crown = field == .weight ? w : r
   }
 }
 
@@ -521,20 +545,26 @@ struct InterRestScreen: View {
   var body: some View {
     VStack(spacing: 0) {
       TopStrip(onPause: onPause, lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
+      Spacer(minLength: 2)
+      // Slightly smaller ring leaves room for the meta line (reps were being cut)
+      // and the +15 button — still the most prominent mark on the screen.
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: 104)
       Spacer(minLength: 4)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: 116)
-      Spacer(minLength: 6)
-      VStack(spacing: 3) {
+      VStack(spacing: 2) {
         Legend(WatchCopy.upNext)
         Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
+        // Scale-to-fit so the trailing "× reps" never truncates on the 41 mm case.
         Text("\(mirror.setLabel) · \(targetText)")
           .font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
+          .lineLimit(1).minimumScaleFactor(0.7)
       }
-      Spacer(minLength: 6)
-      StageButton(title: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, kind: ready ? .primary : .onstage, height: 48, fontSize: 16, action: onReady)
-      // (+15 sec is intentionally omitted until rest-extension is wired phone-side.)
+      Spacer(minLength: 4)
+      StageButton(title: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, kind: ready ? .primary : .onstage, height: 44, fontSize: 16, action: onReady)
+      if !ready {
+        StageButton(title: WatchCopy.addRest, kind: .ghost, height: 30, fontSize: 13, action: onAdd)
+      }
     }
-    .padding(.horizontal, 10).padding(.bottom, 8)
+    .padding(.horizontal, 10).padding(.bottom, 6)
   }
 
   private var targetText: String {
@@ -559,26 +589,32 @@ struct TransitionRestScreen: View {
     VStack(spacing: 0) {
       TopStrip(onPause: onPause, lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1))
       Spacer(minLength: 2)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: 96)
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: 96, restingLabel: "NEXT")
       Spacer(minLength: 6)
       card
-      Spacer(minLength: 6)
-      StageButton(title: WatchCopy.startNextLift, kind: ready ? .primary : .onstage, height: 46, fontSize: 16, action: onReady)
-      // (+15 sec omitted until rest-extension is wired phone-side.)
+      Spacer(minLength: 4)
+      StageButton(title: WatchCopy.startNextLift, kind: ready ? .primary : .onstage, height: 44, fontSize: 16, action: onReady)
+      if !ready {
+        StageButton(title: WatchCopy.addRest, kind: .ghost, height: 30, fontSize: 13, action: onAdd)
+      }
     }
-    .padding(.horizontal, 10).padding(.bottom, 8)
+    .padding(.horizontal, 10).padding(.bottom, 6)
     .sheet(isPresented: $showSwap) {
-      SwapOverlay(options: swaps) { id in onSwap(id); showSwap = false }
+      SwapOverlay(
+        currentName: mirror.nextExerciseName ?? "",
+        options: swaps,
+        onPick: { id in onSwap(id); showSwap = false },
+        onCancel: { showSwap = false }
+      )
     }
   }
 
   private var card: some View {
+    // Muscle group omitted (founder: no CHEST/BACK labels); the ring already reads
+    // "NEXT", so the card leads straight with the exercise name.
     VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .top) {
-        VStack(alignment: .leading, spacing: 2) {
-          Legend(WatchCopy.next)
-          Text(mirror.nextExerciseName ?? "").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
-        }
+        Text(mirror.nextExerciseName ?? "").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
         Spacer()
         if !swaps.isEmpty {
           Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 14)) }
@@ -606,23 +642,48 @@ struct TransitionRestScreen: View {
 // MARK: Swap overlay
 
 struct SwapOverlay: View {
+  let currentName: String
   let options: [WireSwapOption]
   let onPick: (String) -> Void
+  let onCancel: () -> Void
   var body: some View {
-    VStack(spacing: 6) {
-      Legend(WatchCopy.swapTitle, size: 11)
-      Text(WatchCopy.swapHint).font(.system(size: 11)).foregroundStyle(Palette.ink2)
-      List {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 8) {
+        Legend(WatchCopy.swapTitle, size: 10)
+        Text(WatchCopy.swapHint).font(.system(size: 11)).foregroundStyle(Palette.ink2)
+          .padding(.bottom, 2)
+        // The current exercise — highlighted, not re-selectable.
+        HStack {
+          Text(currentName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
+          Spacer()
+          Text(WatchCopy.current.uppercased())
+            .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(0.6)
+            .foregroundStyle(Palette.signal)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+          RoundedRectangle(cornerRadius: 12).fill(Palette.stage1)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.signal, lineWidth: 2))
+        )
+        // The 2 closest-in-effect alternatives.
         ForEach(options, id: \.id) { o in
           Button { onPick(o.id) } label: {
             Text(o.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 12).padding(.vertical, 12)
+              .background(RoundedRectangle(cornerRadius: 12).fill(Palette.stage1))
           }
-          .listRowBackground(RoundedRectangle(cornerRadius: 10).fill(Palette.stage1))
+          .buttonStyle(.plain)
         }
+        Button(action: onCancel) {
+          Text(WatchCopy.cancel).font(.system(size: 15)).foregroundStyle(Palette.ink1)
+            .frame(maxWidth: .infinity).padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
       }
-      .listStyle(.carousel)
+      .padding(.horizontal, 10).padding(.vertical, 6)
     }
-    .padding(.top, 6)
     .background(Palette.stage0)
   }
 }
@@ -638,7 +699,9 @@ struct CompleteScreen: View {
       Spacer(minLength: 4)
       HStack(spacing: 8) { DrawCheck(size: 18); Legend(WatchCopy.saved, size: 11) }
       Text(WatchCopy.complete(mirror.workoutName ?? ""))
-        .font(.system(size: 24, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(2).padding(.top, 10)
+        .font(.system(size: 26, weight: .semibold)).foregroundStyle(Palette.ink0)
+        .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 10)
       if let s = mirror.summary {
         HStack(spacing: 8) {
           Metric(value: s.timeLabel, label: WatchCopy.metricTime)

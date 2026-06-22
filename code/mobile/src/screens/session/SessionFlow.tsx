@@ -441,12 +441,15 @@ function Rest({
   }, [remaining, paused, session, sync]);
 
   // +15s: extend the absolute end and the total, then re-sync (the ring fast-fills).
+  // Also tell the session store so the longer rest re-publishes to the Apple Watch /
+  // Live Activity (otherwise a phone +15 wouldn't reach the watch).
   const addFifteen = useCallback(() => {
     setTotal((tt) => tt + 15);
     remainingRef.current += 15;
     endAtRef.current = (endAtRef.current ?? Date.now() + remainingRef.current * 1000) + 15000;
     sync();
-  }, [sync]);
+    session.extendRest(15);
+  }, [sync, session]);
 
   return (
     <>
