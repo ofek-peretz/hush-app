@@ -17,6 +17,9 @@ export type Units = 'kg' | 'lb';
 
 export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning';
 
+/** Weekly training volume — the athlete's set-volume lever (default moderate). */
+export type WeeklyVolume = 'low' | 'moderate' | 'high';
+
 /** Training experience — the single biggest input to the cold-start starting weight. */
 export type Experience = 'beginner' | 'intermediate' | 'advanced';
 
@@ -41,6 +44,7 @@ export interface Profile {
   goal: Goal;
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
+  volume?: WeeklyVolume; // weekly set-volume lever; absent => 'moderate' (parity-preserving)
   healthConnected: boolean;
   /** ISO date the account was created (Profile §4.28 "Member since"). App-layer. */
   memberSince?: string;
@@ -65,6 +69,10 @@ export interface Slot {
   capability: Capability; // capability class is FIXED for the slot
   exerciseId: string;
   setCount: number;
+  // Supplemental work (currently: core) — included in the program but NOT a primary
+  // progression target. One per week, 3 sets, placed last, preferring upper sessions.
+  // Rendered like any slot; it just never drives capability load/progression.
+  supplemental?: boolean;
 }
 
 export interface ProgramDay {

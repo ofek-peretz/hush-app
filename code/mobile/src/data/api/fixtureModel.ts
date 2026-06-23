@@ -31,9 +31,12 @@ import type {
   ProgramDay,
   SetTarget,
   Slot,
+  WeeklyVolume,
 } from '@/data/local/models';
-import { EXERCISES, exerciseById, type Exercise } from '@/data/exercises';
-import { db } from '@/data/local/db';
+import { EXERCISES, exerciseById, exercisesForMuscle, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { prescribe, computePortrait } from '@/data/progression';
+import { db, type OwnedPreferences } from '@/data/local/db';
+import type { Session } from '@/data/local/models';
 import type { ActualSet, ModelClient } from './modelClient';
 
 const CALIBRATION_SESSIONS = 7;
@@ -41,17 +44,6 @@ const CALIBRATION_SESSIONS = 7;
 // many per-set targets per exercise so a slot's setCount is ALWAYS fully covered (a slot
 // never falls through to the default-weight fallback).
 const MAX_SETS = 5;
-
-// Post-calibration demonstrative decisions so every voice surface is exercisable: an
-// increase (with forecast), a decrease, and a hard-no hold (with a dated forecast).
-const ADVISORY_DECISION: Record<
-  string,
-  { kind: 'increase' | 'decrease' | 'hold'; delta?: number; weeks?: number }
-> = {
-  bb_bench_press: { kind: 'increase', delta: 1 },
-  bb_back_squat: { kind: 'decrease', delta: 2 },
-  bb_overhead_press: { kind: 'hold', weeks: 2 },
-};
 
 // ───────────────────────────── split library (market-standard) ─────────────────────────────
 // Each day = a recognized session built from the catalog. Days are ordered big→small
@@ -61,34 +53,31 @@ const ADVISORY_DECISION: Record<
 // RDL, split squat, glute bridge, pull-through, abduction, kickback) typical of how women
 // train.
 
+// Only blueprints referenced by a split below are kept (dead, never-referenced blueprints
+// were removed 2026-06-23). Core is NOT listed here — it is supplemental work added once per
+// week by addWeeklyCore() (3 sets, last, upper-preferred), never a primary slot in the split.
+// Each day lists compounds first; dayFromBlueprint also enforces compound-before-isolation.
 const MEN: Record<string, string[]> = {
-  'Full Body A': ['bb_back_squat', 'bb_bench_press', 'bb_row', 'bb_overhead_press', 'standing_calf_raise', 'hanging_leg_raise'],
-  'Full Body B': ['bb_deadlift', 'incline_bb_press', 'lat_pulldown', 'db_shoulder_press', 'leg_extension', 'cable_crunch'],
-  'Full Body C': ['front_squat', 'db_bench_press', 'cable_row', 'lateral_raise', 'bb_curl', 'triceps_pushdown'],
+  'Full Body A': ['bb_back_squat', 'bb_rdl', 'bb_bench_press', 'bb_row', 'bb_overhead_press'],
   'Upper A': ['bb_bench_press', 'bb_row', 'bb_overhead_press', 'lat_pulldown', 'bb_curl', 'triceps_pushdown'],
-  'Lower A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise', 'hanging_leg_raise'],
-  'Upper B': ['incline_bb_press', 'cable_row', 'db_shoulder_press', 'pull_up', 'hammer_curl', 'skullcrusher'],
-  'Lower B': ['bb_deadlift', 'hack_squat', 'walking_lunge', 'leg_curl', 'seated_calf_raise', 'cable_crunch'],
+  'Lower A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
   'Push A': ['bb_bench_press', 'bb_overhead_press', 'incline_db_press', 'lateral_raise', 'triceps_pushdown'],
-  'Pull A': ['bb_row', 'lat_pulldown', 'cable_row', 'face_pull', 'bb_curl'],
-  'Legs A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise', 'hanging_leg_raise'],
+  // Conventional deadlift is the canonical hip-hinge — programmed on the pull day (standard PPL).
+  'Pull A': ['bb_deadlift', 'bb_row', 'lat_pulldown', 'face_pull', 'bb_curl'],
+  'Legs A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
   'Push B': ['incline_bb_press', 'db_shoulder_press', 'chest_dip', 'cable_lateral_raise', 'overhead_triceps_ext'],
   'Pull B': ['pull_up', 't_bar_row', 'cable_row', 'rear_delt_fly', 'hammer_curl'],
-  'Legs B': ['front_squat', 'hip_thrust', 'hack_squat', 'walking_lunge', 'seated_calf_raise', 'ab_wheel'],
+  'Legs B': ['front_squat', 'hip_thrust', 'hack_squat', 'walking_lunge', 'seated_calf_raise'],
 };
 
 const WOMEN: Record<string, string[]> = {
   'Full Body A': ['bb_back_squat', 'hip_thrust', 'db_bench_press', 'lat_pulldown', 'leg_curl', 'standing_calf_raise'],
-  'Full Body B': ['bb_rdl', 'bulgarian_split_squat', 'db_shoulder_press', 'cable_row', 'glute_bridge', 'hanging_leg_raise'],
-  'Full Body C': ['hip_thrust', 'goblet_squat', 'incline_db_press', 'lat_pulldown', 'hip_abduction', 'cable_crunch'],
-  'Upper A': ['db_bench_press', 'lat_pulldown', 'db_shoulder_press', 'cable_row', 'lateral_raise', 'hanging_leg_raise'],
-  'Upper B': ['incline_db_press', 'cable_row', 'lateral_raise', 'face_pull', 'bb_curl', 'cable_crunch'],
+  'Upper A': ['db_bench_press', 'lat_pulldown', 'db_shoulder_press', 'cable_row', 'lateral_raise'],
+  'Upper B': ['incline_db_press', 'cable_row', 'lateral_raise', 'face_pull', 'bb_curl'],
   'Lower A': ['hip_thrust', 'bb_back_squat', 'bb_rdl', 'leg_curl', 'cable_pull_through', 'standing_calf_raise'],
   'Lower B': ['bulgarian_split_squat', 'hip_thrust', 'leg_press', 'leg_curl', 'hip_abduction', 'seated_calf_raise'],
   'Legs A': ['hip_thrust', 'bb_rdl', 'bb_back_squat', 'cable_kickback', 'hip_abduction', 'standing_calf_raise'],
   'Legs B': ['bulgarian_split_squat', 'glute_bridge', 'walking_lunge', 'leg_extension', 'cable_pull_through', 'seated_calf_raise'],
-  'Push': ['db_bench_press', 'db_shoulder_press', 'incline_db_press', 'lateral_raise', 'triceps_pushdown'],
-  'Pull': ['lat_pulldown', 'cable_row', 'face_pull', 'bb_curl', 'rear_delt_fly'],
 };
 
 // daysPerWeek → ordered day names. The frequency philosophy is founder-directed
@@ -115,25 +104,172 @@ const WOMEN_SPLITS: Record<number, string[]> = {
   6: ['Lower A', 'Upper A', 'Lower B', 'Upper B', 'Legs A', 'Legs B'],
 };
 
+/**
+ * Order a day's exercises for both training quality AND gym flow:
+ *   PRIMARY  — compounds before isolation (never pre-fatigue a muscle before its main lift).
+ *   SECONDARY— within each phase, keep same-equipment lifts ADJACENT (founder 2026-06-23): an
+ *     athlete already at a station shouldn't leave and return mid-phase and risk losing it.
+ * Equipment clusters lead in the order they first appear, so the phase's main lift stays first.
+ * (The one unavoidable revisit — a barbell used in both the compound and the isolation phase —
+ * is the accepted cost of compounds-first.)
+ */
+function orderForFlow(list: Exercise[]): Exercise[] {
+  const tierRank = (e: Exercise) => (e.tier === 'compound' ? 0 : 1);
+  const tierSorted = list
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => tierRank(a.e) - tierRank(b.e) || a.i - b.i) // stable: compounds first
+    .map((x) => x.e);
+  const firstSeen = new Map<string, number>();
+  tierSorted.forEach((e, i) => {
+    const k = `${tierRank(e)}|${e.equipment}`;
+    if (!firstSeen.has(k)) firstSeen.set(k, i);
+  });
+  return tierSorted
+    .map((e, i) => ({ e, i }))
+    .sort(
+      (a, b) =>
+        firstSeen.get(`${tierRank(a.e)}|${a.e.equipment}`)! -
+          firstSeen.get(`${tierRank(b.e)}|${b.e.equipment}`)! || a.i - b.i,
+    )
+    .map((x) => x.e);
+}
+
 function dayFromBlueprint(
   index: number,
   name: string,
   exerciseIds: string[],
   goal: Goal,
   age?: number,
+  volume: WeeklyVolume = 'moderate',
 ): ProgramDay {
-  const exercises = exerciseIds
-    .map((exerciseId) => exerciseById(exerciseId))
-    .filter((e): e is Exercise => !!e);
+  const exercises = orderForFlow(
+    exerciseIds.map((exerciseId) => exerciseById(exerciseId)).filter((e): e is Exercise => !!e),
+  );
   const slots: Slot[] = exercises.map((ex) => ({
     capability: ex.capability,
     exerciseId: ex.id,
-    setCount: setsFor(ex.tier, goal, age),
+    setCount: setsFor(ex.tier, goal, age, volume),
   }));
   // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
   // Calves · Core), in catalog order, deduplicated.
   const muscleGroups = [...new Set(exercises.map((ex) => ex.muscle))];
   return { id: `day_${index}`, name, muscleGroups, isRest: false, slots, key: String(index), completed: false };
+}
+
+// ───────────────────────────── supplemental core (founder rules 2026-06-23) ─────────────────────────────
+// Core is supplemental, NOT a primary progression target. Exactly ONE core exercise per
+// week, 3 sets, placed LAST, preferring an upper-body session over a lower one. Rotated by
+// frequency so every core movement is reachable through generation (not just via swaps).
+const CORE_POOL = EXERCISES.filter((e) => e.muscle === 'Core').map((e) => e.id);
+const CORE_SETS = 3;
+
+/** The session a weekly core block attaches to: upper-preferred, then full-body, then first. */
+function coreHostIndex(days: ProgramDay[]): number {
+  const upper = days.findIndex((d) => /^(Upper|Push|Pull)/.test(d.name));
+  if (upper >= 0) return upper;
+  const full = days.findIndex((d) => /^Full Body/.test(d.name));
+  return full >= 0 ? full : 0;
+}
+
+// ── Session duration cap (founder rule 2026-06-23: the prescribed work must fit ≤ 1 hour) ──
+// Prescribed WORK SETS only — warm-ups, walks and setup are the athlete's, never counted.
+// Per-set minutes ≈ rest + execution; compounds rest longer than isolation.
+const COMPOUND_SET_MIN = 3;
+const ISOLATION_SET_MIN = 2;
+const MAX_SESSION_MIN = 60;
+
+function isCompound(exerciseId: string): boolean {
+  return exerciseById(exerciseId)?.tier === 'compound';
+}
+
+/** Estimated prescribed-work minutes for a day (work sets only). */
+export function estimateSessionMinutes(day: ProgramDay): number {
+  return day.slots.reduce(
+    (m, s) => m + s.setCount * (isCompound(s.exerciseId) ? COMPOUND_SET_MIN : ISOLATION_SET_MIN),
+    0,
+  );
+}
+
+/**
+ * Keep a day's prescribed work at or under MAX_SESSION_MIN. Quality-preserving and ordered:
+ *   1) trim the bonus set off compounds (4→3) from the LAST compound backward — never the
+ *      first (the day's main lift keeps its full scheme), never below 3.
+ *   2) only if still over (rare), drop a trailing NON-core isolation slot, never going below
+ *      4 slots and never dropping calves/core (coverage guarantees hold).
+ */
+function enforceTimeCap(day: ProgramDay): void {
+  const compoundIdx = day.slots.map((s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
+  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
+    const slot = day.slots[compoundIdx[k]];
+    if (slot.setCount > 3) slot.setCount = 3;
+  }
+  for (let i = day.slots.length - 1; i >= 0 && estimateSessionMinutes(day) > MAX_SESSION_MIN; i--) {
+    if (day.slots.length <= 4) break;
+    const ex = exerciseById(day.slots[i].exerciseId);
+    if (ex && ex.tier === 'isolation' && !day.slots[i].supplemental && ex.muscle !== 'Calves' && ex.muscle !== 'Core') {
+      day.slots.splice(i, 1);
+    }
+  }
+}
+
+// ── Athlete-owned customizations honored at (re)generation (Program Ownership Contract) ──
+// Pins are muscle-keyed (swaps are muscle-scoped → the muscle is the durable slot identity).
+// A pin is applied to the FIRST slot of its muscle, never duplicating an exercise the day
+// already contains, and only within the slot's own capability — so structure stays valid.
+function applyPins(day: ProgramDay, pinsByMuscle: Record<string, string>): void {
+  const present = new Set(day.slots.map((s) => s.exerciseId));
+  const consumedMuscle = new Set<string>();
+  day.slots = day.slots.map((slot) => {
+    const ex = exerciseById(slot.exerciseId);
+    if (!ex) return slot;
+    const pinId = pinsByMuscle[ex.muscle];
+    const pex = pinId ? exerciseById(pinId) : undefined;
+    if (
+      pex &&
+      pinId !== slot.exerciseId &&
+      pex.capability === slot.capability &&
+      !present.has(pinId) &&
+      !consumedMuscle.has(ex.muscle)
+    ) {
+      consumedMuscle.add(ex.muscle);
+      return { ...slot, exerciseId: pinId };
+    }
+    return slot;
+  });
+}
+
+/** Reorder a day's slots to the athlete's saved within-workout order (by exerciseId); slots not
+ *  in the list (e.g. a freshly pinned lift, or the supplemental core) keep their order AFTER the
+ *  listed ones — so the athlete owns order while core still trails. Empty/absent => model order. */
+function applyExerciseOrder(day: ProgramDay, order?: string[]): void {
+  if (!order || !order.length) return;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  day.slots = day.slots
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => (rank.get(a.s.exerciseId) ?? order.length) - (rank.get(b.s.exerciseId) ?? order.length) || a.i - b.i)
+    .map((x) => x.s);
+}
+
+/** Reorder the week's workouts to the athlete's saved order (by stable day key); unlisted days
+ *  keep their relative order after the listed ones. */
+function applyWorkoutOrder(days: ProgramDay[], order: string[]): ProgramDay[] {
+  if (!order.length) return days;
+  const rank = new Map(order.map((k, i) => [k, i]));
+  return days
+    .map((d, i) => ({ d, i }))
+    .sort((a, b) => (rank.get(a.d.key ?? '') ?? order.length) - (rank.get(b.d.key ?? '') ?? order.length) || a.i - b.i)
+    .map((x) => x.d);
+}
+
+/** Append the week's single supplemental core slot to its host session (mutates in place). */
+function addWeeklyCore(days: ProgramDay[], daysPerWeek: number): void {
+  if (!days.length || !CORE_POOL.length) return;
+  const coreId = CORE_POOL[(Math.max(1, daysPerWeek) - 1) % CORE_POOL.length];
+  const ex = exerciseById(coreId);
+  if (!ex) return;
+  const host = days[coreHostIndex(days)];
+  host.slots.push({ capability: ex.capability, exerciseId: ex.id, setCount: CORE_SETS, supplemental: true });
+  if (!host.muscleGroups.includes(ex.muscle)) host.muscleGroups.push(ex.muscle);
 }
 
 // ───────────────────────────── cold-start starting weights ─────────────────────────────
@@ -213,16 +349,20 @@ function repsFor(tier: Tier, goal: Goal, age?: number): number {
 }
 
 /**
- * Working sets by goal × tier, then age-adjusted. Strength/hypertrophy carry an extra
- * compound set; lighter goals stay at 3. Age 65+ trims one compound set for recovery.
- * Always ≤ MAX_SETS, so sessionTargets fully covers every slot.
+ * Working sets by goal × tier × VOLUME, then age-adjusted. Moderate (the default) is the
+ * historical scheme — strength/hypertrophy carry an extra compound set, lighter goals stay at 3.
+ * The volume lever then shifts every exercise: LOW floors to the minimum effective 3, HIGH adds
+ * one set. Clamped to [3, MAX_SETS] so the rep-min holds and sessionTargets always covers a slot.
+ * Absent volume ⇒ 'moderate' ⇒ byte-identical to the prior behavior (parity-preserving).
  */
-function setsFor(tier: Tier, goal: Goal, age?: number): number {
+function setsFor(tier: Tier, goal: Goal, age?: number, volume: WeeklyVolume = 'moderate'): number {
   const compound = tier === 'compound';
   let sets = 3;
-  if (compound && (goal === 'get_stronger' || goal === 'build_muscle')) sets = 4;
+  if (compound && (goal === 'get_stronger' || goal === 'build_muscle')) sets = 4; // moderate base
+  if (volume === 'high') sets += 1;
+  if (volume === 'low') sets = 3;
   if (age != null && age >= 65 && compound) sets = Math.max(sets - 1, 3);
-  return Math.min(sets, MAX_SETS);
+  return Math.min(Math.max(sets, 3), MAX_SETS);
 }
 
 async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age'>> {
@@ -233,6 +373,35 @@ async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'ex
     /* offline/test — fall through to a sensible default */
   }
   return { sex: 'male', weightKg: 75, experience: 'intermediate', goal: 'build_muscle' };
+}
+
+/** Completed-session history (newest first), the substrate for real progression. Never throws
+ *  — an empty history yields cold-start (seed) prescriptions. */
+async function loadHistorySafe(): Promise<Session[]> {
+  try {
+    return await db.loadHistory();
+  } catch {
+    return [];
+  }
+}
+
+async function loadPreferencesSafe(): Promise<OwnedPreferences> {
+  try {
+    return await db.loadPreferences();
+  } catch {
+    return { pinsByMuscle: {}, backups: {}, substitutes: {}, workoutOrder: [], exerciseOrderByWorkout: {} };
+  }
+}
+
+/** Mutate the saved preferences atomically (load → edit → save). */
+async function editPreferences(edit: (p: OwnedPreferences) => void): Promise<void> {
+  const prefs = await loadPreferencesSafe();
+  edit(prefs);
+  try {
+    await db.savePreferences(prefs);
+  } catch {
+    /* offline/test — the in-memory edit already applied for this session */
+  }
 }
 
 export const fixtureModel: ModelClient = {
@@ -260,8 +429,15 @@ export const fixtureModel: ModelClient = {
     const pool = female ? WOMEN : MEN;
     const plan = (female ? WOMEN_SPLITS : MEN_SPLITS)[n] ?? (female ? WOMEN_SPLITS : MEN_SPLITS)[3];
     const goal = profile.goal ?? 'build_muscle';
-    const days = plan.map((name, i) => dayFromBlueprint(i, name, pool[name] ?? [], goal, profile.age));
-    return { id: 'program_v1', frequency: n, days };
+    const volume = profile.volume ?? 'moderate';
+    const prefs = await loadPreferencesSafe();
+    const days = plan.map((name, i) => dayFromBlueprint(i, name, pool[name] ?? [], goal, profile.age, volume));
+    for (const d of days) applyPins(d, prefs.pinsByMuscle); // athlete-owned swaps survive regen
+    addWeeklyCore(days, n); // one supplemental core block, last, upper-preferred
+    for (const d of days) enforceTimeCap(d); // prescribed work ≤ 60 min (warm-ups excluded)
+    for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
+    const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
+    return { id: 'program_v1', frequency: n, days: ordered };
   },
 
   async sessionTargets({ programDayId, completedSessions }): Promise<SetTarget[]> {
@@ -269,49 +445,44 @@ export const fixtureModel: ModelClient = {
     const advisory = completedSessions >= CALIBRATION_SESSIONS;
     const profile = await loadProfileSafe();
     const goal = profile.goal ?? 'build_muscle';
+    const history = await loadHistorySafe();
     const out: SetTarget[] = [];
 
     for (const ex of EXERCISES) {
+      // REAL equipment-aware double progression from the athlete's own logged history.
+      // First session (no history) is byte-identical to the prior static seed × goal-reps.
       const seed = startingWeight(ex, profile);
-      const reps = repsFor(ex.tier, goal, profile.age);
-      const decision = advisory ? ADVISORY_DECISION[ex.id] : undefined;
+      const bottomReps = repsFor(ex.tier, goal, profile.age);
+      const presc = prescribe(ex.id, seed, bottomReps, history);
+
+      // The advisory VOICE (reason + forecast) is gated to ADVISORY and only ever rides the
+      // first working set; the load itself progresses from session one (calibration or not).
+      const voiced = advisory && (presc.increased || presc.decreased);
 
       // Emit MAX_SETS targets per exercise so any slot's setCount is fully covered,
       // regardless of the goal/age set scheme the program was built with.
       for (let s = 0; s < MAX_SETS; s++) {
-        const t: SetTarget = { exerciseId: ex.id, setIndex: s, recommendedWeight: seed, recommendedReps: reps };
-
-        // Reason + forecast on the first working set of a changed exercise (post-calibration).
-        if (decision && seed != null && s === 0) {
-          if (decision.kind === 'increase') {
-            t.recommendedWeight = seed + (decision.delta ?? 1);
+        const t: SetTarget = {
+          exerciseId: ex.id,
+          setIndex: s,
+          recommendedWeight: presc.weight,
+          recommendedReps: presc.reps,
+        };
+        if (voiced && s === 0) {
+          if (presc.increased) {
             t.reasonType = 'increase';
-            t.reasonDelta = decision.delta ?? 1;
+            t.reasonDelta = presc.deltaKg;
             t.forecast = {
               type: 'increase',
               capability: ex.capability,
-              predictedValue: t.recommendedWeight,
-              predictedReps: reps,
+              predictedValue: presc.weight ?? 0,
+              predictedReps: presc.reps,
               dueSessionOrDate: 'same-session',
             };
-          } else if (decision.kind === 'decrease') {
-            t.recommendedWeight = seed - (decision.delta ?? 2);
+          } else if (presc.decreased) {
             t.reasonType = 'decrease';
-            t.reasonDelta = decision.delta ?? 2;
-          } else if (decision.kind === 'hold') {
-            t.reasonType = 'hold';
-            t.forecast = {
-              type: 'hold',
-              capability: ex.capability,
-              predictedValue: seed,
-              predictedReps: reps,
-              dueSessionOrDate: 'open',
-            };
+            t.reasonDelta = presc.deltaKg;
           }
-        }
-        if (decision && seed != null && s > 0) {
-          if (decision.kind === 'increase') t.recommendedWeight = seed + (decision.delta ?? 1);
-          if (decision.kind === 'decrease') t.recommendedWeight = seed - (decision.delta ?? 2);
         }
         out.push(t);
       }
@@ -319,42 +490,83 @@ export const fixtureModel: ModelClient = {
     return out;
   },
 
-  async recordSession(_args: { programDayId: string; sets: ActualSet[]; earlyFinish: boolean }) {},
+  async recordSession(_args: { programDayId: string; sets: ActualSet[]; earlyFinish: boolean }) {
+    // The completed session is persisted to local history by the session flow (db.append
+    // CompletedSession); progression reads that history on the next sessionTargets call.
+  },
 
   async replaceBlock(_args: { blockId: string; fromExercise: string; toExercise?: string }) {},
 
   async portraitSnapshot({ completedSessions }): Promise<PortraitSnapshot> {
-    const baseline = completedSessions < 7;
-    const per: Record<Capability, number> = baseline
-      ? { horizontal_push: 0.40, horizontal_pull: 0.38, vertical_push: 0.35, knee_dominant: 0.42, hip_dominant: 0.30 }
-      : { horizontal_push: 0.62, horizontal_pull: 0.40, vertical_push: 0.30, knee_dominant: 0.55, hip_dominant: 0.82 };
-    const confidence: Record<Capability, number> = baseline
-      ? { horizontal_push: 45, horizontal_pull: 45, vertical_push: 45, knee_dominant: 45, hip_dominant: 45 }
-      : { horizontal_push: 85, horizontal_pull: 75, vertical_push: 22, knee_dominant: 80, hip_dominant: 90 };
-    const stillLearning: Record<Capability, boolean> = {
-      horizontal_push: confidence.horizontal_push < 30,
-      horizontal_pull: confidence.horizontal_pull < 30,
-      vertical_push: confidence.vertical_push < 30,
-      knee_dominant: confidence.knee_dominant < 30,
-      hip_dominant: confidence.hip_dominant < 30,
-    };
-    return { timestamp: new Date().toISOString(), perCapability: per, confidence, stillLearning };
+    void completedSessions; // confidence now derives from per-capability DATA, not a raw count
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    // REAL portrait: relative strength per capability from the athlete's best logged e1RM vs a
+    // sex/bodyweight-scaled benchmark; confidence rises with sessions of real data per capability.
+    return { timestamp: new Date().toISOString(), ...computePortrait(history, profile) };
   },
 
   async programChanges({ completedSessions }): Promise<ProgramChange[]> {
     if (completedSessions < CALIBRATION_SESSIONS) return [];
+    // REAL load changes: exercises whose double-progression just earned a load move, derived
+    // from the athlete's own history (no phantom frame changes — the live model never reframes).
+    const profile = await loadProfileSafe();
+    const goal = profile.goal ?? 'build_muscle';
+    const history = await loadHistorySafe();
     const now = new Date().toISOString();
-    return [
-      { id: 'pc_load', kind: 'load', capabilityOrTarget: 'chest load', appliedAt: now },
-      { id: 'pc_frame', kind: 'frame', capabilityOrTarget: 'hip hinge', appliedAt: now },
-    ];
+    const changes: ProgramChange[] = [];
+    const seenMuscles = new Set<string>();
+    for (const ex of EXERCISES) {
+      const presc = prescribe(ex.id, startingWeight(ex, profile), repsFor(ex.tier, goal, profile.age), history);
+      if (!(presc.increased || presc.decreased)) continue;
+      if (seenMuscles.has(ex.muscle)) continue; // one line per muscle group, not per exercise
+      seenMuscles.add(ex.muscle);
+      changes.push({
+        id: `pc_${ex.id}`,
+        kind: 'load',
+        capabilityOrTarget: `${ex.muscle.toLowerCase()} load`,
+        appliedAt: now,
+      });
+    }
+    return changes;
   },
 
-  async setExercisePreference(_args: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }) {},
-  async restoreExercisePreference(_args: { capability: Capability }) {},
-  async setSubstitute(_args: { primaryExercise: string; substituteExercise?: string; remove?: boolean }) {},
-  async setBackup(_args: { primaryExercise: string; backupExercise?: string; remove?: boolean }) {},
-  async setOrder(_args: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability }) {},
+  async setExercisePreference({ toExercise }: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }) {
+    // Pin the athlete's choice by MUSCLE (swaps are muscle-scoped), so a weekly regeneration
+    // honors it. The slot's capability is preserved automatically (muscle ⊂ capability).
+    const muscle = exerciseById(toExercise)?.muscle;
+    if (!muscle) return;
+    await editPreferences((p) => {
+      p.pinsByMuscle[muscle] = toExercise;
+    });
+  },
+  async restoreExercisePreference({ capability }: { capability: Capability }) {
+    await editPreferences((p) => {
+      for (const muscle of Object.keys(p.pinsByMuscle)) {
+        if (exercisesForMuscle(muscle as MuscleGroup)[0]?.capability === capability) delete p.pinsByMuscle[muscle];
+      }
+    });
+  },
+  async setSubstitute({ primaryExercise, substituteExercise, remove }: { primaryExercise: string; substituteExercise?: string; remove?: boolean }) {
+    await editPreferences((p) => {
+      if (remove || !substituteExercise) delete p.substitutes[primaryExercise];
+      else p.substitutes[primaryExercise] = substituteExercise;
+    });
+  },
+  async setBackup({ primaryExercise, backupExercise, remove }: { primaryExercise: string; backupExercise?: string; remove?: boolean }) {
+    await editPreferences((p) => {
+      if (remove || !backupExercise) delete p.backups[primaryExercise];
+      else p.backups[primaryExercise] = backupExercise;
+    });
+  },
+  async setOrder({ scope, order, workoutKey }: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability; workoutKey?: string }) {
+    // Both scopes are durable across regen: workout order by day key, exercise order keyed by the
+    // day's stable key (so a fresh week re-applies the athlete's within-workout sequence).
+    await editPreferences((p) => {
+      if (scope === 'workout') p.workoutOrder = order;
+      else if (workoutKey) p.exerciseOrderByWorkout[workoutKey] = order;
+    });
+  },
   async markEquipmentOccupied(_args: { blockId: string }) {},
   async weeklyRest() {
     return false;

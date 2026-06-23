@@ -398,9 +398,9 @@ export class HttpModelClient implements ModelClient {
     });
   }
 
-  async setOrder({ scope, order, capability }: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability }): Promise<void> {
+  async setOrder({ scope, order, capability, workoutKey }: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability; workoutKey?: string }): Promise<void> {
     await this.request('POST', '/preferences/order', {
-      client_event_id: newEventId(), scope, order, capability, source: 'program_detail',
+      client_event_id: newEventId(), scope, order, capability, workout_key: workoutKey, source: 'program_detail',
     });
   }
 

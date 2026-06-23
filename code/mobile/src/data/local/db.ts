@@ -35,8 +35,28 @@ const K = {
   telemetry: 'hush.telemetry.buffer',
   firsts: 'hush.telemetry.firsts',
   health: 'hush.health.state',
+  preferences: 'hush.preferences',
   schemaVersion: 'hush.schema.version',
 } as const;
+
+/** Athlete-OWNED program customizations, persisted so weekly regeneration honors them
+ *  (Program Ownership Contract). Pins are keyed by MUSCLE (swaps are muscle-scoped, so the
+ *  muscle is the durable slot identity across regenerations). */
+export interface OwnedPreferences {
+  pinsByMuscle: Record<string, string>; // MuscleGroup -> chosen exerciseId
+  backups: Record<string, string>; // primary exerciseId -> equipment-busy backup
+  substitutes: Record<string, string>; // primary exerciseId -> preferred substitute
+  workoutOrder: string[]; // day keys, athlete order
+  exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
+}
+
+export const EMPTY_PREFERENCES: OwnedPreferences = {
+  pinsByMuscle: {},
+  backups: {},
+  substitutes: {},
+  workoutOrder: [],
+  exerciseOrderByWorkout: {},
+};
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
  *  v2: added the Health connection record (hush.health.state) — additive. */
@@ -165,6 +185,15 @@ export const db = {
   // ---- Health connection record (convenience-only; never a model input) ----
   loadHealthState: () => getJSON<HealthState>(K.health),
   saveHealthState: (s: HealthState) => setJSON(K.health, s),
+
+  // ---- Athlete-owned program preferences (pins / order / backups; durable across regen) ----
+  async loadPreferences(): Promise<OwnedPreferences> {
+    const p = await getJSON<Partial<OwnedPreferences>>(K.preferences);
+    return { ...EMPTY_PREFERENCES, ...(p ?? {}) };
+  },
+  async savePreferences(p: OwnedPreferences): Promise<void> {
+    await setJSON(K.preferences, p);
+  },
 
   // ---- Schema version (detect persisted-shape drift on boot) ----
   async getSchemaVersion(): Promise<number | null> {

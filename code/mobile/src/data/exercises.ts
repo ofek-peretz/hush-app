@@ -65,6 +65,10 @@ export interface Exercise {
   bwScaled?: boolean;
   /** Loaded by bodyweight — no external weight prescribed. */
   bodyweight?: boolean;
+  /** Intentionally NOT placed in the auto-generated split — available only as a swap /
+   *  equipment-busy backup. Every catalog exercise must be reachable by generation OR be
+   *  flagged swapOnly (enforced by the catalogSync test), so nothing is ever orphaned. */
+  swapOnly?: boolean;
 }
 
 export const EXERCISES: Exercise[] = [
@@ -148,6 +152,187 @@ export const EXERCISES: Exercise[] = [
   { id: 'ab_wheel', name: 'Ab Wheel Rollout', capability: 'hip_dominant', muscle: 'Core', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Brace hard.', 'Roll out only as far as you control.', 'Pull back with the abs.'], synonyms: ['rollout'] },
 ];
 
+// ───────────────────────── catalog ↔ engine synchronization ─────────────────────────
+// The single registry that guarantees every catalog exercise is fully wired: reachable,
+// progressable, swappable, and backed by an alternative. The catalogSync test asserts
+// 100% coverage against this section, so a newly-added exercise cannot silently drift.
+
+/**
+ * SWAP-ONLY exercises: present in the catalog and offered as swaps / equipment-busy
+ * backups, but deliberately NOT in the auto-generated split (so the default program stays
+ * focused). Listing here is the conscious "this is a swap alternate, not orphaned" decision
+ * the catalogSync reachability test requires. Everything NOT listed must appear in a
+ * generated program (a blueprint slot or the weekly core insertion).
+ */
+export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
+  // horizontal_push
+  'machine_chest_press', 'push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher',
+  // horizontal_pull
+  'chin_up', 'db_row', 'machine_row', 'db_curl', 'preacher_curl',
+  // vertical_push
+  'machine_shoulder_press', 'arnold_press',
+  // knee_dominant
+  'leg_press_calf_raise', 'goblet_squat',
+  // hip_dominant (alternate hinges; the conventional deadlift IS auto-generated — men's Pull)
+  'sumo_deadlift', 'db_rdl', 'good_morning', 'back_extension',
+]);
+
+export function isSwapOnly(id: string): boolean {
+  return SWAP_ONLY_IDS.has(id);
+}
+
+// ── Movement patterns (so coverage of the six fundamentals is verifiable) ─────
+// The engine's `capability` is coarse (it folds vertical_pull into horizontal_pull). For
+// movement-balance auditing we need the finer pattern — most importantly VERTICAL PULL
+// (pull-ups / pulldowns), which the capability layer hides. Derived (never hand-maintained)
+// so it can't drift from the catalog.
+export type MovementPattern =
+  | 'horizontal_push'
+  | 'vertical_push'
+  | 'horizontal_pull'
+  | 'vertical_pull'
+  | 'squat'
+  | 'hinge'
+  | 'arms'
+  | 'side_delt'
+  | 'calf'
+  | 'core';
+
+/** The six fundamental patterns a complete week should cover. */
+export const FUNDAMENTAL_PATTERNS: readonly MovementPattern[] = [
+  'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'squat', 'hinge',
+];
+
+const VERTICAL_PULL_IDS = new Set(['pull_up', 'chin_up', 'lat_pulldown']);
+
+/** The movement pattern an exercise trains, finer than its engine capability. */
+export function movementPattern(id: string): MovementPattern {
+  const ex = BY_ID.get(id);
+  if (!ex) return 'horizontal_push';
+  if (VERTICAL_PULL_IDS.has(id)) return 'vertical_pull';
+  switch (ex.capability) {
+    case 'horizontal_push':
+      return ex.muscle === 'Triceps' && ex.tier === 'isolation' ? 'arms' : 'horizontal_push';
+    case 'horizontal_pull':
+      return ex.muscle === 'Biceps' ? 'arms' : 'horizontal_pull';
+    case 'vertical_push':
+      return ex.tier === 'isolation' ? 'side_delt' : 'vertical_push';
+    case 'knee_dominant':
+      return ex.muscle === 'Calves' ? 'calf' : 'squat';
+    case 'hip_dominant':
+      return ex.muscle === 'Core' ? 'core' : 'hinge';
+  }
+}
+
+/** The pattern if it is one of the six fundamentals, else null (an accessory pattern). */
+export function fundamentalPattern(id: string): MovementPattern | null {
+  const p = movementPattern(id);
+  return (FUNDAMENTAL_PATTERNS as readonly string[]).includes(p) ? p : null;
+}
+
+// ── Equipment-aware progression ──────────────────────────────────────────────
+// WHEN to apply a step is the model's call; the catalog owns the GRANULARITY (the smallest
+// real-world increment for the equipment), so a load never moves by an unloadable amount.
+export const LOAD_STEP_KG: Record<EquipmentFamily, number> = {
+  barbell: 2.5, // smallest plate pair commonly available (1.25 kg/side)
+  dumbbell: 2, // next dumbbell up in the working range
+  machine: 5, // pin / plate-stack increment
+  cable: 5, // pin-stack increment
+  bodyweight: 0, // no external load — progress by reps, then a harder variation
+};
+
+export type ProgressionMode = 'load' | 'reps';
+
+export interface ProgressionRule {
+  mode: ProgressionMode;
+  /** Load step in kg (load mode only). */
+  loadStepKg?: number;
+  /** Rep target ceiling before advancing (reps mode only). */
+  repCeiling?: number;
+  /** A harder catalog variation to graduate to once the rep ceiling is held (reps mode). */
+  harder?: string;
+}
+
+// Bodyweight lifts have no load axis: add reps to a ceiling, then graduate to a harder
+// variation where one exists (else keep adding reps / external load on a belt).
+const BODYWEIGHT_PROGRESSION: Record<string, { repCeiling: number; harder?: string }> = {
+  push_up: { repCeiling: 20, harder: 'chest_dip' },
+  chest_dip: { repCeiling: 15 }, // then add load on a dip belt
+  chin_up: { repCeiling: 12, harder: 'pull_up' },
+  pull_up: { repCeiling: 12 }, // then add load on a belt
+  hanging_leg_raise: { repCeiling: 15 },
+  ab_wheel: { repCeiling: 12 },
+};
+
+/** The progression rule every exercise carries (load step, or a bodyweight rep/variation
+ *  ladder). Defined for ALL catalog ids — the catalogSync test asserts 100% coverage. */
+export function progressionRule(id: string): ProgressionRule {
+  const ex = BY_ID.get(id);
+  if (!ex) return { mode: 'load', loadStepKg: LOAD_STEP_KG.barbell };
+  if (ex.bodyweight || ex.equipment === 'bodyweight') {
+    const bw = BODYWEIGHT_PROGRESSION[id] ?? { repCeiling: 15 };
+    return { mode: 'reps', repCeiling: bw.repCeiling, harder: bw.harder };
+  }
+  return { mode: 'load', loadStepKg: LOAD_STEP_KG[ex.equipment] };
+}
+
+// ── Equipment-busy backups ───────────────────────────────────────────────────
+// General availability of an equipment family (lower = easier to grab when the gym is busy).
+const EQUIP_AVAILABILITY: Record<EquipmentFamily, number> = {
+  bodyweight: 0,
+  dumbbell: 1,
+  machine: 2,
+  cable: 3,
+  barbell: 4, // the contended rack/platform — worst fallback when busy
+};
+
+/**
+ * The default equipment-busy backup for an exercise: a same-muscle alternative on a
+ * DIFFERENT (and generally more available) equipment family, so if the current station is
+ * taken the backup isn't. Deterministic; the slot's capability is preserved automatically
+ * (muscle ⊂ capability). Returns undefined only if the muscle has no other exercise.
+ */
+export function defaultBackup(id: string): Exercise | undefined {
+  const cur = BY_ID.get(id);
+  if (!cur) return undefined;
+  const pool = (BY_MUSCLE.get(cur.muscle) ?? []).filter((e) => e.id !== id);
+  if (!pool.length) return undefined;
+  return pool.slice().sort((a, b) => {
+    const diff = (a.equipment === cur.equipment ? 1 : 0) - (b.equipment === cur.equipment ? 1 : 0);
+    if (diff) return diff; // prefer a different equipment family first
+    const avail = EQUIP_AVAILABILITY[a.equipment] - EQUIP_AVAILABILITY[b.equipment];
+    if (avail) return avail; // then the more available family
+    return (a.tier === cur.tier ? 0 : 1) - (b.tier === cur.tier ? 0 : 1); // then same tier
+  })[0];
+}
+
+// ── Engine ↔ catalog id reconciliation ───────────────────────────────────────
+// The frozen Python engine uses bare ids (bench_press) where the mobile catalog uses
+// equipment-prefixed ids (bb_bench_press). This map reconciles the two WITHOUT renaming the
+// frozen engine catalog or its append-only history, so a backend-driven block resolves to the
+// right catalog exercise. The four dumbbell/machine ids already match and need no entry.
+const ENGINE_TO_CATALOG: Record<string, string> = {
+  bench_press: 'bb_bench_press',
+  barbell_row: 'bb_row',
+  overhead_press: 'bb_overhead_press',
+  back_squat: 'bb_back_squat',
+  deadlift: 'bb_deadlift',
+  romanian_deadlift: 'bb_rdl',
+};
+const CATALOG_TO_ENGINE: Record<string, string> = Object.fromEntries(
+  Object.entries(ENGINE_TO_CATALOG).map(([eng, cat]) => [cat, eng]),
+);
+
+/** Map a (possibly bare) engine exercise id to its mobile-catalog id. Identity if unknown. */
+export function catalogIdFromEngine(id: string): string {
+  return ENGINE_TO_CATALOG[id] ?? id;
+}
+
+/** Map a mobile-catalog id to the engine's bare id. Identity if unknown. */
+export function engineIdFromCatalog(id: string): string {
+  return CATALOG_TO_ENGINE[id] ?? id;
+}
+
 const BY_ID = new Map(EXERCISES.map((e) => [e.id, e]));
 const BY_CAPABILITY = new Map<Capability, Exercise[]>();
 const BY_MUSCLE = new Map<MuscleGroup, Exercise[]>();
@@ -178,7 +363,7 @@ export function muscleOf(id: string | null | undefined): MuscleGroup | undefined
 const EQUIP_PREFIX = new Set(['bb', 'db', 'kb', 'machine', 'cable', 'smith']);
 export function exerciseDisplayName(id: string | null | undefined): string {
   if (!id) return '';
-  const ex = BY_ID.get(id);
+  const ex = BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id));
   if (ex) return ex.name;
   const parts = id.split('_').filter(Boolean);
   if (parts.length > 1 && EQUIP_PREFIX.has(parts[0])) parts.shift();

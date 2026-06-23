@@ -3,7 +3,7 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Capability, ForecastRecord, OnboardingInputs, PortraitSnapshot, Profile, Program, SetLog, Units } from '@/data/local/models';
+import type { Capability, ForecastRecord, OnboardingInputs, PortraitSnapshot, Profile, Program, SetLog, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { buildPortraitForecast, detectThreshold, type ThresholdEvent } from '@/domain/portrait';
 import { resolveHold, resolvePortrait, resolvePortraitForecasts } from '@/domain/receiptRules';
@@ -199,6 +199,8 @@ interface AppApi extends AppState {
   ensurePortraitSnapshot: () => Promise<void>;
   /** Switch units (kg/lb); restyles every weight display instantly (§10.1). */
   setUnits: (units: Units) => Promise<void>;
+  /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
+  setVolume: (volume: WeeklyVolume) => Promise<void>;
   /** Deliberate replacement: persist the chosen exercise as the slot's preference (R18). */
   replaceSlotExercise: (dayId: string, slotIndex: number, exerciseId: string) => Promise<void>;
   /** Athlete-owned exercise order within a workout (Athlete > Model). Durable + preserved across
@@ -688,6 +690,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'PROFILE_UPDATED', profile });
       },
 
+      async setVolume(volume) {
+        if (!state.profile || (state.profile.volume ?? 'moderate') === volume) return;
+        const profile: Profile = { ...state.profile, volume };
+        await db.saveProfile(profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile });
+        // Volume changes the set scheme → rebuild the week now (athlete-owned pins/order re-apply
+        // through generateProgram). Best-effort; otherwise it takes effect on the next regeneration.
+        try {
+          const program = await model.generateProgram(profile);
+          await db.saveProgram(program);
+          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        } catch {
+          /* offline — applies on the next weekly regeneration */
+        }
+      },
+
       async replaceSlotExercise(dayId, slotIndex, exerciseId) {
         if (!state.program) return;
         // The slot's exercise IS the persisted preference (R18, §7.2). The
@@ -729,7 +747,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // weekly regenerations preserve it. Exercise ids are the durable keys composition consumes.
         void track('exercise_reordered', { dayId });
         model
-          .setOrder({ scope: 'exercise', order: slots.map((s) => s.exerciseId) })
+          .setOrder({ scope: 'exercise', order: slots.map((s) => s.exerciseId), workoutKey: day.key })
           .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'exercise' }));
       },
 

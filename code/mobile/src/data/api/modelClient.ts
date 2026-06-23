@@ -131,8 +131,10 @@ export interface ModelClient {
   setSubstitute(args: { primaryExercise: string; substituteExercise?: string; remove?: boolean }): Promise<void>;
   /** Define (or remove) an equipment-busy backup exercise. */
   setBackup(args: { primaryExercise: string; backupExercise?: string; remove?: boolean }): Promise<void>;
-  /** Persist athlete-owned exercise order (within a capability) or workout order. */
-  setOrder(args: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability }): Promise<void>;
+  /** Persist athlete-owned exercise order (within a workout, keyed by `workoutKey`) or the
+   *  workout order itself. `workoutKey` is the day's stable key — required for exercise scope so
+   *  the order survives weekly regeneration; omitted for workout scope. */
+  setOrder(args: { scope: 'exercise' | 'workout'; order: string[]; capability?: Capability; workoutKey?: string }): Promise<void>;
   /** Equipment occupied (V1): move this exercise one position later in the current workout. No
    *  replacement, no structure change — a temporary runtime reorder. Returns nothing (the caller
    *  re-reads the session). */
