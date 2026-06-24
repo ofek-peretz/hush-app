@@ -166,3 +166,17 @@ a dedicated UX feature; the current placeholder impls are unwired dead scaffoldi
   press) — neither was imported anywhere. Kept `wellDone`, the only wired haptic (Well Done screen).
 
 No behavior change (the removed functions never fired).
+
+## 11. Remove the unsurfaced swap search / browse / recents helpers
+**Founder decision (2026-06-24):** the richer Swap UI (text search, "Your exercises" recents, and
+"All [muscle] exercises" grouped browse) is not shipping; `SwapSheet` offers only the capped
+Recommended list. Removed the production-dead helpers from `domain/replacement.ts`:
+
+- `searchExercises`, `recentsForSlot`, `allByEquipment`, the `EquipmentGroup` type, and the
+  now-orphaned private `normalize`/`matches` helpers (+ the `EquipmentFamily` import). Kept
+  `recommended` and its `poolFor` helper.
+- `__tests__/flows/replacement.test.ts` — dropped the search/recents/browse suites; retargeted the
+  in-group + capability-subset invariants onto `recommended` so the no-cross-muscle guarantee stays
+  covered.
+
+No behavior change (`SwapSheet` uses only `recommended`).
