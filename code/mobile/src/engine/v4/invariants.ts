@@ -22,10 +22,18 @@ export interface InvariantCtx {
    *  cap that yields to this physical floor: a load already at the minimum cannot be clamped lower,
    *  so the rail is considered satisfied there (only reachable at a near-zero demonstrated capacity). */
   minLoadable?: (slotId: string) => number;
+  /** True if the slot was CALIBRATING at decision time (rail inactive). Covers the calibration-EXIT
+   *  week, whose calibrate decision is rail-exempt even though `calibrating` flips false in output. */
+  wasCalibrating?: (slotId: string) => boolean;
   /** This was a deload/adherence week (volume may sit at the floor; I-4 relaxed). */
   reducedWeek?: boolean;
   /** Enforce the per-pattern MEV floor (true once a real split guarantees enough slots/pattern). */
   enforceFloor?: boolean;
+  /** Enforce the per-pattern MRV ceiling on the ASSEMBLED program. Default false: the kept split
+   *  library (override §6) may baseline a pattern above v4's reference landmark; the ceiling instead
+   *  bounds the ENGINE'S volume lever (enforced in rails.ts, which never ADDS past it). Set true only
+   *  for A/B/C/D-style structures whose baseline is within the landmark. */
+  enforceCeiling?: boolean;
   consts?: Constants;
 }
 
@@ -65,16 +73,20 @@ function checkForbiddenKeys(obj: Record<string, unknown>, where: string, out: st
 export function checkInvariants(result: PlanResult, ctx: InvariantCtx): string[] {
   const consts = ctx.consts ?? DEFAULTS;
   const v: string[] = [];
+  // Slots still CALIBRATING have an inactive rail (I-1: "for a never-demonstrated exercise in
+  // CALIBRATING, rail is inactive") — the engine skips the rail for them, so the checker must too.
+  const calibrating = new Set(result.updated_slots.filter((s) => s.calibrating).map((s) => s.slotId));
 
   // ── Per-slot output integrity + safety ──
   for (const s of result.next_slots) {
     const [lo, hi] = s.rep_range;
     // I-29 rep_target ∈ rep_range
     if (s.rep_target < lo || s.rep_target > hi) v.push(`I-29 rep_target ${s.rep_target} outside [${lo},${hi}] (${s.slotId})`);
-    // I-1 implied-e1RM rail
+    // I-1 implied-e1RM rail (inactive while CALIBRATING)
     const best = ctx.bestE1rm ? ctx.bestE1rm(s.slotId) : null;
     const floor = ctx.minLoadable ? ctx.minLoadable(s.slotId) : 0;
-    if (best != null && s.load_kg != null && s.load_kg > floor) {
+    const railExempt = calibrating.has(s.slotId) || (ctx.wasCalibrating ? ctx.wasCalibrating(s.slotId) : false);
+    if (best != null && s.load_kg != null && s.load_kg > floor && !railExempt) {
       const implied = epley(s.load_kg, s.rep_target);
       if (implied > best * (1 + consts.RAIL_HEADROOM) + 1e-6)
         v.push(`I-1 rail: implied e1RM ${implied.toFixed(1)} > ${(best * (1 + consts.RAIL_HEADROOM)).toFixed(1)} (${s.slotId})`);
@@ -88,7 +100,7 @@ export function checkInvariants(result: PlanResult, ctx: InvariantCtx): string[]
     const slots = result.next_slots.filter((s) => s.pattern === pattern);
     if (slots.length === 0) continue;
     const total = slots.reduce((sum, s) => sum + s.sets, 0);
-    if (total > consts.VOL_CEIL[ctx.ta]) v.push(`I-4 ${pattern} volume ${total} > ceil ${consts.VOL_CEIL[ctx.ta]}`);
+    if (ctx.enforceCeiling && total > consts.VOL_CEIL[ctx.ta]) v.push(`I-4 ${pattern} volume ${total} > ceil ${consts.VOL_CEIL[ctx.ta]}`);
     if (ctx.enforceFloor && !ctx.reducedWeek && total < consts.VOL_FLOOR[ctx.ta])
       v.push(`I-4 ${pattern} volume ${total} < floor ${consts.VOL_FLOOR[ctx.ta]}`);
   }

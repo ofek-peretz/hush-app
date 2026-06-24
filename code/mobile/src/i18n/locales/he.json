@@ -2,6 +2,14 @@
   "common": {
     "back": "חזרה"
   },
+  "weekly": {
+    "eyebrow": "השבוע",
+    "title": "מה השתנה",
+    "steady": "הכול נשאר יציב השבוע — תמשיך להגיע והעבודה תצטבר.",
+    "observation": "מה ראיתי",
+    "conclusion": "מה זה אומר",
+    "action": "מה עשיתי"
+  },
   "auth": {
     "wordmark": "Hush",
     "tagline": "להתאמן.\nבשקט.",

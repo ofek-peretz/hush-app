@@ -131,6 +131,13 @@ export function ProfileSheet({ navigation }: Props) {
         {goalExp ? <Row label={t('profile.goalExperience')} sub={goalExp} /> : null}
         {memberSince ? <Row label={t('profile.membership')} sub={memberSince} last /> : null}
 
+        {__DEV__ ? (
+          <>
+            <Legend style={styles.sectionLegend}>Developer</Legend>
+            <Row label="v4 engine state" sub="Per-slot debug / QA" onPress={() => navigation.navigate('V4Debug')} last />
+          </>
+        ) : null}
+
         <View style={styles.actions}>
           <Button variant="secondary" block label={t('profile.signOut')} onPress={confirmSignOut} />
           <Button variant="danger" block label={t('profile.deleteAccount')} onPress={confirmDelete} />

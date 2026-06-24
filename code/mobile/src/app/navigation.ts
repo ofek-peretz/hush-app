@@ -55,4 +55,8 @@ export type MainParamList = {
   QuarterlyReport: undefined;
   // All-time progression (founder, 2026-06-21) — reached from Home / Recovery hub.
   Progress: undefined;
+  // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
+  WeeklyUpdate: undefined;
+  // Internal debug/QA (DEV only) — per-slot v4 engine state dump.
+  V4Debug: undefined;
 };

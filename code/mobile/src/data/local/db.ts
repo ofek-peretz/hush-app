@@ -72,6 +72,10 @@ export interface EngineV4State {
   slots: Record<string, unknown>; // slotId -> SlotState
   global: unknown; // GlobalState
   lastAdvanceAt: number;
+  goal?: string; // last engine goal seen — a change applies the C4-1 goal-change transition
+  /** The most recent week's explanations (for the Weekly Update + Why surfaces) + when produced.
+   *  Structural to avoid a layering cycle into the engine. `seen` flips once the athlete views it. */
+  lastUpdate?: { weekIndex: number; at: string; explanations: unknown[]; seen?: boolean };
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */

@@ -16,7 +16,9 @@ import type { Profile, Program, ProgramDay, Session, Goal, Experience } from '@/
 import { db, type EngineV4State } from '@/data/local/db';
 import { planNextWeek } from './planWeek';
 import { demonstrated, epley, normalizeLoad, volumeLoad } from './reads';
+import { exerciseDisplayName } from '@/data/exercises';
 import { enginePattern, exerciseMeta, candidatesForPattern } from './catalogAdapter';
+import type { Explanation } from './types';
 import { toEngineGoal, toTrainingAge, repScheme, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type SetRecord, type Pattern } from './types';
 import { REP_RANGE_BY_GOAL } from './constants';
 
@@ -155,6 +157,22 @@ export async function ensureSlots(program: Program, profile: EngineProfile, hist
   }
   // Drop slots no longer in the program (e.g. frequency change).
   for (const id of Object.keys(slots)) if (!keep.has(id)) delete slots[id];
+
+  // Goal change transition (C4-1, IT-goal-change): on a goal change, set each slot's rep_range/
+  // rep_target from the new goal and RECOMPUTE load from demonstrated history at the new target;
+  // `calibrating` is unchanged (NOT a new-athlete path); the seed is never consulted.
+  if (state.goal && state.goal !== profile.goal) {
+    const scheme = repScheme(profile.goal);
+    for (const id of Object.keys(slots)) {
+      const s = slots[id];
+      const meta = exerciseMeta(s.current_exercise_id);
+      const { best } = bestE1rmFromHistory(s.current_exercise_id, history);
+      const load = meta.bodyweight ? null : best > 0 ? normalizeLoad(best / (1 + scheme.target / 30), meta.equipment) : s.current_load_kg;
+      slots[id] = { ...s, rep_range: scheme.range, rep_target: scheme.target, current_load_kg: load, levers_tried: [], flat_weeks: 0, hold_mode: false };
+    }
+  }
+  state.goal = profile.goal;
+
   await saveState(state);
   return state;
 }
@@ -225,6 +243,7 @@ export async function maybeAdvance(program: Program, profile: EngineProfile, his
       meta: exerciseMeta,
       candidates: (p) => candidatesForPattern(p),
       seedLoad: (id) => seedFor(id),
+      nameOf: exerciseDisplayName,
       consts: undefined,
     });
 
@@ -237,12 +256,59 @@ export async function maybeAdvance(program: Program, profile: EngineProfile, his
       slots[ns.slotId] = rec ? { ...ns, history: [rec, ...ns.history].slice(0, 6) } : ns;
     }
     state.global = out.updated_global;
+    // Capture the week's explanations for the Weekly Update + Why surfaces (a new week to view).
+    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations: out.explanations, seen: false };
     state.lastAdvanceAt += freq;
   }
   await saveState(state);
 }
 
+// ───────────────────────────── Weekly Update accessors ─────────────────────────────
+export interface WeeklyUpdate {
+  weekIndex: number;
+  at: string;
+  explanations: Explanation[];
+  seen: boolean;
+}
+
+/** The most recent week's explanations (Weekly Update + Why surfaces), or null if none yet. */
+export async function getWeeklyUpdate(): Promise<WeeklyUpdate | null> {
+  const state = await loadState();
+  const u = state.lastUpdate;
+  if (!u) return null;
+  return { weekIndex: u.weekIndex, at: u.at, explanations: (u.explanations as Explanation[]) ?? [], seen: !!u.seen };
+}
+
+/** Mark the latest Weekly Update as seen (so it is not re-presented). */
+export async function markWeeklyUpdateSeen(): Promise<void> {
+  const state = await loadState();
+  if (state.lastUpdate) {
+    state.lastUpdate.seen = true;
+    await saveState(state);
+  }
+}
+
 /** Reset all v4 engine state (account wipe / tests). */
 export async function resetV4(): Promise<void> {
   await saveState(emptyState());
+}
+
+// ───────────────────────────── debug / QA ─────────────────────────────
+export interface V4DebugState {
+  slots: SlotState[];
+  global: GlobalState;
+  lastAdvanceAt: number;
+  lastUpdate: { weekIndex: number; at: string; changes: number; seen: boolean } | null;
+}
+
+/** Full persisted engine state for the internal debug/QA screen (every slot field). */
+export async function getDebugState(): Promise<V4DebugState> {
+  const state = await loadState();
+  const u = state.lastUpdate;
+  return {
+    slots: Object.values(slotsRecord(state)),
+    global: state.global as GlobalState,
+    lastAdvanceAt: state.lastAdvanceAt,
+    lastUpdate: u ? { weekIndex: u.weekIndex, at: u.at, changes: (u.explanations as unknown[]).length, seen: !!u.seen } : null,
+  };
 }

@@ -2,6 +2,14 @@
   "common": {
     "back": "Back"
   },
+  "weekly": {
+    "eyebrow": "This week",
+    "title": "What changed",
+    "steady": "Everything held steady this week — keep showing up and the work compounds.",
+    "observation": "What I saw",
+    "conclusion": "What it means",
+    "action": "What I did"
+  },
   "auth": {
     "wordmark": "Hush",
     "tagline": "Train.\nQuietly.",

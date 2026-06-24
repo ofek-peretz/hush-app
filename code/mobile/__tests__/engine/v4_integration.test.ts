@@ -5,6 +5,8 @@
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { setV4Enabled } from '@/engine/v4/flag';
+import { deriveSlots, getWeeklyUpdate } from '@/engine/v4/v4Engine';
+import type { SlotState } from '@/engine/v4/types';
 import { db } from '@/data/local/db';
 import type { Profile, Session, SetLog } from '@/data/local/models';
 
@@ -92,6 +94,73 @@ describe('week rollover advances the prescription from logged work', () => {
     const advancedBench = await targetWeight('bb_bench_press');
     expect(advancedBench).not.toBeNull();
     expect(advancedBench!).toBeGreaterThan(seedBench!);
+  });
+});
+
+describe('Weekly Update surfaces explanations for real (post-calibration) changes', () => {
+  it('an established slot that progresses produces a Weekly Update entry with a Why', async () => {
+    const p: Profile = { ...profile, daysPerWeek: 1 }; // Full Body A — one session = one week
+    await db.saveProfile(p);
+    const program = await fixtureModel.generateProgram(p);
+    await db.saveProgram(program);
+
+    // Force the bench slot to be ESTABLISHED (post-calibration) so a beat-week PROGRESSES
+    // (calibration steps are deliberately not surfaced as "changes").
+    const benchSlotId = deriveSlots(program).find((d) => d.exerciseId === 'bb_bench_press')!.slotId;
+    const state = (await db.loadEngineV4())!;
+    const slots = state.slots as Record<string, SlotState>;
+    slots[benchSlotId] = { ...slots[benchSlotId], calibrating: false, calib_weeks: 0, tenure_weeks: 6, weeks_since_swap: 12, current_load_kg: 60, rep_target: 8, rep_range: [8, 12] };
+    await db.saveEngineV4(state);
+
+    // Log one completed Full Body session beating bench with room.
+    const day = program.days[0];
+    const sets: SetLog[] = day.slots.map((slot, i) => ({
+      exerciseId: slot.exerciseId,
+      setIndex: i,
+      recommendedWeight: slot.exerciseId === 'bb_bench_press' ? 60 : 40,
+      recommendedReps: 8,
+      actualWeight: slot.exerciseId === 'bb_bench_press' ? 60 : 40,
+      actualReps: 10, // beat with room
+      edited: false,
+      persistedAt: new Date().toISOString(),
+    }));
+    await db.appendCompletedSession({ id: 'wk', programDayId: day.id, startedAt: new Date().toISOString(), state: 'SAVED', earlyFinish: false, sets });
+
+    // Trigger the weekly advance, then read the Weekly Update.
+    await fixtureModel.sessionTargets({ programDayId: day.id, completedSessions: 1 });
+    const update = await getWeeklyUpdate();
+    expect(update).not.toBeNull();
+    const push = update!.explanations.find((e) => e.pattern === 'HORIZONTAL_PUSH');
+    expect(push).toBeTruthy();
+    expect(push!.observation).not.toBe('');
+    expect(push!.conclusion).not.toBe('');
+    expect(push!.action).not.toBe('');
+    expect(push!.text.toLowerCase()).not.toContain('fatigue');
+  });
+});
+
+describe('goal change applies the C4-1 transition (rep range/target + load recompute)', () => {
+  it('hypertrophy→strength updates an established slot without re-calibrating', async () => {
+    const p: Profile = { ...profile, goal: 'build_muscle', daysPerWeek: 1 };
+    await db.saveProfile(p);
+    // History BEFORE the slot is first created → bench imports ESTABLISHED (calibrating=false).
+    for (let w = 0; w < 2; w++) {
+      const sets: SetLog[] = [
+        { exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 80, recommendedReps: 8, actualWeight: 80, actualReps: 8, edited: false, persistedAt: new Date().toISOString() },
+      ];
+      await db.appendCompletedSession({ id: `h${w}`, programDayId: 'd', startedAt: new Date().toISOString(), state: 'SAVED', earlyFinish: false, sets });
+    }
+    await fixtureModel.generateProgram(p); // ensureSlots → bench established, goal=hypertrophy
+
+    // Change goal → strength and regenerate (ensureSlots applies C4-1).
+    await db.saveProfile({ ...p, goal: 'get_stronger' });
+    const program = await fixtureModel.generateProgram({ ...p, goal: 'get_stronger' });
+    const benchId = deriveSlots(program).find((d) => d.exerciseId === 'bb_bench_press')!.slotId;
+    const bench = (await db.loadEngineV4())!.slots[benchId] as SlotState;
+    expect(bench.rep_range).toEqual([3, 6]); // strength range
+    expect(bench.rep_target).toBe(5);
+    expect(bench.calibrating).toBe(false); // NOT a new-athlete path (C4-1)
+    expect(bench.current_load_kg).toBeGreaterThan(0); // recomputed from demonstrated, seed not consulted
   });
 });
 

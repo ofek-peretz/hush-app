@@ -20,6 +20,7 @@ import {
   type NotificationIntent,
 } from '@/platform/notifications';
 import { color } from '@/design/tokens';
+import { track } from '@/platform/telemetry';
 import type { MainParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
@@ -41,6 +42,9 @@ import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
 import { Progress } from '@/screens/progress/Progress';
+import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
+import { V4Debug } from '@/screens/dev/V4Debug';
+import { isV4Enabled } from '@/engine/v4/flag';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -88,6 +92,8 @@ function MainNavigator() {
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
       <MainStack.Screen name="Progress" component={Progress} />
+      <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
+      {__DEV__ && <MainStack.Screen name="V4Debug" component={V4Debug} />}
     </MainStack.Navigator>
   );
 }
@@ -95,7 +101,9 @@ function MainNavigator() {
 /** Route a tapped notification into the main stack (no-op pre-enrollment). */
 function routeNotificationIntent(intent: NotificationIntent | null, enrolled: boolean): void {
   if (!intent || !enrolled) return;
-  if (intent.kind === 'weekly_program_ready') navigateMain('Program'); // 1.20
+  void track('notification_opened', { kind: intent.kind });
+  // v4: the weekly notification opens the Weekly Update (what changed + Why); legacy path → Program.
+  if (intent.kind === 'weekly_program_ready') navigateMain(isV4Enabled() ? 'WeeklyUpdate' : 'Program'); // 1.20
   else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
   // threshold_alert no longer has a destination (the Portrait surfaces were removed);
   // the intent map is retained for the notification layer + tests, but it deep-links

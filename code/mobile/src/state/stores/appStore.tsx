@@ -450,6 +450,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         await Promise.all([db.saveProfile(profile), db.saveProgram(program), persistMode(m)]);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots });
+        void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
+        void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });
         // Weekly Program Container: the weekly plan is ready — wire the EXISTING Weekly Program
         // Ready notification (20:00 local; no second flow). Stub is a no-op; native build delivers.
         void notifier.scheduleWeeklyProgramReady(program.frequency);
@@ -678,6 +680,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const program = await model.generateProgram(state.profile);
           await db.saveProgram(program);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+          void track('program_generated', { reason: 'weekly', frequency: program.frequency, workouts: program.days.length });
         } catch {
           // Backend unreachable → keep the last-known session (degrade quietly, §5.3).
         }
@@ -695,12 +698,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const profile: Profile = { ...state.profile, volume };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
+        void track('volume_changed', { volume });
         // Volume changes the set scheme → rebuild the week now (athlete-owned pins/order re-apply
         // through generateProgram). Best-effort; otherwise it takes effect on the next regeneration.
         try {
           const program = await model.generateProgram(profile);
           await db.saveProgram(program);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+          void track('program_generated', { reason: 'volume', frequency: program.frequency });
         } catch {
           /* offline — applies on the next weekly regeneration */
         }

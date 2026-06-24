@@ -10,6 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Legend, Stepper, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { track } from '@/platform/telemetry';
 import { color, font, textScale, tracking, trackingPx } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -21,6 +22,7 @@ export function DaysPerWeek({ navigation, route }: Props) {
   const [days, setDays] = useState(4);
 
   function onContinue() {
+    void track('days_per_week_selected', { days });
     navigation.navigate('ProgramCreated', {
       inputs: {
         goal,
