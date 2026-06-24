@@ -36,6 +36,7 @@ const K = {
   firsts: 'hush.telemetry.firsts',
   health: 'hush.health.state',
   preferences: 'hush.preferences',
+  engineV4: 'hush.engine.v4', // Hush v4 per-slot progression state (gated; see engine/v4)
   schemaVersion: 'hush.schema.version',
 } as const;
 
@@ -59,8 +60,19 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
 };
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
- *  v2: added the Health connection record (hush.health.state) — additive. */
-export const SCHEMA_VERSION = 2;
+ *  v2: added the Health connection record (hush.health.state) — additive.
+ *  v3: added the Hush v4 per-slot engine state (hush.engine.v4) — additive. */
+export const SCHEMA_VERSION = 3;
+
+/** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
+ *  days_since_last_session; `lastAdvanceAt` is the completed-session count at the last weekly
+ *  advance (the week-rollover trigger). Shape mirrors engine/v4 types (kept structural to avoid a
+ *  layering cycle into the engine from the persistence module). */
+export interface EngineV4State {
+  slots: Record<string, unknown>; // slotId -> SlotState
+  global: unknown; // GlobalState
+  lastAdvanceAt: number;
+}
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
 export interface PendingSync {
@@ -194,6 +206,10 @@ export const db = {
   async savePreferences(p: OwnedPreferences): Promise<void> {
     await setJSON(K.preferences, p);
   },
+
+  // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
+  loadEngineV4: () => getJSON<EngineV4State>(K.engineV4),
+  saveEngineV4: (s: EngineV4State) => setJSON(K.engineV4, s),
 
   // ---- Schema version (detect persisted-shape drift on boot) ----
   async getSchemaVersion(): Promise<number | null> {

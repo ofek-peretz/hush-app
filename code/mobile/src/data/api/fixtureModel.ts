@@ -35,6 +35,8 @@ import type {
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { prescribe, computePortrait } from '@/data/progression';
+import { isV4Enabled } from '@/engine/v4/flag';
+import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets } from '@/engine/v4/v4Engine';
 import { db, type OwnedPreferences } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import type { ActualSet, ModelClient } from './modelClient';
@@ -316,6 +318,13 @@ function startingWeight(
   return Math.max(kg, step);
 }
 
+/** The cold-start seed for an exercise id (null for bodyweight / unknown) — injected into the v4
+ *  engine as its week-1 guess, discarded at calibration exit (C-8, §4.4). */
+function seedForExercise(id: string, profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>): number | null {
+  const ex = exerciseById(id);
+  return ex ? startingWeight(ex, profile) : null;
+}
+
 type Tier = Exercise['tier'];
 
 /**
@@ -437,7 +446,15 @@ export const fixtureModel: ModelClient = {
     for (const d of days) enforceTimeCap(d); // prescribed work ≤ 60 min (warm-ups excluded)
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
-    return { id: 'program_v1', frequency: n, days: ordered };
+    const program = { id: 'program_v1', frequency: n, days: ordered };
+    // v4 (gated): ensure durable per-slot engine state exists for this program (idempotent;
+    // preserves state across regen, honors athlete pins as locked manual replacements — C-1/C-7).
+    if (isV4Enabled()) {
+      const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
+      const history = await loadHistorySafe();
+      await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile)).catch(() => {});
+    }
+    return program;
   },
 
   async sessionTargets({ programDayId, completedSessions }): Promise<SetTarget[]> {
@@ -447,6 +464,23 @@ export const fixtureModel: ModelClient = {
     const goal = profile.goal ?? 'build_muscle';
     const history = await loadHistorySafe();
     const out: SetTarget[] = [];
+
+    // v4 (gated): advance the engine for any completed weeks, then source the prescription from the
+    // durable per-slot state. Exercises without an engine slot (swap-only) fall back to the seed.
+    if (isV4Enabled()) {
+      const program = await db.loadProgram();
+      const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
+      const seedFor = (id: string) => seedForExercise(id, profile);
+      if (program) await maybeAdvance(program, eprofile, history, seedFor).catch(() => {});
+      const targets = await currentTargets().catch((): Record<string, { weight: number | null; reps: number }> => ({}));
+      for (const ex of EXERCISES) {
+        const t = targets[ex.id];
+        const weight = t ? t.weight : startingWeight(ex, profile);
+        const reps = t ? t.reps : repsFor(ex.tier, goal, profile.age);
+        for (let s = 0; s < MAX_SETS; s++) out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps });
+      }
+      return out;
+    }
 
     for (const ex of EXERCISES) {
       // REAL equipment-aware double progression from the athlete's own logged history.
