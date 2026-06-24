@@ -136,3 +136,23 @@ implementation:
   `estimateMinutes` went). Home computes its own `slots.length` / `~8 min per lift` inline.
 
 Why: dead exports inflate the API surface and mislead readers. No behavior change.
+
+## 8. Remove dead `design/motion.ts` (duplicate motion tokens)
+Deleted `src/design/motion.ts` — a constants file imported by **no** file (`@/design/motion`
+appears in zero imports). Its `motion` export was a dead duplicate shadowed by the live
+`tokens.motion` (the one every component imports via `@/design/tokens`, e.g. `Switch.tsx`'s
+`motion.dur`/`motion.easeStandard`). Its `reducedMotion` constants were superseded by the live
+`platform/reducedMotion.ts`; navigation durations are inlined in `navAnimations.ts`.
+
+Caught by a per-file inbound-import scan (the earlier grep "use" count was inflated by the
+basename collision with `tokens.motion` + `platform/reducedMotion`). No behavior change.
+
+## 9. Remove unused locals / imports
+Trivial dead bindings flagged by `tsc --noUnusedLocals --noUnusedParameters` (non-engine files
+only; the frozen `engine/v4` is left untouched):
+
+- `screens/session/WellDone.tsx` — dropped the unused `color` import.
+- `components/HushMark.tsx` — dropped `const k` (the SVG scales via its `viewBox`, not `k`).
+- `data/api/fixtureModel.ts` — renamed an unused `.map((s, i) => i)` param to `_s`.
+
+Why: unused bindings are lint noise that obscures real usage. No behavior change.

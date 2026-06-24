@@ -18,7 +18,6 @@ interface Props {
 }
 
 export function HushMark({ size = 26, color = INK }: Props) {
-  const k = size / 48; // the svg is authored at 48×48
   return (
     <View accessibilityRole="image" accessibilityLabel="Hush" style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox="0 0 48 48">

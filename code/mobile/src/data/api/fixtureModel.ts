@@ -197,7 +197,7 @@ export function estimateSessionMinutes(day: ProgramDay): number {
  *      4 slots and never dropping calves/core (coverage guarantees hold).
  */
 function enforceTimeCap(day: ProgramDay): void {
-  const compoundIdx = day.slots.map((s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
+  const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
   for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
     const slot = day.slots[compoundIdx[k]];
     if (slot.setCount > 3) slot.setCount = 3;

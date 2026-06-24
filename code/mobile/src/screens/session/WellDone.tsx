@@ -18,7 +18,7 @@ import { Metric, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { wellDone as wellDoneHaptic } from '@/platform/haptics';
-import { color, space, stage, font, textScale, tracking, trackingPx, up } from '@/design/tokens';
+import { space, stage, font, textScale, tracking, trackingPx, up } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
