@@ -4,9 +4,15 @@
  * makes muscle-scoped swaps safe (each muscle ⊂ exactly one capability) must hold.
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
+import { setV4Enabled } from '@/engine/v4/flag';
 import { EXERCISES, exerciseById } from '@/data/exercises';
 import { db } from '@/data/local/db';
 import type { Capability, Goal, Profile, Program } from '@/data/local/models';
+
+// Validates the legacy cold-start seed/reps math (which v4 reuses as its week-1 seed) surfaced via
+// sessionTargets, plus split-library coverage (flag-independent). Pin to the rollback path.
+beforeEach(() => setV4Enabled(false));
+afterAll(() => setV4Enabled(true));
 
 const GOALS: Goal[] = ['get_stronger', 'build_muscle', 'general_fitness', 'toning'];
 const CAPS: Capability[] = [

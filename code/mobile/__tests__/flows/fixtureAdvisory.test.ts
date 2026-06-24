@@ -5,6 +5,7 @@
  * exercises (spec §5.5 R7, §5.6 R20). No demo deltas — every reason is earned by history.
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
+import { setV4Enabled } from '@/engine/v4/flag';
 import { db } from '@/data/local/db';
 import type { Profile, Session } from '@/data/local/models';
 
@@ -27,10 +28,14 @@ function sess(exerciseId: string, weight: number, reps: number[]): Session {
   };
 }
 
+// Legacy rollback path: this file validates the pre-v4 double-progression advisory voice
+// (reason + forecast) surfaced through sessionTargets. v4 is the default engine; opt out here.
 beforeEach(async () => {
+  setV4Enabled(false);
   await db.clearAll();
   await db.saveProfile(profile);
 });
+afterAll(() => setV4Enabled(true));
 
 describe('sessionTargets gating', () => {
   it('attaches NO reason/forecast during calibration, even when a lift earned a change', async () => {
