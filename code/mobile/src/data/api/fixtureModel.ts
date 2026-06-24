@@ -25,7 +25,6 @@ import type {
   Experience,
   Goal,
   PortraitSnapshot,
-  ProgramChange,
   Profile,
   Program,
   ProgramDay,
@@ -538,31 +537,6 @@ export const fixtureModel: ModelClient = {
     // REAL portrait: relative strength per capability from the athlete's best logged e1RM vs a
     // sex/bodyweight-scaled benchmark; confidence rises with sessions of real data per capability.
     return { timestamp: new Date().toISOString(), ...computePortrait(history, profile) };
-  },
-
-  async programChanges({ completedSessions }): Promise<ProgramChange[]> {
-    if (completedSessions < CALIBRATION_SESSIONS) return [];
-    // REAL load changes: exercises whose double-progression just earned a load move, derived
-    // from the athlete's own history (no phantom frame changes — the live model never reframes).
-    const profile = await loadProfileSafe();
-    const goal = profile.goal ?? 'build_muscle';
-    const history = await loadHistorySafe();
-    const now = new Date().toISOString();
-    const changes: ProgramChange[] = [];
-    const seenMuscles = new Set<string>();
-    for (const ex of EXERCISES) {
-      const presc = prescribe(ex.id, startingWeight(ex, profile), repsFor(ex.tier, goal, profile.age), history);
-      if (!(presc.increased || presc.decreased)) continue;
-      if (seenMuscles.has(ex.muscle)) continue; // one line per muscle group, not per exercise
-      seenMuscles.add(ex.muscle);
-      changes.push({
-        id: `pc_${ex.id}`,
-        kind: 'load',
-        capabilityOrTarget: `${ex.muscle.toLowerCase()} load`,
-        appliedAt: now,
-      });
-    }
-    return changes;
   },
 
   async setExercisePreference({ toExercise }: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }) {

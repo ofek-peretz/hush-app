@@ -8,7 +8,6 @@ import {
   strongestConfident,
   laggingConfident,
   isStillLearning,
-  detectThreshold,
   compareProof,
   commitmentLine,
   barFraction,
@@ -74,23 +73,6 @@ describe('bars are RELATIVE to the strongest confident capability (Decision 2)',
     );
     expect(barFraction(raw, 'knee_dominant')).toBeCloseTo(1.0); // strongest confident
     expect(barFraction(raw, 'horizontal_push')).toBeCloseTo(60 / 80);
-  });
-});
-
-describe('threshold detection (§7.10)', () => {
-  it('detects the rising capability that caught/passed another', () => {
-    const ev = detectThreshold(baseline, unlock);
-    expect(ev).not.toBeNull();
-    expect(ev!.a).toBe('hip_dominant'); // rose
-    expect(ev!.b).toBe('horizontal_pull'); // was ahead, now caught/passed
-  });
-  it('returns null when no crossing occurs', () => {
-    expect(detectThreshold(unlock, unlock)).toBeNull();
-  });
-  it('ignores still-learning capabilities as either side', () => {
-    const ev = detectThreshold(baseline, unlock);
-    expect(ev!.a).not.toBe('vertical_push');
-    expect(ev!.b).not.toBe('vertical_push');
   });
 });
 

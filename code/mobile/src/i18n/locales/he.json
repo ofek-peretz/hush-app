@@ -321,8 +321,6 @@
     "compareProof": "ה{{capability}} שלך עבר מהכי חלש ל{{state}}.",
     "seeYourBody": "ראה את הגוף שלך",
     "later": "אחר כך",
-    "thresholdOvertake": "ה{{a}} שלך בדיוק השיג את ה{{b}}.",
-    "thresholdReorder": "ה{{a}} שלך עקף את ה{{b}}.",
     "stateStrongest": "הכי חזק שלך",
     "stateSecond": "השני הכי חזק שלך",
     "stateMid": "באמצע",
@@ -495,7 +493,6 @@
     "weeklyReadyBody": "בניתי את התוכנית שלך לשבוע הבא. {{count}} אימונים, מותאמים לאיך שהתאמנת.",
     "weeklyReadyBodyOne": "בניתי את התוכנית שלך לשבוע הבא. אימון אחד, מותאם לאיך שהתאמנת.",
     "weeklyReadyBodyGeneric": "בניתי את התוכנית שלך לשבוע הבא, מותאמת לאיך שהתאמנת.",
-    "thresholdTitle": "תמונת האימון שלך השתנתה.",
     "quarterlyReportTitle": "ההתקדמות שלך מוכנה."
   },
   "watch": {

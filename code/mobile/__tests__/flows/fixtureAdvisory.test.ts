@@ -71,21 +71,4 @@ describe('sessionTargets gating', () => {
   });
 });
 
-describe('programChanges gating', () => {
-  it('returns no changes during calibration (silence)', async () => {
-    await db.appendCompletedSession(sess('bb_bench_press', 60, [10, 10, 10]));
-    expect(await fixtureModel.programChanges({ completedSessions: 4 })).toEqual([]);
-  });
-
-  it('returns the real applied load changes in ADVISORY', async () => {
-    await db.appendCompletedSession(sess('bb_bench_press', 60, [10, 10, 10]));
-    const changes = await fixtureModel.programChanges({ completedSessions: 7 });
-    expect(changes.some((c) => c.kind === 'load')).toBe(true);
-  });
-
-  it('returns nothing when no lift earned a change', async () => {
-    await db.appendCompletedSession(sess('bb_bench_press', 60, [8, 8, 8])); // mid-range, holds
-    const changes = await fixtureModel.programChanges({ completedSessions: 7 });
-    expect(changes).toEqual([]);
-  });
-});
+// (programChanges removed — the per-week change surface is now the v4 Weekly Update + Why.)

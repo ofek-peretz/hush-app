@@ -52,14 +52,6 @@ describe('notification lifecycle telemetry', () => {
     expect(types).toContain(NOTIFICATION_EVENTS.scheduled);
   });
 
-  it('firing the threshold alert records an immediate scheduled event', async () => {
-    await notifier.fireThresholdAlert();
-    await settle();
-    const buffered = await db.loadTelemetry<{ type: string; data?: Record<string, unknown> }>();
-    const scheduled = buffered.find((e) => e.type === NOTIFICATION_EVENTS.scheduled);
-    expect(scheduled?.data).toMatchObject({ kind: 'threshold_alert', immediate: true });
-  });
-
   it('cancelAll records a canceled event', async () => {
     await notifier.cancelAll();
     await settle();

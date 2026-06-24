@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Capability, ForecastRecord, OnboardingInputs, PortraitSnapshot, Profile, Program, SetLog, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
-import { buildPortraitForecast, detectThreshold, type ThresholdEvent } from '@/domain/portrait';
+import { buildPortraitForecast } from '@/domain/portrait';
 import { resolveHold, resolvePortrait, resolvePortraitForecasts } from '@/domain/receiptRules';
 import { shouldReanchorWeekly } from '@/domain/schedule';
 import { CONSENT_VERSION } from '@/domain/consent';
@@ -71,7 +71,6 @@ interface AppState {
   modeState: AthleteModeState;
   justUnlockedPortrait: boolean; // one-shot flag consumed by the Well Done → Portrait route
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
-  pendingThreshold: ThresholdEvent | null; // coalesced; at most one outstanding (§7.10)
   forecasts: ForecastRecord[]; // the asymmetry engine (spec §8.4)
   pendingPortraitReceipt: { capability: Capability } | null; // set on a HIT; resurfaces Portrait in Compare
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
@@ -80,16 +79,15 @@ interface AppState {
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; recents: string[]; pendingThreshold: ThresholdEvent | null }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; recents: string[] }
   | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[] }
   | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[] }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
-  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; pendingThreshold: ThresholdEvent | null; portraitReceipt: { capability: Capability } | null }
+  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; portraitReceipt: { capability: Capability } | null }
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
   | { type: 'FORECASTS'; forecasts: ForecastRecord[] }
   | { type: 'PORTRAIT_RESOLVED'; forecasts: ForecastRecord[]; snapshots: PortraitSnapshot[]; receipt: { capability: Capability } | null }
   | { type: 'CLEAR_PORTRAIT_FLAG' }
-  | { type: 'CLEAR_THRESHOLD' }
   | { type: 'CLEAR_PORTRAIT_RECEIPT' }
   | { type: 'WEEK_REST'; weekRest: boolean }
   | { type: 'REVOKED' }
@@ -102,7 +100,6 @@ const initial: AppState = {
   modeState: initialAthleteModeState,
   justUnlockedPortrait: false,
   snapshots: [],
-  pendingThreshold: null,
   forecasts: [],
   pendingPortraitReceipt: null,
   recents: [],
@@ -113,7 +110,7 @@ const initial: AppState = {
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, forecasts: a.forecasts, recents: a.recents, pendingThreshold: a.pendingThreshold };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, forecasts: a.forecasts, recents: a.recents };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents };
     case 'ONBOARDED':
@@ -127,7 +124,6 @@ function reducer(s: AppState, a: Action): AppState {
         justUnlockedPortrait: a.unlocked,
         snapshots: a.snapshots,
         forecasts: a.forecasts,
-        pendingThreshold: a.pendingThreshold ?? s.pendingThreshold,
         pendingPortraitReceipt: a.portraitReceipt ?? s.pendingPortraitReceipt,
       };
     case 'CALIBRATION_SYNCED':
@@ -140,8 +136,6 @@ function reducer(s: AppState, a: Action): AppState {
       return { ...s, forecasts: a.forecasts, snapshots: a.snapshots, pendingPortraitReceipt: a.receipt ?? s.pendingPortraitReceipt };
     case 'CLEAR_PORTRAIT_FLAG':
       return { ...s, justUnlockedPortrait: false };
-    case 'CLEAR_THRESHOLD':
-      return { ...s, pendingThreshold: null };
     case 'CLEAR_PORTRAIT_RECEIPT':
       return { ...s, pendingPortraitReceipt: null };
     case 'WEEK_REST':
@@ -172,7 +166,6 @@ interface AppApi extends AppState {
   completeOnboarding: (inputs: OnboardingInputs) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   clearPortraitFlag: () => void;
-  clearThreshold: () => void;
   /** Create the Portrait's eight-week gap-closing forecast (on unlock dismissal). */
   createPortraitForecast: () => Promise<void>;
   /** Persist a delivered hold forecast as a durable PENDING record (#9). Idempotent
@@ -306,19 +299,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
       }
 
-      const [profile, program, persistedMode, snapshots, forecasts, recents, pendingThreshold] = await Promise.all([
+      const [profile, program, persistedMode, snapshots, forecasts, recents] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadForecasts(),
         db.loadRecents(),
-        db.loadPendingThreshold(),
       ]);
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, forecasts, recents, pendingThreshold });
+      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, forecasts, recents });
 
       // HealthKit (convenience-only) — silent bodyweight ingestion on boot. It is
       // NEVER a model input (it only proposes a value for the local Profile, which
@@ -471,7 +463,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // completeSet may have just resolved/issued a hold this same set, and that
         // write must not be clobbered by a stale list (matches the hold loop, #9).
         let forecasts = await db.loadForecasts();
-        let pendingThreshold: ThresholdEvent | null = null;
         let portraitReceipt: { capability: Capability } | null = null;
 
         // A snapshot is captured at EVERY program construction once the Portrait
@@ -480,7 +471,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // standing gap-closing commitment and (b) detect threshold crossings on
         // an ongoing basis — not just at unlock. Tolerates the B2 gap (no snap).
         if (next.portrait === 'PORTRAIT_UNLOCKED') {
-          const prevSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
           const snap = await tryPortraitSnapshot(model, next.completedSessions);
           if (snap) {
             snapshots = await db.appendSnapshot(snap);
@@ -498,33 +488,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 void track('forecast_resolved', { forecastType: 'portrait', capability: res.receipt.capability, hit: true });
               }
             }
-
-            // Detect a single threshold crossing vs the prior snapshot (coalesced —
-            // at most one outstanding). Fire the calm alert + persist it so it
-            // survives until the athlete sees it, including across a relaunch.
-            if (prevSnap && !state.pendingThreshold) {
-              pendingThreshold = detectThreshold(prevSnap, snap);
-              if (pendingThreshold) {
-                // Telemetry + durable persistence are retained, but the user-facing
-                // ThresholdAlert surface was removed (Portrait feature retired), so we
-                // no longer fire a notification that would deep-link nowhere.
-                void track('threshold_crossed', { a: pendingThreshold.a, b: pendingThreshold.b, kind: pendingThreshold.kind });
-                await db.savePendingThreshold(pendingThreshold);
-              }
-            }
           }
         }
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots, forecasts, pendingThreshold, portraitReceipt });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots, forecasts, portraitReceipt });
         return { unlockedPortrait: unlocked };
       },
 
       clearPortraitFlag() {
         dispatch({ type: 'CLEAR_PORTRAIT_FLAG' });
-      },
-
-      clearThreshold() {
-        void db.clearPendingThreshold(); // durable clear so it never re-surfaces after dismissal
-        dispatch({ type: 'CLEAR_THRESHOLD' });
       },
 
       // The commitment IS the forecast: on Portrait dismissal, stake an
@@ -796,10 +767,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
         const snap = await model.portraitSnapshot({ completedSessions: next.completedSessions });
         const snapshots = await db.appendSnapshot(snap);
-        const pendingThreshold =
-          snapshots.length >= 2 ? detectThreshold(snapshots[snapshots.length - 2], snap) : null;
         await persistMode(next);
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots, forecasts: state.forecasts, pendingThreshold, portraitReceipt: null });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots, forecasts: state.forecasts, portraitReceipt: null });
       },
 
       // Test harness only — never reachable in release. Fabricates a post-due

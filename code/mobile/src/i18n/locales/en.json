@@ -322,8 +322,6 @@
     "compareProof": "Your {{capability}} went from your weakest to {{state}}.",
     "seeYourBody": "See your body",
     "later": "Later",
-    "thresholdOvertake": "Your {{a}} just caught your {{b}}.",
-    "thresholdReorder": "Your {{a}} moved ahead of your {{b}}.",
     "stateStrongest": "your strongest",
     "stateSecond": "your second strongest",
     "stateMid": "the middle of the pack",
@@ -502,7 +500,6 @@
     "weeklyReadyBody": "I've built your program for next week. {{count}} sessions, tuned to how you trained.",
     "weeklyReadyBodyOne": "I've built your program for next week. One session, tuned to how you trained.",
     "weeklyReadyBodyGeneric": "I've built your program for next week, tuned to how you trained.",
-    "thresholdTitle": "Your training picture changed.",
     "quarterlyReportTitle": "Your progress is ready."
   },
   "watch": {

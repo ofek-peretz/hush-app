@@ -1,12 +1,8 @@
-# Hush v1 — CI gate (BB-31 controlled build provenance; ATD-1 assemble-then-test discipline).
+# Hush — CI gate (mobile).
 #
-# The deployable is a *generated* artifact: the source-of-truth is the per-sprint snapshots under
-# implementation/, assembled into build/_assembled/ by build/_verify/assemble_and_test.py. This
-# workflow is the reproducible build-of-record gate. It does NOT touch the frozen model; it only
-# assembles, tests, and audits.
-#
-# External dependency to enable this: a GitHub (or compatible) Actions runner. The steps themselves
-# are the same commands a developer runs locally, so this reduces — not invents — future setup work.
+# The product is the React Native / Expo app in code/mobile (the live v4 engine runs there).
+# The dormant Python Bayesian backend was decommissioned (see V4_CLEANUP_PROPOSAL.md), so CI now
+# gates the mobile app: type-check + the full Jest suite (engine invariants, sims, flows, laws).
 name: hush-ci
 
 on:
@@ -15,48 +11,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  gate:
-    name: assemble + canonical gate + contract/SCA
+  mobile:
+    name: mobile typecheck + tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/mobile
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.13"
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: code/mobile/package-lock.json
 
-      - name: Install pinned test/dev dependencies (BB-31 — exact closure)
-        run: pip install -r deploy/requirements-dev.txt
+      - name: Install dependencies (exact lockfile closure)
+        run: npm ci
 
-      - name: Canonical gate (model golden runner + API pytest)
-        # The single source of truth for "is it green": model 189 + API 95 must both pass.
-        run: python build/_verify/assemble_and_test.py
+      - name: Type-check (tsc, no emit)
+        run: npx tsc --noEmit
 
-      - name: OpenAPI contract is in sync with the served surface (drift gate)
-        # assemble_and_test.py above already produced build/_assembled; --check fails on drift so
-        # the committed deploy/openapi.json (the client/staging baseline) can never silently rot.
-        run: python deploy/export_openapi.py --check
-
-      - name: SCA over the pinned dependency closure (BB-31)
-        # pip-audit reaches the advisory DB over the network on the runner. A real vulnerability
-        # fails the build (exit 1); an inability to reach the DB is surfaced as exit 2, not a pass.
-        run: python deploy/sca_audit.py --install
-
-  smoke:
-    name: end-to-end HTTP smoke (BB-14 dress-rehearsal)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install pinned runtime + server dependencies
-        run: pip install -r deploy/requirements-dev.txt
-
-      - name: Assemble the build-of-record tree
-        run: python build/_verify/assemble_and_test.py
-
-      - name: Boot the assembled service and smoke the full lifecycle over real HTTP
-        run: python deploy/smoke_test.py --self
+      - name: Test (full Jest suite)
+        run: npx jest --ci

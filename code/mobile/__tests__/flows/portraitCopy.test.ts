@@ -6,7 +6,7 @@
 import i18next, { type i18n as I18nType } from 'i18next';
 import en from '@/i18n/locales/en.json';
 import type { Capability, PortraitSnapshot } from '@/data/local/models';
-import { commitmentLine, compareProof, thresholdLine, detectThreshold } from '@/domain/portrait';
+import { commitmentLine, compareProof } from '@/domain/portrait';
 
 function snap(per: Record<Capability, number>, conf: Record<Capability, number>, ts: string): PortraitSnapshot {
   const stillLearning = Object.fromEntries(
@@ -56,10 +56,5 @@ describe('resolved Portrait copy', () => {
     expect(text).toContain('went from your weakest to');
     expect(text).not.toMatch(/week|month|day/i); // horizonless
     expect(text).not.toMatch(/!/);
-  });
-
-  it('threshold line is factual and first-person, no alarm', () => {
-    const ev = detectThreshold(baseline, unlock)!;
-    expect(line(thresholdLine(ev))).toBe('Your hip hinge moved ahead of your horizontal pull.');
   });
 });

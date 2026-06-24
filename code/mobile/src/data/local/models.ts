@@ -183,26 +183,6 @@ export interface PortraitSnapshot {
   stillLearning: Record<Capability, boolean>;
 }
 
-export type ProgramChangeKind = 'load' | 'frame';
-
-export interface ProgramChange {
-  id: string;
-  kind: ProgramChangeKind;
-  capabilityOrTarget: string; // rendered into first-person copy
-  appliedAt: string;
-  // load => undoable until replaced; frame => vetoable ("Keep as is")
-}
-
-/** A capability-ordering change between two Portrait snapshots (spec §6.5, §7.10).
- *  Persisted (durable) so a crossing detected in one session survives until the
- *  athlete sees the alert — including across an app relaunch. */
-export type ThresholdKind = 'overtake' | 'reorder';
-export interface ThresholdEvent {
-  a: Capability; // the capability that rose
-  b: Capability; // the capability it caught / passed
-  kind: ThresholdKind;
-}
-
 export type HistoryAnnotation = 'increased' | 'swapped' | 'ended_early' | null;
 
 export interface HistoryEvent {

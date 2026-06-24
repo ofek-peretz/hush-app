@@ -23,11 +23,10 @@ import i18next from 'i18next';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
-export type NotificationKind = 'weekly_program_ready' | 'threshold_alert' | 'quarterly_report';
+export type NotificationKind = 'weekly_program_ready' | 'quarterly_report';
 
 export type NotificationIntent =
-  | { kind: 'weekly_program_ready' } // -> Program
-  | { kind: 'threshold_alert' } // -> (no destination; Portrait surfaces removed)
+  | { kind: 'weekly_program_ready' } // -> Program / Weekly Update
   | { kind: 'quarterly_report' }; // -> QuarterlyReport
 
 /**
@@ -58,7 +57,6 @@ export function buildPayload(kind: NotificationKind): Record<string, unknown> {
 export function intentFromNotificationData(data: unknown): NotificationIntent | null {
   const kind = (data as { [k: string]: unknown } | null | undefined)?.[INTENT_KEY];
   if (kind === 'weekly_program_ready') return { kind: 'weekly_program_ready' };
-  if (kind === 'threshold_alert') return { kind: 'threshold_alert' };
   if (kind === 'quarterly_report') return { kind: 'quarterly_report' };
   return null;
 }
@@ -74,8 +72,6 @@ export interface Notifier {
   /** Schedule the calm weekly note at 20:00 local. Idempotent. `sessionCount`
    *  (the week's workout count) personalizes the body per §4.31 when known. */
   scheduleWeeklyProgramReady(sessionCount?: number): Promise<void>;
-  /** Fire a one-off threshold alert (coalesced upstream). */
-  fireThresholdAlert(): Promise<void>;
   /** Schedule the recurring quarterly progress report note (every ~3 months). A tap
    *  opens the QuarterlyReport comparison screen. Idempotent. */
   scheduleQuarterlyReport(): Promise<void>;
@@ -85,7 +81,6 @@ export interface Notifier {
 
 /** Stable identifiers so re-scheduling is idempotent and cancel is targeted. */
 const WEEKLY_ID = 'hush.weekly_program_ready';
-const THRESHOLD_ID = 'hush.threshold_alert';
 const QUARTERLY_ID = 'hush.quarterly_report';
 const WEEKLY_HOUR = 20; // 20:00 local (§8.6)
 const QUARTERLY_INTERVAL_S = 12 * 7 * 24 * 60 * 60; // ~3 months, repeating
@@ -162,25 +157,6 @@ export const notifierExpo: Notifier = {
     }
   },
 
-  async fireThresholdAlert() {
-    try {
-      if (!(await ensurePermission())) return;
-      // Reuse a stable id so rapid duplicate events coalesce to one alert.
-      await Notifications.cancelScheduledNotificationAsync(THRESHOLD_ID).catch(() => {});
-      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'threshold_alert' });
-      await Notifications.scheduleNotificationAsync({
-        identifier: THRESHOLD_ID,
-        // data carries the routing intent so a tap opens the Portrait threshold alert (1.10).
-        content: { title: i18next.t('notifications.thresholdTitle'), body: '', data: buildPayload('threshold_alert') },
-        trigger: null, // immediate (event-driven, never periodic)
-      });
-      // Immediate trigger ⇒ scheduling IS delivery for this kind.
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'threshold_alert', immediate: true });
-    } catch {
-      /* swallow */
-    }
-  },
-
   async scheduleQuarterlyReport() {
     try {
       if (!(await ensurePermission())) return;
@@ -216,7 +192,6 @@ export const notifierExpo: Notifier = {
 /** v1 no-op stub — the swap point for tests and any non-native environment. */
 export const notifierStub: Notifier = {
   async scheduleWeeklyProgramReady() {},
-  async fireThresholdAlert() {},
   async scheduleQuarterlyReport() {},
   async cancelAll() {},
 };

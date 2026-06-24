@@ -9,12 +9,8 @@
  * the data threshold is "still learning" and is excluded from commitments and
  * median/imbalance math (spec §5.7, §7.9).
  */
-import type { Capability, ForecastRecord, PortraitSnapshot, ThresholdEvent, ThresholdKind } from '@/data/local/models';
+import type { Capability, ForecastRecord, PortraitSnapshot } from '@/data/local/models';
 import type { Line } from '@/domain/voice';
-
-// Persisted threshold shape lives in models (it is durable); re-exported here so
-// existing importers (state, screens, tests) keep their import path.
-export type { ThresholdEvent, ThresholdKind } from '@/data/local/models';
 
 /** Fixed render order, top to bottom (bars draw in this sequence). */
 export const CAPABILITY_ORDER: Capability[] = [
@@ -183,41 +179,3 @@ export function compareProof(baseline: PortraitSnapshot, current: PortraitSnapsh
   };
 }
 
-/**
- * Detect a single threshold crossing between two snapshots (spec §6.5, §7.10):
- * a capability A that was below B and is now at/above B. "overtake" when A is
- * now ahead; "reorder" reflects the new ordering factually, no alarm.
- * Returns the most significant single crossing (coalesce — never stack two).
- */
-export function detectThreshold(
-  prev: PortraitSnapshot,
-  next: PortraitSnapshot,
-): ThresholdEvent | null {
-  let best: { ev: ThresholdEvent; gain: number } | null = null;
-  for (const a of CAPABILITY_ORDER) {
-    if (isStillLearning(next, a)) continue;
-    for (const b of CAPABILITY_ORDER) {
-      if (a === b || isStillLearning(next, b)) continue;
-      const wasBelow = prev.perCapability[a] < prev.perCapability[b];
-      const nowAtOrAbove = next.perCapability[a] >= next.perCapability[b];
-      if (wasBelow && nowAtOrAbove) {
-        const gain = next.perCapability[a] - next.perCapability[b];
-        const kind: ThresholdKind = next.perCapability[a] > next.perCapability[b] ? 'reorder' : 'overtake';
-        if (!best || gain > best.gain) best = { ev: { a, b, kind }, gain };
-      }
-    }
-  }
-  return best?.ev ?? null;
-}
-
-/** Threshold alert copy line for an event (§4.8, §10.12). */
-export function thresholdLine(ev: ThresholdEvent): Line {
-  const key = ev.kind === 'overtake' ? 'portrait.thresholdOvertake' : 'portrait.thresholdReorder';
-  return {
-    key,
-    params: {
-      a: '$t(' + capabilityNameKey(ev.a) + ')',
-      b: '$t(' + capabilityNameKey(ev.b) + ')',
-    },
-  };
-}

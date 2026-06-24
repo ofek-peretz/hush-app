@@ -15,7 +15,6 @@ import type {
   Profile,
   Program,
   Session,
-  ThresholdEvent,
 } from './models';
 // Type-only import (erased at runtime → no layering cycle). The Health connection
 // record is persisted local state, stored behind this repo like everything else.
@@ -31,7 +30,6 @@ const K = {
   forecasts: 'hush.forecasts',
   recents: 'hush.exercise.recents',
   pendingSync: 'hush.sync.pending',
-  pendingThreshold: 'hush.portrait.threshold',
   telemetry: 'hush.telemetry.buffer',
   firsts: 'hush.telemetry.firsts',
   health: 'hush.health.state',
@@ -174,11 +172,6 @@ export const db = {
     // De-dupe by session id (idempotent replay; a retried session never doubles).
     await this.setPendingSync([...all.filter((p) => p.sessionId !== item.sessionId), item]);
   },
-
-  // ---- Pending threshold alert (durable; survives relaunch until surfaced §7.10) ----
-  loadPendingThreshold: () => getJSON<ThresholdEvent>(K.pendingThreshold),
-  savePendingThreshold: (ev: ThresholdEvent) => setJSON(K.pendingThreshold, ev),
-  clearPendingThreshold: () => AsyncStorage.removeItem(K.pendingThreshold),
 
   // ---- Telemetry (durable buffer + first-event registry; alpha hardening) ----
   async loadTelemetry<T>(): Promise<T[]> {

@@ -24,7 +24,6 @@
 import type {
   Capability,
   PortraitSnapshot,
-  ProgramChange,
   Profile,
   Program,
   ProgramDay,
@@ -41,8 +40,6 @@ import { newEventId } from '@/platform/deviceContext';
 
 const REQUEST_TIMEOUT_MS = 12000;
 import { db } from '@/data/local/db';
-
-const CALIBRATION_SESSIONS = 7;
 
 // ---- backend wire shapes (mirror schemas.py BlockOut / SessionOut) ----
 interface BlockOut {
@@ -355,19 +352,6 @@ export class HttpModelClient implements ModelClient {
     }
     return { timestamp: new Date().toISOString(), perCapability, confidence, stillLearning };
   }
-
-  async programChanges({ completedSessions }: { completedSessions: number }): Promise<ProgramChange[]> {
-    // B4: no weekly program-change surface. Per-block decisions exist but the
-    // load-change(Undo)/frame-change(veto) card has no backend counterpart yet.
-    void completedSessions;
-    void CALIBRATION_SESSIONS;
-    return [];
-  }
-
-  // C5 (ratified 2026-06-15): program-change responses (acknowledged|vetoed|ignored) are
-  // recorded as research events for learning + trust measurement via the telemetry →
-  // athlete_event pipeline; they never alter model state or future recommendations, so there
-  // is NO model-mutating undo/veto endpoint here.
 
   // ---- Program Ownership Contract: durable, server-backed athlete-owned structure ----
   async setExercisePreference({ capability, fromExercise, toExercise, reason }: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }): Promise<void> {

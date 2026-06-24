@@ -6,7 +6,7 @@
  * backend in `implementation/api` is wired. The interface is the contract; the
  * client code above it does not care which implementation answers.
  */
-import type { Capability, PortraitSnapshot, ProgramChange, Profile, Program, SetTarget } from '@/data/local/models';
+import type { Capability, PortraitSnapshot, Profile, Program, SetTarget } from '@/data/local/models';
 
 /** What the athlete actually did — the only model input (spec §8.7). */
 export interface ActualSet {
@@ -98,20 +98,8 @@ export interface ModelClient {
    */
   replaceBlock(args: { blockId: string; fromExercise: string; toExercise?: string }): Promise<void>;
 
-  /**
-   * Material program changes for the current week (spec §4.9, §2.7). Load
-   * changes are auto-applied + undoable; frame changes are decided + vetoable.
-   * Empty when nothing material changed — the app then shows NO line (§5.5 R7).
-   * Never returns changes during calibration.
-   */
-  programChanges(args: { completedSessions: number }): Promise<ProgramChange[]>;
-
-  // NOTE (C5, ratified 2026-06-15): a program change may be ACKNOWLEDGED, VETOED, or
-  // IGNORED, and every such response is stored as DATA for learning + trust measurement —
-  // it must NEVER directly alter model state or future recommendations (not user-controlled
-  // progression). Responses are therefore recorded as research events via the telemetry →
-  // athlete_event pipeline, NOT as model-mutating client methods. There is deliberately no
-  // undo/veto method here (an earlier revert-style contract was wrong and was removed).
+  // NOTE: the per-week "material program changes" surface is now the v4 Weekly Update + Why
+  // (engine/v4), sourced from the engine's persisted explanations — not a model-client method.
 
   // ---- Program Ownership Contract: athlete-OWNED program structure (durable + server-backed) ----
   // Every customization is persisted to the append-only preference log server-side, so it
