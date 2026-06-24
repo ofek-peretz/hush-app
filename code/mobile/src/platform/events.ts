@@ -37,7 +37,7 @@ export const HEALTH_EVENTS = {
 
 /** Local Notifications — local only (no APNs). */
 export const NOTIFICATION_EVENTS = {
-  /** A notification was scheduled (weekly) or fired immediately (threshold). */
+  /** A notification was scheduled (weekly program ready / quarterly report). */
   scheduled: 'notification_scheduled',
   /** Delivered while the app was foregrounded (the only delivery JS can observe). */
   delivered: 'notification_delivered',

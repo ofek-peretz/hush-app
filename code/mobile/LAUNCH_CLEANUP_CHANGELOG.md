@@ -22,3 +22,13 @@ Deleted 12 component files that were left behind by the LIGHT-instrument redesig
 - `TopSheet` → unused (only `BottomSheet` is live)
 
 Why: dead code increases maintenance/compile surface and confuses future readers about which components are live. No behavior change. (15 files total; `ds/*` and `onboarding/*` components all verified still in use.)
+
+## 2. Fix stale comments referencing removed features
+Updated misleading comments that still named features removed in the v4 migration / Bayesian decommission. No code paths changed:
+
+- `app/navigationRef.ts`, `platform/notifications.ts` — removed references to the non-existent `ThresholdAlert` route / `threshold_alert` intent (the Portrait threshold alert was removed; that intent kind no longer exists in `NotificationIntent`).
+- `app/Root.tsx` — removed the dead comment block describing `threshold_alert` routing (no such intent kind remains).
+- `platform/events.ts` — `notification_scheduled` doc no longer claims a "threshold" notification fires.
+- `data/api/httpClient.ts` — header comment no longer points at the removed `programChanges` model-client method; notes the v4 Weekly Update is the live surface.
+
+Why: comments that name deleted features mislead the next reader during launch hardening.

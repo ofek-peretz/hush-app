@@ -10,9 +10,8 @@
  *
  * Contract (do not violate):
  *  - Weekly Program Ready: 20:00 LOCAL, title "Next week's program is ready.",
- *    NO body, no numbers/CTA; opens Program (1.20). Weekly-repeating.
- *  - Threshold alert: event-driven ONLY, never scheduled/periodic; opens the
- *    Portrait threshold alert (1.10); coalesce duplicates.
+ *    opens the v4 Weekly Update (1.20). Weekly-repeating.
+ *  - Quarterly Report: every ~3 months; opens the peak-weight comparison.
  *  - Receipts are NEVER notifications — receipts surface in-session only (§8.6).
  *
  * Calm defaults: no sound, no badge (a quiet product, §8.6). Copy flows through
@@ -234,7 +233,7 @@ export function addNotificationResponseListener(
 
 /**
  * The intent of the notification the app was COLD-STARTED from (tapped while not
- * running), or null. Used once at launch to deep-link to Program / ThresholdAlert.
+ * running), or null. Used once at launch to deep-link to the Weekly Update / Quarterly Report.
  */
 export async function getInitialNotificationIntent(): Promise<NotificationIntent | null> {
   try {

@@ -105,9 +105,6 @@ function routeNotificationIntent(intent: NotificationIntent | null, enrolled: bo
   // v4: the weekly notification opens the Weekly Update (what changed + Why); legacy path → Program.
   if (intent.kind === 'weekly_program_ready') navigateMain(isV4Enabled() ? 'WeeklyUpdate' : 'Program'); // 1.20
   else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
-  // threshold_alert no longer has a destination (the Portrait surfaces were removed);
-  // the intent map is retained for the notification layer + tests, but it deep-links
-  // nowhere now. Capability "training picture" alerts are not user-facing in V1.
 }
 
 export function Root() {
