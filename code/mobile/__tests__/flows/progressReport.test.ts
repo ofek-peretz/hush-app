@@ -5,7 +5,7 @@
  *  - sets outside the 12-week window and bodyweight sets are ignored;
  *  - entries are sorted biggest-gain first.
  */
-import { quarterlyPeakProgress, isQuarterlyReportDue } from '@/domain/progressReport';
+import { quarterlyPeakProgress } from '@/domain/progressReport';
 import type { Session, SetLog } from '@/data/local/models';
 
 const NOW = Date.parse('2026-06-19T12:00:00.000Z');
@@ -95,13 +95,3 @@ describe('quarterlyPeakProgress', () => {
   });
 });
 
-describe('isQuarterlyReportDue', () => {
-  it('is due once 12 weeks have passed since the anchor', () => {
-    expect(isQuarterlyReportDue(new Date(NOW - 12 * WEEK).toISOString(), NOW)).toBe(true);
-    expect(isQuarterlyReportDue(new Date(NOW - 11 * WEEK).toISOString(), NOW)).toBe(false);
-  });
-  it('is never due without a valid anchor', () => {
-    expect(isQuarterlyReportDue(null, NOW)).toBe(false);
-    expect(isQuarterlyReportDue('not-a-date', NOW)).toBe(false);
-  });
-});

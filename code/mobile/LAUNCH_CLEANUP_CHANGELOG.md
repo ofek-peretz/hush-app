@@ -180,3 +180,14 @@ Recommended list. Removed the production-dead helpers from `domain/replacement.t
   covered.
 
 No behavior change (`SwapSheet` uses only `recommended`).
+
+## 12. Remove the dead `isQuarterlyReportDue` gate
+**Founder decision (2026-06-24):** drop the retained-for-future helper. The Quarterly Report is
+driven by the every-12-weeks local notification (`notifier.scheduleQuarterlyReport` → the
+`quarterly_report` intent navigates to the screen); nothing called `isQuarterlyReportDue`.
+
+- `domain/progressReport.ts` — removed the function (its `REPORT_WINDOW_WEEKS`/`WEEK_MS` constants
+  stay; other functions use them).
+- `__tests__/flows/progressReport.test.ts` — removed the `isQuarterlyReportDue` suite + import.
+
+No behavior change (the report cadence is the notification, not this gate).

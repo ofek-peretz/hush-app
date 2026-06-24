@@ -124,14 +124,3 @@ export function allTimePeakProgress(sessions: Session[], nowMs: number): Quarter
   return out;
 }
 
-/**
- * Whether a quarterly report is due relative to an anchor (account creation, or the
- * last report). Retained for a future periodic notification trigger; the in-app
- * surface gates on `quarterlyPeakProgress(...).length` instead (data IS the cadence).
- */
-export function isQuarterlyReportDue(anchorIso: string | null, nowMs: number): boolean {
-  if (!anchorIso) return false;
-  const anchor = Date.parse(anchorIso);
-  if (Number.isNaN(anchor)) return false;
-  return nowMs - anchor >= REPORT_WINDOW_WEEKS * WEEK_MS;
-}
