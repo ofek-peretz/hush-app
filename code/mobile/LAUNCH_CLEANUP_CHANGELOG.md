@@ -108,3 +108,31 @@ rendered by no screen. Removed end-to-end:
   `portraitLogic`, `portraitCopy` to the surviving reason/Portrait behavior.
 
 Verification: tsc clean, jest 412/412 (46 suites), copy-lint pass, `expo export --platform ios` clean.
+
+## 6. Remove dead components (LogoMark, Wheel)
+Final dead-path sweep. Deleted two component files imported nowhere in `src/`, `__tests__/`,
+or `App*.tsx`:
+
+- `components/LogoMark.tsx` — the live logo is `HushMark`; `LogoMark` survived only as a name in
+  a `tokens.ts` comment. Removed the orphaned `accent` gradient export it was the sole consumer of
+  (the comment said it was "retained for the LogoMark only"; product surfaces use the flat
+  `color.accent`, never the gradient).
+- `components/Wheel.tsx` — the old wheel picker; onboarding now uses `ds/SegmentedControl` +
+  `ds/Stepper`. The only `Wheel` string left in `src` is the "Ab Wheel Rollout" exercise name.
+
+Why: leftover pre-redesign UI with zero importers. No behavior change.
+
+## 7. Remove unused design tokens + domain helpers
+Deleted exported utilities with zero callers anywhere in `src/` or `__tests__/` (verified by
+`ts-prune` + per-symbol grep). No behavior change — each was superseded by an inline or `ds/*`
+implementation:
+
+- `design/tokens.ts` — `scaleFactor` (the `s()` scaler uses the private `_scaleFactor`), `a11y`,
+  `tabBar` ("kept for any chrome that still references it" — nothing does; Hush has no tab bar),
+  `tnum`/`heroNum` and their now-orphaned `TABULAR`/`FontVariant` helpers.
+- `design/typography.ts` — `sansFamily`/`monoFamily` weight→family mappers (callers set
+  `fontFamily` via the `ds` components / `font` tokens directly). Kept `installGlobalFontDefault`.
+- `domain/schedule.ts` — `dayExerciseCount`, `estimateMinutes`, and `daySetCount` (orphaned once
+  `estimateMinutes` went). Home computes its own `slots.length` / `~8 min per lift` inline.
+
+Why: dead exports inflate the API surface and mislead readers. No behavior change.

@@ -35,7 +35,6 @@ const DESIGN_WIDTH = 393; // iPhone 16 Pro reference (the design's target frame)
 const _screenW = Dimensions.get('window').width;
 const _scaleFactor = Math.min(Math.max(_screenW / DESIGN_WIDTH, 0.92), 1.15);
 export const s = (n: number) => Math.round(n * _scaleFactor);
-export const scaleFactor = _scaleFactor;
 
 /* ============================================================================
  * RAW PALETTE — OKLCH converted to sRGB hex (exact).
@@ -151,16 +150,6 @@ export const color = {
   bgSurface: paper[1],
   borderSubtle: line[0],
   onSurface: ink[0],
-} as const;
-
-/**
- * Accent gradient — retained for the LogoMark only (the mark's ochre dot).
- * The product surfaces use the flat `signal` accent, never a gradient.
- */
-export const accent = {
-  start: signal[0],
-  end: signal[1],
-  text: signal.ink,
 } as const;
 
 /* ============================================================================
@@ -369,38 +358,9 @@ export const motion = {
 } as const;
 
 /* ============================================================================
- * Accessibility scale bounds.
- * ==========================================================================*/
-export const a11y = {
-  heroMaxScale: 1.4,
-  displayMaxScale: 1.4,
-  titleMaxScale: 1.5,
-  bodyMaxScale: 1.8,
-} as const;
-
-/**
- * Translucent top bar — paper, not black. Kept for any chrome that still
- * references it; Hush has no persistent tab bar (hub-and-spoke nav).
- */
-export const tabBar = {
-  height: 62,
-  bg: 'rgba(251,250,248,0.82)', // paper-0 @ 82%
-  blur: 20,
-  topBorder: color.border,
-} as const;
-
-/* ============================================================================
  * Font-feature helpers.
  * ==========================================================================*/
-type FontVariant = NonNullable<import('react-native').TextStyle['fontVariant']>;
-const TABULAR: FontVariant = ['tabular-nums'];
-export const tnum = { fontVariant: TABULAR, fontFamily: font.mono };
 export const trackingPx = (size: number, em: number) => size * em;
-export const heroNum = (size: number, em = tracking.display) => ({
-  fontFamily: font.monoSemibold,
-  fontVariant: TABULAR,
-  letterSpacing: size * em,
-});
 export const heroTitle = (size: number, em = tracking.display) => ({
   fontFamily: font.sansBold,
   letterSpacing: size * em,

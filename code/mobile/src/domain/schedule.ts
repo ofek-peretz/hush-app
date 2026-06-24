@@ -21,25 +21,6 @@ export function weekProgress(program: Program): { done: number; total: number } 
   return { done: workouts.filter((d) => d.completed).length, total: workouts.length };
 }
 
-/** Home metadata (Screen 01): exercises = filled slots in the day. */
-export function dayExerciseCount(day: ProgramDay): number {
-  return day.slots.length;
-}
-
-/** Home metadata: total working sets across the day's slots. */
-export function daySetCount(day: ProgramDay): number {
-  return day.slots.reduce((n, s) => n + s.setCount, 0);
-}
-
-/**
- * Rough session duration in whole minutes, derived from set volume alone
- * (~3.7 min per working set including rest). Display-only "~N min" estimate;
- * never a performance score.
- */
-export function estimateMinutes(day: ProgramDay): number {
-  return Math.round(daySetCount(day) * 3.7);
-}
-
 /**
  * History day label. Prefers the name captured AT START (stable across weekly
  * regenerations), then a live program lookup for legacy sessions, then a neutral
