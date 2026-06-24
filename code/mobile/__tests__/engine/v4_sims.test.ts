@@ -8,7 +8,6 @@
  * must always terminate with a valid plan (no dead-ends). Goal-change (C4-1) is covered separately.
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
-import { setV4Enabled } from '@/engine/v4/flag';
 import { deriveSlots } from '@/engine/v4/v4Engine';
 import { planNextWeek } from '@/engine/v4/planWeek';
 import { checkInvariants } from '@/engine/v4/invariants';
@@ -16,8 +15,6 @@ import { exerciseMeta, candidatesForPattern } from '@/engine/v4/catalogAdapter';
 import { demonstrated, epley, volumeLoad } from '@/engine/v4/reads';
 import { repScheme, toEngineGoal, toTrainingAge, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type WeekRecord } from '@/engine/v4/types';
 import type { Goal, Experience, Profile } from '@/data/local/models';
-
-beforeAll(() => setV4Enabled(false)); // we drive the pure engine directly; no persistence side effects
 
 const sessionOf = (slotId: string) => slotId.split(':')[0];
 

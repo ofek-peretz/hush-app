@@ -33,14 +33,12 @@ import type {
   WeeklyVolume,
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, type Exercise, type MuscleGroup } from '@/data/exercises';
-import { prescribe, computePortrait } from '@/data/progression';
-import { isV4Enabled } from '@/engine/v4/flag';
+import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets } from '@/engine/v4/v4Engine';
 import { db, type OwnedPreferences } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import type { ActualSet, ModelClient } from './modelClient';
 
-const CALIBRATION_SESSIONS = 7;
 // The most sets any (goal × tier × age) scheme can prescribe. sessionTargets emits this
 // many per-set targets per exercise so a slot's setCount is ALWAYS fully covered (a slot
 // never falls through to the default-weight fallback).
@@ -446,79 +444,33 @@ export const fixtureModel: ModelClient = {
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     const program = { id: 'program_v1', frequency: n, days: ordered };
-    // v4 (gated): ensure durable per-slot engine state exists for this program (idempotent;
+    // v4: ensure durable per-slot engine state exists for this program (idempotent;
     // preserves state across regen, honors athlete pins as locked manual replacements — C-1/C-7).
-    if (isV4Enabled()) {
-      const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
-      const history = await loadHistorySafe();
-      await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile)).catch(() => {});
-    }
+    const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
+    const history = await loadHistorySafe();
+    await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile)).catch(() => {});
     return program;
   },
 
-  async sessionTargets({ programDayId, completedSessions }): Promise<SetTarget[]> {
+  async sessionTargets({ programDayId }): Promise<SetTarget[]> {
     void programDayId; // targets are keyed by exercise; the screen picks the day's slots
-    const advisory = completedSessions >= CALIBRATION_SESSIONS;
     const profile = await loadProfileSafe();
     const goal = profile.goal ?? 'build_muscle';
     const history = await loadHistorySafe();
     const out: SetTarget[] = [];
 
-    // v4 (gated): advance the engine for any completed weeks, then source the prescription from the
+    // v4: advance the engine for any completed weeks, then source the prescription from the
     // durable per-slot state. Exercises without an engine slot (swap-only) fall back to the seed.
-    if (isV4Enabled()) {
-      const program = await db.loadProgram();
-      const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
-      const seedFor = (id: string) => seedForExercise(id, profile);
-      if (program) await maybeAdvance(program, eprofile, history, seedFor).catch(() => {});
-      const targets = await currentTargets().catch((): Record<string, { weight: number | null; reps: number }> => ({}));
-      for (const ex of EXERCISES) {
-        const t = targets[ex.id];
-        const weight = t ? t.weight : startingWeight(ex, profile);
-        const reps = t ? t.reps : repsFor(ex.tier, goal, profile.age);
-        for (let s = 0; s < MAX_SETS; s++) out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps });
-      }
-      return out;
-    }
-
+    const program = await db.loadProgram();
+    const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
+    const seedFor = (id: string) => seedForExercise(id, profile);
+    if (program) await maybeAdvance(program, eprofile, history, seedFor).catch(() => {});
+    const targets = await currentTargets().catch((): Record<string, { weight: number | null; reps: number }> => ({}));
     for (const ex of EXERCISES) {
-      // REAL equipment-aware double progression from the athlete's own logged history.
-      // First session (no history) is byte-identical to the prior static seed × goal-reps.
-      const seed = startingWeight(ex, profile);
-      const bottomReps = repsFor(ex.tier, goal, profile.age);
-      const presc = prescribe(ex.id, seed, bottomReps, history);
-
-      // The advisory VOICE (reason + forecast) is gated to ADVISORY and only ever rides the
-      // first working set; the load itself progresses from session one (calibration or not).
-      const voiced = advisory && (presc.increased || presc.decreased);
-
-      // Emit MAX_SETS targets per exercise so any slot's setCount is fully covered,
-      // regardless of the goal/age set scheme the program was built with.
-      for (let s = 0; s < MAX_SETS; s++) {
-        const t: SetTarget = {
-          exerciseId: ex.id,
-          setIndex: s,
-          recommendedWeight: presc.weight,
-          recommendedReps: presc.reps,
-        };
-        if (voiced && s === 0) {
-          if (presc.increased) {
-            t.reasonType = 'increase';
-            t.reasonDelta = presc.deltaKg;
-            t.forecast = {
-              type: 'increase',
-              capability: ex.capability,
-              predictedValue: presc.weight ?? 0,
-              predictedReps: presc.reps,
-              dueSessionOrDate: 'same-session',
-            };
-          } else if (presc.decreased) {
-            t.reasonType = 'decrease';
-            t.reasonDelta = presc.deltaKg;
-          }
-        }
-        out.push(t);
-      }
+      const t = targets[ex.id];
+      const weight = t ? t.weight : startingWeight(ex, profile);
+      const reps = t ? t.reps : repsFor(ex.tier, goal, profile.age);
+      for (let s = 0; s < MAX_SETS; s++) out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps });
     }
     return out;
   },

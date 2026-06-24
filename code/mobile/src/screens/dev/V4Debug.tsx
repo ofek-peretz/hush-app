@@ -9,7 +9,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { getDebugState, type V4DebugState } from '@/engine/v4/v4Engine';
-import { isV4Enabled } from '@/engine/v4/flag';
 import { exerciseDisplayName } from '@/data/exercises';
 import type { SlotState } from '@/engine/v4/types';
 import { color, space, font, textScale } from '@/design/tokens';
@@ -44,7 +43,6 @@ export function V4Debug({ navigation }: Props) {
         <Text style={styles.title}>v4 engine state</Text>
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.meta}>flag: {isV4Enabled() ? 'ON' : 'OFF'}</Text>
         {state && (
           <>
             <Text style={styles.meta}>

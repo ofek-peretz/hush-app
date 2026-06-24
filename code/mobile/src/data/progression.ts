@@ -1,112 +1,12 @@
 /**
- * Equipment-aware DOUBLE PROGRESSION (founder-directed 2026-06-23). The live, working
- * replacement for the disconnected score-engine: a prescription is a PURE function of the
- * athlete's own logged history + the catalog. No RIR input is needed — the rep RANGE encodes
- * effort; you add load only once you own the top of the range across all working sets.
+ * Capability Portrait, computed from the athlete's real logged history.
  *
- *   • Weighted lifts: stay at a weight until every working set reaches the range TOP, then add
- *     ONE equipment step (barbell 2.5 / dumbbell 2 / machine 5 / cable 5) and reset to the
- *     bottom. Two sessions failing the bottom → deload one step. This progresses in a sensible
- *     time, never gets stuck, and only ever moves by a real, loadable increment.
- *   • Bodyweight lifts: add a rep each session toward the movement's ceiling, then surface a
- *     harder variation (progressionRule.harder) — no phantom load.
- *
- * The bottom of the range is the caller's existing per-goal rep target, so a first session
- * (no history) is byte-identical to the prior static behavior.
+ * (The legacy double-progression `prescribe()` that once lived here was the rollback engine for
+ * the v4 migration; it was removed on 2026-06-24 once v4 became the sole engine — the v4 engine
+ * in `src/engine/v4` is now the single source of every prescription. Recoverable from git.)
  */
-import { exerciseById, progressionRule, LOAD_STEP_KG, exercisesForCapability } from './exercises';
+import { exercisesForCapability } from './exercises';
 import type { Capability, PortraitSnapshot, Profile, Session } from './local/models';
-
-/** Extra reps above the goal's bottom target before a load increase is earned. */
-const RANGE_SPREAD = { compound: 2, isolation: 3 } as const;
-
-export interface Prescription {
-  weight: number | null; // null = bodyweight
-  reps: number; // the working-rep target (the range bottom to clear)
-  increased: boolean; // load went UP vs the last session
-  decreased: boolean; // load was deloaded
-  deltaKg?: number; // the equipment step applied on an increase/decrease
-  variationHint?: string; // bodyweight only: a harder exercise once the ceiling is owned
-}
-
-interface Performance {
-  weight: number | null;
-  repsPerSet: number[];
-}
-
-/** The athlete's most recent (and prior) logged performances of an exercise, newest first.
- *  `history` is expected newest-first (db.loadHistory). Working sets only — the heaviest load
- *  used that session, with the reps achieved at it (warm-ups, if ever logged, fall away). */
-function performances(exerciseId: string, history: Session[]): Performance[] {
-  const out: Performance[] = [];
-  for (const session of history) {
-    const sets = session.sets.filter((s) => s.exerciseId === exerciseId);
-    if (!sets.length) continue;
-    const weights = sets.map((s) => s.actualWeight);
-    const top = weights.every((w) => w == null) ? null : Math.max(...weights.map((w) => w ?? -Infinity));
-    const working = top == null ? sets : sets.filter((s) => (s.actualWeight ?? -Infinity) >= top);
-    out.push({ weight: top, repsPerSet: working.map((s) => s.actualReps) });
-  }
-  return out;
-}
-
-/**
- * The next prescription for an exercise. `seedWeight` is the cold-start load (null for
- * bodyweight); `bottomReps` is the caller's per-goal working-rep target (the range bottom).
- */
-export function prescribe(
-  exerciseId: string,
-  seedWeight: number | null,
-  bottomReps: number,
-  history: Session[],
-): Prescription {
-  const ex = exerciseById(exerciseId);
-  const hold = (weight: number | null, reps: number): Prescription => ({
-    weight,
-    reps,
-    increased: false,
-    decreased: false,
-  });
-  if (!ex) return hold(seedWeight, bottomReps);
-
-  const rule = progressionRule(exerciseId);
-  const top = bottomReps + RANGE_SPREAD[ex.tier];
-  const perfs = performances(exerciseId, history);
-  const last = perfs[0];
-
-  // ── Bodyweight: progress reps toward the ceiling, then surface a harder variation ──
-  if (rule.mode === 'reps') {
-    if (!last) return hold(null, bottomReps);
-    const ceiling = rule.repCeiling ?? top;
-    const minReps = last.repsPerSet.length ? Math.min(...last.repsPerSet) : bottomReps;
-    if (minReps >= ceiling) return { ...hold(null, ceiling), variationHint: rule.harder };
-    return hold(null, Math.max(bottomReps, Math.min(ceiling, minReps + 1)));
-  }
-
-  // ── Weighted: equipment-aware double progression ──
-  const step = rule.loadStepKg ?? LOAD_STEP_KG[ex.equipment];
-  if (!last) return hold(seedWeight, bottomReps);
-  const lastW = last.weight ?? seedWeight ?? step;
-
-  if (last.repsPerSet.length && last.repsPerSet.every((r) => r >= top)) {
-    return { weight: lastW + step, reps: bottomReps, increased: true, decreased: false, deltaKg: step };
-  }
-
-  const missedBottom = (p?: Performance) =>
-    !!p && p.repsPerSet.length > 0 && p.repsPerSet.some((r) => r < bottomReps);
-  if (missedBottom(last) && missedBottom(perfs[1])) {
-    return {
-      weight: Math.max(step, lastW - step),
-      reps: bottomReps,
-      increased: false,
-      decreased: true,
-      deltaKg: step,
-    };
-  }
-
-  // Mid-range (or a single miss): hold the load and chase the top next time.
-  return hold(lastW, bottomReps);
-}
 
 // ─────────────────────── Capability Portrait, computed from real history ───────────────────────
 // The Portrait's bars are RELATIVE strength (0–1) per capability: the athlete's best estimated

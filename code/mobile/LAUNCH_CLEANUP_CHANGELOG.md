@@ -52,3 +52,25 @@ so it is undeployable/unmaintainable.
 
 Implications (accepted): no server-side research telemetry / crash reports, no server identity, and
 account deletion is local-only until a v4 backend is built. All restorable by re-adding the URL.
+
+## 4. Remove the legacy rollback engine (v4 is the sole engine)
+**Founder decision (2026-06-24):** no second engine path remains. The v4 engine in `src/engine/v4`
+is the single source of every prescription. Removed:
+
+- `src/engine/v4/flag.ts` — deleted the `isV4Enabled`/`setV4Enabled` feature flag.
+- `src/data/progression.ts` — removed `prescribe()` (legacy equipment-aware double progression) and
+  its helpers (`Prescription`, `Performance`, `performances`, `RANGE_SPREAD`). **Kept** `computePortrait`
+  and the Portrait math (still used by `portraitSnapshot`).
+- `src/data/api/fixtureModel.ts` — removed the flag-OFF branch in `generateProgram` and
+  `sessionTargets`; v4 now always seeds slots and sources targets. Dropped the now-unused
+  `CALIBRATION_SESSIONS` constant and the legacy per-set `reasonType`/`forecast` voice (v4 surfaces
+  "why" via the Weekly Update, not per-set targets — this voice was already dead in production with
+  the flag ON).
+- `src/app/Root.tsx`, `src/screens/dev/V4Debug.tsx` — dropped the flag import; the weekly notification
+  always routes to the v4 Weekly Update; the debug screen no longer prints a flag state.
+- Tests: deleted `progression.test.ts` (tested `prescribe`) and `fixtureAdvisory.test.ts` (tested the
+  removed legacy advisory voice). Dropped flag toggling from `v4_integration`, `v4_sims`,
+  `programCoverage`, and removed the "flag OFF" integration block. Added `beforeEach(db.clearAll)` to
+  `programCoverage` (v4 persists slot state, so the cold-start fallback tests now need isolation).
+
+Verification: tsc clean, jest 437/437 (49 suites), `expo export --platform ios` clean.

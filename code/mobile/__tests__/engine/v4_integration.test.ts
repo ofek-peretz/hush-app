@@ -1,10 +1,8 @@
 /**
- * Phase 7b — gated live integration: with the v4 flag ON, fixtureModel sources prescriptions from
- * the durable per-slot engine state, advancing at week rollover. Flag OFF is covered by the existing
- * suite (unchanged behavior). This proves the wiring end-to-end.
+ * Phase 7b — live integration: fixtureModel sources prescriptions from the durable per-slot v4
+ * engine state, advancing at week rollover. This proves the wiring end-to-end.
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
-import { setV4Enabled } from '@/engine/v4/flag';
 import { deriveSlots, getWeeklyUpdate } from '@/engine/v4/v4Engine';
 import type { SlotState } from '@/engine/v4/types';
 import { db } from '@/data/local/db';
@@ -24,9 +22,7 @@ const profile: Profile = {
 beforeEach(async () => {
   await db.clearAll();
   await db.saveProfile(profile);
-  setV4Enabled(true);
 });
-afterAll(() => setV4Enabled(false));
 
 async function targetWeight(exerciseId: string): Promise<number | null> {
   const targets = await fixtureModel.sessionTargets({ programDayId: 'day_0', completedSessions: 0 });
@@ -161,14 +157,5 @@ describe('goal change applies the C4-1 transition (rep range/target + load recom
     expect(bench.rep_target).toBe(5);
     expect(bench.calibrating).toBe(false); // NOT a new-athlete path (C4-1)
     expect(bench.current_load_kg).toBeGreaterThan(0); // recomputed from demonstrated, seed not consulted
-  });
-});
-
-describe('flag OFF restores the existing double-progression path', () => {
-  it('does not read v4 slot state when disabled', async () => {
-    setV4Enabled(false);
-    await fixtureModel.generateProgram(profile);
-    const targets = await fixtureModel.sessionTargets({ programDayId: 'day_0', completedSessions: 0 });
-    expect(targets.find((t) => t.exerciseId === 'bb_bench_press')).toBeTruthy();
   });
 });

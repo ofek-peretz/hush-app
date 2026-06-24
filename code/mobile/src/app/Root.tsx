@@ -44,7 +44,6 @@ import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
 import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { V4Debug } from '@/screens/dev/V4Debug';
-import { isV4Enabled } from '@/engine/v4/flag';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -103,7 +102,7 @@ function routeNotificationIntent(intent: NotificationIntent | null, enrolled: bo
   if (!intent || !enrolled) return;
   void track('notification_opened', { kind: intent.kind });
   // v4: the weekly notification opens the Weekly Update (what changed + Why); legacy path → Program.
-  if (intent.kind === 'weekly_program_ready') navigateMain(isV4Enabled() ? 'WeeklyUpdate' : 'Program'); // 1.20
+  if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate'); // 1.20 (v4 Weekly Update + Why)
   else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
 }
 
