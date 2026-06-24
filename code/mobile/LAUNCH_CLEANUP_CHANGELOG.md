@@ -191,3 +191,15 @@ driven by the every-12-weeks local notification (`notifier.scheduleQuarterlyRepo
 - `__tests__/flows/progressReport.test.ts` — removed the `isQuarterlyReportDue` suite + import.
 
 No behavior change (the report cadence is the notification, not this gate).
+
+## 13. Remove the unused `expo-sqlite` dependency
+**Founder decision (2026-06-24):** drop it if unused — it is. `expo-sqlite` was imported by no
+source file (it appeared only in a `db.ts` comment as a hypothetical future swap) and was in no
+`app.json`/EAS config. `db.ts` runs entirely on AsyncStorage.
+
+- `npm uninstall expo-sqlite` — removed from `package.json`, `package-lock.json`, and
+  `node_modules` (also slims the native build, which would otherwise autolink the unused module).
+- `db.ts` — reworded the storage-backend comment to drop the specific package name (the
+  swap-the-backend-later intent stands; "e.g. SQLite").
+
+No behavior change.

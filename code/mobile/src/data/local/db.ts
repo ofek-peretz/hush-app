@@ -1,8 +1,8 @@
 /**
  * Local persistence — the offline source of truth (UX §6, spec §8.4).
  *
- * M1 uses AsyncStorage behind this repo interface; it can be swapped for
- * expo-sqlite later without touching callers. Per-set actuals are persisted at
+ * Uses AsyncStorage behind this repo interface; it can be swapped for a durable
+ * store (e.g. SQLite) later without touching callers. Per-set actuals are persisted at
  * each Complete Set (not at session end) so a killed app resumes from the last
  * persisted set (§7.4). Logged actuals are immutable (§9 law 17).
  */
