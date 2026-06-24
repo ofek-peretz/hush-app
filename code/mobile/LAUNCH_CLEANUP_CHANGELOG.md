@@ -156,3 +156,13 @@ only; the frozen `engine/v4` is left untouched):
 - `data/api/fixtureModel.ts` — renamed an unused `.map((s, i) => i)` param to `_s`.
 
 Why: unused bindings are lint noise that obscures real usage. No behavior change.
+
+## 10. Remove unwired placeholder haptics
+**Founder decision (2026-06-24):** the full rest-timer haptics experience will be designed later as
+a dedicated UX feature; the current placeholder impls are unwired dead scaffolding. Removed from
+`platform/haptics.ts` the two haptics that no screen ever called:
+
+- `timerComplete` (Light Impact on rest 00:00) and `startWorkout` (Medium Impact on the Home Start
+  press) — neither was imported anywhere. Kept `wellDone`, the only wired haptic (Well Done screen).
+
+No behavior change (the removed functions never fired).
