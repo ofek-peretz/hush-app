@@ -15,16 +15,9 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://hush-api.fly.dev"
       }
     },
-    "production": {
-      "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://hush-api.fly.dev"
-      }
-    }
+    "production": {}
   },
   "submit": {
     "production": {

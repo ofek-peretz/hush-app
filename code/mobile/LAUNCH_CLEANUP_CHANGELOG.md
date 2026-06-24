@@ -32,3 +32,23 @@ Updated misleading comments that still named features removed in the v4 migratio
 - `data/api/httpClient.ts` — header comment no longer points at the removed `programChanges` model-client method; notes the v4 Weekly Update is the live surface.
 
 Why: comments that name deleted features mislead the next reader during launch hardening.
+
+## 3. Launch on-device only (production runs the v4 engine)
+**Founder decision (2026-06-24):** the launch build runs entirely on-device on the v4 engine.
+
+Root cause fixed: production `eas.json` set `EXPO_PUBLIC_API_BASE_URL=https://hush-api.fly.dev`, so
+onboarding's `selfEnroll` adopted a server token and `selectModel()` switched the app to
+`HttpModelClient` — which does NOT use the v4 engine (v4 only runs on the on-device `fixtureModel`
+path). A production build therefore would have run the deployed server engine, bypassing v4 — and that
+backend's source was deleted in `2e8e21f` (along with the `build/_assembled` inputs `fly.toml` needs),
+so it is undeployable/unmaintainable.
+
+- `code/mobile/eas.json` — removed the `EXPO_PUBLIC_API_BASE_URL` env from the `preview` and
+  `production` profiles. With no base URL, `selectModel()` always picks `fixtureModel` (→ v4),
+  `selfEnroll` short-circuits, telemetry buffers locally (no sink), and Delete Account is a local wipe.
+- Moved the dead Fly.io deploy stack to `reference/` (`reference/fly.toml`, `reference/deploy/`) — it
+  references deleted build inputs and cannot build; preserved as topology for a future v4 backend.
+  Documented in `reference/backend/README.md`.
+
+Implications (accepted): no server-side research telemetry / crash reports, no server identity, and
+account deletion is local-only until a v4 backend is built. All restorable by re-adding the URL.

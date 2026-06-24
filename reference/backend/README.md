@@ -22,3 +22,11 @@ erasure, week_plan) — is documented and **classified** in `V4_LEGACY_DATA_AUDI
 `schema.py`, which also defined the now-removed Bayesian latent tables).
 
 **Nothing here is wired into the app.** It is reference material for if/when a v4 backend is built.
+
+### Deployment scaffolding (`reference/deploy/`, `reference/fly.toml`)
+The Fly.io deploy stack was moved here (2026-06-24) because it is now **non-functional**: its build
+inputs (`build/_assembled/*`, the `implementation/` API runtime) were deleted in the decommission, so
+`fly.toml` + `deploy/Dockerfile` can no longer build. The launch app runs **entirely on-device** (the
+v4 engine via the local fixture; `EXPO_PUBLIC_API_BASE_URL` was removed from the EAS preview/production
+profiles), so no server is deployed. These files (Dockerfile, Caddyfile, entrypoint, encrypted-backup
+script, compose, smoke test, OpenAPI) are kept as the reusable topology for a future v4 backend.
