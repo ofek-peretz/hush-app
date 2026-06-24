@@ -6,7 +6,7 @@
 import i18next, { type i18n as I18nType } from 'i18next';
 import en from '@/i18n/locales/en.json';
 import type { Capability, PortraitSnapshot } from '@/data/local/models';
-import { commitmentLine, compareProof } from '@/domain/portrait';
+import { compareProof } from '@/domain/portrait';
 
 function snap(per: Record<Capability, number>, conf: Record<Capability, number>, ts: string): PortraitSnapshot {
   const stillLearning = Object.fromEntries(
@@ -40,16 +40,6 @@ const unlock = snap(
 );
 
 describe('resolved Portrait copy', () => {
-  it('commitment names strongest + most-untapped, horizonless (no timing)', () => {
-    expect(line(commitmentLine(unlock))).toBe(
-      "Your squat is the strongest thing about you. Your horizontal pull is the most untapped. I'm building around closing that gap.",
-    );
-  });
-
-  it('receipt copy is the loud-when-right line, no timeframe', () => {
-    expect(i18n.t('portrait.receiptClosed')).toBe('This was your weakest. Told you.');
-  });
-
   it('compare proof is a plain factual sentence with NO timeframe', () => {
     const text = line(compareProof(baseline, unlock));
     expect(text).toContain('hip hinge');

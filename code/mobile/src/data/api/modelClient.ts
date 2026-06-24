@@ -70,7 +70,7 @@ export interface ModelClient {
 
   /**
    * Resolve advisory targets for the next session of a program day. During
-   * calibration these are conservative with NO reason/forecast attached — the
+   * calibration these are conservative with NO reason line attached — the
    * model owns that gating (spec §5.6, §2.3). The app renders what it gets.
    */
   sessionTargets(args: {

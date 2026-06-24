@@ -9,7 +9,6 @@ import {
   laggingConfident,
   isStillLearning,
   compareProof,
-  commitmentLine,
   barFraction,
 } from '@/domain/portrait';
 
@@ -49,13 +48,6 @@ describe('strength selection (confident only)', () => {
   });
   it('lagging is the weakest confident capability', () => {
     expect(laggingConfident(unlock)).toBe('horizontal_pull');
-  });
-  it('commitment line is null when nothing is confident yet', () => {
-    const early = snap(
-      { horizontal_push: 0.3, horizontal_pull: 0.3, vertical_push: 0.3, knee_dominant: 0.3, hip_dominant: 0.3 },
-      { horizontal_push: 10, horizontal_pull: 10, vertical_push: 10, knee_dominant: 10, hip_dominant: 10 },
-    );
-    expect(commitmentLine(early)).toBeNull();
   });
 });
 

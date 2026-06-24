@@ -9,7 +9,7 @@ import {
   CALIBRATION_SESSIONS,
   type AthleteModeState,
 } from '@/state/machines/athleteMode';
-import { canSpeak, mayShowReason, mayForecast, mayHardNo } from '@/domain/modeGate';
+import { canSpeak, mayShowReason, mayHardNo } from '@/domain/modeGate';
 
 function onboardToCalibrating(): AthleteModeState {
   let s = initialAthleteModeState;
@@ -24,7 +24,6 @@ describe('mode gate', () => {
     for (const mode of ['UNAUTH', 'AUTHED', 'ONBOARDING', 'CALIBRATING'] as const) {
       expect(canSpeak(mode)).toBe(false);
       expect(mayShowReason(mode)).toBe(false);
-      expect(mayForecast(mode)).toBe(false);
       expect(mayHardNo(mode)).toBe(false);
     }
   });

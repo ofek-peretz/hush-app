@@ -3,13 +3,10 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Capability, ForecastRecord, OnboardingInputs, PortraitSnapshot, Profile, Program, SetLog, Units, WeeklyVolume } from '@/data/local/models';
+import type { OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
-import { buildPortraitForecast } from '@/domain/portrait';
-import { resolveHold, resolvePortrait, resolvePortraitForecasts } from '@/domain/receiptRules';
 import { shouldReanchorWeekly } from '@/domain/schedule';
 import { CONSENT_VERSION } from '@/domain/consent';
-import type { Line } from '@/domain/voice';
 import {
   athleteModeReducer,
   didUnlockPortrait,
@@ -71,24 +68,20 @@ interface AppState {
   modeState: AthleteModeState;
   justUnlockedPortrait: boolean; // one-shot flag consumed by the Well Done → Portrait route
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
-  forecasts: ForecastRecord[]; // the asymmetry engine (spec §8.4)
-  pendingPortraitReceipt: { capability: Capability } | null; // set on a HIT; resurfaces Portrait in Compare
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
   revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
   weekRest: boolean; // Weekly Program Container: week complete → Home shows the existing Rest state
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; recents: string[] }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[] }
   | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[] }
   | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[] }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
-  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[]; forecasts: ForecastRecord[]; portraitReceipt: { capability: Capability } | null }
+  | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[] }
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
-  | { type: 'FORECASTS'; forecasts: ForecastRecord[] }
-  | { type: 'PORTRAIT_RESOLVED'; forecasts: ForecastRecord[]; snapshots: PortraitSnapshot[]; receipt: { capability: Capability } | null }
+  | { type: 'PORTRAIT_RESOLVED'; snapshots: PortraitSnapshot[] }
   | { type: 'CLEAR_PORTRAIT_FLAG' }
-  | { type: 'CLEAR_PORTRAIT_RECEIPT' }
   | { type: 'WEEK_REST'; weekRest: boolean }
   | { type: 'REVOKED' }
   | { type: 'RESET' };
@@ -100,8 +93,6 @@ const initial: AppState = {
   modeState: initialAthleteModeState,
   justUnlockedPortrait: false,
   snapshots: [],
-  forecasts: [],
-  pendingPortraitReceipt: null,
   recents: [],
   revoked: false,
   weekRest: false,
@@ -110,7 +101,7 @@ const initial: AppState = {
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, forecasts: a.forecasts, recents: a.recents };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents };
     case 'ONBOARDED':
@@ -123,21 +114,15 @@ function reducer(s: AppState, a: Action): AppState {
         modeState: a.mode,
         justUnlockedPortrait: a.unlocked,
         snapshots: a.snapshots,
-        forecasts: a.forecasts,
-        pendingPortraitReceipt: a.portraitReceipt ?? s.pendingPortraitReceipt,
       };
     case 'CALIBRATION_SYNCED':
       // Reconcile to backend truth WITHOUT firing the one-time unlock animation
       // (that is a live-session moment, not a boot/reconcile moment).
       return { ...s, modeState: a.mode };
-    case 'FORECASTS':
-      return { ...s, forecasts: a.forecasts };
     case 'PORTRAIT_RESOLVED':
-      return { ...s, forecasts: a.forecasts, snapshots: a.snapshots, pendingPortraitReceipt: a.receipt ?? s.pendingPortraitReceipt };
+      return { ...s, snapshots: a.snapshots };
     case 'CLEAR_PORTRAIT_FLAG':
       return { ...s, justUnlockedPortrait: false };
-    case 'CLEAR_PORTRAIT_RECEIPT':
-      return { ...s, pendingPortraitReceipt: null };
     case 'WEEK_REST':
       return { ...s, weekRest: a.weekRest };
     case 'REVOKED':
@@ -166,21 +151,6 @@ interface AppApi extends AppState {
   completeOnboarding: (inputs: OnboardingInputs) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   clearPortraitFlag: () => void;
-  /** Create the Portrait's eight-week gap-closing forecast (on unlock dismissal). */
-  createPortraitForecast: () => Promise<void>;
-  /** Persist a delivered hold forecast as a durable PENDING record (#9). Idempotent
-   *  per capability: one outstanding hold per capability. */
-  issueHoldForecast: (seed: {
-    capability: Capability;
-    predictedValue: number;
-    predictedReps?: number;
-    dueSessionOrDate: string;
-  }) => Promise<void>;
-  /** Resolve any PENDING hold forecast for `capability` against a just-logged set.
-   *  Returns a receipt line ONLY on a HIT (the held weight was passed); otherwise
-   *  null and the forecast stays PENDING (horizonless, silent — the asymmetry). */
-  resolveHoldForecasts: (args: { capability: Capability; log: SetLog }) => Promise<Line | null>;
-  clearPortraitReceipt: () => void;
   /** Re-resolve today's session (session-at-a-time). Called on Home focus so a
    *  completed session gives way to the next composed one. */
   refreshProgram: () => Promise<void>;
@@ -209,8 +179,6 @@ interface AppApi extends AppState {
   deleteAccount: () => Promise<void>;
   /** __DEV__-only test harness: jump straight to the Portrait unlock state. */
   devUnlockPortrait: () => Promise<void>;
-  /** __DEV__-only test harness: resolve the pending Portrait forecast hit/miss. */
-  devResolvePortraitForecast: (success: boolean) => Promise<void>;
   model: ModelClient;
   /** Current (most recent) Portrait snapshot, or null pre-unlock. */
   currentSnapshot: PortraitSnapshot | null;
@@ -299,18 +267,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
       }
 
-      const [profile, program, persistedMode, snapshots, forecasts, recents] = await Promise.all([
+      const [profile, program, persistedMode, snapshots, recents] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
-        db.loadForecasts(),
         db.loadRecents(),
       ]);
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, forecasts, recents });
+      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents });
 
       // HealthKit (convenience-only) — silent bodyweight ingestion on boot. It is
       // NEVER a model input (it only proposes a value for the local Profile, which
@@ -459,116 +426,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await persistMode(next);
 
         let snapshots = state.snapshots;
-        // Read forecasts from the DB (source of truth), not the in-memory closure:
-        // completeSet may have just resolved/issued a hold this same set, and that
-        // write must not be clobbered by a stale list (matches the hold loop, #9).
-        let forecasts = await db.loadForecasts();
-        let portraitReceipt: { capability: Capability } | null = null;
-
-        // A snapshot is captured at EVERY program construction once the Portrait
-        // is live — the unlock session AND every session after it (§8.4). This is
-        // what gives the asymmetry engine the continuity to (a) resolve the
-        // standing gap-closing commitment and (b) detect threshold crossings on
-        // an ongoing basis — not just at unlock. Tolerates the B2 gap (no snap).
+        // A Portrait snapshot is captured at every session once the Portrait is live —
+        // the unlock session and every session after it (§8.4) — giving the capability
+        // trajectory its continuity. Tolerates the B2 gap (no snap).
         if (next.portrait === 'PORTRAIT_UNLOCKED') {
           const snap = await tryPortraitSnapshot(model, next.completedSessions);
           if (snap) {
             snapshots = await db.appendSnapshot(snap);
             emitCapabilitySnapshot(snap, unlocked ? 'unlock' : 'session', next.completedSessions);
-
-            // Resolve the standing Portrait commitment against the fresh snapshot
-            // (the production resolver). Loud once on a HIT — the receipt resurfaces
-            // the Portrait in Compare; silent on PENDING/VOID (the asymmetry).
-            const res = resolvePortraitForecasts(forecasts, snap);
-            if (res.changed) {
-              forecasts = res.forecasts;
-              await db.saveForecasts(forecasts);
-              if (res.receipt) {
-                portraitReceipt = res.receipt;
-                void track('forecast_resolved', { forecastType: 'portrait', capability: res.receipt.capability, hit: true });
-              }
-            }
           }
         }
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots, forecasts, portraitReceipt });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots });
         return { unlockedPortrait: unlocked };
       },
 
       clearPortraitFlag() {
         dispatch({ type: 'CLEAR_PORTRAIT_FLAG' });
-      },
-
-      // The commitment IS the forecast: on Portrait dismissal, stake an
-      // eight-week gap-closing claim on the weakest ACTIONABLE capability
-      // (spec §5.3 R9 — never on a low-confidence/still-learning capability).
-      // If Hush cannot make an actionable claim, it makes none (conviction or
-      // silence). Idempotent — never two outstanding Portrait forecasts.
-      async createPortraitForecast() {
-        const snap = state.snapshots[state.snapshots.length - 1];
-        if (!snap) return;
-        const alreadyPending = state.forecasts.some((f) => f.type === 'portrait' && f.state === 'PENDING');
-        if (alreadyPending) return;
-        const rec = buildPortraitForecast(snap, `pf_${Date.now()}`, new Date().toISOString());
-        if (!rec) return; // no actionable commitment -> silence
-        const forecasts = [...state.forecasts, rec];
-        await db.saveForecasts(forecasts);
-        void track('forecast_created', { forecastType: 'portrait', forecastId: rec.id, capability: rec.capability, predictedValue: rec.predictedValue });
-        dispatch({ type: 'FORECASTS', forecasts });
-      },
-
-      // Hold Receipt loop (#9). A hold forecast ("Holding here — you'll pass it")
-      // is staked when delivered and resolves on a LATER session, exactly like the
-      // other forecast types — that is how the hold earns authority. These read the
-      // DB as source of truth (not in-memory state) so a cross-session resolve is
-      // immune to a stale closure. Idempotent: never two outstanding holds for one
-      // capability.
-      async issueHoldForecast(seed) {
-        const all = await db.loadForecasts();
-        const alreadyPending = all.some(
-          (f) => f.type === 'hold' && f.capability === seed.capability && f.state === 'PENDING',
-        );
-        if (alreadyPending) return;
-        const rec: ForecastRecord = {
-          id: `hf_${seed.capability}_${Date.now()}`,
-          type: 'hold',
-          capability: seed.capability,
-          predictedValue: seed.predictedValue,
-          predictedReps: seed.predictedReps,
-          dueSessionOrDate: seed.dueSessionOrDate,
-          state: 'PENDING',
-        };
-        const forecasts = [...all, rec];
-        await db.saveForecasts(forecasts);
-        void track('forecast_created', { forecastType: 'hold', forecastId: rec.id, capability: rec.capability, predictedValue: rec.predictedValue });
-        dispatch({ type: 'FORECASTS', forecasts });
-      },
-
-      async resolveHoldForecasts({ capability, log }) {
-        const all = await db.loadForecasts();
-        const hasPending = all.some(
-          (f) => f.type === 'hold' && f.capability === capability && f.state === 'PENDING',
-        );
-        if (!hasPending) return null;
-        let receipt: Line | null = null;
-        let changed = false;
-        const forecasts = all.map((f) => {
-          if (!(f.type === 'hold' && f.capability === capability && f.state === 'PENDING')) return f;
-          const res = resolveHold(f, log);
-          if (res.state !== 'HIT') return f; // not passed → stays PENDING, silent (the asymmetry)
-          changed = true;
-          if (!receipt) receipt = res.receipt;
-          void track('forecast_resolved', { forecastId: f.id, forecastType: 'hold', capability: f.capability, hit: true });
-          return { ...f, state: 'HIT' as const };
-        });
-        if (changed) {
-          await db.saveForecasts(forecasts);
-          dispatch({ type: 'FORECASTS', forecasts });
-        }
-        return receipt;
-      },
-
-      clearPortraitReceipt() {
-        dispatch({ type: 'CLEAR_PORTRAIT_RECEIPT' });
       },
 
       async syncCalibration() {
@@ -617,7 +490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!snap) return; // still offline — heal on a later view
         const snapshots = await db.appendSnapshot(snap);
         emitCapabilitySnapshot(snap, 'heal', state.modeState.completedSessions);
-        dispatch({ type: 'PORTRAIT_RESOLVED', forecasts: state.forecasts, snapshots, receipt: null });
+        dispatch({ type: 'PORTRAIT_RESOLVED', snapshots });
       },
 
       async refreshProgram() {
@@ -768,38 +641,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snap = await model.portraitSnapshot({ completedSessions: next.completedSessions });
         const snapshots = await db.appendSnapshot(snap);
         await persistMode(next);
-        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots, forecasts: state.forecasts, portraitReceipt: null });
-      },
-
-      // Test harness only — never reachable in release. Fabricates a post-due
-      // snapshot to drive the forecast to a HIT or a MISS so the receipt loop
-      // (and the silent-on-miss asymmetry) can be reviewed without waiting eight
-      // weeks. Production resolves this at real program constructions.
-      async devResolvePortraitForecast(success: boolean) {
-        if (!__DEV__) return;
-        const rec = state.forecasts.find((f) => f.type === 'portrait' && f.state === 'PENDING');
-        const current = state.snapshots[state.snapshots.length - 1];
-        if (!rec || !current) return;
-
-        // Horizonless: a later snapshot where the gap is (or isn't) closed. A
-        // non-close stays PENDING (silent) — same observable outcome as before.
-        const future: PortraitSnapshot = {
-          timestamp: new Date().toISOString(),
-          perCapability: {
-            ...current.perCapability,
-            [rec.capability]: success ? rec.predictedValue + 0.05 : rec.predictedValue - 0.05,
-          },
-          confidence: { ...current.confidence },
-          stillLearning: { ...current.stillLearning },
-        };
-        const snapshots = await db.appendSnapshot(future);
-        const resolution = resolvePortrait(rec, future);
-        const forecasts = state.forecasts.map((f) =>
-          f.id === rec.id ? { ...f, state: resolution.state } : f,
-        );
-        await db.saveForecasts(forecasts);
-        const receipt = resolution.state === 'HIT' ? { capability: rec.capability } : null;
-        dispatch({ type: 'PORTRAIT_RESOLVED', forecasts, snapshots, receipt });
+        dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots });
       },
 
       async resetAccount() {

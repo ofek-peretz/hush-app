@@ -2,7 +2,7 @@
  * Athlete-Model mode machine (spec §6.1). One of two orthogonal machines.
  *
  * This machine is the SINGLE authority on whether Hush is allowed to speak.
- * Reason lines, forecasts, and hard-no are active only in ADVISORY (and L1).
+ * Reason lines and hard-no are active only in ADVISORY (and L1).
  * All are suppressed in CALIBRATING (spec §6.1, §5.6 R20).
  *
  * Calibration ends by COMPLETED SESSION COUNT, never by calendar (§7.1, R20):

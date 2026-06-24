@@ -7,7 +7,7 @@
  * defaults. "Ready" (endRest) is the only rest agency.
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { ForecastRecord, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
+import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, similarExercises, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
@@ -21,12 +21,9 @@ import {
   type SessionEvent,
   type SessionMachine,
 } from '@/state/machines/sessionState';
-import { resolveIncrease } from '@/domain/receiptRules';
-import type { Line } from '@/domain/voice';
-import { canSpeak } from '@/domain/modeGate';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
-import { LIVE_ACTIVITY_EVENTS, NOTIFICATION_EVENTS } from '@/platform/events';
+import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
 /** True if a failed sync is worth queuing for retry (transient), not a doomed payload. */
@@ -85,14 +82,11 @@ interface InternalState {
   plan: Step[];
   session: Session | null;
   machine: SessionMachine;
-  // A receipt earned on the previous set, to be shown ONCE on the next set
-  // (an increase forecast resolves same-session, §2.9). Loud only when right.
-  pendingReceipt: Line | null;
 }
 
 type Action =
   | { type: 'START'; plan: Step[]; session: Session; machine: SessionMachine }
-  | { type: 'LOG'; setLog: SetLog; session: Session; machine: SessionMachine; pendingReceipt: Line | null }
+  | { type: 'LOG'; setLog: SetLog; session: Session; machine: SessionMachine }
   | { type: 'MACHINE'; machine: SessionMachine }
   | { type: 'SWAP_PLAN'; plan: Step[] }
   | { type: 'END' };
@@ -100,15 +94,15 @@ type Action =
 function reducer(s: InternalState, a: Action): InternalState {
   switch (a.type) {
     case 'START':
-      return { plan: a.plan, session: a.session, machine: a.machine, pendingReceipt: null };
+      return { plan: a.plan, session: a.session, machine: a.machine };
     case 'LOG':
-      return { ...s, session: a.session, machine: a.machine, pendingReceipt: a.pendingReceipt };
+      return { ...s, session: a.session, machine: a.machine };
     case 'MACHINE':
       return { ...s, machine: a.machine };
     case 'SWAP_PLAN':
       return { ...s, plan: a.plan };
     case 'END':
-      return { plan: [], session: null, machine: initialSessionMachine(true), pendingReceipt: null };
+      return { plan: [], session: null, machine: initialSessionMachine(true) };
     default:
       return s;
   }
@@ -148,8 +142,6 @@ export interface SessionView {
   restSeconds: number;
   /** Epoch ms the active session started (for the rest-screen calorie estimate). */
   startedAtMs: number | null;
-  /** Receipt to show on the CURRENT set (earned by the previous set), once. */
-  receiptLine: Line | null;
   // actions
   start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
@@ -220,7 +212,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     plan: [],
     session: null,
     machine: initialSessionMachine(true),
-    pendingReceipt: null,
   });
   // Keep the latest session for synchronous persistence inside actions.
   const sessionRef = useRef<Session | null>(null);
@@ -449,8 +440,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
       restSeconds,
       startedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
-      // Show the earned receipt only on a presented set (never over rest).
-      receiptLine: displayPhase === 'SET_PRESENTED' ? state.pendingReceipt : null,
       // Equipment Occupied applies at the START of an exercise that has a later exercise to do.
       canMarkOccupied:
         displayPhase === 'SET_PRESENTED' &&
@@ -515,61 +504,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Persist the actual at each Complete Set (§8.4).
         await db.saveActiveSession(updated);
 
-        // Resolve forecasts against THIS set. The old pending receipt (shown on
-        // this set) is consumed; a new one may be earned for the next set.
-        // Asymmetry: a receipt only on a HIT (§5.4).
-        const speaking = canSpeak(app.modeState.mode);
         const capability = exerciseById(current.exerciseId)?.capability;
-        const fc = current.target.forecast;
 
-        // (a) Increase forecast resolves same-session (§2.9) — no durable record.
-        let increaseReceipt: Line | null = null;
-        if (speaking && fc?.type === 'increase') {
-          const rec: ForecastRecord = {
-            id: `fc_${current.globalIndex}`,
-            type: 'increase',
-            capability: fc.capability,
-            predictedValue: fc.predictedValue,
-            predictedReps: fc.predictedReps,
-            dueSessionOrDate: fc.dueSessionOrDate,
-            state: 'PENDING',
-          };
-          increaseReceipt = resolveIncrease(rec, setLog).receipt;
-        }
-
-        // (b) Hold forecast loop (#9) — durable, cross-session. Resolve any PENDING
-        // hold for this capability against the logged set FIRST (so a freshly-issued
-        // hold can never self-resolve), THEN stake a newly-delivered hold as PENDING.
-        let holdReceipt: Line | null = null;
-        if (speaking && capability) {
-          holdReceipt = await app.resolveHoldForecasts({ capability, log: setLog });
-          if (fc?.type === 'hold') {
-            await app.issueHoldForecast({
-              capability: fc.capability,
-              predictedValue: fc.predictedValue,
-              predictedReps: fc.predictedReps,
-              dueSessionOrDate: fc.dueSessionOrDate,
-            });
-          }
-        }
-
-        // At most one receipt surfaces per set; the same-session increase wins ties.
-        const pendingReceipt: Line | null = increaseReceipt ?? holdReceipt;
-        // Dataset capture: a receipt was earned + will surface in-session (receipts
-        // are NEVER notifications, §8.6 — captured here so delivery is in the dataset).
-        if (pendingReceipt) {
-          void track(NOTIFICATION_EVENTS.receiptSurfaced, {
-            sessionId: session.id,
-            capability,
-            kind: increaseReceipt ? 'increase' : 'hold',
-          });
-        }
-
-        // Decision + trust telemetry (alpha): structured per-set decision context,
-        // outcome, and override — enough to answer "was the model right?" later.
-        const decisionType = current.target.reasonType;
-        const forecastIssued = speaking && !!current.target.forecast;
-        const hit = speaking && fc?.type === 'increase' ? increaseReceipt != null : undefined;
+        // Per-set decision + outcome telemetry (alpha): structured context and the
+        // logged actual — enough to reconstruct the session later.
         void track('set_completed', {
           sessionId: session.id,
           exerciseId: current.exerciseId,
@@ -580,25 +518,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           actualWeight: setLog.actualWeight,
           actualReps: setLog.actualReps,
           override: setLog.edited,
-          decisionType,
-          forecastIssued,
-          hit,
+          decisionType: current.target.reasonType,
         });
         if (setLog.edited) void trackFirst('first_override');
-        if (speaking) {
-          if (decisionType === 'hold') {
-            void trackFirst('first_hold_encountered');
-            if (!setLog.edited) void trackFirst('first_hold_accepted');
-          }
-          if (forecastIssued) void trackFirst('first_forecast_delivered');
-          if (hit === true) {
-            void trackFirst('first_receipt_delivered');
-            void trackFirst('first_forecast_proven_correct');
-            void track('forecast_resolved', { sessionId: session.id, capability, hit: true });
-          } else if (hit === false) {
-            void track('forecast_resolved', { sessionId: session.id, capability, hit: false });
-          }
-        }
 
         const restSecondsForThis = current.lastSetOfExercise ? REST_TRANSITION_S : REST_INTER_S;
         const m = sessionReducer(
@@ -606,7 +528,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
         );
         sessionRef.current = updated;
-        dispatch({ type: 'LOG', setLog, session: updated, machine: m, pendingReceipt });
+        dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
         if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {

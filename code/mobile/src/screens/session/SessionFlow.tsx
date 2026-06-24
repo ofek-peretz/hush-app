@@ -287,9 +287,7 @@ function ActiveSet({
               </View>
             ) : null}
             {reason ? (
-              <Text style={styles.deltaCaption}>
-                {reason === 'hold' ? t('workout.holdingLast') : t('workout.vsLast')}
-              </Text>
+              <Text style={styles.deltaCaption}>{t('workout.vsLast')}</Text>
             ) : null}
             <Text style={styles.repsLine}>
               × {target.recommendedReps} <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
@@ -486,7 +484,7 @@ function Rest({
                   {nextWeight != null ? nextWeight : t('workout.bodyweight')}
                   {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
                 </Text>
-                {isTransition && nextDelta && nextDelta !== 'hold' ? (
+                {isTransition && nextDelta ? (
                   <View style={styles.upDelta}>
                     <LoadDelta
                       direction={nextDelta === 'increase' ? 'up' : 'down'}

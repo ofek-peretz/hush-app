@@ -226,36 +226,13 @@ export class HttpModelClient implements ModelClient {
 
     const out: SetTarget[] = [];
     for (const b of session.blocks) {
-      // Honest reason/forecast from the real recommendation (contract §12).
+      // Honest reason line from the real recommendation (contract §12) — increase/decrease only.
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
-      let forecast: SetTarget['forecast'];
       if (b.recommendation_id) {
         try {
           const why = await this.request<WhyResponse>('GET', `/recommendations/${b.recommendation_id}/why`);
-          const mapped = mapDecision(why);
-          reasonType = mapped.reasonType;
-          if (reasonType === 'increase' && mapped.increaseForecastReps != null) {
-            forecast = {
-              type: 'increase',
-              capability: toCapability(b.capability),
-              predictedValue: b.recommended_weight,
-              predictedReps: mapped.increaseForecastReps,
-              dueSessionOrDate: 'same-session',
-            };
-          }
-          // Hold carries a HORIZONLESS forecast ("You'll pass it.") — the held
-          // weight is what the athlete must later exceed (#9). dueSessionOrDate
-          // 'open' signals no deadline; it resolves on a future session.
-          if (reasonType === 'hold' && mapped.holdForecast) {
-            forecast = {
-              type: 'hold',
-              capability: toCapability(b.capability),
-              predictedValue: b.recommended_weight,
-              predictedReps: b.target_reps,
-              dueSessionOrDate: 'open',
-            };
-          }
+          reasonType = mapDecision(why).reasonType;
           if (reasonType === 'increase' || reasonType === 'decrease') {
             // C3: prefer the model's AUTHORITATIVE previous load (Δ = recommended − previous_weight);
             // fall back to the athlete's own last logged weight only when the model has no prior.
@@ -270,7 +247,7 @@ export class HttpModelClient implements ModelClient {
       }
 
       for (let s = 0; s < b.target_sets; s++) {
-        const first = s === 0; // reason/forecast on the first working set only (ratified)
+        const first = s === 0; // reason line on the first working set only (ratified)
         out.push({
           exerciseId: b.exercise,
           setIndex: s,
@@ -279,7 +256,6 @@ export class HttpModelClient implements ModelClient {
           recommendedReps: b.target_reps,
           reasonType: first ? reasonType : undefined,
           reasonDelta: first ? reasonDelta : undefined,
-          forecast: first ? forecast : undefined,
         });
       }
     }

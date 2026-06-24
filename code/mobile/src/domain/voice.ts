@@ -6,7 +6,7 @@
  * Returns i18n keys + params, never raw strings — the copy lives in en.json.
  */
 import type { AthleteMode, SetTarget } from '@/data/local/models';
-import { mayForecast, mayShowReason } from './modeGate';
+import { mayShowReason } from './modeGate';
 
 export interface Line {
   key: string;
@@ -24,8 +24,6 @@ export function reasonLine(mode: AthleteMode, target: SetTarget): Line | null {
   switch (target.reasonType) {
     case 'increase':
       return { key: 'workout.reasonIncrease', params: { delta: fmtDelta(target.reasonDelta) } };
-    case 'hold':
-      return { key: 'workout.reasonHold' };
     case 'decrease':
       return { key: 'workout.reasonDecrease', params: { delta: fmtDelta(target.reasonDelta) } };
   }
@@ -34,23 +32,6 @@ export function reasonLine(mode: AthleteMode, target: SetTarget): Line | null {
 /** Whether the weight value is tappable (a Reason Sheet exists only if a reason exists, §4.3). */
 export function weightHasReason(mode: AthleteMode, target: SetTarget): boolean {
   return reasonLine(mode, target) !== null;
-}
-
-/**
- * Forecast line (§4.7). Shown only when the model attached a forecast (which it
- * does only at actionable confidence, §5.3 R9) AND mode permits. Never hedged.
- */
-export function forecastLine(mode: AthleteMode, target: SetTarget): Line | null {
-  if (!mayForecast(mode) || !target.forecast) return null;
-  const f = target.forecast;
-  if (f.type === 'increase') {
-    return { key: 'workout.forecastIncrease', params: { reps: target.recommendedReps } };
-  }
-  if (f.type === 'hold') {
-    // Horizonless conviction (ratified 2026-06-14): no timing — "You'll pass it."
-    return { key: 'workout.forecastHold' };
-  }
-  return null; // frame-outcome forecast renders on Program, not the Workout Screen
 }
 
 function fmtDelta(delta?: number): string {

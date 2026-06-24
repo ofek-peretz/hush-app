@@ -74,3 +74,37 @@ is the single source of every prescription. Removed:
   `programCoverage` (v4 persists slot state, so the cold-start fallback tests now need isolation).
 
 Verification: tsc clean, jest 437/437 (49 suites), `expo export --platform ios` clean.
+
+## 5. Remove the Forecasts feature (prediction → react-don't-predict)
+**Founder decision (2026-06-24):** Forecasts is a prediction feature (not goal-tracking) and was
+already dead in the on-device v4 build — no producer of `SetTarget.forecast` on the v4 path, no
+caller of `createPortraitForecast` (the Portrait screen is gone), and the in-session receipt was
+rendered by no screen. Removed end-to-end:
+
+- **Data model** (`models.ts`): deleted `ForecastSeed`, `ForecastState`, `ForecastRecord`,
+  `SetTarget.forecast`, and the `'hold'` member of `ReasonType` (now `'increase' | 'decrease'`).
+- **Persistence** (`db.ts`): removed `db.forecasts` (`loadForecasts`/`saveForecasts`, the
+  `hush.forecasts` key).
+- **Logic**: deleted `domain/receiptRules.ts` (entirely forecast resolution); removed the forecast
+  exports from `domain/portrait.ts` (`buildPortraitForecast`, `forecastableLagging`,
+  `commitmentTargets`, `commitmentLine`, `ACTIONABLE_CONFIDENCE`) — kept the Portrait math
+  (`barFraction`, `strongestConfident`, `laggingConfident`, `isStillLearning`, `compareProof`, …);
+  removed `forecastLine` from `domain/voice.ts` and `mayForecast` from `domain/modeGate.ts`.
+- **Stores**: stripped all forecast paths from `appStore.tsx` (`forecasts` state, `pendingPortraitReceipt`,
+  `createPortraitForecast`, `issueHoldForecast`, `resolveHoldForecasts`, `clearPortraitReceipt`,
+  `devResolvePortraitForecast`, the portrait-forecast resolution in `recordSessionCompleted`) and
+  `sessionStore.tsx` (the increase/hold resolution block, `pendingReceipt`/`receiptLine`, the
+  `forecast_*`/`receipt_surfaced` telemetry). Kept Portrait snapshots, capability trajectory, and
+  the general `set_completed` event.
+- **HTTP adapter** (`httpClient.ts`, `decisionMap.ts`): dropped the forecast + `'hold'` mapping
+  (increase/decrease reason line only).
+- **Analytics** (`events.ts`): removed the `receipt_surfaced` event; the `forecast_created`/
+  `forecast_resolved`/`first_forecast_*`/`first_receipt_*`/`first_hold_*` track calls are gone.
+- **Copy** (`en.json`/`he.json`): removed `forecastIncrease`, `forecastHold`, `forecastFrame`,
+  `receiptClean`, `receiptWithReps`, `reasonHold`, `holdingLast`, `portrait.commitment`,
+  `portrait.receiptClosed`.
+- **Tests**: deleted the pure-forecast suites (`portraitForecast`, `portraitProductionResolution`,
+  `receiptAsymmetry`); retargeted `decisionMap`, `advisoryVoice`, `calibrationSilence`,
+  `portraitLogic`, `portraitCopy` to the surviving reason/Portrait behavior.
+
+Verification: tsc clean, jest 412/412 (46 suites), copy-lint pass, `expo export --platform ios` clean.

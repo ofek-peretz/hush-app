@@ -49,9 +49,6 @@ export const NOTIFICATION_EVENTS = {
   canceled: 'notification_canceled',
   /** OS permission was denied, so nothing will be scheduled/delivered. */
   permissionDenied: 'notification_permission_denied',
-  /** An in-session receipt surfaced (receipts are NEVER notifications, §8.6 — but
-   *  the moment is captured here so the dataset records receipt delivery). */
-  receiptSurfaced: 'receipt_surfaced',
 } as const;
 
 /** Live Activity / Dynamic Island / Lock Screen — read-only mirror lifecycle. */

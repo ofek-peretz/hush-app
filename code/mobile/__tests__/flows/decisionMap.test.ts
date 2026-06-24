@@ -1,6 +1,7 @@
 /**
- * Real backend decision → client reason/forecast mapping (honest, no invention).
- * Vocabulary from sprint3a/decision.py.
+ * Real backend decision → client reason-line mapping (honest, no invention).
+ * Vocabulary from sprint3a/decision.py. Only a load CHANGE earns a reason line;
+ * every KEEP is silence. (No forecast/hold mapping — the Forecasts feature was removed.)
  */
 import { mapDecision, type WhyResponse } from '@/data/api/decisionMap';
 
@@ -19,44 +20,21 @@ function why(p: Partial<WhyResponse>): WhyResponse {
 }
 
 describe('reason line only on a real change', () => {
-  it('INCREASE_LOAD → increase reason + forecast at high confidence', () => {
-    const m = mapDecision(why({ decision_type: 'INCREASE_LOAD', prediction_confidence: 'high', target_reps: 6 }));
-    expect(m.reasonType).toBe('increase');
-    expect(m.increaseForecastReps).toBe(6);
+  it('INCREASE_LOAD → increase reason', () => {
+    expect(mapDecision(why({ decision_type: 'INCREASE_LOAD' })).reasonType).toBe('increase');
   });
 
-  it('INCREASE_LOAD at medium confidence → reason but NO forecast (not actionable)', () => {
-    const m = mapDecision(why({ decision_type: 'INCREASE_LOAD', prediction_confidence: 'medium' }));
-    expect(m.reasonType).toBe('increase');
-    expect(m.increaseForecastReps).toBeUndefined();
+  it('DECREASE_LOAD → decrease reason', () => {
+    expect(mapDecision(why({ decision_type: 'DECREASE_LOAD' })).reasonType).toBe('decrease');
   });
 
-  it('DECREASE_LOAD → decrease reason, never a forecast (R11)', () => {
-    const m = mapDecision(why({ decision_type: 'DECREASE_LOAD' }));
-    expect(m.reasonType).toBe('decrease');
-    expect(m.increaseForecastReps).toBeUndefined();
-  });
-
-  it('KEEP_LOAD + fatigue_hold at high confidence → hold reason + horizonless forecast (#9)', () => {
-    const m = mapDecision(why({ decision_type: 'KEEP_LOAD', decision_reason: 'fatigue_hold:reps_reduced,load_held', prediction_confidence: 'high' }));
-    expect(m.reasonType).toBe('hold');
-    expect(m.holdForecast).toBe(true);
-  });
-
-  it('KEEP_LOAD + fatigue_hold at medium confidence → hold reason but NO forecast (not actionable)', () => {
-    const m = mapDecision(why({ decision_type: 'KEEP_LOAD', decision_reason: 'fatigue_hold:load_held', prediction_confidence: 'medium' }));
-    expect(m.reasonType).toBe('hold');
-    expect(m.holdForecast).toBeFalsy();
-  });
-
-  it('KEEP_LOAD default/low-confidence/conflict → SILENCE (no reason)', () => {
-    for (const r of ['keep_load:default', 'keep_load:low_confidence', 'keep_load:evidence_conflict']) {
+  it('KEEP_LOAD (any reason, including fatigue_hold) → SILENCE (no reason)', () => {
+    for (const r of ['keep_load:default', 'keep_load:low_confidence', 'keep_load:evidence_conflict', 'fatigue_hold:load_held', 'working_set:target+RIR']) {
       expect(mapDecision(why({ decision_type: 'KEEP_LOAD', decision_reason: r })).reasonType).toBeUndefined();
     }
   });
 
-  it('working_set seed and signal-only types → silence', () => {
-    expect(mapDecision(why({ decision_type: 'KEEP_LOAD', decision_reason: 'working_set:target+RIR' })).reasonType).toBeUndefined();
+  it('signal-only types → silence', () => {
     expect(mapDecision(why({ decision_type: 'REPLACE_EXERCISE' })).reasonType).toBeUndefined();
     expect(mapDecision(why({ decision_type: 'CHANGE_STRATEGY' })).reasonType).toBeUndefined();
   });

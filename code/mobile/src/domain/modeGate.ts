@@ -2,9 +2,9 @@
  * Mode gate — the structural boundary that makes Hush silent in calibration
  * (spec §5.2 R5/R6, §5.6 R20, §6.1).
  *
- * Reason lines, forecasts, and hard-no are STRUCTURALLY impossible to render
- * outside ADVISORY / ADVISORY_AUTOPILOT_L1. Every voice surface routes through
- * here so the law cannot be bypassed screen by screen.
+ * Reason lines and hard-no are STRUCTURALLY impossible to render outside
+ * ADVISORY / ADVISORY_AUTOPILOT_L1. Every voice surface routes through here so
+ * the law cannot be bypassed screen by screen.
  */
 import type { AthleteMode } from '@/data/local/models';
 
@@ -15,11 +15,6 @@ export function canSpeak(mode: AthleteMode): boolean {
 
 /** Reason lines (§5.2): only on a changed set, only in ADVISORY. Never in CALIBRATING. */
 export function mayShowReason(mode: AthleteMode): boolean {
-  return canSpeak(mode);
-}
-
-/** Forecasts (§5.3 R9/R10): only outside calibration, only at actionable confidence. */
-export function mayForecast(mode: AthleteMode): boolean {
   return canSpeak(mode);
 }
 

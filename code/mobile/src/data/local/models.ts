@@ -98,7 +98,7 @@ export interface Program {
 }
 
 /** Reason types Hush may attach to a changed set (spec §4.4). */
-export type ReasonType = 'increase' | 'hold' | 'decrease';
+export type ReasonType = 'increase' | 'decrease';
 
 /** A model-provided target for one set of one exercise. */
 export interface SetTarget {
@@ -110,27 +110,6 @@ export interface SetTarget {
   recommendedReps: number;
   reasonType?: ReasonType; // present only on a changed set, ADVISORY only
   reasonDelta?: number; // for increase/decrease copy
-  // Forecast attached to this set, if model is at actionable confidence (§4.7).
-  forecast?: ForecastSeed;
-}
-
-/** Forecast as authored by the model before it is persisted as a record. */
-export interface ForecastSeed {
-  // 'portrait' = the Capability Portrait's eight-week gap-closing commitment.
-  type: 'increase' | 'hold' | 'frame' | 'portrait';
-  capability: Capability;
-  predictedValue: number; // weight
-  predictedReps?: number;
-  dueSessionOrDate: string; // session id or ISO date (holds/frames)
-  weeks?: number; // for "pass it in N weeks" / frame outcome copy
-}
-
-export type ForecastState = 'PENDING' | 'HIT' | 'MISS' | 'VOID';
-
-/** Persisted forecast record (spec §8.4 shape). */
-export interface ForecastRecord extends ForecastSeed {
-  id: string;
-  state: ForecastState;
 }
 
 /** A single logged set. Per-set actuals persisted at each Complete Set (§8.4). */

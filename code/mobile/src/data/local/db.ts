@@ -9,7 +9,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   AthleteMode,
-  ForecastRecord,
   PortraitSnapshot,
   PortraitState,
   Profile,
@@ -27,7 +26,6 @@ const K = {
   activeSession: 'hush.session.active',
   history: 'hush.history.sessions',
   snapshots: 'hush.portrait.snapshots',
-  forecasts: 'hush.forecasts',
   recents: 'hush.exercise.recents',
   pendingSync: 'hush.sync.pending',
   telemetry: 'hush.telemetry.buffer',
@@ -138,14 +136,6 @@ export const db = {
     all.push(s);
     await setJSON(K.snapshots, all);
     return all;
-  },
-
-  // ---- Forecast records (the asymmetry engine; spec §8.4) ----
-  async loadForecasts(): Promise<ForecastRecord[]> {
-    return (await getJSON<ForecastRecord[]>(K.forecasts)) ?? [];
-  },
-  async saveForecasts(all: ForecastRecord[]): Promise<void> {
-    await setJSON(K.forecasts, all);
   },
 
   // ---- Exercise recents ("Your exercises"); most-recent first (UX §1.6) ----
