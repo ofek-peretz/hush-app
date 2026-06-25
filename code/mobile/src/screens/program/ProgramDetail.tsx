@@ -1,27 +1,29 @@
 /**
- * Workout Edit (§4.20) — rebuilt 1:1 to the Claude Design "Design System" workout
- * sheet (ui_kits/app/Program.jsx → WorkoutSheet). The day's exercises as planned:
- * legend (muscle groups) → name → each exercise as an indexed ListRow (sets · reps)
- * with a Swap action that opens the Swap sheet (§4.21). The athlete owns exercise
- * SELECTION (swap/replace); the frozen model owns order, load, sets and reps.
+ * Workout detail (§4.20) — rebuilt 1:1 to the Claude Design WorkoutSheet
+ * (ui_kits/app/Program.jsx). The day's exercises as planned: muscle-group legend
+ * → name → intro ("Lock a lift…"). Each exercise is a row: a number badge that
+ * turns ochre when locked, the name, sets · reps, an inline LOCKED tag, and three
+ * actions — Form (the looping demo / silhouette guide), Lock (the pin), Swap.
  *
- * "Begin {name}" sets this workout as Home's offered workout (focusDayId) and
- * returns to Home — so the actual start stays on the canonical, Sunday-04:00-gated
- * Home path (identical to Home's "Choose another workout"), never bypassing it.
+ * The athlete owns exercise SELECTION (swap/replace) and the lock; the frozen
+ * model owns order, load, sets, reps — and may auto-swap only UNLOCKED slots.
+ * "Begin {name}" sets this as Home's offered workout and returns to Home, so the
+ * actual start stays on the canonical, Sunday-04:00-gated path.
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SwapSheet } from '@/components/SwapSheet';
+import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { Icon } from '@/components/Icon';
-import { Legend, ListRow, Button } from '@/components/ds';
+import { Legend, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { exerciseDisplayName } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
-import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProgramDetail'>;
@@ -38,6 +40,7 @@ export function ProgramDetail({ navigation, route }: Props) {
 
   const [targets, setTargets] = useState<SetTarget[]>([]);
   const [swapping, setSwapping] = useState<Swapping | null>(null);
+  const [formFor, setFormFor] = useState<number | null>(null);
   const [yoursNow, setYoursNow] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,6 +59,8 @@ export function ProgramDetail({ navigation, route }: Props) {
     setYoursNow(exerciseDisplayName(exerciseId));
     setSwapping(null);
   }
+
+  const formCues = [t('workout.formCue1'), t('workout.formCue2'), t('workout.formCue3')];
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -77,26 +82,63 @@ export function ProgramDetail({ navigation, route }: Props) {
 
       {!day ? null : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <Text style={styles.intro}>{t('program.lockIntro')}</Text>
           {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
 
-          {day.slots.map((slot, i) => (
-            <ListRow
-              key={`${slot.exerciseId}_${i}`}
-              index={i + 1}
-              title={exerciseDisplayName(slot.exerciseId)}
-              subtitle={t('program.setsReps', { sets: slot.setCount, reps: repsFor(slot.exerciseId) })}
-              last={i === day.slots.length - 1}
-              trailing={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  label={t('workout.swapAction')}
-                  leading={<Icon name="repeat" size={16} color={color.textPrimary} strokeWidth={2} />}
-                  onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId })}
-                />
-              }
-            />
-          ))}
+          {day.slots.map((slot, i) => {
+            const locked = slot.locked === true;
+            const lockable = slot.locked !== undefined;
+            return (
+              <View key={`${slot.exerciseId}_${i}`} style={[styles.lift, i === day.slots.length - 1 && styles.liftLast]}>
+                <View style={[styles.badge, locked && styles.badgeLocked]}>
+                  <Text style={[styles.badgeText, locked && styles.badgeTextLocked]}>{i + 1}</Text>
+                </View>
+                <View style={styles.liftBody}>
+                  <Text style={styles.liftName} numberOfLines={1}>{exerciseDisplayName(slot.exerciseId)}</Text>
+                  <View style={styles.liftMeta}>
+                    <Text style={styles.setsReps}>{t('program.setsReps', { sets: slot.setCount, reps: repsFor(slot.exerciseId) })}</Text>
+                    {locked ? (
+                      <View style={styles.lockedTag}>
+                        <Icon name="pin" size={12} color={color.accentText} strokeWidth={2} />
+                        <Text style={styles.lockedTagText}>{t('program.locked').toUpperCase()}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                <View style={styles.actions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workout.form')}
+                    onPress={() => setFormFor(i)}
+                    style={({ pressed }) => [styles.formBtn, pressed && styles.formBtnPressed]}
+                  >
+                    <Icon name="play" size={16} color={color.onAccent} />
+                  </Pressable>
+                  {lockable ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: locked }}
+                      accessibilityLabel={locked ? t('program.unlockExercise') : t('program.lockExercise')}
+                      onPress={() => void app.toggleSlotLock(day.id, i)}
+                      style={({ pressed }) => [styles.actionBtn, locked && styles.lockBtnOn, pressed && styles.actionBtnPressed]}
+                    >
+                      <Icon name="pin" size={17} color={locked ? color.accentText : color.textTertiary} strokeWidth={2} />
+                    </Pressable>
+                  ) : (
+                    <View style={styles.actionBtn} />
+                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workout.swapAction')}
+                    onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId })}
+                    style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+                  >
+                    <Icon name="repeat" size={17} color={color.textTertiary} strokeWidth={2} />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -114,10 +156,18 @@ export function ProgramDetail({ navigation, route }: Props) {
       ) : null}
 
       {swapping ? (
-        <SwapSheet
-          currentExerciseId={swapping.currentExerciseId}
-          onSelect={onSelectSwap}
-          onClose={() => setSwapping(null)}
+        <SwapSheet currentExerciseId={swapping.currentExerciseId} onSelect={onSelectSwap} onClose={() => setSwapping(null)} />
+      ) : null}
+
+      {day && formFor != null ? (
+        <ExerciseDemo
+          title={exerciseDisplayName(day.slots[formFor].exerciseId)}
+          exerciseId={day.slots[formFor].exerciseId}
+          cues={formCues}
+          focusLabel={t('workout.focusOn')}
+          formGuideLabel={t('workout.form')}
+          doneLabel={t('common.close')}
+          onDone={() => setFormFor(null)}
         />
       ) : null}
     </SafeAreaView>
@@ -131,6 +181,36 @@ const styles = StyleSheet.create({
   headTitles: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
   body: { paddingHorizontal: space.gutter, paddingBottom: 24 },
-  yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, paddingTop: 12, marginBottom: 4 },
+  intro: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20, paddingTop: 2, paddingBottom: 8 },
+  yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginBottom: 4 },
+
+  lift: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: color.border },
+  liftLast: { borderBottomWidth: 0 },
+  badge: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  badgeLocked: { borderColor: color.accent, backgroundColor: color.accentWash },
+  badgeText: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  badgeTextLocked: { color: color.accentText },
+  liftBody: { flex: 1, minWidth: 0 },
+  liftName: { fontFamily: font.sansMedium, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary },
+  liftMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 3 },
+  setsReps: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
+  lockedTag: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lockedTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.accentText },
+
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  formBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.textPrimary, alignItems: 'center', justifyContent: 'center' },
+  formBtnPressed: { backgroundColor: color.textSecondary },
+  actionBtn: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  actionBtnPressed: { backgroundColor: color.fillSubtle },
+  lockBtnOn: { backgroundColor: color.accentWash, borderWidth: 1, borderColor: color.accent },
+
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
 });

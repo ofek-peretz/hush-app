@@ -115,6 +115,10 @@ export interface ModelClient {
   }): Promise<void>;
   /** Clear the pin for a capability → the model selects again. */
   restoreExercisePreference(args: { capability: Capability }): Promise<void>;
+  /** Lock System: lock/unlock a slot (by its durable engine slotId) against engine-initiated
+   *  swaps. The lock belongs to the slot (survives regen + manual replacement); manual replacement
+   *  stays allowed. */
+  setSlotLock(args: { slotId: string; locked: boolean }): Promise<void>;
   /** Define (or remove) a persistent preferred substitute for an exercise. */
   setSubstitute(args: { primaryExercise: string; substituteExercise?: string; remove?: boolean }): Promise<void>;
   /** Define (or remove) an equipment-busy backup exercise. */

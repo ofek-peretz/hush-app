@@ -117,11 +117,15 @@ export function checkInvariants(result: PlanResult, ctx: InvariantCtx): string[]
     }
   }
 
-  // ── I-26 every emitted change carries a non-empty explanation ──
+  // ── I-26 every emitted change carries a non-empty explanation (each field is an
+  //    i18n line; the resolvable key is the non-empty content) ──
   for (const e of result.explanations) {
-    if (!e.observation || !e.conclusion || !e.action || !e.text) v.push(`I-26 empty explanation field (${e.slotId})`);
-    // I-27 reprice never says "fatigue" / never claims volume changed
-    if (e.text.toLowerCase().includes('fatigue')) v.push(`I-27 explanation says "fatigue" (${e.slotId})`);
+    if (!e.observation.key || !e.conclusion.key || !e.action.key || !e.text.key) {
+      v.push(`I-26 empty explanation field (${e.slotId})`);
+    }
+    // I-27 "never says fatigue / never claims volume changed" is now guaranteed at the
+    // COPY layer (no string lives in the engine): the forbidden-vocabulary copy test
+    // bans "fatigue" across all locales, and the reprice copy states sets are kept.
   }
 
   // ── Structural forbidden-concept guards (I-30..I-41) ──

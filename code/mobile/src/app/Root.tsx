@@ -40,9 +40,12 @@ import { Program } from '@/screens/program/Program';
 import { ProgramDetail } from '@/screens/program/ProgramDetail';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
+import { Cardio } from '@/screens/cardio/Cardio';
+import { CardioDetail } from '@/screens/cardio/CardioDetail';
 import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
 import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
+import { Paywall } from '@/screens/subscription/Paywall';
 import { V4Debug } from '@/screens/dev/V4Debug';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
@@ -89,9 +92,13 @@ function MainNavigator() {
       <MainStack.Screen name="ProgramDetail" component={ProgramDetail} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
+      {/* Open training (run / walk) — full-screen focus; fades in like the session flow. */}
+      <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+      <MainStack.Screen name="CardioDetail" component={CardioDetail} />
       <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
       <MainStack.Screen name="Progress" component={Progress} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
+      <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
       {__DEV__ && <MainStack.Screen name="V4Debug" component={V4Debug} />}
     </MainStack.Navigator>
   );

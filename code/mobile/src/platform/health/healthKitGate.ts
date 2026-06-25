@@ -9,8 +9,9 @@
  * result the stub produces (denial is a routed path, never an error — spec §7.11).
  *
  * Contract honored here (ratified OD, spec §10.3):
- *  - READ-ONLY: we request read access for bodyMass + distanceWalkingRunning and
- *    never write to Health (no `toShare`).
+ *  - READ-ONLY: we request read access for bodyMass ONLY (bodyweight import) and
+ *    never write to Health (no `toShare`). No activity / steps / distance / workout
+ *    scope is requested — HealthKit is bodyweight import, nothing else.
  *  - HealthKit is NOT a model input: this gate only surfaces values; the silent
  *    bodyweight adoption + telemetry live in `healthIngestion.ts`, feeding the
  *    Profile (display), never the ModelClient.
@@ -26,20 +27,18 @@ import {
   getMostRecentQuantitySample,
   getRequestStatusForAuthorization,
   isHealthDataAvailableAsync,
-  queryWorkoutSamples,
   requestAuthorization,
-  WorkoutActivityType,
 } from '@kingstinct/react-native-healthkit';
 import type { HealthGate } from '@/platform/health';
-import type { BodyweightSample, HealthPermissionState, WalkSample } from './healthModel';
+import type { BodyweightSample, HealthPermissionState } from './healthModel';
 
 // String-union identifiers (v14 dropped the enum). Read-only scopes only.
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
-const DISTANCE_WALKING_RUNNING = 'HKQuantityTypeIdentifierDistanceWalkingRunning';
 
-/** Read-only auth request — `toRead` only, never `toShare` (Hush never writes). */
+/** Read-only auth request — bodyweight ONLY, `toRead` only, never `toShare`
+ *  (Hush never writes, and reads nothing beyond bodyweight). */
 const READ_AUTH = {
-  toRead: [BODY_MASS, DISTANCE_WALKING_RUNNING],
+  toRead: [BODY_MASS],
 } as const;
 
 /** kilograms — the unit the Profile speaks. */
@@ -82,27 +81,5 @@ export const healthKitGate: HealthGate = {
 
   async latestBodyweightKg(): Promise<number | null> {
     return (await this.latestBodyweight())?.kg ?? null;
-  },
-
-  async recentWalks(): Promise<WalkSample[]> {
-    try {
-      // Query recent workouts and keep walks/runs (filtering in JS avoids a
-      // version-specific predicate shape). `duration`/`totalDistance` are Quantities.
-      const workouts = await queryWorkoutSamples({ limit: 50, ascending: false });
-      return workouts
-        .filter(
-          (w) =>
-            w.workoutActivityType === WorkoutActivityType.walking ||
-            w.workoutActivityType === WorkoutActivityType.running,
-        )
-        .map((w) => ({
-          id: w.uuid,
-          startedAt: w.startDate.toISOString(),
-          distanceMeters: w.totalDistance?.quantity ?? 0,
-          durationS: w.duration.quantity,
-        }));
-    } catch {
-      return [];
-    }
   },
 };

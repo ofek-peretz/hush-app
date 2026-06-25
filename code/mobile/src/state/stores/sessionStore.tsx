@@ -140,7 +140,7 @@ export interface SessionView {
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
   nextSetLabel: { n: number; m: number } | null;
   restSeconds: number;
-  /** Epoch ms the active session started (for the rest-screen calorie estimate). */
+  /** Epoch ms the active session started (drives the session elapsed-time label on the mirror). */
   startedAtMs: number | null;
   // actions
   start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;

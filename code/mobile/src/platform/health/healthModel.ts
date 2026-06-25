@@ -20,14 +20,6 @@ export interface BodyweightSample {
   recordedAt?: string;
 }
 
-/** A walk/run reading from Health (History → Walk Detail; never manual entry). */
-export interface WalkSample {
-  id: string;
-  startedAt: string; // ISO
-  distanceMeters: number;
-  durationS: number;
-}
-
 /** Durable record of the Health connection (persisted via db; see DataProtection). */
 export interface HealthState {
   permission: HealthPermissionState;

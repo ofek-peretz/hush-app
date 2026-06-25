@@ -73,6 +73,10 @@ export interface Slot {
   // progression target. One per week, 3 sets, placed last, preferring upper sessions.
   // Rendered like any slot; it just never drives capability load/progression.
   supplemental?: boolean;
+  // Lock System: the athlete locked this slot's exercise against engine-initiated swaps.
+  // Present (true/false) only on engine-managed, lockable slots; undefined on core /
+  // unmapped slots (which the engine never swaps anyway, so they cannot be locked).
+  locked?: boolean;
 }
 
 export interface ProgramDay {
@@ -164,10 +168,39 @@ export interface PortraitSnapshot {
 
 export type HistoryAnnotation = 'increased' | 'swapped' | 'ended_early' | null;
 
-export interface HistoryEvent {
-  id: string;
-  kind: 'workout' | 'walk';
-  timestamp: string;
-  annotation: HistoryAnnotation;
-  ref: string; // session id or health-activity id
+/* ----------------------------------------------------------------------------
+ * Cardio — "Open training" (run / walk). Recorded, NEVER coached. A deliberate
+ * departure from the rest of Hush: the v4 strength engine does not see any of
+ * this — it never influences load, progression, volume, frequency, exercise
+ * selection, or programming. Cardio activities are simply logged and surfaced
+ * in the single unified History timeline alongside strength sessions.
+ * -------------------------------------------------------------------------- */
+export type CardioGait = 'run' | 'walk';
+export type CardioGoalKind = 'open' | 'distance' | 'time';
+
+/** One kilometre split of a recorded cardio activity (pure data, never graded). */
+export interface CardioSplit {
+  km: number; // which kilometre (1-indexed)
+  durationSec: number; // seconds spent on this km
+  paceSec: number; // sec per km (this split)
+  gait: CardioGait; // gait held during this km
 }
+
+/** A recorded run/walk. Stored in History; opening it shows its own activity
+ *  details (distance, duration, pace, heart rate, calories) — no coaching. */
+export interface CardioActivity {
+  kind: 'cardio'; // discriminator in the unified History timeline
+  id: string;
+  gait: CardioGait; // the chosen mode
+  startedAt: string; // ISO
+  durationSec: number;
+  distanceKm: number;
+  avgPaceSec: number; // sec/km
+  avgHr?: number; // bpm — present only when a heart-rate source was available
+  calories?: number; // kcal — present only when estimable
+  splits: CardioSplit[];
+}
+
+/** Unified History timeline entry: a completed strength Session or a recorded
+ *  CardioActivity. Sessions are tagged `kind:'strength'` at merge time. */
+export type HistoryItem = ({ kind: 'strength' } & Session) | CardioActivity;

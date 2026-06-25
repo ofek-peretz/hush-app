@@ -13,6 +13,7 @@ import { useSession } from '@/state/stores/sessionStore';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
 import { trainingWeekNumber, isNextWeekLocked } from '@/domain/weekCadence';
+import { isTrainingGated } from '@/domain/entitlement';
 import { db } from '@/data/local/db';
 import type { SetTarget, Session } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
@@ -169,9 +170,17 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused, day?.id, resting]);
 
+  // Free-trial gate (Subscription + Apple Payments): once the free sessions are
+  // spent and no membership is active, starting another session opens the paywall.
+  const gated = isTrainingGated(app.modeState.completedSessions, app.entitlement.active);
+
   async function onStart() {
     if (!day) return;
     if (resting) return; // hard gate: the next week is locked until Sunday 04:00
+    if (gated) {
+      navigation.navigate('Paywall', { source: 'gate' });
+      return;
+    }
     setStartError(false);
     try {
       const targets =
@@ -217,6 +226,7 @@ export function Home({ navigation, route }: Props) {
       onHistory={() => navigation.navigate('History')}
       onSettings={() => navigation.navigate('ProfileSheet')}
       onProgress={() => navigation.navigate('Progress')}
+      onCardio={() => navigation.navigate('Cardio')}
     />
   );
 }

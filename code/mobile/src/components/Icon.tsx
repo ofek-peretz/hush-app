@@ -37,10 +37,16 @@ export type IconName =
   | 'trendingUp' // trending-up
   | 'layers' // layers
   | 'lock' // lock
+  | 'pin' // pin — "pinned / protected" (the lock affordance; not a security padlock)
+  | 'minus' // minus — calm "matched / held" verdict mark
   | 'circle' // circle-dashed (remaining workout)
   | 'dumbbell' // dumbbell (history)
   | 'shield' // shield-check (consent)
-  | 'heart'; // heart-pulse (health)
+  | 'heart' // heart-pulse (health)
+  | 'footprints' // footprints (Open training: run / walk)
+  | 'wind' // wind (walk mode)
+  | 'flag' // flag (finish a cardio activity)
+  | 'checkCheck'; // check-check (cardio recorded)
 
 interface Props {
   name: IconName;
@@ -249,6 +255,16 @@ function render(
           <Path d="M8 11V8a4 4 0 0 1 8 0v3" />
         </G>
       );
+    case 'pin':
+      // lucide `pin` — "pinned / protected", the calm lock affordance (not a padlock).
+      return (
+        <G {...common}>
+          <Path d="M12 17v5" />
+          <Path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+        </G>
+      );
+    case 'minus':
+      return <Line x1="5" y1="12" x2="19" y2="12" {...common} />;
     case 'circle':
       return <Circle cx="12" cy="12" r="8" {...common} strokeDasharray="3 3" />;
     case 'dumbbell':
@@ -270,6 +286,38 @@ function render(
         <G {...common}>
           <Path d="M12 20s-7-4.3-9.3-8.3C1.3 9 2.3 6 5.2 6c1.8 0 2.9 1 3.8 2.2C9.9 7 11 6 12.8 6c2.9 0 3.9 3 2.5 5.7" />
           <Path d="M3 13h4l2-3 2 5 2-3h6" />
+        </G>
+      );
+    case 'footprints':
+      // lucide `footprints` — two staggered footprints.
+      return (
+        <G {...common}>
+          <Path d="M4 16v-2.4a2 2 0 0 1 .6-1.5C5.3 11.4 6 10.3 6 8.5 6 6 5 4 6.5 4S9 6 9 8.5c0 1.6.4 3 .7 4.1.2.7-.4 1.4-1.1 1.4H5.2A1.2 1.2 0 0 0 4 15.2" />
+          <Path d="M20 20v-2.4a2 2 0 0 0-.6-1.5c-.7-.7-1.4-1.8-1.4-3.6 0-2.5 1-4.5-.5-4.5S15 10 15 12.5c0 1.6-.4 3-.7 4.1-.2.7.4 1.4 1.1 1.4h3.4a1.2 1.2 0 0 1 1.2 1.2" />
+        </G>
+      );
+    case 'wind':
+      // lucide `wind` — three streams of moving air.
+      return (
+        <G {...common}>
+          <Path d="M3 8h9a2.5 2.5 0 1 0-2.5-2.5" />
+          <Path d="M3 12h13a2.5 2.5 0 1 1-2.5 2.5" />
+          <Path d="M3 16h7a2 2 0 1 1-2 2" />
+        </G>
+      );
+    case 'flag':
+      // lucide `flag` — pole + pennant.
+      return (
+        <G {...common}>
+          <Path d="M5 21V4M5 4h11l-1.5 3.5L16 11H5" />
+        </G>
+      );
+    case 'checkCheck':
+      // lucide `check-check` — a doubled checkmark (recorded / saved).
+      return (
+        <G {...common}>
+          <Path d="M2 12.5l3.5 3.5L13 8" />
+          <Path d="M11 15l1 1 7.5-8" />
         </G>
       );
     default:

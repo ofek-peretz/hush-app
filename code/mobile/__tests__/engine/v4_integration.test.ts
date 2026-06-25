@@ -4,6 +4,7 @@
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { deriveSlots, getWeeklyUpdate } from '@/engine/v4/v4Engine';
+import { resolveLine } from '../helpers/resolveExplain';
 import type { SlotState } from '@/engine/v4/types';
 import { db } from '@/data/local/db';
 import type { Profile, Session, SetLog } from '@/data/local/models';
@@ -128,10 +129,10 @@ describe('Weekly Update surfaces explanations for real (post-calibration) change
     expect(update).not.toBeNull();
     const push = update!.explanations.find((e) => e.pattern === 'HORIZONTAL_PUSH');
     expect(push).toBeTruthy();
-    expect(push!.observation).not.toBe('');
-    expect(push!.conclusion).not.toBe('');
-    expect(push!.action).not.toBe('');
-    expect(push!.text.toLowerCase()).not.toContain('fatigue');
+    expect(resolveLine(push!.observation)).not.toBe('');
+    expect(resolveLine(push!.conclusion)).not.toBe('');
+    expect(resolveLine(push!.action)).not.toBe('');
+    expect(resolveLine(push!.text).toLowerCase()).not.toContain('fatigue');
   });
 });
 

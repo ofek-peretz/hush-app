@@ -8,7 +8,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { color, radius, control, space, font, textScale, shadow } from '@/design/tokens';
 
-type Option = string | { value: string; label: string };
+type Option = string | { value: string; label: string; icon?: React.ReactNode };
 
 interface Props {
   options: Option[];
@@ -35,6 +35,7 @@ export function SegmentedControl({ options, value, onChange, block, stack, size 
             onPress={() => onChange(o.value)}
             style={[styles.item, { minHeight: minH }, (block || stack) && styles.itemBlock, stack && styles.itemStack, active && styles.itemActive]}
           >
+            {o.icon ? <View style={styles.icon}>{o.icon}</View> : null}
             <Text
               style={[
                 styles.label,
@@ -65,11 +66,14 @@ const styles = StyleSheet.create({
   block: { alignSelf: 'stretch', width: '100%' },
   trackStack: { flexDirection: 'column', alignSelf: 'stretch', width: '100%' },
   item: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: space[2],
     paddingHorizontal: space[4],
     borderRadius: radius.sm,
   },
+  icon: { alignItems: 'center', justifyContent: 'center' },
   itemBlock: { flex: 1 },
   itemStack: { flex: 0, alignItems: 'flex-start', justifyContent: 'center', width: '100%' },
   itemActive: { backgroundColor: color.surface, ...(shadow.md as object) },

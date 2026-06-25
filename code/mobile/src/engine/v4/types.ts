@@ -104,14 +104,24 @@ export interface PlanSlot {
   order_index: number;
 }
 
-/** Every emitted change carries {observation, conclusion, action} + rendered text (I-26). */
+/** An i18n line: a key + params, resolved by the surface that renders it (never a
+ *  baked string) — so explanations obey the copy law and translate (mirrors
+ *  domain/voice `Line`). The engine emits these; the Weekly Update screen resolves
+ *  them through i18next, and they persist locale-independently. */
+export interface ExplanationLine {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
+/** Every emitted change carries {observation, conclusion, action} + a headline
+ *  (`text`), each an i18n line (I-26). */
 export interface Explanation {
   slotId: string;
   pattern: Pattern;
-  observation: string;
-  conclusion: string;
-  action: string;
-  text: string;
+  observation: ExplanationLine;
+  conclusion: ExplanationLine;
+  action: ExplanationLine;
+  text: ExplanationLine;
 }
 
 export interface PlanResult {

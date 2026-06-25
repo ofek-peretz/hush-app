@@ -16,7 +16,7 @@
  * everywhere (Expo Go / Windows / test).
  */
 import { Platform } from 'react-native';
-import type { BodyweightSample, HealthPermissionState, WalkSample } from './health/healthModel';
+import type { BodyweightSample, HealthPermissionState } from './health/healthModel';
 
 export interface HealthGate {
   /** Request read permission. Resolves true iff Health is readable afterward.
@@ -29,19 +29,6 @@ export interface HealthGate {
   latestBodyweightKg(): Promise<number | null>;
   /** Most-recent bodyweight sample (with timestamp) if connected, else null. */
   latestBodyweight(): Promise<BodyweightSample | null>;
-  /** Recent walk/run samples for History → Walk Detail; empty when none/unavailable. */
-  recentWalks(): Promise<WalkSample[]>;
-  /** Live workout vitals from the paired Apple Watch (heart rate + active energy),
-   *  shown on the rest screens (§3.4/§3.5; founder #7). OPTIONAL: requires a native
-   *  HealthKit workout session, so the stub + any build without it simply return
-   *  null and the rest screen hides the row. Never throws, never blocks the UI. */
-  workoutVitals?(): Promise<WorkoutVitals | null>;
-}
-
-/** A live vitals reading during an active workout (from the paired watch). */
-export interface WorkoutVitals {
-  heartRateBpm: number;
-  activeKcal: number;
 }
 
 /** v1 stub: reports unavailable, so onboarding routes through About You and the
@@ -59,19 +46,13 @@ export const healthStub: HealthGate = {
   async latestBodyweight() {
     return null;
   },
-  async recentWalks() {
-    return [];
-  },
-  async workoutVitals() {
-    return null; // no live source until the native HealthKit workout session lands
-  },
 };
 
 /**
  * Active Health provider — the single swap point.
  *
- * On iOS the HealthKit-backed gate (`health/healthKitGate.ts`, read-only bodyMass +
- * distanceWalkingRunning) is selected via a LAZY require so its native module is
+ * On iOS the HealthKit-backed gate (`health/healthKitGate.ts`, read-only bodyMass —
+ * bodyweight import only) is selected via a LAZY require so its native module is
  * only loaded on the platform that has it — web / Expo Go / test never touch it,
  * and a load failure (no native module / dev client without the build) falls back
  * to the stub. Everywhere else the stub is used, so onboarding routes through the

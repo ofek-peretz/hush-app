@@ -34,8 +34,8 @@ import type {
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { computePortrait } from '@/data/progression';
-import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets } from '@/engine/v4/v4Engine';
-import { db, type OwnedPreferences } from '@/data/local/db';
+import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, slotIdsByPosition } from '@/engine/v4/v4Engine';
+import { db, EMPTY_PREFERENCES, type OwnedPreferences } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import type { ActualSet, ModelClient } from './modelClient';
 
@@ -395,7 +395,7 @@ async function loadPreferencesSafe(): Promise<OwnedPreferences> {
   try {
     return await db.loadPreferences();
   } catch {
-    return { pinsByMuscle: {}, backups: {}, substitutes: {}, workoutOrder: [], exerciseOrderByWorkout: {} };
+    return { ...EMPTY_PREFERENCES };
   }
 }
 
@@ -444,11 +444,22 @@ export const fixtureModel: ModelClient = {
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     const program = { id: 'program_v1', frequency: n, days: ordered };
-    // v4: ensure durable per-slot engine state exists for this program (idempotent;
-    // preserves state across regen, honors athlete pins as locked manual replacements — C-1/C-7).
+    // Lock System: annotate each engine-managed slot with the athlete's lock state (for display +
+    // the per-slot toggle), keyed by the durable engine slotId. Core/unmapped slots stay unlocked.
+    const lockedSet = new Set(prefs.lockedSlots);
+    const idsByDay = slotIdsByPosition(program);
+    for (const day of program.days) {
+      const ids = idsByDay.get(day.id) ?? [];
+      day.slots.forEach((slot, i) => {
+        const sid = ids[i];
+        if (sid != null) slot.locked = lockedSet.has(sid);
+      });
+    }
+    // v4: ensure durable per-slot engine state exists for this program (idempotent; preserves state
+    // across regen). The locked set is the source of truth for slot.locked (Lock System).
     const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
     const history = await loadHistorySafe();
-    await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile)).catch(() => {});
+    await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile), lockedSet).catch(() => {});
     return program;
   },
 
@@ -464,7 +475,8 @@ export const fixtureModel: ModelClient = {
     const program = await db.loadProgram();
     const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
     const seedFor = (id: string) => seedForExercise(id, profile);
-    if (program) await maybeAdvance(program, eprofile, history, seedFor).catch(() => {});
+    const prefs = await loadPreferencesSafe(); // Lock System: locked slots gate engine swaps at rollover
+    if (program) await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots)).catch(() => {});
     const targets = await currentTargets().catch((): Record<string, { weight: number | null; reps: number }> => ({}));
     for (const ex of EXERCISES) {
       const t = targets[ex.id];
@@ -505,6 +517,16 @@ export const fixtureModel: ModelClient = {
       for (const muscle of Object.keys(p.pinsByMuscle)) {
         if (exercisesForMuscle(muscle as MuscleGroup)[0]?.capability === capability) delete p.pinsByMuscle[muscle];
       }
+    });
+  },
+  async setSlotLock({ slotId, locked }: { slotId: string; locked: boolean }) {
+    // Lock System: the lock belongs to the durable engine slotId, so it survives weekly
+    // regeneration and manual replacement. ensureSlots reconciles the engine state from this set.
+    await editPreferences((p) => {
+      const set = new Set(p.lockedSlots);
+      if (locked) set.add(slotId);
+      else set.delete(slotId);
+      p.lockedSlots = [...set];
     });
   },
   async setSubstitute({ primaryExercise, substituteExercise, remove }: { primaryExercise: string; substituteExercise?: string; remove?: boolean }) {

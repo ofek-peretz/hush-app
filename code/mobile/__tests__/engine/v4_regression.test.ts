@@ -4,6 +4,7 @@
  */
 import { planNextWeek, type PlanWeekInputs } from '@/engine/v4/planWeek';
 import { checkInvariants } from '@/engine/v4/invariants';
+import { resolveLine } from '../helpers/resolveExplain';
 import { demonstrated, epley, volumeLoad } from '@/engine/v4/reads';
 import type { SlotState, SlotResult, EngineProfile, GlobalState, WeekRecord } from '@/engine/v4/types';
 import type { ExerciseMeta } from '@/engine/v4/decisions';
@@ -75,7 +76,7 @@ describe('R-no-fatigue: noisy/decaying but target-hit week → no volume cut, no
     ]);
     const out = planNextWeek({ profile: profile(), slots: [s], global: { days_since_last_session: 3 }, results: [r], meta });
     expect(out.updated_slots[0].current_sets).toBe(8); // volume untouched
-    expect(out.explanations.every((e) => e.text.toLowerCase() !== 'deload')).toBe(true);
+    expect(out.explanations.every((e) => resolveLine(e.text).toLowerCase() !== 'deload')).toBe(true);
     expect(checkInvariants(out, ctxFor([r]))).toEqual([]);
   });
 });
@@ -90,7 +91,7 @@ describe('R-no-sustained-deload: one slot DOWN ≥3 wks while hitting target →
       const load = 80 - wk * 2;
       const r = result([{ load, reps: 5, failed: false }]);
       const out = planNextWeek({ profile: profile(), slots: [s], global: g, results: [r], meta });
-      expect(out.explanations.every((e) => e.observation.toLowerCase().indexOf('train around') === -1)).toBe(true);
+      expect(out.explanations.every((e) => resolveLine(e.observation).toLowerCase().indexOf('train around') === -1)).toBe(true);
       expect(out.updated_slots[0].current_sets).toBeGreaterThanOrEqual(8 - 0); // never volume-cut
       // thread history so the trend can see the decline
       const rec: WeekRecord = { week: wk, sets: r.sets, e1rm_week: epley(load, 5), volume_load: volumeLoad(r.sets), completed_sets: 1, prescribed_sets: s.current_sets };
@@ -109,7 +110,7 @@ describe('R-no-scheduled-deload: 16 thriving weeks → zero deloads (I-34)', () 
       const load = s.current_load_kg ?? 80;
       const r = result([{ load, reps: s.rep_target + 1, failed: false }, { load, reps: s.rep_target + 1, failed: false }]);
       const out = planNextWeek({ profile: profile(), slots: [s], global: g, results: [r], meta });
-      expect(out.explanations.find((e) => e.text.toLowerCase().includes('pulled the weight'))).toBeUndefined();
+      expect(out.explanations.find((e) => resolveLine(e.text).toLowerCase().includes('pulled the weight'))).toBeUndefined();
       const rec: WeekRecord = { week: wk, sets: r.sets, e1rm_week: epley(load, s.rep_target + 1), volume_load: volumeLoad(r.sets), completed_sets: 2, prescribed_sets: s.current_sets };
       s = { ...out.updated_slots[0], history: [rec, ...out.updated_slots[0].history].slice(0, 6) };
     }

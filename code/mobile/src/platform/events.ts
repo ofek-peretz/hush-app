@@ -25,9 +25,8 @@ export const HEALTH_EVENTS = {
   connected: 'health_connected',
   /** Read access denied — the denied path is fully functional (routes via About You). */
   denied: 'health_denied',
-  /** HealthKit unavailable on this device/build (e.g. no native module yet). */
-  unavailable: 'health_unavailable',
-  /** Observed permission state on a later check (reconstructs a revoke-in-Settings). */
+  /** Observed permission state on a later check (reconstructs a revoke-in-Settings;
+   *  also captures the 'unavailable' state, so a separate event is not needed). */
   permissionState: 'health_permission_state',
   /** A bodyweight sample was ingested silently into the profile (no UI). */
   bodyweightIngested: 'health_bodyweight_ingested',
@@ -92,7 +91,32 @@ export const WATCH_EVENTS = {
   exerciseDeferred: 'watch_exercise_deferred',
 } as const;
 
+/** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */
+export const BILLING_EVENTS = {
+  /** The paywall was presented (free-trial limit reached, or opened from Profile). */
+  paywallViewed: 'paywall_viewed',
+  /** The athlete dismissed the paywall without subscribing. */
+  paywallDismissed: 'paywall_dismissed',
+  /** A purchase flow was initiated for a product. */
+  purchaseStarted: 'purchase_started',
+  /** A purchase completed and the entitlement is now active. */
+  purchaseSucceeded: 'purchase_succeeded',
+  /** The athlete cancelled the StoreKit sheet. */
+  purchaseCancelled: 'purchase_cancelled',
+  /** The purchase flow failed (store error, network, validation). */
+  purchaseFailed: 'purchase_failed',
+  /** Restore purchases was initiated. */
+  restoreStarted: 'restore_started',
+  /** Restore found an active entitlement and reinstated it. */
+  restoreSucceeded: 'restore_succeeded',
+  /** Restore found nothing to restore. */
+  restoreEmpty: 'restore_empty',
+  /** The cached/effective entitlement state changed (refreshed from the store). */
+  entitlementChanged: 'entitlement_changed',
+} as const;
+
 export type HealthEvent = (typeof HEALTH_EVENTS)[keyof typeof HEALTH_EVENTS];
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[keyof typeof NOTIFICATION_EVENTS];
 export type LiveActivityEvent = (typeof LIVE_ACTIVITY_EVENTS)[keyof typeof LIVE_ACTIVITY_EVENTS];
 export type WatchEvent = (typeof WATCH_EVENTS)[keyof typeof WATCH_EVENTS];
+export type BillingEvent = (typeof BILLING_EVENTS)[keyof typeof BILLING_EVENTS];

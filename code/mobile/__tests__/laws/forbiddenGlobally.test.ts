@@ -37,6 +37,15 @@ const DENYLIST: { re: RegExp; why: string }[] = [
 const TIMEFRAME_EXEMPT = new Set(['portrait.threeMonths', 'portrait.compareThreeMonths']);
 const isDecision1 = (why: string) => why.includes('Decision 1');
 
+// Cardio (Open training) is a RECORDED, never-coached activity, deliberately
+// sealed off from the strength engine (it never affects load/progression/etc).
+// "Calories" is a standard, expected readout for a logged run/walk and appears
+// in the finalized cardio design — so the §4.1 calorie ban (written for the
+// strength coaching surfaces) does not apply inside the `cardio` namespace. The
+// ban still guards every coaching surface everywhere else.
+const isCalories = (why: string) => why.includes('calories');
+const isCardioPath = (path: string) => path.startsWith('cardio.');
+
 function values(node: unknown, out: { path: string; v: string }[], path = ''): void {
   if (typeof node === 'string') {
     if (!path.split('.').pop()?.startsWith('_comment')) out.push({ path, v: node });
@@ -56,7 +65,10 @@ describe('forbidden vocabulary never appears in copy', () => {
   for (const { re, why } of DENYLIST) {
     it(why, () => {
       const hits = all.filter(
-        (x) => re.test(x.v) && !(isDecision1(why) && TIMEFRAME_EXEMPT.has(x.path)),
+        (x) =>
+          re.test(x.v) &&
+          !(isDecision1(why) && TIMEFRAME_EXEMPT.has(x.path)) &&
+          !(isCalories(why) && isCardioPath(x.path)),
       );
       expect(hits.map((h) => `${h.path}: "${h.v}"`)).toEqual([]);
     });

@@ -28,9 +28,7 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
   requestAuthorization: async () => false,
   getRequestStatusForAuthorization: async () => 0,
   getMostRecentQuantitySample: async () => undefined,
-  queryWorkoutSamples: async () => [],
   AuthorizationRequestStatus: { unknown: 0, shouldRequest: 1, unnecessary: 2 },
-  WorkoutActivityType: { running: 37, walking: 52 },
 }));
 
 // expo-secure-store is native — in-memory mock for tests (Keychain in prod).

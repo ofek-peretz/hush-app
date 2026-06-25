@@ -8,7 +8,8 @@
 import React, { useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { SegmentedControl, Button } from '@/components/ds';
+import { OptStack } from '@/components/onboarding/OptStack';
+import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
 import type { Experience as ExperienceT } from '@/data/local/models';
@@ -35,15 +36,13 @@ export function Experience({ navigation, route }: Props) {
       sub={t('ob.expSub')}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
-      <SegmentedControl
-        stack
-        size="lg"
+      <OptStack
         value={experience}
         onChange={(v) => setExperience(v as ExperienceT)}
         options={[
-          { value: 'beginner', label: t('ob.expBeginner') },
-          { value: 'intermediate', label: t('ob.expIntermediate') },
-          { value: 'advanced', label: t('ob.expAdvanced') },
+          { value: 'beginner', label: t('ob.expBeginner'), desc: t('ob.expBeginnerDesc') },
+          { value: 'intermediate', label: t('ob.expIntermediate'), desc: t('ob.expIntermediateDesc') },
+          { value: 'advanced', label: t('ob.expAdvanced'), desc: t('ob.expAdvancedDesc') },
         ]}
       />
     </OnboardingScaffold>

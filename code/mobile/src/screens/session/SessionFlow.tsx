@@ -14,7 +14,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, Stepper } from '@/components/ds';
@@ -22,14 +21,15 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { similarExercises, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { color, space, stage, font, textScale, tracking, trackingPx, signal, up } from '@/design/tokens';
+import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'finish' | 'demo' | 'swap';
+type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'swap';
 type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -43,6 +43,7 @@ export function SessionFlow({ navigation }: Props) {
   const [swapTarget, setSwapTarget] = useState<'current' | 'next'>('current');
   const units = useApp().profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
+  useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
 
   function goWellDone(r: CompleteResult) {
     navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait, summary: r.summary });
@@ -92,7 +93,6 @@ export function SessionFlow({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         {confirm ? (
           <Logged units={units} confirm={confirm} />
@@ -102,8 +102,8 @@ export function SessionFlow({ navigation }: Props) {
             editing={editing}
             onToggleEdit={() => setEditing((v) => !v)}
             onComplete={onCompleteSet}
-            onPause={openPause}
-            onFinish={() => setOverlay('finish')}
+            onExit={openPause}
+            onWhy={() => setOverlay('reasoning')}
             onDemo={() => setOverlay('demo')}
             onSwap={() => openSwap('current')}
           />
@@ -111,8 +111,7 @@ export function SessionFlow({ navigation }: Props) {
           <Rest
             units={units}
             paused={session.paused}
-            onPause={openPause}
-            onFinish={() => setOverlay('finish')}
+            onExit={openPause}
             onDemo={() => setOverlay('demo')}
             onSwap={() => openSwap('next')}
           />
@@ -121,24 +120,18 @@ export function SessionFlow({ navigation }: Props) {
 
       {overlay === 'pause' ? (
         <BottomSheet onClose={resume}>
-          <Legend style={styles.sheetLegend}>{t('workout.paused')}</Legend>
+          <Legend style={styles.sheetLegend}>{t('pauseSheet.legend')}</Legend>
           <Text style={styles.sheetTitle}>{t('pauseSheet.title')}</Text>
+          <Text style={styles.sheetBody}>{t('pauseSheet.body')}</Text>
           <View style={styles.sheetActions}>
             <Button variant="primary" block label={t('pauseSheet.resume')} onPress={resume} />
-            <Button variant="danger" block label={t('pauseSheet.endWorkout')} onPress={finish} />
+            <Button variant="danger" block label={t('pauseSheet.finishWorkout')} onPress={finish} />
           </View>
         </BottomSheet>
       ) : null}
 
-      {overlay === 'finish' ? (
-        <BottomSheet onClose={() => setOverlay('none')}>
-          <Legend style={styles.sheetLegend}>{t('finishSheet.legend')}</Legend>
-          <Text style={styles.sheetBody}>{t('finishSheet.body')}</Text>
-          <View style={styles.sheetActions}>
-            <Button variant="danger" block label={t('finishSheet.save')} onPress={finish} />
-            <Button variant="quiet" block label={t('finishSheet.keep')} onPress={() => setOverlay('none')} />
-          </View>
-        </BottomSheet>
+      {overlay === 'reasoning' ? (
+        <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
       ) : null}
 
       {overlay === 'swap' ? (
@@ -152,6 +145,7 @@ export function SessionFlow({ navigation }: Props) {
           focusLabel={t('workout.focusOn')}
           formGuideLabel={t('workout.formGuide')}
           doneLabel={t('workout.demoDone')}
+          exerciseId={session.currentExerciseId}
           onDone={() => setOverlay('none')}
         />
       ) : null}
@@ -160,21 +154,17 @@ export function SessionFlow({ navigation }: Props) {
 }
 
 /* --------------------------------------------------------------- Stage chrome */
-function StageBar({ center, onPause, onFinish }: { center: string; onPause: () => void; onFinish: () => void }) {
+function StageBar({ center, onExit }: { center: string; onExit: () => void }) {
   const { t } = useCopy();
   return (
     <View style={styles.stageBar}>
       <View style={styles.stageBarSide}>
-        <IconButton onStage accessibilityLabel={t('pauseSheet.title')} onPress={onPause}>
-          <Icon name="pause" size={20} color={stage.ink1} />
-        </IconButton>
-      </View>
-      <Text style={styles.stageBarCenter}>{center}</Text>
-      <View style={[styles.stageBarSide, styles.stageBarRight]}>
-        <IconButton onStage accessibilityLabel={t('finishSheet.legend')} onPress={onFinish}>
+        <IconButton onStage accessibilityLabel={t('pauseSheet.title')} onPress={onExit}>
           <Icon name="close" size={20} color={stage.ink1} strokeWidth={2} />
         </IconButton>
       </View>
+      <Text style={styles.stageBarCenter}>{center}</Text>
+      <View style={[styles.stageBarSide, styles.stageBarRight]} />
     </View>
   );
 }
@@ -217,8 +207,8 @@ function ActiveSet({
   editing,
   onToggleEdit,
   onComplete,
-  onPause,
-  onFinish,
+  onExit,
+  onWhy,
   onDemo,
   onSwap,
 }: {
@@ -226,8 +216,8 @@ function ActiveSet({
   editing: boolean;
   onToggleEdit: () => void;
   onComplete: () => void;
-  onPause: () => void;
-  onFinish: () => void;
+  onExit: () => void;
+  onWhy: () => void;
   onDemo: () => void;
   onSwap: () => void;
 }) {
@@ -260,7 +250,7 @@ function ActiveSet({
 
   return (
     <>
-      <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onPause={onPause} onFinish={onFinish} />
+      <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
       <View style={styles.stageBody}>
         {group ? <Text style={styles.group}>{group.toUpperCase()}</Text> : null}
         <Text style={styles.exName}>{exName}</Text>
@@ -270,28 +260,41 @@ function ActiveSet({
             {isBodyweight ? (
               <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
             ) : (
-              <View style={styles.heroRow}>
-                <Text style={styles.hero} accessibilityLabel={`${weight} ${units}`}>{weight}</Text>
-                <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
-              </View>
+              // The load — the one number that matters, set before you arrived.
+              // Tap it for the light, observational "why this load".
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('whyLoad.legend')}
+                onPress={onWhy}
+                style={({ pressed }) => [styles.loadBtn, pressed && styles.loadBtnPressed]}
+              >
+                <View style={styles.heroRow}>
+                  <Text style={styles.hero} accessibilityLabel={`${weight} ${units}`}>{weight}</Text>
+                  <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+                </View>
+                {reason ? (
+                  <View style={styles.deltaWrap}>
+                    <LoadDelta
+                      direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
+                      value={deltaMag}
+                      unit={unitLabel(units)}
+                      size="lg"
+                      pill
+                    />
+                  </View>
+                ) : null}
+                <View style={styles.whyRow}>
+                  <Text style={styles.whyText}>{t('whyLoad.trigger').toUpperCase()}</Text>
+                  <Icon name="chevronRight" size={12} color={stage.ink2} strokeWidth={2} />
+                </View>
+              </Pressable>
             )}
-            {reason ? (
-              <View style={styles.deltaWrap}>
-                <LoadDelta
-                  direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
-                  value={deltaMag}
-                  unit={unitLabel(units)}
-                  size="lg"
-                  pill
-                />
-              </View>
-            ) : null}
-            {reason ? (
-              <Text style={styles.deltaCaption}>{t('workout.vsLast')}</Text>
-            ) : null}
-            <Text style={styles.repsLine}>
-              × {target.recommendedReps} <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
-            </Text>
+            {/* The exact rep prescription — a single number in a target chip */}
+            <View style={styles.repsPill}>
+              <Text style={styles.repsTimes}>×</Text>
+              <Text style={styles.repsNum}>{target.recommendedReps}</Text>
+              <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
+            </View>
           </>
         ) : (
           <View style={styles.editBlock}>
@@ -361,15 +364,13 @@ function Logged({ units, confirm }: { units: 'kg' | 'lb'; confirm: Confirm }) {
 function Rest({
   units,
   paused,
-  onPause,
-  onFinish,
+  onExit,
   onDemo,
   onSwap,
 }: {
   units: 'kg' | 'lb';
   paused: boolean;
-  onPause: () => void;
-  onFinish: () => void;
+  onExit: () => void;
   onDemo: () => void;
   onSwap: () => void;
 }) {
@@ -451,11 +452,7 @@ function Rest({
 
   return (
     <>
-      <StageBar
-        center={isTransition ? t('workout.nextExercise') : t('workout.rest')}
-        onPause={onPause}
-        onFinish={onFinish}
-      />
+      <StageBar center={isTransition ? t('workout.nextExercise') : t('workout.rest')} onExit={onExit} />
       <View style={styles.stageBody}>
         <RestRing
           remaining={remaining}
@@ -515,9 +512,14 @@ function Rest({
           onPress={() => session.endRest()}
         />
         {remaining > 0 ? (
-          <View style={styles.ghostRow}>
-            <StageGhost icon="chevronUp" label={t('workout.addSeconds')} onPress={addFifteen} />
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('workout.addSeconds')}
+            onPress={addFifteen}
+            style={({ pressed }) => [styles.addFifteen, pressed && styles.ghostPressed]}
+          >
+            <Text style={styles.ghostLabel}>{t('workout.addSeconds')}</Text>
+          </Pressable>
         ) : null}
       </View>
     </>
@@ -609,6 +611,60 @@ function SwapRow({
   return <View style={[styles.swapRow, !last && styles.swapRowBorder]}>{body}</View>;
 }
 
+/* --------------------------------------------------- Why this load (reasoning) */
+/** The LIGHT, single-line, observational reason behind a load — the in-session
+ *  cousin of the Weekly Update's WhyTriple. Calm, past-tense, never predictive,
+ *  never a setback. A load coming down is matched to demonstrated capability with
+ *  the sets kept. */
+function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => void }) {
+  const { t } = useCopy();
+  const session = useSession();
+  const target = session.currentTarget;
+  const exName = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
+  if (!target) return null;
+
+  const to = displayWeight(target.recommendedWeight, units) ?? 0;
+  const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
+  const unit = unitLabel(units);
+  const tone: 'up' | 'down' | 'hold' =
+    target.reasonType === 'increase' ? 'up' : target.reasonType === 'decrease' ? 'down' : 'hold';
+  const toneColor = tone === 'up' ? up[0] : tone === 'down' ? down[0] : color.hold;
+  const toneWash = tone === 'up' ? up.wash : tone === 'down' ? down.wash : color.fillSubtle;
+  const verdict = tone === 'up' ? t('whyLoad.verdictUp') : tone === 'down' ? t('whyLoad.verdictDown') : t('whyLoad.verdictHold');
+  const from = tone === 'up' ? to - deltaMag : tone === 'down' ? to + deltaMag : null;
+  const line = tone === 'up' ? t('whyLoad.lineUp', { delta: deltaMag, unit }) : tone === 'down' ? t('whyLoad.lineDown') : t('whyLoad.lineHold');
+  const icon: IconName = tone === 'up' ? 'trendingUp' : 'minus';
+
+  return (
+    <BottomSheet onClose={onClose}>
+      <Legend style={styles.sheetLegend}>{t('whyLoad.legend')}</Legend>
+      <View style={styles.whyHead}>
+        <Text style={styles.whyName} numberOfLines={1}>{exName}</Text>
+        <View style={[styles.verdictBadge, { backgroundColor: toneWash }]}>
+          <Icon name={icon} size={14} color={toneColor} strokeWidth={2} />
+          <Text style={[styles.verdictText, { color: toneColor }]}>{verdict}</Text>
+        </View>
+      </View>
+      <View style={styles.whyNums}>
+        {from != null ? (
+          <>
+            <Text style={styles.whyFrom}>{from}</Text>
+            <Icon name="chevronRight" size={16} color={color.textTertiary} strokeWidth={2} />
+          </>
+        ) : null}
+        <Text style={[styles.whyTo, { color: toneColor }]}>{to}</Text>
+        <Text style={styles.whyKg}>{unit}</Text>
+      </View>
+      <Text style={styles.whyLine}>{line}</Text>
+      <View style={styles.whyNote}>
+        <Icon name="shield" size={16} color={color.textTertiary} strokeWidth={2} />
+        <Text style={styles.whyNoteText}>{t('whyLoad.note')}</Text>
+      </View>
+      <Button variant="primary" block label={t('whyLoad.got')} onPress={onClose} style={styles.whyGot} />
+    </BottomSheet>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
@@ -626,15 +682,21 @@ const styles = StyleSheet.create({
   // Active set
   group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10 },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
-  heroRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 38 },
+  loadBtn: { marginTop: 30, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 16, borderRadius: radius.md },
+  loadBtnPressed: { backgroundColor: stage[1] },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  whyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 13 },
+  whyText: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
+  repsPill: { marginTop: 20, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
+  repsTimes: { fontFamily: font.mono, fontSize: textScale.md, color: stage.ink2 },
+  repsNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0 },
+  addFifteen: { alignItems: 'center', paddingVertical: 10, borderRadius: radius.md },
   // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
   // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false },
   heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginLeft: 6, marginBottom: 12 },
   bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
   deltaWrap: { marginTop: 16, height: 26, alignItems: 'center' },
-  deltaCaption: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 8 },
-  repsLine: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink1, marginTop: 30 },
   repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2 },
 
   // Inline edit
@@ -696,4 +758,18 @@ const styles = StyleSheet.create({
   swapSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
   swapBadge: { backgroundColor: signal.wash, borderRadius: 4, paddingHorizontal: 8, height: 22, alignItems: 'center', justifyContent: 'center' },
   swapBadgeText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText },
+
+  // Why this load (the in-session, single-line cousin of the Why triple)
+  whyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6 },
+  whyName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary },
+  verdictBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 11, borderRadius: radius.full },
+  verdictText: { fontFamily: font.sansSemibold, fontSize: textScale.xs },
+  whyNums: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 16 },
+  whyFrom: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textTertiary },
+  whyTo: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -0.7 },
+  whyKg: { fontFamily: font.mono, fontSize: textScale.md, color: color.textMuted },
+  whyLine: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 23, marginTop: 14 },
+  whyNote: { flexDirection: 'row', gap: 9, marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: color.border },
+  whyNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20 },
+  whyGot: { marginTop: 18 },
 });

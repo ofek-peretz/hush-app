@@ -14,13 +14,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
-import { Avatar, SegmentedControl, Switch, Legend, Button } from '@/components/ds';
+import { HushMark } from '@/components/HushMark';
+import { Avatar, SegmentedControl, Switch, Legend, Button, Badge } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { health } from '@/platform/health';
 import { setLocale, currentLocale } from '@/i18n';
+import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import type { Goal } from '@/data/local/models';
-import { color, space, font, textScale, tracking, trackingPx, press, down } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProfileSheet'>;
@@ -78,6 +81,21 @@ export function ProfileSheet({ navigation }: Props) {
     ? [t(`goal.${GOAL_KEY[p.goal]}`), p.experience ? t(`experience.${p.experience}`) : null].filter(Boolean).join(' · ')
     : null;
 
+  // Membership (Subscription + Apple Payments): active → plan name, tapping opens
+  // the system manage-subscriptions screen; inactive → free-trial status, tapping
+  // opens the paywall.
+  const ent = app.entitlement;
+  const planPeriod = ent.productId && isProductId(ent.productId) ? PRODUCT_PERIOD[ent.productId] : null;
+  const sessionsLeft = freeSessionsRemaining(app.modeState.completedSessions);
+  const membershipState: 'active' | 'trial' | 'ended' = ent.active ? 'active' : sessionsLeft > 0 ? 'trial' : 'ended';
+  function onMembership() {
+    if (ent.active) {
+      void Linking.openURL('itms-apps://apps.apple.com/account/subscriptions').catch(() => {});
+    } else {
+      navigation.navigate('Paywall', { source: 'profile' });
+    }
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -118,18 +136,61 @@ export function ProfileSheet({ navigation }: Props) {
           last
         />
 
+        {/* Membership (Subscription + Apple Payments) — its own prominent card with a
+            state badge; trial state adds a sessions-left meter + an honest billing note. */}
+        <Legend style={styles.sectionLegend}>{t('profile.membership')}</Legend>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.membership')}
+          onPress={onMembership}
+          style={({ pressed }) => [styles.memberCard, pressed && styles.memberCardPressed]}
+        >
+          <View style={styles.memberIconBox}>
+            <HushMark size={22} />
+          </View>
+          <View style={styles.memberBody}>
+            <View style={styles.memberTitleRow}>
+              <Text style={styles.memberTitle}>{t('profile.proName')}</Text>
+              <Badge tone={membershipState === 'active' ? 'up' : membershipState === 'ended' ? 'neutral' : 'signal'} legend>
+                {membershipState === 'active' ? t('profile.badgeActive') : membershipState === 'ended' ? t('profile.badgeExpired') : t('profile.badgeTrial')}
+              </Badge>
+            </View>
+            <Text style={styles.memberSub}>
+              {membershipState === 'active' ? (
+                t('profile.activeSub', { plan: planPeriod ? t(`paywall.${planPeriod}`) : t('profile.membershipProGeneric') })
+              ) : membershipState === 'ended' ? (
+                t('profile.endedSub')
+              ) : (
+                <>
+                  <Text style={styles.memberSessions}>{sessionsLeft}</Text>
+                  {t('profile.trialSubRest', { total: FREE_SESSION_LIMIT })}
+                </>
+              )}
+            </Text>
+            {membershipState === 'trial' ? (
+              <View style={styles.memberTrack}>
+                <View style={[styles.memberFill, { width: `${((FREE_SESSION_LIMIT - sessionsLeft) / FREE_SESSION_LIMIT) * 100}%` }]} />
+              </View>
+            ) : null}
+          </View>
+          <View style={membershipState === 'trial' ? styles.memberChevronTop : styles.memberChevron}>
+            <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+          </View>
+        </Pressable>
+        {membershipState === 'trial' ? <Text style={styles.trialNote}>{t('profile.trialNote')}</Text> : null}
+
         <Legend style={styles.sectionLegend}>{t('profile.healthSection')}</Legend>
         <Row
           label={t('profile.appleHealth')}
-          sub={p?.healthConnected ? t('profile.healthConnectedSub') : t('profile.notConnected')}
+          sub={p?.healthConnected ? t('profile.healthImporting') : t('profile.notConnected')}
           control={<Switch checked={!!p?.healthConnected} onChange={() => void onHealth()} accessibilityLabel={t('profile.appleHealth')} />}
           last
         />
+        <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
 
         <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
-        {bodyData ? <Row label={t('profile.bodyData')} sub={bodyData} /> : null}
-        {goalExp ? <Row label={t('profile.goalExperience')} sub={goalExp} /> : null}
-        {memberSince ? <Row label={t('profile.membership')} sub={memberSince} last /> : null}
+        {bodyData ? <Row label={t('profile.bodyData')} sub={bodyData} last={!goalExp} /> : null}
+        {goalExp ? <Row label={t('profile.goalExperience')} sub={goalExp} last /> : null}
 
         {__DEV__ ? (
           <>
@@ -222,6 +283,40 @@ const styles = StyleSheet.create({
   rowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textPrimary },
   rowDanger: { color: down[0] },
   rowSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
+
+  // membership card
+  memberCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 8,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    backgroundColor: color.surface,
+  },
+  memberCardPressed: { backgroundColor: color.fillSubtle },
+  memberIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: color.fillSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberBody: { flex: 1, minWidth: 0 },
+  memberTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  memberTitle: { fontFamily: font.sansSemibold, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary },
+  memberSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 3 },
+  memberSessions: { fontFamily: font.monoSemibold, color: color.accentText },
+  memberTrack: { height: 4, borderRadius: 2, backgroundColor: color.fillSubtle, marginTop: 10, overflow: 'hidden' },
+  memberFill: { height: '100%', backgroundColor: signal[0], borderRadius: 2 },
+  memberChevron: { alignSelf: 'center' },
+  memberChevronTop: { alignSelf: 'flex-start', marginTop: 4 },
+  trialNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2 },
+  healthNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2 },
 
   actions: { marginTop: 28, gap: 10 },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },

@@ -15,7 +15,6 @@ function gate(over: Partial<HealthGate> = {}): HealthGate {
     permissionState: async () => 'granted',
     latestBodyweightKg: async () => null,
     latestBodyweight: async () => ({ kg: 80 }),
-    recentWalks: async () => [],
     ...over,
   };
 }

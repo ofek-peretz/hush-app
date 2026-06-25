@@ -91,8 +91,8 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                     </View>
                     <ProgressMeter value={best} max={ceiling} mark={initial} tone="up" />
                     <View style={styles.liftFoot}>
-                      <Text style={styles.footText}>{t('report.initialPeak', { value: initial })}</Text>
-                      <Text style={styles.footText}>{t('report.best', { value: best })}</Text>
+                      <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit: unitLabel(units) })}</Text>
+                      <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit: unitLabel(units) })}</Text>
                     </View>
                   </View>
                 );
@@ -130,4 +130,5 @@ const styles = StyleSheet.create({
   liftBestUnit: { fontFamily: font.mono, fontSize: textScale['2xs'], color: color.textMuted },
   liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   footText: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary },
+  footNow: { color: color.up },
 });

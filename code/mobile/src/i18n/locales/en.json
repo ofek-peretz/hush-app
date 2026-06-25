@@ -1,11 +1,20 @@
 {
   "common": {
-    "back": "Back"
+    "back": "Back",
+    "close": "Close"
   },
   "weekly": {
     "eyebrow": "This week",
     "title": "What changed",
+    "weekTitle": "Week {{n}}",
+    "intro_one": "Your program for the week, at its new loads. 1 lift changed — tap it to see what I saw.",
+    "intro_other": "Your program for the week, at its new loads. {{count}} lifts changed — tap any of them to see what I saw.",
     "steady": "Everything held steady this week — keep showing up and the work compounds.",
+    "setsUnit": "sets",
+    "repsUnit": "reps",
+    "newExercise": "New exercise",
+    "swapped": "Swapped",
+    "done": "Done",
     "observation": "What I saw",
     "conclusion": "What it means",
     "action": "What I did"
@@ -33,7 +42,7 @@
   },
   "connectHealth": {
     "title": "Connect Health",
-    "body": "Hush reads your steps and weight to round out your training picture. You'll answer a few quick things next either way.",
+    "body": "Hush imports your bodyweight from Apple Health, so you do not have to enter it. You'll answer a few quick things next either way.",
     "optional": "Optional. You can change this anytime.",
     "continue": "Continue",
     "skip": "Skip"
@@ -103,6 +112,10 @@
     "nextSession": "Next session",
     "begin": "Begin {{name}}",
     "chooseAnother": "Choose another workout",
+    "readyWhenYouAre": "Ready when you are, {{name}}.",
+    "readyAnon": "Ready when you are.",
+    "loadsSet": "Tonight's loads are set — your only job is to lift.",
+    "openTraining": "Open training",
     "programLegend": "Program",
     "hubThisWeek": "This week",
     "hubThisWeekSub": "{{done}} done · {{remaining}} remaining",
@@ -114,6 +127,58 @@
   "recovery": {
     "sunShort": "Sun",
     "sunday": "Sunday"
+  },
+  "cardio": {
+    "legend": "Open training",
+    "title": "Run or walk",
+    "recordedNotCoached": "Recorded, not coached",
+    "introPre": "Hush coaches your lifts. Your runs, it simply ",
+    "introRecords": "records",
+    "introPost": " — no targets, no grading. The effort is yours.",
+    "mode": "Mode",
+    "run": "Run",
+    "walk": "Walk",
+    "goalLegend": "Personal goal · optional",
+    "goalOpen": "Open",
+    "goalDistance": "Distance",
+    "goalTime": "Time",
+    "goalOpenNote": "No goal. Move as long as you like — Hush keeps the log either way.",
+    "targetDistance": "Target distance",
+    "targetTime": "Target time",
+    "startRun": "Start run",
+    "startWalk": "Start walk",
+    "gpsNote": "GPS & heart rate connect when you begin",
+    "starting": "starting",
+    "go": "Go",
+    "running": "Running",
+    "walking": "Walking",
+    "elapsed": "Elapsed",
+    "distance": "Distance",
+    "pace": "Pace",
+    "perKm": "/km",
+    "calories": "Calories",
+    "heart": "Heart",
+    "paused": "Paused",
+    "resume": "Resume",
+    "finishSave": "Finish & save",
+    "pause": "Pause",
+    "recorded": "Recorded",
+    "runLogged": "Run logged.",
+    "walkLogged": "Walk logged.",
+    "duration": "Duration",
+    "avgPace": "Avg pace",
+    "avgHeart": "Avg heart",
+    "splits": "Splits",
+    "splitsPerKm": "Splits · per km",
+    "fastest": "Fastest",
+    "walkTag": "walk",
+    "savedNote": "Saved to your log. Hush doesn't grade your runs and your lifting program is untouched — this is yours to keep.",
+    "done": "Done",
+    "viewInHistory": "View in history",
+    "readOnlyRecord": "Read-only record",
+    "km": "km",
+    "kcal": "kcal",
+    "bpm": "bpm"
   },
   "ob": {
     "continue": "Continue",
@@ -135,9 +200,9 @@
     "namePlaceholder": "Your name",
     "healthLegend": "Optional",
     "healthTitle": "Connect health data",
-    "healthSub": "Hush can read your weight and activity to sharpen fatigue management. This is optional and can be changed later.",
+    "healthSub": "Hush imports your bodyweight from Apple Health. This is optional and can be changed later.",
     "healthCardTitle": "Apple Health",
-    "healthCardSub": "Weight · activity",
+    "healthCardSub": "Bodyweight",
     "healthConnect": "Connect",
     "healthSkip": "Skip for now",
     "bodyLegend": "About you",
@@ -153,15 +218,22 @@
     "goalTitle": "What are you training for?",
     "goalSub": "This sets how Hush prioritises load, volume and progression.",
     "goalMuscle": "Build muscle",
+    "goalMuscleDesc": "Prioritise hypertrophy and muscle growth",
     "goalStrength": "Increase strength",
+    "goalStrengthDesc": "Heavier progression on the main compound lifts",
     "goalLean": "Get lean",
+    "goalLeanDesc": "Lean and defined — moderate loads, higher reps",
     "goalConsistent": "Stay consistent",
+    "goalConsistentDesc": "Balanced progression, built to be sustainable",
     "expLegend": "Your background",
     "expTitle": "How long have you trained?",
     "expSub": "Honesty here makes the first weeks accurate. Hush adjusts quickly regardless.",
     "expBeginner": "Beginner · under 1 year",
+    "expBeginnerDesc": "New to structured lifting — Hush starts conservative",
     "expIntermediate": "Intermediate · 1–3 years",
+    "expIntermediateDesc": "Comfortable with the main lifts and steady progression",
     "expAdvanced": "Advanced · 3+ years",
+    "expAdvancedDesc": "Years of consistent training and refined technique",
     "daysLegend": "Your week",
     "daysTitle": "How many sessions per week?",
     "daysSub": "Hush will design a split that fits this exactly — no wasted days, no overreach.",
@@ -175,7 +247,9 @@
     "buildStep4": "Setting progression targets",
     "readyLegend": "Ready",
     "readyTitle": "Your program is built.",
-    "readySub": "{{focus}} focus · {{days}} sessions a week. From here, Hush decides the loads. You decide the lifts.",
+    "readySub": "{{focus}} focus · {{days}} sessions a week.",
+    "readyOwnership": "Hush decides the loads.\nYou decide the lifts.",
+    "readyNote": "Hush only adds load your last sessions have earned — steady, never guesswork.",
     "readyCta": "Go to my next workout",
     "focusStrength": "Strength",
     "focusHypertrophy": "Hypertrophy",
@@ -223,6 +297,11 @@
     "setsAnd": "{{sets}} sets · × {{reps}}",
     "upNext": "Up next",
     "form": "Form",
+    "looping": "Looping",
+    "illustration": "Illustration",
+    "formCue1": "Brace, retract the shoulder blades, keep the spine neutral.",
+    "formCue2": "Drive elbows back; pause briefly at full contraction.",
+    "formCue3": "Control the eccentric — roughly two seconds down.",
     "swapAction": "Swap",
     "swapExercise": "Swap exercise",
     "startNextSet": "Start next set",
@@ -254,11 +333,26 @@
     "repsLabel": "Reps"
   },
   "pauseSheet": {
+    "legend": "Workout",
     "title": "Workout paused",
+    "body": "Your completed sets are saved. Finish now and Hush reads the shortened session into your next recommendation.",
     "resume": "Resume workout",
     "showExercise": "Show exercise",
     "finishEarly": "Finish early",
+    "finishWorkout": "Finish workout",
     "endWorkout": "End workout"
+  },
+  "whyLoad": {
+    "legend": "Why this load",
+    "verdictUp": "Moved up",
+    "verdictDown": "Matched",
+    "verdictHold": "Held",
+    "trigger": "Why this load",
+    "lineUp": "Your last sessions cleared the top of the range here, so Hush moved the load up {{delta}} {{unit}}.",
+    "lineDown": "Your recent sets came in under range, so Hush matched the load to what you're lifting clean — and kept every set.",
+    "lineHold": "Right on target — strong, but Hush held the load until the signal is clean.",
+    "note": "Hush never moves a load on a single session. It reads the pattern, then acts — your job is just to lift.",
+    "got": "Got it"
   },
   "rest": {
     "ready": "Ready"
@@ -293,6 +387,15 @@
     "duration": "Duration",
     "sets": "Sets",
     "progressed": "Progressed",
+    "volume": "Volume",
+    "logged": "Logged",
+    "thatsTheWork": "That's the work.",
+    "resultBody": "{{workout}} · {{lifts}} lifts · every set recorded.",
+    "topSet": "Top set",
+    "reading": "Hush is reading your session · {{sets}} sets",
+    "tapSkip": "Tap to skip",
+    "saturday": "Every set feeds Saturday's update. Hush is already reading {{week}} from how you trained.",
+    "weekN": "Week {{n}}",
     "done": "Done",
     "viewRecord": "View session record"
   },
@@ -358,6 +461,14 @@
   },
   "program": {
     "title": "Program",
+    "lockExercise": "Lock this exercise",
+    "unlockExercise": "Unlock this exercise",
+    "lockIntro": "Lock a lift to keep it in your program — Hush won't swap it. You still own the load.",
+    "locked": "Locked",
+    "sessionsDone": "sessions done",
+    "momentum_one": "1 session between you and a complete week — keep the momentum.",
+    "momentum_other": "{{count}} sessions between you and a complete week — keep the momentum.",
+    "weekDone": "A complete week. Every session in the books.",
     "thisWeek": "This week",
     "weekLegend": "Week {{n}} · {{freq}}× / week",
     "weekLegendSplit": "Week {{n}} · {{split}} · {{freq}}×",
@@ -408,8 +519,8 @@
     "empty": "Keep training — your progress will show here.",
     "totalAdded": "Total strength added",
     "acrossLifts": "across {{count}} lifts",
-    "initialPeak": "initial peak {{value}}",
-    "best": "best {{value}}",
+    "initialPeak": "started {{value}} {{unit}}",
+    "best": "now {{value}} {{unit}}",
     "weekRange": "Weeks {{from}}–{{to}}"
   },
   "progress": {
@@ -419,6 +530,9 @@
   "history": {
     "title": "History",
     "legend": "Completed sessions",
+    "summaryLegend": "The work so far",
+    "sessionsLogged": "sessions logged",
+    "summaryMoved": " moved across {{weeks}} weeks. Every rep you've done is here.",
     "recordLegend": "{{date}} · read-only record",
     "duration": "Duration",
     "setsLabel": "Sets",
@@ -459,7 +573,22 @@
     "account": "Account",
     "bodyData": "Body data",
     "goalExperience": "Goal & experience",
-    "healthConnectedSub": "Connected · weight, activity"
+    "healthConnectedSub": "Connected · bodyweight",
+    "membershipPro": "Hush Pro · {{plan}}",
+    "membershipProGeneric": "Pro",
+    "membershipTrial_one": "Free trial · {{count}} session left",
+    "membershipTrial_other": "Free trial · {{count}} sessions left",
+    "membershipTrialEnded": "Free trial ended",
+    "proName": "Hush Pro",
+    "badgeTrial": "Trial",
+    "badgeActive": "Active",
+    "badgeExpired": "Expired",
+    "trialSubRest": " of {{total}} free sessions left",
+    "activeSub": "{{plan}} · renews automatically",
+    "endedSub": "Your free trial has ended",
+    "trialNote": "You're only billed after your seven free sessions — never during. Choose a plan when you're ready.",
+    "healthImporting": "Importing your bodyweight",
+    "healthNote": "Hush imports your bodyweight from Apple Health, so you don't have to type it in. Nothing else is read."
   },
   "settings": {
     "units": "Units",
@@ -487,10 +616,10 @@
     "general": "Something went wrong. Try again."
   },
   "notifications": {
-    "weeklyReadyTitle": "Next week is ready",
-    "weeklyReadyBody": "I've built your program for next week. {{count}} sessions, tuned to how you trained.",
-    "weeklyReadyBodyOne": "I've built your program for next week. One session, tuned to how you trained.",
-    "weeklyReadyBodyGeneric": "I've built your program for next week, tuned to how you trained.",
+    "weeklyReadyTitle": "Your weekly update is ready",
+    "weeklyReadyBody": "Your program for the week is set — {{count}} sessions, tuned to how you trained. Tap to see what changed.",
+    "weeklyReadyBodyOne": "Your program for the week is set — one session, tuned to how you trained. Tap to see what changed.",
+    "weeklyReadyBodyGeneric": "Your program for the week is set, tuned to how you trained. Tap to see what changed.",
     "quarterlyReportTitle": "Your progress is ready."
   },
   "watch": {
@@ -537,5 +666,108 @@
     "swapTitle": "Swap exercise",
     "swapHint": "Hush recalibrates the load.",
     "cancel": "Cancel"
+  },
+  "paywall": {
+    "eyebrow": "Membership",
+    "title": "Keep training with Hush.",
+    "body": "Your first seven sessions were free. Hush Pro keeps deciding the loads.",
+    "benefitProgram": "Every load and progression, decided for you.",
+    "benefitAdapts": "A weekly read on what changed, and why.",
+    "benefitPortrait": "Your full history and progress, kept.",
+    "annual": "Annual",
+    "monthly": "Monthly",
+    "bestValue": "Best value",
+    "perYear": "/year",
+    "perMonth": "/month",
+    "billedYearly": "Billed yearly",
+    "billedMonthly": "Billed monthly",
+    "onlyBilled": "You're only billed after your seven free calibration sessions.",
+    "freeTrial": "{{period}} free",
+    "subscribe": "Subscribe",
+    "subscribePlan": "Subscribe · {{plan}}",
+    "working": "One moment",
+    "restore": "Restore purchases",
+    "legal": "Billed through your Apple ID. A membership renews automatically until you cancel it in Settings.",
+    "legalDynamic": "Prices update live from the App Store. {{plan}} auto-renews at {{price}}{{cadence}}, billed to your Apple ID until cancelled in Settings.",
+    "unavailable": "The store is unavailable. Check your connection and open this again.",
+    "error": "That did not complete. Your card was not charged."
+  },
+  "explain": {
+    "progressReps": {
+      "text": "{{ex}} is near the top of its range, so I added a rep per set.",
+      "observation": "{{ex}} is improving and close to the top of its range.",
+      "conclusion": "Another rep per set comes before more weight.",
+      "action": "I set the target to {{reps}} reps."
+    },
+    "progressLoad": {
+      "text": "{{ex}} hit the top of its range with room, so I added {{delta}} kg.",
+      "textVariation": "{{ex}} hit the top of its range with room, so I moved you to a harder variation.",
+      "observation": "{{ex}} reached the top of its range with room to spare.",
+      "conclusion": "It is ready for more weight.",
+      "conclusionVariation": "It is ready for a harder variation.",
+      "action": "I added {{delta}} kg.",
+      "actionVariation": "I moved you to a harder variation."
+    },
+    "reprice": {
+      "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",
+      "textBw": "Last week {{ex}} came in under its prescription, so I matched it to your demonstrated capability and kept your sets unchanged.",
+      "observation": "Last week {{ex}} came in under its prescription.",
+      "conclusion": "That shows me the right weight for now.",
+      "action": "I set it to {{load}} kg and kept your sets unchanged.",
+      "actionBw": "I matched it to your demonstrated capability and kept your sets unchanged."
+    },
+    "leverVol": {
+      "text": "{{ex}} held steady, so I added a set for more stimulus.",
+      "observation": "{{ex}} held steady at full effort.",
+      "conclusion": "More sets give it more stimulus.",
+      "action": "I took it to {{sets}} sets."
+    },
+    "leverLoad": {
+      "text": "{{ex}} stalled with full volume, so I added {{delta}} kg to break it.",
+      "textStep": "{{ex}} stalled with full volume, so I stepped the load up to break it.",
+      "observation": "{{ex}} stalled with its full volume in place.",
+      "conclusion": "A small load increase breaks the stall.",
+      "action": "I added {{delta}} kg.",
+      "actionStep": "I stepped the load up."
+    },
+    "leverRange": {
+      "text": "{{ex}} stalled with full volume, so I changed the range to {{lo}} to {{hi}} and kept the lift.",
+      "observation": "{{ex}} stalled with its full volume in place.",
+      "conclusion": "A new rep range keeps the same lift moving.",
+      "action": "I set the range to {{lo}} to {{hi}}."
+    },
+    "patientHold": {
+      "text": "{{ex}} is steady, so I hold it and re-test before pushing.",
+      "observation": "{{ex}} is steady right now.",
+      "conclusion": "I hold and re-test before pushing.",
+      "action": "I hold this week and probe a small increase soon.",
+      "actionHold": "I hold it this week."
+    },
+    "swap": {
+      "text": "That slot missed the mark for a few weeks while your other lifts held, so I swapped it to {{ex}}.",
+      "observation": "That slot has missed the mark for a few weeks while your other lifts held.",
+      "conclusion": "The exercise is the thing to change.",
+      "action": "I moved the slot to {{ex}}."
+    },
+    "deload": {
+      "text": "I pulled the weight and volume back so you can keep training safely.",
+      "observation": "You flagged something to train around.",
+      "conclusion": "I pull the weight and volume back so you can train safely.",
+      "action": "I eased it to {{load}} kg and {{sets}} sets.",
+      "actionBw": "I eased it to bodyweight and {{sets}} sets."
+    },
+    "absence": {
+      "text": "After more than a week away, I eased the load about ten percent and we rebuild.",
+      "observation": "More than a week passed without training.",
+      "conclusion": "I ease back in to rebuild safely.",
+      "action": "I eased about ten percent to {{load}} kg.",
+      "actionBw": "I eased back to bodyweight."
+    },
+    "adherenceHold": {
+      "text": "I held everything and trimmed the volume to make this week finishable.",
+      "observation": "Last week did not fully happen.",
+      "conclusion": "I hold everything and trim volume so this week is finishable.",
+      "action": "I trimmed it to {{sets}} sets."
+    }
   }
 }

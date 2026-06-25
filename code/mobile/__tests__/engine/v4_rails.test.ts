@@ -5,6 +5,7 @@
 import { applyRails, type SlotPlan } from '@/engine/v4/rails';
 import { planNextWeek, type PlanWeekInputs } from '@/engine/v4/planWeek';
 import { explain } from '@/engine/v4/explain';
+import { resolveLine } from '../helpers/resolveExplain';
 import { epley } from '@/engine/v4/reads';
 import type { SlotState, SlotDecision, EngineProfile } from '@/engine/v4/types';
 import type { ExerciseMeta } from '@/engine/v4/decisions';
@@ -118,9 +119,9 @@ describe('explanations (I-26/27)', () => {
   it('reprice text never says "fatigue" and never claims volume changed', () => {
     const slot = baseSlot();
     const e = explain(dec(slot, 'reprice', { load_kg: 72.5 }), (id) => id)!;
-    expect(e.text.toLowerCase()).not.toContain('fatigue');
-    expect(e.text.toLowerCase()).toContain('sets unchanged');
-    expect(e.observation).not.toBe('');
+    expect(resolveLine(e.text).toLowerCase()).not.toContain('fatigue');
+    expect(resolveLine(e.text).toLowerCase()).toContain('sets unchanged');
+    expect(resolveLine(e.observation)).not.toBe('');
   });
   it('calibrate / steady hold surface no change line', () => {
     const slot = baseSlot();

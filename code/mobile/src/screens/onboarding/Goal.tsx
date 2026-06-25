@@ -9,7 +9,8 @@
 import React, { useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { SegmentedControl, Button } from '@/components/ds';
+import { OptStack } from '@/components/onboarding/OptStack';
+import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
 import type { Goal as GoalT } from '@/data/local/models';
@@ -36,16 +37,14 @@ export function Goal({ navigation, route }: Props) {
       sub={t('ob.goalSub')}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
-      <SegmentedControl
-        stack
-        size="lg"
+      <OptStack
         value={goal}
         onChange={(v) => setGoal(v as GoalT)}
         options={[
-          { value: 'build_muscle', label: t('ob.goalMuscle') },
-          { value: 'get_stronger', label: t('ob.goalStrength') },
-          { value: 'toning', label: t('ob.goalLean') },
-          { value: 'general_fitness', label: t('ob.goalConsistent') },
+          { value: 'build_muscle', label: t('ob.goalMuscle'), desc: t('ob.goalMuscleDesc') },
+          { value: 'get_stronger', label: t('ob.goalStrength'), desc: t('ob.goalStrengthDesc') },
+          { value: 'toning', label: t('ob.goalLean'), desc: t('ob.goalLeanDesc') },
+          { value: 'general_fitness', label: t('ob.goalConsistent'), desc: t('ob.goalConsistentDesc') },
         ]}
       />
     </OnboardingScaffold>

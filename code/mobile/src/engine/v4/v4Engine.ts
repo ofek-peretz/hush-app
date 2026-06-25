@@ -68,6 +68,40 @@ export function deriveSlots(program: Program): DerivedSlot[] {
   return out;
 }
 
+/**
+ * Per day, the engine slotId aligned to each `day.slots` position (null where the slot is core /
+ * unmapped — i.e. not engine-managed, so not lockable). Mirrors deriveSlots' indexing exactly, so
+ * the app can key a slot's lock/state to the durable engine slotId from a (dayId, slotIndex). */
+export function slotIdsByPosition(program: Program): Map<string, (string | null)[]> {
+  const byDay = new Map<string, (string | null)[]>();
+  for (const day of program.days) {
+    const ids: (string | null)[] = [];
+    if (day.isRest) {
+      byDay.set(day.id, ids);
+      continue;
+    }
+    const perPattern = new Map<Pattern, number>();
+    for (const slot of day.slots) {
+      const pattern = slot.supplemental ? null : enginePattern(slot.exerciseId);
+      if (pattern == null) {
+        ids.push(null);
+        continue;
+      }
+      const idx = perPattern.get(pattern) ?? 0;
+      perPattern.set(pattern, idx + 1);
+      ids.push(`${day.key ?? day.id}:${pattern}#${idx}`);
+    }
+    byDay.set(day.id, ids);
+  }
+  return byDay;
+}
+
+/** The engine slotId for a displayed (dayId, slotIndex), or null when that slot is not engine-
+ *  managed (core / unmapped) and therefore cannot be locked. */
+export function engineSlotIdAt(program: Program, dayId: string, slotIndex: number): string | null {
+  return slotIdsByPosition(program).get(dayId)?.[slotIndex] ?? null;
+}
+
 // ───────────────────────────── initial state (migration §9.2) ─────────────────────────────
 /** Best demonstrated e1RM for an exercise across history (weighted lifts only). */
 function bestE1rmFromHistory(exerciseId: string, history: Session[]): { best: number; sessions: number } {
@@ -138,9 +172,20 @@ const slotsRecord = (s: EngineV4State) => s.slots as Record<string, SlotState>;
 /**
  * Ensure persisted slot state matches the current program. Adds missing slots (initialized from
  * history per §9.2). If a slot's exercise changed (athlete pin / manual replacement, C-7), reset the
- * exercise-scoped state for the new lift and LOCK it (athlete owns selection). Idempotent.
+ * exercise-scoped state so the new lift starts CALIBRATING — the slot's durable identity (slotId,
+ * order, LOCK) is preserved. Idempotent.
+ *
+ * Lock System: the athlete-LOCKED set is the source of truth for `slot.locked` — every slot's lock
+ * is reconciled to it here. A lock therefore belongs to the SLOT (survives regen + manual
+ * replacement) and is purely athlete-controlled; manual replacement no longer implies a lock.
  */
-export async function ensureSlots(program: Program, profile: EngineProfile, history: Session[], seedFor: SeedFor): Promise<EngineV4State> {
+export async function ensureSlots(
+  program: Program,
+  profile: EngineProfile,
+  history: Session[],
+  seedFor: SeedFor,
+  lockedSlotIds: ReadonlySet<string> = new Set(),
+): Promise<EngineV4State> {
   const state = await loadState();
   const slots = slotsRecord(state);
   const derived = deriveSlots(program);
@@ -150,13 +195,18 @@ export async function ensureSlots(program: Program, profile: EngineProfile, hist
     if (!existing) {
       slots[d.slotId] = initialSlot(d, profile, history, seedFor);
     } else if (existing.current_exercise_id !== d.exerciseId) {
-      // Athlete-owned manual replacement (C-7): new lift starts CALIBRATING, slot is LOCKED.
+      // Manual replacement (C-7): the new lift calibrates into the slot; identity is kept.
       const fresh = initialSlot(d, profile, history, seedFor);
-      slots[d.slotId] = { ...fresh, locked: true, calibrating: true, tenure_weeks: 0, weeks_since_swap: 0 };
+      slots[d.slotId] = { ...fresh, calibrating: true, tenure_weeks: 0, weeks_since_swap: 0 };
     }
   }
   // Drop slots no longer in the program (e.g. frequency change).
   for (const id of Object.keys(slots)) if (!keep.has(id)) delete slots[id];
+
+  // Reconcile each slot's lock to the athlete's lock store (the source of truth). This is what
+  // makes the lock durable across regen/replacement and prevents engine-initiated swaps (swap.ts
+  // I-7) on locked slots, while leaving manual replacement unaffected.
+  for (const id of Object.keys(slots)) slots[id].locked = lockedSlotIds.has(id);
 
   // Goal change transition (C4-1, IT-goal-change): on a goal change, set each slot's rep_range/
   // rep_target from the new goal and RECOMPUTE load from demonstrated history at the new target;
@@ -218,9 +268,15 @@ function setRecords(exerciseId: string, sessions: Session[]): SetRecord[] {
  * week = `frequency` completed sessions. Aggregates each week's logged sets into per-slot results,
  * runs planNextWeek, and persists the updated slot state + a fresh history record per slot.
  */
-export async function maybeAdvance(program: Program, profile: EngineProfile, history: Session[], seedFor: SeedFor): Promise<void> {
+export async function maybeAdvance(
+  program: Program,
+  profile: EngineProfile,
+  history: Session[],
+  seedFor: SeedFor,
+  lockedSlotIds: ReadonlySet<string> = new Set(),
+): Promise<void> {
   const freq = Math.max(1, program.frequency);
-  const state = await ensureSlots(program, profile, history, seedFor);
+  const state = await ensureSlots(program, profile, history, seedFor, lockedSlotIds);
   const slots = slotsRecord(state);
   // history is newest-first; process oldest-first in week-sized chunks.
   const chrono = history.slice().reverse();
@@ -234,6 +290,11 @@ export async function maybeAdvance(program: Program, profile: EngineProfile, his
       if (!sets.length) continue; // untrained slot → no result → holds
       results.push({ slotId: slot.slotId, pattern: slot.pattern, exercise_id: slot.current_exercise_id, sets, sessions_completed: week.length, sessions_planned: freq });
     }
+
+    // Snapshot each slot's BEFORE state so the Weekly Update (B) can render the
+    // true from→to per change (decreases included — the explanation lines alone
+    // don't carry the old value).
+    const beforeById = new Map(slotList.map((s) => [s.slotId, s]));
 
     const out = planNextWeek({
       profile,
@@ -256,8 +317,24 @@ export async function maybeAdvance(program: Program, profile: EngineProfile, his
       slots[ns.slotId] = rec ? { ...ns, history: [rec, ...ns.history].slice(0, 6) } : ns;
     }
     state.global = out.updated_global;
-    // Capture the week's explanations for the Weekly Update + Why surfaces (a new week to view).
-    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations: out.explanations, seen: false };
+    // Per-changed-slot from→to snapshot (only slots that surfaced an explanation).
+    const plan: WeekPlanChange[] = out.explanations.map((e) => {
+      const before = beforeById.get(e.slotId);
+      const after = out.next_slots.find((n) => n.slotId === e.slotId);
+      return {
+        slotId: e.slotId,
+        exerciseId: after?.exercise_id ?? before?.current_exercise_id ?? '',
+        loadFrom: before?.current_load_kg ?? null,
+        loadTo: after?.load_kg ?? before?.current_load_kg ?? null,
+        setsFrom: before?.current_sets ?? after?.sets ?? 0,
+        setsTo: after?.sets ?? before?.current_sets ?? 0,
+        rangeFrom: before?.rep_range ?? after?.rep_range ?? [0, 0],
+        rangeTo: after?.rep_range ?? before?.rep_range ?? [0, 0],
+        swapped: !!after && !!before && after.exercise_id !== before.current_exercise_id,
+      };
+    });
+    // Capture the week's explanations + plan for the Weekly Update + Why surfaces (a new week to view).
+    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations: out.explanations, plan, seen: false };
     state.lastAdvanceAt += freq;
   }
   await saveState(state);
@@ -286,6 +363,84 @@ export async function markWeeklyUpdateSeen(): Promise<void> {
     state.lastUpdate.seen = true;
     await saveState(state);
   }
+}
+
+// ──────────────── Weekly Update B: the whole week at its new loads ────────────────
+/** A per-changed-slot from→to snapshot, captured at advance time (decreases included). */
+export interface WeekPlanChange {
+  slotId: string;
+  exerciseId: string;
+  loadFrom: number | null;
+  loadTo: number | null;
+  setsFrom: number;
+  setsTo: number;
+  rangeFrom: [number, number];
+  rangeTo: [number, number];
+  swapped: boolean;
+}
+
+export interface WeeklyPlanLift {
+  exerciseId: string;
+  name: string;
+  loadKg: number | null; // current (new) prescribed load; null = bodyweight / unmanaged
+  sets: number;
+  repRange: [number, number] | null;
+  /** Present only when Hush changed this slot this week (carries the Why triple). */
+  change: { snapshot: WeekPlanChange; explanation: Explanation } | null;
+}
+export interface WeeklyPlanWorkout {
+  dayId: string;
+  name: string;
+  groups: string[];
+  lifts: WeeklyPlanLift[];
+}
+export interface WeeklyPlanView {
+  weekIndex: number;
+  at: string; // ISO of the advance
+  changedCount: number;
+  seen: boolean;
+  workouts: WeeklyPlanWorkout[];
+}
+
+/**
+ * The full week — every workout's lifts at their NEW loads, with the per-change
+ * from→to snapshot and Why. Joins the program structure (grouping / order / names)
+ * with engine slot state (current load / sets / range) and the captured weekly
+ * snapshot (changes + explanations). Read-only; never alters state. Returns null
+ * only when there is no engine state at all.
+ */
+export async function getWeeklyPlan(program: Program): Promise<WeeklyPlanView | null> {
+  const state = await loadState();
+  const u = state.lastUpdate;
+  const slots = slotsRecord(state);
+  const explanations = (u?.explanations as Explanation[] | undefined) ?? [];
+  const plan = (u?.plan as WeekPlanChange[] | undefined) ?? [];
+  const explBySlot = new Map(explanations.map((e) => [e.slotId, e]));
+  const planBySlot = new Map(plan.map((p) => [p.slotId, p]));
+  const idsByDay = slotIdsByPosition(program);
+
+  const workouts: WeeklyPlanWorkout[] = [];
+  for (const day of program.days) {
+    if (day.isRest) continue;
+    const ids = idsByDay.get(day.id) ?? [];
+    const lifts: WeeklyPlanLift[] = day.slots.map((slot, i) => {
+      const slotId = ids[i] ?? null;
+      const st = slotId ? slots[slotId] : undefined;
+      const snap = slotId ? planBySlot.get(slotId) : undefined;
+      const expl = slotId ? explBySlot.get(slotId) : undefined;
+      return {
+        exerciseId: slot.exerciseId,
+        name: exerciseDisplayName(slot.exerciseId),
+        loadKg: st ? st.current_load_kg : null,
+        sets: st ? st.current_sets : slot.setCount,
+        repRange: st ? st.rep_range : null,
+        change: snap && expl ? { snapshot: snap, explanation: expl } : null,
+      };
+    });
+    workouts.push({ dayId: day.id, name: day.name, groups: day.muscleGroups, lifts });
+  }
+  const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0);
+  return { weekIndex: u?.weekIndex ?? 0, at: u?.at ?? new Date().toISOString(), changedCount, seen: !!u?.seen, workouts };
 }
 
 /** Reset all v4 engine state (account wipe / tests). */

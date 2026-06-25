@@ -7,7 +7,7 @@
  *   → Goal → Days per week → Program Created → Home.
  * Invite-token enrollment is removed.
  */
-import type { Experience, Goal, OnboardingInputs, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, Experience, Goal, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
 /** Profile fields gathered before Goal — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
@@ -45,6 +45,11 @@ export type MainParamList = {
   Home: { focusDayId?: string } | undefined;
   Program: undefined;
   History: undefined;
+  // Open training (run / walk) — recorded, never coached, sealed off from the v4
+  // strength engine. The recorded activity lands in the unified History timeline.
+  Cardio: undefined;
+  // Read-only details for one recorded cardio activity (opened from History).
+  CardioDetail: { activity: CardioActivity };
   // Pushed / modal surfaces.
   ProfileSheet: undefined;
   SessionFlow: undefined;
@@ -57,6 +62,9 @@ export type MainParamList = {
   Progress: undefined;
   // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
   WeeklyUpdate: undefined;
+  // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
+  // also opened from Profile → Membership. `source` records what surfaced it.
+  Paywall: { source: 'gate' | 'profile' } | undefined;
   // Internal debug/QA (DEV only) — per-slot v4 engine state dump.
   V4Debug: undefined;
 };

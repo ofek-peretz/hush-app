@@ -1,27 +1,41 @@
 import ActivityKit
 import Foundation
 
-// Canonical ActivityKit attributes for the Hush session Live Activity.
+// Canonical ActivityKit attributes for the Hush STRENGTH session Live Activity.
 //
-// This is the native mirror of the SUBSET of `SessionMirror` (sessionMirror.ts)
-// that the Live Activity / Dynamic Island / Lock Screen renders. It is duplicated
-// verbatim in the widget extension target (targets/widget/HushSessionAttributes.swift)
-// because ActivityKit decodes `ContentState` across the app↔widget process boundary
-// by its Codable shape — the two copies MUST stay byte-identical.
+// Native mirror of the SUBSET of `SessionMirror` (sessionMirror.ts) that the Live
+// Activity / Dynamic Island / Lock Screen renders — kept in sync with the
+// `LiveActivityState` (kind: 'strength') projection in `src/platform/liveActivity.ts`.
+// ActivityKit decodes `ContentState` across the app↔widget process boundary by its
+// Codable shape, so the copy in the widget extension target MUST stay byte-identical.
 //
-// Contract (spec §8.5): read-only; the timer (`restEndDate`) is the hero; the
-// exercise name + set label are support. No completion control, progress ring,
-// heart rate, calories, or streak.
+// Contract (spec §8.5): read-only; the rest timer (`restEndDate`) is the hero during
+// rest; NO completion control, progress ring, heart rate, calories, or streak.
 struct HushSessionAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
-    /// Current exercise name (support text).
+    /// Program-day name, e.g. "Upper B".
+    var workoutName: String
+    /// "set" | "rest" | "transition" | "paused".
+    var phase: String
+    /// Current exercise name.
     var exerciseName: String
-    /// e.g. "Set 2 of 4" (support text).
+    /// e.g. "Set 2 of 4".
     var setLabel: String
+    /// 1-based ordinal of the current lift among the session's distinct lifts.
+    var liftIndex: Int
+    var liftCount: Int
+    /// Prescribed load (kg); nil => bodyweight.
+    var targetWeight: Double?
+    var targetReps: Int
     /// Absolute instant the current rest ends. Non-nil only while resting; drives
-    /// the drift-proof `Text(timerInterval:)` countdown. Nil during an active set.
+    /// the drift-proof `Text(timerInterval:)` countdown.
     var restEndDate: Date?
-    /// True while the session is in a rest phase (inter-set or transition).
+    /// Full prescribed rest length (s) — the ring denominator; nil unless resting.
+    var restTotalS: Double?
     var isResting: Bool
+    /// Upcoming exercise during a transition rest (else nil).
+    var nextExerciseName: String?
+    var nextTargetWeight: Double?
+    var nextTargetReps: Int?
   }
 }

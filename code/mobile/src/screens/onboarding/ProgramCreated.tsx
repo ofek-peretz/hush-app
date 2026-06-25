@@ -81,6 +81,12 @@ export function ProgramCreated({ route }: Props) {
             </View>
             <Text style={styles.readyTitle}>{t('ob.readyTitle')}</Text>
             <Text style={styles.readySub}>{t('ob.readySub', { focus, days: inputs.daysPerWeek })}</Text>
+            {/* the philosophy in one sentence — given its own weight (handoff §1/§9) */}
+            <Text style={styles.readyOwnership}>{t('ob.readyOwnership')}</Text>
+            <View style={styles.readyNote}>
+              <Icon name="shield" size={16} color={up[0]} strokeWidth={2} />
+              <Text style={styles.readyNoteText}>{t('ob.readyNote')}</Text>
+            </View>
           </>
         )}
       </View>
@@ -114,5 +120,8 @@ const styles = StyleSheet.create({
   readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0] },
   readyTitle: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], lineHeight: textScale['3xl'] * 1.05, letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: color.textPrimary, marginTop: 16 },
   readySub: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, marginTop: 14, maxWidth: 300 },
+  readyOwnership: { fontFamily: font.sansSemibold, fontSize: textScale.lg, lineHeight: 26, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, marginTop: 16, maxWidth: 320 },
+  readyNote: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', marginTop: 18, maxWidth: 320 },
+  readyNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary },
   footer: { paddingHorizontal: space.gutter, paddingBottom: 24 },
 });

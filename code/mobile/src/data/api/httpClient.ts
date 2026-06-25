@@ -345,6 +345,12 @@ export class HttpModelClient implements ModelClient {
     });
   }
 
+  async setSlotLock({ slotId, locked }: { slotId: string; locked: boolean }): Promise<void> {
+    await this.request('POST', '/preferences/lock', {
+      client_event_id: newEventId(), slot_id: slotId, locked, source: 'program_detail',
+    });
+  }
+
   async setSubstitute({ primaryExercise, substituteExercise, remove }: { primaryExercise: string; substituteExercise?: string; remove?: boolean }): Promise<void> {
     await this.request('POST', '/preferences/substitute', {
       client_event_id: newEventId(), primary_exercise: primaryExercise,

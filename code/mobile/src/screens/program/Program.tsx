@@ -86,13 +86,21 @@ export function Program({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <ProgressMeter
-          label={t('program.completedMeter')}
-          valueLabel={`${prog.done} / ${prog.total}`}
-          value={prog.done}
-          max={prog.total || 1}
-          tone="signal"
-        />
+        <View style={styles.summary}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryCount}>
+              {prog.done}
+              <Text style={styles.summaryTotal}> / {prog.total}</Text>
+            </Text>
+            <Text style={styles.summaryLabel}>{t('program.sessionsDone')}</Text>
+          </View>
+          <Text style={styles.summaryBody}>
+            {prog.total - prog.done <= 0 ? t('program.weekDone') : t('program.momentum', { count: prog.total - prog.done })}
+          </Text>
+          <View style={styles.summaryMeter}>
+            <ProgressMeter value={prog.done} max={prog.total || 1} tone="signal" />
+          </View>
+        </View>
 
         {upcoming.length > 0 ? (
           <View style={styles.group}>
@@ -143,6 +151,13 @@ const styles = StyleSheet.create({
   headTitles: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
   body: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  summary: { paddingTop: 2, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: color.border },
+  summaryRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
+  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: color.textPrimary },
+  summaryTotal: { fontSize: textScale.xl, color: color.textTertiary },
+  summaryLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary },
+  summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary },
+  summaryMeter: { marginTop: 14 },
   group: { marginTop: 24 },
   groupLegend: { marginBottom: 2 },
   meta: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },

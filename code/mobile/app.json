@@ -22,12 +22,21 @@
       "buildNumber": "15",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "NSHealthShareUsageDescription": "Hush reads your weight and walks to learn your body faster.",
-        "NSHealthUpdateUsageDescription": "Hush does not write any data to Apple Health.",
+        "NSHealthShareUsageDescription": "Hush imports your bodyweight from Apple Health so you do not have to enter it.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "com.apple.developer.healthkit": true
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
       }
     },
     "android": {
@@ -45,12 +54,12 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Hush reads your weight and walks to learn your body faster.",
-          "NSHealthUpdateUsageDescription": "Hush does not write any data to Apple Health."
+          "NSHealthShareUsageDescription": "Hush imports your bodyweight from Apple Health so you do not have to enter it."
         }
       ],
       "@bacons/apple-targets",
-      "expo-font"
+      "expo-font",
+      "expo-video"
     ],
     "extra": {
       "eas": {

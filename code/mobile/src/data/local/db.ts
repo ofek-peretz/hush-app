@@ -9,6 +9,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   AthleteMode,
+  CardioActivity,
   PortraitSnapshot,
   PortraitState,
   Profile,
@@ -18,6 +19,9 @@ import type {
 // Type-only import (erased at runtime → no layering cycle). The Health connection
 // record is persisted local state, stored behind this repo like everything else.
 import type { HealthState } from '@/platform/health/healthModel';
+// Type-only — the cached entitlement (StoreKit is the source of truth; this is the
+// local mirror used for instant offline gating at boot).
+import type { Entitlement } from '@/domain/entitlement';
 
 const K = {
   profile: 'hush.profile',
@@ -25,6 +29,7 @@ const K = {
   mode: 'hush.mode',
   activeSession: 'hush.session.active',
   history: 'hush.history.sessions',
+  cardio: 'hush.cardio.activities', // recorded run/walk activities (Open training)
   snapshots: 'hush.portrait.snapshots',
   recents: 'hush.exercise.recents',
   pendingSync: 'hush.sync.pending',
@@ -33,6 +38,7 @@ const K = {
   health: 'hush.health.state',
   preferences: 'hush.preferences',
   engineV4: 'hush.engine.v4', // Hush v4 per-slot progression state (gated; see engine/v4)
+  entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   schemaVersion: 'hush.schema.version',
 } as const;
 
@@ -45,6 +51,10 @@ export interface OwnedPreferences {
   substitutes: Record<string, string>; // primary exerciseId -> preferred substitute
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
+  // Athlete-LOCKED slots (Lock System): engine slotIds the athlete pinned against engine-initiated
+  // swaps. The lock belongs to the SLOT (durable across regen + manual replacement), never the
+  // exercise — so it is keyed by the engine's stable slotId (deriveSlots), not an exercise id.
+  lockedSlots: string[];
 }
 
 export const EMPTY_PREFERENCES: OwnedPreferences = {
@@ -53,12 +63,15 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
   substitutes: {},
   workoutOrder: [],
   exerciseOrderByWorkout: {},
+  lockedSlots: [],
 };
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
  *  v2: added the Health connection record (hush.health.state) — additive.
- *  v3: added the Hush v4 per-slot engine state (hush.engine.v4) — additive. */
-export const SCHEMA_VERSION = 3;
+ *  v3: added the Hush v4 per-slot engine state (hush.engine.v4) — additive.
+ *  v4: added the cached subscription entitlement (hush.entitlement) — additive.
+ *  v5: added recorded cardio activities (hush.cardio.activities) — additive. */
+export const SCHEMA_VERSION = 5;
 
 /** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
  *  days_since_last_session; `lastAdvanceAt` is the completed-session count at the last weekly
@@ -70,8 +83,10 @@ export interface EngineV4State {
   lastAdvanceAt: number;
   goal?: string; // last engine goal seen — a change applies the C4-1 goal-change transition
   /** The most recent week's explanations (for the Weekly Update + Why surfaces) + when produced.
-   *  Structural to avoid a layering cycle into the engine. `seen` flips once the athlete views it. */
-  lastUpdate?: { weekIndex: number; at: string; explanations: unknown[]; seen?: boolean };
+   *  `plan` is the per-changed-slot from→to snapshot captured at advance time (Weekly Update B
+   *  renders the whole week at its new loads). Structural to avoid a layering cycle into the engine.
+   *  `seen` flips once the athlete views it. */
+  lastUpdate?: { weekIndex: number; at: string; explanations: unknown[]; plan?: unknown[]; seen?: boolean };
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
@@ -125,6 +140,16 @@ export const db = {
     const all = await this.loadHistory();
     all.unshift(s);
     await setJSON(K.history, all);
+  },
+
+  // ---- Cardio activities (Open training: recorded, never coached; newest first) ----
+  async loadCardio(): Promise<CardioActivity[]> {
+    return (await getJSON<CardioActivity[]>(K.cardio)) ?? [];
+  },
+  async appendCardioActivity(a: CardioActivity): Promise<void> {
+    const all = await this.loadCardio();
+    all.unshift(a);
+    await setJSON(K.cardio, all);
   },
 
   // ---- Portrait snapshots (one per program construction; oldest first) ----
@@ -197,6 +222,10 @@ export const db = {
   // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
   loadEngineV4: () => getJSON<EngineV4State>(K.engineV4),
   saveEngineV4: (s: EngineV4State) => setJSON(K.engineV4, s),
+
+  // ---- Subscription entitlement (local mirror; StoreKit is the source of truth) ----
+  loadEntitlement: () => getJSON<Entitlement>(K.entitlement),
+  saveEntitlement: (e: Entitlement) => setJSON(K.entitlement, e),
 
   // ---- Schema version (detect persisted-shape drift on boot) ----
   async getSchemaVersion(): Promise<number | null> {

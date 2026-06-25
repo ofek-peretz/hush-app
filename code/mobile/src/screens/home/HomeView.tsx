@@ -12,13 +12,13 @@
  * The container (Home.tsx) wires state + navigation.
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
-import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton, Metric } from '@/components/ds';
+import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, font, textScale, signal } from '@/design/tokens';
+import { color, space, font, textScale, signal, radius } from '@/design/tokens';
 
 export interface HomeWorkoutOption {
   id: string;
@@ -46,6 +46,7 @@ export interface HomeViewProps {
   onHistory: () => void;
   onSettings: () => void;
   onProgress?: () => void;
+  onCardio: () => void; // Open training (run / walk) — recorded, not coached
 }
 
 export function HomeView(props: HomeViewProps) {
@@ -72,6 +73,11 @@ export function HomeView(props: HomeViewProps) {
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.legendTop}>
+            {!props.resting ? (
+              <Text style={styles.greeting}>
+                {props.name ? t('home.readyWhenYouAre', { name: props.name.split(' ')[0] }) : t('home.readyAnon')}
+              </Text>
+            ) : null}
             <Legend>{props.resting ? t('home.recovery') : t('home.nextWorkout')}</Legend>
           </View>
 
@@ -91,27 +97,6 @@ export function HomeView(props: HomeViewProps) {
                   size="lg"
                 />
               </View>
-              {/* two instrument stats: rest days taken + when the next week opens (Sunday 04:00) */}
-              <View style={styles.statRow}>
-                <Metric value={props.restDaysTaken ?? 0} label={t('home.restDaysTaken')} size="sm" />
-                <Metric value={t('recovery.sunShort')} label={t('home.nextSessionOpens')} size="sm" />
-              </View>
-              {/* the next session, locked until Sunday 04:00 */}
-              <View style={styles.lockedWrap}>
-                <ListRow
-                  title={props.workouts[0]?.name ?? t('home.nextSession')}
-                  subtitle={props.workouts[0]?.muscles}
-                  muted
-                  last
-                  leading={<Icon name="lock" size={20} color={color.textTertiary} strokeWidth={2} />}
-                  trailing={<Text style={styles.lockedDay}>{t('recovery.sunday')}</Text>}
-                />
-              </View>
-              {props.onProgress ? (
-                <View style={styles.viewProgress}>
-                  <Button variant="secondary" block label={t('home.viewProgress')} onPress={props.onProgress} />
-                </View>
-              ) : null}
             </View>
           ) : (
             <View style={styles.block}>
@@ -150,6 +135,11 @@ export function HomeView(props: HomeViewProps) {
                 />
               </View>
 
+              <View style={styles.loadsSetRow}>
+                <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
+                <Text style={styles.loadsSetText}>{t('home.loadsSet')}</Text>
+              </View>
+
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
               <View style={styles.cta}>
@@ -163,10 +153,29 @@ export function HomeView(props: HomeViewProps) {
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : null}
-                <Button variant="quiet" block label={t('home.chooseAnother')} onPress={props.onProgram} />
               </View>
             </View>
           )}
+
+          {/* open training — run / walk, recorded not coached (sealed from the engine) */}
+          <View style={styles.openTraining}>
+            <Legend style={styles.hubLegend}>{t('home.openTraining')}</Legend>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('cardio.title')}
+              onPress={props.onCardio}
+              style={({ pressed }) => [styles.cardioCard, pressed && styles.cardioCardPressed]}
+            >
+              <View style={styles.cardioIconBox}>
+                <Icon name="footprints" size={19} color={color.textSecondary} strokeWidth={2} />
+              </View>
+              <View style={styles.cardioText}>
+                <Text style={styles.cardioTitle}>{t('cardio.title')}</Text>
+                <Text style={styles.cardioSub}>{t('cardio.recordedNotCoached')}</Text>
+              </View>
+              <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+            </Pressable>
+          </View>
 
           {/* hub entries */}
           <View style={styles.hub}>
@@ -217,9 +226,38 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 },
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
-  legendTop: { paddingTop: 26 },
+  legendTop: { paddingTop: 24 },
+  greeting: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginBottom: 10 },
   block: { paddingTop: 14 },
   restCopy: { marginTop: 14, maxWidth: 320 },
+
+  loadsSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22 },
+  loadsSetText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary },
+
+  openTraining: { marginTop: 24 },
+  cardioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  cardioCardPressed: { backgroundColor: color.fillSubtle },
+  cardioIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: color.fillSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardioText: { flex: 1, minWidth: 0 },
+  cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary },
+  cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
 
   groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, alignItems: 'center' },
   groupItem: { flexDirection: 'row', alignItems: 'center' },
@@ -231,10 +269,6 @@ const styles = StyleSheet.create({
   metaSep: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary },
 
   meterWrap: { marginTop: 28 },
-  statRow: { flexDirection: 'row', gap: 28, marginTop: 24 },
-  lockedWrap: { marginTop: 20 },
-  lockedDay: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
-  viewProgress: { marginTop: 20 },
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
 

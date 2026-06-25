@@ -23,11 +23,15 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
+import { engineSlotIdAt } from '@/engine/v4/v4Engine';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
+import { billing, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
+import { BILLING_EVENTS } from '@/platform/events';
+import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
 
 /** Derive the calibration mode from the backend's completed-session count
  *  (source of truth, §2.3). Reinstall/device-change safe. */
@@ -71,10 +75,12 @@ interface AppState {
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
   revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
   weekRest: boolean; // Weekly Program Container: week complete → Home shows the existing Rest state
+  entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[] }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement }
+  | { type: 'ENTITLEMENT'; entitlement: Entitlement }
   | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[] }
   | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[] }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
@@ -96,12 +102,15 @@ const initial: AppState = {
   recents: [],
   revoked: false,
   weekRest: false,
+  entitlement: NO_ENTITLEMENT,
 };
 
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: a.entitlement };
+    case 'ENTITLEMENT':
+      return { ...s, entitlement: a.entitlement };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents };
     case 'ONBOARDED':
@@ -166,6 +175,9 @@ interface AppApi extends AppState {
   setVolume: (volume: WeeklyVolume) => Promise<void>;
   /** Deliberate replacement: persist the chosen exercise as the slot's preference (R18). */
   replaceSlotExercise: (dayId: string, slotIndex: number, exerciseId: string) => Promise<void>;
+  /** Lock System: toggle the athlete lock on a slot. A locked slot is never auto-swapped by the
+   *  engine; manual replacement stays allowed and the lock stays attached to the slot. */
+  toggleSlotLock: (dayId: string, slotIndex: number) => Promise<void>;
   /** Athlete-owned exercise order within a workout (Athlete > Model). Durable + preserved across
    *  weekly regenerations. */
   reorderExercise: (dayId: string, fromIndex: number, toIndex: number) => Promise<void>;
@@ -173,6 +185,12 @@ interface AppApi extends AppState {
   reorderWorkouts: (fromIndex: number, toIndex: number) => Promise<void>;
   /** Mark a workout finished for the week (DONE chip + Home advances). Local, idempotent. */
   markWorkoutCompleted: (programDayId: string) => Promise<void>;
+  /** Re-read the entitlement from the store (StoreKit) and update the cache. Best-effort. */
+  refreshEntitlement: () => Promise<void>;
+  /** Begin the StoreKit purchase flow for a plan; on success the entitlement unlocks training. */
+  purchaseSubscription: (productId: ProductId) => Promise<PurchaseResult>;
+  /** Restore a prior purchase (re-reads the Apple ID's entitlements). */
+  restorePurchases: () => Promise<PurchaseResult>;
   /** Sign Out: clear the local identity + token (the server data is retained). */
   resetAccount: () => Promise<void>;
   /** Delete Account: erase (anonymize) the athlete SERVER-SIDE (OD-2), then wipe local state. */
@@ -267,17 +285,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
       }
 
-      const [profile, program, persistedMode, snapshots, recents] = await Promise.all([
+      const [profile, program, persistedMode, snapshots, recents, cachedEntitlement] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadRecents(),
+        db.loadEntitlement(),
       ]);
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents });
+      // Gate on the CACHED entitlement immediately (offline-safe); the live store
+      // value is reconciled just after boot (below).
+      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT });
+
+      // Reconcile the entitlement against StoreKit (source of truth) right after
+      // boot. Best-effort + fully isolated so it can never break the boot path; a
+      // store/offline failure just keeps the cached value.
+      void (async () => {
+        try {
+          const prev = cachedEntitlement ?? NO_ENTITLEMENT;
+          const next = await billing.getEntitlement();
+          await db.saveEntitlement(next);
+          trackEntitlementChange(prev, next);
+          dispatch({ type: 'ENTITLEMENT', entitlement: next });
+        } catch {
+          /* store unavailable — keep the cached entitlement */
+        }
+      })();
 
       // HealthKit (convenience-only) — silent bodyweight ingestion on boot. It is
       // NEVER a model input (it only proposes a value for the local Profile, which
@@ -583,6 +619,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
+      async toggleSlotLock(dayId, slotIndex) {
+        if (!state.program) return;
+        const slotId = engineSlotIdAt(state.program, dayId, slotIndex);
+        if (!slotId) return; // core / unmapped slot — the engine never swaps it, so it is not lockable
+        const day = state.program.days.find((d) => d.id === dayId);
+        const slot = day?.slots[slotIndex];
+        if (!slot) return;
+        const locked = !slot.locked;
+        // In-place update (mirrors replaceSlotExercise): flip the display flag + persist, so a
+        // mid-week toggle never regenerates the week (which would clobber completed/edits).
+        const days = state.program.days.map((d) =>
+          d.id !== dayId ? d : { ...d, slots: d.slots.map((sl, i) => (i === slotIndex ? { ...sl, locked } : sl)) },
+        );
+        const program: Program = { ...state.program, days };
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        void track('exercise_lock_toggled', { locked });
+        // Persist the durable, slot-keyed lock so it survives regen/replacement and the engine
+        // reconciles its swap gate. Best-effort (local edit already applied).
+        model
+          .setSlotLock({ slotId, locked })
+          .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'lock' }));
+      },
+
       async reorderExercise(dayId, fromIndex, toIndex) {
         if (!state.program) return;
         const day = state.program.days.find((d) => d.id === dayId);
@@ -642,6 +702,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snapshots = await db.appendSnapshot(snap);
         await persistMode(next);
         dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked: true, snapshots });
+      },
+
+      async refreshEntitlement() {
+        try {
+          const next = await billing.getEntitlement();
+          if (
+            next.active === state.entitlement.active &&
+            next.productId === state.entitlement.productId &&
+            next.source === state.entitlement.source
+          ) {
+            return; // already consistent
+          }
+          await db.saveEntitlement(next);
+          trackEntitlementChange(state.entitlement, next);
+          dispatch({ type: 'ENTITLEMENT', entitlement: next });
+        } catch {
+          /* store unavailable — keep the cached entitlement */
+        }
+      },
+
+      async purchaseSubscription(productId) {
+        void track(BILLING_EVENTS.purchaseStarted, { productId });
+        const result = await billing.purchase(productId);
+        if (result.status === 'purchased' || result.status === 'restored') {
+          await db.saveEntitlement(result.entitlement);
+          trackEntitlementChange(state.entitlement, result.entitlement);
+          dispatch({ type: 'ENTITLEMENT', entitlement: result.entitlement });
+          void track(BILLING_EVENTS.purchaseSucceeded, { productId, source: result.entitlement.source });
+        } else if (result.status === 'cancelled') {
+          void track(BILLING_EVENTS.purchaseCancelled, { productId });
+        } else {
+          void track(BILLING_EVENTS.purchaseFailed, { productId, status: result.status });
+        }
+        return result;
+      },
+
+      async restorePurchases() {
+        void track(BILLING_EVENTS.restoreStarted);
+        const result = await billing.restore();
+        if (result.status === 'restored' && result.entitlement.active) {
+          await db.saveEntitlement(result.entitlement);
+          trackEntitlementChange(state.entitlement, result.entitlement);
+          dispatch({ type: 'ENTITLEMENT', entitlement: result.entitlement });
+          void track(BILLING_EVENTS.restoreSucceeded, { productId: result.entitlement.productId });
+        } else {
+          void track(BILLING_EVENTS.restoreEmpty);
+        }
+        return result;
       },
 
       async resetAccount() {
