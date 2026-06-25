@@ -19,7 +19,7 @@
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush imports your bodyweight from Apple Health so you do not have to enter it.",
