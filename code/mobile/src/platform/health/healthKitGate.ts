@@ -9,12 +9,13 @@
  * result the stub produces (denial is a routed path, never an error — spec §7.11).
  *
  * Contract honored here (ratified OD, spec §10.3):
- *  - READ-ONLY: we request read access for bodyMass ONLY (bodyweight import) and
- *    never write to Health (no `toShare`). No activity / steps / distance / workout
- *    scope is requested — HealthKit is bodyweight import, nothing else.
- *  - HealthKit is NOT a model input: this gate only surfaces values; the silent
- *    bodyweight adoption + telemetry live in `healthIngestion.ts`, feeding the
- *    Profile (display), never the ModelClient.
+ *  - READ-ONLY: we request read access for the CARDIO metrics the run / walk
+ *    recorder surfaces — heart rate, active energy (calories) and walking/running
+ *    distance, plus workouts — and never write to Health (no `toShare`). Bodyweight
+ *    is no longer read; the Profile's weight is entered by hand.
+ *  - HealthKit is NOT a model input: this gate only surfaces values for the cardio
+ *    log (distance / pace / heart / calories). None of it feeds the strength engine,
+ *    the program, loads, or selection.
  *
  * HealthKit privacy note: iOS never reveals whether READ access was granted.
  * `getRequestStatusForAuthorization` only says whether the prompt has been shown, so
@@ -24,7 +25,6 @@
  */
 import {
   AuthorizationRequestStatus,
-  getMostRecentQuantitySample,
   getRequestStatusForAuthorization,
   isHealthDataAvailableAsync,
   requestAuthorization,
@@ -32,17 +32,19 @@ import {
 import type { HealthGate } from '@/platform/health';
 import type { BodyweightSample, HealthPermissionState } from './healthModel';
 
-// String-union identifiers (v14 dropped the enum). Read-only scopes only.
-const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
+// String-union identifiers (v14 dropped the enum). Read-only cardio scopes — the
+// metrics the run / walk recorder shows: heart rate, active energy (calories),
+// walking/running distance, and the workout type itself.
+const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
+const ACTIVE_ENERGY = 'HKQuantityTypeIdentifierActiveEnergyBurned';
+const DISTANCE = 'HKQuantityTypeIdentifierDistanceWalkingRunning';
+const WORKOUT = 'HKWorkoutTypeIdentifier';
 
-/** Read-only auth request — bodyweight ONLY, `toRead` only, never `toShare`
- *  (Hush never writes, and reads nothing beyond bodyweight). */
+/** Read-only auth request — cardio metrics, `toRead` only, never `toShare`
+ *  (Hush never writes to Health). */
 const READ_AUTH = {
-  toRead: [BODY_MASS],
+  toRead: [HEART_RATE, ACTIVE_ENERGY, DISTANCE, WORKOUT],
 } as const;
-
-/** kilograms — the unit the Profile speaks. */
-const KG = 'kg' as const;
 
 export const healthKitGate: HealthGate = {
   async requestPermission() {
@@ -69,17 +71,14 @@ export const healthKitGate: HealthGate = {
     }
   },
 
+  // Bodyweight is no longer read from Health (weight is entered by hand). These
+  // satisfy the shared HealthGate contract but never surface a value, so the
+  // (now inert) bodyweight-adoption path in healthIngestion.ts simply does nothing.
   async latestBodyweight(): Promise<BodyweightSample | null> {
-    try {
-      const sample = await getMostRecentQuantitySample(BODY_MASS, KG);
-      if (!sample) return null;
-      return { kg: sample.quantity, recordedAt: sample.endDate.toISOString() };
-    } catch {
-      return null;
-    }
+    return null;
   },
 
   async latestBodyweightKg(): Promise<number | null> {
-    return (await this.latestBodyweight())?.kg ?? null;
+    return null;
   },
 };

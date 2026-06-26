@@ -439,11 +439,12 @@ function Rest({
     return () => clearTimeout(id);
   }, [remaining, paused, session, sync]);
 
-  // +15s: extend the absolute end and the total, then re-sync (the ring fast-fills).
-  // Also tell the session store so the longer rest re-publishes to the Apple Watch /
-  // Live Activity (otherwise a phone +15 wouldn't reach the watch).
+  // +15s: extend the absolute end but KEEP `total` fixed (the design adds only to
+  // `remaining`), so the ring visibly fills FORWARD by a clear 15/total slice — the
+  // "loading" top-up — instead of the near-imperceptible nudge you get when total
+  // grows in lock-step. Then re-sync, and tell the session store so the longer rest
+  // re-publishes to the Apple Watch / Live Activity (a phone +15 must reach the watch).
   const addFifteen = useCallback(() => {
-    setTotal((tt) => tt + 15);
     remainingRef.current += 15;
     endAtRef.current = (endAtRef.current ?? Date.now() + remainingRef.current * 1000) + 15000;
     sync();

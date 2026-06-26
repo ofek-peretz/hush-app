@@ -519,7 +519,9 @@ const styles = StyleSheet.create({
   activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   heroLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: textScale.data * 0.95, letterSpacing: -3, color: stageC.ink0 },
+  // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono
+  // digit tops — the 0.95 the web design tolerates is unsafe here (see SessionFlow `hero`).
+  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0 },
   heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginLeft: 6, marginBottom: 8 },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
@@ -554,7 +556,10 @@ const styles = StyleSheet.create({
   gaitPillTextActive: { color: stageC[0] },
 
   // pause overlay
-  pauseOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,17,14,0.86)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  // Near-opaque (RN has no cheap backdrop-blur like the web design): at 0.86 the
+  // live metrics behind bled through and collided with the "Finish & save" flag +
+  // label, reading as a stray floating flag. A solid cover keeps the pause panel clean.
+  pauseOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,17,14,0.985)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12 },
   pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0 },
   pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },

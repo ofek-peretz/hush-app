@@ -4,13 +4,12 @@
  * via Steppers). Calibrates starting loads. Continue → Goal, carrying the draft.
  * Progress 3 / 6.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Legend, SegmentedControl, Stepper, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { health } from '@/platform/health';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
@@ -21,18 +20,8 @@ export function ManualInfo({ navigation, route }: Props) {
   const [sex, setSex] = useState<'female' | 'male'>('male');
   const [age, setAge] = useState(28);
   const [height, setHeight] = useState(178);
+  // Weight is entered by hand — Health is now read for cardio metrics, not bodyweight.
   const [weight, setWeight] = useState(82);
-
-  useEffect(() => {
-    if (!healthConnected) return;
-    let cancelled = false;
-    void health.latestBodyweightKg().then((kg) => {
-      if (!cancelled && kg && kg > 0) setWeight(Math.round(kg));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [healthConnected]);
 
   function onContinue() {
     navigation.navigate('Goal', {

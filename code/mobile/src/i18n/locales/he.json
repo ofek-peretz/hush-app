@@ -42,7 +42,7 @@
   },
   "connectHealth": {
     "title": "חיבור ל-Health",
-    "body": "Hush מייבאת את משקל הגוף שלך מ‑Apple Health, כדי שלא תצטרך להזין אותו. בכל מקרה תענה על כמה שאלות קצרות בהמשך.",
+    "body": "Hush קוראת את הדופק, הקלוריות והמרחק בריצות ובהליכות שתתעד — כך שהמאמץ אמיתי, לא משוער. בכל מקרה תענה על כמה שאלות קצרות בהמשך.",
     "optional": "אופציונלי. אפשר לשנות בכל עת.",
     "continue": "המשך",
     "skip": "דילוג"
@@ -200,9 +200,9 @@
     "namePlaceholder": "השם שלך",
     "healthLegend": "אופציונלי",
     "healthTitle": "חיבור נתוני בריאות",
-    "healthSub": "Hush מייבאת את משקל הגוף שלך מ‑Apple Health. זה אופציונלי וניתן לשינוי בהמשך.",
+    "healthSub": "Hush קוראת דופק, קלוריות ומרחק עבור הריצות וההליכות שתתעד. אופציונלי, וניתן לשינוי בהמשך.",
     "healthCardTitle": "Apple Health",
-    "healthCardSub": "משקל גוף",
+    "healthCardSub": "דופק · קלוריות · מרחק",
     "healthConnect": "חיבור",
     "healthSkip": "דילוג לעת עתה",
     "bodyLegend": "עליך",
@@ -572,7 +572,7 @@
     "account": "חשבון",
     "bodyData": "נתוני גוף",
     "goalExperience": "מטרה וניסיון",
-    "healthConnectedSub": "מחובר · משקל גוף",
+    "healthConnectedSub": "מחובר · דופק, קלוריות, מרחק",
     "membershipPro": "Hush Pro · {{plan}}",
     "membershipProGeneric": "פרו",
     "membershipTrial_one": "תקופת ניסיון · נותר אימון {{count}}",
@@ -586,8 +586,8 @@
     "activeSub": "{{plan}} · מתחדש אוטומטית",
     "endedSub": "תקופת הניסיון החינמית שלך הסתיימה",
     "trialNote": "החיוב מתחיל רק אחרי שבעת אימוני הניסיון החינמיים — אף פעם לא לפני. בחר תוכנית כשתהיה מוכן.",
-    "healthImporting": "מייבא את משקל הגוף שלך",
-    "healthNote": "‏Hush מייבא את משקל הגוף שלך מ‑Apple Health, כדי שלא תצטרך להקליד אותו. שום דבר אחר לא נקרא."
+    "healthImporting": "דופק · קלוריות · מרחק",
+    "healthNote": "‏Hush קוראת דופק, קלוריות ומרחק עבור הריצות וההליכות שאתה מתעד. היא לעולם לא כותבת ל‑Health, ושום דבר מזה לא נוגע בתוכנית האימונים שלך."
   },
   "settings": {
     "units": "יחידות",

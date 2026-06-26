@@ -114,7 +114,8 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 12 },
-  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: textScale.data * 0.95, letterSpacing: -3, color: color.textPrimary },
+  // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono digit tops.
+  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: color.textPrimary },
   heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginLeft: 6, marginBottom: 8 },
 
   metrics: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 18, marginTop: 24, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },

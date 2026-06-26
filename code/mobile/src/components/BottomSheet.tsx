@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { View, Pressable, StyleSheet, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -54,6 +54,7 @@ export function BottomSheet({
   style,
 }: Props) {
   const ty = useSharedValue(0);
+  const insets = useSafeAreaInsets();
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
@@ -79,11 +80,15 @@ export function BottomSheet({
         onPress={onClose}
       />
       {behind}
-      <SafeAreaView edges={['bottom']} style={styles.anchor} pointerEvents="box-none">
+      {/* Plain anchor (NOT a bottom-edge SafeAreaView, which padded the inset
+          BELOW the sheet and left a scrim gap under it). The sheet sits flush to
+          the screen bottom; the home-indicator inset is absorbed as INNER bottom
+          padding so content still clears it. */}
+      <View style={styles.anchor} pointerEvents="box-none">
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor: background, paddingHorizontal: gutter },
+            { backgroundColor: background, paddingHorizontal: gutter, paddingBottom: 28 + insets.bottom },
             heightFraction != null ? { height: `${heightFraction * 100}%` } : null,
             sheetStyle,
             style,
@@ -98,7 +103,7 @@ export function BottomSheet({
           </GestureDetector>
           {children}
         </Animated.View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -113,7 +118,8 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
-    paddingBottom: 28,
+    // paddingBottom is applied inline (28 + safe-area inset) so the sheet reaches
+    // the screen edge with no scrim gap beneath it.
   },
   // Top drag handle area (replaces the old fixed paddingTop) — taller so it's easy
   // to grab; the grabber sits centered within it.

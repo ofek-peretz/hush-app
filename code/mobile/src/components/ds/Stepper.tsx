@@ -80,7 +80,13 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.4 },
   sign: { fontFamily: font.sans, fontSize: 20, color: color.textPrimary, lineHeight: 22 },
   valBox: {
-    flex: 1,
+    // `flexGrow + flexBasis:'auto'` (NOT `flex:1`, whose flexBasis:0 makes the
+    // auto-width wrap size as if the value were 0-wide, then minWidth overflows and
+    // `overflow:'hidden'` clips the trailing "+" button to a sliver). With an auto
+    // basis the wrap content-sizes to −/value/+ in full; flexGrow still lets the
+    // value fill when a parent stretches the control.
+    flexGrow: 1,
+    flexBasis: 'auto',
     minWidth: 64,
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -91,7 +97,10 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderColor: color.border,
   },
-  num: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: color.textPrimary },
-  numLg: { fontSize: textScale.xl },
+  // lineHeight ≥ fontSize + includeFontPadding:false, or RN clips the tall mono
+  // digit tops inside the fixed-height, overflow-hidden control (same headroom the
+  // stage hero needs — see SessionFlow `hero`).
+  num: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.md, lineHeight: 22, includeFontPadding: false, color: color.textPrimary },
+  numLg: { fontSize: textScale.xl, lineHeight: 30 },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
 });

@@ -22,7 +22,7 @@
       "buildNumber": "16",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "NSHealthShareUsageDescription": "Hush imports your bodyweight from Apple Health so you do not have to enter it.",
+        "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
@@ -54,7 +54,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Hush imports your bodyweight from Apple Health so you do not have to enter it."
+          "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health."
         }
       ],
       "@bacons/apple-targets",

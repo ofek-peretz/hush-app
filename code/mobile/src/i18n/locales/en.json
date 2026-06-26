@@ -42,7 +42,7 @@
   },
   "connectHealth": {
     "title": "Connect Health",
-    "body": "Hush imports your bodyweight from Apple Health, so you do not have to enter it. You'll answer a few quick things next either way.",
+    "body": "Hush reads your heart rate, calories and distance during the runs and walks you record — so the effort is real, not estimated. You'll answer a few quick things next either way.",
     "optional": "Optional. You can change this anytime.",
     "continue": "Continue",
     "skip": "Skip"
@@ -200,9 +200,9 @@
     "namePlaceholder": "Your name",
     "healthLegend": "Optional",
     "healthTitle": "Connect health data",
-    "healthSub": "Hush imports your bodyweight from Apple Health. This is optional and can be changed later.",
+    "healthSub": "Hush reads heart rate, calories and distance for the runs and walks you record. Optional, and you can change it later.",
     "healthCardTitle": "Apple Health",
-    "healthCardSub": "Bodyweight",
+    "healthCardSub": "Heart rate · Calories · Distance",
     "healthConnect": "Connect",
     "healthSkip": "Skip for now",
     "bodyLegend": "About you",
@@ -573,7 +573,7 @@
     "account": "Account",
     "bodyData": "Body data",
     "goalExperience": "Goal & experience",
-    "healthConnectedSub": "Connected · bodyweight",
+    "healthConnectedSub": "Connected · heart rate, calories, distance",
     "membershipPro": "Hush Pro · {{plan}}",
     "membershipProGeneric": "Pro",
     "membershipTrial_one": "Free trial · {{count}} session left",
@@ -587,8 +587,8 @@
     "activeSub": "{{plan}} · renews automatically",
     "endedSub": "Your free trial has ended",
     "trialNote": "You're only billed after your seven free sessions — never during. Choose a plan when you're ready.",
-    "healthImporting": "Importing your bodyweight",
-    "healthNote": "Hush imports your bodyweight from Apple Health, so you don't have to type it in. Nothing else is read."
+    "healthImporting": "Heart rate · calories · distance",
+    "healthNote": "Hush reads heart rate, calories and distance for the runs and walks you record. It never writes to Health, and none of it touches your lifting program."
   },
   "settings": {
     "units": "Units",

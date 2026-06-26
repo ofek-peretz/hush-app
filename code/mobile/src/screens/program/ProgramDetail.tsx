@@ -112,7 +112,7 @@ export function ProgramDetail({ navigation, route }: Props) {
                     onPress={() => setFormFor(i)}
                     style={({ pressed }) => [styles.formBtn, pressed && styles.formBtnPressed]}
                   >
-                    <Icon name="play" size={16} color={color.onAccent} />
+                    <Icon name="play" size={18} color={color.textPrimary} />
                   </Pressable>
                   {lockable ? (
                     <Pressable
@@ -206,8 +206,10 @@ const styles = StyleSheet.create({
   lockedTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.accentText },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  formBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.textPrimary, alignItems: 'center', justifyContent: 'center' },
-  formBtnPressed: { backgroundColor: color.textSecondary },
+  // Design RowAction "emphasis": a quiet sunken tile with an ink glyph — NOT a
+  // heavy black square (which broke the row's balance).
+  formBtn: { width: 36, height: 36, borderRadius: radius.md, backgroundColor: color.fillSubtle, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },
+  formBtnPressed: { backgroundColor: color.fillSubtleStrong },
   actionBtn: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   actionBtnPressed: { backgroundColor: color.fillSubtle },
   lockBtnOn: { backgroundColor: color.accentWash, borderWidth: 1, borderColor: color.accent },

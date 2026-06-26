@@ -41,10 +41,12 @@ const isDecision1 = (why: string) => why.includes('Decision 1');
 // sealed off from the strength engine (it never affects load/progression/etc).
 // "Calories" is a standard, expected readout for a logged run/walk and appears
 // in the finalized cardio design — so the §4.1 calorie ban (written for the
-// strength coaching surfaces) does not apply inside the `cardio` namespace. The
-// ban still guards every coaching surface everywhere else.
+// strength coaching surfaces) does not apply inside the `cardio` namespace, nor
+// in the Apple Health connection copy (any `*health*` key), which honestly names
+// the cardio metrics — heart rate, calories, distance — that Health is read for.
+// The ban still guards every coaching surface everywhere else.
 const isCalories = (why: string) => why.includes('calories');
-const isCardioPath = (path: string) => path.startsWith('cardio.');
+const isCardioPath = (path: string) => path.startsWith('cardio.') || /health/i.test(path);
 
 function values(node: unknown, out: { path: string; v: string }[], path = ''): void {
   if (typeof node === 'string') {

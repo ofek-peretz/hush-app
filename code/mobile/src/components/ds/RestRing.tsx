@@ -11,7 +11,7 @@
  * the same way (a quick, honest linear fill, not a teleport). A fresh period
  * (remaining ≥ total) snaps to full with no sweep.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
@@ -45,12 +45,21 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
 
   // Animated fraction of the ring that remains (1 = full, 0 = empty).
   const frac = useSharedValue(target);
+  const prevRemaining = useRef(remaining);
   useEffect(() => {
-    // A fresh period (or a forward jump to/over full) snaps; everything else
-    // sweeps linearly over one second to mirror the design's mechanical fill.
+    const delta = remaining - prevRemaining.current;
+    prevRemaining.current = remaining;
     if (remaining >= total) {
+      // A fresh, full period — snap to full (no sweep up from the previous ring).
+      frac.value = target;
+    } else if (delta <= -2) {
+      // A multi-second DROP in one update = a re-sync after the phone was locked /
+      // backgrounded (JS timers suspend). Snap to the true position so reopening the
+      // app shows the ring already where it belongs — no visible fast catch-up sweep.
       frac.value = target;
     } else {
+      // Normal per-second countdown AND the +15s top-up both fill/drain linearly over
+      // a second — the mechanical, "winding" instrument feel from the design.
       frac.value = withTiming(target, { duration: 1000, easing: Easing.linear });
     }
   }, [remaining, total, target, frac]);
