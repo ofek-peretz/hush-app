@@ -94,7 +94,7 @@ function deloadSlot(slot: SlotState, meta: ExerciseMeta, consts: Constants): Slo
   const load =
     meta.bodyweight || slot.current_load_kg == null
       ? slot.current_load_kg
-      : normalizeLoad(slot.current_load_kg * consts.DELOAD_LOAD, meta.equipment);
+      : normalizeLoad(slot.current_load_kg * consts.DELOAD_LOAD, meta.equipment, meta.observed_loads);
   return {
     ...slot,
     current_load_kg: load,
@@ -111,7 +111,9 @@ function deloadSlot(slot: SlotState, meta: ExerciseMeta, consts: Constants): Slo
 function absenceSlot(slot: SlotState, meta: ExerciseMeta): SlotState {
   // Ease ~10%, KEEP volume, rebuild (I-6: never resume above 0.90× pre-gap load).
   const load =
-    meta.bodyweight || slot.current_load_kg == null ? slot.current_load_kg : normalizeLoad(slot.current_load_kg * 0.9, meta.equipment);
+    meta.bodyweight || slot.current_load_kg == null
+      ? slot.current_load_kg
+      : normalizeLoad(slot.current_load_kg * 0.9, meta.equipment, meta.observed_loads);
   return {
     ...slot,
     current_load_kg: load,

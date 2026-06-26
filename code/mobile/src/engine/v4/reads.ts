@@ -143,7 +143,8 @@ export function step(load: number, region: BodyRegion, tier: Tier): number {
 }
 
 /** Smallest loadable increment per equipment (Handoff 6b: barbell 2.5, dumbbell 1.0; machine/cable
- *  2.5 — spec-silent, chosen fine + safe). Bodyweight has no external load. */
+ *  2.5 — spec-silent, chosen fine + safe). Bodyweight has no external load. This is the STATIC grid:
+ *  the fallback used only until the athlete's real, observed grid is known. */
 export const LOAD_INCREMENT: Record<Equipment, number> = {
   barbell: 2.5,
   dumbbell: 1.0,
@@ -152,9 +153,30 @@ export const LOAD_INCREMENT: Record<Equipment, number> = {
   bodyweight: 0,
 };
 
-/** Round a load DOWN to the equipment's valid loadable increment (Handoff 6b / C4-3). Never rounds
- *  up — so normalization can never push implied e1RM above the rail. */
-export function normalizeLoad(load: number, equipment: Equipment): number {
+/**
+ * Map an ideal load onto the closest achievable real-world load. The engine still decides the ideal
+ * load (unchanged — no progression/rail behavior lives here); THIS only translates it to a load that
+ * can actually be set. When the athlete's observed grid (the real loads performed on this exercise)
+ * is supplied, it rounds DOWN to the nearest real rung; otherwise it falls back to the static
+ * equipment increment. Rounding DOWN preserves the safety invariant (Handoff 6b / C4-3): normalization
+ * can never raise implied e1RM above the rail. There is deliberately NO directional / coarse-grid
+ * logic — micro-loading (add-ons / magnetic / fine pin) is an assumed equipment reality, so the next
+ * real rung above the current load is always close, and a plain round-DOWN never stalls progression.
+ */
+export function normalizeLoad(load: number, equipment: Equipment, grid?: number[]): number {
+  if (grid && grid.length > 0) {
+    const rungs = Array.from(new Set(grid.filter((x) => x > 0))).sort((a, b) => a - b);
+    const max = rungs[rungs.length - 1];
+    if (load <= max + 1e-9) {
+      // Within the range the athlete has already worked → snap DOWN to the nearest real rung.
+      let down: number | null = null;
+      for (const x of rungs) if (x <= load + 1e-9) down = x;
+      if (down != null) return down;
+    }
+    // Above the athlete's max observed load (normal progression past their best) — or below the
+    // smallest rung — defer to the static increment. This is EXACTLY stock v4 behavior: the grid
+    // refines recommendations among loads already performed; it never caps progression.
+  }
   const inc = LOAD_INCREMENT[equipment];
   if (inc <= 0) return load;
   return Math.floor(load / inc) * inc;

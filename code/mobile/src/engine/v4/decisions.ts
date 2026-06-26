@@ -31,6 +31,10 @@ export interface ExerciseMeta {
   tier: Tier;
   equipment: Equipment;
   bodyweight: boolean;
+  /** The athlete's observed achievable loads for this exercise (the learned equipment grid).
+   *  Injected by the integration façade from preserved history; absent for pure-engine callers,
+   *  in which case normalizeLoad falls back to the static increment. */
+  observed_loads?: number[];
 }
 
 export interface SlotInputs {
@@ -51,6 +55,12 @@ export interface SlotOutcome {
 
 const top = (s: SlotState) => s.rep_range[1];
 const bottom = (s: SlotState) => s.rep_range[0];
+
+/** Normalize an ideal load onto the athlete's observed grid (round DOWN to the nearest real rung),
+ *  falling back to the static increment when no grid is known. The engine still decides the ideal
+ *  load; this only picks the closest achievable real-world load. */
+const gridNorm = (load: number, meta: ExerciseMeta): number =>
+  normalizeLoad(load, meta.equipment, meta.observed_loads);
 
 /** A decision that prescribes the given fields and threads the durable counters forward. */
 function emit(
@@ -97,13 +107,13 @@ export function calibrate(slot: SlotState, demo: Demonstrated, meta: ExerciseMet
 
   if (!meta.bodyweight && load != null) {
     if (demo.empty || demo.missed) {
-      load = normalizeLoad(load * 0.9, meta.equipment);
+      load = gridNorm(load * 0.9, meta);
     } else if (demo.best_reps >= target + 3) {
-      load = normalizeLoad(load * 1.1, meta.equipment);
+      load = gridNorm(load * 1.1, meta);
     } else {
       const st = step(load, meta.region, meta.tier);
       deltaKg = st;
-      load = normalizeLoad(load + st, meta.equipment);
+      load = gridNorm(load + st, meta);
     }
   }
 
@@ -135,7 +145,7 @@ export function repriceKeepVolume(slot: SlotState, demo: Demonstrated, meta: Exe
   // Reprice DOWN to demonstrated capability; never raise on a miss (I-13). KEEP sets + rep_target (I-12).
   const target = slot.current_load_kg;
   const demoLoad = demo.demonstrated_load_at_target ?? target;
-  const load = normalizeLoad(Math.min(target, demoLoad), meta.equipment);
+  const load = gridNorm(Math.min(target, demoLoad), meta);
   return emit(slot, 'reprice', {
     current_load_kg: load,
     miss_streak: slot.miss_streak + 1,
@@ -152,7 +162,7 @@ function emptyWeek(slot: SlotState, meta: ExerciseMeta): SlotOutcome {
   // No demonstrated capability → load ×0.90, KEEP volume + rep_target. Does NOT bank a miss
   // (a logged zero week is ambiguous, not a demonstrated failure — avoids a spurious swap).
   const load =
-    meta.bodyweight || slot.current_load_kg == null ? slot.current_load_kg : normalizeLoad(slot.current_load_kg * 0.9, meta.equipment);
+    meta.bodyweight || slot.current_load_kg == null ? slot.current_load_kg : gridNorm(slot.current_load_kg * 0.9, meta);
   return emit(slot, 'reprice', {
     current_load_kg: load,
     flat_weeks: 0,
@@ -175,7 +185,7 @@ function progress(slot: SlotState, demo: Demonstrated, meta: ExerciseMeta): Slot
     return emit(slot, 'progress_load', { ...cleared, rep_target: top(slot) }); // hold at top; variation surfaced at integration
   }
   const st = step(slot.current_load_kg, meta.region, meta.tier);
-  const load = normalizeLoad(slot.current_load_kg + st, meta.equipment);
+  const load = gridNorm(slot.current_load_kg + st, meta);
   return emit(slot, 'progress_load', { ...cleared, current_load_kg: load, rep_target: bottom(slot), deltaKg: st });
 }
 
@@ -217,14 +227,14 @@ export function reactiveProgress(slot: SlotState, demo: Demonstrated, inp: SlotI
   }
   if (!tried.has('load') && !meta.bodyweight && slot.current_load_kg != null) {
     const st = step(slot.current_load_kg, meta.region, meta.tier);
-    const load = normalizeLoad(slot.current_load_kg + st, meta.equipment);
+    const load = gridNorm(slot.current_load_kg + st, meta);
     return emit(slot, 'lever_load', { ...carry, current_load_kg: load, levers_tried: [...slot.levers_tried, 'load'], deltaKg: st });
   }
   if (!tried.has('range')) {
     const newRange = rangeChange(slot, demo, meta);
     const newTarget = newRange[0];
     let load = slot.current_load_kg;
-    if (!meta.bodyweight && demo.best_e1rm) load = normalizeLoad(demo.best_e1rm / (1 + newTarget / 30), meta.equipment);
+    if (!meta.bodyweight && demo.best_e1rm) load = gridNorm(demo.best_e1rm / (1 + newTarget / 30), meta);
     return emit(slot, 'lever_range', {
       ...carry,
       rep_range: newRange,
@@ -238,7 +248,7 @@ export function reactiveProgress(slot: SlotState, demo: Demonstrated, inp: SlotI
   const probe = flat_weeks % consts.PATIENT_PROBE_EVERY === 0;
   if (probe && !meta.bodyweight && slot.current_load_kg != null) {
     const st = step(slot.current_load_kg, meta.region, meta.tier);
-    const load = normalizeLoad(slot.current_load_kg + st, meta.equipment);
+    const load = gridNorm(slot.current_load_kg + st, meta);
     return emit(slot, 'patient_hold', { ...carry, hold_mode: true, current_load_kg: load, deltaKg: st });
   }
   return emit(slot, 'patient_hold', { ...carry, hold_mode: true });

@@ -264,6 +264,30 @@ function setRecords(exerciseId: string, sessions: Session[]): SetRecord[] {
 }
 
 /**
+ * The athlete's learned equipment grid for an exercise: the distinct loads they have ACTUALLY
+ * performed (preserved observed truth — never normalized). De-duped to 0.5 kg so float dust /
+ * a one-off mis-entry can't shatter the grid. This is what lets normalizeLoad prefer a real
+ * achievable load over the static increment; empty until the first session, where it falls back.
+ */
+function observedLoads(exerciseId: string, sessions: Session[]): number[] {
+  const seen = new Set<number>();
+  for (const s of sessions) {
+    for (const log of s.sets) {
+      if (log.exerciseId !== exerciseId) continue;
+      if (log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
+    }
+  }
+  return [...seen];
+}
+
+/** `exerciseMeta` enriched with the athlete's observed grid (integration-only; the pure engine just
+ *  reads `meta.observed_loads`). Curried over the full history so each slot's normalization snaps to
+ *  the real loads performed on THAT exercise. */
+function metaWithGridFor(history: Session[]) {
+  return (exerciseId: string) => ({ ...exerciseMeta(exerciseId), observed_loads: observedLoads(exerciseId, history) });
+}
+
+/**
  * Advance the engine for every COMPLETED week that has not yet been processed (week rollover). A
  * week = `frequency` completed sessions. Aggregates each week's logged sets into per-slot results,
  * runs planNextWeek, and persists the updated slot state + a fresh history record per slot.
@@ -301,7 +325,7 @@ export async function maybeAdvance(
       slots: slotList,
       global: state.global as GlobalState,
       results,
-      meta: exerciseMeta,
+      meta: metaWithGridFor(history),
       candidates: (p) => candidatesForPattern(p),
       seedLoad: (id) => seedFor(id),
       nameOf: exerciseDisplayName,
