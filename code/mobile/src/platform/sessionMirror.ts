@@ -35,6 +35,27 @@ export type MirrorPhase =
  *  surface built against an older app rejects a shape it cannot read. */
 export const MIRROR_SCHEMA_VERSION = 1 as const;
 
+/** Equipment-native load setup (kg) — how to physically load the prescribed weight so the athlete
+ *  never has to calculate (UX items 5/12). Mirrors `domain/loadPresentation.LoadSetup` but is a
+ *  plain structural type so this module stays free of domain/native imports. The headline IS the
+ *  step's `targetWeight`; these fields only explain the setup. Watch + Live Activity render a
+ *  compact line from it. `style` is a free string (the load style) to keep this decoupled. */
+export interface MirrorLoadSetup {
+  style: string;
+  /** Per-side weight for a bar / carriage (barbell, plate_loaded). */
+  perSide?: number;
+  /** Plate stack for one side (largest first) — present ONLY when it sums exactly to `perSide`. */
+  plates?: number[];
+  /** Bar weight (barbell only). */
+  barKg?: number;
+  /** Per-hand weight (dumbbell). */
+  perHand?: number;
+  /** Stack pin weight (selectorized, cable). */
+  pin?: number;
+  /** Fixed-bar weight (fixed_barbell). */
+  fixedBar?: number;
+}
+
 /** One step of the live plan, name-resolved, as the projection needs it. Decoupled
  *  from the session store's internal `Step` so this module stays pure. */
 export interface MirrorStep {
@@ -53,6 +74,9 @@ export interface MirrorStep {
   reasonDelta?: number;
   /** In-class alternatives the athlete may swap to (Swap overlay); empty = none. */
   swapOptions?: { id: string; name: string }[];
+  /** Equipment-native setup (kg) for this step's load — the watch reads it so the
+   *  athlete never has to do mental math on the wrist (item 11). */
+  loadSetup?: MirrorLoadSetup | null;
 }
 
 /** The canonical mirror. Every surface renders a SUBSET of this — e.g. the Live
@@ -114,6 +138,18 @@ export interface SessionMirror {
   swapOptions: { id: string; name: string }[];
   /** Swap alternatives for the UPCOMING exercise (Transition rest card glyph). */
   nextSwapOptions: { id: string; name: string }[];
+  /** Equipment-native setup (kg) for the CURRENT set's load (item 11) — the watch /
+   *  Live Activity render the per-side / plate / pin / per-hand line from it.
+   *  Optional/back-compatible: a version-skewed surface simply omits the line. */
+  loadSetup?: MirrorLoadSetup | null;
+  /** Equipment-native setup (kg) for the UPCOMING exercise's first set (transition rest). */
+  nextLoadSetup?: MirrorLoadSetup | null;
+  /** TO-LOAD vs LOADED for the CURRENT set (item: instruction-first execution). True when the
+   *  athlete still has to set the equipment — the first set of an exercise, or the load changed
+   *  since the last completed set of it. False once a set has been logged at this load (the bar /
+   *  pin is set) and for bodyweight (nothing to load). Drives the bright imperative vs the quiet
+   *  "loaded" confirmation on the Active Set. */
+  toLoad?: boolean;
 }
 
 export interface MirrorInputs {
@@ -134,6 +170,15 @@ export interface MirrorInputs {
   workoutName?: string;
   /** When the session started (ms epoch) — drives the Complete summary time. */
   sessionStartedAtMs?: number | null;
+  /** Sets actually LOGGED this session — drives the Complete summary's truthful set
+   *  count. Falls back to the planned `total` only when omitted (e.g. a pure-projection
+   *  caller without the live session). Fixes the watch reporting all planned sets done. */
+  completedSets?: number;
+  /** Distinct lifts the athlete actually trained AND that the model raised — the
+   *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
+  progressedLifts?: number;
+  /** Whether the CURRENT set still needs the equipment set (TO-LOAD) — see SessionMirror.toLoad. */
+  toLoad?: boolean;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
@@ -198,8 +243,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     const startedMs = inp.sessionStartedAtMs ?? null;
     const summary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
-      sets: total,
-      up,
+      // Truthful: the sets the athlete ACTUALLY logged (not the planned total) — an
+      // early finish must never report every planned set as done.
+      sets: inp.completedSets ?? total,
+      up: inp.progressedLifts ?? up,
     };
     return {
       schema: MIRROR_SCHEMA_VERSION,
@@ -229,6 +276,9 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       summary,
       swapOptions: [],
       nextSwapOptions: [],
+      loadSetup: null,
+      nextLoadSetup: null,
+      toLoad: false,
     };
   }
 
@@ -301,6 +351,12 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     summary: null,
     swapOptions: phase === 'active_set' ? cur.swapOptions ?? [] : [],
     nextSwapOptions: isTransition && next ? next.swapOptions ?? [] : [],
+    // Equipment-native setup (kg): the current set's during a live set, the upcoming
+    // exercise's during a transition rest — so the watch shows how to load it.
+    loadSetup: phase === 'active_set' ? cur.loadSetup ?? null : null,
+    nextLoadSetup: isTransition && next ? next.loadSetup ?? null : null,
+    // TO-LOAD only matters on the live set; the caller computes it from the logged sets.
+    toLoad: phase === 'active_set' ? inp.toLoad ?? false : false,
   };
 }
 

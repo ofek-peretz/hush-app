@@ -7,11 +7,17 @@ import SwiftUI
 @main
 struct HushWatchApp: App {
   @StateObject private var model = WatchModel()
+  @Environment(\.scenePhase) private var scenePhase
 
   var body: some Scene {
     WindowGroup {
       WatchRootView(model: model)
         .onAppear { model.start() }
+    }
+    // Returning to the foreground (raise-to-wake / reopened) during a live session gets a gentle
+    // "you're back in the workout" cue (item 6).
+    .onChange(of: scenePhase) { phase in
+      if phase == .active { model.appBecameActive() }
     }
   }
 }

@@ -13,6 +13,8 @@ import WatchKit
 
 enum HapticEvent {
   case setLogged // single light tap
+  case restApproach // soft awareness tick (T-7 / T-3 / T-2 of the rest countdown)
+  case restApproachFinal // crisp imminent tick (T-1)
   case restElapsed // soft ascending double — the go signal
   case readyTapped // action ack
   case exerciseBoundary // even triple — closed phase
@@ -41,6 +43,12 @@ enum WatchHaptics {
     switch event {
     case .setLogged:
       return [Beat(delay: 0, type: .click)]
+    case .restApproach:
+      // soft awareness whisper — felt without looking, never alarming.
+      return [Beat(delay: 0, type: .start)]
+    case .restApproachFinal:
+      // crisp, imminent — "one".
+      return [Beat(delay: 0, type: .directionUp)]
     case .restElapsed:
       // ascending double: a soft start then a firmer up — "go".
       return [Beat(delay: 0, type: .start), Beat(delay: 0.12, type: .directionUp)]

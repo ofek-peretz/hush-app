@@ -81,6 +81,32 @@ describe('projectSessionMirror', () => {
     expect(m.restEndsAt).toBeNull();
   });
 
+  it('Complete summary reports the ACTUAL logged sets + trained lifts, not the plan total', () => {
+    // An early finish at 2:11 with only 2 of 3 planned sets done — the watch must NOT say "3 sets".
+    const m = project({
+      machine: machine({ phase: 'SESSION_SAVED', setIndex: 1, earlyFinish: true }),
+      sessionStartedAtMs: NOW - 131_000,
+      completedSets: 2,
+      progressedLifts: 1,
+    })!;
+    expect(m.summary).toEqual({ timeLabel: '2:11', sets: 2, up: 1 });
+  });
+
+  it('Complete summary falls back to the planned total when no live count is supplied', () => {
+    const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
+    expect(m.summary!.sets).toBe(3); // STEPS.length — pure-projection back-compat
+  });
+
+  it('carries TO-LOAD only on the live set (instruction-first), never on the complete frame', () => {
+    const toLoad = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }), toLoad: true })!;
+    expect(toLoad.toLoad).toBe(true);
+    const loaded = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }), toLoad: false })!;
+    expect(loaded.toLoad).toBe(false);
+    // Rests + complete never carry a load-action flag.
+    expect(project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW, toLoad: true })!.toLoad).toBe(false);
+    expect(project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }), toLoad: true })!.toLoad).toBe(false);
+  });
+
   it('offers Exercise Busy only at the start of an exercise with a later one', () => {
     // idx 0 = Bench set 1 of 2, with Squat later → offerable
     expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!.canMarkBusy).toBe(true);

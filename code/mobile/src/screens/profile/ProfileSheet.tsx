@@ -49,6 +49,12 @@ export function ProfileSheet({ navigation }: Props) {
     Alert.alert(t('language.title'), t('language.restartNote'));
   }
   async function onHealth() {
+    // Connected already → there is nothing more to grant in-app (iOS only revokes from
+    // system Settings), so route there to MANAGE the connection. Otherwise request access.
+    if (p?.healthConnected) {
+      void Linking.openSettings();
+      return;
+    }
     const granted = await health.requestPermission();
     if (!granted) void Linking.openSettings();
   }
@@ -180,8 +186,10 @@ export function ProfileSheet({ navigation }: Props) {
         <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
 
         <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
-        {bodyData ? <Row label={t('profile.bodyData')} sub={bodyData} last={!experienceLabel} /> : null}
-        {experienceLabel ? <Row label={t('profile.experience')} sub={experienceLabel} last /> : null}
+        {/* Body data + Experience are now EDITABLE post-onboarding (item 9) — tap to open the
+            edit screen. Always shown (even if unset) so missing details can be added. */}
+        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
+        <Row label={t('profile.experience')} sub={experienceLabel ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} last />
 
         {__DEV__ ? (
           <>

@@ -51,6 +51,27 @@ describe('allTimePeakProgress', () => {
     expect(out[0].weeksTrained).toBe(4);
   });
 
+  test('multiple workouts across different DAYS within one week qualify (TestFlight fix)', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const sessions = [
+      session('s1', base, [set('bench', 60, base)]),
+      session('s2', base + 2 * DAY, [set('bench', 62.5, base + 2 * DAY)]),
+    ];
+    const out = allTimePeakProgress(sessions, base + 3 * DAY);
+    expect(out).toHaveLength(1);
+    expect(out[0].deltaKg).toBe(2.5);
+    expect(out[0].weeksTrained).toBe(2); // distinct training days
+  });
+
+  test('two sessions on the SAME day do not qualify (no real then-vs-now)', () => {
+    const HOUR = 60 * 60 * 1000;
+    const sessions = [
+      session('s1', base, [set('bench', 60, base)]),
+      session('s2', base + 3 * HOUR, [set('bench', 62.5, base + 3 * HOUR)]),
+    ];
+    expect(allTimePeakProgress(sessions, base + 6 * HOUR)).toHaveLength(0);
+  });
+
   test('bodyweight sets (null load) are ignored; sorted by biggest gain', () => {
     const sessions = [
       session('s1', base, [set('bench', 40, base), { ...set('pullup', 0, base), actualWeight: null, recommendedWeight: null }]),

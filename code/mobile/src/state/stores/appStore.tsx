@@ -3,7 +3,7 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
+import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { shouldReanchorWeekly } from '@/domain/schedule';
 import { CONSENT_VERSION } from '@/domain/consent';
@@ -171,6 +171,16 @@ interface AppApi extends AppState {
   ensurePortraitSnapshot: () => Promise<void>;
   /** Switch units (kg/lb); restyles every weight display instantly (§10.1). */
   setUnits: (units: Units) => Promise<void>;
+  /** Edit post-onboarding profile info (body data + experience) from Settings. Persists the merged
+   *  profile. Body-data corrections must NOT reset progression, so the current program is left
+   *  untouched — a changed experience/body informs the next weekly regeneration + cold starts. */
+  updateProfileInfo: (fields: {
+    age?: number;
+    heightCm?: number;
+    weightKg?: number;
+    sex?: 'male' | 'female';
+    experience?: Experience;
+  }) => Promise<void>;
   /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
   setVolume: (volume: WeeklyVolume) => Promise<void>;
   /** Deliberate replacement: persist the chosen exercise as the slot's preference (R18). */
@@ -571,6 +581,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const profile: Profile = { ...state.profile, units };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
+      },
+
+      async updateProfileInfo(fields) {
+        if (!state.profile) return;
+        // Merge only the provided fields; undefined leaves the existing value intact.
+        const profile: Profile = {
+          ...state.profile,
+          ...(fields.age != null ? { age: fields.age } : {}),
+          ...(fields.heightCm != null ? { heightCm: fields.heightCm } : {}),
+          ...(fields.weightKg != null ? { weightKg: fields.weightKg } : {}),
+          ...(fields.sex ? { sex: fields.sex } : {}),
+          ...(fields.experience ? { experience: fields.experience } : {}),
+        };
+        await db.saveProfile(profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile });
+        void track('profile_edited', {
+          changed: Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null),
+        });
       },
 
       async setVolume(volume) {

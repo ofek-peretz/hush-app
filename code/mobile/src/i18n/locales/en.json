@@ -583,7 +583,8 @@
     "endedSub": "Your free trial has ended",
     "trialNote": "You're only billed after your seven free sessions — never during. Choose a plan when you're ready.",
     "healthImporting": "Heart rate · calories · distance",
-    "healthNote": "Hush reads heart rate, calories and distance for the runs and walks you record. It never writes to Health, and none of it touches your lifting program."
+    "healthNote": "Hush reads heart rate, calories and distance for the runs and walks you record. It never writes to Health, and none of it touches your lifting program.",
+    "notSet": "Not set"
   },
   "settings": {
     "units": "Units",
@@ -764,5 +765,24 @@
       "conclusion": "I hold everything and trim volume so this week is finishable.",
       "action": "I trimmed it to {{sets}} sets."
     }
+  },
+  "profileEdit": {
+    "legend": "Account",
+    "title": "Edit your details",
+    "sub": "Update your body data and training experience. Corrections never reset your progress.",
+    "save": "Save changes"
+  },
+  "exec": {
+    "load": "Load",
+    "grab": "Grab",
+    "setPin": "Set the pin",
+    "takeBar": "Take the bar",
+    "eachHand": "one in each hand",
+    "loaded": "Loaded",
+    "inHand": "In hand",
+    "pinSet": "Pin set",
+    "barReady": "Bar ready",
+    "use": "Use",
+    "dumbbells": "{{weight}} {{unit}} dumbbells"
   }
 }

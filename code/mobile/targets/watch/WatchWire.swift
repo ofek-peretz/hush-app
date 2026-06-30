@@ -23,6 +23,18 @@ struct WireSummary: Codable, Equatable {
   var up: Int
 }
 
+/// Equipment-native load setup (kg) — how to physically load the prescribed weight, so the athlete
+/// never has to calculate on the wrist (item 11). Mirror of sessionMirror.ts `MirrorLoadSetup`.
+struct WireLoadSetup: Codable, Equatable {
+  var style: String
+  var perSide: Double?
+  var plates: [Double]?
+  var barKg: Double?
+  var perHand: Double?
+  var pin: Double?
+  var fixedBar: Double?
+}
+
 /// Read-only projection of the live session (subset rendered on the watch). The
 /// fields added for the stage design are optional so a version-skewed frame still
 /// decodes; the model/views coalesce them.
@@ -57,6 +69,11 @@ struct WireMirror: Codable, Equatable {
   var summary: WireSummary?
   var swapOptions: [WireSwapOption]?
   var nextSwapOptions: [WireSwapOption]?
+  /// Equipment-native setup (kg) for the current set's load + the upcoming exercise's first set.
+  var loadSetup: WireLoadSetup?
+  var nextLoadSetup: WireLoadSetup?
+  /// TO-LOAD (set the equipment) vs LOADED (already set) for the current set.
+  var toLoad: Bool?
 }
 
 /// One pickable workout in the Start screen's "Choose workout" overlay.

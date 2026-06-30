@@ -40,13 +40,24 @@ final class WatchModel: ObservableObject {
 
   private var mirror: WireMirror?
   private var lobby: WireLobby?
-  private var connection: ConnectionState = .reconnecting
+  // Optimistic: assume connected until a sustained drop proves otherwise (item 5). The honest
+  // "Reconnecting" viewer must be rare — a brief unreachable blip (display asleep, phone app
+  // backgrounded) is normal and applicationContext still syncs, so we keep showing the last mirror.
+  private var connection: ConnectionState = .connected
   private var highestSeq = Int.min
 
   // Local UI (presentation only — never workout state).
   private var editDraft: EditDraft?
   private var setConfirm: (weight: Double?, reps: Int, index: Int, total: Int)?
   private var setConfirmToken = 0
+
+  // Connection grace: only fall back to the Reconnecting viewer after a SUSTAINED unreachable gap.
+  private var graceWork: DispatchWorkItem?
+  private let reconnectGraceS: TimeInterval = 12
+  // Locally-scheduled rest countdown + completion haptics (item 7) — the watch OWNS the rest
+  // haptics (it fires reliably wrist-down/screen-off), anchored to the phone's absolute rest end.
+  private var restHaptics: [DispatchWorkItem] = []
+  private var lastReturnHaptic = Date.distantPast
 
   private let manager = WatchSessionManager()
   /// Fired when a screen is entered, so the view can play the entry haptic.
@@ -56,6 +67,19 @@ final class WatchModel: ObservableObject {
     manager.model = self
     manager.activate()
     recompute()
+  }
+
+  /// The watch app returned to the foreground (raise-to-wake / reopened). A gentle "you're back in
+  /// the workout" cue during a live session (item 6); debounced so a wake that also reconnects
+  /// never double-buzzes.
+  func appBecameActive() { signalReturnToWorkout() }
+
+  private func signalReturnToWorkout() {
+    guard let m = mirror, m.phase != "complete", m.phase != "paused" else { return }
+    let now = Date()
+    guard now.timeIntervalSince(lastReturnHaptic) > 2 else { return }
+    lastReturnHaptic = now
+    onEntryHaptic.send(.reconnected)
   }
 
   // MARK: Inbound (from WatchSessionManager)
@@ -74,14 +98,79 @@ final class WatchModel: ObservableObject {
       // A new set invalidates any in-flight Edit override.
       if mirror?.phase != "active_set" || indexChanged { editDraft = nil }
     }
+    // The workout is over: the completion experience supersedes any in-flight per-set confirmation,
+    // so clear it immediately (otherwise the 1.5s Set Confirmation would mask Workout Complete — the
+    // "watch doesn't show the completion experience" defect, item 3).
+    if mirror?.phase == "complete" {
+      setConfirmToken += 1
+      setConfirm = nil
+    }
+    syncRestHaptics(prev: prev, next: mirror)
     recompute()
   }
 
   func setReachable(_ reachable: Bool) {
-    let next: ConnectionState = reachable ? .connected : .reconnecting
-    guard next != connection else { return }
-    connection = next
-    recompute()
+    if reachable {
+      graceWork?.cancel()
+      graceWork = nil
+      guard connection != .connected else { return }
+      connection = .connected
+      recompute()
+      signalReturnToWorkout() // came back during a live session → the return cue (item 6)
+      return
+    }
+    // A dropped reachability is NORMAL (display asleep / phone app backgrounded); keep showing the
+    // last mirror and only fall back to the honest Reconnecting viewer after a sustained gap.
+    guard connection == .connected, graceWork == nil else { return }
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.graceWork = nil
+      self.connection = .reconnecting
+      self.recompute()
+    }
+    graceWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + reconnectGraceS, execute: work)
+  }
+
+  // MARK: Rest haptics (locally scheduled against the phone's absolute rest end)
+
+  /// (Re)schedule the rest countdown + GO haptics when a rest begins or its end moves (+15 / resume);
+  /// cancel them when rest ends, is skipped, or the phase otherwise changes.
+  private func syncRestHaptics(prev: WireMirror?, next: WireMirror?) {
+    let isRest: (WireMirror?) -> Bool = { $0?.phase == "rest_inter" || $0?.phase == "rest_transition" }
+    let nowRest = isRest(next)
+    let wasRest = isRest(prev)
+    let endChanged = prev?.restEndsAt != next?.restEndsAt
+    if nowRest, let endIso = next?.restEndsAt, let end = WatchWire.parseDate(endIso), (!wasRest || endChanged) {
+      scheduleRestHaptics(endsAt: end, isTransition: next?.phase == "rest_transition")
+    } else if !nowRest {
+      cancelRestHaptics()
+    }
+  }
+
+  private func cancelRestHaptics() {
+    for w in restHaptics { w.cancel() }
+    restHaptics = []
+  }
+
+  private func scheduleRestHaptics(endsAt: Date, isTransition: Bool) {
+    cancelRestHaptics()
+    let now = Date()
+    // "The Approach": soft awareness at T-7, rising at T-3/-2, crisp at T-1, then the GO at 0 —
+    // a new lift gets the distinct exercise-boundary triple, a next set the rest-elapsed double.
+    let plan: [(TimeInterval, HapticEvent)] = [
+      (-7, .restApproach), (-3, .restApproach), (-2, .restApproach), (-1, .restApproachFinal),
+      (0, isTransition ? .exerciseBoundary : .restElapsed),
+    ]
+    for (offset, event) in plan {
+      let delay = endsAt.addingTimeInterval(offset).timeIntervalSince(now)
+      guard delay > 0.05 else { continue } // beats already in the past are skipped (no buzz storm)
+      let work = DispatchWorkItem { [weak self] in
+        self?.onEntryHaptic.send(event)
+      }
+      restHaptics.append(work)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
   }
 
   // MARK: Local UI — inline Edit (committed override) + Set Confirmation

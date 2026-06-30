@@ -89,6 +89,18 @@ export function SessionFlow({ navigation }: Props) {
   function goWellDone(r: CompleteResult) {
     navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait, summary: r.summary, notStarted: r.notStarted });
   }
+
+  // Single navigation path to Well Done: ANY completion (phone tap, finish-early, or a
+  // watch-proposed finish) sets `endResult` on the session store; we consume it here and
+  // navigate. This is what keeps a watch-triggered finish from leaving SessionFlow stranded
+  // on an empty (black) stage — the screen no longer has to be the thing that calls complete.
+  useEffect(() => {
+    if (!session.endResult) return;
+    const r = session.endResult;
+    session.clearEndResult();
+    goWellDone(r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.endResult]);
   function openPause() {
     session.pause();
     setOverlay('pause');
@@ -98,8 +110,8 @@ export function SessionFlow({ navigation }: Props) {
     setOverlay('none');
   }
   async function finish() {
-    const r = await session.finishEarly();
-    goWellDone(r);
+    // Navigation is driven by the `endResult` effect above (one path for phone + watch).
+    await session.finishEarly();
   }
 
   // Complete set → the "Set logged" beat (§3.3), then log + advance.
@@ -135,7 +147,7 @@ export function SessionFlow({ navigation }: Props) {
         learnToastShownRef.current = true;
         toast.show(t('load.remembered'));
       }
-      if (r.ended) goWellDone(r);
+      // When r.ended, the `endResult` effect navigates to Well Done (one path for phone + watch).
     }, CONFIRM_DWELL_MS);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,41 +291,87 @@ function perSideLine(setup: LoadSetup, t: (k: string, o?: Record<string, unknown
   return t('load.perSide', { plates: stack });
 }
 
-function loadSetupStrings(setup: LoadSetup, t: (k: string, o?: Record<string, unknown>) => string, units: 'kg' | 'lb'): string[] {
-  const u = unitLabel(units);
+type ExecT = (k: string, o?: Record<string, unknown>) => string;
+
+/** The imperative + the info the athlete acts on. Barbell/plate carry the per-side figure; pin/fixed
+ *  are verb-only (the hero IS the figure); dumbbell names the exact pair to take off the rack. */
+function execParts(setup: LoadSetup, t: ExecT, units: 'kg' | 'lb'): { verb: string; figure: string | null } {
   switch (setup.style) {
-    case 'barbell': {
-      const out: string[] = [];
-      const ps = perSideLine(setup, t);
-      if (ps) out.push(ps);
-      if (setup.barKg != null) out.push(t('load.bar', { weight: setup.barKg, unit: u }));
-      return out;
-    }
-    case 'plate_loaded': {
-      const ps = perSideLine(setup, t);
-      return ps ? [ps] : [];
-    }
-    case 'fixed_barbell':
-      return [t('load.useBar', { weight: setup.fixedBar, unit: u })];
+    case 'barbell':
+    case 'plate_loaded':
+      return { verb: t('exec.load'), figure: perSideLine(setup, t) };
     case 'dumbbell':
-      return [t('load.perHand')];
+      return { verb: t('exec.use'), figure: t('exec.dumbbells', { weight: setup.perHand, unit: unitLabel(units) }) };
     case 'selectorized':
     case 'cable':
-      return [t('load.setPin', { weight: setup.pin })];
+      return { verb: t('exec.setPin'), figure: null };
+    case 'fixed_barbell':
+      return { verb: t('exec.takeBar'), figure: null };
     default:
-      return [];
+      return { verb: '', figure: null };
   }
 }
 
-function LoadSetupLines({ setup, units }: { setup: LoadSetup; units: 'kg' | 'lb' }) {
+/** The quiet LOADED-state confirmation (bar/pin already set). */
+function execConfirmation(setup: LoadSetup, t: ExecT): string {
+  switch (setup.style) {
+    case 'barbell':
+    case 'plate_loaded': {
+      const ps = perSideLine(setup, t);
+      return ps ? `${t('exec.loaded')} · ${ps}` : t('exec.loaded');
+    }
+    case 'dumbbell':
+      return t('exec.inHand');
+    case 'selectorized':
+    case 'cable':
+      return t('exec.pinSet');
+    case 'fixed_barbell':
+      return t('exec.barReady');
+    default:
+      return t('exec.loaded');
+  }
+}
+
+function execGlyph(style: LoadSetup['style']): IconName {
+  switch (style) {
+    case 'dumbbell':
+    case 'fixed_barbell':
+      return 'dumbbell';
+    case 'selectorized':
+    case 'cable':
+      return 'pin';
+    default:
+      return 'layers'; // barbell, plate_loaded
+  }
+}
+
+/**
+ * The execution INSTRUCTION — sits directly under the load (the athlete's "what do I do now?").
+ * TO-LOAD: a bright imperative chip (verb + figure). LOADED (after the first set at this load): a
+ * quiet "loaded" confirmation. It is the prescription's action, never secondary metadata.
+ */
+function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: boolean; units: 'kg' | 'lb' }) {
   const { t } = useCopy();
-  const lines = loadSetupStrings(setup, t, units);
-  if (lines.length === 0) return null;
+  if (toLoad) {
+    const { verb, figure } = execParts(setup, t, units);
+    return (
+      <View style={styles.instrChip}>
+        <Icon name={execGlyph(setup.style)} size={18} color={signal[0]} strokeWidth={2} />
+        {figure ? (
+          <View style={styles.instrCol}>
+            <Text style={styles.instrVerb}>{verb.toUpperCase()}</Text>
+            <Text style={styles.instrFigure}>{figure}</Text>
+          </View>
+        ) : (
+          <Text style={styles.instrVerbSolo}>{verb}</Text>
+        )}
+      </View>
+    );
+  }
   return (
-    <View style={styles.setupLines}>
-      {lines.map((line, i) => (
-        <Text key={i} style={styles.setupLine}>{line}</Text>
-      ))}
+    <View style={styles.instrDone}>
+      <Icon name="check" size={15} color={up[0]} strokeWidth={2.4} />
+      <Text style={styles.instrDoneText}>{execConfirmation(setup, t)}</Text>
     </View>
   );
 }
@@ -378,45 +436,48 @@ function ActiveSet({
 
         {!editing ? (
           <>
+            {/* 1 · LOAD — Hush's decision, the hero (set before you arrived). */}
             {isBodyweight ? (
               <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
             ) : (
-              // The load — the one number that matters, set before you arrived.
-              // Tap it for the light, observational "why this load".
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('whyLoad.legend')}
-                onPress={onWhy}
-                style={({ pressed }) => [styles.loadBtn, pressed && styles.loadBtnPressed]}
-              >
-                <View style={styles.heroRow}>
-                  <Text style={styles.hero} accessibilityLabel={`${heroValue} ${units}`}>{heroValue}</Text>
-                  <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
-                </View>
-                {setup ? <LoadSetupLines setup={setup} units={units} /> : null}
-                {reason ? (
-                  <View style={styles.deltaWrap}>
-                    <LoadDelta
-                      direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
-                      value={deltaMag}
-                      unit={unitLabel(units)}
-                      size="lg"
-                      pill
-                    />
-                  </View>
-                ) : null}
-                <View style={styles.whyRow}>
-                  <Text style={styles.whyText}>{t('whyLoad.trigger').toUpperCase()}</Text>
-                  <Icon name="chevronRight" size={12} color={stage.ink2} strokeWidth={2} />
-                </View>
-              </Pressable>
+              <View style={styles.heroRow}>
+                <Text style={styles.hero} accessibilityLabel={`${heroValue} ${unitLabel(units)}`}>{heroValue}</Text>
+                <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+              </View>
             )}
-            {/* The exact rep prescription — a single number in a target chip */}
+
+            {/* 2 · INSTRUCTION — what the athlete physically does now (part of the prescription). */}
+            {setup ? <ExecInstruction setup={setup} toLoad={session.toLoad} units={units} /> : null}
+
+            {/* 3 · REPS — the execution target. */}
             <View style={styles.repsPill}>
               <Text style={styles.repsTimes}>×</Text>
               <Text style={styles.repsNum}>{target.recommendedReps}</Text>
               <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
             </View>
+
+            {/* 4 · WHY / Δ — optional reasoning, demoted below the instruction so it never competes
+                  with it. The delta is shown when the load changed; the row taps through to "why". */}
+            {!isBodyweight ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('whyLoad.legend')}
+                onPress={onWhy}
+                style={({ pressed }) => [styles.whyDeltaRow, pressed && styles.loadBtnPressed]}
+              >
+                {reason ? (
+                  <LoadDelta
+                    direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
+                    value={deltaMag}
+                    unit={unitLabel(units)}
+                    size="sm"
+                    pill
+                  />
+                ) : null}
+                <Text style={styles.whyText}>{t('whyLoad.trigger')}</Text>
+                <Icon name="chevronRight" size={13} color={stage.ink2} strokeWidth={2} />
+              </Pressable>
+            ) : null}
           </>
         ) : (
           <View style={styles.editBlock}>
@@ -840,9 +901,19 @@ const styles = StyleSheet.create({
   // Equipment-native setup instruction under the headline (plate math, pin, per hand, fixed bar).
   setupLines: { marginTop: 12, alignItems: 'center', gap: 3 },
   setupLine: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink1, letterSpacing: 0.2 },
-  whyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 13 },
-  whyText: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
-  repsPill: { marginTop: 20, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
+  // Instruction-first execution: the imperative chip (TO-LOAD) + the quiet confirmation (LOADED),
+  // sitting directly under the load — the athlete's "what do I do now?".
+  instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
+  instrCol: { alignItems: 'flex-start' },
+  instrVerb: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: signal[0], marginBottom: 2 },
+  instrFigure: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: stage.ink0 },
+  instrVerbSolo: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: stage.ink0 },
+  instrDone: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
+  instrDoneText: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2 },
+  // Why / Δ — demoted below the instruction; quiet and optional, never competing with it.
+  whyDeltaRow: { marginTop: 18, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
+  whyText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink2 },
+  repsPill: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
   repsTimes: { fontFamily: font.mono, fontSize: textScale.md, color: stage.ink2 },
   repsNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0 },
   addFifteen: { alignItems: 'center', paddingVertical: 10, borderRadius: radius.md },
@@ -860,7 +931,7 @@ const styles = StyleSheet.create({
   editWheel: { alignSelf: 'stretch' },
   editLabel: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
-  dotsWrap: { marginTop: 40, alignItems: 'center' },
+  dotsWrap: { marginTop: 24, alignItems: 'center' },
   dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
   dot: { height: 7, borderRadius: 4 },
   dotDone: { backgroundColor: up[0] },

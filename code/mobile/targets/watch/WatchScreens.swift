@@ -38,6 +38,59 @@ private func fmtTime(_ s: Double) -> String {
   let t = max(0, Int(s.rounded())); return "\(t / 60):" + String(format: "%02d", t % 60)
 }
 
+/// Compact equipment-native setup line (kg) for the wrist — so the athlete never does mental math
+/// (item 11). Barbell/plate → "20 + 20 /side"; machine → "pin 55"; dumbbell → "per hand". Returns
+/// nil when there's nothing useful to add (e.g. a fixed bar, where the headline already IS the load).
+private func setupLine(_ s: WireLoadSetup?) -> String? {
+  guard let s else { return nil }
+  switch s.style {
+  case "barbell", "plate_loaded":
+    if let plates = s.plates, !plates.isEmpty {
+      return plates.map { fmtW($0) }.joined(separator: " + ") + " /side"
+    }
+    if let ps = s.perSide, ps > 0 { return fmtW(ps) + " /side" }
+    return nil
+  case "dumbbell":
+    return WatchCopy.perHand
+  case "selectorized", "cable":
+    if let pin = s.pin { return WatchCopy.pin + " " + fmtW(pin) }
+    return nil
+  default:
+    return nil
+  }
+}
+
+/// Instruction-first execution language. TO-LOAD = an imperative verb + only the info the hero load
+/// doesn't already give (per-side for barbell/plate; nothing for pin/fixed/dumbbell since the hero
+/// IS the action figure — dumbbell adds the per-hand placement).
+private struct ExecInstruction { let verb: String; let figure: String? }
+private func execInstruction(_ s: WireLoadSetup?) -> ExecInstruction? {
+  guard let s else { return nil }
+  switch s.style {
+  case "barbell", "plate_loaded": return ExecInstruction(verb: WatchCopy.exLoad, figure: setupLine(s))
+  case "dumbbell":
+    let fig = s.perHand.map { "\(fmtW($0)) \(WatchCopy.kg) \(WatchCopy.exDumbbells)" }
+    return ExecInstruction(verb: WatchCopy.exUse, figure: fig)
+  case "selectorized", "cable": return ExecInstruction(verb: WatchCopy.exSetPin, figure: nil)
+  case "fixed_barbell": return ExecInstruction(verb: WatchCopy.exTakeBar, figure: nil)
+  default: return nil
+  }
+}
+
+/// LOADED-state confirmation (quiet) for the current set's equipment.
+private func execConfirmation(_ s: WireLoadSetup?) -> String? {
+  guard let s else { return nil }
+  switch s.style {
+  case "barbell", "plate_loaded":
+    if let line = setupLine(s) { return WatchCopy.exLoaded + " · " + line }
+    return WatchCopy.exLoaded
+  case "dumbbell": return WatchCopy.exInHand
+  case "selectorized", "cable": return WatchCopy.exPinSet
+  case "fixed_barbell": return WatchCopy.exBarReady
+  default: return nil
+  }
+}
+
 // MARK: Shared chrome
 
 /// Uppercase instrument legend.
@@ -166,19 +219,6 @@ struct LoadDelta: View {
 }
 
 /// Set-progress dots: done = sage, current = elongated ochre, upcoming = stage line.
-private struct SetDots: View {
-  let total: Int
-  let index: Int // 0-based current; everything below it is done
-  var body: some View {
-    HStack(spacing: 6) {
-      ForEach(0..<max(total, 1), id: \.self) { i in
-        Capsule()
-          .fill(i < index ? Palette.up : i == index ? Palette.signal : Palette.stage2)
-          .frame(width: i == index ? 18 : 7, height: 7)
-      }
-    }
-  }
-}
 
 private struct DrawCheck: View {
   var size: CGFloat = 22
@@ -187,9 +227,11 @@ private struct DrawCheck: View {
   }
 }
 
-/// The countdown ring — a mechanical linear sweep, mono time at centre. Drift-proof
-/// + Always-On safe: it recomputes from the phone-supplied absolute end every tick,
-/// so whenever it is shown it is correct (the gym-defining glance).
+/// The countdown ring — a CONTINUOUS, fluid linear sweep, mono time at centre. Drift-proof
+/// + Always-On safe: `TimelineView(.animation)` recomputes the arc from the phone-supplied
+/// ABSOLUTE end on every display frame (not in 0.5 s steps), so the sweep is smooth — matching
+/// the iPhone ring — and a +15 s top-up (the end + total both move out) simply fills forward and
+/// keeps draining without a stutter. Whenever it is shown it is correct (the gym-defining glance).
 private struct RestRing: View {
   let endsAt: String?
   let totalS: Int
@@ -198,8 +240,8 @@ private struct RestRing: View {
   var restingLabel: String = "REST"
   var body: some View {
     let end = WatchWire.parseDate(endsAt)
-    let stroke = max(6, diameter * 0.05)
-    TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+    let stroke = max(5, diameter * 0.055)
+    TimelineView(.animation) { ctx in
       let remaining = max(0, end.map { $0.timeIntervalSince(ctx.date) } ?? 0)
       let frac = totalS > 0 ? min(1, max(0, remaining / Double(totalS))) : 0
       let ready = remaining <= 0.5
@@ -210,13 +252,39 @@ private struct RestRing: View {
           .rotationEffect(.degrees(-90))
         VStack(spacing: 1) {
           Text(fmtTime(remaining))
-            .font(.system(size: diameter * 0.23, weight: .semibold, design: .monospaced))
+            .font(.system(size: diameter * 0.24, weight: .semibold, design: .monospaced))
             .monospacedDigit().foregroundStyle(Palette.ink0)
           Text(ready ? "READY" : restingLabel).font(.system(size: 9, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
         }
       }
     }
     .frame(width: diameter, height: diameter)
+  }
+}
+
+/// Compact actions row for the rest screens: the full-width primary (Skip rest / Start) with a
+/// fixed-width "+15s" button beside it — so BOTH stay visible with NO scrolling on every case size
+/// (founder: nothing scrolls during execution). When the rest is already up, only the primary shows.
+private struct RestActions: View {
+  let ready: Bool
+  let primaryTitle: String
+  let onReady: () -> Void
+  let onAdd: () -> Void
+  var body: some View {
+    HStack(spacing: 6) {
+      StageButton(title: primaryTitle, kind: ready ? .primary : .onstage, height: 42, fontSize: 15, action: onReady)
+      if !ready {
+        Button(action: onAdd) {
+          Text(WatchCopy.addShort)
+            .font(.system(size: 14, weight: .semibold))
+            .frame(width: 54, height: 42)
+            .foregroundStyle(Palette.ink0)
+            .background(Palette.stage1)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
+      }
+    }
   }
 }
 
@@ -376,9 +444,11 @@ struct ActiveSetScreen: View {
       Spacer(minLength: 2)
       if editing { editor } else { readout }
       Spacer(minLength: 2)
+      // Set progress is EXPLICIT TEXT only (founder: on the wrist, prefer unambiguous clarity over a
+      // decorative indicator; the dots duplicated this exact information and cost space on the
+      // smallest case). "Set n of m" + the top strip's "LIFT i/n" are the two progress signals.
       if !editing {
-        SetDots(total: mirror.setsInExercise ?? 1, index: (mirror.setNumber ?? 1) - 1)
-        Text(mirror.setLabel).font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2).padding(.top, 4)
+        Text(mirror.setLabel).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
       }
       footer
     }
@@ -418,18 +488,43 @@ struct ActiveSetScreen: View {
   }
 
   private var readout: some View {
-    VStack(spacing: 12) {
+    // Hierarchy (canonical-first): LOAD (hero) → INSTRUCTION (what to do now) → REPS → Δ.
+    VStack(spacing: 6) {
       HStack(alignment: .firstTextBaseline, spacing: 4) {
         if let wt = shownWeight {
-          Text(fmtW(wt)).font(.system(size: 46, weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
+          Text(fmtW(wt)).font(.system(size: 42, weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
           Text(WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
         } else {
-          Text(WatchCopy.bodyweight).font(.system(size: 30, weight: .semibold)).foregroundStyle(Palette.ink0)
+          Text(WatchCopy.bodyweight).font(.system(size: 28, weight: .semibold)).foregroundStyle(Palette.ink0)
         }
       }
-      HStack(spacing: 12) {
-        LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0)
-        Text("× \(shownReps)").font(.system(size: 16, design: .monospaced)).foregroundStyle(Palette.ink1)
+      instruction
+      HStack(spacing: 10) {
+        Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
+        if (mirror.loadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0, fontSize: 10) }
+      }
+    }
+  }
+
+  /// The execution instruction, directly under the load. TO-LOAD = a bright imperative chip; once a
+  /// set is logged at this load it becomes a quiet "loaded" confirmation (the bar is set).
+  @ViewBuilder private var instruction: some View {
+    let toLoad = mirror.toLoad ?? false
+    if toLoad, let instr = execInstruction(mirror.loadSetup) {
+      // One line (verb + figure) so the chip, reps, explicit set info and Complete all fit with no
+      // scrolling on the 40/41 mm case.
+      HStack(spacing: 6) {
+        Text(instr.verb).font(.system(size: 11, weight: .semibold)).tracking(0.8).foregroundStyle(Palette.signal)
+        if let f = instr.figure {
+          Text(f).font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0).lineLimit(1).minimumScaleFactor(0.7)
+        }
+      }
+      .padding(.vertical, 5).padding(.horizontal, 12)
+      .background(Palette.stage1).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    } else if let line = execConfirmation(mirror.loadSetup) {
+      HStack(spacing: 4) {
+        Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.up)
+        Text(line).font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2).lineLimit(1).minimumScaleFactor(0.7)
       }
     }
   }
@@ -477,15 +572,15 @@ struct ActiveSetScreen: View {
         Image(systemName: editing ? "checkmark" : "pencil")
           .font(.system(size: 18, weight: .semibold))
           .foregroundStyle(Palette.ink1)
-          .frame(width: 38, height: 52)
+          .frame(width: 36, height: 48)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
-      StageButton(title: editing ? WatchCopy.save : WatchCopy.completeSet, kind: .primary, height: 52, fontSize: 17) {
+      StageButton(title: editing ? WatchCopy.save : WatchCopy.completeSet, kind: .primary, height: 48, fontSize: 17) {
         if editing { commit() } else { onComplete() }
       }
     }
-    .padding(.top, 6)
+    .padding(.top, 4)
   }
 
   private func enterEdit() {
@@ -543,26 +638,27 @@ struct InterRestScreen: View {
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
 
   var body: some View {
+    // NO SCROLL: the ring, the next-set line, the equipment setup, and BOTH actions stay on screen
+    // at once on every case size (founder: nothing scrolls during execution). The ring is sized
+    // down and the two actions share one row so all of it fits even on the 40/41 mm case.
     VStack(spacing: 0) {
       TopStrip(onPause: onPause, lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
       Spacer(minLength: 2)
-      // Slightly smaller ring leaves room for the meta line (reps were being cut)
-      // and the +15 button — still the most prominent mark on the screen.
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: 104)
-      Spacer(minLength: 4)
-      VStack(spacing: 2) {
-        Legend(WatchCopy.upNext)
-        Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
-        // Scale-to-fit so the trailing "× reps" never truncates on the 41 mm case.
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: 84)
+      Spacer(minLength: 2)
+      // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
+      // execution-grade setup line (how to load it).
+      VStack(spacing: 1) {
+        Text(mirror.exerciseName).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
         Text("\(mirror.setLabel) · \(targetText)")
-          .font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
+          .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2)
           .lineLimit(1).minimumScaleFactor(0.7)
+        if let line = setupLine(mirror.loadSetup) {
+          Text(line).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
+        }
       }
-      Spacer(minLength: 4)
-      StageButton(title: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, kind: ready ? .primary : .onstage, height: 44, fontSize: 16, action: onReady)
-      if !ready {
-        StageButton(title: WatchCopy.addRest, kind: .ghost, height: 30, fontSize: 13, action: onAdd)
-      }
+      Spacer(minLength: 2)
+      RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
   }
@@ -586,17 +682,34 @@ struct TransitionRestScreen: View {
   private var swaps: [WireSwapOption] { mirror.nextSwapOptions ?? [] }
 
   var body: some View {
+    // NO SCROLL: ring + the next lift (name, load·reps, the execution setup line, the change) + BOTH
+    // actions all stay visible at once. A plain block (no boxed card) keeps it within the 40/41 mm
+    // height so nothing is ever clipped or scrolled during execution.
     VStack(spacing: 0) {
       TopStrip(onPause: onPause, lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1))
       Spacer(minLength: 2)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: 96, restingLabel: "NEXT")
-      Spacer(minLength: 6)
-      card
-      Spacer(minLength: 4)
-      StageButton(title: WatchCopy.startNextLift, kind: ready ? .primary : .onstage, height: 44, fontSize: 16, action: onReady)
-      if !ready {
-        StageButton(title: WatchCopy.addRest, kind: .ghost, height: 30, fontSize: 13, action: onAdd)
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: 78, restingLabel: "NEXT")
+      Spacer(minLength: 2)
+      VStack(spacing: 2) {
+        HStack(spacing: 6) {
+          Text(mirror.nextExerciseName ?? "").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
+          if !swaps.isEmpty {
+            Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 12)) }
+              .buttonStyle(.plain).foregroundStyle(Palette.ink2)
+          }
+        }
+        HStack(spacing: 6) {
+          Text(nextTargetText)
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2)
+            .lineLimit(1).minimumScaleFactor(0.7)
+          if (mirror.nextLoadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: 9) }
+        }
+        if let line = setupLine(mirror.nextLoadSetup) {
+          Text(line).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
+        }
       }
+      Spacer(minLength: 2)
+      RestActions(ready: ready, primaryTitle: WatchCopy.startNextLift, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
     .sheet(isPresented: $showSwap) {
@@ -609,33 +722,9 @@ struct TransitionRestScreen: View {
     }
   }
 
-  private var card: some View {
-    // Muscle group omitted (founder: no CHEST/BACK labels); the ring already reads
-    // "NEXT", so the card leads straight with the exercise name.
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .top) {
-        Text(mirror.nextExerciseName ?? "").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
-        Spacer()
-        if !swaps.isEmpty {
-          Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 14)) }
-            .buttonStyle(.plain).foregroundStyle(Palette.ink2)
-        }
-      }
-      HStack(alignment: .bottom) {
-        Text("\(mirror.nextSetsInExercise ?? 0) sets · × \(mirror.nextTargetReps ?? 0)")
-          .font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
-        Spacer()
-        VStack(alignment: .trailing, spacing: 3) {
-          HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(mirror.nextTargetWeight.map(fmtW) ?? "BW").font(.system(size: 22, weight: .semibold, design: .monospaced))
-            if mirror.nextTargetWeight != nil { Text(" " + WatchCopy.kg).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2) }
-          }.foregroundStyle(Palette.ink0)
-          if (mirror.nextLoadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: 11) }
-        }
-      }
-    }
-    .padding(12)
-    .background(Palette.stage1).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+  private var nextTargetText: String {
+    let w = mirror.nextTargetWeight.map { "\(fmtW($0)) \(WatchCopy.kg)" } ?? WatchCopy.bodyweight
+    return "\(w) · × \(mirror.nextTargetReps ?? 0)"
   }
 }
 

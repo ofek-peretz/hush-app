@@ -12,6 +12,7 @@ import { exerciseById, similarExercises, type Exercise } from '@/data/exercises'
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
+import { loadSetup } from '@/domain/loadPresentation';
 import { WatchSession } from '@/platform/watch/watchBridge';
 import type { WatchLobby } from '@/platform/watch/protocol';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
@@ -168,6 +169,10 @@ export interface SessionView {
   markEquipmentOccupied: () => void;
   /** True when Equipment Occupied applies (at the start of an exercise that isn't last). */
   canMarkOccupied: boolean;
+  /** TO-LOAD vs LOADED for the current set: true when the athlete must still set the equipment
+   *  (first set of the exercise, or the load changed since the last completed set). Drives the
+   *  bright imperative instruction vs the quiet "loaded" confirmation on the Active Set. */
+  toLoad: boolean;
   /** Publish the pre-session lobby to the Apple Watch Start screen (the queued
    *  workout + pickable list). Read-only/no-op while a session is active. The phone
    *  remains the sole authority that actually starts a workout. */
@@ -178,6 +183,12 @@ export interface SessionView {
   setWatchHomeActions: (
     handlers: { onBegin: () => void; onSelect: (workoutId?: string) => void } | null,
   ) => void;
+  /** The closing result of the session that just finished, or null. Set when ANY
+   *  completion path resolves (phone tap, finish-early, or a watch-proposed finish),
+   *  so SessionFlow can navigate to Well Done from one place. Cleared by the consumer. */
+  endResult: CompleteResult | null;
+  /** Acknowledge `endResult` after navigating to Well Done (prevents a re-navigation). */
+  clearEndResult: () => void;
 }
 
 const Ctx = createContext<SessionView | null>(null);
@@ -208,6 +219,75 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
   return steps;
 }
 
+/**
+ * Name-resolve the live plan into canonical mirror steps — shared by the live mirror effect AND
+ * the terminal complete-frame publish (so the watch/Live Activity always get the same projection).
+ * Attaches the equipment-native load setup (kg) so the watch can show how to load the weight (item
+ * 11), and the in-class swap alternatives at the start of each exercise.
+ */
+function buildMirrorSteps(plan: Step[]): MirrorStep[] {
+  return plan.map((st) => {
+    const ex = exerciseById(st.exerciseId);
+    const swapOptions =
+      ex && st.exerciseSetIndex === 0
+        ? similarExercises(ex.id, 2).map((e) => ({ id: e.id, name: e.name }))
+        : [];
+    const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
+    return {
+      exerciseName: ex?.name ?? '',
+      exerciseGroup: ex?.muscle ?? '',
+      setIndexInExercise: st.exerciseSetIndex,
+      totalSetsInExercise: st.totalSetsInExercise,
+      globalIndex: st.globalIndex,
+      targetWeight: st.target.recommendedWeight,
+      targetReps: st.target.recommendedReps,
+      reasonType: st.target.reasonType,
+      reasonDelta: st.target.reasonDelta,
+      swapOptions,
+      loadSetup: setup
+        ? {
+            style: setup.style,
+            perSide: setup.perSide,
+            plates: setup.plates,
+            barKg: setup.barKg,
+            perHand: setup.perHand,
+            pin: setup.pin,
+            fixedBar: setup.fixedBar,
+          }
+        : null,
+    };
+  });
+}
+
+/**
+ * TO-LOAD vs LOADED for the current set (instruction-first execution): true when the athlete must
+ * still set the equipment — the first set of an exercise, OR the load changed since the last
+ * completed set of it (re-load). False once a set has been logged at this load (the bar/pin is set),
+ * and for bodyweight (nothing to load). Pure over the logged sets so the phone view and the watch
+ * mirror agree.
+ */
+function isToLoad(plan: Step[], setIndex: number, sets: SetLog[]): boolean {
+  const cur = plan[setIndex];
+  if (!cur) return false;
+  const curLoad = cur.target.recommendedWeight;
+  if (curLoad == null) return false; // bodyweight — no loading action
+  let loaded: number | null | undefined;
+  for (const s of sets) if (s.exerciseId === cur.exerciseId) loaded = s.actualWeight;
+  if (loaded === undefined) return true; // no set of this exercise logged yet → must load
+  return loaded !== curLoad; // load changed since last loaded → re-load
+}
+
+/** Distinct lifts the athlete actually trained (logged ≥1 set) AND that the model raised — the
+ *  truthful "lifts up" for the Complete summary (an early finish must not count untrained lifts). */
+function progressedLiftCount(plan: Step[], sets: SetLog[]): number {
+  const trained = new Set(sets.map((s) => s.exerciseId));
+  return new Set(
+    plan
+      .filter((s) => s.target.reasonType === 'increase' && trained.has(s.exerciseId))
+      .map((s) => s.exerciseId),
+  ).size;
+}
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const app = useApp();
   const [state, dispatch] = useReducer(reducer, {
@@ -230,6 +310,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // rest is republished to the watch + Live Activity.
   const restExtraSecondsRef = useRef(0);
   const [restNonce, setRestNonce] = useState(0);
+  // The closing result of the just-finished session. Set by finalize() from a SINGLE place so the
+  // phone navigates to Well Done whether the completion was triggered on the phone OR proposed from
+  // the watch — a watch-driven finish previously left SessionFlow on an empty (black) stage. The
+  // SessionFlow screen consumes this and clears it.
+  const [endResult, setEndResult] = useState<CompleteResult | null>(null);
   // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
   const laStartedRef = useRef(false);
   // Watch action handlers, refreshed each render so a (native) watch intent runs the
@@ -273,31 +358,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // READ-ONLY, timer is the hero, no completion controls from outside the app.
   useEffect(() => {
     const { plan, machine } = state;
-    const steps: MirrorStep[] = plan.map((st) => {
-      const ex = exerciseById(st.exerciseId);
-      // In-class swap alternatives — the SAME 2 closest-in-effect options the
-      // phone's in-workout Swap sheet shows (current + 2 = 3 total). Only at the
-      // START of an exercise (the watch offers swap before you begin a station).
-      const swapOptions =
-        ex && st.exerciseSetIndex === 0
-          ? similarExercises(ex.id, 2).map((e) => ({ id: e.id, name: e.name }))
-          : [];
-      return {
-        exerciseName: ex?.name ?? '',
-        exerciseGroup: ex?.muscle ?? '',
-        setIndexInExercise: st.exerciseSetIndex,
-        totalSetsInExercise: st.totalSetsInExercise,
-        globalIndex: st.globalIndex,
-        targetWeight: st.target.recommendedWeight,
-        targetReps: st.target.recommendedReps,
-        // Advisory — feeds the watch LoadDelta mark only.
-        reasonType: st.target.reasonType,
-        reasonDelta: st.target.reasonDelta,
-        swapOptions,
-      };
-    });
+    const loggedSets = state.session?.sets ?? [];
     const mirror = projectSessionMirror({
-      steps,
+      steps: buildMirrorSteps(plan),
       total: plan.length,
       machine,
       restInterS: REST_INTER_S,
@@ -307,6 +370,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       nowMs: Date.now(),
       workoutName: state.session?.programDayName ?? '',
       sessionStartedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
+      completedSets: loggedSets.length,
+      progressedLifts: progressedLiftCount(plan, loggedSets),
+      toLoad: isToLoad(plan, machine.setIndex, loggedSets),
     });
 
     // One projection → both surfaces. The watch receives the full mirror (incl. the
@@ -360,7 +426,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
         dispatch({ type: 'END' });
         void track('session_abandoned', { sessionId: session.id, programDayId: session.programDayId });
-        return { ended: true, unlockedPortrait: false, notStarted: true };
+        const notStartedResult: CompleteResult = { ended: true, unlockedPortrait: false, notStarted: true };
+        setEndResult(notStartedResult);
+        return notStartedResult;
       }
 
       // Owner-voice annotation only when Hush acted or the athlete ended early
@@ -383,6 +451,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // Mark this workout DONE for the week so Program shows the green DONE chip and
       // Home advances to the next unfinished workout (Rest once all are done).
       await app.markWorkoutCompleted(session.programDayId);
+
+      // Publish the terminal "complete" frame to the watch BEFORE teardown (deterministic — not
+      // reliant on the [state] effect's scheduling). The wrist then shows Workout Complete with the
+      // TRUTHFUL summary; END below empties the plan so the next projection is null, which the watch
+      // bridge ignores once this complete frame has ended its session.
+      const completeMirror = projectSessionMirror({
+        steps: buildMirrorSteps(plan),
+        total: plan.length,
+        machine: { ...machine, phase: 'SESSION_SAVED' },
+        restInterS: REST_INTER_S,
+        restTransitionS: REST_TRANSITION_S,
+        restStartedAtMs: null,
+        nowMs: Date.now(),
+        workoutName: saved.programDayName ?? '',
+        sessionStartedAtMs: Date.parse(saved.startedAt),
+        completedSets: saved.sets.length,
+        progressedLifts: progressedLiftCount(plan, saved.sets),
+      });
+      if (completeMirror) watchRef.current?.publish(completeMirror);
       dispatch({ type: 'END' });
 
       void track('session_completed', {
@@ -422,7 +509,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
         earlyFinish,
       };
-      return { ended: true, unlockedPortrait, summary };
+      const result: CompleteResult = { ended: true, unlockedPortrait, summary };
+      setEndResult(result);
+      return result;
     }
 
     return {
@@ -458,6 +547,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         !!current &&
         current.exerciseSetIndex === 0 &&
         plan.some((s) => s.globalIndex > current.globalIndex && s.exerciseId !== current.exerciseId),
+      toLoad: current ? isToLoad(plan, machine.setIndex, state.session?.sets ?? []) : false,
 
       publishWatchLobby(lobby) {
         // An active session drives the watch via the mirror; never overwrite it.
@@ -470,6 +560,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         watchStartRef.current = handlers ? () => handlers.onBegin() : () => {};
         watchSelectRef.current = handlers ? (id) => handlers.onSelect(id) : () => {};
       },
+      endResult,
+      clearEndResult: () => setEndResult(null),
 
       async start(day, targets) {
         const plan2 = buildPlan(day, targets);
@@ -639,7 +731,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       },
     };
-  }, [state, app]);
+  }, [state, app, endResult]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.

@@ -151,24 +151,25 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day?.id, day?.name, resting, workouts.length]);
 
-  // While Home is focused, let the watch Start screen run the EXACT same Begin /
-  // Choose the phone does (start + navigate / queue another workout). Cleared on blur
-  // so a watch Begin never fires when the athlete isn't on Home. Re-binds when the
-  // queued day changes so onStart closes over the current workout.
+  // Let the watch Start screen run the EXACT same Begin / Choose the phone does (start + navigate /
+  // queue another workout). Bound while Home is MOUNTED — not just focused — so a watch Begin works
+  // even when the athlete has pushed Settings / Program / History on top of Home (Home stays mounted
+  // underneath). This removes the "watch Begin does nothing unless the phone is literally on Home"
+  // dead-end (item 4). It is still safe during an active session: there is no Start screen on the
+  // watch then, and the bridge rejects a `start_workout` intent while a session is live. Re-binds
+  // when the queued day / lock changes so onStart closes over the current workout.
   useEffect(() => {
-    if (isFocused) {
-      session.setWatchHomeActions({
-        onBegin: () => {
-          if (!resting) void onStart();
-        },
-        onSelect: (id) => {
-          if (id) setChosenId(id);
-        },
-      });
-    }
+    session.setWatchHomeActions({
+      onBegin: () => {
+        if (!resting) void onStart();
+      },
+      onSelect: (id) => {
+        if (id) setChosenId(id);
+      },
+    });
     return () => session.setWatchHomeActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, day?.id, resting]);
+  }, [day?.id, resting]);
 
   // Free-trial gate (Subscription + Apple Payments): once the free sessions are
   // spent and no membership is active, starting another session opens the paywall.

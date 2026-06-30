@@ -52,6 +52,8 @@ export type MainParamList = {
   CardioDetail: { activity: CardioActivity };
   // Pushed / modal surfaces.
   ProfileSheet: undefined;
+  // Edit body data + experience after onboarding (opened from Settings).
+  ProfileEdit: undefined;
   SessionFlow: undefined;
   // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
   // Done renders the calm "Workout not started" state instead of a completion.

@@ -70,14 +70,22 @@ export function quarterlyPeakProgress(sessions: Session[], nowMs: number): Quart
 /**
  * ALL-TIME peak progress (founder, 2026-06-21). Same comparison as the quarterly
  * report — initial peak vs best peak reached since — but the window spans the
- * athlete's ENTIRE history (first training week → now), so the Progress screen
- * always shows cumulative progression. Gate: an exercise must have been trained
- * in ≥2 distinct weeks, so there is a real "then vs now" to compare. Pure & I/O-free.
+ * athlete's ENTIRE history (first training day → now), so the Progress screen
+ * always shows cumulative progression.
+ *
+ * Gate: an exercise must have been trained on ≥2 distinct DAYS, so there is a real
+ * "then vs now" to compare. (Originally bucketed by 7-day week, which left the
+ * screen empty for a new athlete who trained several DAYS inside their first week —
+ * TestFlight defect 2026-06-30. A day is the right granularity for a first month:
+ * one session per day is the norm, and two sessions in a single day are not a
+ * meaningful progression comparison.) Pure & I/O-free.
  */
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Minimum distinct training days for a lift to appear (a real first-vs-best comparison). */
 export const ALL_TIME_MIN_WEEKS = 2;
 
 export function allTimePeakProgress(sessions: Session[], nowMs: number): QuarterlyProgressEntry[] {
-  // Origin = the earliest logged set with a load; weeks are counted from there.
+  // Origin = the earliest logged set with a load; day buckets are counted from there.
   let originMs = Number.POSITIVE_INFINITY;
   for (const session of sessions) {
     for (const log of session.sets) {
@@ -88,36 +96,36 @@ export function allTimePeakProgress(sessions: Session[], nowMs: number): Quarter
   }
   if (!Number.isFinite(originMs)) return [];
 
-  // exerciseId → (weekIndex from origin → max weight that week)
+  // exerciseId → (dayIndex from origin → max weight that day)
   const byExercise = new Map<string, Map<number, number>>();
   for (const session of sessions) {
     for (const log of session.sets) {
       if (log.actualWeight == null) continue;
       const tsMs = Date.parse(log.persistedAt || session.startedAt);
       if (Number.isNaN(tsMs) || tsMs < originMs || tsMs > nowMs) continue;
-      const week = Math.floor((tsMs - originMs) / WEEK_MS);
-      let weeks = byExercise.get(log.exerciseId);
-      if (!weeks) {
-        weeks = new Map();
-        byExercise.set(log.exerciseId, weeks);
+      const day = Math.floor((tsMs - originMs) / DAY_MS);
+      let days = byExercise.get(log.exerciseId);
+      if (!days) {
+        days = new Map();
+        byExercise.set(log.exerciseId, days);
       }
-      const cur = weeks.get(week);
-      if (cur == null || log.actualWeight > cur) weeks.set(week, log.actualWeight);
+      const cur = days.get(day);
+      if (cur == null || log.actualWeight > cur) days.set(day, log.actualWeight);
     }
   }
 
   const out: QuarterlyProgressEntry[] = [];
-  for (const [exerciseId, weeks] of byExercise) {
-    if (weeks.size < ALL_TIME_MIN_WEEKS) continue;
-    const earliestWeek = Math.min(...weeks.keys());
-    const initialPeakKg = weeks.get(earliestWeek)!;
-    const periodPeakKg = Math.max(...weeks.values());
+  for (const [exerciseId, days] of byExercise) {
+    if (days.size < ALL_TIME_MIN_WEEKS) continue;
+    const earliestDay = Math.min(...days.keys());
+    const initialPeakKg = days.get(earliestDay)!;
+    const periodPeakKg = Math.max(...days.values());
     out.push({
       exerciseId,
       initialPeakKg,
       periodPeakKg,
       deltaKg: Math.round((periodPeakKg - initialPeakKg) * 10) / 10,
-      weeksTrained: weeks.size,
+      weeksTrained: days.size, // distinct training days (field name kept for the shared entry type)
     });
   }
   out.sort((a, b) => b.deltaKg - a.deltaKg || b.weeksTrained - a.weeksTrained);

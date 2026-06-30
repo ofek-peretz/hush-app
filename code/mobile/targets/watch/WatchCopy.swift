@@ -18,6 +18,19 @@ enum WatchCopy {
   static let crownToAdjust = "Crown to adjust"
   static let kg = "kg"
   static let bodyweight = "BW"
+  // Equipment-native setup line (item 11)
+  static let perHand = "per hand"
+  static let pin = "pin"
+  // Instruction-first execution (verb + state). Verbs are uppercase legends; confirmations are quiet.
+  static let exLoad = "LOAD"
+  static let exUse = "USE"
+  static let exDumbbells = "dumbbells"
+  static let exSetPin = "SET THE PIN"
+  static let exTakeBar = "TAKE THE BAR"
+  static let exLoaded = "Loaded"
+  static let exInHand = "In hand"
+  static let exPinSet = "Pin set"
+  static let exBarReady = "Bar ready"
 
   // Rest
   static let ready = "Ready"
@@ -28,6 +41,8 @@ enum WatchCopy {
   static let skipRest = "Skip rest"
   static let startNextLift = "Start next lift"
   static let addRest = "+15 sec"
+  // Compact form for the side-by-side rest action row (fits the 41 mm case without scrolling).
+  static let addShort = "+15s"
 
   // Set Confirmation
   static let recorded = "Recorded."
