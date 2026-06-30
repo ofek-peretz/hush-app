@@ -5,13 +5,14 @@
  * Idioms (spec §1, §7.1): full-layer Slide Left/Right; sheets present as modals;
  * Pause/Finish are modal-frozen (handled inside SessionFlow). No tab bar.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useApp } from '@/state/stores/appStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
+import { onReloadRequested } from './reload';
 import { navigationRef, navigateMain } from './navigationRef';
 import {
   addNotificationDeliveryListener,
@@ -127,6 +128,12 @@ export function Root() {
   enrolledRef.current = !!app.profile;
   const coldStartRouted = useRef(false);
 
+  // Soft reload: a language change flips I18nManager direction, then asks for a
+  // remount so the new direction (RTL ⇄ LTR) applies without a process relaunch.
+  // Bumping this key recreates the whole navigator subtree with the new direction.
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => onReloadRequested(() => setReloadKey((k) => k + 1)), []);
+
   // Warm taps: app already running. Route every notification response.
   useEffect(() => {
     const remove = addNotificationResponseListener((intent) =>
@@ -146,6 +153,7 @@ export function Root() {
 
   return (
     <NavigationContainer
+      key={reloadKey}
       ref={navigationRef}
       theme={navTheme}
       onReady={() => {

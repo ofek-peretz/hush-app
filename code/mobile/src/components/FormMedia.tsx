@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   chip: {
     position: 'absolute',
     top: 10,
-    left: 10,
+    start: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

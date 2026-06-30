@@ -8,8 +8,15 @@
  * The control is an accessible "adjustable" element: VoiceOver reads the label + value and the
  * increment/decrement rotor steps it (parity with the Stepper it replaced).
  *
- * Props mirror the Stepper (value/onChange/min/max/step/unit/format/size). Layout is logical, so it
- * mirrors correctly under RTL.
+ * Props mirror the Stepper (value/onChange/min/max/step/unit/format/size).
+ *
+ * RTL: the wheel is a NUMERIC LTR ISLAND. A measurement wheel is a number line —
+ * values ascend left-to-right in every locale (numerals are LTR; this matches rulers,
+ * steppers, sliders, and keypads even in Hebrew UIs), and pinning the control LTR also
+ * sidesteps React Native's inverted horizontal-scroll behavior under forceRTL, which
+ * would otherwise break the contentOffset/snap math on this precision control. The form
+ * row AROUND the wheel still mirrors (label side, where the field sits) via its parent.
+ * NOTE: the scroll/snap behavior under forceRTL must be verified on a Hebrew device.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -196,6 +203,9 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    // LTR island — the numeric wheel never mirrors (see header). A no-op in the LTR
+    // build; under forceRTL it keeps digits ascending L→R and the offset math intact.
+    direction: 'ltr',
     borderWidth: 1,
     borderColor: color.borderControl,
     borderRadius: radius.md,
@@ -219,10 +229,10 @@ const styles = StyleSheet.create({
   marker: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   tick: { width: 22, height: 2, borderRadius: 1, backgroundColor: color.accent },
   // The unit sits in its own bordered cell, separate from the scrolling digits.
-  unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: color.border, backgroundColor: color.surface },
+  unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
   // Inverted "stage" treatment — graphite surface + ink, ochre detent ticks (unchanged).
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
-  unitBoxStage: { borderLeftColor: stage[2], backgroundColor: stage[1] },
+  unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
   unitStage: { color: stage.ink2 },
 });

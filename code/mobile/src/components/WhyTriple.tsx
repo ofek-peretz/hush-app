@@ -60,11 +60,11 @@ export function WhyTriple({ saw, means, did, kind = 'neutral', onStage = false }
 }
 
 const styles = StyleSheet.create({
-  root: { position: 'relative', paddingLeft: 22 },
-  spine: { position: 'absolute', left: 4, top: 7, bottom: 7, width: 1.5, opacity: 0.7 },
+  root: { position: 'relative', paddingStart: 22 },
+  spine: { position: 'absolute', start: 4, top: 7, bottom: 7, width: 1.5, opacity: 0.7 },
   row: { position: 'relative' },
   rowGap: { marginTop: 16 },
-  dot: { position: 'absolute', left: -22, top: 3, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
+  dot: { position: 'absolute', start: -22, top: 3, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
   dotFill: { position: 'absolute', top: 1.5, left: 1.5, right: 1.5, bottom: 1.5, borderRadius: 3 },
   k: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', marginBottom: 4 },
   kStrong: { fontFamily: font.sansSemibold },

@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
   totalValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), color: color.textPrimary },
   totalUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: color.textMuted },
-  totalBadge: { marginLeft: 'auto', alignSelf: 'center' },
+  totalBadge: { marginStart: 'auto', alignSelf: 'center' },
 
   lifts: { marginTop: 18, gap: 18 },
   lift: {},

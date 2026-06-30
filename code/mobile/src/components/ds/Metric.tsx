@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   unit: {
     fontFamily: font.monoMedium,
     color: color.textMuted,
-    marginLeft: 4,
+    marginStart: 4,
     marginBottom: 3,
   },
 });

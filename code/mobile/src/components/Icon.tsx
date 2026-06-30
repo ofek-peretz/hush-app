@@ -8,6 +8,7 @@
  * the active tab. Color/size/strokeWidth are caller-controlled.
  */
 import React from 'react';
+import { I18nManager } from 'react-native';
 import Svg, { Path, Rect, Circle, Line, G } from 'react-native-svg';
 import { color as tokens } from '@/design/tokens';
 
@@ -56,6 +57,19 @@ interface Props {
   filled?: boolean; // tab glyphs: solid when active
 }
 
+/**
+ * The horizontal chevrons are DIRECTIONAL (back / forward / disclosure) everywhere
+ * they're used in this app, so they must mirror under RTL — a frozen SVG glyph won't.
+ * `play`, `trendingUp`, and `swap` are intentionally NOT mirrored (iOS convention
+ * keeps media/trend/exchange glyphs fixed). Vertical chevrons are direction-neutral.
+ */
+function resolveDirection(name: IconName): IconName {
+  if (!I18nManager.isRTL) return name;
+  if (name === 'chevronLeft') return 'chevronRight';
+  if (name === 'chevronRight') return 'chevronLeft';
+  return name;
+}
+
 export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled }: Props) {
   const stroke = color;
   const common = {
@@ -68,7 +82,7 @@ export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth 
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      {render(name, { stroke, strokeWidth, filled: !!filled, common })}
+      {render(resolveDirection(name), { stroke, strokeWidth, filled: !!filled, common })}
     </Svg>
   );
 }

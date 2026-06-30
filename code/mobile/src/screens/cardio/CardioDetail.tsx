@@ -12,6 +12,7 @@ import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { fmtClock, fmtPace } from '@/platform/cardio/cardioTracker';
+import { textEnd } from '@/i18n/bidi';
 import { color, space, font, textScale, radius, tracking, trackingPx, press, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -116,7 +117,7 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 12 },
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono digit tops.
   heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: color.textPrimary },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginLeft: 6, marginBottom: 8 },
+  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginStart: 6, marginBottom: 8 },
 
   metrics: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 18, marginTop: 24, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
   stat: { width: '50%', gap: 4 },
@@ -131,8 +132,8 @@ const styles = StyleSheet.create({
   splitKm: { width: 16, fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
   splitTrack: { flex: 1, height: 22, backgroundColor: color.fillSubtle, borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
   splitFill: { height: '100%', borderRadius: 4 },
-  splitWalkTag: { position: 'absolute', right: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: color.textMuted, textTransform: 'uppercase' },
-  splitPace: { width: 52, textAlign: 'right', fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary },
+  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: color.textMuted, textTransform: 'uppercase' },
+  splitPace: { width: 52, textAlign: textEnd, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary },
 
   note: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, paddingTop: 16, borderTopWidth: 1, borderTopColor: color.border },
   noteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20 },

@@ -100,10 +100,11 @@ function GoogleG({ size = 18 }: { size?: number }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  brand: { flexDirection: 'row', alignItems: 'flex-end' },
+  // Brand lockup stays LTR ("Hush·") in every locale rather than mirroring.
+  brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
   brandSpacing: { marginTop: 18 },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 }, // rtl-ok: inside LTR brand lockup
   tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },

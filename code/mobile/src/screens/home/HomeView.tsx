@@ -18,6 +18,7 @@ import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
 import { color, space, font, textScale, signal, radius } from '@/design/tokens';
 
 export interface HomeWorkoutOption {
@@ -75,7 +76,7 @@ export function HomeView(props: HomeViewProps) {
           <View style={styles.legendTop}>
             {!props.resting ? (
               <Text style={styles.greeting}>
-                {props.name ? t('home.readyWhenYouAre', { name: props.name.split(' ')[0] }) : t('home.readyAnon')}
+                {props.name ? t('home.readyWhenYouAre', { name: bidi(props.name.split(' ')[0]) }) : t('home.readyAnon')}
               </Text>
             ) : null}
             <Legend>{props.resting ? t('home.recovery') : t('home.nextWorkout')}</Legend>
@@ -148,7 +149,7 @@ export function HomeView(props: HomeViewProps) {
                     variant="primary"
                     size="lg"
                     block
-                    label={t('home.begin', { name: props.dayName })}
+                    label={t('home.begin', { name: bidi(props.dayName) })}
                     onPress={props.onStart}
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
@@ -221,9 +222,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: 4,
   },
-  brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
+  // The wordmark + accent dot is a brand lockup — it stays LTR ("Hush·") in every
+  // locale rather than mirroring to "·Hush".
+  brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, direction: 'ltr' },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary },
-  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 }, // rtl-ok: inside LTR brand lockup
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
   legendTop: { paddingTop: 24 },

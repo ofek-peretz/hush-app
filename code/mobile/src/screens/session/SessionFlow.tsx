@@ -20,6 +20,7 @@ import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, use
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
@@ -431,7 +432,7 @@ function ActiveSet({
     <>
       <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
       <View style={styles.stageBody}>
-        {group ? <Text style={styles.group}>{group.toUpperCase()}</Text> : null}
+        {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
         <Text style={styles.exName}>{exName}</Text>
 
         {!editing ? (
@@ -679,7 +680,7 @@ function Rest({
           <Card stage pad="md">
             <View style={styles.upRow}>
               <View style={styles.upInfo}>
-                {isTransition && nextGroup ? <Text style={styles.upGroup}>{nextGroup.toUpperCase()}</Text> : null}
+                {isTransition && nextGroup ? <Text style={styles.upGroup}>{t(`muscle.${nextGroup}`).toUpperCase()}</Text> : null}
                 <Text style={styles.upName}>{nextName}</Text>
                 <Text style={styles.upMeta}>
                   {isTransition
@@ -719,7 +720,7 @@ function Rest({
           variant="onstage"
           size="lg"
           block
-          label={isTransition ? t('workout.startNamed', { name: nextName }) : t('workout.startNextSet')}
+          label={isTransition ? t('workout.startNamed', { name: bidi(nextName) }) : t('workout.startNextSet')}
           onPress={() => session.endRest()}
         />
         {remaining > 0 ? (
@@ -773,7 +774,7 @@ function SwapSheet({ target, onClose }: { target: 'current' | 'next'; onClose: (
         <SwapRow
           key={a.id}
           title={a.name}
-          subtitle={muscle}
+          subtitle={muscle ? t(`muscle.${muscle}`) : undefined}
           last={i === alts.length - 1}
           onPress={() => choose(a.id)}
         />
@@ -920,7 +921,7 @@ const styles = StyleSheet.create({
   // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
   // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false },
-  heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginLeft: 6, marginBottom: 12 },
+  heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginStart: 6, marginBottom: 12 },
   bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
   deltaWrap: { marginTop: 16, height: 26, alignItems: 'center' },
   repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2 },
@@ -957,13 +958,13 @@ const styles = StyleSheet.create({
 
   // Up next card
   upNext: { marginTop: 40, width: '100%', maxWidth: 340 },
-  upNextLegend: { marginBottom: 12, textAlign: 'left' },
+  upNextLegend: { marginBottom: 12 },
   upRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   upInfo: { flex: 1, minWidth: 0 },
   upGroup: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
   upName: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: stage.ink0, marginTop: 3 },
   upMeta: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, marginTop: 2 },
-  upRight: { alignItems: 'flex-end', marginLeft: 12 },
+  upRight: { alignItems: 'flex-end', marginStart: 12 },
   upWeight: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0 },
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2 },
   upDelta: { marginTop: 4 },

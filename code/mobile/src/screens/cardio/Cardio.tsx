@@ -23,6 +23,7 @@ import { useCardioTracker, fmtClock, fmtPace, hrZone } from '@/platform/cardio/c
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import type { CardioActivity, CardioGait, CardioGoalKind } from '@/data/local/models';
+import { textEnd } from '@/i18n/bidi';
 import { color, space, font, textScale, radius, stage as stageC, signal, up, tracking, trackingPx } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono
   // digit tops — the 0.95 the web design tolerates is unsafe here (see SessionFlow `hero`).
   heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0 },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginLeft: 6, marginBottom: 8 },
+  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8 },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
   paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2 },
@@ -587,8 +588,8 @@ const styles = StyleSheet.create({
   splitKm: { width: 16, fontFamily: font.mono, fontSize: textScale.sm, color: stageC.ink2 },
   splitTrack: { flex: 1, height: 22, backgroundColor: stageC[1], borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
   splitFill: { height: '100%', borderRadius: 4 },
-  splitWalkTag: { position: 'absolute', right: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: stageC.ink1, textTransform: 'uppercase' },
-  splitPace: { width: 52, textAlign: 'right', fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink0 },
+  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: stageC.ink1, textTransform: 'uppercase' },
+  splitPace: { width: 52, textAlign: textEnd, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink0 },
 
   savedNoteRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, paddingTop: 16, borderTopWidth: 1, borderTopColor: stageC[2] },
   savedNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink1, lineHeight: 20 },

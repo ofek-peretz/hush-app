@@ -19,6 +19,7 @@ import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { Icon } from '@/components/Icon';
 import { Legend, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -83,7 +84,7 @@ export function ProgramDetail({ navigation, route }: Props) {
       {!day ? null : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.intro}>{t('program.lockIntro')}</Text>
-          {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: yoursNow })}</Text> : null}
+          {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: bidi(yoursNow) })}</Text> : null}
 
           {day.slots.map((slot, i) => {
             const locked = slot.locked === true;
@@ -148,7 +149,7 @@ export function ProgramDetail({ navigation, route }: Props) {
             variant="primary"
             size="lg"
             block
-            label={t('home.begin', { name: day.name })}
+            label={t('home.begin', { name: bidi(day.name) })}
             leading={<Icon name="play" size={18} color={color.onAccent} />}
             onPress={() => navigation.navigate('Home', { focusDayId: day.id })}
           />

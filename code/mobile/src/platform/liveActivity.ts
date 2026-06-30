@@ -18,6 +18,7 @@
  */
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import i18next from 'i18next';
 import type { SessionMirror } from './sessionMirror';
 import type { CardioGait } from '@/data/local/models';
 
@@ -119,7 +120,10 @@ export function liveActivityStateFromMirror(mirror: SessionMirror): LiveActivity
     workoutName: mirror.workoutName,
     phase: phaseFromMirror(mirror.phase),
     exerciseName: mirror.exerciseName,
-    setLabel: mirror.setLabel,
+    // The Live Activity is a PHONE surface, so its set label follows the app
+    // language (the watch is English-only and keeps the raw English mirror.setLabel).
+    // Exercise/workout names stay English by product rule.
+    setLabel: i18next.t('workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
     liftIndex: mirror.liftIndex,
     liftCount: mirror.liftCount,
     targetWeight: mirror.targetWeight,

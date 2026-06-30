@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "lint:copy": "node scripts/lint-copy.cjs"
+    "lint:copy": "node scripts/lint-copy.cjs",
+    "lint:rtl": "node scripts/lint-rtl.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/hanken-grotesk": "^0.4.3",

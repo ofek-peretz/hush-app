@@ -9,7 +9,7 @@
  * system permission flow, Sign Out / Delete run behind a native confirm.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -20,6 +20,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { health } from '@/platform/health';
 import { setLocale, currentLocale } from '@/i18n';
+import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
@@ -46,7 +47,8 @@ export function ProfileSheet({ navigation }: Props) {
   async function onLanguage(v: string) {
     if (v === locale) return;
     await setLocale(v as 'en' | 'he');
-    Alert.alert(t('language.title'), t('language.restartNote'));
+    // Apply the new writing direction (RTL ⇄ LTR) immediately — no manual relaunch.
+    reloadApp();
   }
   async function onHealth() {
     // Connected already → there is nothing more to grant in-app (iOS only revokes from

@@ -17,6 +17,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Metric, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { wellDone as wellDoneHaptic } from '@/platform/haptics';
@@ -167,7 +168,7 @@ export function WellDone({ navigation, route }: Props) {
             </View>
             <Text style={styles.savedTitle} accessibilityRole="header">
               {summary?.workoutName
-                ? `${summary.workoutName} ${partial ? t('complete.savedWord') : t('complete.completeWord')}`
+                ? `${bidi(summary.workoutName)} ${partial ? t('complete.savedWord') : t('complete.completeWord')}`
                 : partial ? t('complete.savedWord') : t('complete.completeWord')}
             </Text>
 
