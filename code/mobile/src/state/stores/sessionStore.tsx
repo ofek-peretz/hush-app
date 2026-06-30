@@ -111,8 +111,10 @@ function reducer(s: InternalState, a: Action): InternalState {
 export interface CompleteResult {
   ended: boolean;
   unlockedPortrait: boolean;
-  /** Closing summary for the Complete screen — present when the session ended. */
+  /** Closing summary for the Complete screen — present when a real (≥1 set) session was saved. */
   summary?: SessionSummary;
+  /** The athlete left without logging a single set: NOT a workout — nothing was saved or counted. */
+  notStarted?: boolean;
 }
 
 /** What the SessionFlow renders underneath any overlay. */
@@ -350,6 +352,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
       const session = sessionRef.current;
       if (!session) return { ended: true, unlockedPortrait: false };
+
+      // NOT STARTED (UX item 3A): the athlete entered the workout and left without completing a
+      // single set. This is NOT a workout — it is never saved to history, never counted toward
+      // calibration, and never marks the day done. Just clear the orphan session and exit.
+      if (session.sets.length === 0) {
+        await db.clearActiveSession();
+        dispatch({ type: 'END' });
+        void track('session_abandoned', { sessionId: session.id, programDayId: session.programDayId });
+        return { ended: true, unlockedPortrait: false, notStarted: true };
+      }
 
       // Owner-voice annotation only when Hush acted or the athlete ended early
       // (§4.10). Early-finish takes precedence; otherwise an increase this session.

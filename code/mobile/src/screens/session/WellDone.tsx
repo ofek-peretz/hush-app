@@ -51,7 +51,10 @@ export function WellDone({ navigation, route }: Props) {
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
   const summary = route.params?.summary;
+  const notStarted = route.params?.notStarted ?? false;
   const early = summary?.earlyFinish ?? false;
+  // Partial = ended early but real work was logged; Full = completed every set.
+  const partial = !notStarted && early && (summary?.sets ?? 0) > 0;
   const reduced = useReducedMotion();
 
   const [session, setSession] = useState<Session | null>(null);
@@ -61,6 +64,8 @@ export function WellDone({ navigation, route }: Props) {
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
 
   useEffect(() => {
+    // Nothing was completed → no success moment, no history read.
+    if (notStarted) return;
     let active = true;
     wellDoneHaptic();
     // Never let a storage hiccup leave the result data empty without recovering.
@@ -70,7 +75,7 @@ export function WellDone({ navigation, route }: Props) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [notStarted]);
 
   // Per-lift bests (first-seen order) + the session's top set, from the saved sets.
   const { lifts, topSet, volumeKg, setsCount } = useMemo(() => {
@@ -129,6 +134,27 @@ export function WellDone({ navigation, route }: Props) {
   const setLabel = (s: SetLog) => `${displayWeight(s.actualWeight, units) ?? t('workout.bodyweight')} × ${s.actualReps}`;
   const weekN = trainingWeekNumber(app.profile?.memberSince, Date.now()) + 1;
 
+  /* ---- Not started (item 3A): nothing was completed — not a workout, nothing saved ---- */
+  if (notStarted) {
+    return (
+      <View style={styles.root}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+          <View style={styles.notStartedBody}>
+            <View style={styles.savedRow}>
+              <Icon name="minus" size={18} color={stage.ink2} strokeWidth={2.4} />
+              <Text style={styles.notStartedLegend}>{t('complete.notStartedLegend')}</Text>
+            </View>
+            <Text style={styles.savedTitle} accessibilityRole="header">{t('complete.notStartedTitle')}</Text>
+            <Text style={styles.copy}>{t('complete.notStartedBody')}</Text>
+          </View>
+          <View style={styles.footer}>
+            <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={goHome} />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   /* ---- Beats 1+2: saved, then Hush reads the session into evidence ---- */
   if (phase !== 'result') {
     return (
@@ -140,7 +166,9 @@ export function WellDone({ navigation, route }: Props) {
               <Text style={styles.savedLegend}>{t('complete.saved')}</Text>
             </View>
             <Text style={styles.savedTitle} accessibilityRole="header">
-              {summary?.workoutName ? `${summary.workoutName} ${t('complete.completeWord')}` : t('complete.completeWord')}
+              {summary?.workoutName
+                ? `${summary.workoutName} ${partial ? t('complete.savedWord') : t('complete.completeWord')}`
+                : partial ? t('complete.savedWord') : t('complete.completeWord')}
             </Text>
 
             {lifts.length > 0 ? (
@@ -183,7 +211,7 @@ export function WellDone({ navigation, route }: Props) {
             <Icon name="checkCheck" size={16} color={up[0]} strokeWidth={2} />
             <Text style={styles.savedLegend}>{t('complete.logged')}</Text>
           </View>
-          <Text style={styles.resultTitle} accessibilityRole="header">{t('complete.thatsTheWork')}</Text>
+          <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
           <Text style={styles.copy}>{body}</Text>
 
           {topSet ? (
@@ -232,6 +260,10 @@ export function WellDone({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
+
+  // not started
+  notStartedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
+  notStartedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
   // beats 1+2
   savedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },

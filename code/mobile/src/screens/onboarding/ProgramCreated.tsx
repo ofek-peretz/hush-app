@@ -12,18 +12,10 @@ import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import type { Goal } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, up, signal } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ProgramCreated'>;
-
-const FOCUS_KEY: Record<Goal, string> = {
-  build_muscle: 'focusHypertrophy',
-  get_stronger: 'focusStrength',
-  general_fitness: 'focusConsistency',
-  toning: 'focusLean',
-};
 
 export function ProgramCreated({ route }: Props) {
   const { t } = useCopy();
@@ -41,7 +33,8 @@ export function ProgramCreated({ route }: Props) {
 
   const steps = [t('ob.buildStep1'), t('ob.buildStep2'), t('ob.buildStep3'), t('ob.buildStep4')];
   const ready = phase >= 4;
-  const focus = t(`ob.${FOCUS_KEY[inputs.goal]}`);
+  // Hush is hypertrophy-first for everyone — the focus is fixed, no longer chosen in onboarding.
+  const focus = t('ob.focusHypertrophy');
 
   function onDone() {
     if (busy) return;

@@ -28,7 +28,6 @@ import { Consent } from '@/screens/onboarding/Consent';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
-import { Goal } from '@/screens/onboarding/Goal';
 import { Experience } from '@/screens/onboarding/Experience';
 import { DaysPerWeek } from '@/screens/onboarding/DaysPerWeek';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -66,7 +65,6 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />
-      <OnboardingStack.Screen name="Goal" component={Goal} />
       <OnboardingStack.Screen name="Experience" component={Experience} />
       <OnboardingStack.Screen name="DaysPerWeek" component={DaysPerWeek} />
       <OnboardingStack.Screen name="ProgramCreated" component={ProgramCreated} />
@@ -80,7 +78,14 @@ function MainNavigator() {
   const sheet = sheetAnimation(reduced);
   return (
     <MainStack.Navigator
-      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bgBase }, animation: fullLayer }}
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: color.bgBase },
+        animation: fullLayer,
+        // WhatsApp-style full-width back swipe (not just the screen edge). Stage screens
+        // (SessionFlow / WellDone / Cardio) opt out individually via gestureEnabled:false.
+        fullScreenGestureEnabled: true,
+      }}
     >
       <MainStack.Screen name="Home" component={Home} />
       <MainStack.Screen name="ProfileSheet" component={ProfileSheet} options={{ presentation: 'modal', animation: sheet }} />

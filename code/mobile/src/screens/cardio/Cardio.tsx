@@ -16,7 +16,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend, Button, SegmentedControl, Stepper } from '@/components/ds';
+import { Legend, Button, SegmentedControl, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { db } from '@/data/local/db';
 import { useCardioTracker, fmtClock, fmtPace, hrZone } from '@/platform/cardio/cardioTracker';
@@ -337,15 +337,15 @@ function CardioSelect(props: {
 
         {props.goalKind === 'open' ? <Text style={styles.goalNote}>{t('cardio.goalOpenNote')}</Text> : null}
         {props.goalKind === 'distance' ? (
-          <View style={styles.goalRow}>
+          <View style={styles.goalCol}>
             <Text style={styles.goalRowLabel}>{t('cardio.targetDistance')}</Text>
-            <Stepper value={props.goalDist} onChange={props.setGoalDist} step={0.5} min={0.5} unit={t('cardio.km')} />
+            <WheelPicker value={props.goalDist} onChange={props.setGoalDist} step={0.5} min={0.5} max={50} unit={t('cardio.km')} label={t('cardio.targetDistance')} style={styles.goalWheel} />
           </View>
         ) : null}
         {props.goalKind === 'time' ? (
-          <View style={styles.goalRow}>
+          <View style={styles.goalCol}>
             <Text style={styles.goalRowLabel}>{t('cardio.targetTime')}</Text>
-            <Stepper value={props.goalTime} onChange={props.setGoalTime} step={5} min={5} unit="min" />
+            <WheelPicker value={props.goalTime} onChange={props.setGoalTime} step={5} min={5} max={240} unit="min" label={t('cardio.targetTime')} style={styles.goalWheel} />
           </View>
         ) : null}
 
@@ -496,6 +496,8 @@ const styles = StyleSheet.create({
   fieldLegendGoal: { marginTop: 26, marginBottom: 10 },
   goalNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 14, marginHorizontal: 2, lineHeight: 20 },
   goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  goalCol: { marginTop: 16, gap: 8 },
+  goalWheel: { alignSelf: 'stretch' },
   goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary },
   startWrap: { marginTop: 32 },
   gpsNote: { textAlign: 'center', fontFamily: font.sans, fontSize: textScale['2xs'], color: color.textTertiary, marginTop: 14, letterSpacing: 0.2 },

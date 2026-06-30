@@ -58,16 +58,6 @@
     "weight": "משקל",
     "continue": "המשך"
   },
-  "goal": {
-    "eyebrow": "למה אתה מתאמן",
-    "buildMuscle": "בניית שריר",
-    "increaseStrength": "הגדלת כוח",
-    "stayConsistent": "שמירה על עקביות",
-    "continue": "המשך",
-    "getStronger": "להתחזק",
-    "generalFitness": "כושר כללי",
-    "toning": "חיטוב"
-  },
   "experience": {
     "eyebrow": "הניסיון שלך",
     "beginner": "מתחיל",
@@ -214,17 +204,6 @@
     "weight": "משקל",
     "female": "נקבה",
     "male": "זכר",
-    "goalLegend": "המטרה שלך",
-    "goalTitle": "למה אתה מתאמן?",
-    "goalSub": "זה קובע איך Hush מתעדפת עומס, נפח והתקדמות.",
-    "goalMuscle": "בניית שריר",
-    "goalMuscleDesc": "מיקוד בהיפרטרופיה ובגדילת שריר",
-    "goalStrength": "הגדלת כוח",
-    "goalStrengthDesc": "התקדמות כבדה יותר בתרגילים המורכבים המרכזיים",
-    "goalLean": "חיטוב",
-    "goalLeanDesc": "רזה ומוגדר — משקלים מתונים, יותר חזרות",
-    "goalConsistent": "שמירה על עקביות",
-    "goalConsistentDesc": "התקדמות מאוזנת, בנויה להיות בת‑קיימא",
     "expLegend": "הרקע שלך",
     "expTitle": "כמה זמן אתה מתאמן?",
     "expSub": "כנות כאן הופכת את השבועות הראשונים למדויקים. Hush מתכווננת מהר בכל מקרה.",
@@ -251,10 +230,7 @@
     "readyOwnership": "‏Hush מחליטה על המשקלים.\nאתה מחליט על התרגילים.",
     "readyNote": "‏Hush מוסיפה משקל רק כשהאימונים האחרונים שלך הרוויחו אותו — יציב, אף פעם לא ניחוש.",
     "readyCta": "לאימון הבא שלי",
-    "focusStrength": "כוח",
-    "focusHypertrophy": "היפרטרופיה",
-    "focusConsistency": "עקביות",
-    "focusLean": "חיטוב"
+    "focusHypertrophy": "היפרטרופיה"
   },
   "menu": {
     "title": "תפריט",
@@ -396,7 +372,26 @@
     "saturday": "כל סט מזין את עדכון יום שבת. Hush כבר קורא את {{week}} מאיך שהתאמנת.",
     "weekN": "שבוע {{n}}",
     "done": "סיום",
-    "viewRecord": "צפייה ברשומת האימון"
+    "viewRecord": "צפייה ברשומת האימון",
+    "notStartedLegend": "לא התחיל",
+    "notStartedTitle": "האימון לא התחיל",
+    "notStartedBody": "לא הושלמו תרגילים. שום דבר לא נשמר — אפשר להתחיל מחדש בכל רגע.",
+    "partialTitle": "אימון חלקי נשמר."
+  },
+  "load": {
+    "perSide": "{{plates}} בכל צד",
+    "bar": "מוט {{weight}} {{unit}}",
+    "useBar": "השתמש במוט {{weight}} {{unit}}",
+    "perHand": "לכל יד",
+    "setPin": "כוון את הפין ל-{{weight}}",
+    "remembered": "נזכור את המשקל הזה בפעם הבאה"
+  },
+  "firstGym": {
+    "legend": "אימון ראשון",
+    "title": "אנחנו לומדים את חדר הכושר שלך",
+    "body1": "כל חדר כושר קצת שונה. במהלך האימונים הראשונים, ייתכן ש-Hush ינקוב במשקל שלא קיים בציוד שלך.",
+    "body2": "אם זה קורה, יש לבחור את המשקל הקרוב ביותר הזמין. Hush יזכור אותו ויהפוך מדויק יותר עם הזמן.",
+    "got": "הבנתי"
   },
   "portrait": {
     "tab": "דיוקן",
@@ -571,7 +566,7 @@
     "healthSection": "בריאות",
     "account": "חשבון",
     "bodyData": "נתוני גוף",
-    "goalExperience": "מטרה וניסיון",
+    "experience": "ניסיון",
     "healthConnectedSub": "מחובר · דופק, קלוריות, מרחק",
     "membershipPro": "Hush Pro · {{plan}}",
     "membershipProGeneric": "פרו",

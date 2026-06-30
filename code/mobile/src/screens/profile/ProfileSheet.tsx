@@ -2,7 +2,7 @@
  * Settings / Profile (§4.28) — rebuilt 1:1 to the Claude Design "Design System"
  * Settings (ui_kits/app/Settings.jsx). Identity (avatar + name), then grouped
  * rows: Preferences (Units, Language — SegmentedControls), Health (Apple Health —
- * Switch), Account (Body data, Goal & experience, Membership). Sign out
+ * Switch), Account (Body data, Experience, Membership). Sign out
  * (secondary) + Delete account (danger) at the bottom, version pinned beneath.
  *
  * Every action is the real one: units/language switch instantly, Health opens the
@@ -22,19 +22,11 @@ import { health } from '@/platform/health';
 import { setLocale, currentLocale } from '@/i18n';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
-import type { Goal } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ProfileSheet'>;
 type Overlay = 'none' | 'delete' | 'signout';
-
-const GOAL_KEY: Record<Goal, string> = {
-  get_stronger: 'getStronger',
-  build_muscle: 'buildMuscle',
-  general_fitness: 'generalFitness',
-  toning: 'toning',
-};
 
 export function ProfileSheet({ navigation }: Props) {
   const { t } = useCopy();
@@ -70,16 +62,15 @@ export function ProfileSheet({ navigation }: Props) {
     setOverlay('delete');
   }
 
-  // Body data + Goal/experience summaries (only the parts we actually have).
+  // Body data + experience summaries (only the parts we actually have). Goal is no longer a per-user
+  // setting — Hush is hypertrophy-first for everyone — so it's no longer surfaced as a profile field.
   const bodyBits = [
     p?.age != null ? `${p.age}` : null,
     p?.heightCm != null ? `${p.heightCm} cm` : null,
     p?.weightKg != null ? `${p.weightKg} kg` : null,
   ].filter(Boolean);
   const bodyData = bodyBits.length ? bodyBits.join(' · ') : null;
-  const goalExp = p
-    ? [t(`goal.${GOAL_KEY[p.goal]}`), p.experience ? t(`experience.${p.experience}`) : null].filter(Boolean).join(' · ')
-    : null;
+  const experienceLabel = p?.experience ? t(`experience.${p.experience}`) : null;
 
   // Membership (Subscription + Apple Payments): active → plan name, tapping opens
   // the system manage-subscriptions screen; inactive → free-trial status, tapping
@@ -189,8 +180,8 @@ export function ProfileSheet({ navigation }: Props) {
         <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
 
         <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
-        {bodyData ? <Row label={t('profile.bodyData')} sub={bodyData} last={!goalExp} /> : null}
-        {goalExp ? <Row label={t('profile.goalExperience')} sub={goalExp} last /> : null}
+        {bodyData ? <Row label={t('profile.bodyData')} sub={bodyData} last={!experienceLabel} /> : null}
+        {experienceLabel ? <Row label={t('profile.experience')} sub={experienceLabel} last /> : null}
 
         {__DEV__ ? (
           <>

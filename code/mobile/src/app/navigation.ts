@@ -2,14 +2,15 @@
  * Navigation param lists. Two groups gated by onboarding completion (Root.tsx):
  * onboarding (forward-only) and the main app.
  *
- * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18):
- *   Authentication → Consent → Connect Health → [Manual Info, if Health skipped]
- *   → Goal → Days per week → Program Created → Home.
+ * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18; Goal step removed
+ * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked):
+ *   Authentication → Consent → Name → Connect Health → Manual Info
+ *   → Experience → Days per week → Program Created → Home.
  * Invite-token enrollment is removed.
  */
-import type { CardioActivity, Experience, Goal, OnboardingInputs, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, Experience, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
-/** Profile fields gathered before Goal — from HealthKit (granted) or Manual Info. */
+/** Profile fields gathered in onboarding — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
   healthConnected: boolean;
   age?: number;
@@ -28,10 +29,9 @@ export type OnboardingParamList = {
   // are needed for the program; HealthKit only reliably gives steps/weight). The flag
   // records whether Health was connected (for weight prefill + the profile).
   ManualInfo: { healthConnected: boolean } | undefined;
-  Goal: { profile: OnboardingProfileDraft };
-  // Experience drives the starting weights; sits between Goal and Days per week.
-  Experience: { profile: OnboardingProfileDraft; goal: Goal };
-  DaysPerWeek: { profile: OnboardingProfileDraft; goal: Goal; experience: Experience };
+  // Experience drives the starting weights; the first choice after body data.
+  Experience: { profile: OnboardingProfileDraft };
+  DaysPerWeek: { profile: OnboardingProfileDraft; experience: Experience };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };
@@ -53,7 +53,9 @@ export type MainParamList = {
   // Pushed / modal surfaces.
   ProfileSheet: undefined;
   SessionFlow: undefined;
-  WellDone: { unlockedPortrait: boolean; summary?: SessionSummary };
+  // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
+  // Done renders the calm "Workout not started" state instead of a completion.
+  WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   ProgramDetail: { dayId: string };
   WorkoutDetail: { sessionId: string };
   // Quarterly peak-weight progress report — surfaced by the every-12-weeks notification.

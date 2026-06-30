@@ -25,6 +25,7 @@ import {
 import { initI18n } from '@/i18n';
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
+import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
 import { installCrashHandler, flush as flushTelemetry } from '@/platform/telemetry';
 import { color } from '@/design/tokens';
@@ -65,7 +66,9 @@ export default function App() {
         <StatusBar style="dark" />
         <AppProvider>
           <SessionProvider>
-            <Root />
+            <ToastProvider>
+              <Root />
+            </ToastProvider>
           </SessionProvider>
         </AppProvider>
       </SafeAreaProvider>

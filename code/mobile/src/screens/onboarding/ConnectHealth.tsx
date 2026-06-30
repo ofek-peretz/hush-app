@@ -35,7 +35,7 @@ export function ConnectHealth({ navigation }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 6 }}
+      progress={{ index: 2, total: 5 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       sub={t('ob.healthSub')}

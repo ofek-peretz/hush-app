@@ -58,16 +58,6 @@
     "weight": "Weight",
     "continue": "Continue"
   },
-  "goal": {
-    "eyebrow": "What are you training for",
-    "buildMuscle": "Build Muscle",
-    "increaseStrength": "Increase Strength",
-    "stayConsistent": "Stay Consistent",
-    "continue": "Continue",
-    "getStronger": "Get Stronger",
-    "generalFitness": "General Fitness",
-    "toning": "Get Lean"
-  },
   "experience": {
     "eyebrow": "Your experience",
     "beginner": "Beginner",
@@ -214,17 +204,6 @@
     "weight": "Weight",
     "female": "Female",
     "male": "Male",
-    "goalLegend": "Your intent",
-    "goalTitle": "What are you training for?",
-    "goalSub": "This sets how Hush prioritises load, volume and progression.",
-    "goalMuscle": "Build muscle",
-    "goalMuscleDesc": "Prioritise hypertrophy and muscle growth",
-    "goalStrength": "Increase strength",
-    "goalStrengthDesc": "Heavier progression on the main compound lifts",
-    "goalLean": "Get lean",
-    "goalLeanDesc": "Lean and defined — moderate loads, higher reps",
-    "goalConsistent": "Stay consistent",
-    "goalConsistentDesc": "Balanced progression, built to be sustainable",
     "expLegend": "Your background",
     "expTitle": "How long have you trained?",
     "expSub": "Honesty here makes the first weeks accurate. Hush adjusts quickly regardless.",
@@ -251,10 +230,7 @@
     "readyOwnership": "Hush decides the loads.\nYou decide the lifts.",
     "readyNote": "Hush only adds load your last sessions have earned — steady, never guesswork.",
     "readyCta": "Go to my next workout",
-    "focusStrength": "Strength",
-    "focusHypertrophy": "Hypertrophy",
-    "focusConsistency": "Consistency",
-    "focusLean": "Lean"
+    "focusHypertrophy": "Hypertrophy"
   },
   "menu": {
     "title": "Menu",
@@ -397,7 +373,26 @@
     "saturday": "Every set feeds Saturday's update. Hush is already reading {{week}} from how you trained.",
     "weekN": "Week {{n}}",
     "done": "Done",
-    "viewRecord": "View session record"
+    "viewRecord": "View session record",
+    "notStartedLegend": "Not started",
+    "notStartedTitle": "Workout not started",
+    "notStartedBody": "No exercises completed. Nothing was saved — start again whenever you're ready.",
+    "partialTitle": "Partial session logged."
+  },
+  "load": {
+    "perSide": "{{plates}} / side",
+    "bar": "{{weight}} {{unit}} bar",
+    "useBar": "Use the {{weight}} {{unit}} bar",
+    "perHand": "per hand",
+    "setPin": "Set the pin to {{weight}}",
+    "remembered": "We'll remember this weight next time"
+  },
+  "firstGym": {
+    "legend": "First workout",
+    "title": "We're learning your gym",
+    "body1": "Every gym is a little different. During your first few workouts, Hush may occasionally name a weight that isn't on your equipment.",
+    "body2": "If that happens, choose the closest weight available. Hush remembers it and becomes more accurate over time.",
+    "got": "Got it"
   },
   "portrait": {
     "tab": "Portrait",
@@ -572,7 +567,7 @@
     "healthSection": "Health",
     "account": "Account",
     "bodyData": "Body data",
-    "goalExperience": "Goal & experience",
+    "experience": "Experience",
     "healthConnectedSub": "Connected · heart rate, calories, distance",
     "membershipPro": "Hush Pro · {{plan}}",
     "membershipProGeneric": "Pro",

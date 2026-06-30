@@ -32,7 +32,7 @@ export function NameEntry({ navigation }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 6 }}
+      progress={{ index: 1, total: 5 }}
       keyboard
       legend={t('ob.nameLegend')}
       title={t('ob.nameTitle')}

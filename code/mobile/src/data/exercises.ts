@@ -33,6 +33,22 @@ import type { Capability } from './local/models';
 
 export type EquipmentFamily = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
 
+/**
+ * How a load is physically SET UP — finer than `equipment`, so the live workout can tell the
+ * athlete exactly what to do (plate math, dumbbell-per-hand, a pin, a fixed bar) and they never
+ * have to calculate. Display-only; the engine never reads it (it keys on `capability`). Defaults
+ * are derived from `equipment` (see `loadStyleOf`); an exercise overrides only when the default is
+ * wrong (e.g. a plate-loaded machine, which the default would treat as a selectorized pin stack).
+ */
+export type LoadStyle =
+  | 'barbell' // an Olympic bar + plates → "20 + 20 / side", "20 kg bar"
+  | 'fixed_barbell' // a pre-weighted fixed bar → "Use the 30 kg bar"
+  | 'dumbbell' // one dumbbell per hand → "20 kg / hand"
+  | 'selectorized' // a pin-selected weight stack → "Set the pin to 24"
+  | 'cable' // a pin-selected cable stack → "Set the pin to 28"
+  | 'plate_loaded' // a lever machine loaded with plates → "30 + 30 / side"
+  | 'bodyweight'; // no external load
+
 /** Human-readable muscle group — display + swap scoping. Subset of one capability. */
 export type MuscleGroup =
   | 'Chest'
@@ -53,6 +69,9 @@ export interface Exercise {
   /** Display + swap-scoping muscle group (strict subset of `capability`). */
   muscle: MuscleGroup;
   equipment: EquipmentFamily;
+  /** Setup convention for the load display (defaults from `equipment`; override only when the
+   *  default is wrong — e.g. a plate-loaded leg press, not a selectorized stack). */
+  loadStyle?: LoadStyle;
   /** Exactly 3 concise technique cues. */
   cues: [string, string, string];
   synonyms?: string[];
@@ -118,8 +137,8 @@ export const EXERCISES: Exercise[] = [
   // ───────────────────────── knee_dominant · Quads ─────────────────────────
   { id: 'bb_back_squat', name: 'Barbell Back Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Big breath, brace.', 'Sit between the hips.', 'Drive up evenly.'], synonyms: ['squat'] },
   { id: 'front_squat', name: 'Front Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'barbell', tier: 'compound', baseKg: 35, bwScaled: true, cues: ['Elbows high.', 'Stay upright.', 'Drive through mid-foot.'] },
-  { id: 'leg_press', name: 'Leg Press', capability: 'knee_dominant', muscle: 'Quads', equipment: 'machine', tier: 'compound', baseKg: 80, bwScaled: true, cues: ['Feet mid-platform.', 'Knees track your toes.', "Don't lock out hard."] },
-  { id: 'hack_squat', name: 'Hack Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'machine', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Back flat on the pad.', 'Sit down and back.', 'Drive through the heels.'] },
+  { id: 'leg_press', name: 'Leg Press', capability: 'knee_dominant', muscle: 'Quads', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 80, bwScaled: true, cues: ['Feet mid-platform.', 'Knees track your toes.', "Don't lock out hard."] },
+  { id: 'hack_squat', name: 'Hack Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Back flat on the pad.', 'Sit down and back.', 'Drive through the heels.'] },
   { id: 'goblet_squat', name: 'Goblet Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'dumbbell', tier: 'compound', baseKg: 16, cues: ['Hold it at your chest.', 'Sit straight down.', 'Drive up.'] },
   { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Back foot elevated.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['split squat'] },
   { id: 'walking_lunge', name: 'Walking Lunge', capability: 'knee_dominant', muscle: 'Quads', equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Long step.', 'Knee tracks the toes.', 'Push off the front foot.'], synonyms: ['lunge'] },
@@ -128,7 +147,7 @@ export const EXERCISES: Exercise[] = [
   // ───────────────────────── knee_dominant · Calves ─────────────────────────
   { id: 'standing_calf_raise', name: 'Standing Calf Raise', capability: 'knee_dominant', muscle: 'Calves', equipment: 'machine', tier: 'isolation', baseKg: 40, bwScaled: true, cues: ['Rise onto the balls of your feet.', 'Pause at the top.', 'Lower for a full stretch.'] },
   { id: 'seated_calf_raise', name: 'Seated Calf Raise', capability: 'knee_dominant', muscle: 'Calves', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Knees under the pad.', 'Drive through the toes.', 'Stretch at the bottom.'] },
-  { id: 'leg_press_calf_raise', name: 'Leg Press Calf Raise', capability: 'knee_dominant', muscle: 'Calves', equipment: 'machine', tier: 'isolation', baseKg: 60, bwScaled: true, cues: ['Toes on the platform edge.', 'Press through the balls of your feet.', 'Control the stretch.'] },
+  { id: 'leg_press_calf_raise', name: 'Leg Press Calf Raise', capability: 'knee_dominant', muscle: 'Calves', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'isolation', baseKg: 60, bwScaled: true, cues: ['Toes on the platform edge.', 'Press through the balls of your feet.', 'Control the stretch.'] },
 
   // ───────────────────────── hip_dominant · Hamstrings ─────────────────────────
   { id: 'bb_deadlift', name: 'Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Bar over mid-foot.', 'Flat back, brace.', 'Push the floor away.'], synonyms: ['conventional deadlift'] },
@@ -274,6 +293,26 @@ export function progressionRule(id: string): ProgressionRule {
     return { mode: 'reps', repCeiling: bw.repCeiling, harder: bw.harder };
   }
   return { mode: 'load', loadStepKg: LOAD_STEP_KG[ex.equipment] };
+}
+
+// ── Equipment-native load setup ──────────────────────────────────────────────
+// The default setup convention each equipment family implies. A machine is assumed SELECTORIZED
+// (a pin stack) — the common case; the few plate-loaded machines carry an explicit `loadStyle`.
+const DEFAULT_LOAD_STYLE: Record<EquipmentFamily, LoadStyle> = {
+  barbell: 'barbell',
+  dumbbell: 'dumbbell',
+  cable: 'cable',
+  machine: 'selectorized',
+  bodyweight: 'bodyweight',
+};
+
+/** The load-setup convention for an exercise (explicit override, else the equipment default). A
+ *  bodyweight movement is always 'bodyweight' regardless of its nominal equipment family. */
+export function loadStyleOf(id: string | null | undefined): LoadStyle {
+  const ex = id ? BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id)) : undefined;
+  if (!ex) return 'barbell';
+  if (ex.bodyweight || ex.equipment === 'bodyweight') return 'bodyweight';
+  return ex.loadStyle ?? DEFAULT_LOAD_STYLE[ex.equipment];
 }
 
 // ── Equipment-busy backups ───────────────────────────────────────────────────

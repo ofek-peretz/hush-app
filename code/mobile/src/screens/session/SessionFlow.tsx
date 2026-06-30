@@ -9,14 +9,14 @@
  *
  * Everything the engine owns is preserved: targets/loads from the frozen model,
  * per-set logging at Complete Set, the save-before-Well-Done invariant, rest
- * timing, edit-result (now inline Steppers), swap (current + upcoming), finish.
+ * timing, edit-result (inline WheelPickers), swap (current + upcoming), finish.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon, type IconName } from '@/components/Icon';
-import { Button, IconButton, RestRing, Card, LoadDelta, Legend, Stepper } from '@/components/ds';
+import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
@@ -25,28 +25,69 @@ import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { similarExercises, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
+import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
+import { db } from '@/data/local/db';
+import * as haptics from '@/platform/haptics';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'swap';
+type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'swap' | 'firstGym';
 type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
+/** Once-per-install key for the "We're learning your gym" first-workout note. */
+const FIRST_GYM_KEY = 'first_workout_modal';
 
 export function SessionFlow({ navigation }: Props) {
   const { t } = useCopy();
   const session = useSession();
+  const toast = useToast();
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [editing, setEditing] = useState(false);
   const [swapTarget, setSwapTarget] = useState<'current' | 'next'>('current');
   const units = useApp().profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
+  // Equipment-learning toast: the engine's pristine load for the active set (captured before any
+  // Edit Result), and whether the athlete corrected the load to a different available weight.
+  const originalWeightRef = useRef<number | null>(null);
+  const lastIdxRef = useRef<number>(-1);
+  const correctedRef = useRef(false);
+  // The learning reassurance is one promise for the whole gym, not per lift — show it AT MOST ONCE
+  // per workout (resets naturally on each fresh SessionFlow mount), never on a set-by-set basis.
+  const learnToastShownRef = useRef(false);
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
 
+  // Capture the engine's pristine recommended load the first time each set is presented (before
+  // an Edit Result mutates it). Done during render so the value is the untouched engine number.
+  const curIdx = session.globalProgress?.index ?? -1;
+  if (curIdx !== lastIdxRef.current) {
+    lastIdxRef.current = curIdx;
+    originalWeightRef.current = session.currentTarget?.recommendedWeight ?? null;
+  }
+
+  // First Start ever: a confident start haptic, and the one-time "we're learning your gym" note
+  // (shown AFTER Start, never in onboarding, never twice). Mount-only.
+  useEffect(() => {
+    haptics.workoutStart();
+    let active = true;
+    void db.hasFirst(FIRST_GYM_KEY).then((seen) => {
+      if (active && !seen) setOverlay('firstGym');
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function dismissFirstGym() {
+    void db.markFirst(FIRST_GYM_KEY);
+    setOverlay('none');
+  }
+
   function goWellDone(r: CompleteResult) {
-    navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait, summary: r.summary });
+    navigation.replace('WellDone', { unlockedPortrait: r.unlockedPortrait, summary: r.summary, notStarted: r.notStarted });
   }
   function openPause() {
     session.pause();
@@ -66,6 +107,11 @@ export function SessionFlow({ navigation }: Props) {
     const tgt = session.currentTarget;
     if (!tgt || confirm) return;
     setEditing(false);
+    // Equipment learning: the load was corrected to a different available weight (not bodyweight).
+    correctedRef.current =
+      tgt.recommendedWeight != null &&
+      originalWeightRef.current != null &&
+      tgt.recommendedWeight !== originalWeightRef.current;
     setConfirm({
       weight: tgt.recommendedWeight,
       reps: tgt.recommendedReps,
@@ -76,10 +122,19 @@ export function SessionFlow({ navigation }: Props) {
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
     confirmRunning.current = true;
+    haptics.setLogged(); // the set is captured — a light, affirmative tick
+    const corrected = correctedRef.current;
+    correctedRef.current = false;
     const id = setTimeout(async () => {
       const r = await session.completeSet();
       confirmRunning.current = false;
       setConfirm(null);
+      // Non-blocking confirmation that Hush will remember the corrected load — shown at most ONCE
+      // per workout, and NEVER when this set ends the workout (it must never float over Well Done).
+      if (corrected && !r.ended && !learnToastShownRef.current) {
+        learnToastShownRef.current = true;
+        toast.show(t('load.remembered'));
+      }
       if (r.ended) goWellDone(r);
     }, CONFIRM_DWELL_MS);
     return () => clearTimeout(id);
@@ -136,6 +191,18 @@ export function SessionFlow({ navigation }: Props) {
 
       {overlay === 'swap' ? (
         <SwapSheet target={swapTarget} onClose={() => setOverlay('none')} />
+      ) : null}
+
+      {overlay === 'firstGym' ? (
+        <BottomSheet onClose={dismissFirstGym}>
+          <Legend style={styles.sheetLegend}>{t('firstGym.legend')}</Legend>
+          <Text style={styles.sheetTitle}>{t('firstGym.title')}</Text>
+          <Text style={styles.sheetBody}>{t('firstGym.body1')}</Text>
+          <Text style={styles.sheetBody}>{t('firstGym.body2')}</Text>
+          <View style={styles.sheetActions}>
+            <Button variant="primary" block label={t('firstGym.got')} onPress={dismissFirstGym} />
+          </View>
+        </BottomSheet>
       ) : null}
 
       {overlay === 'demo' ? (
@@ -201,6 +268,56 @@ function StageGhost({ icon, label, onPress }: { icon: IconName; label: string; o
   );
 }
 
+/* ------------------------------------------------------- Equipment-native load */
+/** The setup instruction lines under the headline load — equipment-native, never a universal
+ *  "per side". Tells the athlete exactly how to load the weight so they never have to calculate. */
+/** The per-side line: an exact plate stack when the load decomposes ("20 + 20"), else the numeric
+ *  per-side weight ("9.5") — never a plate stack that doesn't sum to the prescribed load. */
+function perSideLine(setup: LoadSetup, t: (k: string, o?: Record<string, unknown>) => string): string | null {
+  if (setup.perSide == null || setup.perSide <= 0) return null;
+  const stack = setup.plates && setup.plates.length ? setup.plates.join(' + ') : String(setup.perSide);
+  return t('load.perSide', { plates: stack });
+}
+
+function loadSetupStrings(setup: LoadSetup, t: (k: string, o?: Record<string, unknown>) => string, units: 'kg' | 'lb'): string[] {
+  const u = unitLabel(units);
+  switch (setup.style) {
+    case 'barbell': {
+      const out: string[] = [];
+      const ps = perSideLine(setup, t);
+      if (ps) out.push(ps);
+      if (setup.barKg != null) out.push(t('load.bar', { weight: setup.barKg, unit: u }));
+      return out;
+    }
+    case 'plate_loaded': {
+      const ps = perSideLine(setup, t);
+      return ps ? [ps] : [];
+    }
+    case 'fixed_barbell':
+      return [t('load.useBar', { weight: setup.fixedBar, unit: u })];
+    case 'dumbbell':
+      return [t('load.perHand')];
+    case 'selectorized':
+    case 'cable':
+      return [t('load.setPin', { weight: setup.pin })];
+    default:
+      return [];
+  }
+}
+
+function LoadSetupLines({ setup, units }: { setup: LoadSetup; units: 'kg' | 'lb' }) {
+  const { t } = useCopy();
+  const lines = loadSetupStrings(setup, t, units);
+  if (lines.length === 0) return null;
+  return (
+    <View style={styles.setupLines}>
+      {lines.map((line, i) => (
+        <Text key={i} style={styles.setupLine}>{line}</Text>
+      ))}
+    </View>
+  );
+}
+
 /* ----------------------------------------------------------------- Active Set */
 function ActiveSet({
   units,
@@ -237,6 +354,10 @@ function ActiveSet({
   const weight = displayWeight(target.recommendedWeight, units);
   const reason = target.reasonType; // 'increase' | 'hold' | 'decrease' | undefined
   const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
+  // Equipment-native setup: the headline snaps to a loadable weight (barbell / plate-loaded),
+  // and the setup lines tell the athlete exactly how to load it (items 5 & 12).
+  const setup = loadSetup(session.currentExerciseId, weight, units);
+  const heroValue = setup ? setup.headline : weight;
 
   // Inline edit → write straight to the current step (engine re-renders).
   const wStep = units === 'kg' ? 2.5 : 5;
@@ -269,9 +390,10 @@ function ActiveSet({
                 style={({ pressed }) => [styles.loadBtn, pressed && styles.loadBtnPressed]}
               >
                 <View style={styles.heroRow}>
-                  <Text style={styles.hero} accessibilityLabel={`${weight} ${units}`}>{weight}</Text>
+                  <Text style={styles.hero} accessibilityLabel={`${heroValue} ${units}`}>{heroValue}</Text>
                   <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
                 </View>
+                {setup ? <LoadSetupLines setup={setup} units={units} /> : null}
                 {reason ? (
                   <View style={styles.deltaWrap}>
                     <LoadDelta
@@ -301,12 +423,12 @@ function ActiveSet({
             {!isBodyweight ? (
               <View style={styles.editRow}>
                 <Text style={styles.editLabel}>{t('workout.actualWeight')}</Text>
-                <Stepper value={weight ?? 0} onChange={setWeight} step={wStep} min={0} unit={unitLabel(units)} />
+                <WheelPicker value={weight ?? 0} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} unit={unitLabel(units)} label={t('workout.actualWeight')} onStage style={styles.editWheel} />
               </View>
             ) : null}
             <View style={styles.editRow}>
               <Text style={styles.editLabel}>{t('workout.actualReps')}</Text>
-              <Stepper value={target.recommendedReps} onChange={setReps} step={1} min={0} unit={t('workout.repsUnit')} />
+              <WheelPicker value={target.recommendedReps} onChange={setReps} step={1} min={0} max={50} unit={t('workout.repsUnit')} label={t('workout.actualReps')} onStage style={styles.editWheel} />
             </View>
           </View>
         )}
@@ -380,6 +502,7 @@ function Rest({
   const nextName = session.nextExercise?.name ?? exerciseDisplayName(session.nextExerciseId);
   const nextGroup = session.nextExercise?.muscle ?? '';
   const nextTarget = session.nextTarget;
+  // The upcoming load is the engine's prescribed value verbatim (same number the athlete will lift).
   const nextWeight = displayWeight(nextTarget?.recommendedWeight ?? null, units);
   const nextReps = nextTarget?.recommendedReps ?? 0;
   const nextSet = session.nextSetLabel;
@@ -394,6 +517,9 @@ function Rest({
   const [remaining, setRemaining] = useState(session.restSeconds);
   const endAtRef = useRef<number | null>(null);
   const remainingRef = useRef(session.restSeconds);
+  // Rest "Approach" haptic countdown — each beat (7/3/2/1) fires once as `remaining` lands on it.
+  const beatsFiredRef = useRef<Set<number>>(new Set());
+  const prevRemForBeatsRef = useRef(session.restSeconds);
 
   const sync = useCallback(() => {
     if (endAtRef.current == null) return;
@@ -408,6 +534,8 @@ function Rest({
     setRemaining(session.restSeconds);
     remainingRef.current = session.restSeconds;
     endAtRef.current = paused ? null : Date.now() + session.restSeconds * 1000;
+    beatsFiredRef.current.clear(); // fresh rest → re-arm the Approach countdown
+    prevRemForBeatsRef.current = session.restSeconds;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.restSeconds, session.displayPhase]);
 
@@ -432,12 +560,31 @@ function Rest({
   useEffect(() => {
     if (paused) return;
     if (remaining <= 0) {
+      // GO — felt without looking. A new exercise gets the distinct triple; the next set, the double.
+      if (isTransition) haptics.exerciseAdvance();
+      else haptics.restFinished();
       session.endRest();
       return;
     }
     const id = setTimeout(sync, 1000);
     return () => clearTimeout(id);
-  }, [remaining, paused, session, sync]);
+  }, [remaining, paused, session, sync, isTransition]);
+
+  // The Approach countdown: fire each beat once as `remaining` lands on a threshold via a normal
+  // tick. A jump (background catch-up / re-anchor) consumes skipped beats SILENTLY — never a buzz
+  // storm on return to foreground.
+  useEffect(() => {
+    const prev = prevRemForBeatsRef.current;
+    prevRemForBeatsRef.current = remaining;
+    if (paused) return;
+    const jumped = prev - remaining > 1;
+    for (const tSec of haptics.REST_APPROACH_BEATS) {
+      if (remaining <= tSec && !beatsFiredRef.current.has(tSec)) {
+        beatsFiredRef.current.add(tSec); // consume so it never fires late
+        if (!jumped && remaining === tSec) haptics.restApproach(tSec);
+      }
+    }
+  }, [remaining, paused]);
 
   // +15s: extend the absolute end but KEEP `total` fixed (the design adds only to
   // `remaining`), so the ring visibly fills FORWARD by a clear 15/total slice — the
@@ -447,6 +594,8 @@ function Rest({
   const addFifteen = useCallback(() => {
     remainingRef.current += 15;
     endAtRef.current = (endAtRef.current ?? Date.now() + remainingRef.current * 1000) + 15000;
+    beatsFiredRef.current.clear(); // the final-seconds window moved out — re-arm the countdown
+    prevRemForBeatsRef.current = remainingRef.current;
     sync();
     session.extendRest(15);
   }, [sync, session]);
@@ -541,6 +690,7 @@ function SwapSheet({ target, onClose }: { target: 'current' | 'next'; onClose: (
   const nextTarget = session.nextTarget;
 
   function choose(altId: string) {
+    haptics.confirm();
     if (target === 'current') {
       session.swapCurrentExercise(altId);
     } else {
@@ -684,8 +834,12 @@ const styles = StyleSheet.create({
   group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10 },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
   loadBtn: { marginTop: 30, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 16, borderRadius: radius.md },
-  loadBtnPressed: { backgroundColor: stage[1] },
+  // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
+  loadBtnPressed: { opacity: 0.55 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  // Equipment-native setup instruction under the headline (plate math, pin, per hand, fixed bar).
+  setupLines: { marginTop: 12, alignItems: 'center', gap: 3 },
+  setupLine: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink1, letterSpacing: 0.2 },
   whyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 13 },
   whyText: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
   repsPill: { marginTop: 20, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
@@ -702,7 +856,8 @@ const styles = StyleSheet.create({
 
   // Inline edit
   editBlock: { marginTop: 30, width: '100%', maxWidth: 300, gap: 16 },
-  editRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editRow: { gap: 8 },
+  editWheel: { alignSelf: 'stretch' },
   editLabel: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
   dotsWrap: { marginTop: 40, alignItems: 'center' },

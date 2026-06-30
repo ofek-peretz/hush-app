@@ -1,9 +1,9 @@
 /**
- * Experience — one choice between Goal and Days per week, re-skinned to the design
+ * Experience — the first choice after body data, re-skinned to the design
  * onboarding step: legend → title → sub → a stacked SegmentedControl
  * (Beginner / Intermediate / Advanced with durations). Training experience is the
  * single biggest input to the cold-start starting weight. Continue → Days per
- * week. Progress 5 / 6.
+ * week. Progress 4 / 5.
  */
 import React, { useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -19,18 +19,18 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'Experience'>;
 
 export function Experience({ navigation, route }: Props) {
   const { t } = useCopy();
-  const { profile, goal } = route.params;
+  const { profile } = route.params;
   const [experience, setExperience] = useState<ExperienceT>('intermediate');
 
   function onContinue() {
     void track('experience_selected', { experience });
-    navigation.navigate('DaysPerWeek', { profile, goal, experience });
+    navigation.navigate('DaysPerWeek', { profile, experience });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 5, total: 6 }}
+      progress={{ index: 4, total: 5 }}
       legend={t('ob.expLegend')}
       title={t('ob.expTitle')}
       sub={t('ob.expSub')}
