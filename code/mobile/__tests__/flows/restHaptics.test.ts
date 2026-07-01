@@ -1,0 +1,136 @@
+/**
+ * Rest-haptics backstop (Build #19, regression #3).
+ *
+ * The 7s warning + rest-over cue must reach a LOCKED/BACKGROUNDED phone (JS timers
+ * suspend, so Core Haptics can't). These tests pin the OS-notification backstop: the
+ * ownership gate (watch active → phone stands down), the exact schedule (warning at
+ * end−7s, complete at end), the sub-second guard, and idempotent re-arm/disarm.
+ */
+
+// File-level mocks (jest hoists these above the import). Only `mock*`-prefixed vars may
+// be referenced inside a factory.
+const mockScheduled: Array<{ identifier: string; content: { data?: { kind?: string }; sound?: boolean }; trigger: { seconds?: number } }> = [];
+const mockCanceled: string[] = [];
+const mockState = { reachable: false, granted: true };
+
+jest.mock('expo-notifications', () => ({
+  SchedulableTriggerInputTypes: { WEEKLY: 'weekly', TIME_INTERVAL: 'timeInterval' },
+  setNotificationHandler: () => {},
+  getPermissionsAsync: async () => ({ granted: mockState.granted, canAskAgain: true }),
+  requestPermissionsAsync: async () => ({ granted: mockState.granted, canAskAgain: true }),
+  scheduleNotificationAsync: async (req: (typeof mockScheduled)[number]) => {
+    mockScheduled.push(req);
+    return req.identifier;
+  },
+  cancelScheduledNotificationAsync: async (id: string) => {
+    mockCanceled.push(id);
+  },
+  cancelAllScheduledNotificationsAsync: async () => {},
+  addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+  addNotificationReceivedListener: () => ({ remove: () => {} }),
+  getLastNotificationResponseAsync: async () => null,
+}));
+
+jest.mock('@/platform/watch/watchTransportNative', () => ({
+  watchTransport: { isReachable: () => mockState.reachable },
+}));
+
+jest.mock('@/platform/telemetry', () => ({ track: () => {} }));
+
+import { restHaptics, restAlertDelays, phoneOwnsRestHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
+
+const NOW = 1_700_000_000_000;
+
+beforeEach(() => {
+  mockScheduled.length = 0;
+  mockCanceled.length = 0;
+  mockState.reachable = false;
+  mockState.granted = true;
+  jest.spyOn(Date, 'now').mockReturnValue(NOW);
+});
+afterEach(() => jest.restoreAllMocks());
+
+const at = (s: number) => NOW + s * 1000;
+const byId = (id: string) => mockScheduled.find((r) => r.identifier === id);
+
+describe('restAlertDelays — warning leads the end by 7s, sub-second dropped', () => {
+  it('a normal 90s rest schedules both', () => {
+    expect(restAlertDelays(at(90), NOW)).toEqual({ warnInS: 90 - REST_WARNING_LEAD_S, doneInS: 90 });
+  });
+  it('exactly 7s rest: warning collapses to null, complete stays', () => {
+    expect(restAlertDelays(at(7), NOW)).toEqual({ warnInS: null, doneInS: 7 });
+  });
+  it('8s rest: warning is the minimum 1s', () => {
+    expect(restAlertDelays(at(8), NOW)).toEqual({ warnInS: 1, doneInS: 8 });
+  });
+  it('a rest already over: both null', () => {
+    expect(restAlertDelays(at(0), NOW)).toEqual({ warnInS: null, doneInS: null });
+    expect(restAlertDelays(at(-5), NOW)).toEqual({ warnInS: null, doneInS: null });
+  });
+});
+
+describe('ownership gate', () => {
+  it('no watch reachable → phone owns', () => {
+    mockState.reachable = false;
+    expect(phoneOwnsRestHaptics()).toBe(true);
+  });
+  it('watch reachable → phone stands down', () => {
+    mockState.reachable = true;
+    expect(phoneOwnsRestHaptics()).toBe(false);
+  });
+});
+
+describe('arm — phone owns (no watch)', () => {
+  it('schedules the 7s warning and the rest-complete alert', async () => {
+    await restHaptics.arm(at(90));
+    expect(mockScheduled).toHaveLength(2);
+
+    const warn = byId('hush.rest_warn')!;
+    const done = byId('hush.rest_done')!;
+    expect(warn.trigger.seconds).toBe(83);
+    expect(done.trigger.seconds).toBe(90);
+    // Tagged rest_* so the foreground handler suppresses them; sound on so they alert when locked.
+    expect(warn.content.data?.kind).toBe('rest_warn');
+    expect(done.content.data?.kind).toBe('rest_done');
+    expect(warn.content.sound).toBe(true);
+    expect(done.content.sound).toBe(true);
+  });
+
+  it('clears the prior pair before scheduling (idempotent re-arm for +15s / resume)', async () => {
+    await restHaptics.arm(at(90));
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('a short rest (<1s of warning window) schedules only what remains', async () => {
+    await restHaptics.arm(at(5)); // warn null, done 5
+    expect(byId('hush.rest_warn')).toBeUndefined();
+    expect(byId('hush.rest_done')!.trigger.seconds).toBe(5);
+  });
+
+  it('a rest already over schedules nothing', async () => {
+    await restHaptics.arm(at(0));
+    expect(mockScheduled).toHaveLength(0);
+  });
+
+  it('denied notification permission → nothing scheduled (never throws)', async () => {
+    mockState.granted = false;
+    await expect(restHaptics.arm(at(90))).resolves.toBeUndefined();
+    expect(mockScheduled).toHaveLength(0);
+  });
+});
+
+describe('arm — watch owns (reachable)', () => {
+  it('schedules nothing on the phone, but still clears any stale pair', async () => {
+    mockState.reachable = true;
+    await restHaptics.arm(at(90));
+    expect(mockScheduled).toHaveLength(0);
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+});
+
+describe('disarm', () => {
+  it('cancels both rest alerts', async () => {
+    await restHaptics.disarm();
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+});

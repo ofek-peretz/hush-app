@@ -92,19 +92,26 @@ const QUARTERLY_INTERVAL_S = 12 * 7 * 24 * 60 * 60; // ~3 months, repeating
  */
 try {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      const data = (notification as { request?: { content?: { data?: { kind?: unknown } } } })
+        ?.request?.content?.data;
+      const kind = typeof data?.kind === 'string' ? data.kind : '';
+      // Rest alerts (rest_warn / rest_done) are the LOCKED/BACKGROUND backstop for the
+      // 7 s warning + rest-over cue. In the FOREGROUND the in-app Core Haptics countdown
+      // already fires, so present nothing here — no double buzz, no banner over the stage.
+      if (kind.startsWith('rest_')) {
+        return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
+      }
+      return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false };
+    },
   });
 } catch {
   /* native module unavailable — handler is a no-op until a real build */
 }
 
-/** Request notification permission once; never throws. */
-async function ensurePermission(): Promise<boolean> {
+/** Request notification permission once; never throws. Shared with the rest-haptics
+ *  backstop (`platform/restHaptics.ts`) so both surfaces use one permission path. */
+export async function ensureNotificationPermission(): Promise<boolean> {
   try {
     const current = await Notifications.getPermissionsAsync();
     if (current.granted) return true;
@@ -124,7 +131,7 @@ async function ensurePermission(): Promise<boolean> {
 export const notifierExpo: Notifier = {
   async scheduleWeeklyProgramReady(sessionCount?: number) {
     try {
-      if (!(await ensurePermission())) return;
+      if (!(await ensureNotificationPermission())) return;
       // Idempotent: clear any prior weekly before re-scheduling (a re-anchor
       // coalesces onto the same stable id rather than stacking).
       await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID).catch(() => {});
@@ -158,7 +165,7 @@ export const notifierExpo: Notifier = {
 
   async scheduleQuarterlyReport() {
     try {
-      if (!(await ensurePermission())) return;
+      if (!(await ensureNotificationPermission())) return;
       // Idempotent: coalesce onto a stable id so re-scheduling never stacks.
       await Notifications.cancelScheduledNotificationAsync(QUARTERLY_ID).catch(() => {});
       void track(NOTIFICATION_EVENTS.coalesced, { kind: 'quarterly_report' });

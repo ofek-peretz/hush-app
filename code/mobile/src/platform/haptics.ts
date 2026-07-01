@@ -38,10 +38,12 @@ export function restFinished(): void {
  * (light → medium → rigid) builds readiness so they launch into the set on the GO without staring at
  * the screen. The whole pattern is single transients, distinct from every other workout haptic.
  *
- * NOTE: on iPhone these only fire while the app is foregrounded + awake (JS timers suspend when
- * locked/backgrounded). The Apple Watch is the primary surface for the wrist-down countdown and,
- * once its native target exists, OWNS the countdown (the phone then suppresses to avoid a double
- * buzz). See `platform/watch/watchHaptics.ts` (`rest_countdown`).
+ * NOTE: these Core Haptics fire only while the app is foregrounded + awake (JS timers suspend when
+ * locked/backgrounded). The locked/background 7s-warning + rest-over cue is delivered by the
+ * OS-level local-notification backstop in `platform/restHaptics.ts` (the notification handler
+ * suppresses those alerts in the foreground so they never double with these beats). When a watch
+ * workout is active the watch OWNS the wrist-down countdown and the phone backstop stands down.
+ * See `platform/watch/watchHaptics.ts` (`rest_countdown`).
  */
 export const REST_APPROACH_BEATS: readonly number[] = [7, 3, 2, 1];
 

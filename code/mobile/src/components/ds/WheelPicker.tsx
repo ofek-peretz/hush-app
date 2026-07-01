@@ -10,19 +10,29 @@
  *
  * Props mirror the Stepper (value/onChange/min/max/step/unit/format/size).
  *
- * RTL: the wheel is a NUMERIC LTR ISLAND. A measurement wheel is a number line —
- * values ascend left-to-right in every locale (numerals are LTR; this matches rulers,
- * steppers, sliders, and keypads even in Hebrew UIs), and pinning the control LTR also
- * sidesteps React Native's inverted horizontal-scroll behavior under forceRTL, which
- * would otherwise break the contentOffset/snap math on this precision control. The form
- * row AROUND the wheel still mirrors (label side, where the field sits) via its parent.
- * NOTE: the scroll/snap behavior under forceRTL must be verified on a Hebrew device.
+ * RTL: the wheel is a NUMERIC LTR ISLAND — values ascend left-to-right in every locale
+ * (numerals are LTR; this matches rulers, steppers, sliders, and keypads even in Hebrew
+ * UIs). The form row AROUND the wheel still mirrors (label side, where the field sits)
+ * via its parent.
+ *
+ * The hard part is the scroll math. Under `I18nManager.forceRTL(true)` iOS MIRRORS a
+ * horizontal list's WRITE side: `initialScrollIndex` / `scrollToOffset({offset})` land
+ * at the mirror position `(count-1-i)` instead of `i`. The READ side is unaffected —
+ * `contentOffset.x / itemW` is the honestly-centered index in both locales. (Build #18
+ * proved this: age 28→76, weight 82→203.5, reps 8→42 — an EXACT `max+min-value` mirror,
+ * yet the wrong value was faithfully committed, i.e. read matched what was shown.)
+ *
+ * Fix: pre-invert only the WRITE via `wheelOffset()`, so the native inversion cancels and
+ * the target lands on `i`; the READ stays direct. `initialScrollIndex` (a second, buggy
+ * writer that also blanked large-range wheels) is removed — a single imperative
+ * `scrollToOffset` positions the wheel once width/content are known.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
+  I18nManager,
   StyleSheet,
   type AccessibilityActionEvent,
   type NativeSyntheticEvent,
@@ -59,10 +69,31 @@ function buildValues(min: number, max: number, step: number): number[] {
   return out;
 }
 
+/**
+ * The scroll offset (px) to REQUEST so that logical value-index `i` ends up centered.
+ * LTR: identity (`i * itemW`). RTL: pre-inverted to `(count-1-i) * itemW`, because iOS
+ * mirrors the requested offset under forceRTL — the two inversions cancel and `i` lands.
+ * Pure + exported for LTR/RTL unit coverage of the positioning invariant.
+ */
+export function wheelOffset(i: number, itemW: number, count: number, rtl: boolean): number {
+  const physical = rtl ? count - 1 - i : i;
+  return physical * itemW;
+}
+
+/**
+ * The centered value-index READ back from a settled `contentOffset.x`. Direct in BOTH
+ * locales (iOS does not mirror the read) — exported so the read/write asymmetry is
+ * explicit and testable. Caller clamps to the track bounds.
+ */
+export function wheelIndexFromOffset(x: number, itemW: number): number {
+  return Math.round(x / itemW);
+}
+
 export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, style }: Props) {
   const itemW = ITEM_W[size];
   const h = size === 'lg' ? control.hLg : control.h;
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
+  const rtl = I18nManager.isRTL; // locked for the app session (RTL needs a relaunch)
   const listRef = useRef<FlatList<number>>(null);
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
@@ -77,23 +108,33 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   );
   const [activeIndex, setActiveIndex] = useState(() => indexOfValue(value));
 
-  // Center on the controlled value (mount + external change), once the width is known.
-  useEffect(() => {
+  // Position the wheel on the controlled value — the SINGLE writer (there is no
+  // initialScrollIndex). Uses the RTL-aware offset so the value lands centered under
+  // forceRTL. Deferred to the next frame so the FlatList has laid out (a far target on a
+  // large-range wheel — weight/distance — otherwise scrolls into an unrendered window and
+  // shows a blank track). Re-runs on external value change and once content is measured.
+  const positionToValue = useCallback(() => {
     if (width === 0) return;
     const target = indexOfValue(value);
-    if (target !== lastIndexRef.current) {
-      lastIndexRef.current = target;
-      setActiveIndex(target);
-      listRef.current?.scrollToOffset({ offset: target * itemW, animated: false });
-    }
-  }, [value, width, indexOfValue, itemW]);
+    lastIndexRef.current = target;
+    setActiveIndex(target);
+    listRef.current?.scrollToOffset({ offset: wheelOffset(target, itemW, values.length, rtl), animated: false });
+  }, [width, indexOfValue, value, itemW, values.length, rtl]);
+
+  useEffect(() => {
+    if (width === 0) return;
+    if (indexOfValue(value) === lastIndexRef.current) return;
+    const raf = requestAnimationFrame(positionToValue);
+    return () => cancelAnimationFrame(raf);
+  }, [value, width, indexOfValue, positionToValue]);
 
   const sidePad = width > 0 ? Math.max(0, (width - itemW) / 2) : 0;
 
   // Track the centered detent as the wheel moves — fire a tick + report on change.
+  // The read is direct (RTL-agnostic); iOS mirrors only the write side.
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const idx = clampIndex(Math.round(e.nativeEvent.contentOffset.x / itemW));
+      const idx = clampIndex(wheelIndexFromOffset(e.nativeEvent.contentOffset.x, itemW));
       if (idx !== activeIndex) {
         setActiveIndex(idx);
         selectionHaptic();
@@ -105,7 +146,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   // Commit the settled detent.
   const onSettle = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const idx = clampIndex(Math.round(e.nativeEvent.contentOffset.x / itemW));
+      const idx = clampIndex(wheelIndexFromOffset(e.nativeEvent.contentOffset.x, itemW));
       lastIndexRef.current = idx;
       const v = values[idx];
       if (v !== value) onChange(v);
@@ -122,10 +163,10 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
       lastIndexRef.current = idx;
       setActiveIndex(idx);
       onChange(v);
-      listRef.current?.scrollToOffset({ offset: idx * itemW, animated: true });
+      listRef.current?.scrollToOffset({ offset: wheelOffset(idx, itemW, values.length, rtl), animated: true });
       selectionHaptic();
     },
-    [clampIndex, indexOfValue, itemW, onChange, value, values],
+    [clampIndex, indexOfValue, itemW, onChange, value, values, rtl],
   );
   const onAccessibilityAction = useCallback(
     (e: AccessibilityActionEvent) => {
@@ -156,11 +197,13 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             showsHorizontalScrollIndicator={false}
             keyExtractor={(v) => String(v)}
             getItemLayout={(_d, index) => ({ length: itemW, offset: itemW * index, index })}
-            initialScrollIndex={activeIndex}
             snapToInterval={itemW}
             decelerationRate="fast"
             disableIntervalMomentum
             contentContainerStyle={{ paddingHorizontal: sidePad }}
+            // Re-assert the centered value once the track is measured — the imperative
+            // scroll (no initialScrollIndex) needs real content to land a far target.
+            onContentSizeChange={positionToValue}
             onScroll={onScroll}
             scrollEventThrottle={16}
             onMomentumScrollEnd={onSettle}

@@ -6,7 +6,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // expo-notifications is native — no-op mock for tests. requestPermissions
 // resolves "not granted" so scheduling is skipped (mirrors a denied device).
 jest.mock('expo-notifications', () => ({
-  SchedulableTriggerInputTypes: { WEEKLY: 'weekly' },
+  SchedulableTriggerInputTypes: { WEEKLY: 'weekly', TIME_INTERVAL: 'timeInterval' },
   setNotificationHandler: () => {},
   getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
   requestPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),

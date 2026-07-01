@@ -609,7 +609,11 @@
     "weeklyReadyBody": "התוכנית שלך לשבוע מוכנה — {{count}} אימונים, מותאמים לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
     "weeklyReadyBodyOne": "התוכנית שלך לשבוע מוכנה — אימון אחד, מותאם לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
     "weeklyReadyBodyGeneric": "התוכנית שלך לשבוע מוכנה, מותאמת לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
-    "quarterlyReportTitle": "ההתקדמות שלך מוכנה."
+    "quarterlyReportTitle": "ההתקדמות שלך מוכנה.",
+    "restWarnTitle": "עוד רגע",
+    "restWarnBody": "7 שניות — התכונן.",
+    "restDoneTitle": "המנוחה הסתיימה",
+    "restDoneBody": "קדימה."
   },
   "watch": {
     "next": "הבא:",

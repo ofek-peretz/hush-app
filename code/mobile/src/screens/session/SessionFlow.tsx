@@ -29,6 +29,7 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
 import * as haptics from '@/platform/haptics';
+import { restHaptics } from '@/platform/restHaptics';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -598,6 +599,10 @@ function Rest({
     endAtRef.current = paused ? null : Date.now() + session.restSeconds * 1000;
     beatsFiredRef.current.clear(); // fresh rest → re-arm the Approach countdown
     prevRemForBeatsRef.current = session.restSeconds;
+    // Locked/background backstop: schedule the OS-level 7s warning + rest-over alert
+    // against the same absolute end (or clear it while paused).
+    if (endAtRef.current != null) void restHaptics.arm(endAtRef.current);
+    else void restHaptics.disarm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.restSeconds, session.displayPhase]);
 
@@ -605,11 +610,19 @@ function Rest({
   useEffect(() => {
     if (paused) {
       endAtRef.current = null;
+      void restHaptics.disarm(); // held — no alert should fire
     } else {
       endAtRef.current = Date.now() + remainingRef.current * 1000;
       sync();
+      void restHaptics.arm(endAtRef.current); // resume — reschedule from the new end
     }
   }, [paused, sync]);
+
+  // Cancel any pending locked/background alerts when this rest screen tears down
+  // (workout exit, finish, or advancing to the next set).
+  useEffect(() => {
+    return () => void restHaptics.disarm();
+  }, []);
 
   // Lock-screen / background fix: JS timers suspend, so re-sync on foreground.
   useEffect(() => {
@@ -625,6 +638,7 @@ function Rest({
       // GO — felt without looking. A new exercise gets the distinct triple; the next set, the double.
       if (isTransition) haptics.exerciseAdvance();
       else haptics.restFinished();
+      void restHaptics.disarm(); // rest reached zero in-app → drop the pending OS alerts
       session.endRest();
       return;
     }
@@ -659,6 +673,7 @@ function Rest({
     beatsFiredRef.current.clear(); // the final-seconds window moved out — re-arm the countdown
     prevRemForBeatsRef.current = remainingRef.current;
     sync();
+    void restHaptics.arm(endAtRef.current); // the end moved out — reschedule the OS alerts
     session.extendRest(15);
   }, [sync, session]);
 

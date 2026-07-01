@@ -616,7 +616,11 @@
     "weeklyReadyBody": "Your program for the week is set — {{count}} sessions, tuned to how you trained. Tap to see what changed.",
     "weeklyReadyBodyOne": "Your program for the week is set — one session, tuned to how you trained. Tap to see what changed.",
     "weeklyReadyBodyGeneric": "Your program for the week is set, tuned to how you trained. Tap to see what changed.",
-    "quarterlyReportTitle": "Your progress is ready."
+    "quarterlyReportTitle": "Your progress is ready.",
+    "restWarnTitle": "Almost up",
+    "restWarnBody": "7 seconds — get set.",
+    "restDoneTitle": "Rest complete",
+    "restDoneBody": "Go."
   },
   "watch": {
     "next": "Next:",
