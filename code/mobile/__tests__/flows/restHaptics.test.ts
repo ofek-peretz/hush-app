@@ -9,7 +9,7 @@
 
 // File-level mocks (jest hoists these above the import). Only `mock*`-prefixed vars may
 // be referenced inside a factory.
-const mockScheduled: Array<{ identifier: string; content: { data?: { kind?: string }; sound?: boolean }; trigger: { seconds?: number } }> = [];
+const mockScheduled: Array<{ identifier: string; content: { data?: { kind?: string }; sound?: boolean; interruptionLevel?: string }; trigger: { seconds?: number } }> = [];
 const mockCanceled: string[] = [];
 const mockState = { reachable: false, granted: true };
 
@@ -94,6 +94,10 @@ describe('arm — phone owns (no watch)', () => {
     expect(done.content.data?.kind).toBe('rest_done');
     expect(warn.content.sound).toBe(true);
     expect(done.content.sound).toBe(true);
+    // Time-Sensitive so both pierce the lock screen / Focus when the screen is off
+    // (default `.active` is held silently) — the Build #19 locked-phone regression.
+    expect(warn.content.interruptionLevel).toBe('timeSensitive');
+    expect(done.content.interruptionLevel).toBe('timeSensitive');
   });
 
   it('clears the prior pair before scheduling (idempotent re-arm for +15s / resume)', async () => {

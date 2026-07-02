@@ -87,6 +87,10 @@ export const restHaptics: RestHaptics = {
             body: i18next.t('notifications.restWarnBody'),
             data: { kind: 'rest_warn' }, // rest_* → suppressed in foreground by the handler
             sound: true, // must alert when locked/backgrounded
+            // A rest timer must pierce the LOCK SCREEN + Focus modes. Default `.active`
+            // is held silently when the screen is off; `timeSensitive` is Apple's
+            // sanctioned break-through level (needs the time-sensitive entitlement).
+            interruptionLevel: 'timeSensitive',
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: warnInS, repeats: false },
         });
@@ -99,6 +103,7 @@ export const restHaptics: RestHaptics = {
             body: i18next.t('notifications.restDoneBody'),
             data: { kind: 'rest_done' },
             sound: true,
+            interruptionLevel: 'timeSensitive', // break through lock screen + Focus (see rest_warn)
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: doneInS, repeats: false },
         });
