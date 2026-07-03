@@ -19,7 +19,7 @@
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health.",
