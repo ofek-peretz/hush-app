@@ -22,7 +22,8 @@
       "buildNumber": "20",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health.",
+        "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
+        "NSHealthUpdateUsageDescription": "Hush saves your completed strength workouts to Apple Health.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
@@ -55,7 +56,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health."
+          "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks."
         }
       ],
       "@bacons/apple-targets",
@@ -74,7 +75,10 @@
                 },
                 {
                   "bundleIdentifier": "com.hushfitness.app.watch",
-                  "targetName": "HushWatch"
+                  "targetName": "HushWatch",
+                  "entitlements": {
+                    "com.apple.developer.healthkit": true
+                  }
                 }
               ]
             }

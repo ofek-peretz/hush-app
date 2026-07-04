@@ -33,11 +33,14 @@ function harness() {
   const completed: (number | undefined)[] = [];
   const completedWeights: (number | null | undefined)[] = [];
 
+  const acked: string[] = [];
   const transport: WatchTransport = {
     isReachable: () => reachable,
     sendState: (env) => void sent.push(env),
     onIntent: (cb) => { intentCb = cb; return () => { intentCb = undefined; }; },
     onReachabilityChange: (cb) => { reachCb = cb; return () => { reachCb = undefined; }; },
+    onSessionRecord: () => () => {},
+    ackRecord: (id) => void acked.push(id),
   };
 
   const selected: (string | undefined)[] = [];

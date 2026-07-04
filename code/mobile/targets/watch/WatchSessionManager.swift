@@ -31,6 +31,23 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
     session.sendMessage(["intent": json], replyHandler: nil, errorHandler: nil)
   }
 
+  /// Transfer a watch-local session record to the phone — the DURABLE channel
+  /// (transferUserInfo survives both apps terminating and delivers whenever the
+  /// pair next syncs). Unlike intents, records MUST be queued: they are facts
+  /// about a finished workout, not proposals against live state. At-least-once +
+  /// a phone-side idempotent apply; skipped when the same record is already
+  /// in flight.
+  func transferRecord(_ record: WireSessionRecord) {
+    guard WCSession.isSupported() else { return }
+    guard let json = WatchWire.encodeRecord(record) else { return }
+    let session = WCSession.default
+    let inFlight = session.outstandingUserInfoTransfers.contains {
+      ($0.userInfo["recordId"] as? String) == record.recordId
+    }
+    guard !inFlight else { return }
+    session.transferUserInfo(["record": json, "recordId": record.recordId])
+  }
+
   private func ingest(_ payload: [String: Any]) {
     guard let json = payload["envelope"] as? String,
           let envelope = WatchWire.decodeEnvelope(json) else { return }
@@ -62,5 +79,12 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
 
   func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
     ingest(applicationContext)
+  }
+
+  // The phone's durable acknowledgment of a reconciled session record — clear it
+  // from the outbox (the reconciliation loop is closed).
+  func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+    guard let ack = userInfo["recordAck"] as? String else { return }
+    DispatchQueue.main.async { [weak self] in self?.model?.recordAcked(ack) }
   }
 }

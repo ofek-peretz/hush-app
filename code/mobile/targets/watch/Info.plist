@@ -37,5 +37,19 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.hushfitness.app</string>
+	<!-- Standalone workout runtime: keeps the app executing in the background while an
+	     HKWorkoutSession is active (rest timers + haptics fire wrist-down/screen-off). -->
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+	<!-- HealthKit purpose strings shown by the on-watch authorization sheet. The watch
+	     WRITES the finished workout (update) and READS live heart rate + active energy
+	     for the workout builder (share). Required in THIS plist — the request originates
+	     on the watch, not the companion. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>Hush reads your heart rate and active energy during a workout to record your training session.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Hush saves your completed strength workouts to Apple Health.</string>
 </dict>
 </plist>

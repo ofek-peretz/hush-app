@@ -23,8 +23,11 @@ import { watchTransportStub, type WatchTransport } from './watchBridge';
 interface HushWatchConnectivityNativeModule {
   isReachable(): boolean;
   sendState(json: string): void;
+  /** Durably acknowledge a reconciled watch-local session record (transferUserInfo). */
+  ackRecord(recordId: string): void;
   addListener(event: 'onIntent', cb: (e: { intent: string }) => void): EventSubscription;
   addListener(event: 'onReachabilityChange', cb: (e: { reachable: boolean }) => void): EventSubscription;
+  addListener(event: 'onSessionRecord', cb: (e: { record: string }) => void): EventSubscription;
 }
 
 const native =
@@ -77,6 +80,25 @@ export const watchTransportNative: WatchTransport | null = native
             /* already removed */
           }
         };
+      },
+      onSessionRecord(cb: (raw: unknown) => void) {
+        // Same defensive parse as intents: a malformed record becomes a value the
+        // reconciler rejects (never throws here).
+        const sub = native.addListener('onSessionRecord', (e) => cb(parseIntent(e.record)));
+        return () => {
+          try {
+            sub.remove();
+          } catch {
+            /* already removed */
+          }
+        };
+      },
+      ackRecord(recordId: string) {
+        try {
+          native.ackRecord(recordId);
+        } catch {
+          /* transport unavailable — the watch re-delivers; reconcile is idempotent */
+        }
       },
     }
   : null;

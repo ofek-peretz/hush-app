@@ -89,6 +89,11 @@ export const WATCH_EVENTS = {
   finishResolved: 'watch_finish_resolved',
   /** Exercise Busy (equipment-occupied) was applied from the watch. */
   exerciseDeferred: 'watch_exercise_deferred',
+  /** A plan snapshot (standalone execution data) was published to the watch. */
+  planPublished: 'watch_plan_published',
+  /** A watch-local session record arrived for reconciliation (`outcome`:
+   *  'applied' | 'duplicate' | 'rejected'). */
+  recordReceived: 'watch_record_received',
 } as const;
 
 /** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */

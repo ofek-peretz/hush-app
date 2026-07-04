@@ -22,6 +22,7 @@ import {
   decideWatchIntent,
   makeStateEnvelope,
   type WatchLobby,
+  type WatchPlanSnapshot,
   type WatchStateEnvelope,
 } from './protocol';
 
@@ -35,6 +36,11 @@ export interface WatchTransport {
   onIntent(cb: (raw: unknown) => void): () => void;
   /** Subscribe to reachability changes. Returns an unsubscribe fn. */
   onReachabilityChange(cb: (reachable: boolean) => void): () => void;
+  /** Subscribe to watch-local session records (durable userInfo transfers) for
+   *  reconciliation. Returns an unsubscribe fn. */
+  onSessionRecord(cb: (raw: unknown) => void): () => void;
+  /** Durably acknowledge a reconciled record so the watch clears its outbox. */
+  ackRecord(recordId: string): void;
 }
 
 /** v1 no-op transport — there is no watch target yet, so nothing is sent and no
@@ -44,6 +50,8 @@ export const watchTransportStub: WatchTransport = {
   sendState: () => {},
   onIntent: () => () => {},
   onReachabilityChange: () => () => {},
+  onSessionRecord: () => () => {},
+  ackRecord: () => {},
 };
 
 export interface WatchSessionDeps {
@@ -119,13 +127,24 @@ export class WatchSession {
    * Publish the pre-session lobby (the Start screen). No active session — the
    * envelope carries a null mirror + the lobby. Keeps the transport subscribed so
    * the Start screen's select/start proposals are received and routed to the phone.
+   *
+   * `plan` (when provided) is the standalone plan snapshot — the fully prescribed
+   * remaining workouts the watch stores durably so it can EXECUTE one with the
+   * phone absent. It rides the lobby envelope (applicationContext survives
+   * unreachable watches), never the live mirror frames.
    */
-  publishLobby(lobby: WatchLobby | null): void {
+  publishLobby(lobby: WatchLobby | null, plan: WatchPlanSnapshot | null = null): void {
     this.subscribe();
     this.lastMirror = null;
-    const env = makeStateEnvelope(null, ++this.authoritySeq, this.d.now(), lobby);
+    const env = makeStateEnvelope(null, ++this.authoritySeq, this.d.now(), lobby, plan);
     this.d.transport.sendState(env);
     this.d.track(WATCH_EVENTS.statePublished, { phase: 'lobby', seq: this.authoritySeq });
+    if (plan) {
+      this.d.track(WATCH_EVENTS.planPublished, {
+        planId: plan.planId,
+        workouts: plan.workouts.length,
+      });
+    }
   }
 
   /**

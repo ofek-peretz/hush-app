@@ -9,7 +9,9 @@ import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HomeView } from '@/screens/home/HomeView';
 import { useApp } from '@/state/stores/appStore';
-import { useSession } from '@/state/stores/sessionStore';
+import { REST_INTER_S, REST_TRANSITION_S, useSession } from '@/state/stores/sessionStore';
+import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
+import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
 import { trainingWeekNumber, isNextWeekLocked } from '@/domain/weekCadence';
@@ -86,6 +88,44 @@ export function Home({ navigation, route }: Props) {
   // they commit the slide). Keyed by day id; cleared when the day changes.
   const prefetch = useRef<{ dayId: string; targets: SetTarget[] } | null>(null);
 
+  // Standalone watch execution data: the model's prescriptions for every REMAINING
+  // workout, precomputed here (the phone owns the model) and shipped with the lobby
+  // so the watch can execute a workout with the phone absent. Best-effort + silent:
+  // a day whose targets fail to resolve just narrows the snapshot.
+  const [watchPlan, setWatchPlan] = useState<WatchPlanSnapshot | null>(null);
+  useEffect(() => {
+    if (!isFocused || !program) return;
+    let cancelled = false;
+    void (async () => {
+      const days = program.days.filter((d) => !d.isRest && !d.completed);
+      const targetsByDay: Record<string, SetTarget[]> = {};
+      for (const d of days) {
+        try {
+          targetsByDay[d.id] = await app.model.sessionTargets({
+            programDayId: d.id,
+            completedSessions: app.modeState.completedSessions,
+          });
+        } catch {
+          /* skip this day — the watch just can't start it offline */
+        }
+      }
+      if (cancelled) return;
+      setWatchPlan(
+        buildWatchPlanSnapshot({
+          days,
+          targetsByDay,
+          nowMs: Date.now(),
+          restInterS: REST_INTER_S,
+          restTransitionS: REST_TRANSITION_S,
+        }),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, program, app.modeState.completedSessions]);
+
   // Session-at-a-time: re-resolve today's session on focus; drain offline work.
   const [startError, setStartError] = useState(false);
   useEffect(() => {
@@ -147,9 +187,9 @@ export function Home({ navigation, route }: Props) {
           muscles: d.muscleGroups.join(' · '),
           done: d.completed,
         })),
-    });
+    }, watchPlan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day?.id, day?.name, resting, workouts.length]);
+  }, [day?.id, day?.name, resting, workouts.length, watchPlan]);
 
   // Let the watch Start screen run the EXACT same Begin / Choose the phone does (start + navigate /
   // queue another workout). Bound while Home is MOUNTED — not just focused — so a watch Begin works

@@ -99,14 +99,87 @@ struct WireLobby: Codable, Equatable {
 
 /// Phone → watch envelope. `authoritySeq` is monotonic; the watch keeps the highest
 /// it has seen and ignores any envelope with a lower seq (reorder-proof). `lobby` is
-/// populated only when `mirror` is nil (pre-session).
+/// populated only when `mirror` is nil (pre-session); `plan` rides lobby envelopes
+/// and is the standalone execution data the watch stores durably.
 struct WireEnvelope: Codable {
   var v: Int
   var type: String
   var mirror: WireMirror?
   var lobby: WireLobby?
+  var plan: WirePlan?
   var authoritySeq: Int
   var sentAt: String
+}
+
+// ---- Standalone plan snapshot (phone → watch) -------------------------------
+//
+// The phone owns the MODEL; the watch owns nothing but execution. The snapshot is
+// the model's output — every remaining workout of the week, fully prescribed and
+// name-resolved — so the watch can EXECUTE one with the phone absent. Mirror of
+// protocol.ts `WatchPlanSnapshot`.
+
+let WATCH_PLAN_SCHEMA_VERSION = 1
+
+struct WirePlanStep: Codable, Equatable {
+  var exerciseId: String
+  var exerciseName: String
+  var exerciseGroup: String?
+  var setIndexInExercise: Int
+  var totalSetsInExercise: Int
+  var globalIndex: Int
+  var targetWeight: Double?
+  var targetReps: Int
+  var blockId: String?
+  /// Advisory load-change reason ("increase" | "decrease") + magnitude (kg).
+  var reasonType: String?
+  var reasonDelta: Double?
+  var loadSetup: WireLoadSetup?
+}
+
+struct WirePlanWorkout: Codable, Equatable {
+  var id: String
+  var name: String
+  var muscles: String
+  var steps: [WirePlanStep]
+}
+
+struct WirePlan: Codable, Equatable {
+  var schema: Int
+  var planId: String
+  var generatedAt: String
+  var restInterS: Int
+  var restTransitionS: Int
+  var workouts: [WirePlanWorkout]
+}
+
+// ---- Watch-local session record (watch → phone reconciliation) --------------
+//
+// What the watch reports after executing a workout AS THE LOCAL AUTHORITY.
+// Durable in the outbox until the phone acks `recordId`; delivered at-least-once
+// (the phone de-dupes). Mirror of protocol.ts `WatchSessionRecord`.
+
+struct WireRecordSet: Codable, Equatable {
+  var exerciseId: String
+  var setIndex: Int
+  var blockId: String?
+  var recommendedWeight: Double?
+  var recommendedReps: Int
+  var actualWeight: Double?
+  var actualReps: Int
+  var completedAt: String
+}
+
+struct WireSessionRecord: Codable, Equatable {
+  var v: Int
+  var type: String // "session_record"
+  var recordId: String
+  var planId: String?
+  var workoutId: String
+  var workoutName: String
+  var startedAt: String
+  var endedAt: String
+  var earlyFinish: Bool
+  var sets: [WireRecordSet]
 }
 
 /// Watch → phone intent. The phone de-dupes on `intentId` and rejects stale/wrong-
@@ -135,6 +208,15 @@ enum WatchWire {
   static func encodeIntent(_ intent: WireIntent) -> String? {
     guard let data = try? JSONEncoder().encode(intent) else { return nil }
     return String(data: data, encoding: .utf8)
+  }
+
+  static func encodeRecord(_ record: WireSessionRecord) -> String? {
+    guard let data = try? JSONEncoder().encode(record) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  static func iso(_ date: Date) -> String {
+    ISO8601DateFormatter().string(from: date)
   }
 
   /// Parse an absolute rest-end instant (ISO-8601) into a Date for a drift-proof

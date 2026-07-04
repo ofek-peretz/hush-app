@@ -14,7 +14,8 @@ import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
 import { loadSetup } from '@/domain/loadPresentation';
 import { WatchSession } from '@/platform/watch/watchBridge';
-import type { WatchLobby } from '@/platform/watch/protocol';
+import type { WatchLobby, WatchPlanSnapshot } from '@/platform/watch/protocol';
+import { applyWatchSessionRecord } from '@/platform/watch/watchReconcile';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
@@ -32,8 +33,10 @@ function worthQueuing(e: unknown): boolean {
   return !(e instanceof HttpError) || e.transient;
 }
 
-const REST_INTER_S = 90; // between sets of the same exercise (Hush-owned)
-const REST_TRANSITION_S = 120; // between exercises (Hush-owned)
+// Hush-owned rest lengths (not user-adjustable, §10.8). Exported so the standalone
+// watch plan snapshot ships the SAME rests the phone would run.
+export const REST_INTER_S = 90; // between sets of the same exercise
+export const REST_TRANSITION_S = 120; // between exercises
 
 
 export interface Step {
@@ -175,8 +178,9 @@ export interface SessionView {
   toLoad: boolean;
   /** Publish the pre-session lobby to the Apple Watch Start screen (the queued
    *  workout + pickable list). Read-only/no-op while a session is active. The phone
-   *  remains the sole authority that actually starts a workout. */
-  publishWatchLobby: (lobby: WatchLobby) => void;
+   *  remains the sole authority that actually starts a workout WHILE PRESENT; the
+   *  optional `plan` snapshot is what lets the watch execute one when it is not. */
+  publishWatchLobby: (lobby: WatchLobby, plan?: WatchPlanSnapshot | null) => void;
   /** Register (or clear, with null) the Home screen's Begin/Choose handlers so the
    *  watch Start screen can run the EXACT same path. Home sets these while focused
    *  and clears them on blur, so a watch Begin only acts when the phone is on Home. */
@@ -295,6 +299,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     session: null,
     machine: initialSessionMachine(true),
   });
+  // Latest app store for the watch-record reconciler (subscribed once on mount —
+  // a ref keeps its deps from closing over a stale modeState/program).
+  const appRef = useRef(app);
+  appRef.current = app;
+  // Reconcile watch-local session records: the watch executed a workout AS THE
+  // LOCAL AUTHORITY (phone absent) and durably queued the result. Delivery is
+  // at-least-once (OS userInfo transfer), apply is idempotent, and the ack is
+  // durable — so the workout lands in history/mode/model exactly once no matter
+  // how often it is replayed. Subscribed for the app's whole lifetime: records
+  // reconcile whenever the phone comes back, not only around live sessions.
+  useEffect(() => {
+    return watchTransport.onSessionRecord((raw) => {
+      void applyWatchSessionRecord(raw, {
+        loadHistory: () => db.loadHistory(),
+        appendCompletedSession: (s) => db.appendCompletedSession(s),
+        recordSessionCompleted: () => appRef.current.recordSessionCompleted(),
+        markWorkoutCompleted: (id) => appRef.current.markWorkoutCompleted(id),
+        recordToModel: (args) => appRef.current.model.recordSession(args),
+        enqueuePendingSync: (args) => db.enqueuePendingSync(args),
+        track: (type, data) => void track(type, data),
+        ack: (id) => watchTransport.ackRecord(id),
+      });
+    });
+  }, []);
   // Keep the latest session for synchronous persistence inside actions.
   const sessionRef = useRef<Session | null>(null);
   sessionRef.current = state.session;
@@ -549,12 +577,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         plan.some((s) => s.globalIndex > current.globalIndex && s.exerciseId !== current.exerciseId),
       toLoad: current ? isToLoad(plan, machine.setIndex, state.session?.sets ?? []) : false,
 
-      publishWatchLobby(lobby) {
+      publishWatchLobby(lobby, watchPlan) {
         // An active session drives the watch via the mirror; never overwrite it.
         const sessionActive =
           plan.length > 0 && machine.phase !== 'SESSION_SAVED' && machine.phase !== 'WELL_DONE';
         if (sessionActive) return;
-        watchRef.current?.publishLobby(lobby);
+        watchRef.current?.publishLobby(lobby, watchPlan ?? null);
       },
       setWatchHomeActions(handlers) {
         watchStartRef.current = handlers ? () => handlers.onBegin() : () => {};

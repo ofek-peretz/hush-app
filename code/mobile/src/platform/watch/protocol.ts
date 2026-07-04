@@ -19,9 +19,14 @@
  *    entirely on its own, online or offline.
  */
 import type { SessionEvent } from '@/state/machines/sessionState';
-import type { SessionMirror } from '@/platform/sessionMirror';
+import type { MirrorLoadSetup, SessionMirror } from '@/platform/sessionMirror';
+import type { ReasonType } from '@/data/local/models';
 
 export const WATCH_PROTOCOL_VERSION = 1 as const;
+
+/** Schema of the standalone plan snapshot (phone → watch). Bump on any
+ *  incompatible change — the watch rejects a shape it cannot read. */
+export const WATCH_PLAN_SCHEMA_VERSION = 1 as const;
 
 /** How long a watch intent stays valid after it was issued. Beyond this it is
  *  rejected as stale — protects against an intent arriving late after a
@@ -43,6 +48,11 @@ export interface WatchStateEnvelope {
    *  ignores any envelope with a lower seq (last-write-wins, reorder-proof). */
   authoritySeq: number;
   sentAt: string; // ISO
+  /** Standalone plan snapshot — the full per-set prescriptions of the week's
+   *  remaining workouts, so the watch can EXECUTE a workout with the phone absent.
+   *  Attached to lobby envelopes only (it changes when the program/targets do, not
+   *  per mirror frame). Optional/back-compatible: an older watch ignores it. */
+  plan?: WatchPlanSnapshot | null;
 }
 
 export function makeStateEnvelope(
@@ -50,15 +60,130 @@ export function makeStateEnvelope(
   authoritySeq: number,
   sentAtMs: number,
   lobby: WatchLobby | null = null,
+  plan: WatchPlanSnapshot | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
     type: 'session_state',
     mirror,
     lobby,
+    plan,
     authoritySeq,
     sentAt: new Date(sentAtMs).toISOString(),
   };
+}
+
+// ---- Standalone plan snapshot (phone → watch) -------------------------------
+//
+// The phone remains the sole owner of the MODEL (progression, targets, program
+// composition). The snapshot is the model's OUTPUT, precomputed for every
+// remaining workout of the week and handed to the watch so it can execute one
+// with the phone absent. The watch never recomputes targets — it runs the
+// prescriptions verbatim and reports what actually happened back for
+// reconciliation (WatchSessionRecord).
+
+/** One prescribed set, fully resolved (names + equipment setup included) so the
+ *  watch renders it with zero local model/catalog knowledge. */
+export interface WatchPlanStep {
+  exerciseId: string;
+  exerciseName: string;
+  /** Primary muscle group label (Active Set legend). */
+  exerciseGroup?: string;
+  setIndexInExercise: number; // 0-based within the exercise
+  totalSetsInExercise: number;
+  globalIndex: number; // 0-based within the workout
+  targetWeight: number | null; // null => bodyweight
+  targetReps: number;
+  /** Backend block id — carried through to the record so a reconciled set syncs
+   *  to the right block, exactly like a phone-logged one. */
+  blockId?: string;
+  /** Advisory load-change reason (drives the watch LoadDelta mark + the truthful
+   *  "lifts up" summary). Never authoritative. */
+  reasonType?: ReasonType;
+  reasonDelta?: number;
+  /** Equipment-native setup (kg) for this step's load. */
+  loadSetup?: MirrorLoadSetup | null;
+}
+
+export interface WatchPlanWorkout {
+  id: string;
+  name: string;
+  muscles: string;
+  steps: WatchPlanStep[];
+}
+
+export interface WatchPlanSnapshot {
+  schema: typeof WATCH_PLAN_SCHEMA_VERSION;
+  /** Content hash — the watch replaces its stored plan when this changes, and a
+   *  session record names the plan it executed. */
+  planId: string;
+  generatedAt: string; // ISO
+  /** Hush-owned rest lengths (s) — the watch runs the same rests the phone would. */
+  restInterS: number;
+  restTransitionS: number;
+  /** The week's REMAINING (not completed, non-rest) workouts, fully prescribed. */
+  workouts: WatchPlanWorkout[];
+}
+
+// ---- Watch-local session record (watch → phone reconciliation) --------------
+
+/** One set the watch logged locally. Mirrors the phone's SetLog materially so
+ *  reconciliation produces a history entry indistinguishable from a phone-run one. */
+export interface WatchRecordSet {
+  exerciseId: string;
+  setIndex: number; // 0-based within the exercise
+  blockId?: string;
+  recommendedWeight: number | null;
+  recommendedReps: number;
+  actualWeight: number | null;
+  actualReps: number;
+  completedAt: string; // ISO
+}
+
+/** A workout the watch executed AS THE LOCAL AUTHORITY (phone absent). Durable on
+ *  the watch (outbox) until the phone acknowledges it; delivered at-least-once, so
+ *  the phone de-dupes on `recordId`. */
+export interface WatchSessionRecord {
+  v: typeof WATCH_PROTOCOL_VERSION;
+  type: 'session_record';
+  /** Idempotency key; also the reconciled session's identity (`watch_<recordId>`). */
+  recordId: string;
+  /** The plan snapshot the watch executed (staleness is diagnosable, never fatal). */
+  planId?: string;
+  workoutId: string;
+  workoutName: string;
+  startedAt: string; // ISO
+  endedAt: string; // ISO
+  earlyFinish: boolean;
+  sets: WatchRecordSet[];
+}
+
+/** Parse a wire-form session record defensively — anything unreadable is null,
+ *  never a throw (the phone must survive any watch payload). */
+export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!o || typeof o !== 'object') return null;
+  const r = o as Record<string, unknown>;
+  if (r.v !== WATCH_PROTOCOL_VERSION || r.type !== 'session_record') return null;
+  if (typeof r.recordId !== 'string' || r.recordId.length === 0) return null;
+  if (typeof r.workoutId !== 'string' || typeof r.startedAt !== 'string' || typeof r.endedAt !== 'string') {
+    return null;
+  }
+  if (!Array.isArray(r.sets)) return null;
+  for (const s of r.sets) {
+    if (!s || typeof s !== 'object') return null;
+    const set = s as Record<string, unknown>;
+    if (typeof set.exerciseId !== 'string' || typeof set.setIndex !== 'number') return null;
+    if (typeof set.actualReps !== 'number') return null;
+  }
+  return r as unknown as WatchSessionRecord;
 }
 
 // ---- Watch → Phone ---------------------------------------------------------

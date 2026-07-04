@@ -31,9 +31,16 @@ describe('watchTransportNative (no native module under test)', () => {
     const offReach = watchTransport.onReachabilityChange(() => {
       throw new Error('should never fire');
     });
+    const offRecord = watchTransport.onSessionRecord(() => {
+      throw new Error('should never fire');
+    });
     expect(typeof offIntent).toBe('function');
     expect(typeof offReach).toBe('function');
+    expect(typeof offRecord).toBe('function');
     offIntent();
     offReach();
+    offRecord();
+    // Durable ack is a safe no-op with no transport.
+    expect(() => watchTransport.ackRecord('r1')).not.toThrow();
   });
 });
