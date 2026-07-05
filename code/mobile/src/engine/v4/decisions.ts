@@ -62,6 +62,25 @@ const bottom = (s: SlotState) => s.rep_range[0];
 const gridNorm = (load: number, meta: ExerciseMeta): number =>
   normalizeLoad(load, meta.equipment, meta.observed_loads);
 
+/** A single mis-entry must not double the prescription: an upward anchor adoption is capped at
+ *  this multiple of the prescribed load (a genuine 2× underestimate still closes in one week). */
+const ANCHOR_RAISE_CAP = 2;
+
+/**
+ * The load a weekly decision steps FROM: the load the athlete actually lifted this week when it
+ * differs from the prescription (the prescription is a hypothesis; the completed sets are the
+ * truth — Handoff §1.1.2). An athlete who put more on the bar than Hush asked for has demonstrated
+ * that load; stepping from the stale prescription ignored the evidence and left the number wrong
+ * for months. Downward differences are adopted as-is (they were performed); upward differences are
+ * capped at ANCHOR_RAISE_CAP× to bound a typo. Bodyweight / empty weeks anchor on the prescription.
+ */
+function anchorLoad(slot: SlotState, demo: Demonstrated, meta: ExerciseMeta): number | null {
+  const prescribed = slot.current_load_kg;
+  if (meta.bodyweight || prescribed == null || demo.best_load == null) return prescribed;
+  if (demo.best_load > prescribed) return Math.min(demo.best_load, prescribed * ANCHOR_RAISE_CAP);
+  return demo.best_load;
+}
+
 /** A decision that prescribes the given fields and threads the durable counters forward. */
 function emit(
   slot: SlotState,
@@ -102,7 +121,9 @@ function emit(
 export function calibrate(slot: SlotState, demo: Demonstrated, meta: ExerciseMeta, consts: Constants = DEFAULTS): SlotOutcome {
   const target = slot.rep_target;
   const inRange = !demo.missed && !demo.empty && Math.abs(demo.best_reps - target) <= 2;
-  let load = slot.current_load_kg;
+  // Calibration corrections apply to the load the athlete actually LIFTED, not the guess they
+  // ignored — an athlete who put 90 on a 50 kg prescription has already calibrated themselves.
+  let load = anchorLoad(slot, demo, meta);
   let deltaKg: number | undefined;
 
   if (!meta.bodyweight && load != null) {
@@ -176,16 +197,22 @@ function emptyWeek(slot: SlotState, meta: ExerciseMeta): SlotOutcome {
 function progress(slot: SlotState, demo: Demonstrated, meta: ExerciseMeta): SlotOutcome {
   const cleared = { flat_weeks: 0, hold_mode: false, levers_tried: [] as LeverTag[], miss_streak: 0,
     tenure_weeks: slot.tenure_weeks + 1, weeks_since_swap: slot.weeks_since_swap + 1 };
-  // Below the range top → earn a rep first.
+  // Below the range top → earn a rep first (at the load actually lifted, when it differs).
   if (slot.rep_target < top(slot)) {
-    return emit(slot, 'progress_reps', { ...cleared, rep_target: slot.rep_target + 1 });
+    const adopted = anchorLoad(slot, demo, meta);
+    return emit(slot, 'progress_reps', {
+      ...cleared,
+      rep_target: slot.rep_target + 1,
+      current_load_kg: meta.bodyweight || adopted == null ? slot.current_load_kg : gridNorm(adopted, meta),
+    });
   }
   // At the range top → add load, reset to the bottom (bodyweight has no load → graduate variation).
   if (meta.bodyweight || slot.current_load_kg == null) {
     return emit(slot, 'progress_load', { ...cleared, rep_target: top(slot) }); // hold at top; variation surfaced at integration
   }
-  const st = step(slot.current_load_kg, meta.region, meta.tier);
-  const load = gridNorm(slot.current_load_kg + st, meta);
+  const base = anchorLoad(slot, demo, meta) ?? slot.current_load_kg;
+  const st = step(base, meta.region, meta.tier);
+  const load = gridNorm(base + st, meta);
   return emit(slot, 'progress_load', { ...cleared, current_load_kg: load, rep_target: bottom(slot), deltaKg: st });
 }
 
@@ -226,8 +253,9 @@ export function reactiveProgress(slot: SlotState, demo: Demonstrated, inp: SlotI
     return emit(slot, 'lever_vol', { ...carry, current_sets: slot.current_sets + 1, levers_tried: [...slot.levers_tried, 'vol'] });
   }
   if (!tried.has('load') && !meta.bodyweight && slot.current_load_kg != null) {
-    const st = step(slot.current_load_kg, meta.region, meta.tier);
-    const load = gridNorm(slot.current_load_kg + st, meta);
+    const base = anchorLoad(slot, demo, meta) ?? slot.current_load_kg;
+    const st = step(base, meta.region, meta.tier);
+    const load = gridNorm(base + st, meta);
     return emit(slot, 'lever_load', { ...carry, current_load_kg: load, levers_tried: [...slot.levers_tried, 'load'], deltaKg: st });
   }
   if (!tried.has('range')) {
@@ -247,8 +275,9 @@ export function reactiveProgress(slot: SlotState, demo: Demonstrated, inp: SlotI
   // All levers exhausted → PATIENT HOLD; a single load probe every PATIENT_PROBE_EVERY flat weeks (rule 9 / I-16).
   const probe = flat_weeks % consts.PATIENT_PROBE_EVERY === 0;
   if (probe && !meta.bodyweight && slot.current_load_kg != null) {
-    const st = step(slot.current_load_kg, meta.region, meta.tier);
-    const load = gridNorm(slot.current_load_kg + st, meta);
+    const base = anchorLoad(slot, demo, meta) ?? slot.current_load_kg;
+    const st = step(base, meta.region, meta.tier);
+    const load = gridNorm(base + st, meta);
     return emit(slot, 'patient_hold', { ...carry, hold_mode: true, current_load_kg: load, deltaKg: st });
   }
   return emit(slot, 'patient_hold', { ...carry, hold_mode: true });

@@ -143,13 +143,17 @@ describe('supplemental core rules (founder 2026-06-23)', () => {
     }
   }
 
-  it('core rotation reaches every core movement across frequencies', async () => {
+  it('core rotation reaches every ASSIGNABLE core movement; advanced core stays swap-only', async () => {
     const used = new Set<string>();
     for (let days = 1; days <= 6; days++) {
       const prog = await fixtureModel.generateProgram(profile({ sex: 'male', daysPerWeek: days }));
       for (const s of coreSlots(prog)) used.add(s.exerciseId);
     }
-    const coreCatalog = EXERCISES.filter((e) => e.muscle === 'Core').map((e) => e.id);
-    for (const id of coreCatalog) expect(used.has(id)).toBe(true);
+    // Generation covers the accessible pool; the advanced movements (hanging leg raise,
+    // ab wheel) must never be assigned by default — they are swap-only regressions' inverse.
+    const assignable = EXERCISES.filter((e) => e.muscle === 'Core' && !isSwapOnly(e.id)).map((e) => e.id);
+    expect(assignable.length).toBeGreaterThanOrEqual(2);
+    for (const id of assignable) expect(used.has(id)).toBe(true);
+    for (const id of ['hanging_leg_raise', 'ab_wheel']) expect(used.has(id)).toBe(false);
   });
 });

@@ -20,7 +20,7 @@ import { exerciseDisplayName } from '@/data/exercises';
 import { enginePattern, exerciseMeta, candidatesForPattern } from './catalogAdapter';
 import type { Explanation } from './types';
 import { toEngineGoal, toTrainingAge, repScheme, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type SetRecord, type Pattern } from './types';
-import { REP_RANGE_BY_GOAL } from './constants';
+import { DEFAULTS, REP_RANGE_BY_GOAL } from './constants';
 
 export type SeedFor = (exerciseId: string) => number | null;
 
@@ -305,6 +305,48 @@ export async function maybeAdvance(
   // history is newest-first; process oldest-first in week-sized chunks.
   const chrono = history.slice().reverse();
 
+  // ── Extended absence (I-6) — the one time-based fact the engine reads. days_since_last_session
+  // is a wall-clock read of the newest completed session; when the gap exceeds ABSENCE_DAYS the
+  // engine's absence path (ease all loads ×0.90, KEEP volume, fresh baseline) is applied ONCE per
+  // gap, keyed to the last pre-gap session so reopening the app never re-eases. This runs on
+  // RETURN (every prescription read), not at week rollover — an absent athlete completes no weeks,
+  // so the rollover path alone could never reach it.
+  const lastSession = history[0];
+  const daysSince = lastSession ? Math.max(0, Math.floor((Date.now() - Date.parse(lastSession.startedAt)) / 86400000)) : 0;
+  state.global = { ...(state.global as GlobalState), days_since_last_session: daysSince };
+  if (lastSession && daysSince > DEFAULTS.ABSENCE_DAYS && state.absenceKey !== lastSession.id && Object.keys(slots).length > 0) {
+    const slotList = Object.values(slots);
+    const beforeById = new Map(slotList.map((s) => [s.slotId, s]));
+    const out = planNextWeek({
+      profile,
+      slots: slotList,
+      global: state.global as GlobalState,
+      results: [], // no completed week — the global absence order applies to every slot
+      meta: metaWithGridFor(history),
+      nameOf: exerciseDisplayName,
+      consts: undefined,
+    });
+    for (const ns of out.updated_slots) slots[ns.slotId] = ns;
+    state.absenceKey = lastSession.id;
+    // Surface the easing (Weekly Update + Why): the athlete returns to visibly adjusted loads.
+    const plan: WeekPlanChange[] = out.explanations.map((e) => {
+      const before = beforeById.get(e.slotId);
+      const after = out.next_slots.find((n) => n.slotId === e.slotId);
+      return {
+        slotId: e.slotId,
+        exerciseId: after?.exercise_id ?? before?.current_exercise_id ?? '',
+        loadFrom: before?.current_load_kg ?? null,
+        loadTo: after?.load_kg ?? before?.current_load_kg ?? null,
+        setsFrom: before?.current_sets ?? after?.sets ?? 0,
+        setsTo: after?.sets ?? before?.current_sets ?? 0,
+        rangeFrom: before?.rep_range ?? after?.rep_range ?? [0, 0],
+        rangeTo: after?.rep_range ?? before?.rep_range ?? [0, 0],
+        swapped: false,
+      };
+    });
+    state.lastUpdate = { weekIndex: Math.floor(state.lastAdvanceAt / freq), at: new Date().toISOString(), explanations: out.explanations, plan, seen: false };
+  }
+
   while (chrono.length - state.lastAdvanceAt >= freq) {
     const week = chrono.slice(state.lastAdvanceAt, state.lastAdvanceAt + freq);
     const slotList = Object.values(slots);
@@ -323,7 +365,9 @@ export async function maybeAdvance(
     const out = planNextWeek({
       profile,
       slots: slotList,
-      global: state.global as GlobalState,
+      // A completed week being processed is activity by definition — the absence fact is a NOW
+      // read handled by the pre-pass above, never re-applied to queued historical chunks.
+      global: { ...(state.global as GlobalState), days_since_last_session: 0 },
       results,
       meta: metaWithGridFor(history),
       candidates: (p) => candidatesForPattern(p),

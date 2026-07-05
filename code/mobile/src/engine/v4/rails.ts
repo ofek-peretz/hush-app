@@ -23,6 +23,10 @@ export interface SlotPlan {
   slot: SlotState; // the engine's proposed next state
   prev: SlotState; // last week's state (for jump cap + volume revert)
   bestE1rm: number | null; // demonstrated this week (null → rail inactive)
+  /** Heaviest load actually lifted this week — the jump cap's upward base includes it, so a
+   *  decision anchored on the performed load (athlete lifted heavier than prescribed) is not
+   *  clamped back to ±10% of the stale prescription. Null when nothing was lifted. */
+  performedMax?: number | null;
   equipment: Equipment;
 }
 
@@ -55,10 +59,14 @@ function railSlot(p: SlotPlan, consts: Constants): void {
     if (d.load_kg > maxLoad) d.load_kg = normalizeLoad(maxLoad, p.equipment);
   }
 
-  // I-2 jump cap (±10%), except calibration / deload / absence moves.
+  // I-2 jump cap (±10%), except calibration / deload / absence moves. The UPWARD base is the
+  // heavier of the prior prescription and what was actually lifted this week — a performed load
+  // IS a demonstrated single-week reality, so stepping from it is not a jump. The DOWNWARD cap
+  // stays prescription-based (staged descent, unchanged).
   if (!EXEMPT_FROM_JUMP_CAP.has(d.type) && p.prev.current_load_kg != null) {
     const prev = p.prev.current_load_kg;
-    const up = prev * (1 + consts.LOAD_STEP_CAP);
+    const upBase = Math.max(prev, p.performedMax ?? 0);
+    const up = upBase * (1 + consts.LOAD_STEP_CAP);
     const down = prev * (1 - consts.LOAD_STEP_CAP);
     if (d.load_kg > up) d.load_kg = normalizeLoad(up, p.equipment);
     if (d.load_kg < down) d.load_kg = normalizeLoad(down, p.equipment);

@@ -420,7 +420,12 @@ function ActiveSet({
   const heroValue = setup ? setup.headline : weight;
 
   // Inline edit → write straight to the current step (engine re-renders).
-  const wStep = units === 'kg' ? 2.5 : 5;
+  // 0.5 kg (1 lb) detents — the union of every real gym granularity (2 kg and 2.5 kg dumbbell
+  // racks, 1.25 kg plate pairs, half-pin stacks) AND the 1 kg-rounded cold-start seeds, so the
+  // prescribed value always sits ON the wheel and the athlete can log the weight they actually
+  // lifted. The coarser 2.5 kg wheel could not express a real 14/16 kg dumbbell — the learned
+  // equipment grid was being taught rungs that don't exist.
+  const wStep = units === 'kg' ? 0.5 : 1;
   const setWeight = (v: number) => {
     const kg = units === 'lb' ? +(v / 2.2046226).toFixed(1) : v;
     session.editCurrentSet({ weight: kg, reps: target.recommendedReps });

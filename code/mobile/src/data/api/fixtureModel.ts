@@ -32,7 +32,7 @@ import type {
   Slot,
   WeeklyVolume,
 } from '@/data/local/models';
-import { EXERCISES, exerciseById, exercisesForMuscle, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, slotIdsByPosition } from '@/engine/v4/v4Engine';
 import { db, EMPTY_PREFERENCES, type OwnedPreferences } from '@/data/local/db';
@@ -159,7 +159,10 @@ function dayFromBlueprint(
 // Core is supplemental, NOT a primary progression target. Exactly ONE core exercise per
 // week, 3 sets, placed LAST, preferring an upper-body session over a lower one. Rotated by
 // frequency so every core movement is reachable through generation (not just via swaps).
-const CORE_POOL = EXERCISES.filter((e) => e.muscle === 'Core').map((e) => e.id);
+// Generation pool = accessible core only (cable/machine crunch). The advanced movements
+// (hanging leg raise, ab wheel) are swap-only: a first-week athlete is never assigned a
+// movement that requires strength they don't have yet; anyone can swap into them.
+const CORE_POOL = EXERCISES.filter((e) => e.muscle === 'Core' && !isSwapOnly(e.id)).map((e) => e.id);
 const CORE_SETS = 3;
 
 /** The session a weekly core block attaches to: upper-preferred, then full-body, then first. */

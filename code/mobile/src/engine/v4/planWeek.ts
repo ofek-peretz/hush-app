@@ -41,6 +41,7 @@ export function planNextWeek(inp: PlanWeekInputs): PlanResult {
       slot,
       prev,
       bestE1rm: demo ? demo.best_e1rm : null,
+      performedMax: demo ? demo.best_load : null,
       equipment: inp.meta(prev.current_exercise_id).equipment,
     };
   });

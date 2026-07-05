@@ -84,6 +84,9 @@ export interface EngineV4State {
   global: unknown; // GlobalState
   lastAdvanceAt: number;
   goal?: string; // last engine goal seen — a change applies the C4-1 goal-change transition
+  /** Id of the last pre-gap session an extended-absence ease (I-6) was applied for — the ease
+   *  fires ONCE per gap; reopening the app during the same gap never re-eases. */
+  absenceKey?: string;
   /** The most recent week's explanations (for the Weekly Update + Why surfaces) + when produced.
    *  `plan` is the per-changed-slot from→to snapshot captured at advance time (Weekly Update B
    *  renders the whole week at its new loads). Structural to avoid a layering cycle into the engine.

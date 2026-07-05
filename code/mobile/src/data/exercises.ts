@@ -99,6 +99,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'machine_chest_press', name: 'Machine Chest Press', capability: 'horizontal_push', muscle: 'Chest', equipment: 'machine', tier: 'compound', baseKg: 35, cues: ['Set the seat height.', 'Press smoothly.', 'Control the return.'] },
   { id: 'chest_dip', name: 'Chest Dip', capability: 'horizontal_push', muscle: 'Chest', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Lean slightly forward.', 'Lower to a deep stretch.', 'Press to lockout.'], synonyms: ['dips'] },
   { id: 'push_up', name: 'Push-Up', capability: 'horizontal_push', muscle: 'Chest', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Body in a straight line.', 'Lower the chest to the floor.', 'Press the floor away.'] },
+  { id: 'knee_push_up', name: 'Knee Push-Up', capability: 'horizontal_push', muscle: 'Chest', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Body straight from knees to head.', 'Lower the chest to the floor.', 'Press the floor away.'], synonyms: ['kneeling push-up'] },
   { id: 'pec_deck', name: 'Pec Deck Fly', capability: 'horizontal_push', muscle: 'Chest', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Soft elbows.', 'Squeeze the chest together.', 'Open slowly.'], synonyms: ['chest fly', 'machine fly'] },
   { id: 'cable_fly', name: 'Cable Fly', capability: 'horizontal_push', muscle: 'Chest', equipment: 'cable', tier: 'isolation', baseKg: 12, cues: ['Slight forward lean.', 'Hug the arms together.', 'Control the stretch.'] },
 
@@ -154,7 +155,8 @@ export const EXERCISES: Exercise[] = [
   { id: 'bb_rdl', name: 'Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Soft knees.', 'Push the hips back.', 'Keep the bar close.'], synonyms: ['rdl'] },
   { id: 'sumo_deadlift', name: 'Sumo Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Wide stance.', 'Knees out.', 'Drive hips through.'] },
   { id: 'db_rdl', name: 'Dumbbell Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'dumbbell', tier: 'compound', baseKg: 18, cues: ['Soft knees.', 'Hips back.', 'Keep the weights close.'], synonyms: ['db rdl', 'dumbbell rdl'] },
-  { id: 'good_morning', name: 'Good Morning', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'barbell', tier: 'compound', baseKg: 25, bwScaled: true, cues: ['Soft knees.', 'Hinge with a flat back.', 'Feel the hamstrings.'] },
+  // (Good Morning removed 2026-07-05 — highest injury-to-value hinge in the catalog for the
+  // general population; RDL / back extension cover the movement.)
   { id: 'leg_curl', name: 'Leg Curl', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Hips down.', 'Curl fully.', 'Lower slowly.'], synonyms: ['hamstring curl'] },
   { id: 'back_extension', name: 'Back Extension', capability: 'hip_dominant', muscle: 'Hamstrings', equipment: 'machine', tier: 'isolation', bodyweight: true, cues: ['Hinge at the hips.', 'Squeeze at the top.', 'Lower slowly.'], synonyms: ['hyperextension'] },
 
@@ -166,8 +168,12 @@ export const EXERCISES: Exercise[] = [
   { id: 'cable_kickback', name: 'Cable Glute Kickback', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'cable', tier: 'isolation', baseKg: 10, cues: ['Hinge slightly forward.', 'Drive the heel back.', 'Squeeze the glute.'], synonyms: ['glute kickback'] },
 
   // ───────────────────────── hip_dominant · Core ─────────────────────────
-  { id: 'hanging_leg_raise', name: 'Hanging Leg Raise', capability: 'hip_dominant', muscle: 'Core', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Hang tall, no swing.', 'Raise the legs with control.', 'Lower slowly.'] },
+  // Generation pool = the accessible movements (cable/machine crunch); hanging leg raise and the
+  // ab wheel demand strength/skill a first-week athlete does not have, so they are swap-only —
+  // reachable the day an athlete asks for them, never assigned by default.
   { id: 'cable_crunch', name: 'Cable Crunch', capability: 'hip_dominant', muscle: 'Core', equipment: 'cable', tier: 'isolation', baseKg: 25, cues: ['Hips fixed.', 'Crunch through the abs.', 'Resist on the way up.'] },
+  { id: 'machine_crunch', name: 'Ab Crunch Machine', capability: 'hip_dominant', muscle: 'Core', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Chest on the pad.', 'Crunch down through the abs.', 'Return with control.'], synonyms: ['crunch machine', 'ab machine'] },
+  { id: 'hanging_leg_raise', name: 'Hanging Leg Raise', capability: 'hip_dominant', muscle: 'Core', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Hang tall, no swing.', 'Raise the legs with control.', 'Lower slowly.'] },
   { id: 'ab_wheel', name: 'Ab Wheel Rollout', capability: 'hip_dominant', muscle: 'Core', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Brace hard.', 'Roll out only as far as you control.', 'Pull back with the abs.'], synonyms: ['rollout'] },
 ];
 
@@ -185,7 +191,7 @@ export const EXERCISES: Exercise[] = [
  */
 export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
   // horizontal_push
-  'machine_chest_press', 'push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher',
+  'machine_chest_press', 'push_up', 'knee_push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher',
   // horizontal_pull
   'chin_up', 'db_row', 'machine_row', 'db_curl', 'preacher_curl',
   // vertical_push
@@ -193,7 +199,9 @@ export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
   // knee_dominant
   'leg_press_calf_raise', 'goblet_squat',
   // hip_dominant (alternate hinges; the conventional deadlift IS auto-generated — men's Pull)
-  'sumo_deadlift', 'db_rdl', 'good_morning', 'back_extension',
+  'sumo_deadlift', 'db_rdl', 'back_extension',
+  // core — advanced movements are never assigned by default (generation pool = cable/machine crunch)
+  'hanging_leg_raise', 'ab_wheel',
 ]);
 
 export function isSwapOnly(id: string): boolean {
@@ -275,6 +283,7 @@ export interface ProgressionRule {
 // Bodyweight lifts have no load axis: add reps to a ceiling, then graduate to a harder
 // variation where one exists (else keep adding reps / external load on a belt).
 const BODYWEIGHT_PROGRESSION: Record<string, { repCeiling: number; harder?: string }> = {
+  knee_push_up: { repCeiling: 20, harder: 'push_up' },
   push_up: { repCeiling: 20, harder: 'chest_dip' },
   chest_dip: { repCeiling: 15 }, // then add load on a dip belt
   chin_up: { repCeiling: 12, harder: 'pull_up' },

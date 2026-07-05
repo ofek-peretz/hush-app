@@ -26,6 +26,10 @@ export interface Demonstrated {
   best_e1rm: number | null;
   /** best_e1rm / (1 + rep_target/30); null for bodyweight or empty. */
   demonstrated_load_at_target: number | null;
+  /** Heaviest load actually lifted for ≥1 rep this week — the performed-load truth the weekly
+   *  anchor reads (the prescription is a hypothesis; what was lifted is fact). Null for
+   *  bodyweight or an empty week. */
+  best_load: number | null;
   best_reps: number;
   hit: boolean;
   room: boolean;
@@ -54,6 +58,7 @@ export function demonstrated(sets: SetRecord[], rep_target: number): Demonstrate
     return {
       best_e1rm: null,
       demonstrated_load_at_target: null,
+      best_load: null,
       best_reps: 0,
       hit: false,
       room: false,
@@ -69,18 +74,21 @@ export function demonstrated(sets: SetRecord[], rep_target: number): Demonstrate
   const room = best_reps >= rep_target + 1 && topSetClean;
 
   if (bodyweight) {
-    return { best_e1rm: null, demonstrated_load_at_target: null, best_reps, hit, room, missed, empty: false, bodyweight: true };
+    return { best_e1rm: null, demonstrated_load_at_target: null, best_load: null, best_reps, hit, room, missed, empty: false, bodyweight: true };
   }
 
   let best_e1rm = 0;
+  let best_load = 0;
   for (const s of sets) {
     if (s.load == null || s.reps <= 0) continue;
     best_e1rm = Math.max(best_e1rm, epley(s.load, s.reps));
+    best_load = Math.max(best_load, s.load);
   }
   const demonstrated_load_at_target = best_e1rm > 0 ? best_e1rm / (1 + rep_target / 30) : null;
   return {
     best_e1rm: best_e1rm > 0 ? best_e1rm : null,
     demonstrated_load_at_target,
+    best_load: best_load > 0 ? best_load : null,
     best_reps,
     hit,
     room,
@@ -153,6 +161,13 @@ export const LOAD_INCREMENT: Record<Equipment, number> = {
   bodyweight: 0,
 };
 
+/** How far below the ideal a learned-grid rung may sit and still be snapped to. Real equipment
+ *  granularity is ≤ 2.5 kg everywhere Hush supports (barbell 1.25/side, dumbbell 1–2.5, pins 2.5),
+ *  so a rung further away than this is not "the same weight, rounded" — it is a DIFFERENT weight
+ *  from a sparse grid (e.g. {50, 90} after a manual edit), and snapping to it would freeze the
+ *  prescription at the low rung forever. Beyond the tolerance, the static increment decides. */
+const GRID_SNAP_TOLERANCE_KG = 2.5;
+
 /**
  * Map an ideal load onto the closest achievable real-world load. The engine still decides the ideal
  * load (unchanged — no progression/rail behavior lives here); THIS only translates it to a load that
@@ -168,14 +183,17 @@ export function normalizeLoad(load: number, equipment: Equipment, grid?: number[
     const rungs = Array.from(new Set(grid.filter((x) => x > 0))).sort((a, b) => a - b);
     const max = rungs[rungs.length - 1];
     if (load <= max + 1e-9) {
-      // Within the range the athlete has already worked → snap DOWN to the nearest real rung.
+      // Within the range the athlete has already worked → snap DOWN to the nearest real rung,
+      // but only when that rung is a plausible rounding of the ideal (within the tolerance).
+      // A sparse grid (rungs far apart) must never drag a between-rungs ideal down to the low
+      // rung — that froze progression permanently; the static increment handles the gap instead.
       let down: number | null = null;
       for (const x of rungs) if (x <= load + 1e-9) down = x;
-      if (down != null) return down;
+      if (down != null && load - down <= GRID_SNAP_TOLERANCE_KG + 1e-9) return down;
     }
     // Above the athlete's max observed load (normal progression past their best) — or below the
-    // smallest rung — defer to the static increment. This is EXACTLY stock v4 behavior: the grid
-    // refines recommendations among loads already performed; it never caps progression.
+    // smallest rung, or between distant rungs — defer to the static increment. The grid refines
+    // recommendations among loads already performed; it never caps progression.
   }
   const inc = LOAD_INCREMENT[equipment];
   if (inc <= 0) return load;
