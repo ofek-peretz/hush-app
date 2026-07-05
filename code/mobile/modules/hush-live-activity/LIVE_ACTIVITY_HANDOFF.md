@@ -1,80 +1,50 @@
-# Live Activity / Dynamic Island — macOS/Xcode handoff
+# Live Activity / Dynamic Island — architecture
 
-This documents the **Hush Live Activity** (Dynamic Island + Lock Screen) for both
-the **strength** session and the **cardio** (Open training) activity. The entire
-**JS / React Native side is complete and unit-tested**; what remains is native
-integration and on-device verification, which require macOS + Xcode (ActivityKit +
-WidgetKit cannot be built or previewed on this Windows/Expo environment).
+The Hush Live Activities (strength session + cardio) are split across two
+locations; both build automatically in an EAS iOS build (no manual Xcode step):
 
-The visual source of truth is the Claude Design project + the screenshots in
-`screen shots/notes & Dynamic island & live activity/` and the Dynamic Island
-spec sheet. Do **not** redesign — match the screenshots.
+- **App target — `modules/hush-live-activity/ios/`** (this Expo local module,
+  autolinked): `HushLiveActivityModule` exposes `start/update/end` to JS and holds
+  the single in-flight `Activity` (strength OR cardio — starting one kind ends the
+  other). `HushSessionAttributes` / `HushCardioAttributes` are the ActivityKit
+  `ContentState` definitions.
+- **Widget extension — `targets/widget/`** (`@bacons/apple-targets`, bundle id
+  `.widget`, deployment target 16.2): `HushWidgetBundle` + the SwiftUI Lock
+  Screen / Dynamic Island presentations, plus a **duplicate copy of each
+  attributes file**.
 
----
+## Parity rule (do not violate)
 
-## What is DONE (React Native — verified: tsc + jest green)
+ActivityKit decodes `ContentState` across the app↔widget process boundary by its
+Codable shape. The attributes copies in `ios/` and `targets/widget/` MUST stay
+byte-identical — a divergent copy silently stops the activity from
+pairing/rendering (TestFlight item 8). If you change one, change the other.
 
-- **`src/platform/liveActivity.ts`** — the complete seam:
-  - `LiveActivityState` (kind `strength`): workout, phase (`set`/`rest`/`transition`/`paused`),
-    exercise, set label, lift index/count, target weight×reps, absolute `restEndsAtMs`,
-    rest total, and the upcoming lift during a transition.
-  - `CardioLiveActivityState` (kind `cardio`): gait, paused, absolute `startedAtMs`,
-    elapsed, distance, pace, HR, calories, and the latest km split.
-  - `liveActivityStateFromMirror()` — pure projection from the canonical `SessionMirror`
-    (locked by `__tests__/flows/liveActivityMapping.test.ts`).
-  - `liveActivity` (strength) + `cardioLiveActivity` (cardio) hosts, resolving the native
-    module `HushLiveActivity` when present and degrading to a no-op stub otherwise.
-- **Wiring**:
-  - Strength: the session store drives `liveActivity.start/update/end` across the set →
-    rest → transition → paused → complete lifecycle (read-only mirror; no external
-    completion control).
-  - Cardio: `src/screens/cardio/Cardio.tsx` starts the activity when the run/walk goes
-    live, updates it each second, and ends it when the screen unmounts.
-- **Lock-screen notification** copy aligned to the design ("Your weekly update is ready /
-  … Tap to see what changed", `notifications.weeklyReady*`), routing to the Weekly Update.
-- **`app.json`** already declares `NSSupportsLiveActivities: true`.
+## JS side
 
-## What is SCAFFOLDED (Swift — compiles only in Xcode)
-
-Under `modules/hush-live-activity/`:
-- `ios/HushSessionAttributes.swift` — strength `ActivityAttributes.ContentState` (matches the JS state).
-- `ios/HushCardioAttributes.swift` — cardio `ActivityAttributes.ContentState`.
-- `ios/HushLiveActivityModule.swift` — the Expo module: one `start/update/end` entry point,
-  discriminated by `kind`, holding a single in-flight activity (lifting and running are
-  mutually exclusive; switching kinds ends the prior one).
-- `targets/widget/HushLiveActivityWidget.swift` — the WidgetKit UI: a `WidgetBundle` with
-  the strength + cardio `ActivityConfiguration`s, each providing the Lock Screen view and
-  the Dynamic Island compact / expanded / minimal presentations, using the app's tokens
-  (stage / ochre / sage / JetBrains Mono). The rest countdown and cardio elapsed clock use
-  `Text(timerInterval:)` so they are drift-proof.
-
----
-
-## Remaining work (macOS + Xcode)
-
-1. **Add a Widget Extension target** (e.g. `HushWidget`) to the iOS app in Xcode
-   (File ▸ New ▸ Target ▸ Widget Extension, "Include Live Activity" checked).
-2. **Share the attributes**: add `HushSessionAttributes.swift` and `HushCardioAttributes.swift`
-   to **both** the app target and the widget target (Target Membership), or move them to a
-   shared framework. ActivityKit decodes `ContentState` by its Codable shape across the
-   app↔widget boundary — the copies must stay byte-identical.
-3. **Place the widget UI** (`targets/widget/HushLiveActivityWidget.swift`) in the widget
-   target; keep `@main` on `HushWidgetBundle` (remove the default template widget).
-4. **Bundle the fonts** in the widget target (JetBrains Mono) or fall back to
-   `.monospaced` system digits.
-5. **Build a dev client / TestFlight build** (EAS or local) so `requireOptionalNativeModule`
-   resolves `HushLiveActivity` — until then the JS host stays on the no-op stub.
-6. **On-device QA** against the screenshots: strength set / rest (countdown) / transition /
-   paused; cardio running / auto-paused / km-split. Verify the Dynamic Island compact pill,
-   expanded panel, and Lock Screen banner; verify the rest/elapsed timers stay correct after
-   lock/background (driven by the absolute dates, so they should).
-7. **(Optional) Deep-link the tap**: route a tap on the Live Activity into the app
-   (`Link`/`widgetURL`) to the live session or cardio screen.
+- `src/platform/liveActivity.ts` — the complete seam: projects the canonical
+  `SessionMirror` (strength) / cardio tracker state into the exact ContentState the
+  widget renders; resolves the native module `HushLiveActivity` when present and
+  degrades to a no-op stub otherwise. Projection locked by
+  `__tests__/flows/liveActivityMapping.test.ts`.
+- Strength is driven by `sessionStore.tsx` (start/update per mirror change, end on
+  complete/no-session); cardio by `src/screens/cardio/Cardio.tsx`.
+- Standalone-watch note: the Live Activity mirrors the PHONE's session machine
+  only. A watch-authority (phone-absent) workout never starts one; reconciliation
+  writes history directly and involves no live session.
 
 ## Contract (do not violate)
 
-- The Live Activity is a **read-only projection**. No "Complete set" / completion control
-  from the Dynamic Island (data integrity, spec §8.5).
-- **Strength** shows no heart rate / calories. **Cardio** legitimately shows pace / HR /
-  calories (it is a recorded activity, sealed from the strength engine — never feeds it).
-- One activity at a time; starting one kind ends the other.
+- READ-ONLY projection — no completion / pause / skip controls from the Live
+  Activity (spec §8.5; also impossible pre-iOS 17 App Intents).
+- Strength shows no heart rate / calories. Cardio legitimately shows pace / HR /
+  calories (recorded, never coached — sealed from the strength engine).
+- One activity at a time; switching kinds ends the prior one.
+- All countdowns ride absolute dates via `Text(timerInterval:)` (drift-proof);
+  ranges must be guarded (`end > Date()`) — an inverted range traps.
+- No `@available` guards inside the widget's result builders (deployment target is
+  16.2, and the guards were a result-builder hazard).
+
+Visual source of truth: the design sheet in
+`screen shots/notes & Dynamic island & live activity/` (mono digits, stage/ochre
+tokens; the mockup's interactive buttons are overridden by the read-only contract).

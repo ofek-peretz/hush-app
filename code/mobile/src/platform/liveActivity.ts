@@ -1,7 +1,8 @@
 /**
- * Live Activity / Dynamic Island / Lock Screen host. The NATIVE rendering
- * (ActivityKit + WidgetKit, SwiftUI) lives in `modules/hush-live-activity/` and
- * is built on macOS/Xcode — see LIVE_ACTIVITY_HANDOFF.md. This module is the
+ * Live Activity / Dynamic Island / Lock Screen host. The NATIVE side is split in
+ * two: the ActivityKit controller (`modules/hush-live-activity/ios/`, in the app
+ * target) and the WidgetKit UI (`targets/widget/`, the extension built by
+ * @bacons/apple-targets) — see LIVE_ACTIVITY_HANDOFF.md. This module is the
  * complete RN-side seam: it projects the canonical session/cardio state into the
  * exact ContentState the widget renders, resolves the native module when present,
  * and degrades to a no-op stub everywhere else (web / Expo Go / jest / a build
