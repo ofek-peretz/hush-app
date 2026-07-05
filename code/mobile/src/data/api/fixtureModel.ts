@@ -550,7 +550,4 @@ export const fixtureModel: ModelClient = {
     });
   },
   async markEquipmentOccupied(_args: { blockId: string }) {},
-  async weeklyRest() {
-    return false;
-  },
 };

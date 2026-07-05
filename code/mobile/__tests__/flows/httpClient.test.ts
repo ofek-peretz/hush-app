@@ -195,13 +195,6 @@ describe('equipment occupied + weekly rest (Program Ownership / Weekly Container
     await new HttpModelClient().markEquipmentOccupied({ blockId: 'blk_a' });
     expect(calls.some((c) => c.url.endsWith('/blocks/blk_a/unavailable') && c.method === 'POST')).toBe(true);
   });
-
-  it('weeklyRest reads /weeks/current.rest, and is false when there is no week', async () => {
-    mockFetchOnce({ rest: true, week: { id: 'wk_1' } });
-    expect(await new HttpModelClient().weeklyRest()).toBe(true);
-    mockFetchOnce({ week: null, reason: 'no_week_yet' });
-    expect(await new HttpModelClient().weeklyRest()).toBe(false);
-  });
 });
 
 describe('portraitSnapshot maps /capabilities to a snapshot (relative bars, Decision 2)', () => {

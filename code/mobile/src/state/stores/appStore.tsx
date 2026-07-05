@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
-import { shouldReanchorWeekly } from '@/domain/schedule';
+import { currentWeekOpen, shouldRollWeek } from '@/domain/weekCadence';
 import { CONSENT_VERSION } from '@/domain/consent';
 import {
   athleteModeReducer,
@@ -74,21 +74,20 @@ interface AppState {
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
   revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
-  weekRest: boolean; // Weekly Program Container: week complete → Home shows the existing Rest state
+  weekOpenMs: number | null; // Sunday-04:00-local the current bucket was built for (calendar cadence)
   entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement; weekOpenMs: number | null }
   | { type: 'ENTITLEMENT'; entitlement: Entitlement }
-  | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[] }
-  | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[] }
+  | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[]; weekOpenMs?: number }
+  | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[]; weekOpenMs: number }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
   | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[] }
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
   | { type: 'PORTRAIT_RESOLVED'; snapshots: PortraitSnapshot[] }
   | { type: 'CLEAR_PORTRAIT_FLAG' }
-  | { type: 'WEEK_REST'; weekRest: boolean }
   | { type: 'REVOKED' }
   | { type: 'RESET' };
 
@@ -101,20 +100,20 @@ const initial: AppState = {
   snapshots: [],
   recents: [],
   revoked: false,
-  weekRest: false,
+  weekOpenMs: null,
   entitlement: NO_ENTITLEMENT,
 };
 
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: a.entitlement };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: a.entitlement, weekOpenMs: a.weekOpenMs };
     case 'ENTITLEMENT':
       return { ...s, entitlement: a.entitlement };
     case 'PROGRAM_UPDATED':
-      return { ...s, program: a.program, recents: a.recents };
+      return { ...s, program: a.program, recents: a.recents, ...(a.weekOpenMs !== undefined ? { weekOpenMs: a.weekOpenMs } : {}) };
     case 'ONBOARDED':
-      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, revoked: false };
+      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, weekOpenMs: a.weekOpenMs, revoked: false };
     case 'PROFILE_UPDATED':
       return { ...s, profile: a.profile };
     case 'SESSION_COMPLETED':
@@ -132,8 +131,6 @@ function reducer(s: AppState, a: Action): AppState {
       return { ...s, snapshots: a.snapshots };
     case 'CLEAR_PORTRAIT_FLAG':
       return { ...s, justUnlockedPortrait: false };
-    case 'WEEK_REST':
-      return { ...s, weekRest: a.weekRest };
     case 'REVOKED':
       // Authenticated state cleared; the athlete is returned to Enrollment with
       // the one-line explanation. No continued training on a revoked identity.
@@ -295,20 +292,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.clearActiveSession();
       }
 
-      const [profile, program, persistedMode, snapshots, recents, cachedEntitlement] = await Promise.all([
+      const [profile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadRecents(),
         db.loadEntitlement(),
+        db.loadWeekOpen(),
       ]);
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
       // Gate on the CACHED entitlement immediately (offline-safe); the live store
       // value is reconciled just after boot (below).
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT });
+      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
 
       // Reconcile the entitlement against StoreKit (source of truth) right after
       // boot. Best-effort + fully isolated so it can never break the boot path; a
@@ -453,8 +451,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
         if (baseline) emitCapabilitySnapshot(baseline, 'onboarding', 0);
 
-        await Promise.all([db.saveProfile(profile), db.saveProgram(program), persistMode(m)]);
-        dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots });
+        // Stamp the calendar-week anchor so the bucket first turns over at the NEXT Sunday 04:00,
+        // not immediately (calendar-primary cadence, product model 2026-07-05).
+        const weekOpenMs = currentWeekOpen(Date.now());
+        await Promise.all([db.saveProfile(profile), db.saveProgram(program), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
+        dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
         void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });
         // Weekly Program Container: the weekly plan is ready — wire the EXISTING Weekly Program
@@ -541,38 +542,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async refreshProgram() {
         if (!state.profile) return;
-        // Resolve rest FIRST so we never regenerate/compose a session during a rest
-        // week (state consistency, §1.7). Best-effort; defaults to last-known offline.
-        const wasResting = state.weekRest;
-        let resting = state.weekRest;
-        try {
-          const rest = await model.weeklyRest();
-          resting = rest;
-          if (rest !== state.weekRest) {
-            dispatch({ type: 'WEEK_REST', weekRest: rest });
-            // A fresh trainable week just became ready → re-anchor the Weekly Program
-            // Ready note to today, so the weekly cadence tracks real readiness (§8.6).
-            if (shouldReanchorWeekly(state.weekRest, rest)) void notifier.scheduleWeeklyProgramReady(state.program?.frequency);
+        // CALENDAR-PRIMARY CADENCE (product model, 2026-07-05): the weekly bucket turns over at
+        // Sunday 04:00 local, regardless of workout completion. Finishing every workout early just
+        // leaves Home in Recovery (no next workout to offer) until the calendar rolls; missed
+        // workouts never carry over — each week is a fresh bucket and the engine only progresses
+        // from completed, real-logged work. So the SOLE regeneration trigger is the calendar week
+        // advancing past the one the current bucket was built for (no completion-driven roll — that
+        // was the old `weeklyRest` gate whose hardcoded `false` froze the bucket forever).
+        const nowMs = Date.now();
+        const weekOpen = currentWeekOpen(nowMs);
+        const rolled = shouldRollWeek(state.weekOpenMs, state.program != null, nowMs);
+        if (!rolled) {
+          // A persisted bucket with no anchor is pre-upgrade state: adopt it into the CURRENT week
+          // (persist the anchor) so upgrading never wipes an in-progress week — it rolls next Sunday.
+          if (state.program && state.weekOpenMs == null) {
+            await db.saveWeekOpen(weekOpen);
+            dispatch({ type: 'PROGRAM_UPDATED', program: state.program, recents: state.recents, weekOpenMs: weekOpen });
           }
-        } catch {
-          /* offline — keep the last-known rest state */
+          return; // mid-week: keep the bucket intact (completed flags + athlete edits survive).
         }
-        if (resting) return; // resting → keep the last-known session, do not regenerate
-        // WEEKLY model: the program is a STABLE weekly bucket of N workouts, not a
-        // per-focus recomposition. Regenerate ONLY when there is no program yet, or a
-        // fresh trainable week just began (rest→trainable transition, `wasResting`).
-        // Mid-week we MUST keep the existing program — otherwise a fresh generated week
-        // (all `completed: false`) clobbers finished workouts + athlete edits (order /
-        // replacements) on every Home refocus, so nextWorkout never empties and Rest is
-        // never reachable (the "endless workout loop").
-        if (state.program && !wasResting) return;
         try {
           const program = await model.generateProgram(state.profile);
           await db.saveProgram(program);
-          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+          await db.saveWeekOpen(weekOpen);
+          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents, weekOpenMs: weekOpen });
           void track('program_generated', { reason: 'weekly', frequency: program.frequency, workouts: program.days.length });
         } catch {
-          // Backend unreachable → keep the last-known session (degrade quietly, §5.3).
+          // Backend unreachable → keep the last-known bucket (degrade quietly, §5.3); the roll
+          // re-attempts on the next Home focus since the anchor is only advanced on success.
         }
       },
 
