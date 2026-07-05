@@ -67,7 +67,7 @@ final class WorkoutRuntime: NSObject {
     switch recovered.state {
     case .ended, .stopped:
       state = .ending
-      finalize()
+      finalizeSession()
     default:
       state = .live
       applyPauseState()
@@ -138,7 +138,7 @@ final class WorkoutRuntime: NSObject {
     session?.end() // the delegate's .ended transition finalizes collection + save/discard
   }
 
-  private func finalize() {
+  private func finalizeSession() {
     guard let builder else {
       reset()
       return
@@ -176,7 +176,7 @@ extension WorkoutRuntime: HKWorkoutSessionDelegate {
       guard let self, workoutSession === self.session else { return }
       switch toState {
       case .ended:
-        self.finalize()
+        self.finalizeSession()
       case .stopped:
         workoutSession.end()
       default:
