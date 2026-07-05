@@ -131,8 +131,4 @@ export interface ModelClient {
    *  replacement, no structure change — a temporary runtime reorder. Returns nothing (the caller
    *  re-reads the session). */
   markEquipmentOccupied(args: { blockId: string }): Promise<void>;
-
-  /** Weekly Program Container: true when the week is complete and the athlete is in Rest (the
-   *  existing Home Rest state is reused). false (and no backend) when not in rest. */
-  weeklyRest(): Promise<boolean>;
 }

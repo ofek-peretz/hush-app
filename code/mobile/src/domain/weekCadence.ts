@@ -57,16 +57,15 @@ export function trainingWeekNumber(memberSinceIso: string | null | undefined, no
 }
 
 /**
- * Whether the next week is still locked given the last training activity. The
- * lock lifts at the first Sunday-04:00 after that activity. With no activity yet
- * (brand-new athlete), nothing is locked.
+ * Whether the weekly bucket must be regenerated NOW (calendar-primary cadence, 2026-07-05).
+ * True when there is no bucket yet, or the calendar week has advanced past the Sunday-04:00 the
+ * current bucket was built for. Completion is deliberately irrelevant — the roll is purely the
+ * Sunday-04:00 boundary, so finishing early never rolls and an unfinished week never blocks the
+ * roll. `builtForMs == null` WITH an existing bucket is pre-upgrade state → do NOT roll (the caller
+ * adopts it into the current week), so upgrading never wipes an in-progress week.
  */
-export function isNextWeekLocked(lastActivityMs: number | null, nowMs: number): boolean {
-  if (lastActivityMs == null) return false;
-  return nowMs < nextWeekOpen(lastActivityMs);
-}
-
-/** When the next week unlocks, given the last training activity (or `nowMs`). */
-export function weekUnlocksAt(lastActivityMs: number | null, nowMs: number): number {
-  return nextWeekOpen(lastActivityMs ?? nowMs);
+export function shouldRollWeek(builtForMs: number | null, hasProgram: boolean, nowMs: number): boolean {
+  if (!hasProgram) return true;
+  if (builtForMs == null) return false;
+  return currentWeekOpen(nowMs) > builtForMs;
 }

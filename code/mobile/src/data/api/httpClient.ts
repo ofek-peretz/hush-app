@@ -14,9 +14,9 @@
  * via `POST /weeks` only if none exists) and maps `workouts[]` → `Program.days[]`, each
  * day carrying its backend session id, name, blocks, the athlete-ownership ordering key
  * (`str(session_index % weekly_frequency)`), and a `completed` flag (status). The Program
- * screen renders completed workouts green; Home advances to the next unfinished workout;
- * `weeklyRest()` reports the Rest flag. Each workout's own `session id` is the `programDayId`
- * the client then uses for `sessionTargets` (GET /sessions/{id}) and `recordSession`.
+ * screen renders completed workouts green; Home advances to the next unfinished workout (Recovery
+ * when none remain). Each workout's own `session id` is the `programDayId` the client then uses for
+ * `sessionTargets` (GET /sessions/{id}) and `recordSession`.
  *
  * Historical resolved blockers (kept for context): B2 Portrait → `GET /capabilities`
  * (done). The per-week material-change surface is now the v4 Weekly Update + Why
@@ -375,17 +375,5 @@ export class HttpModelClient implements ModelClient {
     await this.request('POST', `/blocks/${blockId}/unavailable`, {
       client_event_id: newEventId(), seq: 0,
     });
-  }
-
-  async weeklyRest(): Promise<boolean> {
-    try {
-      // The Rest flag from the weekly payload (Rest begins only after ALL of the week's
-      // workouts complete). `generateProgram` consumes the `workouts[]` from the same endpoint
-      // separately; this read is just the boolean the Home Rest state reuses.
-      const data = await this.request<WeekResponse>('GET', '/weeks/current');
-      return data.rest === true;
-    } catch {
-      return false; // no week yet / backend unreachable → not resting
-    }
   }
 }

@@ -32,16 +32,6 @@ export function sessionDayName(session: Session, program: Program | null): strin
   return fromProgram ?? 'Workout';
 }
 
-/**
- * Whether the Weekly Program Ready note should be re-anchored to today: true only
- * on the rest→trainable transition, i.e. the day a fresh week actually becomes
- * ready (§8.6). Keeps the weekly cadence aligned with real readiness instead of
- * the enrollment weekday.
- */
-export function shouldReanchorWeekly(prevRest: boolean, nextRest: boolean): boolean {
-  return prevRest && !nextRest;
-}
-
 /** kg<->lb display. Stored values are kg; display follows the athlete's setting (§10.1). */
 export function displayWeight(kg: number | null, units: Units): number | null {
   if (kg == null) return null;

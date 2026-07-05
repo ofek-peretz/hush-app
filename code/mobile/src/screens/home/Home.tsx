@@ -14,10 +14,9 @@ import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
-import { trainingWeekNumber, isNextWeekLocked } from '@/domain/weekCadence';
+import { trainingWeekNumber } from '@/domain/weekCadence';
 import { isTrainingGated } from '@/domain/entitlement';
-import { db } from '@/data/local/db';
-import type { SetTarget, Session } from '@/data/local/models';
+import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
@@ -49,36 +48,12 @@ export function Home({ navigation, route }: Props) {
     .map((d) => ({ id: d.id, name: d.name, muscles: d.muscleGroups.join(' · ') }));
   const isFocused = useIsFocused();
 
-  // History (for the all-time last-activity → Sunday-04:00 lock). Loaded on focus.
-  const [lastDoneMs, setLastDoneMs] = useState<number | null>(null);
-  useEffect(() => {
-    if (!isFocused) return;
-    let cancelled = false;
-    db.loadHistory().then((sessions: Session[]) => {
-      if (cancelled) return;
-      const times = sessions.map((s) => Date.parse(s.startedAt)).filter((n) => !Number.isNaN(n));
-      setLastDoneMs(times.length ? Math.max(...times) : null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isFocused]);
-
-  // WEEK CADENCE (Sunday 04:00): the next week is genuinely locked until the first
-  // Sunday-04:00 after the last completed session. If the backend prepared a fresh
-  // week early (every workout un-started) we keep Recovery + block starting until
-  // it actually opens — the founder's hard gate.
   const nowMs = Date.now();
-  const nonRest = program?.days.filter((d) => !d.isRest) ?? [];
-  const weekLocked = isNextWeekLocked(lastDoneMs, nowMs);
-  const freshWeek = nonRest.length > 0 && nonRest.every((d) => !d.completed);
-  const prematureNewWeek = freshWeek && weekLocked;
-
-  // A complete week REUSES the Home Rest/Recovery state: the backend Rest flag, OR
-  // every workout in a loaded program is done (no next workout to offer), OR a fresh
-  // week that has not opened yet (locked until Sunday 04:00).
-  const resting =
-    app.weekRest || (!!program && program.days.length > 0 && !day) || prematureNewWeek;
+  // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
+  // bucket only regenerates at the Sunday-04:00 calendar roll (appStore.refreshProgram), so a week
+  // finished early holds Recovery until the new week opens — the "no starting early" gate is now
+  // structural (no fresh bucket exists before Sunday), so no separate lock is needed here.
+  const resting = !!program && program.days.length > 0 && !day;
 
   // Training-week counter ("Week N"), counted from account creation in Sunday-04:00 windows.
   const weekNumber = trainingWeekNumber(app.profile?.memberSince, nowMs);

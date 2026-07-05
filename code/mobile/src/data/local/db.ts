@@ -39,6 +39,7 @@ const K = {
   preferences: 'hush.preferences',
   engineV4: 'hush.engine.v4', // Hush v4 per-slot progression state (gated; see engine/v4)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
+  weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
   schemaVersion: 'hush.schema.version',
 } as const;
 
@@ -70,8 +71,9 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
  *  v2: added the Health connection record (hush.health.state) — additive.
  *  v3: added the Hush v4 per-slot engine state (hush.engine.v4) — additive.
  *  v4: added the cached subscription entitlement (hush.entitlement) — additive.
- *  v5: added recorded cardio activities (hush.cardio.activities) — additive. */
-export const SCHEMA_VERSION = 5;
+ *  v5: added recorded cardio activities (hush.cardio.activities) — additive.
+ *  v6: added the calendar-week anchor (hush.week.open) — additive. */
+export const SCHEMA_VERSION = 6;
 
 /** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
  *  days_since_last_session; `lastAdvanceAt` is the completed-session count at the last weekly
@@ -123,6 +125,12 @@ export const db = {
 
   loadProgram: () => getJSON<Program>(K.program),
   saveProgram: (p: Program) => setJSON(K.program, p),
+
+  // Calendar cadence (product model 2026-07-05): the Sunday-04:00-local instant the current
+  // weekly bucket was generated for. The bucket turns over when the calendar week advances
+  // past this, regardless of workout completion. Null until the first bucket is stamped.
+  loadWeekOpen: () => getJSON<number>(K.weekOpen),
+  saveWeekOpen: (ms: number) => setJSON(K.weekOpen, ms),
 
   loadMode: () => getJSON<PersistedMode>(K.mode),
   saveMode: (m: PersistedMode) => setJSON(K.mode, m),

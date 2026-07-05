@@ -9,8 +9,7 @@ import {
   currentWeekOpen,
   nextWeekOpen,
   trainingWeekNumber,
-  isNextWeekLocked,
-  weekUnlocksAt,
+  shouldRollWeek,
 } from '@/domain/weekCadence';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -70,20 +69,41 @@ describe('weekCadence', () => {
     expect(trainingWeekNumber('not-a-date', Date.now())).toBe(1);
   });
 
-  test('isNextWeekLocked: locked until the Sunday 04:00 after last activity', () => {
-    const lastDone = at(2026, 5, 17, 18); // Wednesday evening, week done
-    const open = nextWeekOpen(lastDone);
-    expect(isNextWeekLocked(lastDone, lastDone + DAY)).toBe(true); // Thursday → locked
-    expect(isNextWeekLocked(lastDone, open - 1000)).toBe(true); // just before open
-    expect(isNextWeekLocked(lastDone, open)).toBe(false); // at open → unlocked
-    expect(isNextWeekLocked(lastDone, open + DAY)).toBe(false); // after → unlocked
-    expect(isNextWeekLocked(null, Date.now())).toBe(false); // no activity → never locked
-  });
+  describe('shouldRollWeek (calendar-primary bucket cadence)', () => {
+    const wed = at(2026, 5, 17, 15); // a Wednesday
+    const thisOpen = currentWeekOpen(wed);
+    const lastOpen = currentWeekOpen(thisOpen - DAY); // the previous Sunday-04:00 window
 
-  test('weekUnlocksAt falls back to now when there is no activity', () => {
-    const now = at(2026, 5, 10, 9);
-    expect(weekUnlocksAt(null, now)).toBe(nextWeekOpen(now));
-    const last = at(2026, 5, 9, 20);
-    expect(weekUnlocksAt(last, now)).toBe(nextWeekOpen(last));
+    test('no bucket yet → always roll (first program / recovery from a lost program)', () => {
+      expect(shouldRollWeek(null, false, wed)).toBe(true);
+      expect(shouldRollWeek(thisOpen, false, wed)).toBe(true);
+    });
+
+    test('bucket built for the current week → do NOT roll mid-week', () => {
+      expect(shouldRollWeek(thisOpen, true, wed)).toBe(false);
+      // still no roll later the same week
+      expect(shouldRollWeek(thisOpen, true, wed + DAY)).toBe(false);
+    });
+
+    test('completion is irrelevant: finishing early never rolls (only the calendar does)', () => {
+      // hasProgram + built-for-this-week is the only signal; there is no "completed" input at all.
+      expect(shouldRollWeek(thisOpen, true, thisOpen)).toBe(false); // Sunday 04:00 exactly, fresh
+      expect(shouldRollWeek(thisOpen, true, thisOpen + 3 * DAY)).toBe(false); // Wednesday, all done
+    });
+
+    test('calendar week advanced past the bucket → roll', () => {
+      expect(shouldRollWeek(lastOpen, true, wed)).toBe(true); // last week bucket, now this week
+      expect(shouldRollWeek(thisOpen, true, nextWeekOpen(thisOpen))).toBe(true); // crossed next Sunday
+    });
+
+    test('roll flips exactly at Sunday 04:00, not before', () => {
+      const next = nextWeekOpen(thisOpen);
+      expect(shouldRollWeek(thisOpen, true, next - 1000)).toBe(false); // one second before → hold
+      expect(shouldRollWeek(thisOpen, true, next)).toBe(true); // at open → roll
+    });
+
+    test('pre-upgrade bucket (no anchor) is adopted into the current week, not wiped', () => {
+      expect(shouldRollWeek(null, true, wed)).toBe(false);
+    });
   });
 });
