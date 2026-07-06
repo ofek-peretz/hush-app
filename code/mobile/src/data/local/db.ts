@@ -28,6 +28,7 @@ const K = {
   program: 'hush.program',
   mode: 'hush.mode',
   activeSession: 'hush.session.active',
+  sessionResume: 'hush.session.resume', // live machine snapshot — mid-workout resume (S3)
   history: 'hush.history.sessions',
   cardio: 'hush.cardio.activities', // recorded run/walk activities (Open training)
   snapshots: 'hush.portrait.snapshots',
@@ -72,8 +73,22 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
  *  v3: added the Hush v4 per-slot engine state (hush.engine.v4) — additive.
  *  v4: added the cached subscription entitlement (hush.entitlement) — additive.
  *  v5: added recorded cardio activities (hush.cardio.activities) — additive.
- *  v6: added the calendar-week anchor (hush.week.open) — additive. */
-export const SCHEMA_VERSION = 6;
+ *  v6: added the calendar-week anchor (hush.week.open) — additive.
+ *  v7: added the mid-workout resume snapshot (hush.session.resume) — additive. */
+export const SCHEMA_VERSION = 7;
+
+/** Persisted mid-workout resume snapshot (S3). Shape mirrors state/sessionRecovery's
+ *  ResumeSnapshot — kept structural here to avoid a persistence→store layering cycle
+ *  (same pattern as EngineV4State). */
+export interface PersistedSessionResume {
+  schema: 1;
+  plan: unknown[]; // Step[]
+  machine: unknown; // SessionMachine
+  restStartedAtMs: number | null;
+  restExtraS: number;
+  pausedAtMs: number | null;
+  savedAt: string; // ISO
+}
 
 /** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
  *  days_since_last_session; `lastAdvanceAt` is the completed-session count at the last weekly
@@ -142,6 +157,11 @@ export const db = {
   loadActiveSession: () => getJSON<Session>(K.activeSession),
   saveActiveSession: (s: Session) => setJSON(K.activeSession, s),
   clearActiveSession: () => AsyncStorage.removeItem(K.activeSession),
+
+  // ---- Mid-workout resume snapshot (S3; written on every session state change) ----
+  loadSessionResume: () => getJSON<PersistedSessionResume>(K.sessionResume),
+  saveSessionResume: (s: PersistedSessionResume) => setJSON(K.sessionResume, s),
+  clearSessionResume: () => AsyncStorage.removeItem(K.sessionResume),
 
   // ---- History (completed sessions, newest first; immutable once written) ----
   async loadHistory(): Promise<Session[]> {

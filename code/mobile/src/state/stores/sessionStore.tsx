@@ -23,6 +23,7 @@ import {
   type SessionEvent,
   type SessionMachine,
 } from '@/state/machines/sessionState';
+import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS } from '@/state/sessionRecovery';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
@@ -33,10 +34,21 @@ function worthQueuing(e: unknown): boolean {
   return !(e instanceof HttpError) || e.transient;
 }
 
-// Hush-owned rest lengths (not user-adjustable, §10.8). Exported so the standalone
-// watch plan snapshot ships the SAME rests the phone would run.
-export const REST_INTER_S = 90; // between sets of the same exercise
+// Hush-owned rest lengths (not user-adjustable, §10.8). Rest matches the work: a compound
+// set needs real recovery, an isolation set doesn't — the flat 90 s was short for a squat
+// and long for a lateral raise (S2, approved 2026-07-05; the session time model already
+// priced compounds at 3 min/set). Exported so the standalone watch plan snapshot ships the
+// SAME rests the phone would run.
+export const REST_COMPOUND_S = 150; // between sets of a compound lift
+export const REST_ISOLATION_S = 75; // between sets of an isolation lift
 export const REST_TRANSITION_S = 120; // between exercises
+/** Plan-level fallback for a stale installed watch app (pre-per-step-rest builds). */
+export const REST_INTER_S = 90;
+
+/** The between-sets rest for an exercise (tier-based; unknown → compound, the safe long side). */
+export function restInterSecondsFor(exerciseId: string | null | undefined): number {
+  return (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
+}
 
 
 export interface Step {
@@ -150,6 +162,12 @@ export interface SessionView {
   startedAtMs: number | null;
   // actions
   start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;
+  /** An interrupted (app-killed) workout that can still be picked up, or null. Home reads
+   *  this on focus to offer "Continue {workout}" as the primary CTA (S3). */
+  loadResumable: () => Promise<{ workoutName: string } | null>;
+  /** Rebuild the interrupted session exactly where it was (logged sets kept, wall-clock
+   *  rest caught up). False when nothing usable remains — the caller falls back to Begin. */
+  resumeSaved: () => Promise<boolean>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
   /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
@@ -343,6 +361,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // the watch — a watch-driven finish previously left SessionFlow on an empty (black) stage. The
   // SessionFlow screen consumes this and clears it.
   const [endResult, setEndResult] = useState<CompleteResult | null>(null);
+  // One-shot remaining seconds of a rest resumed after an app kill (S3): the Rest UI anchors
+  // its countdown on this instead of the full base length. Cleared at the next transition.
+  const [restResumeRemainingS, setRestResumeRemainingS] = useState<number | null>(null);
   // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
   const laStartedRef = useRef(false);
   // Watch action handlers, refreshed each render so a (native) watch intent runs the
@@ -391,7 +412,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       steps: buildMirrorSteps(plan),
       total: plan.length,
       machine,
-      restInterS: REST_INTER_S,
+      // Per-tier: the mirror's REST_INTER duration belongs to the CURRENT exercise.
+      restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
       restTransitionS: REST_TRANSITION_S,
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
@@ -406,6 +428,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // One projection → both surfaces. The watch receives the full mirror (incl. the
     // terminal "complete" frame so it can show Workout Complete, then tear down).
     watchRef.current?.publish(mirror);
+
+    // Mid-workout resume snapshot (S3): every live state change persists the machine + plan
+    // + rest anchors, so an app kill resumes exactly where the athlete was (the watch's
+    // LocalWorkoutEngine standard). Cleared explicitly by finalize/abandon — never here (the
+    // empty pre-hydration state at boot must not destroy a snapshot Home is about to offer).
+    if (plan.length > 0 && state.session && machine.phase !== 'SESSION_SAVED' && machine.phase !== 'WELL_DONE') {
+      void db
+        .saveSessionResume({
+          schema: 1,
+          plan,
+          machine,
+          restStartedAtMs: restStartedAtRef.current,
+          restExtraS: restExtraSecondsRef.current,
+          pausedAtMs: pauseStartedAtRef.current,
+          savedAt: new Date().toISOString(),
+        })
+        .catch(() => {});
+    }
 
     // The Live Activity renders its subset; it ends on no-session / complete.
     if (!mirror || mirror.phase === 'complete') {
@@ -441,7 +481,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ? 'REST_INTER'
         : 'REST_TRANSITION'
       : 'SET_PRESENTED';
-    const restSeconds = displayPhase === 'REST_INTER' ? REST_INTER_S : REST_TRANSITION_S;
+    // A rest resumed after an app kill anchors on its true remaining time, not the base length.
+    const restSeconds =
+      restResumeRemainingS ?? (displayPhase === 'REST_INTER' ? restInterSecondsFor(current?.exerciseId) : REST_TRANSITION_S);
 
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
       const session = sessionRef.current;
@@ -452,6 +494,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // calibration, and never marks the day done. Just clear the orphan session and exit.
       if (session.sets.length === 0) {
         await db.clearActiveSession();
+        await db.clearSessionResume().catch(() => {});
         dispatch({ type: 'END' });
         void track('session_abandoned', { sessionId: session.id, programDayId: session.programDayId });
         const notStartedResult: CompleteResult = { ended: true, unlockedPortrait: false, notStarted: true };
@@ -475,6 +518,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // backend (§6.2). Backend sync is best-effort and queued on failure (§6.4).
       await db.appendCompletedSession(saved);
       await db.clearActiveSession();
+      await db.clearSessionResume().catch(() => {});
       const { unlockedPortrait } = await app.recordSessionCompleted();
       // Mark this workout DONE for the week so Program shows the green DONE chip and
       // Home advances to the next unfinished workout (Rest once all are done).
@@ -488,7 +532,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         steps: buildMirrorSteps(plan),
         total: plan.length,
         machine: { ...machine, phase: 'SESSION_SAVED' },
-        restInterS: REST_INTER_S,
+        restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
         restTransitionS: REST_TRANSITION_S,
         restStartedAtMs: null,
         nowMs: Date.now(),
@@ -592,6 +636,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       clearEndResult: () => setEndResult(null),
 
       async start(day, targets) {
+        // The athlete chose a FRESH workout while an interrupted one was still resumable
+        // (or a stale orphan lingered): salvage its logged work first, then compose cleanly.
+        await salvageOrphanSession();
+        setRestResumeRemainingS(null);
         const plan2 = buildPlan(day, targets);
         const session: Session = {
           id: `sess_${Date.now()}`,
@@ -612,6 +660,63 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           session,
           machine: initialSessionMachine(plan2.length <= 1),
         });
+      },
+
+      async loadResumable() {
+        // A resumable exists only while no session is live in this process.
+        if (plan.length > 0) return null;
+        try {
+          const [active, snap] = await Promise.all([db.loadActiveSession(), db.loadSessionResume()]);
+          if (!active || !snap || snap.schema !== 1) return null;
+          const m = snap.machine as SessionMachine;
+          if (m.phase === 'SESSION_SAVED' || m.phase === 'WELL_DONE') return null;
+          if (Date.now() - Date.parse(snap.savedAt) > RESUME_WINDOW_MS) return null;
+          return { workoutName: active.programDayName ?? '' };
+        } catch {
+          return null;
+        }
+      },
+
+      async resumeSaved() {
+        if (plan.length > 0) return false; // a live session always wins
+        try {
+          const [active, snap] = await Promise.all([db.loadActiveSession(), db.loadSessionResume()]);
+          if (!active || !snap || snap.schema !== 1) return false;
+          const resumePlan = snap.plan as Step[];
+          const r = reconcileResume(
+            {
+              plan: resumePlan,
+              machine: snap.machine as SessionMachine,
+              restStartedAtMs: snap.restStartedAtMs,
+              restExtraS: snap.restExtraS,
+              pausedAtMs: snap.pausedAtMs,
+              savedAt: snap.savedAt,
+            },
+            active,
+            Date.now(),
+            (kind, exerciseId) => (kind === 'inter' ? restInterSecondsFor(exerciseId) : REST_TRANSITION_S),
+          );
+          if (!r) {
+            // Unusable (stale / fully completed) → salvage so the next Begin composes cleanly.
+            await salvageOrphanSession();
+            return false;
+          }
+          sessionRef.current = active;
+          restStartedAtRef.current = r.restStartedAtMs;
+          restExtraSecondsRef.current = r.restExtraS;
+          pauseStartedAtRef.current = null;
+          setRestResumeRemainingS(r.restRemainingS);
+          dispatch({ type: 'START', plan: resumePlan, session: active, machine: r.machine });
+          void track('session_resumed', {
+            sessionId: active.id,
+            sets: active.sets.length,
+            phase: r.machine.phase,
+            restRemainingS: r.restRemainingS,
+          });
+          return true;
+        } catch {
+          return false;
+        }
       },
 
       async completeSet(override): Promise<CompleteResult> {
@@ -654,12 +759,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
         if (setLog.edited) void trackFirst('first_override');
 
-        const restSecondsForThis = current.lastSetOfExercise ? REST_TRANSITION_S : REST_INTER_S;
+        const restSecondsForThis = current.lastSetOfExercise ? REST_TRANSITION_S : restInterSecondsFor(current.exerciseId);
         const m = sessionReducer(
           { ...machine, isLastSetOfSession: current.lastSetOfSession },
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
         );
         sessionRef.current = updated;
+        setRestResumeRemainingS(null); // a fresh transition — the resumed-rest anchor is spent
         dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
@@ -683,6 +789,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           restStartedAtRef.current = null;
         }
         restExtraSecondsRef.current = 0;
+        setRestResumeRemainingS(null); // the resumed-rest anchor is spent
         dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'REST_ELAPSED' }) });
       },
       extendRest(seconds: number) {
@@ -759,7 +866,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       },
     };
-  }, [state, app, endResult]);
+  }, [state, app, endResult, restResumeRemainingS]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.

@@ -40,6 +40,10 @@ export interface HomeViewProps {
   exerciseCount?: number; // next workout's exercise count (meta line)
   loadsUp?: number; // how many lifts step up this session (meta line)
   restDaysTaken?: number; // recovery stat
+  /** An interrupted (app-killed) workout that can be picked up exactly where it was (S3).
+   *  When present, the primary CTA becomes "Continue {workout}" — one path, no fork. */
+  resumable?: { workoutName: string } | null;
+  onResume?: () => void;
   onStart: () => void;
   workouts: HomeWorkoutOption[];
   onChooseWorkout: (id: string) => void;
@@ -144,7 +148,16 @@ export function HomeView(props: HomeViewProps) {
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
               <View style={styles.cta}>
-                {props.dayName ? (
+                {props.resumable ? (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    block
+                    label={t('home.continueWorkout', { name: bidi(props.resumable.workoutName) })}
+                    onPress={props.onResume}
+                    leading={<Icon name="play" size={18} color={color.onAccent} />}
+                  />
+                ) : props.dayName ? (
                   <Button
                     variant="primary"
                     size="lg"

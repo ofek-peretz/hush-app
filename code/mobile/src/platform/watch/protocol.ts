@@ -103,6 +103,9 @@ export interface WatchPlanStep {
   reasonDelta?: number;
   /** Equipment-native setup (kg) for this step's load. */
   loadSetup?: MirrorLoadSetup | null;
+  /** Between-sets rest (s) for THIS exercise (tier-based, S2). A stale watch build
+   *  ignores it and falls back to the plan-level restInterS. */
+  restInterS?: number;
 }
 
 export interface WatchPlanWorkout {

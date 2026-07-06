@@ -33,7 +33,7 @@ function contentHash(workouts: WatchPlanWorkout[]): string {
   return `plan_${(h >>> 0).toString(36)}`;
 }
 
-function buildSteps(day: ProgramDay, targets: SetTarget[]): WatchPlanStep[] {
+function buildSteps(day: ProgramDay, targets: SetTarget[], restInterSFor?: (exerciseId: string) => number): WatchPlanStep[] {
   const find = (exerciseId: string, setIndex: number): SetTarget =>
     targets.find((t) => t.exerciseId === exerciseId && t.setIndex === setIndex) ?? {
       exerciseId,
@@ -60,6 +60,7 @@ function buildSteps(day: ProgramDay, targets: SetTarget[]): WatchPlanStep[] {
         blockId: target.blockId,
         reasonType: target.reasonType,
         reasonDelta: target.reasonDelta,
+        restInterS: restInterSFor ? restInterSFor(slot.exerciseId) : undefined,
         loadSetup: setup
           ? {
               style: setup.style,
@@ -85,9 +86,12 @@ export interface WatchPlanInputs {
    *  is still useful — the watch just can't start THAT workout offline). */
   targetsByDay: Record<string, SetTarget[]>;
   nowMs: number;
-  /** Hush-owned rest lengths (s) — passed in so this module stays constant-free. */
+  /** Hush-owned rest lengths (s) — passed in so this module stays constant-free.
+   *  restInterS is the plan-level FALLBACK (stale watch builds); restInterSFor supplies
+   *  the per-exercise (tier-based) rest each step actually carries. */
   restInterS: number;
   restTransitionS: number;
+  restInterSFor?: (exerciseId: string) => number;
 }
 
 /** Build the snapshot, or null when nothing remains to execute (all done / no
@@ -98,7 +102,7 @@ export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot 
     if (day.isRest || day.completed) continue;
     const targets = inp.targetsByDay[day.id];
     if (!targets) continue;
-    const steps = buildSteps(day, targets);
+    const steps = buildSteps(day, targets, inp.restInterSFor);
     if (steps.length === 0) continue;
     workouts.push({
       id: day.id,

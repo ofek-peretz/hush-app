@@ -9,7 +9,7 @@ import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HomeView } from '@/screens/home/HomeView';
 import { useApp } from '@/state/stores/appStore';
-import { REST_INTER_S, REST_TRANSITION_S, useSession } from '@/state/stores/sessionStore';
+import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
@@ -92,6 +92,7 @@ export function Home({ navigation, route }: Props) {
           nowMs: Date.now(),
           restInterS: REST_INTER_S,
           restTransitionS: REST_TRANSITION_S,
+          restInterSFor: restInterSecondsFor,
         }),
       );
     })();
@@ -190,6 +191,29 @@ export function Home({ navigation, route }: Props) {
   // spent and no membership is active, starting another session opens the paywall.
   const gated = isTrainingGated(app.modeState.completedSessions, app.entitlement.active);
 
+  // Mid-workout resume (S3): an interrupted (app-killed) session younger than the resume
+  // window replaces Begin with "Continue {workout}". Re-checked on every focus; cleared the
+  // moment it is resumed, salvaged, or superseded by a fresh start.
+  const [resumable, setResumable] = useState<{ workoutName: string } | null>(null);
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    void session.loadResumable().then((r) => {
+      if (!cancelled) setResumable(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused]);
+
+  async function onResume() {
+    const ok = await session.resumeSaved();
+    setResumable(null);
+    if (ok) navigation.navigate('SessionFlow');
+    // Not resumable after all (stale/complete) → the salvage already ran; Home falls back to Begin.
+  }
+
   async function onStart() {
     if (!day) return;
     if (resting) return; // hard gate: the next week is locked until Sunday 04:00
@@ -235,6 +259,8 @@ export function Home({ navigation, route }: Props) {
       exerciseCount={day?.slots.length}
       loadsUp={loadsUp}
       restDaysTaken={program ? program.days.filter((d) => d.isRest).length : 0}
+      resumable={resumable}
+      onResume={onResume}
       onStart={onStart}
       workouts={workouts}
       onChooseWorkout={setChosenId}

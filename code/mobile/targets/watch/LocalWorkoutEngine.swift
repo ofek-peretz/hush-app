@@ -188,7 +188,10 @@ final class LocalWorkoutEngine {
   }
 
   private func beginRest(transition: Bool) {
-    let restS = transition ? state.restTransitionS : state.restInterS
+    // Per-tier rest (S2): the just-completed step carries its exercise's between-sets rest;
+    // the plan-level value is the fallback for a snapshot from an older phone build.
+    let stepRestS = state.steps.indices.contains(state.currentIndex) ? state.steps[state.currentIndex].restInterS : nil
+    let restS = transition ? state.restTransitionS : (stepRestS ?? state.restInterS)
     state.phase = transition ? "rest_transition" : "rest_inter"
     state.restEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(restS)))
     state.restTotalS = restS

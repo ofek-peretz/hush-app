@@ -107,6 +107,21 @@ describe('buildWatchPlanSnapshot', () => {
     const c = snapshot([day('d1', { name: 'Renamed' }), day('d2')])!;
     expect(c.planId).not.toBe(a.planId);
   });
+
+  it('per-step tier rest rides each step; plan-level values remain the stale-build fallback (S2)', () => {
+    const plan = buildWatchPlanSnapshot({
+      days: [day('d1')],
+      targetsByDay: { d1: targets('d1') },
+      nowMs: NOW,
+      restInterS: 90,
+      restTransitionS: 120,
+      restInterSFor: (id) => (id === EX_A.id ? 150 : 75),
+    });
+    const steps = plan!.workouts[0].steps;
+    expect(steps[0].restInterS).toBe(150); // EX_A
+    expect(steps[2].restInterS).toBe(75); // EX_B
+    expect(plan!.restInterS).toBe(90); // fallback untouched
+  });
 });
 
 // ---- Reconciliation ---------------------------------------------------------

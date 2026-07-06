@@ -15,8 +15,9 @@
 import type { Profile, Program, ProgramDay, Session, Goal, Experience } from '@/data/local/models';
 import { db, type EngineV4State } from '@/data/local/db';
 import { planNextWeek } from './planWeek';
+import { applySwap } from './swap';
 import { demonstrated, epley, normalizeLoad, volumeLoad } from './reads';
-import { exerciseDisplayName } from '@/data/exercises';
+import { exerciseById, exerciseDisplayName, progressionRule } from '@/data/exercises';
 import { enginePattern, exerciseMeta, candidatesForPattern } from './catalogAdapter';
 import type { Explanation } from './types';
 import { toEngineGoal, toTrainingAge, repScheme, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type SetRecord, type Pattern } from './types';
@@ -143,7 +144,10 @@ function initialSlot(d: DerivedSlot, profile: EngineProfile, history: Session[],
     levers_tried: [],
     hold_mode: false,
     weeks_since_swap: established ? 12 : 0,
-    calibrating: !established,
+    // Calibration tunes LOAD — a bodyweight lift has none, and an athlete overshooting the
+    // rep target can never land "in range" to exit, freezing the slot in calibrate forever
+    // (blocking rep progression AND graduation). Bodyweight goes straight to reactive.
+    calibrating: !meta.bodyweight && !established,
     calib_weeks: 0,
     history: [],
   };
@@ -196,8 +200,9 @@ export async function ensureSlots(
       slots[d.slotId] = initialSlot(d, profile, history, seedFor);
     } else if (existing.current_exercise_id !== d.exerciseId) {
       // Manual replacement (C-7): the new lift calibrates into the slot; identity is kept.
+      // Bodyweight never calibrates (no load to calibrate — see initialSlot).
       const fresh = initialSlot(d, profile, history, seedFor);
-      slots[d.slotId] = { ...fresh, calibrating: true, tenure_weeks: 0, weeks_since_swap: 0 };
+      slots[d.slotId] = { ...fresh, calibrating: !exerciseMeta(d.exerciseId).bodyweight, tenure_weeks: 0, weeks_since_swap: 0 };
     }
   }
   // Drop slots no longer in the program (e.g. frequency change).
@@ -385,24 +390,67 @@ export async function maybeAdvance(
       slots[ns.slotId] = rec ? { ...ns, history: [rec, ...ns.history].slice(0, 6) } : ns;
     }
     state.global = out.updated_global;
-    // Per-changed-slot from→to snapshot (only slots that surfaced an explanation).
-    const plan: WeekPlanChange[] = out.explanations.map((e) => {
+
+    // ── Bodyweight graduation (S6, approved 2026-07-05) ──
+    // A bodyweight lift has no load axis: once it holds the TOP of its rep range for the
+    // athlete's stall window, the next stimulus is the harder catalog variation (knee
+    // push-up → push-up → dip; chin-up → pull-up). Slot-durable swap: identity, order and
+    // volume survive; LOCKED never graduates (I-7). The new lift does NOT calibrate when it
+    // is itself bodyweight (calibration tunes load — meaningless without one; a strong
+    // athlete overshooting the rep target would otherwise never exit). Lifts with no harder
+    // variation (pull-up, dips at the ladder's top) hold honestly — the textVariation copy
+    // says so instead of claiming a move that never happens.
+    const graduated = new Map<string, { from: string; to: string }>();
+    const gradWindow = DEFAULTS.STALL_WINDOW[profile.training_age];
+    for (const id of Object.keys(slots)) {
+      const s = slots[id];
+      const meta = exerciseMeta(s.current_exercise_id);
+      if (!meta.bodyweight || s.locked || s.calibrating) continue;
+      if (s.rep_target !== s.rep_range[1]) continue;
+      const rule = progressionRule(s.current_exercise_id);
+      if (rule.mode !== 'reps' || !rule.harder || !exerciseById(rule.harder)) continue;
+      let streak = 0;
+      for (const rec of s.history) {
+        const best = rec.sets.reduce((m, x) => Math.max(m, x.reps), 0);
+        if (best >= s.rep_range[1]) streak += 1;
+        else break;
+      }
+      if (streak < gradWindow) continue;
+      const from = s.current_exercise_id;
+      const harderMeta = exerciseMeta(rule.harder);
+      slots[id] = { ...applySwap(s, rule.harder, seedFor(rule.harder), repScheme(profile.goal)), calibrating: !harderMeta.bodyweight };
+      graduated.set(id, { from, to: rule.harder });
+    }
+    const gradExplanations: Explanation[] = [...graduated.entries()].map(([slotId, g]) => ({
+      slotId,
+      pattern: slots[slotId].pattern,
+      observation: { key: 'explain.graduate.observation', params: { from: exerciseDisplayName(g.from) } },
+      conclusion: { key: 'explain.graduate.conclusion' },
+      action: { key: 'explain.graduate.action', params: { ex: exerciseDisplayName(g.to) } },
+      text: { key: 'explain.graduate.text', params: { from: exerciseDisplayName(g.from), ex: exerciseDisplayName(g.to) } },
+    }));
+    // A graduating slot's engine line (the "hold the top" note) gives way to the graduation.
+    const explanations = out.explanations.filter((e) => !graduated.has(e.slotId)).concat(gradExplanations);
+
+    // Per-changed-slot from→to snapshot (only slots that surfaced an explanation). `slots`
+    // already holds the FINAL post-week state (rails + graduation applied).
+    const plan: WeekPlanChange[] = explanations.map((e) => {
       const before = beforeById.get(e.slotId);
-      const after = out.next_slots.find((n) => n.slotId === e.slotId);
+      const after = slots[e.slotId];
       return {
         slotId: e.slotId,
-        exerciseId: after?.exercise_id ?? before?.current_exercise_id ?? '',
+        exerciseId: after?.current_exercise_id ?? before?.current_exercise_id ?? '',
         loadFrom: before?.current_load_kg ?? null,
-        loadTo: after?.load_kg ?? before?.current_load_kg ?? null,
-        setsFrom: before?.current_sets ?? after?.sets ?? 0,
-        setsTo: after?.sets ?? before?.current_sets ?? 0,
+        loadTo: after?.current_load_kg ?? before?.current_load_kg ?? null,
+        setsFrom: before?.current_sets ?? after?.current_sets ?? 0,
+        setsTo: after?.current_sets ?? before?.current_sets ?? 0,
         rangeFrom: before?.rep_range ?? after?.rep_range ?? [0, 0],
         rangeTo: after?.rep_range ?? before?.rep_range ?? [0, 0],
-        swapped: !!after && !!before && after.exercise_id !== before.current_exercise_id,
+        swapped: !!after && !!before && after.current_exercise_id !== before.current_exercise_id,
       };
     });
     // Capture the week's explanations + plan for the Weekly Update + Why surfaces (a new week to view).
-    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations: out.explanations, plan, seen: false };
+    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations, plan, seen: false };
     state.lastAdvanceAt += freq;
   }
   await saveState(state);

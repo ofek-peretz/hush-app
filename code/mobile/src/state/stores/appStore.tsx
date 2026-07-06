@@ -5,6 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
+import { salvageOrphanSession, RESUME_WINDOW_MS } from '@/state/sessionRecovery';
 import { currentWeekOpen, shouldRollWeek } from '@/domain/weekCadence';
 import { CONSENT_VERSION } from '@/domain/consent';
 import {
@@ -269,27 +270,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await db.setSchemaVersion(SCHEMA_VERSION);
 
       // Recovery (§7.4 / §5.5): an active session left behind by an app-kill is
-      // never lost. Save what completed (annotated "ended early") + queue it for
-      // sync, then clear the orphan so the next Start composes cleanly. An
+      // never lost. S3 (approved 2026-07-05): a FRESH interruption — a non-terminal
+      // resume snapshot younger than the resume window — is kept INTACT so Home can
+      // offer "Continue {workout}" and the session store rebuilds it exactly.
+      // Anything stale or unusable is salvaged as before: completed sets become an
+      // "ended early" history entry (queued for sync) and the orphan is cleared. An
       // interrupted session does NOT advance calibration (§2.3).
       const active = await db.loadActiveSession();
       if (active) {
-        if (active.sets.length > 0) {
-          // De-dupe: a prior crash may have saved-but-not-cleared; never double-count.
-          const history = await db.loadHistory();
-          if (!history.some((h) => h.id === active.id)) {
-            const saved = { ...active, state: 'SAVED' as const, earlyFinish: true, annotation: 'ended_early' as const };
-            await db.appendCompletedSession(saved);
-            await db.enqueuePendingSync({
-              sessionId: saved.id,
-              programDayId: saved.programDayId,
-              sets: saved.sets.map((s) => ({ exerciseId: s.exerciseId, setIndex: s.setIndex, actualWeight: s.actualWeight, actualReps: s.actualReps, blockId: s.blockId })),
-              earlyFinish: true,
-            });
-            void track('session_recovered', { sessionId: saved.id, sets: saved.sets.length });
-          }
+        let fresh = false;
+        try {
+          const snap = await db.loadSessionResume();
+          const phase = (snap?.machine as { phase?: string } | undefined)?.phase;
+          fresh =
+            snap?.schema === 1 &&
+            phase !== 'SESSION_SAVED' &&
+            phase !== 'WELL_DONE' &&
+            Date.now() - Date.parse(snap.savedAt) < RESUME_WINDOW_MS;
+        } catch {
+          /* unreadable snapshot → salvage */
         }
-        await db.clearActiveSession();
+        if (!fresh) await salvageOrphanSession();
       }
 
       const [profile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([

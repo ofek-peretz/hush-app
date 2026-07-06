@@ -134,6 +134,9 @@ struct WirePlanStep: Codable, Equatable {
   var reasonType: String?
   var reasonDelta: Double?
   var loadSetup: WireLoadSetup?
+  /// Between-sets rest (s) for this exercise (tier-based, S2). Optional on the wire —
+  /// absent (older phone build) falls back to the plan-level restInterS.
+  var restInterS: Int?
 }
 
 struct WirePlanWorkout: Codable, Equatable {

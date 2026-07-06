@@ -101,6 +101,7 @@
     "nextSessionOpens": "Next session opens",
     "nextSession": "Next session",
     "begin": "Begin {{name}}",
+    "continueWorkout": "Continue {{name}}",
     "chooseAnother": "Choose another workout",
     "readyWhenYouAre": "Ready when you are, {{name}}.",
     "readyAnon": "Ready when you are.",
@@ -701,12 +702,18 @@
     },
     "progressLoad": {
       "text": "{{ex}} hit the top of its range with room, so I added {{delta}} kg.",
-      "textVariation": "{{ex}} hit the top of its range with room, so I moved you to a harder variation.",
+      "textVariation": "{{ex}} is holding the top of its range — keep it there and the harder variation comes next.",
       "observation": "{{ex}} reached the top of its range with room to spare.",
       "conclusion": "It is ready for more weight.",
-      "conclusionVariation": "It is ready for a harder variation.",
+      "conclusionVariation": "Holding the top consistently earns the harder variation.",
       "action": "I added {{delta}} kg.",
-      "actionVariation": "I moved you to a harder variation."
+      "actionVariation": "I kept the target at the top of the range."
+    },
+    "graduate": {
+      "text": "You outgrew {{from}}, so I moved you up to {{ex}}.",
+      "observation": "{{from}} has sat at the top of its range for weeks.",
+      "conclusion": "You outgrew it — the harder variation is the next step.",
+      "action": "I moved you up to {{ex}}."
     },
     "reprice": {
       "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",
