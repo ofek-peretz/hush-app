@@ -192,14 +192,14 @@ export const EXERCISES: Exercise[] = [
 export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
   // horizontal_push
   'machine_chest_press', 'push_up', 'knee_push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher',
-  // horizontal_pull
-  'chin_up', 'db_row', 'machine_row', 'db_curl', 'preacher_curl',
+  // horizontal_pull (preacher_curl generates since P2 — men's 5-day Pull B)
+  'chin_up', 'db_row', 'machine_row', 'db_curl',
   // vertical_push
   'machine_shoulder_press', 'arnold_press',
   // knee_dominant
   'leg_press_calf_raise', 'goblet_squat',
-  // hip_dominant (alternate hinges; the conventional deadlift IS auto-generated — men's Pull)
-  'sumo_deadlift', 'db_rdl', 'back_extension',
+  // hip_dominant (alternate hinges; deadlift IS auto-generated — men's Pull; db_rdl since P3 — women's Legs A)
+  'sumo_deadlift', 'back_extension',
   // core — advanced movements are never assigned by default (generation pool = cable/machine crunch)
   'hanging_leg_raise', 'ab_wheel',
 ]);

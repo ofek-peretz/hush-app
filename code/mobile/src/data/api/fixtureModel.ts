@@ -59,13 +59,20 @@ const MAX_SETS = 5;
 const MEN: Record<string, string[]> = {
   'Full Body A': ['bb_back_squat', 'bb_rdl', 'bb_bench_press', 'bb_row', 'bb_overhead_press'],
   'Upper A': ['bb_bench_press', 'bb_row', 'bb_overhead_press', 'lat_pulldown', 'bb_curl', 'triceps_pushdown'],
+  // Upper B (P1, approved 2026-07-06): the 4-day athlete's ADDED day must complement the week,
+  // never replay it — the old 4th day (Upper A) repeated six Push A / Pull A lifts. Second chest
+  // angle, second row pattern, delts twice, arms on different implements; zero overlap with
+  // Push A / Pull A.
+  'Upper B': ['incline_bb_press', 'cable_row', 'db_shoulder_press', 'rear_delt_fly', 'hammer_curl', 'overhead_triceps_ext'],
   'Lower A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
   'Push A': ['bb_bench_press', 'bb_overhead_press', 'incline_db_press', 'lateral_raise', 'triceps_pushdown'],
   // Conventional deadlift is the canonical hip-hinge — programmed on the pull day (standard PPL).
   'Pull A': ['bb_deadlift', 'bb_row', 'lat_pulldown', 'face_pull', 'bb_curl'],
   'Legs A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
   'Push B': ['incline_bb_press', 'db_shoulder_press', 'chest_dip', 'cable_lateral_raise', 'overhead_triceps_ext'],
-  'Pull B': ['pull_up', 't_bar_row', 'cable_row', 'rear_delt_fly', 'hammer_curl'],
+  // P2 (approved 2026-07-06): the week already rows five ways with a third horizontal row here —
+  // preacher curl gives the 5-day athlete the second arms slot instead of a redundant row.
+  'Pull B': ['pull_up', 't_bar_row', 'preacher_curl', 'rear_delt_fly', 'hammer_curl'],
   'Legs B': ['front_squat', 'hip_thrust', 'hack_squat', 'walking_lunge', 'seated_calf_raise'],
 };
 
@@ -75,7 +82,11 @@ const WOMEN: Record<string, string[]> = {
   'Upper B': ['incline_db_press', 'cable_row', 'lateral_raise', 'face_pull', 'bb_curl'],
   'Lower A': ['hip_thrust', 'bb_back_squat', 'bb_rdl', 'leg_curl', 'cable_pull_through', 'standing_calf_raise'],
   'Lower B': ['bulgarian_split_squat', 'hip_thrust', 'leg_press', 'leg_curl', 'hip_abduction', 'seated_calf_raise'],
-  'Legs A': ['hip_thrust', 'bb_rdl', 'bb_back_squat', 'cable_kickback', 'hip_abduction', 'standing_calf_raise'],
+  // Legs A (P3, approved 2026-07-06): the 4-day athlete's ADDED lower day was half of Lower A
+  // re-run (hip thrust ×3/week, squat + RDL duplicated). Same glute-focused identity, now
+  // genuinely distinct: bridge + DB hinge + machine quad work — the week's three lower days
+  // become barbell-hinge / unilateral+machine / bridge+machine-quad.
+  'Legs A': ['glute_bridge', 'db_rdl', 'hack_squat', 'cable_kickback', 'hip_abduction', 'standing_calf_raise'],
   'Legs B': ['bulgarian_split_squat', 'glute_bridge', 'walking_lunge', 'leg_extension', 'cable_pull_through', 'seated_calf_raise'],
 };
 
@@ -90,7 +101,7 @@ const MEN_SPLITS: Record<number, string[]> = {
   1: ['Full Body A'],
   2: ['Upper A', 'Lower A'],
   3: ['Push A', 'Pull A', 'Legs A'],
-  4: ['Push A', 'Pull A', 'Legs A', 'Upper A'],
+  4: ['Push A', 'Pull A', 'Legs A', 'Upper B'],
   5: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B'],
   6: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'],
 };
@@ -193,17 +204,19 @@ export function estimateSessionMinutes(day: ProgramDay): number {
 }
 
 /**
- * Keep a day's prescribed work at or under MAX_SESSION_MIN. Quality-preserving and ordered:
- *   1) trim the bonus set off compounds (4→3) from the LAST compound backward — never the
- *      first (the day's main lift keeps its full scheme), never below 3.
- *   2) only if still over (rare), drop a trailing NON-core isolation slot, never going below
- *      4 slots and never dropping calves/core (coverage guarantees hold).
+ * Keep a day's prescribed work at or under MAX_SESSION_MIN. Quality-preserving and ordered —
+ * compound work is NEVER sacrificed before isolation work (founder, 2026-07-06):
+ *   1) trim isolation bonus sets back to the 3-set minimum (high-volume weeks), last backward;
+ *   2) then drop a trailing NON-core isolation slot, never going below 4 slots and never
+ *      dropping calves/core (coverage guarantees hold);
+ *   3) only then trim the bonus set off compounds (4→3) from the LAST compound backward —
+ *      never the first (the day's main lift keeps its full scheme), never below 3.
  */
 function enforceTimeCap(day: ProgramDay): void {
-  const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
-  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
-    const slot = day.slots[compoundIdx[k]];
-    if (slot.setCount > 3) slot.setCount = 3;
+  const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
+  for (let k = isoIdx.length - 1; k >= 0 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
+    const slot = day.slots[isoIdx[k]];
+    if (!slot.supplemental && slot.setCount > 3) slot.setCount = 3;
   }
   for (let i = day.slots.length - 1; i >= 0 && estimateSessionMinutes(day) > MAX_SESSION_MIN; i--) {
     if (day.slots.length <= 4) break;
@@ -211,6 +224,11 @@ function enforceTimeCap(day: ProgramDay): void {
     if (ex && ex.tier === 'isolation' && !day.slots[i].supplemental && ex.muscle !== 'Calves' && ex.muscle !== 'Core') {
       day.slots.splice(i, 1);
     }
+  }
+  const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
+  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
+    const slot = day.slots[compoundIdx[k]];
+    if (slot.setCount > 3) slot.setCount = 3;
   }
 }
 
