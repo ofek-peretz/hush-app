@@ -98,10 +98,15 @@ interface InternalState {
   plan: Step[];
   session: Session | null;
   machine: SessionMachine;
+  /** The session's FULL target table (every exercise, per set) — a swap adopts the NEW
+   *  exercise's own prescription instead of carrying the old lift's load across equipment
+   *  (a bench 60 kg must never ride onto a machine pin). Empty on resume (swaps then fall
+   *  back to carrying reps at the old load). */
+  targets: SetTarget[];
 }
 
 type Action =
-  | { type: 'START'; plan: Step[]; session: Session; machine: SessionMachine }
+  | { type: 'START'; plan: Step[]; session: Session; machine: SessionMachine; targets?: SetTarget[] }
   | { type: 'LOG'; setLog: SetLog; session: Session; machine: SessionMachine }
   | { type: 'MACHINE'; machine: SessionMachine }
   | { type: 'SWAP_PLAN'; plan: Step[] }
@@ -110,7 +115,7 @@ type Action =
 function reducer(s: InternalState, a: Action): InternalState {
   switch (a.type) {
     case 'START':
-      return { plan: a.plan, session: a.session, machine: a.machine };
+      return { plan: a.plan, session: a.session, machine: a.machine, targets: a.targets ?? [] };
     case 'LOG':
       return { ...s, session: a.session, machine: a.machine };
     case 'MACHINE':
@@ -118,10 +123,34 @@ function reducer(s: InternalState, a: Action): InternalState {
     case 'SWAP_PLAN':
       return { ...s, plan: a.plan };
     case 'END':
-      return { plan: [], session: null, machine: initialSessionMachine(true) };
+      return { plan: [], session: null, machine: initialSessionMachine(true), targets: [] };
     default:
       return s;
   }
+}
+
+/**
+ * Re-point every remaining step of `oldId` (from `startIdx`) at `newId`, adopting the NEW
+ * exercise's own per-set target when the session's target table carries one — the display /
+ * performed / learned number must be the new lift's prescription, never the old lift's load
+ * on different equipment. Falls back to carrying reps at the old target when absent. Pure.
+ */
+export function retargetPlanForSwap(
+  plan: Step[],
+  targets: SetTarget[],
+  startIdx: number,
+  newId: string,
+): Step[] {
+  const anchor = plan[startIdx];
+  if (!anchor) return plan;
+  const oldId = anchor.exerciseId;
+  const targetFor = (setIndex: number): SetTarget | undefined =>
+    targets.find((t) => t.exerciseId === newId && t.setIndex === setIndex);
+  return plan.map((st) =>
+    st.exerciseId === oldId && st.globalIndex >= startIdx
+      ? { ...st, exerciseId: newId, target: targetFor(st.exerciseSetIndex) ?? { ...st.target, exerciseId: newId } }
+      : st,
+  );
 }
 
 export interface CompleteResult {
@@ -316,6 +345,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     plan: [],
     session: null,
     machine: initialSessionMachine(true),
+    targets: [],
   });
   // Latest app store for the watch-record reconciler (subscribed once on mount —
   // a ref keeps its deps from closing over a stale modeState/program).
@@ -659,6 +689,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           plan: plan2,
           session,
           machine: initialSessionMachine(plan2.length <= 1),
+          targets,
         });
       },
 
@@ -830,27 +861,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       swapNextExercise(exerciseId) {
         const startIdx = machine.setIndex + 1; // the upcoming exercise
-        const upcoming = plan[startIdx];
-        if (!upcoming) return;
-        const oldId = upcoming.exerciseId;
-        const newPlan = plan.map((st) =>
-          st.exerciseId === oldId && st.globalIndex >= startIdx
-            ? { ...st, exerciseId, target: { ...st.target, exerciseId } }
-            : st,
-        );
-        dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+        if (!plan[startIdx]) return;
+        dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       swapCurrentExercise(exerciseId) {
         const startIdx = machine.setIndex; // the current exercise
-        const cur = plan[startIdx];
-        if (!cur) return;
-        const oldId = cur.exerciseId;
-        const newPlan = plan.map((st) =>
-          st.exerciseId === oldId && st.globalIndex >= startIdx
-            ? { ...st, exerciseId, target: { ...st.target, exerciseId } }
-            : st,
-        );
-        dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+        if (!plan[startIdx]) return;
+        dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       markEquipmentOccupied() {
         const cur = plan[machine.setIndex];

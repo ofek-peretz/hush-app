@@ -499,7 +499,11 @@
     "close": "סגירה",
     "body": "הציוד תפוס? בחר חלופה לאותה קבוצת שרירים. Hush שומרת על התקדמות העומס שלך.",
     "currentSub": "נוכחי · מומלץ",
-    "currentBadge": "נוכחי"
+    "currentBadge": "נוכחי",
+    "swappedTo": "הוחלף ל-{{name}}",
+    "tryAnother": "עוד אפשרות",
+    "undo": "ביטול",
+    "restored": "חזרנו ל-{{name}}"
   },
   "equipment": {
     "barbell": "מוט",

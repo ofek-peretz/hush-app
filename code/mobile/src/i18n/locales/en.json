@@ -500,7 +500,11 @@
     "close": "Close",
     "body": "Equipment busy? Choose an alternative for the same muscle group. Hush keeps your load progression intact.",
     "currentSub": "Current selection",
-    "currentBadge": "Current"
+    "currentBadge": "Current",
+    "swappedTo": "Swapped to {{name}}",
+    "tryAnother": "Try another",
+    "undo": "Undo",
+    "restored": "Back to {{name}}"
   },
   "equipment": {
     "barbell": "Barbell",

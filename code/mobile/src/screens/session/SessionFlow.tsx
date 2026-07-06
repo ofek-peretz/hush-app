@@ -24,7 +24,8 @@ import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { similarExercises, exerciseDisplayName } from '@/data/exercises';
+import { exerciseDisplayName } from '@/data/exercises';
+import { swapLadder } from '@/domain/replacement';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
@@ -34,7 +35,7 @@ import { color, space, stage, font, textScale, tracking, trackingPx, signal, up,
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'swap' | 'firstGym';
+type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'firstGym';
 type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -48,8 +49,8 @@ export function SessionFlow({ navigation }: Props) {
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [editing, setEditing] = useState(false);
-  const [swapTarget, setSwapTarget] = useState<'current' | 'next'>('current');
-  const units = useApp().profile?.units ?? 'kg';
+  const app = useApp();
+  const units = app.profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
   // Equipment-learning toast: the engine's pristine load for the active set (captured before any
   // Edit Result), and whether the athlete corrected the load to a different available weight.
@@ -155,9 +156,70 @@ export function SessionFlow({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirm]);
 
-  function openSwap(target: 'current' | 'next') {
-    setSwapTarget(target);
-    setOverlay('swap');
+  // ── One-tap swap (S4, approved 2026-07-06) ──
+  // The athlete taps Swap; HUSH decides — their saved substitute, then their backup, then the
+  // catalog's different-equipment default, then similar-effect candidates. No list, no mid-
+  // workout comparison. The toast carries "Try another" (walks the ladder) and "Undo". Kept
+  // behind a per-render-re-bound ref so the toast's delayed actions always drive the LIVE
+  // session, never a stale closure's plan.
+  const quickSwapRef = useRef<{ target: 'current' | 'next'; originalId: string; ladder: string[]; idx: number } | null>(null);
+  const swapActionsRef = useRef({ tryAnother: () => {}, undo: () => {} });
+
+  function applySwapTo(target: 'current' | 'next', id: string) {
+    if (target === 'current') {
+      session.swapCurrentExercise(id);
+    } else {
+      // Keep the backend block mapping when known (fixture: no-op).
+      const nt = session.nextTarget;
+      const from = session.nextExerciseId;
+      if (nt?.blockId && from) void app.model.replaceBlock({ blockId: nt.blockId, fromExercise: from, toExercise: id });
+      session.swapNextExercise(id);
+    }
+  }
+
+  function presentSwapChoice(id: string) {
+    const st = quickSwapRef.current;
+    if (!st) return;
+    haptics.confirm();
+    applySwapTo(st.target, id);
+    toast.show(t('swap.swappedTo', { name: exerciseDisplayName(id) }), {
+      actions: [
+        { label: t('swap.tryAnother'), onPress: () => swapActionsRef.current.tryAnother() },
+        { label: t('swap.undo'), onPress: () => swapActionsRef.current.undo() },
+      ],
+    });
+  }
+
+  swapActionsRef.current = {
+    tryAnother: () => {
+      const st = quickSwapRef.current;
+      if (!st || st.ladder.length === 0) return;
+      st.idx = (st.idx + 1) % st.ladder.length;
+      presentSwapChoice(st.ladder[st.idx]);
+    },
+    undo: () => {
+      const st = quickSwapRef.current;
+      if (!st) return;
+      quickSwapRef.current = null;
+      haptics.confirm();
+      applySwapTo(st.target, st.originalId);
+      toast.show(t('swap.restored', { name: exerciseDisplayName(st.originalId) }));
+    },
+  };
+
+  async function startQuickSwap(target: 'current' | 'next') {
+    const exId = target === 'current' ? session.currentExerciseId : session.nextExerciseId;
+    if (!exId) return;
+    let prefs: { substitutes?: Record<string, string>; backups?: Record<string, string> } | undefined;
+    try {
+      prefs = await db.loadPreferences();
+    } catch {
+      prefs = undefined;
+    }
+    const ladder = swapLadder(exId, prefs);
+    if (!ladder.length) return;
+    quickSwapRef.current = { target, originalId: exId, ladder, idx: 0 };
+    presentSwapChoice(ladder[0]);
   }
 
   return (
@@ -174,7 +236,7 @@ export function SessionFlow({ navigation }: Props) {
             onExit={openPause}
             onWhy={() => setOverlay('reasoning')}
             onDemo={() => setOverlay('demo')}
-            onSwap={() => openSwap('current')}
+            onSwap={() => void startQuickSwap('current')}
           />
         ) : (
           <Rest
@@ -182,7 +244,7 @@ export function SessionFlow({ navigation }: Props) {
             paused={session.paused}
             onExit={openPause}
             onDemo={() => setOverlay('demo')}
-            onSwap={() => openSwap('next')}
+            onSwap={() => void startQuickSwap('next')}
           />
         )}
       </SafeAreaView>
@@ -201,10 +263,6 @@ export function SessionFlow({ navigation }: Props) {
 
       {overlay === 'reasoning' ? (
         <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
-      ) : null}
-
-      {overlay === 'swap' ? (
-        <SwapSheet target={swapTarget} onClose={() => setOverlay('none')} />
       ) : null}
 
       {overlay === 'firstGym' ? (
@@ -758,92 +816,6 @@ function Rest({
   );
 }
 
-/* ---------------------------------------------------------------- Swap sheet */
-function SwapSheet({ target, onClose }: { target: 'current' | 'next'; onClose: () => void }) {
-  const { t } = useCopy();
-  const app = useApp();
-  const session = useSession();
-  const ex = target === 'current' ? session.currentExercise : session.nextExercise;
-  const exId = target === 'current' ? session.currentExerciseId : session.nextExerciseId;
-  const curName = ex?.name ?? exerciseDisplayName(exId);
-  const muscle = ex?.muscle ?? '';
-  // In-workout swap: the 2 closest-in-effect alternatives (current + 2 = 3 total).
-  const alts = ex ? similarExercises(ex.id, 2) : [];
-  const nextTarget = session.nextTarget;
-
-  function choose(altId: string) {
-    haptics.confirm();
-    if (target === 'current') {
-      session.swapCurrentExercise(altId);
-    } else {
-      // Keep the load progression; tell the backend if this block is known.
-      if (nextTarget?.blockId && ex) {
-        void app.model.replaceBlock({ blockId: nextTarget.blockId, fromExercise: ex.id, toExercise: altId });
-      }
-      session.swapNextExercise(altId);
-    }
-    onClose();
-  }
-
-  return (
-    <BottomSheet onClose={onClose}>
-      <Legend style={styles.sheetLegend}>{t('swap.title')}</Legend>
-      <Text style={styles.sheetBody}>{t('swap.body')}</Text>
-      <SwapRow title={curName} subtitle={t('swap.currentSub')} currentBadge muted />
-      {alts.map((a, i) => (
-        <SwapRow
-          key={a.id}
-          title={a.name}
-          subtitle={muscle ? t(`muscle.${muscle}`) : undefined}
-          last={i === alts.length - 1}
-          onPress={() => choose(a.id)}
-        />
-      ))}
-    </BottomSheet>
-  );
-}
-
-function SwapRow({
-  title,
-  subtitle,
-  currentBadge,
-  muted,
-  last,
-  onPress,
-}: {
-  title: string;
-  subtitle?: string;
-  currentBadge?: boolean;
-  muted?: boolean;
-  last?: boolean;
-  onPress?: () => void;
-}) {
-  const { t } = useCopy();
-  const body = (
-    <>
-      <View style={styles.swapInfo}>
-        <Text style={[styles.swapTitle, muted && styles.swapTitleMuted]} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={styles.swapSub} numberOfLines={1}>{subtitle}</Text> : null}
-      </View>
-      {currentBadge ? (
-        <View style={styles.swapBadge}>
-          <Text style={styles.swapBadgeText}>{t('swap.currentBadge').toUpperCase()}</Text>
-        </View>
-      ) : onPress ? (
-        <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
-      ) : null}
-    </>
-  );
-  if (onPress) {
-    return (
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.swapRow, !last && styles.swapRowBorder, pressed && styles.swapRowPressed]}>
-        {body}
-      </Pressable>
-    );
-  }
-  return <View style={[styles.swapRow, !last && styles.swapRowBorder]}>{body}</View>;
-}
-
 /* --------------------------------------------------- Why this load (reasoning) */
 /** The LIGHT, single-line, observational reason behind a load — the in-session
  *  cousin of the Weekly Update's WhyTriple. Calm, past-tense, never predictive,
@@ -997,15 +969,6 @@ const styles = StyleSheet.create({
   sheetActions: { gap: 10 },
 
   // Swap rows
-  swapRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
-  swapRowBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
-  swapRowPressed: { opacity: 0.55 },
-  swapInfo: { flex: 1, minWidth: 0 },
-  swapTitle: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary },
-  swapTitleMuted: { color: color.textSecondary },
-  swapSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
-  swapBadge: { backgroundColor: signal.wash, borderRadius: 4, paddingHorizontal: 8, height: 22, alignItems: 'center', justifyContent: 'center' },
-  swapBadgeText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText },
 
   // Why this load (the in-session, single-line cousin of the Why triple)
   whyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6 },
