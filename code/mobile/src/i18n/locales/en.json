@@ -138,7 +138,7 @@
     "targetTime": "Target time",
     "startRun": "Start run",
     "startWalk": "Start walk",
-    "gpsNote": "GPS & heart rate connect when you begin",
+    "gpsNote": "GPS connects when you begin",
     "starting": "starting",
     "go": "Go",
     "running": "Running",
@@ -169,7 +169,10 @@
     "readOnlyRecord": "Read-only record",
     "km": "km",
     "kcal": "kcal",
-    "bpm": "bpm"
+    "bpm": "bpm",
+    "gpsAcquiring": "Acquiring GPS signal",
+    "gpsOff": "No location access — recording time only",
+    "minUnit": "min"
   },
   "ob": {
     "continue": "Continue",
@@ -231,7 +234,8 @@
     "readyOwnership": "Hush decides the loads.\nYou decide the lifts.",
     "readyNote": "Hush only adds load your last sessions have earned — steady, never guesswork.",
     "readyCta": "Go to my next workout",
-    "focusHypertrophy": "Hypertrophy"
+    "focusHypertrophy": "Hypertrophy",
+    "daysUnitShort": "/wk"
   },
   "menu": {
     "title": "Menu",
@@ -276,9 +280,6 @@
     "form": "Form",
     "looping": "Looping",
     "illustration": "Illustration",
-    "formCue1": "Brace, retract the shoulder blades, keep the spine neutral.",
-    "formCue2": "Drive elbows back; pause briefly at full contraction.",
-    "formCue3": "Control the eccentric — roughly two seconds down.",
     "swapAction": "Swap",
     "swapExercise": "Swap exercise",
     "startNextSet": "Start next set",
@@ -459,7 +460,6 @@
     "title": "Program",
     "lockExercise": "Lock this exercise",
     "unlockExercise": "Unlock this exercise",
-    "lockIntro": "Lock a lift to keep it in your program — Hush won't swap it. You still own the load.",
     "locked": "Locked",
     "sessionsDone": "sessions done",
     "momentum_one": "1 session between you and a complete week — keep the momentum.",

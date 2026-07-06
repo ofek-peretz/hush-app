@@ -24,7 +24,7 @@ import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
-import { exerciseDisplayName } from '@/data/exercises';
+import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { swapLadder } from '@/domain/replacement';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
@@ -280,7 +280,7 @@ export function SessionFlow({ navigation }: Props) {
       {overlay === 'demo' ? (
         <ExerciseDemo
           title={session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId)}
-          cues={session.currentExercise?.cues ?? []}
+          cues={exerciseCues(session.currentExerciseId)}
           focusLabel={t('workout.focusOn')}
           formGuideLabel={t('workout.formGuide')}
           doneLabel={t('workout.demoDone')}

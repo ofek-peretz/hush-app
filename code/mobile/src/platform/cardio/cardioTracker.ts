@@ -1,99 +1,215 @@
 /**
  * Live cardio tracker — the sample source for the Open-training (run / walk) flow.
  *
- * ⚠️ SIMULATED pending native sensors. Distance, pace, heart rate, and calories are
- * modelled here (matching the Claude Design prototype) so the entire Open-training
- * flow — select → countdown → active → complete → recorded-to-History — works
- * end-to-end today on any device, including this Windows/Expo environment.
+ * REAL SENSORS (replaces the simulated generator that shipped through Build #22 and
+ * fabricated distance/pace/HR while the phone sat on a table):
+ *   • distance / pace — expo-location GPS (`watchPositionAsync`, BestForNavigation),
+ *     with honest gating: a fix only counts when its horizontal accuracy is tight,
+ *     and distance only accrues while the device is actually MOVING (Doppler speed
+ *     over a walking threshold, displacement under a sanity cap). A stationary
+ *     indoor session reads 0.00 km, no pace, ~0 kcal — by construction.
+ *   • calories — distance-based estimate from the athlete's bodyweight (≈1.03 kcal/kg
+ *     per km running, ≈0.55 walking — the standard net-cost approximations). No
+ *     distance ⇒ no calories. Absent bodyweight ⇒ omitted entirely (kcal = 0).
+ *   • heart rate — NO phone-side source exists, so `hr` is null and the UI shows a
+ *     dash. (A live HR feed needs the watch app / an HKWorkoutSession — that is the
+ *     next native step, not something to fake here.)
  *
- * NATIVE HANDOFF (macOS / Xcode): replace the sample generator in the interval
- * below with real sources —
- *   • distance / pace  → expo-location (GPS), `watchPositionAsync`
- *   • heart rate       → HealthKit live workout session (HKWorkoutSession)
- *   • calories         → HealthKit active energy, or keep the model estimate
- * Everything downstream (this hook's shape, the screen state machine, history
- * persistence, and the Live Activity wiring) is sensor-agnostic and stays as-is.
+ * Elapsed time is wall-clock (accumulated across pause/resume), never interval
+ * ticks — JS timers suspend in the background and silently under-count.
+ *
+ * The GPS lock state is part of the sample (`gps`) so the screen can say
+ * "acquiring" / "location off" instead of rendering confident zeros.
+ *
+ * Foreground-only for now: without the background-location task entitlement iOS
+ * suspends position updates when the app leaves the foreground. The screen keeps
+ * itself awake during an activity; true background tracking is a follow-up build.
  */
 import { useEffect, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import type { CardioGait, CardioSplit } from '@/data/local/models';
+import {
+  MAX_ACCURACY_M,
+  MIN_SPEED_MS,
+  haversineM,
+  kcalForKm,
+  segmentCounts,
+} from './cardioMath';
 
-/** Base pace (sec/km) per gait — 5:42 /km running, 9:00 /km walking. */
-const PACE: Record<CardioGait, number> = { run: 342, walk: 540 };
+// The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
+export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, segmentCounts } from './cardioMath';
+
+export type GpsState = 'idle' | 'acquiring' | 'ready' | 'denied' | 'unavailable';
 
 export interface CardioSample {
   elapsedSec: number;
   distanceKm: number;
-  hr: number; // bpm
-  calories: number; // kcal
+  /** Live pace over recent movement, sec/km; 0 (⇒ "--:--") when not moving or no lock. */
+  paceSec: number;
+  /** bpm — null: no heart-rate source on the phone (never fabricated). */
+  hr: number | null;
+  calories: number; // kcal, distance-based; 0 until real distance exists
   splits: CardioSplit[];
+  gps: GpsState;
 }
 
-const ZERO: CardioSample = { elapsedSec: 0, distanceKm: 0, hr: 96, calories: 0, splits: [] };
+const ZERO: CardioSample = { elapsedSec: 0, distanceKm: 0, paceSec: 0, hr: null, calories: 0, splits: [], gps: 'idle' };
+
+interface Fix {
+  lat: number;
+  lon: number;
+  tsMs: number;
+}
 
 /**
- * Accumulates a live cardio sample once per real second while `running` is true.
- * `liveGait` can change mid-activity (the athlete toggles run/walk); the model
- * follows it for pace, heart-rate target, and per-km split attribution.
+ * Live cardio sample for an activity. `active` spans the whole activity (GPS stays
+ * warm across pauses); `paused` gates accumulation. `liveGait` can change
+ * mid-activity (the athlete toggles run/walk); calories and split attribution follow it.
  */
-export function useCardioTracker(running: boolean, liveGait: CardioGait): CardioSample {
+export function useCardioTracker(
+  active: boolean,
+  paused: boolean,
+  liveGait: CardioGait,
+  weightKg?: number | null,
+): CardioSample {
   const [sample, setSample] = useState<CardioSample>(ZERO);
   const gaitRef = useRef(liveGait);
   gaitRef.current = liveGait;
-  // Mutable accumulator (refs so the interval reads the latest without re-subscribing).
-  const acc = useRef({ elapsed: 0, dist: 0, hr: ZERO.hr, cal: 0, splits: [] as CardioSplit[], lastKm: 0, splitStart: 0 });
+  const weightRef = useRef(weightKg);
+  weightRef.current = weightKg;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
+  // Mutable accumulator (refs so the GPS callback and the clock read/write the
+  // latest without re-subscribing).
+  const acc = useRef({
+    activeMs: 0, // accumulated while running
+    resumedAtMs: 0, // wall-clock instant of the last resume (0 = not running)
+    distM: 0,
+    cal: 0,
+    paceSec: 0,
+    splits: [] as CardioSplit[],
+    lastKm: 0,
+    splitStartSec: 0,
+    lastFix: null as Fix | null,
+    gps: 'idle' as GpsState,
+  });
+
+  const elapsedSecNow = () => {
+    const s = acc.current;
+    const runMs = s.resumedAtMs > 0 ? Date.now() - s.resumedAtMs : 0;
+    return Math.round((s.activeMs + runMs) / 1000);
+  };
+
+  const publish = () => {
+    const s = acc.current;
+    setSample({
+      elapsedSec: elapsedSecNow(),
+      distanceKm: s.distM / 1000,
+      paceSec: s.paceSec,
+      hr: null,
+      calories: s.cal,
+      splits: s.splits,
+      gps: s.gps,
+    });
+  };
+
+  // ── Wall-clock elapsed: accumulate across pause/resume; tick the UI once a second.
   useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => {
-      const s = acc.current;
-      const g = gaitRef.current;
-      const pace = PACE[g] * (0.94 + Math.random() * 0.12); // sec/km, lightly jittered
-      const dKm = 1 / pace; // one real second of progress
-      s.elapsed += 1;
-      s.dist += dKm;
-      s.cal += dKm * (g === 'run' ? 65 : 48);
-      const target = g === 'run' ? 152 : 120;
-      s.hr = Math.round(s.hr + (target - s.hr) * 0.05 + (Math.random() - 0.5) * 2);
-      const kmDone = Math.floor(s.dist);
-      if (kmDone > s.lastKm) {
-        s.lastKm = kmDone;
-        const sec = s.elapsed - s.splitStart;
-        s.splitStart = s.elapsed;
-        s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: g }];
+    const s = acc.current;
+    const running = active && !paused;
+    if (running) {
+      s.resumedAtMs = Date.now();
+      const id = setInterval(publish, 1000);
+      publish();
+      return () => {
+        clearInterval(id);
+        s.activeMs += Date.now() - s.resumedAtMs;
+        s.resumedAtMs = 0;
+        // A pause breaks the GPS segment — no distance is credited across it.
+        s.lastFix = null;
+        s.paceSec = 0;
+        publish();
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, paused]);
+
+  // ── GPS: one subscription for the whole activity (kept warm across pauses).
+  useEffect(() => {
+    if (!active) return;
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    const s = acc.current;
+    s.gps = 'acquiring';
+    publish();
+
+    (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) return;
+        if (!perm.granted) {
+          s.gps = 'denied';
+          publish();
+          return;
+        }
+        sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
+          (loc) => {
+            const { latitude, longitude, accuracy, speed } = loc.coords;
+            const tsMs = loc.timestamp;
+            const goodFix = accuracy != null && accuracy <= MAX_ACCURACY_M;
+            if (goodFix && s.gps !== 'ready') s.gps = 'ready';
+            if (pausedRef.current || !goodFix) {
+              if (!goodFix) s.lastFix = null; // a poor fix breaks the segment
+              return;
+            }
+            const prev = s.lastFix;
+            s.lastFix = { lat: latitude, lon: longitude, tsMs };
+            if (!prev) return;
+
+            const dtS = (tsMs - prev.tsMs) / 1000;
+            const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
+            const counts = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
+
+            // Pace shows recent MOVEMENT, never elapsed/position artifacts: a light
+            // EMA over Doppler speed while moving; blank the moment movement stops.
+            if (speed != null && speed >= MIN_SPEED_MS) {
+              const inst = 1000 / speed; // sec/km
+              s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : Math.round(inst);
+            } else {
+              s.paceSec = 0;
+            }
+            if (!counts) return;
+
+            const g = gaitRef.current;
+            s.distM += segM;
+            s.cal += kcalForKm(segM / 1000, g, weightRef.current);
+            const kmDone = Math.floor(s.distM / 1000);
+            if (kmDone > s.lastKm) {
+              s.lastKm = kmDone;
+              const nowSec = elapsedSecNow();
+              const sec = nowSec - s.splitStartSec;
+              s.splitStartSec = nowSec;
+              s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: g }];
+            }
+          },
+        );
+      } catch {
+        if (!cancelled) {
+          s.gps = 'unavailable';
+          publish();
+        }
       }
-      setSample({ elapsedSec: s.elapsed, distanceKm: s.dist, hr: s.hr, calories: s.cal, splits: s.splits });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [running]);
+    })();
+
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   return sample;
 }
 
-/* ---- formatting helpers (shared by the screen + history detail) ---- */
-
-/** mm:ss (or h:mm:ss past an hour). */
-export function fmtClock(totalSec: number): string {
-  const s = Math.max(0, Math.round(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const r = s % 60;
-  const mm = String(m).padStart(h ? 2 : 1, '0');
-  return (h ? `${h}:` : '') + `${mm}:${String(r).padStart(2, '0')}`;
-}
-
-/** m:ss per km (— : — when undefined). */
-export function fmtPace(secPerKm: number): string {
-  if (!isFinite(secPerKm) || secPerKm <= 0) return '--:--';
-  const m = Math.floor(secPerKm / 60);
-  const r = Math.round(secPerKm % 60);
-  return `${m}:${String(r).padStart(2, '0')}`;
-}
-
-/** Heart-rate zone label (Z1–Z5) for the live + detail readouts. */
-export function hrZone(hr: number): string {
-  if (hr < 132) return 'Z1';
-  if (hr < 146) return 'Z2';
-  if (hr < 162) return 'Z3';
-  if (hr < 174) return 'Z4';
-  return 'Z5';
-}

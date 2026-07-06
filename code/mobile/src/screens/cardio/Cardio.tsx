@@ -8,8 +8,12 @@
  * Nothing here ever feeds the engine, the program, loads, or selection.
  *
  * Flow: select (paper) → 3·2·1 (stage) → active (stage) → pause → complete (stage).
- * Live distance / pace / heart / calories come from `useCardioTracker` (simulated
- * pending native GPS + HealthKit — see that module's native handoff note).
+ * Live distance / pace / calories come from `useCardioTracker` (real GPS, honestly
+ * gated — see that module). Heart rate has no phone-side source and shows a dash.
+ *
+ * Controls are deliberately minimal (founder, 2026-07-06): while active there is ONE
+ * action — Pause; while paused there are exactly two — Resume and Finish & save. No
+ * flag glyph, no hidden gestures, no second finish path.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -19,6 +23,8 @@ import { Icon } from '@/components/Icon';
 import { Legend, Button, SegmentedControl, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { db } from '@/data/local/db';
+import { useApp } from '@/state/stores/appStore';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useCardioTracker, fmtClock, fmtPace, hrZone } from '@/platform/cardio/cardioTracker';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
@@ -32,6 +38,10 @@ type Phase = 'select' | 'countdown' | 'active' | 'complete';
 
 export function Cardio({ navigation }: Props) {
   const { t } = useCopy();
+  const app = useApp();
+  // Foreground-only GPS (no background-location entitlement yet): the screen stays
+  // awake for the whole cardio surface so a live activity never loses its fix mid-run.
+  useKeepAwake();
   const [phase, setPhase] = useState<Phase>('select');
   const [gait, setGait] = useState<CardioGait>('run'); // chosen mode
   const [live, setLive] = useState<CardioGait>('run'); // current interval gait
@@ -42,9 +52,15 @@ export function Cardio({ navigation }: Props) {
   const [paused, setPaused] = useState(false);
   const startedAtRef = useRef<string>('');
 
-  const sample = useCardioTracker(phase === 'active' && !paused, live);
-  const { elapsedSec, distanceKm, hr, calories, splits } = sample;
-  const curPace = distanceKm > 0 ? elapsedSec / distanceKm : 0;
+  // GPS warms up during the 3·2·1 countdown (active from 'countdown' on); the clock and
+  // accumulation start only once the phase is truly 'active' and unpaused.
+  const sample = useCardioTracker(
+    phase === 'countdown' || phase === 'active',
+    paused || phase !== 'active',
+    live,
+    app.profile?.weightKg,
+  );
+  const { elapsedSec, distanceKm, paceSec, hr, calories, splits, gps } = sample;
 
   // Live Activity / Dynamic Island — start when the activity goes live, update each
   // tick, end when the screen unmounts (Done / View in history both leave it). The
@@ -61,8 +77,8 @@ export function Cardio({ navigation }: Props) {
       startedAtMs: Date.parse(startedAtRef.current) || Date.now(),
       elapsedSec,
       distanceKm: Math.round(distanceKm * 100) / 100,
-      paceSec: Math.round(curPace),
-      hr: Math.round(hr),
+      paceSec: Math.round(paceSec),
+      hr: hr != null ? Math.round(hr) : 0, // 0 = no source; the widget hides it
       calories: Math.round(calories),
       lastSplit: last ? { km: last.km, paceSec: Math.round(last.paceSec), fastest: last.paceSec <= fastest } : null,
     };
@@ -154,7 +170,6 @@ export function Cardio({ navigation }: Props) {
   }
 
   // ---- active (stage) ----
-  const zone = hrZone(hr);
   const fastest = splits.length ? Math.min(...splits.map((s) => s.paceSec)) : 0;
   const goalFrac =
     goalKind === 'distance'
@@ -166,18 +181,12 @@ export function Cardio({ navigation }: Props) {
   return (
     <View style={styles.stage}>
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
-        {/* top bar */}
+        {/* top bar — status only. The single action while active is Pause, below. */}
         <View style={styles.stageBar}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t('cardio.pause')} hitSlop={10} onPress={() => setPaused(true)} style={styles.barBtn}>
-            <Icon name="pause" size={20} color={stageC.ink0} />
-          </Pressable>
           <View style={styles.barCenter}>
             <View style={[styles.runDot, { backgroundColor: live === 'run' ? signal[0] : stageC.ink1 }]} />
             <Text style={styles.barCenterText}>{(live === 'run' ? t('cardio.running') : t('cardio.walking')).toUpperCase()}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={t('cardio.finishSave')} hitSlop={10} onPress={finish} style={[styles.barBtn, styles.barBtnRight]}>
-            <Icon name="flag" size={20} color={stageC.ink0} />
-          </Pressable>
         </View>
 
         {/* hero */}
@@ -192,14 +201,18 @@ export function Cardio({ navigation }: Props) {
             <Text style={styles.heroNum}>{fmtClock(elapsedSec)}</Text>
           )}
 
-          {/* live pace chip */}
+          {/* live pace chip — movement pace, blank until there is real movement */}
           <View style={styles.paceChip}>
             <Text style={styles.paceLegend}>{t('cardio.pace').toUpperCase()}</Text>
             <View style={styles.paceValRow}>
-              <Text style={styles.paceVal}>{fmtPace(curPace)}</Text>
+              <Text style={styles.paceVal}>{fmtPace(paceSec)}</Text>
               <Text style={styles.paceUnit}>{t('cardio.perKm')}</Text>
             </View>
           </View>
+
+          {/* GPS truth line — never confident zeros while there is no lock */}
+          {gps === 'acquiring' ? <Text style={styles.gpsStatus}>{t('cardio.gpsAcquiring')}</Text> : null}
+          {gps === 'denied' || gps === 'unavailable' ? <Text style={styles.gpsStatus}>{t('cardio.gpsOff')}</Text> : null}
 
           {/* progress rhythm */}
           {goalKind === 'time' ? (
@@ -238,7 +251,12 @@ export function Cardio({ navigation }: Props) {
             <View style={styles.clusterDivider} />
             <CardioStat value={Math.round(calories)} unit={t('cardio.kcal')} label={t('cardio.calories')} />
             <View style={styles.clusterDivider} />
-            <CardioStat value={hr} unit={t('cardio.bpm')} label={`${t('cardio.heart')} · ${zone}`} />
+            {/* no phone-side HR source — an honest dash, never a modelled number */}
+            <CardioStat
+              value={hr != null ? hr : '—'}
+              unit={hr != null ? t('cardio.bpm') : undefined}
+              label={hr != null ? `${t('cardio.heart')} · ${hrZone(hr)}` : t('cardio.heart')}
+            />
           </View>
         </View>
 
@@ -263,7 +281,7 @@ export function Cardio({ navigation }: Props) {
             <Text style={styles.pauseClock}>{fmtClock(elapsedSec)}</Text>
             <View style={styles.pauseStats}>
               <Text style={styles.pauseStat}>{distanceKm.toFixed(2)} {t('cardio.km')}</Text>
-              <Text style={styles.pauseStat}>{fmtPace(curPace)} {t('cardio.perKm')}</Text>
+              <Text style={styles.pauseStat}>{fmtPace(paceSec)} {t('cardio.perKm')}</Text>
             </View>
             <View style={styles.pauseActions}>
               <Button variant="onstage" size="lg" block label={t('cardio.resume')} onPress={() => setPaused(false)} leading={<Icon name="play" size={18} color={stageC[0]} />} />
@@ -346,7 +364,7 @@ function CardioSelect(props: {
         {props.goalKind === 'time' ? (
           <View style={styles.goalCol}>
             <Text style={styles.goalRowLabel}>{t('cardio.targetTime')}</Text>
-            <WheelPicker value={props.goalTime} onChange={props.setGoalTime} step={5} min={5} max={240} unit="min" label={t('cardio.targetTime')} style={styles.goalWheel} />
+            <WheelPicker value={props.goalTime} onChange={props.setGoalTime} step={5} min={5} max={240} unit={t('cardio.minUnit')} label={t('cardio.targetTime')} style={styles.goalWheel} />
           </View>
         ) : null}
 
@@ -366,18 +384,19 @@ function CardioComplete(props: {
   startedAt: string;
   elapsedSec: number;
   distanceKm: number;
-  avgHr: number;
+  avgHr: number | null;
   calories: number;
   splits: CardioActivity['splits'];
 }) {
   const { t } = useCopy();
   const { navigation, gait, elapsedSec, distanceKm, avgHr, splits } = props;
-  const d = Math.max(distanceKm, 0.01);
-  const avgPace = elapsedSec / d;
+  // Average pace only once there is real distance — never elapsed ÷ noise.
+  const avgPace = distanceKm >= 0.05 ? elapsedSec / distanceKm : 0;
   const fastest = splits.length ? Math.min(...splits.map((s) => s.paceSec)) : 0;
   const slowest = splits.length ? Math.max(...splits.map((s) => s.paceSec)) : 0;
 
   // Persist the recorded activity exactly once, on mount (sealed from the engine).
+  // HR/calories are OPTIONAL in the record — absent when no real source existed.
   const saved = useRef(false);
   useEffect(() => {
     if (saved.current) return;
@@ -390,8 +409,8 @@ function CardioComplete(props: {
       durationSec: Math.round(elapsedSec),
       distanceKm: Math.round(distanceKm * 100) / 100,
       avgPaceSec: Math.round(avgPace),
-      avgHr: Math.round(avgHr),
-      calories: Math.round(props.calories),
+      ...(avgHr != null ? { avgHr: Math.round(avgHr) } : {}),
+      ...(props.calories > 0 ? { calories: Math.round(props.calories) } : {}),
       splits,
     };
     void db.appendCardioActivity(activity).catch(() => {});
@@ -416,7 +435,7 @@ function CardioComplete(props: {
           <View style={styles.completeMetrics}>
             <CompleteMetric value={fmtClock(elapsedSec)} label={t('cardio.duration')} />
             <CompleteMetric value={fmtPace(avgPace)} unit={t('cardio.perKm')} label={t('cardio.avgPace')} />
-            <CompleteMetric value={avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} />
+            {avgHr != null ? <CompleteMetric value={avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} /> : null}
           </View>
 
           {splits.length > 0 ? (
@@ -506,9 +525,7 @@ const styles = StyleSheet.create({
   // stage (shared)
   stage: { flex: 1, backgroundColor: stageC[0] },
   stageSafe: { flex: 1 },
-  stageBar: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  barBtn: { width: 44, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
-  barBtnRight: { alignItems: 'flex-end' },
+  stageBar: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   barCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   runDot: { width: 7, height: 7, borderRadius: 4 },
   barCenterText: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2 },
@@ -528,6 +545,7 @@ const styles = StyleSheet.create({
   heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8 },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
+  gpsStatus: { marginTop: 12, fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3 },
   paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2 },
   paceValRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0 },

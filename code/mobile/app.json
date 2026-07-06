@@ -54,6 +54,12 @@
       "expo-notifications",
       "expo-dev-client",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Hush uses your location to measure distance and pace for the runs and walks you record."
+        }
+      ],
+      [
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks."

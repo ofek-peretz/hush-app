@@ -52,7 +52,7 @@ export function DaysPerWeek({ navigation, route }: Props) {
         <Text style={styles.number}>{days}</Text>
         <Legend>{t('ob.daysUnit')}</Legend>
         <View style={styles.stepper}>
-          <WheelPicker value={days} onChange={setDays} min={2} max={6} size="lg" unit="/wk" label={t('ob.daysUnit')} style={styles.wheel} />
+          <WheelPicker value={days} onChange={setDays} min={2} max={6} size="lg" unit={t('ob.daysUnitShort')} label={t('ob.daysUnit')} style={styles.wheel} />
         </View>
       </View>
     </OnboardingScaffold>

@@ -109,7 +109,7 @@ const WOMEN_SPLITS: Record<number, string[]> = {
   1: ['Full Body A'],
   2: ['Lower A', 'Upper A'],
   3: ['Lower A', 'Upper A', 'Lower B'],
-  4: ['Lower A', 'Upper A', 'Lower B', 'Legs A'],
+  4: ['Lower A', 'Upper A', 'Lower B', 'Upper B'],
   5: ['Lower A', 'Upper A', 'Lower B', 'Upper B', 'Legs A'],
   6: ['Lower A', 'Upper A', 'Lower B', 'Upper B', 'Legs A', 'Legs B'],
 };

@@ -29,6 +29,7 @@
  * ~75kg (per dumbbell for dumbbell lifts); `bwScaled` lifts scale with the athlete's
  * bodyweight.
  */
+import i18next from 'i18next';
 import type { Capability } from './local/models';
 
 export type EquipmentFamily = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
@@ -416,6 +417,34 @@ export function exerciseDisplayName(id: string | null | undefined): string {
   const parts = id.split('_').filter(Boolean);
   if (parts.length > 1 && EQUIP_PREFIX.has(parts[0])) parts.shift();
   return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+/**
+ * Localized technique cues for an exercise. The catalog's English cues are the
+ * canonical source; a locale overrides them under `cues.<exerciseId>.<0|1|2>`
+ * (Hebrew ships the full library — technique guidance follows the app language even
+ * though exercise NAMES stay English by product rule). Falls back to the catalog
+ * string per-cue, so a missing translation never blanks a note.
+ */
+export function exerciseCues(id: string | null | undefined): string[] {
+  if (!id) return [];
+  const ex = BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id));
+  if (!ex) return [];
+  return ex.cues.map((cue, i) =>
+    i18next.isInitialized ? i18next.t(`cues.${ex.id}.${i}`, { defaultValue: cue }) : cue,
+  );
+}
+
+/**
+ * Localized display for a muscle-group list ("Chest · Shoulders" / "חזה · כתפיים").
+ * Exercise NAMES stay English by product rule; muscle groups follow the app language
+ * (RTL audit ratification, 2026-06-30). Unknown values pass through untranslated.
+ */
+export function muscleGroupsLabel(groups: readonly string[] | undefined): string {
+  if (!groups?.length) return '';
+  return groups
+    .map((m) => (i18next.isInitialized ? i18next.t(`muscle.${m}`, { defaultValue: m }) : m))
+    .join(' · ');
 }
 
 /** Class-matched candidates for a slot's capability (the engine's coarse pattern). */

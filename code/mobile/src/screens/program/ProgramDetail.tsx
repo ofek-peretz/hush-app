@@ -22,7 +22,8 @@ import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
-import { exerciseDisplayName } from '@/data/exercises';
+import { exerciseCues, exerciseDisplayName, muscleGroupsLabel } from '@/data/exercises';
+import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import type { SetTarget } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -61,7 +62,9 @@ export function ProgramDetail({ navigation, route }: Props) {
     setSwapping(null);
   }
 
-  const formCues = [t('workout.formCue1'), t('workout.formCue2'), t('workout.formCue3')];
+  // The day's shape at a glance: exercise count + honest work-time estimate (the same
+  // estimator the 60-minute program cap runs on), rounded to a calm 5 minutes.
+  const estMin = day ? Math.max(5, Math.round(estimateSessionMinutes(day) / 5) * 5) : 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -76,14 +79,14 @@ export function ProgramDetail({ navigation, route }: Props) {
           <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
         </Pressable>
         <View style={styles.headTitles}>
-          {day?.muscleGroups?.length ? <Legend>{day.muscleGroups.join(' · ')}</Legend> : null}
+          {day?.muscleGroups?.length ? <Legend>{muscleGroupsLabel(day.muscleGroups)}</Legend> : null}
           <Text style={styles.title} accessibilityRole="header">{day?.name ?? ''}</Text>
         </View>
       </View>
 
       {!day ? null : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.intro}>{t('program.lockIntro')}</Text>
+          <Text style={styles.intro}>{t('program.dayMeta', { exercises: day.slots.length, min: estMin })}</Text>
           {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: bidi(yoursNow) })}</Text> : null}
 
           {day.slots.map((slot, i) => {
@@ -164,7 +167,7 @@ export function ProgramDetail({ navigation, route }: Props) {
         <ExerciseDemo
           title={exerciseDisplayName(day.slots[formFor].exerciseId)}
           exerciseId={day.slots[formFor].exerciseId}
-          cues={formCues}
+          cues={exerciseCues(day.slots[formFor].exerciseId)}
           focusLabel={t('workout.focusOn')}
           formGuideLabel={t('workout.form')}
           doneLabel={t('common.close')}

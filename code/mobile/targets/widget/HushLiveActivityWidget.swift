@@ -239,7 +239,8 @@ struct HushCardioLiveActivity: Widget {
         DynamicIslandExpandedRegion(.leading) {
           VStack(alignment: .leading, spacing: 2) {
             legend(s.gait == "run" ? "Run" : "Walk")
-            Text(s.paused ? "Auto-paused" : "LIVE")
+            // Pause is MANUAL (the athlete pressed Pause) — never claim auto-pause.
+            Text(s.paused ? "Paused" : "LIVE")
               .font(.system(size: 10, weight: .semibold))
               .tracking(1.2)
               .foregroundColor(s.paused ? HX.ink2 : HX.accent)
@@ -254,7 +255,10 @@ struct HushCardioLiveActivity: Widget {
             CardioStat(value: String(format: "%.2f", s.distanceKm), unit: "km")
             CardioStat(value: fmtPace(s.paceSec), unit: "/km")
             CardioStat(value: "\(s.calories)", unit: "kcal")
-            CardioStat(value: "\(s.hr)", unit: "bpm")
+            // hr == 0 means no heart-rate source — hidden, never shown as "0 bpm".
+            if s.hr > 0 {
+              CardioStat(value: "\(s.hr)", unit: "bpm")
+            }
           }
         }
       } compactLeading: {
@@ -320,7 +324,7 @@ private struct CardioLockView: View {
 
   private var legendText: String {
     let gait = state.gait == "run" ? "Run" : "Walk"
-    if state.paused { return "\(gait) · auto-paused" }
+    if state.paused { return "\(gait) · paused" }
     if let km = state.lastSplitKm { return "\(gait) · km \(km) split" }
     return "\(gait) · live"
   }
@@ -330,10 +334,11 @@ private struct CardioLockView: View {
       VStack(alignment: .leading, spacing: 3) {
         legend(legendText)
         if state.paused {
-          Text("You stopped moving")
+          // Manual pause — state the fact; resuming happens in the app, not by moving.
+          Text("Paused")
             .font(.system(size: 17, weight: .semibold))
             .foregroundColor(HX.accent)
-          Text(String(format: "%.2f km · resumes when you move", state.distanceKm))
+          Text(String(format: "%.2f km · the clock is stopped", state.distanceKm))
             .font(.system(size: 13))
             .foregroundColor(HX.ink2)
         } else {
@@ -360,6 +365,9 @@ private struct CardioLockView: View {
       let tag = state.lastSplitFastest ? " · fastest yet" : ""
       return "Km \(km) · \(fmtPace(pace)) /km\(tag)"
     }
-    return "\(fmtPace(state.paceSec)) /km · \(state.calories) kcal · \(state.hr) bpm"
+    // hr == 0 means no heart-rate source — omitted, never shown as "0 bpm".
+    var line = "\(fmtPace(state.paceSec)) /km · \(state.calories) kcal"
+    if state.hr > 0 { line += " · \(state.hr) bpm" }
+    return line
   }
 }

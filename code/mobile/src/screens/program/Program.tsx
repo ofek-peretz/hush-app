@@ -21,6 +21,7 @@ import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { weekProgress } from '@/domain/schedule';
 import { trainingWeekNumber } from '@/domain/weekCadence';
+import { muscleGroupsLabel } from '@/data/exercises';
 import type { ProgramDay, Session } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -109,7 +110,7 @@ export function Program({ navigation }: Props) {
               <ListRow
                 key={d.id}
                 title={d.name}
-                subtitle={d.muscleGroups.join(' · ')}
+                subtitle={muscleGroupsLabel(d.muscleGroups)}
                 chevron
                 last={i === upcoming.length - 1}
                 onPress={() => openDay(d.id)}
@@ -127,7 +128,7 @@ export function Program({ navigation }: Props) {
               <ListRow
                 key={d.id}
                 title={d.name}
-                subtitle={d.muscleGroups.join(' · ')}
+                subtitle={muscleGroupsLabel(d.muscleGroups)}
                 index={i + 1}
                 done
                 muted

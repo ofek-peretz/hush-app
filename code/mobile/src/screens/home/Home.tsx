@@ -16,6 +16,7 @@ import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
 import { trainingWeekNumber } from '@/domain/weekCadence';
 import { isTrainingGated } from '@/domain/entitlement';
+import { muscleGroupsLabel } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
@@ -45,7 +46,7 @@ export function Home({ navigation, route }: Props) {
   // Every non-rest workout in the week, with its muscle groups, for the chooser.
   const workouts = (program?.days ?? [])
     .filter((d) => !d.isRest)
-    .map((d) => ({ id: d.id, name: d.name, muscles: d.muscleGroups.join(' · ') }));
+    .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups) }));
   const isFocused = useIsFocused();
 
   const nowMs = Date.now();
@@ -149,7 +150,7 @@ export function Home({ navigation, route }: Props) {
     session.publishWatchLobby({
       workoutId: day?.id ?? null,
       workoutName: day?.name ?? '',
-      muscles: day?.muscleGroups.join(' · ') ?? '',
+      muscles: muscleGroupsLabel(day?.muscleGroups),
       lifts,
       // Rough estimate (no per-day duration on the model yet): ~8 min per lift.
       durationLabel: lifts ? `~${lifts * 8} min` : undefined,
@@ -160,7 +161,7 @@ export function Home({ navigation, route }: Props) {
           id: d.id,
           name: d.name,
           lifts: d.slots.length,
-          muscles: d.muscleGroups.join(' · '),
+          muscles: muscleGroupsLabel(d.muscleGroups),
           done: d.completed,
         })),
     }, watchPlan);
@@ -249,7 +250,7 @@ export function Home({ navigation, route }: Props) {
     <HomeView
       resting={resting}
       dayName={day?.name ?? null}
-      muscles={day?.muscleGroups.join(' · ') ?? ''}
+      muscles={muscleGroupsLabel(day?.muscleGroups)}
       greetingPart={greetingPart}
       name={app.profile?.name ?? null}
       trainedThisWeek={trainedThisWeek}
