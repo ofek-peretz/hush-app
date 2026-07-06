@@ -502,7 +502,7 @@
     "currentSub": "Current selection",
     "currentBadge": "Current",
     "swappedTo": "Swapped to {{name}}",
-    "tryAnother": "Try another",
+    "tryAnother": "Another option",
     "undo": "Undo",
     "restored": "Back to {{name}}"
   },
