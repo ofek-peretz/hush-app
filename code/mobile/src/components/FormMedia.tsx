@@ -12,6 +12,8 @@ import Svg, { Rect, Circle, Path, Defs, Pattern } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { ExerciseVideoPlayer } from '@/components/ExerciseVideoPlayer';
 import { exerciseVideoSource } from '@/platform/media/exerciseVideo';
+import { exerciseMotion } from '@/motion/registry';
+import { MotionFigure } from '@/motion/render/MotionFigure';
 import { useCopy } from '@/i18n/useCopy';
 import { color, paper, radius, up, font, tracking, trackingPx } from '@/design/tokens';
 
@@ -22,8 +24,10 @@ interface Props {
 
 export function FormMedia({ exerciseId, title }: Props) {
   const { t } = useCopy();
+  const motion = exerciseMotion(exerciseId);
   const video = exerciseVideoSource(exerciseId);
   const hasVideo = !!video;
+  const looping = !!motion || hasVideo; // both read as a live, muted, looping demonstration
 
   return (
     <View style={styles.frame}>
@@ -38,7 +42,9 @@ export function FormMedia({ exerciseId, title }: Props) {
         <Rect width="100%" height="100%" fill="url(#formStripes)" />
       </Svg>
 
-      {video ? (
+      {motion ? (
+        <MotionFigure rig={motion} style={StyleSheet.absoluteFill as object} />
+      ) : video ? (
         <ExerciseVideoPlayer source={video} accessibilityLabel={title ?? ''} style={StyleSheet.absoluteFill as object} />
       ) : (
         <View style={styles.center}>
@@ -59,8 +65,8 @@ export function FormMedia({ exerciseId, title }: Props) {
 
       {/* shared corner state chip — what makes presence + absence read as one component */}
       <View style={styles.chip}>
-        <View style={[styles.chipDot, { backgroundColor: hasVideo ? up[0] : color.textTertiary }]} />
-        <Text style={styles.chipText}>{(hasVideo ? t('workout.looping') : t('workout.illustration')).toUpperCase()}</Text>
+        <View style={[styles.chipDot, { backgroundColor: looping ? up[0] : color.textTertiary }]} />
+        <Text style={styles.chipText}>{(looping ? t('workout.looping') : t('workout.illustration')).toUpperCase()}</Text>
       </View>
     </View>
   );
