@@ -57,6 +57,15 @@ export interface OwnedPreferences {
   // swaps. The lock belongs to the SLOT (durable across regen + manual replacement), never the
   // exercise — so it is keyed by the engine's stable slotId (deriveSlots), not an exercise id.
   lockedSlots: string[];
+  // PERIODIC REFRESH (founder 2026-07-09): every 3-week cycle, ONE non-PINNed lift per workout is
+  // rotated to a fresh same-muscle variation (variety + plateau-breaking). `rotations` is the
+  // system-chosen exercise per engine slotId (overrides the blueprint, is overridden by an athlete
+  // pin). `rotationUsed` is the ordered list of lifts a slot has already cycled through — so the
+  // rotation walks the WHOLE pool with NO ping-pong (repeats only after the pool is exhausted).
+  // `lastRotationCycle` is the 3-week cycle index last rotated (so it fires once per cycle).
+  rotations: Record<string, string>;
+  rotationUsed: Record<string, string[]>;
+  lastRotationCycle: number;
 }
 
 export const EMPTY_PREFERENCES: OwnedPreferences = {
@@ -66,6 +75,9 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
   workoutOrder: [],
   exerciseOrderByWorkout: {},
   lockedSlots: [],
+  rotations: {},
+  rotationUsed: {},
+  lastRotationCycle: -1,
 };
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
@@ -97,7 +109,14 @@ export interface PersistedSessionResume {
 export interface EngineV4State {
   slots: Record<string, unknown>; // slotId -> SlotState
   global: unknown; // GlobalState
-  lastAdvanceAt: number;
+  lastAdvanceAt: number; // completed-session COUNT already folded into the engine (the slice marker)
+  /** The Sat-23:59 week-open the engine last advanced for (founder 2026-07-09, finding 7). The engine
+   *  now progresses ONCE per training week at the calendar roll — not per N sessions — so the plan is
+   *  stable all week and updates on the whole week's work. null until the first program is built. */
+  lastAdvanceWeekOpen?: number;
+  /** How many weekly advances have run — the durable "week N" index for records + the Weekly Update
+   *  (lastAdvanceAt is no longer a clean multiple of frequency once weeks are calendar-sized). */
+  weeksProcessed?: number;
   goal?: string; // last engine goal seen — a change applies the C4-1 goal-change transition
   /** Id of the last pre-gap session an extended-absence ease (I-6) was applied for — the ease
    *  fires ONCE per gap; reopening the app during the same gap never re-eases. */

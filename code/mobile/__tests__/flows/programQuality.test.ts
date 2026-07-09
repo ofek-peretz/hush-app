@@ -64,43 +64,46 @@ describe('movement-pattern coverage — the six fundamentals, including vertical
   });
 });
 
-describe('exercise ordering — compounds precede isolation; core is last', () => {
-  it('no isolation lift is placed before a compound in any day', async () => {
+describe('exercise ordering — equipment grouped (one station to the end); compounds first within a station; core last', () => {
+  // Founder 2026-07-09 (critical, packed-gym rule): work a piece of equipment to the end and NEVER
+  // leave and return to it. Equipment grouping wins over strict global compounds-first.
+  const contiguous = (equips: string[]): boolean => {
+    let prev: string | null = null;
+    const closed = new Set<string>();
+    for (const e of equips) {
+      if (e === prev) continue;
+      if (closed.has(e)) return false; // this station was already finished — a revisit
+      if (prev !== null) closed.add(prev);
+      prev = e;
+    }
+    return true;
+  };
+
+  it('same-equipment lifts are GLOBALLY contiguous — one station to the end, never leave and return', async () => {
     await eachProgram((prog) => {
       for (const d of prog.days) {
-        let seenIsolation = false;
-        for (const s of d.slots) {
-          const tier = exerciseById(s.exerciseId)!.tier;
-          if (tier === 'isolation') seenIsolation = true;
-          else expect(seenIsolation).toBe(false); // a compound after an isolation => fail
-        }
+        const equips = d.slots.filter((s) => !s.supplemental).map((s) => exerciseById(s.exerciseId)!.equipment);
+        expect(contiguous(equips)).toBe(true); // the supplemental core is exempt (a single finisher)
       }
     });
   });
 
-  it('same-equipment lifts are adjacent within each phase (no leave-and-return)', async () => {
-    // Founder gym-flow rule: don't bounce off a station and come back. Verified per phase
-    // (compounds, isolation) on the primary work — the supplemental core is exempt (it is
-    // pinned last by its own rule, which may cost one revisit).
-    const contiguous = (equips: string[]): boolean => {
-      let prev: string | null = null;
-      const closed = new Set<string>();
-      for (const e of equips) {
-        if (e === prev) continue;
-        if (closed.has(e)) return false; // this station was already finished — a revisit
-        if (prev !== null) closed.add(prev);
-        prev = e;
-      }
-      return true;
-    };
+  it('within each equipment station, compounds precede isolation', async () => {
     await eachProgram((prog) => {
       for (const d of prog.days) {
-        const primary = d.slots.filter((s) => !s.supplemental);
-        for (const tier of ['compound', 'isolation'] as const) {
-          const equips = primary
-            .filter((s) => exerciseById(s.exerciseId)!.tier === tier)
-            .map((s) => exerciseById(s.exerciseId)!.equipment);
-          expect(contiguous(equips)).toBe(true);
+        const byEquip = new Map<string, string[]>();
+        for (const s of d.slots.filter((x) => !x.supplemental)) {
+          const e = exerciseById(s.exerciseId)!;
+          const arr = byEquip.get(e.equipment) ?? [];
+          arr.push(e.tier);
+          byEquip.set(e.equipment, arr);
+        }
+        for (const tiers of byEquip.values()) {
+          let seenIso = false;
+          for (const t of tiers) {
+            if (t === 'isolation') seenIso = true;
+            else expect(seenIso).toBe(false); // a compound AFTER an isolation within a station => fail
+          }
         }
       }
     });

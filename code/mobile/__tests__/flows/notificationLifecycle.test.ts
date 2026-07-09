@@ -44,12 +44,12 @@ describe('notification payload schema (versioned, reconstructable)', () => {
 });
 
 describe('notification lifecycle telemetry', () => {
-  it('scheduling the weekly note records coalesced + scheduled', async () => {
-    await notifier.scheduleWeeklyProgramReady();
+  it('canceling the retired weekly note records a canceled event', async () => {
+    // The 20:00 weekly note is retired (founder 2026-07-09) — only its cancel path remains,
+    // clearing any note a prior build left on an existing install.
+    await notifier.cancelWeeklyProgramReady();
     await settle();
-    const types = await loggedTypes();
-    expect(types).toContain(NOTIFICATION_EVENTS.coalesced);
-    expect(types).toContain(NOTIFICATION_EVENTS.scheduled);
+    expect(await loggedTypes()).toContain(NOTIFICATION_EVENTS.canceled);
   });
 
   it('cancelAll records a canceled event', async () => {

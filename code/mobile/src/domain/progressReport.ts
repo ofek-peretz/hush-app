@@ -73,16 +73,15 @@ export function quarterlyPeakProgress(sessions: Session[], nowMs: number): Quart
  * athlete's ENTIRE history (first training day → now), so the Progress screen
  * always shows cumulative progression.
  *
- * Gate: an exercise must have been trained on ≥2 distinct DAYS, so there is a real
- * "then vs now" to compare. (Originally bucketed by 7-day week, which left the
- * screen empty for a new athlete who trained several DAYS inside their first week —
- * TestFlight defect 2026-06-30. A day is the right granularity for a first month:
- * one session per day is the norm, and two sessions in a single day are not a
- * meaningful progression comparison.) Pure & I/O-free.
+ * Gate (founder 2026-07-09): a lift appears from its VERY FIRST performance — that first
+ * load is the athlete's starting point, shown as a baseline (no gain yet), and every later
+ * session is measured against it. So the Progress screen turns on the moment the first
+ * workout finishes, exactly as an athlete expects. Pure & I/O-free.
  */
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Minimum distinct training days for a lift to appear (a real first-vs-best comparison). */
-export const ALL_TIME_MIN_WEEKS = 2;
+/** Minimum distinct training days for a lift to appear. 1 = show from the first performance
+ *  (the starting point); progress is then measured against it from the second onward. */
+export const ALL_TIME_MIN_WEEKS = 1;
 
 export function allTimePeakProgress(sessions: Session[], nowMs: number): QuarterlyProgressEntry[] {
   // Origin = the earliest logged set with a load; day buckets are counted from there.

@@ -33,6 +33,9 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
   const { t } = useCopy();
   const totalGainKg = entries.reduce((a, e) => a + Math.max(0, e.deltaKg), 0);
   const totalGain = displayWeight(Math.round(totalGainKg * 10) / 10, units) ?? 0;
+  // Baseline (founder 2026-07-09): no gains yet (the first week) — the screen shows the athlete's
+  // starting point, NOT a "+0 added". Each lift's first load is the mark every later gain measures against.
+  const isBaseline = entries.length > 0 && totalGainKg === 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -58,16 +61,25 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
           <Text style={styles.empty}>{t('report.empty')}</Text>
         ) : (
           <>
-            {/* total strength added */}
+            {/* total strength added — or, in the first week, the starting-point framing */}
             <View style={styles.totalBlock}>
-              <Legend>{t('report.totalAdded')}</Legend>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalValue}>+{totalGain}</Text>
-                <Text style={styles.totalUnit}>{unitLabel(units)}</Text>
-                <View style={styles.totalBadge}>
-                  <Badge tone="up">{t('report.acrossLifts', { count: entries.length })}</Badge>
-                </View>
-              </View>
+              {isBaseline ? (
+                <>
+                  <Legend>{t('report.startingPoint')}</Legend>
+                  <Text style={styles.startingSub}>{t('report.startingPointSub')}</Text>
+                </>
+              ) : (
+                <>
+                  <Legend>{t('report.totalAdded')}</Legend>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalValue}>+{totalGain}</Text>
+                    <Text style={styles.totalUnit}>{unitLabel(units)}</Text>
+                    <View style={styles.totalBadge}>
+                      <Badge tone="up">{t('report.acrossLifts', { count: entries.length })}</Badge>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
 
             {/* per-lift rows */}
@@ -86,7 +98,9 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                           {best}
                           <Text style={styles.liftBestUnit}> {unitLabel(units)}</Text>
                         </Text>
-                        <LoadDelta value={deltaDisp} unit={unitLabel(units)} size="sm" />
+                        {/* No gain yet (first performance / held) → the weight IS the starting
+                            point; a "+0" would misread as a result. Show the delta only once it rises. */}
+                        {e.deltaKg > 0 ? <LoadDelta value={deltaDisp} unit={unitLabel(units)} size="sm" /> : null}
                       </View>
                     </View>
                     <ProgressMeter value={best} max={ceiling} mark={initial} tone="up" />
@@ -116,6 +130,7 @@ const styles = StyleSheet.create({
   empty: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, marginTop: 48, textAlign: 'center' },
 
   totalBlock: { paddingTop: 4, paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: color.border },
+  startingSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginTop: 8, lineHeight: textScale.sm * 1.4 },
   totalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
   totalValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), color: color.textPrimary },
   totalUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: color.textMuted },

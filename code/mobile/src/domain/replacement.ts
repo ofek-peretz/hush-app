@@ -33,11 +33,13 @@ export function recommended(currentId: string): Exercise[] {
 export function swapLadder(
   currentId: string,
   prefs?: { substitutes?: Record<string, string>; backups?: Record<string, string> },
+  exclude?: readonly string[],
 ): string[] {
   const muscle = muscleOf(currentId);
+  const excludeSet = new Set(exclude ?? []); // lifts already in THIS session — never a duplicate
   const out: string[] = [];
   const push = (id: string | undefined) => {
-    if (!id || id === currentId || out.includes(id)) return;
+    if (!id || id === currentId || out.includes(id) || excludeSet.has(id)) return;
     if (!exerciseById(id) || muscleOf(id) !== muscle) return; // stay in-muscle, always
     out.push(id);
   };

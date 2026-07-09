@@ -75,7 +75,7 @@ interface AppState {
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
   revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
-  weekOpenMs: number | null; // Sunday-04:00-local the current bucket was built for (calendar cadence)
+  weekOpenMs: number | null; // Saturday-23:59-local the current bucket was built for (calendar cadence)
   entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
 
@@ -260,6 +260,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await adoptDevTokenIfPresent();
       modelRef.current = await selectModel();
 
+      // The 20:00 "weekly program ready" note is retired (founder 2026-07-09) — clear it
+      // from any existing install so no stale push fires. Best-effort; never blocks boot.
+      void notifier.cancelWeeklyProgramReady();
+
       // Schema-version guard: detect persisted-shape drift (e.g. an upgrade/
       // downgrade) so corruption is OBSERVABLE rather than silent. Shapes are
       // additive (forward-compatible), so we stamp + telemeter rather than wipe.
@@ -308,6 +312,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Gate on the CACHED entitlement immediately (offline-safe); the live store
       // value is reconciled just after boot (below).
       dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
+
+      // Finding 5: heal a crashed completion. If a session for a program day is in THIS week's
+      // history but the day wasn't flagged done (a kill between the history write and the flag
+      // write), mark it done so Home never re-offers an already-trained workout. Best-effort +
+      // isolated so it can never break boot. (The completed-session COUNT is no longer surfaced,
+      // so only the day flag needs healing.)
+      void (async () => {
+        try {
+          if (!program) return;
+          const hist = await db.loadHistory();
+          const weekOpen = weekOpenMs ?? currentWeekOpen(Date.now());
+          const doneThisWeek = new Set(hist.filter((s) => Date.parse(s.startedAt) >= weekOpen).map((s) => s.programDayId));
+          const days = program.days.map((d) => (!d.completed && !d.isRest && doneThisWeek.has(d.id) ? { ...d, completed: true } : d));
+          if (days.some((d, i) => d.completed !== program.days[i].completed)) {
+            const healed: Program = { ...program, days };
+            await db.saveProgram(healed);
+            dispatch({ type: 'PROGRAM_UPDATED', program: healed, recents });
+          }
+        } catch {
+          /* best-effort heal — never blocks boot */
+        }
+      })();
 
       // Reconcile the entitlement against StoreKit (source of truth) right after
       // boot. Best-effort + fully isolated so it can never break the boot path; a
@@ -452,16 +478,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
         if (baseline) emitCapabilitySnapshot(baseline, 'onboarding', 0);
 
-        // Stamp the calendar-week anchor so the bucket first turns over at the NEXT Sunday 04:00,
-        // not immediately (calendar-primary cadence, product model 2026-07-05).
+        // Stamp the calendar-week anchor so the bucket first turns over at the NEXT Saturday 23:59,
+        // not immediately (calendar-primary cadence, founder 2026-07-09).
         const weekOpenMs = currentWeekOpen(Date.now());
         await Promise.all([db.saveProfile(profile), db.saveProgram(program), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
         void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });
-        // Weekly Program Container: the weekly plan is ready — wire the EXISTING Weekly Program
-        // Ready notification (20:00 local; no second flow). Stub is a no-op; native build delivers.
-        void notifier.scheduleWeeklyProgramReady(program.frequency);
         // Quarterly progress report — a recurring ~3-month note that opens the
         // peak-weight comparison (founder). Stub is a no-op; native build delivers.
         void notifier.scheduleQuarterlyReport();
@@ -543,8 +566,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async refreshProgram() {
         if (!state.profile) return;
-        // CALENDAR-PRIMARY CADENCE (product model, 2026-07-05): the weekly bucket turns over at
-        // Sunday 04:00 local, regardless of workout completion. Finishing every workout early just
+        // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
+        // Saturday 23:59 local, regardless of workout completion. Finishing every workout early just
         // leaves Home in Recovery (no next workout to offer) until the calendar rolls; missed
         // workouts never carry over — each week is a fresh bucket and the engine only progresses
         // from completed, real-logged work. So the SOLE regeneration trigger is the calendar week
@@ -555,7 +578,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const rolled = shouldRollWeek(state.weekOpenMs, state.program != null, nowMs);
         if (!rolled) {
           // A persisted bucket with no anchor is pre-upgrade state: adopt it into the CURRENT week
-          // (persist the anchor) so upgrading never wipes an in-progress week — it rolls next Sunday.
+          // (persist the anchor) so upgrading never wipes an in-progress week — it rolls next Saturday.
           if (state.program && state.weekOpenMs == null) {
             await db.saveWeekOpen(weekOpen);
             dispatch({ type: 'PROGRAM_UPDATED', program: state.program, recents: state.recents, weekOpenMs: weekOpen });
@@ -622,6 +645,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // The slot's exercise IS the persisted preference (R18, §7.2). The
         // capability class is unchanged (Replacement only ever offers in-class).
         const day = state.program.days.find((d) => d.id === dayId);
+        // Guard (founder 2026-07-09): never create a duplicate — refuse a swap to a lift the
+        // workout already contains. The UI already hides these; this is the defense in depth.
+        if (day && day.slots.some((s, i) => i !== slotIndex && s.exerciseId === exerciseId)) return;
         const slot = day?.slots[slotIndex];
         const fromExercise = slot?.exerciseId;
         const capability = slot?.capability;

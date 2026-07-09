@@ -18,17 +18,22 @@ import { color, font, textScale, tracking, trackingPx, signal, press } from '@/d
 
 interface Props {
   currentExerciseId: string;
+  /** Exercises already in THIS workout — never offered, so a swap can't create a duplicate lift
+   *  in the same session (founder 2026-07-09). */
+  exclude?: readonly string[];
   onSelect: (exerciseId: string) => void;
   onClose: () => void;
 }
 
-export function SwapSheet({ currentExerciseId, onSelect, onClose }: Props) {
+export function SwapSheet({ currentExerciseId, exclude, onSelect, onClose }: Props) {
   const { t } = useCopy();
   const current = exerciseById(currentExerciseId);
   const muscle = muscleOf(currentExerciseId);
   const muscleLabel = muscle ? t(`muscle.${muscle}`) : '';
-  // Program editor: the FULL set for this muscle (wide variety), best-match first.
-  const alternatives = similarExercises(currentExerciseId);
+  // Program editor: the FULL set for this muscle (wide variety), best-match first — minus anything
+  // already in the workout (no duplicate lift in one session).
+  const excludeSet = new Set(exclude ?? []);
+  const alternatives = similarExercises(currentExerciseId).filter((e) => !excludeSet.has(e.id));
 
   return (
     <BottomSheet onClose={onClose} heightFraction={0.74}>

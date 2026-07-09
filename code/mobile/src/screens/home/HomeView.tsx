@@ -38,7 +38,6 @@ export interface HomeViewProps {
   dateLabel: string;
   weekNumber: number; // training-week counter ("Week N"), from memberSince
   exerciseCount?: number; // next workout's exercise count (meta line)
-  loadsUp?: number; // how many lifts step up this session (meta line)
   restDaysTaken?: number; // recovery stat
   /** An interrupted (app-killed) workout that can be picked up exactly where it was (S3).
    *  When present, the primary CTA becomes "Continue {workout}" — one path, no fork. */
@@ -121,12 +120,6 @@ export function HomeView(props: HomeViewProps) {
                 <View style={styles.metaRow}>
                   <Icon name="layers" size={15} color={color.textMuted} strokeWidth={2} />
                   <Text style={styles.metaMono}>{t('home.exerciseCount', { n: props.exerciseCount })}</Text>
-                  {props.loadsUp ? (
-                    <>
-                      <Text style={styles.metaSep}>·</Text>
-                      <Text style={styles.metaText}>{t('home.loadsUp', { n: props.loadsUp })}</Text>
-                    </>
-                  ) : null}
                 </View>
               ) : null}
 

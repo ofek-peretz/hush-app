@@ -87,6 +87,12 @@ describe('week rollover advances the prescription from logged work', () => {
       await db.appendCompletedSession(session);
     }
 
+    // finding 7: the engine advances at the Sat-23:59 roll — simulate a roll by rewinding the
+    // anchor, so the next read folds the just-logged week.
+    const rolled = (await db.loadEngineV4())!;
+    rolled.lastAdvanceWeekOpen = 1;
+    await db.saveEngineV4(rolled);
+
     // Next read triggers the weekly advance → bench load climbs above its seed.
     const advancedBench = await targetWeight('bb_bench_press');
     expect(advancedBench).not.toBeNull();
@@ -107,6 +113,7 @@ describe('Weekly Update surfaces explanations for real (post-calibration) change
     const state = (await db.loadEngineV4())!;
     const slots = state.slots as Record<string, SlotState>;
     slots[benchSlotId] = { ...slots[benchSlotId], calibrating: false, calib_weeks: 0, tenure_weeks: 6, weeks_since_swap: 12, current_load_kg: 60, rep_target: 8, rep_range: [8, 12] };
+    state.lastAdvanceWeekOpen = 1; // finding 7: anchor in the past → the next read rolls the week
     await db.saveEngineV4(state);
 
     // Log one completed Full Body session beating bench with room.
@@ -133,6 +140,35 @@ describe('Weekly Update surfaces explanations for real (post-calibration) change
     expect(resolveLine(push!.conclusion)).not.toBe('');
     expect(resolveLine(push!.action)).not.toBe('');
     expect(resolveLine(push!.text).toLowerCase()).not.toContain('fatigue');
+  });
+});
+
+describe('engine swap reaches the program and survives regen (finding 2)', () => {
+  it('a slot the engine swapped shows the new exercise and is NOT reset to the blueprint lift', async () => {
+    const p: Profile = { ...profile, daysPerWeek: 1 }; // Full Body A — has bb_bench_press
+    await db.saveProfile(p);
+    const program = await fixtureModel.generateProgram(p);
+    await db.saveProgram(program);
+
+    // The bench slot's durable, stable engine id (decoupled from display order).
+    const benchSlot = program.days.flatMap((d) => d.slots).find((s) => s.exerciseId === 'bb_bench_press')!;
+    expect(benchSlot.engineSlotId).toBeTruthy();
+
+    // Simulate the engine having swapped bench → machine chest press (same HORIZONTAL_PUSH pattern).
+    const state = (await db.loadEngineV4())!;
+    const slots = state.slots as Record<string, SlotState>;
+    slots[benchSlot.engineSlotId!] = { ...slots[benchSlot.engineSlotId!], current_exercise_id: 'machine_chest_press' };
+    await db.saveEngineV4(state);
+
+    // Regenerate: the program must ADOPT the engine's swapped exercise (not revert to bench).
+    const regen = await fixtureModel.generateProgram(p);
+    const ids = regen.days.flatMap((d) => d.slots).map((s) => s.exerciseId);
+    expect(ids).toContain('machine_chest_press');
+    expect(ids).not.toContain('bb_bench_press');
+
+    // And the engine state was NOT reset (mistaken for a manual replacement) back to bench.
+    const after = (await db.loadEngineV4())!.slots[benchSlot.engineSlotId!] as SlotState;
+    expect(after.current_exercise_id).toBe('machine_chest_press');
   });
 });
 

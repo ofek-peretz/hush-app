@@ -175,6 +175,9 @@ export interface SessionView {
   /** Raw exercise id of the current step (a fallback when the local catalog lacks
    *  the exercise, so the Active Set never renders blank — §7.9). */
   currentExerciseId: string | null;
+  /** Distinct exercise ids across the whole session — lets an in-session swap avoid offering a
+   *  lift the session already contains (no duplicate in one workout). */
+  sessionExerciseIds: string[];
   currentTarget: SetTarget | null;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
@@ -623,6 +626,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       paused,
       currentExercise: current ? exerciseById(current.exerciseId) ?? null : null,
       currentExerciseId: current?.exerciseId ?? null,
+      sessionExerciseIds: [...new Set(plan.map((s) => s.exerciseId))],
       currentTarget: current?.target ?? null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
@@ -862,11 +866,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       swapNextExercise(exerciseId) {
         const startIdx = machine.setIndex + 1; // the upcoming exercise
         if (!plan[startIdx]) return;
+        if (plan.some((s) => s.exerciseId === exerciseId)) return; // never duplicate a lift already in the session
         dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       swapCurrentExercise(exerciseId) {
         const startIdx = machine.setIndex; // the current exercise
         if (!plan[startIdx]) return;
+        if (plan.some((s) => s.exerciseId === exerciseId)) return; // never duplicate a lift already in the session
         dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       markEquipmentOccupied() {

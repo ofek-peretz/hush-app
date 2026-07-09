@@ -9,10 +9,11 @@
  * that is explicitly out of scope for v1.)
  *
  * Contract (do not violate):
- *  - Weekly Program Ready: 20:00 LOCAL, title "Next week's program is ready.",
- *    opens the v4 Weekly Update (1.20). Weekly-repeating.
  *  - Quarterly Report: every ~3 months; opens the peak-weight comparison.
  *  - Receipts are NEVER notifications — receipts surface in-session only (§8.6).
+ *  - The 20:00 "Weekly Program Ready" note is RETIRED (founder 2026-07-09): the
+ *    weekly plan swaps in silently at Sat 23:59, so no push is sent. Only its
+ *    cancel path remains, to clear the note from existing installs.
  *
  * Calm defaults: no sound, no badge (a quiet product, §8.6). Copy flows through
  * i18n (project copy law) — never a string literal here.
@@ -68,9 +69,10 @@ function intentFromResponse(response: unknown): NotificationIntent | null {
 }
 
 export interface Notifier {
-  /** Schedule the calm weekly note at 20:00 local. Idempotent. `sessionCount`
-   *  (the week's workout count) personalizes the body per §4.31 when known. */
-  scheduleWeeklyProgramReady(sessionCount?: number): Promise<void>;
+  /** Remove the RETIRED 20:00 weekly note (founder 2026-07-09). Idempotent; clears
+   *  any note a prior build left on an existing install. The weekly plan now swaps
+   *  in silently at Sat 23:59, so nothing is ever scheduled here again. */
+  cancelWeeklyProgramReady(): Promise<void>;
   /** Schedule the recurring quarterly progress report note (every ~3 months). A tap
    *  opens the QuarterlyReport comparison screen. Idempotent. */
   scheduleQuarterlyReport(): Promise<void>;
@@ -81,7 +83,6 @@ export interface Notifier {
 /** Stable identifiers so re-scheduling is idempotent and cancel is targeted. */
 const WEEKLY_ID = 'hush.weekly_program_ready';
 const QUARTERLY_ID = 'hush.quarterly_report';
-const WEEKLY_HOUR = 20; // 20:00 local (§8.6)
 const QUARTERLY_INTERVAL_S = 12 * 7 * 24 * 60 * 60; // ~3 months, repeating
 
 /**
@@ -129,37 +130,14 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 
 /** Real, on-device notifier (active in dev/preview/production builds). */
 export const notifierExpo: Notifier = {
-  async scheduleWeeklyProgramReady(sessionCount?: number) {
+  async cancelWeeklyProgramReady() {
+    // The 20:00 weekly note is retired (founder 2026-07-09). Clear any note a prior
+    // build scheduled so existing installs stop receiving it; never throws.
     try {
-      if (!(await ensureNotificationPermission())) return;
-      // Idempotent: clear any prior weekly before re-scheduling (a re-anchor
-      // coalesces onto the same stable id rather than stacking).
-      await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID).catch(() => {});
-      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'weekly_program_ready' });
-      // Anchor the weekly cadence to the day the plan became ready, at 20:00
-      // local. JS getDay() is 0–6 (Sun–Sat); expo weekday is 1–7 (Sun–Sat).
-      const weekday = new Date().getDay() + 1;
-      // Body per §4.31 (pluralized; generic when the count is unknown).
-      const body =
-        sessionCount == null || sessionCount <= 0
-          ? i18next.t('notifications.weeklyReadyBodyGeneric')
-          : sessionCount === 1
-            ? i18next.t('notifications.weeklyReadyBodyOne')
-            : i18next.t('notifications.weeklyReadyBody', { count: sessionCount });
-      await Notifications.scheduleNotificationAsync({
-        identifier: WEEKLY_ID,
-        // data carries the routing intent so a tap opens Program (§4.31).
-        content: { title: i18next.t('notifications.weeklyReadyTitle'), body, data: buildPayload('weekly_program_ready') },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          weekday,
-          hour: WEEKLY_HOUR,
-          minute: 0,
-        },
-      });
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'weekly_program_ready', weekday, hour: WEEKLY_HOUR });
+      await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID);
+      void track(NOTIFICATION_EVENTS.canceled, { kind: 'weekly_program_ready' });
     } catch {
-      // never throw — a notification failure must not break onboarding
+      /* nothing scheduled / no native module */
     }
   },
 
@@ -197,7 +175,7 @@ export const notifierExpo: Notifier = {
 
 /** v1 no-op stub — the swap point for tests and any non-native environment. */
 export const notifierStub: Notifier = {
-  async scheduleWeeklyProgramReady() {},
+  async cancelWeeklyProgramReady() {},
   async scheduleQuarterlyReport() {},
   async cancelAll() {},
 };

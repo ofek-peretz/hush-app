@@ -18,7 +18,8 @@ import { planNextWeek } from './planWeek';
 import { applySwap } from './swap';
 import { demonstrated, epley, normalizeLoad, volumeLoad } from './reads';
 import { exerciseById, exerciseDisplayName, progressionRule } from '@/data/exercises';
-import { enginePattern, exerciseMeta, candidatesForPattern } from './catalogAdapter';
+import { enginePattern, exerciseMeta } from './catalogAdapter';
+import { currentWeekOpen } from '@/domain/weekCadence';
 import type { Explanation } from './types';
 import { toEngineGoal, toTrainingAge, repScheme, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type SetRecord, type Pattern } from './types';
 import { DEFAULTS, REP_RANGE_BY_GOAL } from './constants';
@@ -54,6 +55,7 @@ export interface DerivedSlot {
  *  structure and day keys are deterministic; pins change the exercise inside a slot, not its slot). */
 export function deriveSlots(program: Program): DerivedSlot[] {
   const out: DerivedSlot[] = [];
+  const seen = new Set<string>(); // unified same-exercise slots share one id → emit it once
   for (const day of program.days) {
     if (day.isRest) continue;
     const perPattern = new Map<Pattern, number>();
@@ -63,7 +65,13 @@ export function deriveSlots(program: Program): DerivedSlot[] {
       if (pattern == null) continue;
       const idx = perPattern.get(pattern) ?? 0;
       perPattern.set(pattern, idx + 1);
-      out.push({ slotId: `${day.key ?? day.id}:${pattern}#${idx}`, pattern, exerciseId: slot.exerciseId, dayKey: day.key ?? day.id, setCount: slot.setCount });
+      // STABLE id when the assembler stamped one (founder 2026-07-09); positional fallback keeps
+      // pre-upgrade programs + pure-engine callers working. This is what lets an engine swap change
+      // a slot's exercise WITHOUT shifting its identity at the next regen (finding 2 / V1).
+      const slotId = slot.engineSlotId ?? `${day.key ?? day.id}:${pattern}#${idx}`;
+      if (seen.has(slotId)) continue; // a shared (same-exercise) slot is one engine progression
+      seen.add(slotId);
+      out.push({ slotId, pattern, exerciseId: slot.exerciseId, dayKey: day.key ?? day.id, setCount: slot.setCount });
     }
   }
   return out;
@@ -90,7 +98,7 @@ export function slotIdsByPosition(program: Program): Map<string, (string | null)
       }
       const idx = perPattern.get(pattern) ?? 0;
       perPattern.set(pattern, idx + 1);
-      ids.push(`${day.key ?? day.id}:${pattern}#${idx}`);
+      ids.push(slot.engineSlotId ?? `${day.key ?? day.id}:${pattern}#${idx}`);
     }
     byDay.set(day.id, ids);
   }
@@ -205,8 +213,14 @@ export async function ensureSlots(
       slots[d.slotId] = { ...fresh, calibrating: !exerciseMeta(d.exerciseId).bodyweight, tenure_weeks: 0, weeks_since_swap: 0 };
     }
   }
-  // Drop slots no longer in the program (e.g. frequency change).
-  for (const id of Object.keys(slots)) if (!keep.has(id)) delete slots[id];
+  // Slots no longer in the program (time-cap trim / frequency change). Finding 17: keep a dropped
+  // slot's state DORMANT if it was ever trained (has trend history or tenure), so its progression
+  // resumes untouched if the lift returns; prune only never-trained slots so state can't accrete.
+  for (const id of Object.keys(slots)) {
+    if (keep.has(id)) continue;
+    const s = slots[id] as SlotState;
+    if ((s.history?.length ?? 0) === 0 && (s.tenure_weeks ?? 0) === 0) delete slots[id];
+  }
 
   // Reconcile each slot's lock to the athlete's lock store (the source of truth). This is what
   // makes the lock durable across regen/replacement and prevents engine-initiated swaps (swap.ts
@@ -242,6 +256,28 @@ export interface V4Target {
  *  (a non-program / swap-only exercise → caller falls back to the cold-start seed). */
 export async function targetFor(exerciseId: string): Promise<V4Target | null> {
   return (await currentTargets())[exerciseId] ?? null;
+}
+
+/** Per-slot current identity + volume, keyed by the durable engine slotId — the source the
+ *  assembler overlays onto the program so engine swaps/graduations (exercise) and the volume lever
+ *  (sets) actually reach the athlete's workout (findings 2/3). Load/reps stay in currentTargets. */
+export interface V4SlotView {
+  exerciseId: string;
+  sets: number;
+  /** Weeks stalled + weeks in the slot — the periodic-refresh picker rotates the most-stalled
+   *  (tie: longest-tenured) non-pinned lift out each cycle. */
+  flatWeeks: number;
+  tenure: number;
+}
+export async function currentSlots(): Promise<Record<string, V4SlotView>> {
+  const state = await loadState();
+  const slots = slotsRecord(state);
+  const out: Record<string, V4SlotView> = {};
+  for (const id of Object.keys(slots)) {
+    const s = slots[id];
+    out[id] = { exerciseId: s.current_exercise_id, sets: s.current_sets, flatWeeks: s.flat_weeks, tenure: s.tenure_weeks };
+  }
+  return out;
 }
 
 /** All current per-slot prescriptions keyed by exercise id (single state read; for sessionTargets). */
@@ -293,18 +329,45 @@ function metaWithGridFor(history: Session[]) {
 }
 
 /**
- * Advance the engine for every COMPLETED week that has not yet been processed (week rollover). A
- * week = `frequency` completed sessions. Aggregates each week's logged sets into per-slot results,
- * runs planNextWeek, and persists the updated slot state + a fresh history record per slot.
+ * Advance the engine at the WEEKLY calendar roll (founder 2026-07-09, finding 7). A training week =
+ * the Sat-23:59 window; at the roll the engine folds ALL sessions logged since the last roll into
+ * one week's per-slot results, runs planNextWeek, and persists the updated slot state + a per-slot
+ * history record. So the plan is stable all week and updates on the whole week's work (2+ sessions
+ * of a muscle group feed one decision). The PURE engine is unchanged — only the cadence moved from
+ * "every `frequency` completed sessions" to "once per calendar week". `nowMs` is injectable for tests.
  */
+let advanceInFlight: Promise<void> | null = null;
 export async function maybeAdvance(
   program: Program,
   profile: EngineProfile,
   history: Session[],
   seedFor: SeedFor,
   lockedSlotIds: ReadonlySet<string> = new Set(),
+  nowMs: number = Date.now(),
 ): Promise<void> {
-  const freq = Math.max(1, program.frequency);
+  // Finding 14: coalesce concurrent advances (Home fires several sessionTargets at once) so the
+  // read-modify-write of the persisted engine state never interleaves — the in-flight advance
+  // already folds the current history, and the next read picks up anything newer.
+  if (advanceInFlight) {
+    await advanceInFlight.catch(() => {});
+    return;
+  }
+  advanceInFlight = doAdvance(program, profile, history, seedFor, lockedSlotIds, nowMs);
+  try {
+    await advanceInFlight;
+  } finally {
+    advanceInFlight = null;
+  }
+}
+
+async function doAdvance(
+  program: Program,
+  profile: EngineProfile,
+  history: Session[],
+  seedFor: SeedFor,
+  lockedSlotIds: ReadonlySet<string> = new Set(),
+  nowMs: number = Date.now(),
+): Promise<void> {
   const state = await ensureSlots(program, profile, history, seedFor, lockedSlotIds);
   const slots = slotsRecord(state);
   // history is newest-first; process oldest-first in week-sized chunks.
@@ -316,8 +379,13 @@ export async function maybeAdvance(
   // gap, keyed to the last pre-gap session so reopening the app never re-eases. This runs on
   // RETURN (every prescription read), not at week rollover — an absent athlete completes no weeks,
   // so the rollover path alone could never reach it.
-  const lastSession = history[0];
-  const daysSince = lastSession ? Math.max(0, Math.floor((Date.now() - Date.parse(lastSession.startedAt)) / 86400000)) : 0;
+  // Finding 15: the "last session" for the absence read is the one with the newest DATE, not the
+  // one inserted most recently — a stale watch record reconciled late lands at history[0] but must
+  // not make a currently-active athlete look absent.
+  const lastSession = history.length
+    ? history.reduce((a, b) => (Date.parse(b.startedAt) > Date.parse(a.startedAt) ? b : a))
+    : undefined;
+  const daysSince = lastSession ? Math.max(0, Math.floor((nowMs - Date.parse(lastSession.startedAt)) / 86400000)) : 0;
   state.global = { ...(state.global as GlobalState), days_since_last_session: daysSince };
   if (lastSession && daysSince > DEFAULTS.ABSENCE_DAYS && state.absenceKey !== lastSession.id && Object.keys(slots).length > 0) {
     const slotList = Object.values(slots);
@@ -349,17 +417,23 @@ export async function maybeAdvance(
         swapped: false,
       };
     });
-    state.lastUpdate = { weekIndex: Math.floor(state.lastAdvanceAt / freq), at: new Date().toISOString(), explanations: out.explanations, plan, seen: false };
+    state.lastUpdate = { weekIndex: state.weeksProcessed ?? 0, at: new Date(nowMs).toISOString(), explanations: out.explanations, plan, seen: false };
   }
 
-  while (chrono.length - state.lastAdvanceAt >= freq) {
-    const week = chrono.slice(state.lastAdvanceAt, state.lastAdvanceAt + freq);
+  // ── Weekly rollover at the Sat-23:59 calendar boundary (finding 7) ──
+  const weekOpen = currentWeekOpen(nowMs);
+  const rolled = state.lastAdvanceWeekOpen != null && weekOpen > state.lastAdvanceWeekOpen;
+  if (rolled && chrono.length > state.lastAdvanceAt) {
+    const week = chrono.slice(state.lastAdvanceAt); // every session since the last roll = this week
+    const weekIndex = state.weeksProcessed ?? 0;
     const slotList = Object.values(slots);
     const results: SlotResult[] = [];
     for (const slot of slotList) {
       const sets = setRecords(slot.current_exercise_id, week);
       if (!sets.length) continue; // untrained slot → no result → holds
-      results.push({ slotId: slot.slotId, pattern: slot.pattern, exercise_id: slot.current_exercise_id, sets, sessions_completed: week.length, sessions_planned: freq });
+      // sessions_planned = sessions_completed keeps adherence at 1.0: missed sessions never cut load
+      // (founder — the adherence deload stays off), the engine just progresses from what WAS trained.
+      results.push({ slotId: slot.slotId, pattern: slot.pattern, exercise_id: slot.current_exercise_id, sets, sessions_completed: week.length, sessions_planned: week.length });
     }
 
     // Snapshot each slot's BEFORE state so the Weekly Update (B) can render the
@@ -375,8 +449,16 @@ export async function maybeAdvance(
       global: { ...(state.global as GlobalState), days_since_last_session: 0 },
       results,
       meta: metaWithGridFor(history),
-      candidates: (p) => candidatesForPattern(p),
+      // Founder 2026-07-09: the engine's automatic stall-SWAP is OFF (no `candidates` → planNextWeek
+      // never swaps). Exercise variety + plateau-breaking is handled by the periodic 3-week refresh
+      // (assembler-owned), which walks the whole muscle pool with no ping-pong; a swap the engine
+      // used to make was rare, reactive, and surfaced a roll late — the refresh does it better.
       seedLoad: (id) => seedFor(id),
+      // Founder 2026-07-09: the engine's set-adding lever is OFF — set count is owned entirely by the
+      // assembler (setsFor + the 4-set cap + the 60-min ceiling). A stall therefore breaks straight
+      // through LOAD → RANGE (both reach the athlete's workout), never a set that would fight those
+      // caps. The stall ladder skips 'vol' and never wastes a week on it.
+      volumeLeverAvailable: () => false,
       nameOf: exerciseDisplayName,
       consts: undefined,
     });
@@ -385,7 +467,7 @@ export async function maybeAdvance(
     for (const ns of out.updated_slots) {
       const res = results.find((r) => r.slotId === ns.slotId);
       const rec = res
-        ? { week: state.lastAdvanceAt / freq, sets: res.sets, e1rm_week: demonstrated(res.sets, ns.rep_target).best_e1rm ?? 0, volume_load: volumeLoad(res.sets), completed_sets: res.sets.length, prescribed_sets: ns.current_sets }
+        ? { week: weekIndex, sets: res.sets, e1rm_week: demonstrated(res.sets, ns.rep_target).best_e1rm ?? 0, volume_load: volumeLoad(res.sets), completed_sets: res.sets.length, prescribed_sets: ns.current_sets }
         : null;
       slots[ns.slotId] = rec ? { ...ns, history: [rec, ...ns.history].slice(0, 6) } : ns;
     }
@@ -450,9 +532,13 @@ export async function maybeAdvance(
       };
     });
     // Capture the week's explanations + plan for the Weekly Update + Why surfaces (a new week to view).
-    state.lastUpdate = { weekIndex: state.lastAdvanceAt / freq, at: new Date().toISOString(), explanations, plan, seen: false };
-    state.lastAdvanceAt += freq;
+    state.lastUpdate = { weekIndex, at: new Date(nowMs).toISOString(), explanations, plan, seen: false };
+    state.lastAdvanceAt = chrono.length; // all sessions to now are folded in
+    state.weeksProcessed = weekIndex + 1;
   }
+  // Move the anchor to the current week (even with no work to fold), so the next roll is the NEXT
+  // Sat 23:59; on the very first run this only establishes the baseline (rolled was false → no fold).
+  state.lastAdvanceWeekOpen = weekOpen;
   await saveState(state);
 }
 

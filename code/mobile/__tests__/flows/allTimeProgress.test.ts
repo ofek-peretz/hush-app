@@ -1,6 +1,8 @@
 /**
  * All-time peak progress (the Progress screen's data): initial peak vs best peak
- * across the athlete's entire history, gated at ≥2 distinct weeks per lift.
+ * across the athlete's entire history. A lift appears from its FIRST performance
+ * (founder 2026-07-09) — that first load is the starting point (baseline, delta 0);
+ * gains are measured against it from the second day on.
  */
 import { allTimePeakProgress, ALL_TIME_MIN_WEEKS } from '@/domain/progressReport';
 import type { Session, SetLog } from '@/data/local/models';
@@ -29,10 +31,15 @@ describe('allTimePeakProgress', () => {
     expect(allTimePeakProgress([], Date.now())).toEqual([]);
   });
 
-  test('a single week does not qualify (needs ≥2 distinct weeks)', () => {
+  test('a single performance appears as the starting point (baseline, delta 0)', () => {
     const sessions = [session('s1', base, [set('squat', 60, base)])];
-    expect(allTimePeakProgress(sessions, base + WEEK)).toHaveLength(0);
-    expect(ALL_TIME_MIN_WEEKS).toBe(2);
+    const out = allTimePeakProgress(sessions, base + WEEK);
+    expect(out).toHaveLength(1);
+    expect(out[0].exerciseId).toBe('squat');
+    expect(out[0].initialPeakKg).toBe(60);
+    expect(out[0].periodPeakKg).toBe(60);
+    expect(out[0].deltaKg).toBe(0); // no gain yet — this first load IS the baseline
+    expect(ALL_TIME_MIN_WEEKS).toBe(1);
   });
 
   test('initial peak vs best peak across the full span', () => {
@@ -63,13 +70,16 @@ describe('allTimePeakProgress', () => {
     expect(out[0].weeksTrained).toBe(2); // distinct training days
   });
 
-  test('two sessions on the SAME day do not qualify (no real then-vs-now)', () => {
+  test('two sessions on the SAME day collapse to one day → baseline (best of the day)', () => {
     const HOUR = 60 * 60 * 1000;
     const sessions = [
       session('s1', base, [set('bench', 60, base)]),
       session('s2', base + 3 * HOUR, [set('bench', 62.5, base + 3 * HOUR)]),
     ];
-    expect(allTimePeakProgress(sessions, base + 6 * HOUR)).toHaveLength(0);
+    const out = allTimePeakProgress(sessions, base + 6 * HOUR);
+    expect(out).toHaveLength(1);
+    expect(out[0].periodPeakKg).toBe(62.5); // one day → the day's best is the starting point
+    expect(out[0].deltaKg).toBe(0); // still a single day → no gain yet
   });
 
   test('bodyweight sets (null load) are ignored; sorted by biggest gain', () => {

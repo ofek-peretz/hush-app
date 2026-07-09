@@ -34,15 +34,20 @@ import type {
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { computePortrait } from '@/data/progression';
-import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, slotIdsByPosition } from '@/engine/v4/v4Engine';
+import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
+import { enginePattern } from '@/engine/v4/catalogAdapter';
+import { epley, normalizeLoad } from '@/engine/v4/reads';
+import { trainingWeekNumber } from '@/domain/weekCadence';
+import type { Pattern, Equipment } from '@/engine/v4/types';
 import { db, EMPTY_PREFERENCES, type OwnedPreferences } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
+import { track } from '@/platform/telemetry';
 import type { ActualSet, ModelClient } from './modelClient';
 
-// The most sets any (goal × tier × age) scheme can prescribe. sessionTargets emits this
-// many per-set targets per exercise so a slot's setCount is ALWAYS fully covered (a slot
-// never falls through to the default-weight fallback).
-const MAX_SETS = 5;
+// Hard ceiling on sets per exercise (founder 2026-07-09: max 4 for EVERY lift). setsFor clamps to
+// this, and sessionTargets emits this many per-set targets per exercise so a slot's setCount is
+// ALWAYS fully covered (a slot never falls through to the default-weight fallback).
+const MAX_SETS = 4;
 
 // ───────────────────────────── split library (market-standard) ─────────────────────────────
 // Each day = a recognized session built from the catalog. Days are ordered big→small
@@ -115,33 +120,53 @@ const WOMEN_SPLITS: Record<number, string[]> = {
 };
 
 /**
- * Order a day's exercises for both training quality AND gym flow:
- *   PRIMARY  — compounds before isolation (never pre-fatigue a muscle before its main lift).
- *   SECONDARY— within each phase, keep same-equipment lifts ADJACENT (founder 2026-06-23): an
- *     athlete already at a station shouldn't leave and return mid-phase and risk losing it.
- * Equipment clusters lead in the order they first appear, so the phase's main lift stays first.
- * (The one unavoidable revisit — a barbell used in both the compound and the isolation phase —
- * is the accepted cost of compounds-first.)
+ * Order a day's exercises for gym flow — the athlete works ONE piece of equipment to the end and
+ * NEVER leaves and returns to it (founder 2026-07-09: critical in a packed gym; a taken station on
+ * return is the worst experience). This is the hard constraint, so it wins over strict global
+ * compounds-first: exercises are grouped by EQUIPMENT (every same-station lift is contiguous), and
+ * WITHIN each station compounds come before isolation (never pre-fatigue the station's main lift).
+ * Stations are ordered so the one holding the earliest COMPOUND leads — the day's main lift stays
+ * first — and isolation-only stations trail. The only price vs the old rule is that a station's
+ * isolation can precede another station's compound; grouping equipment is worth it.
  */
 function orderForFlow(list: Exercise[]): Exercise[] {
   const tierRank = (e: Exercise) => (e.tier === 'compound' ? 0 : 1);
-  const tierSorted = list
-    .map((e, i) => ({ e, i }))
-    .sort((a, b) => tierRank(a.e) - tierRank(b.e) || a.i - b.i) // stable: compounds first
-    .map((x) => x.e);
-  const firstSeen = new Map<string, number>();
-  tierSorted.forEach((e, i) => {
-    const k = `${tierRank(e)}|${e.equipment}`;
-    if (!firstSeen.has(k)) firstSeen.set(k, i);
-  });
-  return tierSorted
-    .map((e, i) => ({ e, i }))
-    .sort(
-      (a, b) =>
-        firstSeen.get(`${tierRank(a.e)}|${a.e.equipment}`)! -
-          firstSeen.get(`${tierRank(b.e)}|${b.e.equipment}`)! || a.i - b.i,
-    )
-    .map((x) => x.e);
+  const idx = new Map<Exercise, number>(list.map((e, i) => [e, i]));
+  // group by equipment (one station, fully, before moving on)
+  const stations = new Map<string, Exercise[]>();
+  for (const e of list) {
+    const g = stations.get(e.equipment) ?? [];
+    g.push(e);
+    stations.set(e.equipment, g);
+  }
+  // within a station: compounds first, then original order
+  for (const g of stations.values()) g.sort((a, b) => tierRank(a) - tierRank(b) || idx.get(a)! - idx.get(b)!);
+  // order stations: the one with the earliest compound leads (main lift first); iso-only stations trail
+  return [...stations.values()]
+    .map((g) => {
+      const firstCompound = g.find((e) => tierRank(e) === 0);
+      return { g, key: firstCompound ? idx.get(firstCompound)! : Number.POSITIVE_INFINITY, first: Math.min(...g.map((e) => idx.get(e)!)) };
+    })
+    .sort((a, b) => a.key - b.key || a.first - b.first)
+    .flatMap((x) => x.g);
+}
+
+/**
+ * Re-cluster a day's slots for equipment flow AFTER an engine overlay may have changed an
+ * exercise's equipment (founder: use a station to the end, then move on). Reuses orderForFlow so
+ * the ordering law is identical to first generation; the supplemental core stays last, and every
+ * slot keeps its durable engineSlotId / setCount / lock. Idempotent on an already-clustered day.
+ */
+function reclusterDaySlots(slots: Slot[]): Slot[] {
+  const supplemental = slots.filter((s) => s.supplemental);
+  const primary = slots.filter((s) => !s.supplemental);
+  const exs = primary.map((s) => exerciseById(s.exerciseId)).filter((e): e is Exercise => !!e);
+  const ordered = orderForFlow(exs);
+  const slotByExercise = new Map(primary.map((s) => [s.exerciseId, s]));
+  const orderedPrimary = ordered.map((e) => slotByExercise.get(e.id)).filter((s): s is Slot => !!s);
+  const placed = new Set(orderedPrimary.map((s) => s.exerciseId));
+  const leftover = primary.filter((s) => !placed.has(s.exerciseId)); // safety (unresolved exercise)
+  return [...orderedPrimary, ...leftover, ...supplemental];
 }
 
 function dayFromBlueprint(
@@ -152,18 +177,39 @@ function dayFromBlueprint(
   age?: number,
   volume: WeeklyVolume = 'moderate',
 ): ProgramDay {
+  const dayKey = String(index);
+  // STABLE engine-slot id per blueprint exercise: pattern occurrence in the CANONICAL blueprint
+  // order (exerciseIds as written), NOT the display order below. Keyed by the workout's NAME (e.g.
+  // "Push A"), NOT its index — the name is a workout's true identity, stable when the athlete
+  // changes FREQUENCY (day_3 is Upper B at 4 days but Push B at 5), so per-slot state (load,
+  // progression, swaps) carries across a frequency change on the shared workouts and never leaks
+  // between two different workouts that happen to share an index. Survives equipment clustering and
+  // engine swaps/graduations too (findings 2 / V1).
+  const patternOcc = new Map<Pattern, number>();
+  const engineIdByExercise = new Map<string, string>();
+  for (const id of exerciseIds) {
+    const p = enginePattern(id);
+    if (p == null) continue; // core / unmapped — never engine-managed, no stable id needed
+    const occ = patternOcc.get(p) ?? 0;
+    patternOcc.set(p, occ + 1);
+    engineIdByExercise.set(id, `${name}:${p}#${occ}`);
+  }
   const exercises = orderForFlow(
     exerciseIds.map((exerciseId) => exerciseById(exerciseId)).filter((e): e is Exercise => !!e),
   );
-  const slots: Slot[] = exercises.map((ex) => ({
-    capability: ex.capability,
-    exerciseId: ex.id,
-    setCount: setsFor(ex.tier, goal, age, volume),
-  }));
+  const slots: Slot[] = exercises.map((ex) => {
+    const engineSlotId = engineIdByExercise.get(ex.id);
+    return {
+      capability: ex.capability,
+      exerciseId: ex.id,
+      setCount: setsFor(ex.tier, goal, age, volume),
+      ...(engineSlotId ? { engineSlotId } : {}),
+    };
+  });
   // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
   // Calves · Core), in catalog order, deduplicated.
   const muscleGroups = [...new Set(exercises.map((ex) => ex.muscle))];
-  return { id: `day_${index}`, name, muscleGroups, isRest: false, slots, key: String(index), completed: false };
+  return { id: `day_${index}`, name, muscleGroups, isRest: false, slots, key: dayKey, completed: false };
 }
 
 // ───────────────────────────── supplemental core (founder rules 2026-06-23) ─────────────────────────────
@@ -336,11 +382,64 @@ function startingWeight(
   return Math.max(kg, step);
 }
 
-/** The cold-start seed for an exercise id (null for bodyweight / unknown) — injected into the v4
- *  engine as its week-1 guess, discarded at calibration exit (C-8, §4.4). */
-function seedForExercise(id: string, profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>): number | null {
+/**
+ * Best demonstrated e1RM across the athlete's history for a given engine PATTERN, plus the baseKg
+ * of the lift that produced it — the substrate for the smart swap seed. Weighted lifts only.
+ */
+function bestPatternE1rm(pattern: Pattern, history: Session[]): { e1rm: number; baseKg: number } {
+  let e1rm = 0;
+  let baseKg = 0;
+  for (const s of history) {
+    for (const log of s.sets) {
+      if (log.actualWeight == null || log.actualReps <= 0) continue;
+      const ex = exerciseById(log.exerciseId);
+      if (!ex || ex.baseKg == null || enginePattern(log.exerciseId) !== pattern) continue;
+      const e = epley(log.actualWeight, log.actualReps);
+      if (e > e1rm) {
+        e1rm = e;
+        baseKg = ex.baseKg;
+      }
+    }
+  }
+  return { e1rm, baseKg };
+}
+
+const HYPERTROPHY_REP_TARGET = 8; // goal is hypertrophy for everyone (founder 2026-07-09)
+
+/**
+ * Smart starting load for a lift (founder 2026-07-09): a swap / new exercise must ADAPT to the
+ * athlete's PROVEN strength, not restart from a beginner cold-start (a year-trained bencher moving
+ * to the chest-press machine must not begin at ~half their real pushing load). Priority:
+ *   1. the lift's OWN demonstrated e1RM (already trained it) → working load at the rep target;
+ *   2. else the athlete's best e1RM on the SAME engine pattern, scaled by the two lifts' baseKg
+ *      ratio (relative difficulty) → a strength transfer onto the new lift;
+ *   3. else the conservative cold-start seed (a genuinely new pattern / the first program).
+ * Bodyweight lifts have no external load. The result still enters CALIBRATING, which fine-tunes it.
+ * Injected into the engine as `seedFor`; discarded at calibration exit (C-8, §4.4).
+ */
+function smartSeed(
+  id: string,
+  profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>,
+  history: Session[],
+): number | null {
   const ex = exerciseById(id);
-  return ex ? startingWeight(ex, profile) : null;
+  if (!ex) return null;
+  if (ex.bodyweight || ex.baseKg == null) return startingWeight(ex, profile); // null for bodyweight
+  const toWorking = (e1rm: number) => normalizeLoad(e1rm / (1 + HYPERTROPHY_REP_TARGET / 30), ex.equipment as Equipment);
+  // 1. the lift's own demonstrated capability.
+  let own = 0;
+  for (const s of history)
+    for (const log of s.sets)
+      if (log.exerciseId === id && log.actualWeight != null && log.actualReps > 0) own = Math.max(own, epley(log.actualWeight, log.actualReps));
+  if (own > 0) return toWorking(own);
+  // 2. transfer from the best SAME-PATTERN lift, scaled by relative difficulty (baseKg ratio).
+  const pattern = enginePattern(id);
+  if (pattern) {
+    const best = bestPatternE1rm(pattern, history);
+    if (best.e1rm > 0 && best.baseKg > 0) return toWorking(best.e1rm * (ex.baseKg / best.baseKg));
+  }
+  // 3. conservative cold-start.
+  return startingWeight(ex, profile);
 }
 
 type Tier = Exercise['tier'];
@@ -392,7 +491,7 @@ function setsFor(tier: Tier, goal: Goal, age?: number, volume: WeeklyVolume = 'm
   return Math.min(Math.max(sets, 3), MAX_SETS);
 }
 
-async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age'>> {
+async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age' | 'memberSince'>> {
   try {
     const p = await db.loadProfile();
     if (p) return p;
@@ -431,6 +530,53 @@ async function editPreferences(edit: (p: OwnedPreferences) => void): Promise<voi
   }
 }
 
+// ───────────────────────────── periodic refresh (founder 2026-07-09) ─────────────────────────────
+/** Every N training weeks, ONE non-pinned lift per workout rotates to a fresh variation. */
+const REFRESH_CYCLE_WEEKS = 3;
+
+/**
+ * Pick ONE lift in `day` to rotate out this cycle and swap it for a fresh same-muscle + same-tier
+ * variation. Selection: the most-STALLED non-pinned lift (tie → longest tenure → stable order), so
+ * a plateau is broken while a working lift is left alone. The replacement is the next one the slot
+ * has NOT used recently — walking the WHOLE pool with NO ping-pong (repeats only once the pool is
+ * exhausted). PINNed lifts, core, and swap-only lifts are never touched; a duplicate in the workout
+ * is never introduced. Mutates prefs (`rotations` + `rotationUsed`) and records the rotated slotId.
+ */
+function rotateOneInDay(
+  day: ProgramDay,
+  engView: Record<string, { flatWeeks: number; tenure: number }>,
+  prefs: OwnedPreferences,
+  rotatedIds: Set<string>,
+): void {
+  const rotatable = day.slots.filter((s) => {
+    if (!s.engineSlotId || s.supplemental || rotatedIds.has(s.engineSlotId)) return false;
+    const ex = exerciseById(s.exerciseId);
+    return !!ex && !prefs.pinsByMuscle[ex.muscle]; // never rotate a lift whose muscle the athlete pinned
+  });
+  if (!rotatable.length) return;
+  const chosen = rotatable
+    .map((s, i) => ({ s, i, eng: s.engineSlotId ? engView[s.engineSlotId] : undefined }))
+    .sort((a, b) => (b.eng?.flatWeeks ?? 0) - (a.eng?.flatWeeks ?? 0) || (b.eng?.tenure ?? 0) - (a.eng?.tenure ?? 0) || a.i - b.i)[0].s;
+  const slotId = chosen.engineSlotId!;
+  const cur = exerciseById(chosen.exerciseId);
+  if (!cur) return;
+  const inDay = new Set(day.slots.map((sl) => sl.exerciseId));
+  const pool = exercisesForMuscle(cur.muscle).filter(
+    (e) => e.tier === cur.tier && !isSwapOnly(e.id) && !inDay.has(e.id) && e.id !== chosen.exerciseId,
+  );
+  if (!pool.length) return; // no real alternative — leave this workout unchanged this cycle
+  let used = prefs.rotationUsed[slotId] ?? [];
+  let fresh = pool.filter((e) => !used.includes(e.id));
+  if (!fresh.length) {
+    used = []; // whole pool cycled → start over (the current lift is excluded, so still no ping-pong)
+    fresh = pool;
+  }
+  const next = fresh[0].id; // deterministic → the refresh is reproducible + testable
+  prefs.rotations[slotId] = next;
+  prefs.rotationUsed[slotId] = [...used, chosen.exerciseId]; // remember the outgoing lift
+  rotatedIds.add(slotId);
+}
+
 export const fixtureModel: ModelClient = {
   async getProfile() {
     return {};
@@ -459,28 +605,103 @@ export const fixtureModel: ModelClient = {
     const volume = profile.volume ?? 'moderate';
     const prefs = await loadPreferencesSafe();
     const days = plan.map((name, i) => dayFromBlueprint(i, name, pool[name] ?? [], goal, profile.age, volume));
-    for (const d of days) applyPins(d, prefs.pinsByMuscle); // athlete-owned swaps survive regen
+
+    // Unify same-exercise slots (founder 2026-07-09): when a lift appears in more than one workout
+    // (e.g. women's hip thrust across two lower days), ALL its occurrences share ONE engine
+    // progression — keyed to the first occurrence's stable id — so it gets a single consistent
+    // load fed by EVERY session, never two identical-but-independent slots that could drift apart.
+    const canonicalEngineId = new Map<string, string>();
+    for (const d of days) {
+      for (const slot of d.slots) {
+        if (!slot.engineSlotId) continue;
+        const canon = canonicalEngineId.get(slot.exerciseId);
+        if (canon == null) canonicalEngineId.set(slot.exerciseId, slot.engineSlotId);
+        else slot.engineSlotId = canon; // later occurrence → share the first's engine slot
+      }
+    }
+
+    // Engine decisions → the program (finding 2): BEFORE pins + ensureSlots, each engine-managed
+    // slot adopts the engine's CURRENT exercise (a stall swap or a bodyweight graduation). Doing it
+    // HERE — not after ensureSlots — is what stops ensureSlots from mistaking the engine's own swap
+    // for a manual replacement and RESETTING it: the program now already carries the engine's
+    // exercise, so they agree. Athlete pins run AFTER, so an explicit pin still overrides the engine.
+    // Only the exercise is overlaid; set count stays owned by the assembler (setsFor + the 60-min
+    // cap), which a volume/goal change must be free to re-derive. Fresh / un-swapped slots: no-op.
+    const engSlots = await currentSlots().catch((e): Record<string, V4SlotView> => {
+      void track('engine_error', { op: 'currentSlots', message: String(e) });
+      return {};
+    });
+    const swappedDays = new Set<string>();
+    for (const day of days) {
+      for (const slot of day.slots) {
+        const eng = slot.engineSlotId ? engSlots[slot.engineSlotId] : undefined;
+        if (eng && eng.exerciseId !== slot.exerciseId) {
+          slot.exerciseId = eng.exerciseId;
+          swappedDays.add(day.id);
+        }
+      }
+    }
+
+    // PERIODIC REFRESH: at a NEW 3-week cycle, rotate ONE non-pinned lift per workout (variety +
+    // plateau-breaking). Then APPLY the durable rotations on top of the blueprint — the final word on
+    // a rotated slot's exercise (an athlete pin, applied next, still wins; ensureSlots then calibrates
+    // the fresh lift from the smart seed, so proven strength carries). Runs every generation but only
+    // COMPUTES a new rotation once per cycle (stable within the 3 weeks).
+    const refreshWeek = trainingWeekNumber(profile.memberSince, Date.now());
+    const cycleIndex = Math.floor((refreshWeek - 1) / REFRESH_CYCLE_WEEKS);
+    if (prefs.lastRotationCycle < 0) {
+      // First program: the opening 3-week cycle IS the blueprint — establish the baseline without
+      // rotating; the first refresh lands at the next cycle boundary (~week 4).
+      prefs.lastRotationCycle = cycleIndex;
+      await db.savePreferences(prefs).catch(() => {});
+    } else if (cycleIndex > prefs.lastRotationCycle) {
+      const rotatedIds = new Set<string>();
+      for (const d of days) rotateOneInDay(d, engSlots, prefs, rotatedIds);
+      prefs.lastRotationCycle = cycleIndex;
+      await db.savePreferences(prefs).catch(() => {});
+    }
+    for (const day of days) {
+      for (const slot of day.slots) {
+        const rotated = slot.engineSlotId ? prefs.rotations[slot.engineSlotId] : undefined;
+        const ex = exerciseById(slot.exerciseId);
+        if (rotated && ex && !prefs.pinsByMuscle[ex.muscle] && rotated !== slot.exerciseId) {
+          slot.exerciseId = rotated;
+          swappedDays.add(day.id);
+        }
+      }
+    }
+
+    for (const d of days) applyPins(d, prefs.pinsByMuscle); // athlete pin overrides the rotation + blueprint
     addWeeklyCore(days, n); // one supplemental core block, last, upper-preferred
+    // A swap may have changed a lift's equipment → re-cluster THAT day so the athlete still works one
+    // station to the end (founder); recompute its muscle line. Un-swapped days keep their order.
+    for (const d of days) {
+      if (swappedDays.has(d.id)) {
+        d.slots = reclusterDaySlots(d.slots);
+        d.muscleGroups = [...new Set(d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter((m): m is MuscleGroup => !!m))];
+      }
+    }
     for (const d of days) enforceTimeCap(d); // prescribed work ≤ 60 min (warm-ups excluded)
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     const program = { id: 'program_v1', frequency: n, days: ordered };
-    // Lock System: annotate each engine-managed slot with the athlete's lock state (for display +
-    // the per-slot toggle), keyed by the durable engine slotId. Core/unmapped slots stay unlocked.
-    const lockedSet = new Set(prefs.lockedSlots);
-    const idsByDay = slotIdsByPosition(program);
-    for (const day of program.days) {
-      const ids = idsByDay.get(day.id) ?? [];
-      day.slots.forEach((slot, i) => {
-        const sid = ids[i];
-        if (sid != null) slot.locked = lockedSet.has(sid);
-      });
-    }
     // v4: ensure durable per-slot engine state exists for this program (idempotent; preserves state
     // across regen). The locked set is the source of truth for slot.locked (Lock System).
+    const lockedSet = new Set(prefs.lockedSlots);
     const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
     const history = await loadHistorySafe();
-    await ensureSlots(program, eprofile, history, (id) => seedForExercise(id, profile), lockedSet).catch(() => {});
+    await ensureSlots(program, eprofile, history, (id) => smartSeed(id, profile, history), lockedSet).catch((e) =>
+      // Finding 8: a persisted-state failure must be OBSERVABLE, not silent — otherwise the slot
+      // state silently desyncs from the program and the next read cold-starts with no signal.
+      void track('engine_error', { op: 'ensureSlots', message: String(e) }),
+    );
+    // Lock System: annotate each slot's lock by its durable engineSlotId (stable across the overlay +
+    // re-cluster). Core / unmapped slots have no engineSlotId and stay unlocked.
+    for (const day of program.days) {
+      for (const slot of day.slots) {
+        if (slot.engineSlotId != null) slot.locked = lockedSet.has(slot.engineSlotId);
+      }
+    }
     return program;
   },
 
@@ -495,15 +716,42 @@ export const fixtureModel: ModelClient = {
     // durable per-slot state. Exercises without an engine slot (swap-only) fall back to the seed.
     const program = await db.loadProgram();
     const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
-    const seedFor = (id: string) => seedForExercise(id, profile);
+    const seedFor = (id: string) => smartSeed(id, profile, history);
     const prefs = await loadPreferencesSafe(); // Lock System: locked slots gate engine swaps at rollover
-    if (program) await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots)).catch(() => {});
-    const targets = await currentTargets().catch((): Record<string, { weight: number | null; reps: number }> => ({}));
+    if (program)
+      await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots)).catch((e) =>
+        void track('engine_error', { op: 'maybeAdvance', message: String(e) }),
+      );
+    // Finding 8: currentTargets failing means EVERY exercise silently falls back to cold-start
+    // below. Keep the safe fallback (never crash a workout), but emit telemetry so the cold-start
+    // is observable rather than an invisible full reset.
+    const targets = await currentTargets().catch((e): Record<string, { weight: number | null; reps: number }> => {
+      void track('engine_error', { op: 'currentTargets', message: String(e) });
+      return {};
+    });
+    // Reason lines (finding 4): from WEEK 2 on, surface the engine's per-lift decision — did the load
+    // go up or down vs the athlete's last logged weight — so the WHY sheet, Home's "lifts up", and
+    // Well Done reflect what Hush actually did. WEEK 1 is the learning week: silent (the WHY sheet
+    // shows the learning note instead). Attached to the first set only (the ratified convention).
+    const week = trainingWeekNumber(profile.memberSince, Date.now());
+    const lastLogged = new Map<string, number>();
+    for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
+
     for (const ex of EXERCISES) {
       const t = targets[ex.id];
-      const weight = t ? t.weight : startingWeight(ex, profile);
+      const weight = t ? t.weight : smartSeed(ex.id, profile, history);
       const reps = t ? t.reps : repsFor(ex.tier, goal, profile.age);
-      for (let s = 0; s < MAX_SETS; s++) out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps });
+      let reasonType: SetTarget['reasonType'];
+      let reasonDelta: number | undefined;
+      if (week >= 2 && weight != null) {
+        const prev = lastLogged.get(ex.id);
+        if (prev != null && prev !== weight) {
+          reasonType = weight > prev ? 'increase' : 'decrease';
+          reasonDelta = Math.round((weight - prev) * 10) / 10;
+        }
+      }
+      for (let s = 0; s < MAX_SETS; s++)
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

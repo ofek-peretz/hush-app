@@ -37,9 +37,6 @@ export function Home({ navigation, route }: Props) {
   // "Choose workout" (top-right) swaps the workout shown on Home immediately. Local,
   // session-scoped, takes priority over the default next workout (matches the prototype).
   const [chosenId, setChosenId] = useState<string | null>(null);
-  // How many lifts step up this session (the Home meta line). Derived from the
-  // prefetched targets for the offered workout; 0 until they resolve.
-  const [loadsUp, setLoadsUp] = useState(0);
   const chosenDay =
     chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
   const day = chosenDay ?? focusDay ?? (program ? nextWorkout(program) : null);
@@ -125,12 +122,7 @@ export function Home({ navigation, route }: Props) {
       .sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions })
       .then((targets) => {
         if (cancelled) return;
-        prefetch.current = { dayId: day.id, targets };
-        // Count distinct lifts whose recommended load steps up this session.
-        const up = new Set(
-          targets.filter((x) => x.reasonType === 'increase').map((x) => x.exerciseId),
-        );
-        setLoadsUp(up.size);
+        prefetch.current = { dayId: day.id, targets }; // warm the cache for a no-wait slide-to-start
       })
       .catch(() => {
         /* fall back to fetching on demand in onStart */
@@ -258,7 +250,6 @@ export function Home({ navigation, route }: Props) {
       dateLabel={dateLabel}
       weekNumber={weekNumber}
       exerciseCount={day?.slots.length}
-      loadsUp={loadsUp}
       restDaysTaken={program ? program.days.filter((d) => d.isRest).length : 0}
       resumable={resumable}
       onResume={onResume}

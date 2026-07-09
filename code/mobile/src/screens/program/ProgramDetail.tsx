@@ -8,7 +8,7 @@
  * The athlete owns exercise SELECTION (swap/replace) and the lock; the frozen
  * model owns order, load, sets, reps — and may auto-swap only UNLOCKED slots.
  * "Begin {name}" sets this as Home's offered workout and returns to Home, so the
- * actual start stays on the canonical, Sunday-04:00-gated path.
+ * actual start stays on the canonical, Saturday-23:59-gated path.
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
@@ -160,7 +160,12 @@ export function ProgramDetail({ navigation, route }: Props) {
       ) : null}
 
       {swapping ? (
-        <SwapSheet currentExerciseId={swapping.currentExerciseId} onSelect={onSelectSwap} onClose={() => setSwapping(null)} />
+        <SwapSheet
+          currentExerciseId={swapping.currentExerciseId}
+          exclude={day?.slots.map((s) => s.exerciseId) ?? []}
+          onSelect={onSelectSwap}
+          onClose={() => setSwapping(null)}
+        />
       ) : null}
 
       {day && formFor != null ? (

@@ -8,6 +8,7 @@
  * Plus the supplemental-core product rules (1/week · 3 sets · last · upper-preferred).
  */
 import { fixtureModel } from '@/data/api/fixtureModel';
+import { resetV4 } from '@/engine/v4/v4Engine';
 import {
   EXERCISES,
   exerciseById,
@@ -34,6 +35,10 @@ async function allGeneratedIds(): Promise<Set<string>> {
   const ids = new Set<string>();
   for (const sex of ['male', 'female'] as const) {
     for (let days = 1; days <= 6; days++) {
+      // Each (sex, frequency) is a DISTINCT athlete — reset engine state so one shape's per-slot
+      // state never leaks into another via a shared stable slotId (which would let the engine-swap
+      // overlay carry an exercise across program shapes). In production one athlete has one shape.
+      await resetV4();
       const prog = await fixtureModel.generateProgram(profile({ sex, daysPerWeek: days }));
       for (const d of prog.days) for (const s of d.slots) ids.add(s.exerciseId);
     }

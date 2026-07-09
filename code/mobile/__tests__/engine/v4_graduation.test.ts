@@ -66,9 +66,17 @@ describe('bodyweight graduation', () => {
     // slot graduates — on the LAST processed week, so the Weekly Update carries it.
     // History is newest-first.
     const history: Session[] = [];
-    for (let wk = 0; wk < 4; wk++) history.unshift(chinUpSession(wk, 13, 8 + Math.min(wk, 4)));
-
-    await maybeAdvance(program, eprofile, history, seedFor);
+    // finding 7: the engine advances once per Sat-23:59 roll — drive four weekly rolls (rewinding
+    // the anchor each week so a roll is due), so four week-records accrue and the top-of-range
+    // streak reaches the novice window, exactly as a real month of training would.
+    await maybeAdvance(program, eprofile, history, seedFor); // establish state + the weekly anchor
+    for (let wk = 0; wk < 4; wk++) {
+      history.unshift(chinUpSession(wk, 13, 8 + Math.min(wk, 4)));
+      const st = (await db.loadEngineV4())!;
+      st.lastAdvanceWeekOpen = 1; // any value before the current week-open → a roll is due
+      await db.saveEngineV4(st);
+      await maybeAdvance(program, eprofile, history, seedFor);
+    }
 
     const slot = await slotState();
     expect(slot.current_exercise_id).toBe('pull_up'); // graduated up the ladder

@@ -77,6 +77,12 @@ export interface Slot {
   // Present (true/false) only on engine-managed, lockable slots; undefined on core /
   // unmapped slots (which the engine never swaps anyway, so they cannot be locked).
   locked?: boolean;
+  // STABLE engine-slot identity (founder 2026-07-09), stamped at generation from the CANONICAL
+  // blueprint pattern-occurrence order — NOT the display order. This decouples a slot's durable
+  // identity from equipment clustering + engine swaps, so an engine swap/graduation never shifts
+  // it (fixes findings 2 / V1). Absent on core / unmapped slots; deriveSlots falls back to the
+  // positional id when absent (backward compatibility with pre-upgrade persisted programs).
+  engineSlotId?: string;
 }
 
 export interface ProgramDay {

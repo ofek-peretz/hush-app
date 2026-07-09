@@ -26,6 +26,7 @@ import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { swapLadder } from '@/domain/replacement';
+import { trainingWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
@@ -216,7 +217,8 @@ export function SessionFlow({ navigation }: Props) {
     } catch {
       prefs = undefined;
     }
-    const ladder = swapLadder(exId, prefs);
+    // Exclude every OTHER lift already in this session so a swap never creates a duplicate.
+    const ladder = swapLadder(exId, prefs, session.sessionExerciseIds.filter((id) => id !== exId));
     if (!ladder.length) return;
     quickSwapRef.current = { target, originalId: exId, ladder, idx: 0 };
     presentSwapChoice(ladder[0]);
@@ -824,9 +826,30 @@ function Rest({
 function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => void }) {
   const { t } = useCopy();
   const session = useSession();
+  const app = useApp();
+  const week = trainingWeekNumber(app.profile?.memberSince, Date.now());
   const target = session.currentTarget;
   const exName = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
   if (!target) return null;
+
+  // Week 1 is the LEARNING week (founder 2026-07-09): Hush is still getting to know the athlete, so
+  // there is no up/down yet — pressing Why explains exactly that instead of a load change.
+  if (week <= 1) {
+    return (
+      <BottomSheet onClose={onClose}>
+        <Legend style={styles.sheetLegend}>{t('whyLoad.legend')}</Legend>
+        <View style={styles.whyHead}>
+          <Text style={styles.whyName} numberOfLines={1}>{exName}</Text>
+        </View>
+        <Text style={styles.whyLine}>{t('whyLoad.learning')}</Text>
+        <View style={styles.whyNote}>
+          <Icon name="shield" size={16} color={color.textTertiary} strokeWidth={2} />
+          <Text style={styles.whyNoteText}>{t('whyLoad.note')}</Text>
+        </View>
+        <Button variant="primary" block label={t('whyLoad.got')} onPress={onClose} style={styles.whyGot} />
+      </BottomSheet>
+    );
+  }
 
   const to = displayWeight(target.recommendedWeight, units) ?? 0;
   const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
