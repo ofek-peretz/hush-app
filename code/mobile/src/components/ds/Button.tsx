@@ -21,7 +21,7 @@ import {
   stage as stageC,
 } from '@/design/tokens';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'onstage';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'onstage' | 'onstageGhost';
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -74,6 +74,7 @@ export function Button({
     >
       {leading}
       <Text
+        numberOfLines={1}
         style={[
           styles.label,
           { fontSize: FONT[size], color: FILL[variant].fg, letterSpacing: trackingPx(FONT[size], tracking.tight) },
@@ -101,6 +102,9 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
     fg: down[0],
   },
   onstage: { container: { backgroundColor: stageC.ink0 }, pressed: { backgroundColor: paper[0] }, fg: stageC[0] },
+  // Ghost on the inverted stage — light ink on the dark surface (the paper `ghost`
+  // fg is near-black and disappears on stage).
+  onstageGhost: { container: { backgroundColor: 'transparent' }, pressed: { backgroundColor: stageC[1] }, fg: stageC.ink0 },
 };
 
 const styles = StyleSheet.create({

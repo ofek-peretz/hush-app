@@ -9,7 +9,8 @@
  *   Begin {name} · Choose another workout (bottom sheet — restored 2026-07-10;
  *   the view had silently lost the phone affordance while the watch kept it) ·
  *   Open training · hub rows (This week / History / Progress).
- * Rest state centers "Recovery." with the completed-week meter and a locked next.
+ * Rest state centers "Recovery." with the completed-week meter and one quiet
+ * fact — when the next week opens (Sunday morning, the calendar roll).
  *
  * The container (Home.tsx) wires state + navigation.
  */
@@ -98,6 +99,11 @@ export function HomeView(props: HomeViewProps) {
                   tone="up"
                   size="lg"
                 />
+              </View>
+              {/* the one fact recovery is waiting on — when the next week opens */}
+              <View style={styles.metaRow}>
+                <Icon name="calendar" size={15} color={color.textTertiary} strokeWidth={2} />
+                <Text style={styles.metaMono}>{t('home.restNext')}</Text>
               </View>
             </View>
           ) : (
@@ -296,8 +302,6 @@ const styles = StyleSheet.create({
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
-  metaText: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
-  metaSep: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary },
 
   meterWrap: { marginTop: 28 },
   error: { marginTop: 16 },

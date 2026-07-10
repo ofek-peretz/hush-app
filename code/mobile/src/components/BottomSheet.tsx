@@ -128,6 +128,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#3A3A3C',
+    // Token, not the legacy dark-spec hex — a calm control-line gray on the paper sheet.
+    backgroundColor: color.borderControl,
   },
 });

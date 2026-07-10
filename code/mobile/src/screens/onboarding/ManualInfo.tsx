@@ -24,7 +24,7 @@ export function ManualInfo({ navigation, route }: Props) {
   const [weight, setWeight] = useState(82);
 
   function onContinue() {
-    navigation.navigate('Experience', {
+    navigation.navigate('Training', {
       profile: { healthConnected, age, sex, heightCm: height, weightKg: weight },
     });
   }
@@ -32,7 +32,7 @@ export function ManualInfo({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 5 }}
+      progress={{ index: 3, total: 4 }}
       legend={t('ob.bodyLegend')}
       title={t('ob.bodyTitle')}
       sub={t('ob.bodySub')}
@@ -65,7 +65,9 @@ export function ManualInfo({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  rows: { gap: 18 },
-  col: { gap: 8 },
+  // Compact enough that all four controls + the pinned footer fit the viewport
+  // whole on every supported iPhone — onboarding never scrolls.
+  rows: { gap: 14 },
+  col: { gap: 7 },
   wheel: { alignSelf: 'stretch' },
 });

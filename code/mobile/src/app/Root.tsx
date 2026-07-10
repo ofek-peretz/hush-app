@@ -29,8 +29,7 @@ import { Consent } from '@/screens/onboarding/Consent';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
-import { Experience } from '@/screens/onboarding/Experience';
-import { DaysPerWeek } from '@/screens/onboarding/DaysPerWeek';
+import { Training } from '@/screens/onboarding/Training';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
@@ -67,8 +66,7 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />
-      <OnboardingStack.Screen name="Experience" component={Experience} />
-      <OnboardingStack.Screen name="DaysPerWeek" component={DaysPerWeek} />
+      <OnboardingStack.Screen name="Training" component={Training} />
       <OnboardingStack.Screen name="ProgramCreated" component={ProgramCreated} />
     </OnboardingStack.Navigator>
   );

@@ -3,12 +3,13 @@
  * onboarding (forward-only) and the main app.
  *
  * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18; Goal step removed
- * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked):
+ * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
+ * Experience + Days per week merged into one Training step 2026-07-10):
  *   Authentication → Consent → Name → Connect Health → Manual Info
- *   → Experience → Days per week → Program Created → Home.
+ *   → Training → Program Created → Home.
  * Invite-token enrollment is removed.
  */
-import type { CardioActivity, Experience, OnboardingInputs, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
 /** Profile fields gathered in onboarding — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
@@ -29,9 +30,9 @@ export type OnboardingParamList = {
   // are needed for the program; HealthKit only reliably gives steps/weight). The flag
   // records whether Health was connected (for weight prefill + the profile).
   ManualInfo: { healthConnected: boolean } | undefined;
-  // Experience drives the starting weights; the first choice after body data.
-  Experience: { profile: OnboardingProfileDraft };
-  DaysPerWeek: { profile: OnboardingProfileDraft; experience: Experience };
+  // Training (merged Experience + Days per week, 2026-07-10): experience drives the
+  // starting weights, frequency shapes the split — one screen, whole in the viewport.
+  Training: { profile: OnboardingProfileDraft };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };

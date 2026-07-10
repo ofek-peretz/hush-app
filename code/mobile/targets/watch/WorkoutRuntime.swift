@@ -1,5 +1,24 @@
+import Combine
 import Foundation
 import HealthKit
+
+/// Live sensor readout for the Controls page (heart rate + active energy from the
+/// HKLiveWorkoutBuilder, elapsed time from the session). Published on main. All fields
+/// degrade to nil/zero when HealthKit is unauthorized or the runtime is inert — the
+/// page renders placeholders and the workout is unaffected.
+final class LiveMetrics: ObservableObject {
+  @Published var heartRateBpm: Int?
+  @Published var activeKcal: Int?
+  /// Pause-aware elapsed seconds, read straight from the live builder at render time
+  /// (a TimelineView polls it once a second). Returns nil with no active session.
+  var elapsed: () -> TimeInterval? = { nil }
+
+  func clear() {
+    heartRateBpm = nil
+    activeKcal = nil
+    elapsed = { nil }
+  }
+}
 
 // The watch's OS-level workout runtime: owns the HKWorkoutSession + HKLiveWorkoutBuilder
 // that grant the app background execution during a workout (timers and haptics keep firing
@@ -23,6 +42,8 @@ final class WorkoutRuntime: NSObject {
   private var state: State = .idle
   private var saveOnEnd = true
   private var wantsPause = false
+  /// Live HR / kcal / elapsed for the Controls page (observed by the UI).
+  let metrics = LiveMetrics()
 
   private static var available: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -63,6 +84,8 @@ final class WorkoutRuntime: NSObject {
         healthStore: store, workoutConfiguration: recovered.workoutConfiguration
       )
     }
+    builder?.delegate = self
+    bindMetrics()
     saveOnEnd = true
     switch recovered.state {
     case .ended, .stopped:
@@ -107,8 +130,10 @@ final class WorkoutRuntime: NSObject {
     let liveBuilder = started.associatedWorkoutBuilder()
     liveBuilder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: config)
     started.delegate = self
+    liveBuilder.delegate = self
     session = started
     builder = liveBuilder
+    bindMetrics()
     saveOnEnd = true
     state = .starting
     let start = Date()
@@ -160,7 +185,41 @@ final class WorkoutRuntime: NSObject {
     state = .idle
     wantsPause = false
     saveOnEnd = true
+    metrics.clear()
   }
+
+  /// Point the metrics' elapsed read at the live builder (pause-aware by construction —
+  /// HKLiveWorkoutBuilder.elapsedTime stops while the session is paused).
+  private func bindMetrics() {
+    metrics.elapsed = { [weak self] in self?.builder?.elapsedTime }
+  }
+}
+
+// MARK: HKLiveWorkoutBuilderDelegate (live HR / kcal → Controls page)
+
+extension WorkoutRuntime: HKLiveWorkoutBuilderDelegate {
+  func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
+    for type in collectedTypes {
+      guard let qt = type as? HKQuantityType, let stats = workoutBuilder.statistics(for: qt) else { continue }
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        switch qt {
+        case HKQuantityType.quantityType(forIdentifier: .heartRate):
+          if let bpm = stats.mostRecentQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute())) {
+            self.metrics.heartRateBpm = Int(bpm.rounded())
+          }
+        case HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned):
+          if let kcal = stats.sumQuantity()?.doubleValue(for: .kilocalorie()) {
+            self.metrics.activeKcal = Int(kcal.rounded())
+          }
+        default:
+          break
+        }
+      }
+    }
+  }
+
+  func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 }
 
 // MARK: HKWorkoutSessionDelegate

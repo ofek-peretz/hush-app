@@ -20,15 +20,17 @@ interface Props {
   pill?: boolean;
   size?: Size;
   showValue?: boolean;
+  /** Localized text for the `hold` state (defaults to the English mark). */
+  holdLabel?: string;
   style?: ViewStyle | ViewStyle[];
 }
 
-export function LoadDelta({ value = 0, unit = 'kg', direction, pill, size = 'md', showValue = true, style }: Props) {
+export function LoadDelta({ value = 0, unit = 'kg', direction, pill, size = 'md', showValue = true, holdLabel = 'hold', style }: Props) {
   const dir: Dir = direction || (value > 0 ? 'up' : value < 0 ? 'down' : 'hold');
   const tint = dir === 'up' ? up[0] : dir === 'down' ? down[0] : color.textMuted;
   const pillBg = dir === 'up' ? up.wash : dir === 'down' ? down.wash : color.fillSubtle;
   const mag = Math.abs(value);
-  const label = dir === 'hold' ? 'hold' : `${dir === 'up' ? '+' : '−'}${mag}${unit ? ' ' + unit : ''}`;
+  const label = dir === 'hold' ? holdLabel : `${dir === 'up' ? '+' : '−'}${mag}${unit ? ' ' + unit : ''}`;
   return (
     <View style={[styles.row, pill && [styles.pill, { backgroundColor: pillBg }], style]}>
       <Glyph dir={dir} tint={tint} />

@@ -278,7 +278,11 @@ export function WellDone({ navigation, route }: Props) {
               </View>
             ) : null}
           </Pressable>
-          {lifts.length > 0 ? <Text style={styles.tapSkip}>{t('complete.tapSkip').toUpperCase()}</Text> : null}
+          {lifts.length > 0 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')} onPress={skip} style={styles.tapSkipHit}>
+              <Text style={styles.tapSkip}>{t('complete.tapSkip').toUpperCase()}</Text>
+            </Pressable>
+          ) : null}
         </SafeAreaView>
       </View>
     );
@@ -369,7 +373,10 @@ const styles = StyleSheet.create({
   readCheckDone: { backgroundColor: up[0], borderColor: up[0] },
   readName: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0 },
   readBest: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2 },
-  tapSkip: { textAlign: 'center', paddingBottom: 18, fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
+  // The hint itself is a target too — the whole body Pressable skips, but the label
+  // must honor its own promise (44pt).
+  tapSkipHit: { minHeight: 44, justifyContent: 'center', paddingBottom: 10 },
+  tapSkip: { textAlign: 'center', fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
 
   // beat 3
   resultScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16, flexGrow: 1, justifyContent: 'center' },

@@ -8,8 +8,10 @@ enum WatchCopy {
   static let nextWorkout = "Next workout"
   static let begin = "Begin"
   static let chooseWorkout = "Choose workout"
-  static let recovery = "Recovery — your next workout opens Monday"
+  // Calendar-primary cadence: the week rolls SUNDAY 04:00 (keep in step with en.json).
+  static let recovery = "Recovery — your next workout opens Sunday"
   static func lifts(_ n: Int) -> String { "\(n) lifts" }
+  static let idleWaiting = "Open Hush on iPhone"
 
   // Active Set
   static let editResult = "Edit result"
@@ -53,6 +55,14 @@ enum WatchCopy {
   static let pausedTitle = "Paused"
   static let resume = "Resume"
   static let endWorkout = "End workout"
+
+  // Controls page (swipe left — the Apple Workout idiom)
+  static let controls = "Controls"
+  static let pause = "Pause"
+  static let metricElapsed = "Elapsed"
+  static let metricHeart = "Heart"
+  static let metricKcal = "Kcal"
+  static let bpm = "bpm"
 
   // Complete
   static let saved = "Saved"

@@ -1,9 +1,11 @@
 /**
  * Settings / Profile (§4.28) — rebuilt 1:1 to the Claude Design "Design System"
- * Settings (ui_kits/app/Settings.jsx). Identity (avatar + name), then grouped
- * rows: Preferences (Units, Language — SegmentedControls), Health (Apple Health —
- * Switch), Account (Body data, Experience, Membership). Sign out
- * (secondary) + Delete account (danger) at the bottom, version pinned beneath.
+ * Settings (ui_kits/app/Settings.jsx). Identity (avatar + name) with Membership
+ * directly beneath it (who you are + your plan, one zone — the Apple Settings
+ * idiom), then grouped rows: Preferences (Units, Language — SegmentedControls),
+ * Health (Apple Health — Switch), Account (Body data, Experience). Sign out
+ * (secondary) + Delete account (danger) at the bottom; the version line reads
+ * the REAL app version + build from the binary (never a hand-maintained string).
  *
  * Every action is the real one: units/language switch instantly, Health opens the
  * system permission flow, Sign Out / Delete run behind a native confirm.
@@ -12,6 +14,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
@@ -120,23 +123,9 @@ export function ProfileSheet({ navigation }: Props) {
           </View>
         </View>
 
-        <Legend style={styles.sectionLegend}>{t('profile.preferences')}</Legend>
-        <Row label={t('profile.units')} control={<SegmentedControl options={['kg', 'lb']} value={units} onChange={onUnits} />} />
-        <Row
-          label={t('profile.language')}
-          sub={locale === 'he' ? t('language.hebrew') : t('language.english')}
-          control={
-            <SegmentedControl
-              options={[{ value: 'en', label: 'EN' }, { value: 'he', label: 'עב' }]}
-              value={locale}
-              onChange={onLanguage}
-            />
-          }
-          last
-        />
-
-        {/* Membership (Subscription + Apple Payments) — its own prominent card with a
-            state badge; trial state adds a sessions-left meter + an honest billing note. */}
+        {/* Membership (Subscription + Apple Payments) — directly under identity (who you
+            are + your plan, one zone), a prominent card with a state badge; trial state
+            adds a sessions-left meter + an honest billing note. */}
         <Legend style={styles.sectionLegend}>{t('profile.membership')}</Legend>
         <Pressable
           accessibilityRole="button"
@@ -178,6 +167,20 @@ export function ProfileSheet({ navigation }: Props) {
         </Pressable>
         {membershipState === 'trial' ? <Text style={styles.trialNote}>{t('profile.trialNote')}</Text> : null}
 
+        <Legend style={styles.sectionLegend}>{t('profile.preferences')}</Legend>
+        <Row label={t('profile.units')} control={<SegmentedControl options={['kg', 'lb']} value={units} onChange={onUnits} />} />
+        <Row
+          label={t('profile.language')}
+          control={
+            <SegmentedControl
+              options={[{ value: 'en', label: 'EN' }, { value: 'he', label: 'עב' }]}
+              value={locale}
+              onChange={onLanguage}
+            />
+          }
+          last
+        />
+
         <Legend style={styles.sectionLegend}>{t('profile.healthSection')}</Legend>
         <Row
           label={t('profile.appleHealth')}
@@ -204,7 +207,7 @@ export function ProfileSheet({ navigation }: Props) {
           <Button variant="secondary" block label={t('profile.signOut')} onPress={confirmSignOut} />
           <Button variant="danger" block label={t('profile.deleteAccount')} onPress={confirmDelete} />
         </View>
-        <Text style={styles.version}>{t('profile.version')}</Text>
+        <Text style={styles.version}>{versionLabel()}</Text>
       </ScrollView>
 
       {overlay === 'signout' ? (
@@ -227,6 +230,14 @@ export function ProfileSheet({ navigation }: Props) {
       ) : null}
     </SafeAreaView>
   );
+}
+
+/** "Hush v1.0.0 (23)" — version + iOS build read from the embedded config, so the line
+ *  can never drift from what actually shipped. */
+function versionLabel(): string {
+  const v = Constants.expoConfig?.version ?? '1.0.0';
+  const build = Constants.expoConfig?.ios?.buildNumber;
+  return `Hush v${v}${build ? ` (${build})` : ''}`;
 }
 
 function Row({

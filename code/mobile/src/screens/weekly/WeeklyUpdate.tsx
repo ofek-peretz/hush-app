@@ -24,12 +24,17 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/engine/v4/v4Engine';
+import { displayWeight, unitLabel } from '@/domain/schedule';
+import type { Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, up, down, signal, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WeeklyUpdate'>;
 
-const fmtLoad = (n: number | null): string => (n == null ? 'BW' : String(+n.toFixed(2)));
+// Loads arrive in kg from the engine snapshot; render in the athlete's display units
+// (the rest of the app never shows a unit the athlete didn't choose).
+const fmtLoad = (n: number | null, units: Units): string =>
+  n == null ? 'BW' : String(+((displayWeight(n, units) ?? 0).toFixed(2)));
 const rangeStr = (r: [number, number]): string => `${r[0]}-${r[1]}`;
 
 export function WeeklyUpdate({ navigation }: Props) {
@@ -115,6 +120,8 @@ export function WeeklyUpdate({ navigation }: Props) {
 
 function LiftRow({ lift, open, onToggle }: { lift: WeeklyPlanLift; open: boolean; onToggle: () => void }) {
   const { t } = useCopy();
+  const units = useApp().profile?.units ?? 'kg';
+  const unit = unitLabel(units);
   const ch = lift.change?.snapshot;
   const expl = lift.change?.explanation;
   const hasWhy = !!lift.change;
@@ -135,18 +142,18 @@ function LiftRow({ lift, open, onToggle }: { lift: WeeklyPlanLift; open: boolean
     <View style={styles.loadCluster}>
       {swapped ? (
         <Text style={styles.loadSwap}>
-          {fmtLoad(toLoad)}<Text style={styles.kg}> kg</Text>
+          {fmtLoad(toLoad, units)}<Text style={styles.kg}> {unit}</Text>
         </Text>
       ) : loadChanged ? (
         <Text style={styles.loadLine}>
-          <Text style={styles.loadFrom}>{fmtLoad(ch!.loadFrom)} </Text>
+          <Text style={styles.loadFrom}>{fmtLoad(ch!.loadFrom, units)} </Text>
           <Text style={styles.arrow}>→ </Text>
-          <Text style={[styles.loadTo, { color: loadColor }]}>{fmtLoad(toLoad)}</Text>
-          <Text style={styles.kg}> kg</Text>
+          <Text style={[styles.loadTo, { color: loadColor }]}>{fmtLoad(toLoad, units)}</Text>
+          <Text style={styles.kg}> {unit}</Text>
         </Text>
       ) : (
         <Text style={styles.loadPlain}>
-          {fmtLoad(toLoad)}<Text style={styles.kg}> kg</Text>
+          {fmtLoad(toLoad, units)}<Text style={styles.kg}> {unit}</Text>
         </Text>
       )}
       {hasWhy ? <Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} color={color.textTertiary} strokeWidth={2} /> : null}

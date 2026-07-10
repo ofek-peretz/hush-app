@@ -90,7 +90,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 key={a.label}
                 accessibilityRole="button"
                 accessibilityLabel={a.label}
-                hitSlop={8}
+                hitSlop={{ top: 14, bottom: 14, left: 4, right: 8 }}
                 onPress={() => {
                   dismiss();
                   a.onPress();

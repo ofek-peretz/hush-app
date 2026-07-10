@@ -6,7 +6,7 @@
  * reference; no logging.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Eyebrow } from '@/components/Eyebrow';
 import { FormMedia } from '@/components/FormMedia';
@@ -27,30 +27,36 @@ interface Props {
 export function ExerciseDemo({ title, cues, formGuideLabel, doneLabel, onDone, exerciseId }: Props) {
   return (
     <BottomSheet onClose={onDone} background={color.surface} heightFraction={0.66}>
-      <Eyebrow label={formGuideLabel} size={11} trackingPx={1.5} />
-      <Text style={styles.title}>{title}</Text>
-      <View style={styles.media}>
-        <FormMedia exerciseId={exerciseId} title={title} />
+      {/* Fixed-height sheet: the cues scroll inside their own region so the Close
+          button is ALWAYS on screen, never pushed past the bottom on small phones. */}
+      <View style={styles.body}>
+        <Eyebrow label={formGuideLabel} size={11} trackingPx={1.5} />
+        <Text style={styles.title} numberOfLines={2}>{title}</Text>
+        <View style={styles.media}>
+          <FormMedia exerciseId={exerciseId} title={title} />
+        </View>
+        <ScrollView style={styles.cuesScroll} contentContainerStyle={styles.cues} showsVerticalScrollIndicator={false}>
+          {cues.map((c, i) => (
+            <View key={i} style={styles.cueRow}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.cue}>{c}</Text>
+            </View>
+          ))}
+        </ScrollView>
+        <Button variant="secondary" block label={doneLabel} onPress={onDone} style={styles.close} />
       </View>
-      <View style={styles.cues}>
-        {cues.map((c, i) => (
-          <View key={i} style={styles.cueRow}>
-            <Text style={styles.bullet}>•</Text>
-            <Text style={styles.cue}>{c}</Text>
-          </View>
-        ))}
-      </View>
-      <Button variant="secondary" block label={doneLabel} onPress={onDone} style={styles.close} />
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  body: { flex: 1 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 14 },
   media: { marginBottom: 16 },
-  cues: { gap: 6 },
+  cuesScroll: { flex: 1 },
+  cues: { gap: 6, paddingBottom: 4 },
   cueRow: { flexDirection: 'row', gap: 8 },
   bullet: { fontFamily: font.sans, fontSize: textScale.base, color: color.textMuted, lineHeight: 24 },
   cue: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 24 },
-  close: { marginTop: 20 },
+  close: { marginTop: 16 },
 });

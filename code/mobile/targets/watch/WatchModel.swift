@@ -83,6 +83,8 @@ final class WatchModel: ObservableObject {
   // OS-level workout runtime (HKWorkoutSession): background execution during a workout +
   // HealthKit persistence. Driven from the authoritative mirror in syncWorkoutRuntime().
   private let workoutRuntime = WorkoutRuntime()
+  /// Live HR / kcal / elapsed from the OS runtime — observed by the Controls page.
+  var liveMetrics: LiveMetrics { workoutRuntime.metrics }
   /// Fired when a screen is entered, so the view can play the entry haptic.
   let onEntryHaptic = PassthroughSubject<HapticEvent, Never>()
 

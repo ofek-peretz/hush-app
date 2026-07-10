@@ -1,11 +1,15 @@
 /**
  * OnboardingScaffold — the shared chrome for the design's onboarding flow
- * (ui_kits/app/Onboarding.jsx): an optional back control, a 5-segment progress
- * bar, the head (legend → title → sub), a scrollable body, and a pinned footer.
+ * (ui_kits/app/Onboarding.jsx): an optional back control, a segmented progress
+ * bar, the head (legend → title → sub), the body, and a pinned footer.
  * One decision per screen, nothing optional dressed up as required.
+ *
+ * Founder 2026-07-10: onboarding NEVER scrolls — every step is designed to fit
+ * the viewport whole, so the body is a plain View (not a ScrollView). A step
+ * that doesn't fit is a copy/layout bug on that step, not a reason to scroll.
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
@@ -27,20 +31,14 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
   const { t } = useCopy();
 
   const Body = (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.body}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[styles.flex, styles.body]}>
       <View style={styles.head}>
         {legend ? <Legend style={styles.legend}>{legend}</Legend> : null}
         <Text style={styles.title} accessibilityRole="header">{title}</Text>
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
       {children}
-    </ScrollView>
+    </View>
   );
 
   return (
@@ -84,8 +82,8 @@ const styles = StyleSheet.create({
   segOn: { backgroundColor: signal[0] },
   segOff: { backgroundColor: color.fillSubtleStrong },
 
-  body: { paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
-  head: { marginBottom: 26 },
+  body: { paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
+  head: { marginBottom: 22 },
   legend: { marginBottom: 8 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary },
   sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10 },

@@ -210,9 +210,12 @@ export function Cardio({ navigation }: Props) {
             </View>
           </View>
 
-          {/* GPS truth line — never confident zeros while there is no lock */}
-          {gps === 'acquiring' ? <Text style={styles.gpsStatus}>{t('cardio.gpsAcquiring')}</Text> : null}
-          {gps === 'denied' || gps === 'unavailable' ? <Text style={styles.gpsStatus}>{t('cardio.gpsOff')}</Text> : null}
+          {/* GPS truth line — never confident zeros while there is no lock. The slot has a
+              fixed height so the layout never jumps when the fix arrives or drops. */}
+          <View style={styles.gpsSlot}>
+            {gps === 'acquiring' ? <Text style={styles.gpsStatus}>{t('cardio.gpsAcquiring')}</Text> : null}
+            {gps === 'denied' || gps === 'unavailable' ? <Text style={styles.gpsStatus}>{t('cardio.gpsOff')}</Text> : null}
+          </View>
 
           {/* progress rhythm */}
           {goalKind === 'time' ? (
@@ -265,7 +268,15 @@ export function Cardio({ navigation }: Props) {
           <View style={styles.gaitToggleWrap}>
             <View style={styles.gaitToggle}>
               {(['run', 'walk'] as CardioGait[]).map((v) => (
-                <Pressable key={v} onPress={() => setLive(v)} style={[styles.gaitPill, live === v && styles.gaitPillActive]}>
+                <Pressable
+                  key={v}
+                  accessibilityRole="button"
+                  accessibilityLabel={v === 'run' ? t('cardio.run') : t('cardio.walk')}
+                  accessibilityState={{ selected: live === v }}
+                  hitSlop={{ top: 10, bottom: 10 }}
+                  onPress={() => setLive(v)}
+                  style={[styles.gaitPill, live === v && styles.gaitPillActive]}
+                >
                   <Text style={[styles.gaitPillText, live === v && styles.gaitPillTextActive]}>{v === 'run' ? t('cardio.run') : t('cardio.walk')}</Text>
                 </Pressable>
               ))}
@@ -285,7 +296,7 @@ export function Cardio({ navigation }: Props) {
             </View>
             <View style={styles.pauseActions}>
               <Button variant="onstage" size="lg" block label={t('cardio.resume')} onPress={() => setPaused(false)} leading={<Icon name="play" size={18} color={stageC[0]} />} />
-              <Button variant="ghost" block label={t('cardio.finishSave')} onPress={finish} leading={<Icon name="flag" size={18} color={stageC.ink0} />} style={styles.ghostOnStage} />
+              <Button variant="onstageGhost" block label={t('cardio.finishSave')} onPress={finish} leading={<Icon name="flag" size={18} color={stageC.ink0} />} />
             </View>
           </View>
         ) : null}
@@ -469,7 +480,7 @@ function CardioComplete(props: {
 
         <View style={styles.completeFooter}>
           <Button variant="onstage" size="lg" block label={t('cardio.done')} onPress={() => navigation.goBack()} />
-          <Button variant="ghost" block label={t('cardio.viewInHistory')} onPress={() => navigation.replace('History')} style={styles.ghostOnStage} />
+          <Button variant="onstageGhost" block label={t('cardio.viewInHistory')} onPress={() => navigation.replace('History')} />
         </View>
       </SafeAreaView>
     </View>
@@ -515,7 +526,6 @@ const styles = StyleSheet.create({
   fieldLegend: { marginBottom: 10 },
   fieldLegendGoal: { marginTop: 26, marginBottom: 10 },
   goalNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 14, marginHorizontal: 2, lineHeight: 20 },
-  goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
   goalCol: { marginTop: 16, gap: 8 },
   goalWheel: { alignSelf: 'stretch' },
   goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary },
@@ -545,7 +555,8 @@ const styles = StyleSheet.create({
   heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8 },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
-  gpsStatus: { marginTop: 12, fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3 },
+  gpsSlot: { height: 28, justifyContent: 'flex-end' },
+  gpsStatus: { fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3 },
   paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2 },
   paceValRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0 },
@@ -586,7 +597,6 @@ const styles = StyleSheet.create({
   pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },
   pauseStat: { fontFamily: font.mono, fontSize: textScale.sm, color: stageC.ink1 },
   pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
-  ghostOnStage: { },
 
   // complete
   completeScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16 },

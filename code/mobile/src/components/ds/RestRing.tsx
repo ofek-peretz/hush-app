@@ -27,6 +27,9 @@ interface Props {
   stroke?: number;
   label?: string;
   onStage?: boolean;
+  /** Final-seconds state (the 7 s Approach window): the readout turns signal ochre so the
+   *  closing countdown reads at a glance — the visual twin of the haptic beats. */
+  closing?: boolean;
 }
 
 function fmt(sec: number): string {
@@ -36,7 +39,7 @@ function fmt(sec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage }: Props) {
+export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage, closing }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const target = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
@@ -85,7 +88,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
         />
       </Svg>
       <View style={styles.readout}>
-        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }]}>{fmt(remaining)}</Text>
+        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && styles.timeClosing]}>{fmt(remaining)}</Text>
         {label ? <Legend tone={onStage ? 'onStage' : 'muted'}>{label}</Legend> : null}
       </View>
     </View>
@@ -102,4 +105,6 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     letterSpacing: -0.5,
   },
+  // Final-seconds (Approach window) — the readout inks in signal ochre, both themes.
+  timeClosing: { color: signal[0] },
 });

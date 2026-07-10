@@ -14,6 +14,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useKeepAwake } from 'expo-keep-awake';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast } from '@/components/ds';
@@ -31,7 +33,8 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
 import * as haptics from '@/platform/haptics';
-import { restHaptics } from '@/platform/restHaptics';
+import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
+import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -62,6 +65,11 @@ export function SessionFlow({ navigation }: Props) {
   // per workout (resets naturally on each fresh SessionFlow mount), never on a set-by-set basis.
   const learnToastShownRef = useRef(false);
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
+  // The phone is often DOWN on the bench/floor mid-workout (founder 2026-07-10): the
+  // display must never auto-lock during a session, or the rest countdown goes dark and
+  // the athlete misses the 7 s warning. Same mechanism the cardio surface uses;
+  // released automatically when the workout unmounts (Well Done / exit).
+  useKeepAwake();
 
   // Capture the engine's pristine recommended load the first time each set is presented (before
   // an Edit Result mutates it). Done during render so the value is the untouched engine number.
@@ -333,6 +341,7 @@ function StageGhost({ icon, label, onPress }: { icon: IconName; label: string; o
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      hitSlop={{ top: 8, bottom: 8 }}
       onPress={onPress}
       style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
     >
@@ -499,7 +508,7 @@ function ActiveSet({
       <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
       <View style={styles.stageBody}>
         {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
-        <Text style={styles.exName}>{exName}</Text>
+        <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
 
         {!editing ? (
           <>
@@ -537,6 +546,7 @@ function ActiveSet({
                     direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
                     value={deltaMag}
                     unit={unitLabel(units)}
+                    holdLabel={t('whyLoad.verdictHold')}
                     size="sm"
                     pill
                   />
@@ -727,6 +737,24 @@ function Rest({
     }
   }, [remaining, paused]);
 
+  // Final-seconds IGNITION (founder 2026-07-10): the phone is on the floor and a buzz
+  // alone doesn't say "get under the bar". With the display held awake for the whole
+  // session, the last REST_WARNING_LEAD_S seconds also announce themselves VISUALLY —
+  // the stage pulses a soft ochre wash once per second (light matching the countdown),
+  // readable from standing height without picking the phone up. Honors Reduce Motion
+  // (the closing digits still turn ochre — see RestRing `closing`).
+  const reducedMotion = useReducedMotion();
+  const closing = !paused && remaining > 0 && remaining <= REST_WARNING_LEAD_S;
+  const ignition = useSharedValue(0);
+  useEffect(() => {
+    if (!closing || reducedMotion) return;
+    ignition.value = withSequence(
+      withTiming(0.14, { duration: 140, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 640, easing: Easing.in(Easing.quad) }),
+    );
+  }, [remaining, closing, reducedMotion, ignition]);
+  const ignitionStyle = useAnimatedStyle(() => ({ opacity: ignition.value }));
+
   // +15s: extend the absolute end but KEEP `total` fixed (the design adds only to
   // `remaining`), so the ring visibly fills FORWARD by a clear 15/total slice — the
   // "loading" top-up — instead of the near-imperceptible nudge you get when total
@@ -752,6 +780,7 @@ function Rest({
           size={196}
           stroke={6}
           onStage
+          closing={closing}
           label={remaining <= 0 ? t('workout.ready') : t('workout.rest')}
         />
 
@@ -761,7 +790,7 @@ function Rest({
             <View style={styles.upRow}>
               <View style={styles.upInfo}>
                 {isTransition && nextGroup ? <Text style={styles.upGroup}>{t(`muscle.${nextGroup}`).toUpperCase()}</Text> : null}
-                <Text style={styles.upName}>{nextName}</Text>
+                <Text style={styles.upName} numberOfLines={2}>{nextName}</Text>
                 <Text style={styles.upMeta}>
                   {isTransition
                     ? t('workout.setsAnd', { sets: nextSet?.m ?? 1, reps: nextReps })
@@ -814,6 +843,9 @@ function Rest({
           </Pressable>
         ) : null}
       </View>
+
+      {/* final-seconds ignition wash — over everything, touches nothing */}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.ignition, ignitionStyle]} />
     </>
   );
 }
@@ -910,13 +942,9 @@ const styles = StyleSheet.create({
   // Active set
   group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10 },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
-  loadBtn: { marginTop: 30, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 16, borderRadius: radius.md },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   loadBtnPressed: { opacity: 0.55 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  // Equipment-native setup instruction under the headline (plate math, pin, per hand, fixed bar).
-  setupLines: { marginTop: 12, alignItems: 'center', gap: 3 },
-  setupLine: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink1, letterSpacing: 0.2 },
   // Instruction-first execution: the imperative chip (TO-LOAD) + the quiet confirmation (LOADED),
   // sitting directly under the load — the athlete's "what do I do now?".
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
@@ -927,18 +955,19 @@ const styles = StyleSheet.create({
   instrDone: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
   instrDoneText: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2 },
   // Why / Δ — demoted below the instruction; quiet and optional, never competing with it.
-  whyDeltaRow: { marginTop: 18, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
+  // minHeight keeps the quiet look while giving the tap a full 44pt target.
+  whyDeltaRow: { marginTop: 12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
   whyText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink2 },
   repsPill: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
   repsTimes: { fontFamily: font.mono, fontSize: textScale.md, color: stage.ink2 },
   repsNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0 },
-  addFifteen: { alignItems: 'center', paddingVertical: 10, borderRadius: radius.md },
+  addFifteen: { alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: radius.md },
+  ignition: { backgroundColor: signal[0] },
   // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
   // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false },
   heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginStart: 6, marginBottom: 12 },
   bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
-  deltaWrap: { marginTop: 16, height: 26, alignItems: 'center' },
   repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2 },
 
   // Inline edit
@@ -990,8 +1019,6 @@ const styles = StyleSheet.create({
   sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 18 },
   sheetBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 6, marginBottom: 18 },
   sheetActions: { gap: 10 },
-
-  // Swap rows
 
   // Why this load (the in-session, single-line cousin of the Why triple)
   whyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6 },
