@@ -230,11 +230,6 @@ export function Home({ navigation, route }: Props) {
     }
   }
 
-  const now = new Date();
-  const dateLabel = now.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-  const hour = now.getHours();
-  const greetingPart: 'morning' | 'afternoon' | 'evening' =
-    hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
   // Weekly model: completed (non-rest) workouts in the current program week.
   const trainedThisWeek = program ? program.days.filter((d) => d.completed && !d.isRest).length : 0;
 
@@ -243,14 +238,10 @@ export function Home({ navigation, route }: Props) {
       resting={resting}
       dayName={day?.name ?? null}
       muscles={muscleGroupsLabel(day?.muscleGroups)}
-      greetingPart={greetingPart}
-      name={app.profile?.name ?? null}
       trainedThisWeek={trainedThisWeek}
       startError={startError}
-      dateLabel={dateLabel}
       weekNumber={weekNumber}
       exerciseCount={day?.slots.length}
-      restDaysTaken={program ? program.days.filter((d) => d.isRest).length : 0}
       resumable={resumable}
       onResume={onResume}
       onStart={onStart}

@@ -13,10 +13,13 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Legend, Badge, ProgressMeter, LoadDelta } from '@/components/ds';
+import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
+import type { EarnedMilestone, NextMilestone } from '@/domain/milestones';
+import { milestoneCopy } from '@/domain/milestoneCopy';
 import type { Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 
@@ -27,9 +30,12 @@ interface Props {
   loaded: boolean; // false while history is still loading (suppresses the empty state)
   units: Units;
   onBack: () => void;
+  /** The milestones gallery (Progress screen only — the quarterly report stays a pure
+   *  peak-weight comparison): earned emblems + each family's single next silhouette. */
+  milestones?: { earned: EarnedMilestone[]; next: NextMilestone[] } | null;
 }
 
-export function ProgressReportView({ title, legend, entries, loaded, units, onBack }: Props) {
+export function ProgressReportView({ title, legend, entries, loaded, units, onBack, milestones }: Props) {
   const { t } = useCopy();
   const totalGainKg = entries.reduce((a, e) => a + Math.max(0, e.deltaKg), 0);
   const totalGain = displayWeight(Math.round(totalGainKg * 10) / 10, units) ?? 0;
@@ -112,11 +118,57 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                 );
               })}
             </View>
+
+            {/* milestones — earned stamps (newest first) + each family's next silhouette */}
+            {milestones && (milestones.earned.length > 0 || milestones.next.length > 0) ? (
+              <View style={styles.milestones}>
+                <Legend>{t('milestones.gallery')}</Legend>
+                <View style={styles.emblemGrid}>
+                  {milestones.earned
+                    .slice()
+                    .reverse()
+                    .map((m) => {
+                      const mc = milestoneCopy(m, t, units);
+                      return (
+                        <View key={m.id} style={styles.emblemCell}>
+                          <MilestoneEmblem size={88} value={mc.value} caption={mc.caption} />
+                          <Text style={styles.emblemTitle} numberOfLines={2}>{mc.title}</Text>
+                          <Text style={styles.emblemFoot}>
+                            {new Date(m.earnedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  {milestones.next.map((n) => {
+                    const mc = milestoneCopy(n.milestone, t, units);
+                    return (
+                      <View key={n.milestone.id} style={styles.emblemCell}>
+                        <MilestoneEmblem size={88} tone="locked" value={mc.value} caption={mc.caption} />
+                        <Text style={[styles.emblemTitle, styles.emblemLocked]} numberOfLines={2}>{mc.title}</Text>
+                        <Text style={styles.emblemFoot}>{toGoLabel(n, t, units)}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/** "12 kg to go" / "עוד 13 אימונים" — the silhouette's live distance, in the family's unit. */
+function toGoLabel(n: NextMilestone, t: (k: string, p?: Record<string, unknown>) => string, units: Units): string {
+  const remaining = Math.max(0, n.target - n.current);
+  const amount =
+    n.milestone.family === 'count'
+      ? `${remaining} ${t('milestones.workoutsCaption').toLowerCase()}`
+      : n.milestone.family === 'tonnage'
+        ? `${Math.ceil(remaining / 1000).toLocaleString()} ${t('milestones.tonnesCaption').toLowerCase()}`
+        : `${displayWeight(remaining, units) ?? remaining} ${unitLabel(units)}`;
+  return t('milestones.toGo', { amount });
 }
 
 const styles = StyleSheet.create({
@@ -146,4 +198,11 @@ const styles = StyleSheet.create({
   liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   footText: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary },
   footNow: { color: color.up },
+
+  milestones: { marginTop: 30, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
+  emblemGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16 },
+  emblemCell: { width: '33.33%', alignItems: 'center', paddingHorizontal: 6, marginBottom: 22 },
+  emblemTitle: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], color: color.textPrimary, textAlign: 'center', marginTop: 10, lineHeight: textScale['2xs'] * 1.35 },
+  emblemLocked: { color: color.textMuted },
+  emblemFoot: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary, marginTop: 3 },
 });

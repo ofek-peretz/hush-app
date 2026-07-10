@@ -56,8 +56,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: radius.md,
   },
+  // Equal border widths on both states — selecting must never shift the row's
+  // content by the border delta (the hairline look comes from the color, not width).
   optOn: { borderWidth: 1.5, borderColor: ink[0], backgroundColor: color.surface, ...(shadow.md as object) },
-  optOff: { borderWidth: 1, borderColor: color.borderControl, backgroundColor: 'transparent' },
+  optOff: { borderWidth: 1.5, borderColor: color.borderControl, backgroundColor: 'transparent' },
   text: { flex: 1, minWidth: 0 },
   label: { fontFamily: font.sansMedium, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary },
   labelOn: { fontFamily: font.sansSemibold },

@@ -8,6 +8,12 @@
  * Tapping a strength row opens its read-only record (WorkoutDetail); tapping a
  * cardio row opens its activity details (CardioDetail). Records without
  * interpreting — no praise, no PRs, and no grade on a run.
+ *
+ * Founder 2026-07-10 (design pass): the timeline reads in month chapters (a
+ * quiet legend when the month changes — a wall of rows isn't a record), and a
+ * strength row's trailing figure is the session's TOP SET load, not its total
+ * volume (volume is "not interesting" per-workout; the lifetime total in the
+ * header keeps the tonnage story).
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -43,6 +49,18 @@ function sessionVolumeKg(s: Session): number {
 
 function dateLabelOf(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** Month chapter label — "July 2026", locale-aware. */
+function monthLabelOf(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+/** The session's heaviest logged load (the top set) — null for bodyweight-only sessions. */
+function sessionTopKg(s: Session): number | null {
+  let top = 0;
+  for (const x of s.sets) if (x.actualWeight != null && x.actualWeight > top) top = x.actualWeight;
+  return top > 0 ? top : null;
 }
 
 export function History({ navigation }: Props) {
@@ -124,11 +142,14 @@ export function History({ navigation }: Props) {
           ) : null}
 
           {items.map((item, i) => {
-            const last = i === items.length - 1;
-            if (item.kind === 'cardio') {
-              return (
+            // Month chapters: a quiet legend where the month turns; each chapter's
+            // final row drops its divider so chapters read as distinct blocks.
+            const month = monthLabelOf(item.startedAt);
+            const newMonth = i === 0 || monthLabelOf(items[i - 1].startedAt) !== month;
+            const last = i === items.length - 1 || monthLabelOf(items[i + 1].startedAt) !== month;
+            const row =
+              item.kind === 'cardio' ? (
                 <ListRow
-                  key={item.id}
                   title={item.gait === 'run' ? t('cardio.run') : t('cardio.walk')}
                   subtitle={`${dateLabelOf(item.startedAt)} · ${fmtClock(item.durationSec)}`}
                   chevron
@@ -141,29 +162,32 @@ export function History({ navigation }: Props) {
                   }
                   trailing={<Text style={styles.vol}>{item.distanceKm.toFixed(2)} {t('cardio.km')}</Text>}
                 />
+              ) : (
+                <ListRow
+                  title={dayName(item)}
+                  subtitle={`${dateLabelOf(item.startedAt)} · ${sessionDurationLabel(item)}`}
+                  chevron
+                  last={last}
+                  onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.id })}
+                  leading={
+                    <View style={styles.iconBox}>
+                      <Icon name="dumbbell" size={16} color={color.textSecondary} strokeWidth={2} />
+                    </View>
+                  }
+                  trailing={
+                    sessionTopKg(item) != null ? (
+                      <Text style={styles.vol}>
+                        {displayWeight(sessionTopKg(item)!, units)} {unitLabel(units)}
+                      </Text>
+                    ) : undefined
+                  }
+                />
               );
-            }
-            const volKg = sessionVolumeKg(item);
-            const vol = displayWeight(Math.round(volKg), units) ?? 0;
             return (
-              <ListRow
-                key={item.id}
-                title={dayName(item)}
-                subtitle={`${dateLabelOf(item.startedAt)} · ${sessionDurationLabel(item)}`}
-                chevron
-                last={last}
-                onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.id })}
-                leading={
-                  <View style={styles.iconBox}>
-                    <Icon name="dumbbell" size={16} color={color.textSecondary} strokeWidth={2} />
-                  </View>
-                }
-                trailing={
-                  <Text style={styles.vol}>
-                    {vol.toLocaleString()} {unitLabel(units)}
-                  </Text>
-                }
-              />
+              <View key={item.id}>
+                {newMonth ? <Legend style={styles.monthLegend}>{month}</Legend> : null}
+                {row}
+              </View>
             );
           })}
         </ScrollView>
@@ -188,6 +212,8 @@ const styles = StyleSheet.create({
   summaryCountLabel: { fontFamily: font.sans, fontSize: textScale.md, color: color.textSecondary },
   summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary },
   summaryStrong: { fontFamily: font.mono, color: color.textPrimary },
+
+  monthLegend: { marginTop: 20, marginBottom: 4 },
 
   iconBox: {
     width: 32,

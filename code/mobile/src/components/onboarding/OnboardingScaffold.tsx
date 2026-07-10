@@ -1,6 +1,6 @@
 /**
  * OnboardingScaffold — the shared chrome for the design's onboarding flow
- * (ui_kits/app/Onboarding.jsx): an optional back control, a 6-segment progress
+ * (ui_kits/app/Onboarding.jsx): an optional back control, a 5-segment progress
  * bar, the head (legend → title → sub), a scrollable body, and a pinned footer.
  * One decision per screen, nothing optional dressed up as required.
  */

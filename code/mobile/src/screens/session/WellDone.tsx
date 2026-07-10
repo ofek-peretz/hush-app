@@ -3,15 +3,22 @@
  * (ui_kits/app/Complete.jsx). A three-beat closing on the inverted stage:
  *   1) SESSION SAVED · "{workout} complete."
  *   2) Hush READS the session — each lift checks in (the work becomes evidence)
- *   3) LOGGED · "That's the work." — top set, duration/volume/sets, and a calm
- *      pointer to Saturday's update. A single workout never builds next week's
- *      program; that ritual is the weekly update. No confetti, no streaks.
+ *   3) LOGGED · "That's the work." — top set, duration + estimated calories, and
+ *      a calm pointer to Saturday's update (founder 2026-07-10: sets/volume and
+ *      the body paragraph removed — the athlete just finished; facts only). A
+ *      single workout never builds next week's program; that ritual is the
+ *      weekly update. No confetti, no daily-streak pressure.
+ *   4) MILESTONE — only when this session crossed one (domain/milestones): the
+ *      one licensed loud moment. A beat of black, a heavy stamp haptic, and the
+ *      engraved emblem lands. At most ONE per workout (rarity law) — when
+ *      several cross, the most personal is celebrated and the rest surface
+ *      quietly in the Progress gallery.
  *
  * The session is already SAVED (invariant §8.4); stats are read from it. The
  * success haptic fires once.
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
@@ -25,9 +32,13 @@ import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { trainingWeekNumber } from '@/domain/weekCadence';
+import { newlyEarned } from '@/domain/milestones';
+import { milestoneCopy } from '@/domain/milestoneCopy';
+import { strengthSessionKcal } from '@/domain/energy';
+import { milestone as milestoneHaptic } from '@/platform/haptics';
+import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import type { Session, SetLog } from '@/data/local/models';
-import { space, stage, font, textScale, tracking, trackingPx, up, radius } from '@/design/tokens';
+import { space, stage, font, textScale, tracking, trackingPx, up, signal, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
@@ -58,9 +69,10 @@ export function WellDone({ navigation, route }: Props) {
   const partial = !notStarted && early && (summary?.sets ?? 0) > 0;
   const reduced = useReducedMotion();
 
-  const [session, setSession] = useState<Session | null>(null);
-  const [phase, setPhase] = useState<'saved' | 'result'>(reduced ? 'result' : 'saved');
+  const [history, setHistory] = useState<Session[] | null>(null);
+  const [phase, setPhase] = useState<'saved' | 'result' | 'milestone'>(reduced ? 'result' : 'saved');
   const [read, setRead] = useState(0);
+  const session = history?.[0] ?? null;
 
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
 
@@ -71,15 +83,38 @@ export function WellDone({ navigation, route }: Props) {
     wellDoneHaptic();
     // Never let a storage hiccup leave the result data empty without recovering.
     db.loadHistory()
-      .then((h) => active && setSession(h[0] ?? null))
-      .catch(() => active && setSession(null));
+      .then((h) => active && setHistory(h))
+      .catch(() => active && setHistory(null));
     return () => {
       active = false;
     };
   }, [notStarted]);
 
+  // Milestones crossed by THIS session (the latest in history), most personal
+  // first. [0] is the single celebrated mark; the rest go quietly to the gallery.
+  const celebration = useMemo(() => (history ? newlyEarned(history)[0] ?? null : null), [history]);
+  const celebrated = useRef(false);
+  const pendingExit = useRef<(() => void) | null>(null);
+
+  // The stamp: a beat of black, the heavy plate-lock haptic, and the emblem lands.
+  const stamp = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (phase !== 'milestone') return;
+    if (reduced) {
+      stamp.setValue(1);
+      milestoneHaptic();
+      return;
+    }
+    stamp.setValue(0);
+    const timer = setTimeout(() => {
+      milestoneHaptic();
+      Animated.spring(stamp, { toValue: 1, damping: 14, stiffness: 220, useNativeDriver: true }).start();
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [phase, reduced, stamp]);
+
   // Per-lift bests (first-seen order) + the session's top set, from the saved sets.
-  const { lifts, topSet, volumeKg, setsCount } = useMemo(() => {
+  const { lifts, topSet, setsCount } = useMemo(() => {
     const sets = session?.sets ?? [];
     const order: string[] = [];
     const bestByEx = new Map<string, SetLog>();
@@ -93,7 +128,6 @@ export function WellDone({ navigation, route }: Props) {
     return {
       lifts: order.map((id): Lift => ({ exerciseId: id, name: exerciseDisplayName(id), best: bestByEx.get(id)! })),
       topSet: top,
-      volumeKg: sets.reduce((a, s) => a + vol(s), 0),
       setsCount: sets.length,
     };
   }, [session]);
@@ -131,9 +165,18 @@ export function WellDone({ navigation, route }: Props) {
     app.clearPortraitFlag();
     navigation.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'History' }] });
   }
+  /** Any exit from the result passes through the milestone beat exactly once. */
+  function leave(exit: () => void) {
+    if (celebration && !celebrated.current) {
+      celebrated.current = true;
+      pendingExit.current = exit;
+      setPhase('milestone');
+      return;
+    }
+    exit();
+  }
 
   const setLabel = (s: SetLog) => `${displayWeight(s.actualWeight, units) ?? t('workout.bodyweight')} × ${s.actualReps}`;
-  const weekN = trainingWeekNumber(app.profile?.memberSince, Date.now()) + 1;
 
   /* ---- Not started (item 3A): nothing was completed — not a workout, nothing saved ---- */
   if (notStarted) {
@@ -150,6 +193,48 @@ export function WellDone({ navigation, route }: Props) {
           </View>
           <View style={styles.footer}>
             <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={goHome} />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  /* ---- Beat 4: a milestone landed — the one licensed loud moment ---- */
+  if (phase === 'milestone' && celebration) {
+    const mc = milestoneCopy(celebration, t, units);
+    const dateLabel = new Date(celebration.earnedAt).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    return (
+      <View style={styles.root}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+          <View style={styles.milestoneBody}>
+            <Animated.View
+              style={{
+                alignItems: 'center',
+                opacity: stamp,
+                transform: [{ scale: stamp.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) }],
+              }}
+            >
+              <Text style={styles.milestoneLegend}>{t('milestones.legend').toUpperCase()}</Text>
+              <View style={styles.milestoneEmblem}>
+                <MilestoneEmblem size={216} onStage value={mc.value} caption={mc.caption} />
+              </View>
+              <Text style={styles.milestoneTitle} accessibilityRole="header">{mc.title}</Text>
+              {mc.sub ? <Text style={styles.milestoneSub}>{mc.sub}</Text> : null}
+              <Text style={styles.milestoneDate}>{dateLabel}</Text>
+            </Animated.View>
+          </View>
+          <View style={styles.footer}>
+            <Button
+              variant="onstage"
+              size="lg"
+              block
+              label={t('milestones.continue')}
+              onPress={() => (pendingExit.current ?? goHome)()}
+            />
           </View>
         </SafeAreaView>
       </View>
@@ -199,10 +284,10 @@ export function WellDone({ navigation, route }: Props) {
     );
   }
 
-  /* ---- Beat 3: the work, logged. Grounded in kg. Points to Saturday. ---- */
+  /* ---- Beat 3: the work, logged. The top set, the time, the cost. ---- */
   const durationMs = summary?.durationMs ?? 0;
-  const volumeDisplay = displayWeight(Math.round(volumeKg), units) ?? 0;
-  const body = early ? t('complete.bodyEarly') : t('complete.resultBody', { workout: summary?.workoutName ?? '', lifts: lifts.length });
+  // Honest MET estimate (domain/energy) — absent bodyweight ⇒ no number, never a guess.
+  const kcal = strengthSessionKcal(durationMs, app.profile?.weightKg);
 
   return (
     <View style={styles.root}>
@@ -213,7 +298,7 @@ export function WellDone({ navigation, route }: Props) {
             <Text style={styles.savedLegend}>{t('complete.logged')}</Text>
           </View>
           <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
-          <Text style={styles.copy}>{body}</Text>
+          {early ? <Text style={styles.copy}>{t('complete.bodyEarly')}</Text> : null}
 
           {topSet ? (
             <View style={styles.topCard}>
@@ -232,22 +317,25 @@ export function WellDone({ navigation, route }: Props) {
 
           <View style={styles.stats}>
             <View style={styles.stat}><Metric onStage value={fmtDuration(durationMs)} label={t('complete.duration')} size="md" /></View>
-            <View style={styles.stat}><Metric onStage value={volumeDisplay.toLocaleString()} unit={unitLabel(units)} label={t('complete.volume')} size="md" /></View>
-            <View style={styles.stat}><Metric onStage value={setsCount} label={t('complete.sets')} size="md" /></View>
+            {kcal != null ? (
+              <View style={styles.stat}>
+                <Metric onStage value={`≈${kcal}`} unit={t('complete.kcal')} label={t('complete.calories')} size="md" />
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.saturday}>
             <Icon name="calendar" size={16} color={stage.ink1} strokeWidth={2} />
-            <Text style={styles.saturdayText}>{t('complete.saturday', { week: t('complete.weekN', { n: weekN }) })}</Text>
+            <Text style={styles.saturdayText}>{t('complete.saturday')}</Text>
           </View>
         </ScrollView>
 
         <View style={styles.footer}>
-          <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={goHome} />
+          <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={() => leave(goHome)} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('complete.viewRecord')}
-            onPress={goRecord}
+            onPress={() => leave(goRecord)}
             style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
           >
             <Text style={styles.ghostLabel}>{t('complete.viewRecord')}</Text>
@@ -301,6 +389,14 @@ const styles = StyleSheet.create({
 
   saturday: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: stage[2] },
   saturdayText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink1, lineHeight: 20 },
+
+  // beat 4 — the milestone stamp
+  milestoneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  milestoneLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: signal[0] },
+  milestoneEmblem: { marginTop: 36, marginBottom: 36 },
+  milestoneTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: Math.round(textScale['2xl'] * 1.08), color: stage.ink0, textAlign: 'center' },
+  milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', marginTop: 10, maxWidth: 300 },
+  milestoneDate: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, marginTop: 18 },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: stage[2] },
   ghost: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },

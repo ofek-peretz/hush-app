@@ -10,6 +10,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
+import { earnedMilestones, nextUp } from '@/domain/milestones';
 import type { Session } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
@@ -29,6 +30,13 @@ export function Progress({ navigation }: Props) {
     [sessions],
   );
 
+  // The milestones gallery — earned stamps + each family's next silhouette,
+  // derived (never stored) from the same history the report reads.
+  const milestones = useMemo(
+    () => (sessions ? { earned: earnedMilestones(sessions), next: nextUp(sessions) } : null),
+    [sessions],
+  );
+
   return (
     <ProgressReportView
       title={t('progress.title')}
@@ -37,6 +45,7 @@ export function Progress({ navigation }: Props) {
       loaded={sessions != null}
       units={units}
       onBack={() => navigation.goBack()}
+      milestones={milestones}
     />
   );
 }

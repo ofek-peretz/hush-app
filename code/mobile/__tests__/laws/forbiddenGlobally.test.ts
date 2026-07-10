@@ -44,9 +44,14 @@ const isDecision1 = (why: string) => why.includes('Decision 1');
 // strength coaching surfaces) does not apply inside the `cardio` namespace, nor
 // in the Apple Health connection copy (any `*health*` key), which honestly names
 // the cardio metrics — heart rate, calories, distance — that Health is read for.
-// The ban still guards every coaching surface everywhere else.
+// Founder 2026-07-10: the Complete screen shows duration + an estimated calorie
+// figure (MET × bodyweight × time, omitted when bodyweight is unknown) — the
+// `complete` namespace joins the exemption. The number is a READOUT of the
+// finished session, never a model input and never a coaching signal; the ban
+// still guards every coaching surface everywhere else.
 const isCalories = (why: string) => why.includes('calories');
-const isCardioPath = (path: string) => path.startsWith('cardio.') || /health/i.test(path);
+const isCardioPath = (path: string) =>
+  path.startsWith('cardio.') || path.startsWith('complete.') || /health/i.test(path);
 
 function values(node: unknown, out: { path: string; v: string }[], path = ''): void {
   if (typeof node === 'string') {

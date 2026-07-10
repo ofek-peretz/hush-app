@@ -5,17 +5,21 @@
  * Hub-and-spoke, no tab bar. A scrolling hub that answers one question on open —
  * what do I do next? — and offers the one affordance to begin:
  *   brand (hush·) + settings · Legend(NEXT WORKOUT) · workout name · muscle
- *   groups · week ProgressMeter · Begin {name} · Choose another workout ·
- *   hub rows (This week / History / Progress).
+ *   groups · one quiet meta line (exercises · loads set) · week ProgressMeter ·
+ *   Begin {name} · Choose another workout (bottom sheet — restored 2026-07-10;
+ *   the view had silently lost the phone affordance while the watch kept it) ·
+ *   Open training · hub rows (This week / History / Progress).
  * Rest state centers "Recovery." with the completed-week meter and a locked next.
  *
  * The container (Home.tsx) wires state + navigation.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
+import { BottomSheet } from '@/components/BottomSheet';
+import { TextAction } from '@/components/TextAction';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
@@ -31,14 +35,10 @@ export interface HomeViewProps {
   resting: boolean;
   dayName: string | null;
   muscles: string; // "Chest · Shoulders · Triceps"
-  greetingPart: 'morning' | 'afternoon' | 'evening';
-  name: string | null;
   trainedThisWeek: number;
   startError: boolean;
-  dateLabel: string;
   weekNumber: number; // training-week counter ("Week N"), from memberSince
   exerciseCount?: number; // next workout's exercise count (meta line)
-  restDaysTaken?: number; // recovery stat
   /** An interrupted (app-killed) workout that can be picked up exactly where it was (S3).
    *  When present, the primary CTA becomes "Continue {workout}" — one path, no fork. */
   resumable?: { workoutName: string } | null;
@@ -55,6 +55,7 @@ export interface HomeViewProps {
 
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
+  const [choosing, setChoosing] = useState(false);
 
   const total = props.workouts.length || 0;
   const done = Math.min(props.trainedThisWeek, total);
@@ -76,12 +77,9 @@ export function HomeView(props: HomeViewProps) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Founder 2026-07-10: the greeting line above NEXT WORKOUT said nothing the
+              legend + workout name don't — cut. The workout is the star. */}
           <View style={styles.legendTop}>
-            {!props.resting ? (
-              <Text style={styles.greeting}>
-                {props.name ? t('home.readyWhenYouAre', { name: bidi(props.name.split(' ')[0]) }) : t('home.readyAnon')}
-              </Text>
-            ) : null}
             <Legend>{props.resting ? t('home.recovery') : t('home.nextWorkout')}</Legend>
           </View>
 
@@ -116,12 +114,15 @@ export function HomeView(props: HomeViewProps) {
                 </View>
               ) : null}
 
-              {props.exerciseCount ? (
-                <View style={styles.metaRow}>
-                  <Icon name="layers" size={15} color={color.textMuted} strokeWidth={2} />
-                  <Text style={styles.metaMono}>{t('home.exerciseCount', { n: props.exerciseCount })}</Text>
-                </View>
-              ) : null}
+              {/* one quiet meta line — what's ahead + the product promise, together */}
+              <View style={styles.metaRow}>
+                <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
+                <Text style={styles.metaMono}>
+                  {props.exerciseCount
+                    ? `${t('home.exerciseCount', { n: props.exerciseCount })} · ${t('home.loadsSet')}`
+                    : t('home.loadsSet')}
+                </Text>
+              </View>
 
               <View style={styles.meterWrap}>
                 <ProgressMeter
@@ -131,11 +132,6 @@ export function HomeView(props: HomeViewProps) {
                   max={total || 1}
                   tone="signal"
                 />
-              </View>
-
-              <View style={styles.loadsSetRow}>
-                <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
-                <Text style={styles.loadsSetText}>{t('home.loadsSet')}</Text>
               </View>
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
@@ -159,6 +155,10 @@ export function HomeView(props: HomeViewProps) {
                     onPress={props.onStart}
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
+                ) : null}
+                {/* the athlete owns the week's order — a quiet path to queue a different workout */}
+                {!props.resumable && props.workouts.length > 1 ? (
+                  <TextAction label={t('home.chooseAnother')} onPress={() => setChoosing(true)} />
                 ) : null}
               </View>
             </View>
@@ -214,6 +214,30 @@ export function HomeView(props: HomeViewProps) {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* choose another workout — the weekly bucket is unscheduled; the athlete queues any of it */}
+      {choosing ? (
+        <BottomSheet onClose={() => setChoosing(false)}>
+          <Legend style={styles.sheetLegend}>{t('home.chooseAnother')}</Legend>
+          {props.workouts.map((w, i) => {
+            const current = w.name === props.dayName;
+            return (
+              <ListRow
+                key={w.id}
+                title={w.name}
+                subtitle={w.muscles}
+                chevron={!current}
+                last={i === props.workouts.length - 1}
+                onPress={() => {
+                  if (!current) props.onChooseWorkout(w.id);
+                  setChoosing(false);
+                }}
+                trailing={current ? <Icon name="check" size={18} color={color.up} strokeWidth={2.2} /> : undefined}
+              />
+            );
+          })}
+        </BottomSheet>
+      ) : null}
     </View>
   );
 }
@@ -236,12 +260,10 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
   legendTop: { paddingTop: 24 },
-  greeting: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginBottom: 10 },
   block: { paddingTop: 14 },
   restCopy: { marginTop: 14, maxWidth: 320 },
 
-  loadsSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22 },
-  loadsSetText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary },
+  sheetLegend: { marginTop: 6, marginBottom: 8 },
 
   openTraining: { marginTop: 24 },
   cardioCard: {

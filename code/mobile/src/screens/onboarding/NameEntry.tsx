@@ -1,7 +1,7 @@
 /**
  * NameEntry — "What should Hush call you?" (after Consent), re-skinned to the
  * design onboarding step: legend → title → sub → a labelled TextField → Continue /
- * Skip. Optional; the name is how Hush addresses the athlete. Progress 1 / 6.
+ * Skip. Optional; the name is how Hush addresses the athlete. Progress 1 / 5.
  */
 import React, { useState } from 'react';
 import { Keyboard } from 'react-native';

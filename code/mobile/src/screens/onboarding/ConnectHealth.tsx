@@ -1,8 +1,9 @@
 /**
  * Connect Health (§4.2) — offer HealthKit, re-skinned to the design onboarding
- * step: legend → title → sub → an Apple Health Card → Connect / Skip for now.
+ * step: legend → title → sub → an Apple Health Card (informational — the actions
+ * are the buttons; no false chevron affordance) → Connect / Skip for now.
  * Continue requests HealthKit and carries the outcome to Body data (ManualInfo).
- * Progress 2 / 6.
+ * Progress 2 / 5.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -53,7 +54,6 @@ export function ConnectHealth({ navigation }: Props) {
             <Text style={styles.title}>{t('ob.healthCardTitle')}</Text>
             <Text style={styles.sub}>{t('ob.healthCardSub')}</Text>
           </View>
-          <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
         </View>
       </Card>
     </OnboardingScaffold>

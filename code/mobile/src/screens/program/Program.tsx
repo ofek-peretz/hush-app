@@ -87,6 +87,9 @@ export function Program({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/* Founder 2026-07-10: the sentence under the count said what the count + meter
+            already say ("N to go — keep the momentum"), with a pressure tone the product
+            bans elsewhere. The numbers speak; the meter shows. */}
         <View style={styles.summary}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryCount}>
@@ -95,9 +98,6 @@ export function Program({ navigation }: Props) {
             </Text>
             <Text style={styles.summaryLabel}>{t('program.sessionsDone')}</Text>
           </View>
-          <Text style={styles.summaryBody}>
-            {prog.total - prog.done <= 0 ? t('program.weekDone') : t('program.momentum', { count: prog.total - prog.done })}
-          </Text>
           <View style={styles.summaryMeter}>
             <ProgressMeter value={prog.done} max={prog.total || 1} tone="signal" />
           </View>
@@ -157,8 +157,7 @@ const styles = StyleSheet.create({
   summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: color.textPrimary },
   summaryTotal: { fontSize: textScale.xl, color: color.textTertiary },
   summaryLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary },
-  summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary },
-  summaryMeter: { marginTop: 14 },
+  summaryMeter: { marginTop: 16 },
   group: { marginTop: 24 },
   groupLegend: { marginBottom: 2 },
   meta: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },

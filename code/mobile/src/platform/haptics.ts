@@ -78,3 +78,11 @@ export function wellDone(): void {
   beat(120, I.Soft);
   beat(620, I.Heavy);
 }
+
+/** A milestone lands (founder 2026-07-10 — the one licensed loud moment): a plate locking onto
+ *  the bar. One heavy strike as the emblem stamps in, then a short rigid settle. Rare by
+ *  construction (the rarity law), so its weight stays meaningful. */
+export function milestone(): void {
+  void Haptics.impactAsync(I.Heavy);
+  beat(180, I.Rigid);
+}
