@@ -4,7 +4,7 @@ RESULT: PASS — every predicate holds across the loop.
 
 
 Checks:
-  start: elbow lockout (full press)
+  start: elbow lockout (full press) — the unrack
   end: bar touches the chest line
-  path: hand vertical ±1.5
-  invariants: near foot planted · near toe planted · hips on the bench · shoulders on the bench · head still · no elbow hyperextension
+  path: handR vertical ±1.5
+  invariants: feet planted · toes planted · hips on the bench · shoulders on the bench · head still · no elbow hyperextension

@@ -4,6 +4,10 @@
  * The FormSpec is the canonical definition; these tests assert the rig renders it. They also prove
  * the validator has TEETH: a deliberately broken rig (moving hips, a curved bar path, a
  * hyperextended lockout) must be caught — otherwise "validation passes" would be meaningless.
+ *
+ * The rig is FRONT-VIEW (head-end camera) per §3.4 Amendment 7 — the chest family is a frontal
+ * identity family. The canon is unchanged: bar to the chest line, vertical path, anchored body;
+ * the frontal staging adds SYMMETRY, which these tests assert as mirror geometry.
  */
 import { bbBenchPress } from '@/motion/library/bbBenchPress';
 import { validate } from '@/motion/formspec';
@@ -26,31 +30,42 @@ describe('bench press — FormSpec validation', () => {
     const top = bbBenchPress.poseAt(0);
     // canonical endpoint: bar contacts the chest line
     const contact = bbBenchPress.formspec.end.find((p) => p.kind === 'contactY');
-    expect(contact && contact.kind === 'contactY' ? Math.abs(bottom.j.hand.y - contact.y) : 99).toBeLessThanOrEqual(2);
-    // full press at the top
-    const lockout = angleAt(top.j.shoulder, top.j.elbow, top.j.hand);
+    expect(contact && contact.kind === 'contactY' ? Math.abs(bottom.j.bar.y - contact.y) : 99).toBeLessThanOrEqual(2);
+    // full press at the top — canonical in-plane arm, no projection license needed at lockout
+    const lockout = angleAt(top.j.shoulderR, top.j.elbowR, top.j.handR);
     expect(lockout).toBeGreaterThanOrEqual(165);
     // and the bar actually travels a meaningful distance
-    expect(bottom.j.hand.y - top.j.hand.y).toBeGreaterThan(15);
+    expect(bottom.j.bar.y - top.j.bar.y).toBeGreaterThan(15);
   });
 
   it('never hyperextends the elbow through the whole press', () => {
     for (let i = 0; i <= 100; i++) {
       const pose = bbBenchPress.poseAt(i / 100);
-      expect(angleAt(pose.j.shoulder, pose.j.elbow, pose.j.hand)).toBeLessThanOrEqual(179);
+      expect(angleAt(pose.j.shoulderR, pose.j.elbowR, pose.j.handR)).toBeLessThanOrEqual(179);
     }
   });
 
   it('keeps the bar on a straight vertical path (hand x constant)', () => {
-    const x0 = bbBenchPress.poseAt(0).j.hand.x;
+    const x0 = bbBenchPress.poseAt(0).j.handR.x;
     for (let i = 0; i <= 100; i++) {
-      expect(Math.abs(bbBenchPress.poseAt(i / 100).j.hand.x - x0)).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(bbBenchPress.poseAt(i / 100).j.handR.x - x0)).toBeLessThanOrEqual(1.5);
+    }
+  });
+
+  it('is symmetric — the frontal identity statement: left mirrors right every frame', () => {
+    for (let i = 0; i <= 40; i++) {
+      const p = bbBenchPress.poseAt(i / 40);
+      const cx = p.j.bar.x;
+      for (const [r, l] of [['handR', 'handL'], ['elbowR', 'elbowL'], ['shoulderR', 'shoulderL']] as const) {
+        expect(Math.abs(p.j[r].x + p.j[l].x - 2 * cx)).toBeLessThanOrEqual(0.01);
+        expect(Math.abs(p.j[r].y - p.j[l].y)).toBeLessThanOrEqual(0.01);
+      }
     }
   });
 
   it('anchors the body — feet, hips, shoulders and head never move', () => {
     const ref = bbBenchPress.poseAt(0);
-    for (const pt of ['ankle', 'toe', 'hip', 'shoulder', 'head'] as const) {
+    for (const pt of ['ankleR', 'toeR', 'hipC', 'shoulderR', 'head'] as const) {
       for (let i = 0; i <= 40; i++) {
         const p = bbBenchPress.poseAt(i / 40);
         expect(Math.hypot(p.j[pt].x - ref.j[pt].x, p.j[pt].y - ref.j[pt].y)).toBeLessThanOrEqual(1);
@@ -58,12 +73,13 @@ describe('bench press — FormSpec validation', () => {
     }
   });
 
-  it('the hand always holds the bar (IK contact) — never floats off', () => {
-    // the tracked joint IS the hand; the plate/bar is drawn at the same point, so contact is exact
+  it('the hands always hold the bar (IK contact) — never float off', () => {
+    // the tracked joints ride the bar's y exactly; the forearm is a real limb, never degenerate
     for (let i = 0; i <= 20; i++) {
       const pose = bbBenchPress.poseAt(i / 20);
-      const forearm = Math.hypot(pose.j.hand.x - pose.j.elbow.x, pose.j.hand.y - pose.j.elbow.y);
-      expect(forearm).toBeGreaterThan(0); // a real limb, never degenerate
+      expect(Math.abs(pose.j.handR.y - pose.j.bar.y)).toBeLessThanOrEqual(0.01);
+      const forearm = Math.hypot(pose.j.handR.x - pose.j.elbowR.x, pose.j.handR.y - pose.j.elbowR.y);
+      expect(forearm).toBeGreaterThan(0);
     }
   });
 });
@@ -79,21 +95,21 @@ describe('bench press — the validator has teeth (broken rigs must fail)', () =
   });
 
   it('catches lifting the hips off the bench', () => {
-    const rig = broken((rom, pose) => { pose.j.hip = { x: pose.j.hip.x, y: pose.j.hip.y - 8 * rom }; });
+    const rig = broken((rom, pose) => { pose.j.hipC = { x: pose.j.hipC.x, y: pose.j.hipC.y - 8 * rom }; });
     const res = validate(rig, 120);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => /hip/i.test(v.detail))).toBe(true);
   });
 
   it('catches a bar path that curves off vertical', () => {
-    const rig = broken((rom, pose) => { pose.j.hand = { x: pose.j.hand.x + 6 * rom, y: pose.j.hand.y }; });
+    const rig = broken((rom, pose) => { pose.j.handR = { x: pose.j.handR.x + 6 * rom, y: pose.j.handR.y }; });
     const res = validate(rig, 120);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => /vertical|axis|path/i.test(v.where + v.detail))).toBe(true);
   });
 
   it('catches a partial press that never reaches the chest', () => {
-    const rig = broken((rom, pose) => { pose.j.hand = { x: pose.j.hand.x, y: pose.j.hand.y - 10 }; });
+    const rig = broken((rom, pose) => { pose.j.bar = { x: pose.j.bar.x, y: pose.j.bar.y - 10 }; });
     const res = validate(rig, 120);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => /chest/i.test(v.detail))).toBe(true);

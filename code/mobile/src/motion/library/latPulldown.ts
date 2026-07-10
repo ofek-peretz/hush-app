@@ -12,11 +12,12 @@
  * collarbone, never lower · bar vertical in front of the face · torso lean frozen ~15° (no swing) ·
  * hips on the seat, thighs under the pad. rom 0 = overhead stretch (rep start); rom 1 = collarbone.
  */
-import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
+import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barPathTicks, floorScene } from '../kit';
+import { latPulldownStation } from '../machines';
 
 const FLOOR_Y = 193;
 
@@ -71,25 +72,27 @@ function poseAt(rom: number): Pose {
   };
 }
 
-// ── the cable machine (same stroke grammar as the barbell kit) ───────────────────
-const PULLEY: Vec2 = { x: BAR_X, y: 44 };
-const machine: Primitive[] = [
-  { kind: 'line', a: { x: 118, y: 40 }, b: { x: 210, y: 40 }, w: 3, color: 'ink3' }, // top beam
-  { kind: 'line', a: { x: 208, y: 40 }, b: { x: 208, y: FLOOR_Y }, w: 3, color: 'ink3' }, // stack tower
-  { kind: 'circle', c: PULLEY, r: 4, stroke: 'ink3', w: 2, fill: 'paper1' }, // pulley
-  // seat + post under the glutes
-  { kind: 'rect', x: 134, y: 162, width: 38, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
-  { kind: 'line', a: { x: 153, y: 169 }, b: { x: 153, y: 190 }, w: 2.5, color: 'ink3' },
-  // thigh pad holding the legs down
-  { kind: 'rect', x: 168, y: 136, width: 32, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
-];
-
+// ── the complete pulldown station (§3.5 Amendment 4 — recognition first) ─────────
 function decorAt(rom: number): Decor {
   const bar: Vec2 = { x: BAR_X, y: lerp(STRETCH_Y, COLLAR_Y, rom) };
+  // the cable is 1:1 — the selected plate rises exactly as far as the bar descends
+  const lift = bar.y - STRETCH_Y;
   return {
-    back: [...machine, { kind: 'line', a: PULLEY, b: bar, w: 1.5, color: 'ink2' }, ...barPathTicks(BAR_X, STRETCH_Y, COLLAR_Y, 5)],
+    back: [...latPulldownStation(bar, lift), ...barPathTicks(BAR_X, STRETCH_Y, COLLAR_Y, 5)],
     front: [
-      { kind: 'line', a: { x: bar.x - 14, y: bar.y }, b: { x: bar.x + 14, y: bar.y }, w: 3.5, color: 'ink0', cap: 'round' }, // the wide bar (edge-on)
+      // the wide pulldown bar with its downswept tips — the attachment is a word (§3.5 Am. 5):
+      // this exact silhouette is what names the station's handle, so it is drawn, not a tick
+      {
+        kind: 'polyline',
+        pts: [
+          { x: bar.x - 15.5, y: bar.y + 4 },
+          { x: bar.x - 8.5, y: bar.y },
+          { x: bar.x + 8.5, y: bar.y },
+          { x: bar.x + 15.5, y: bar.y + 4 },
+        ],
+        w: 3.5,
+        color: 'ink0',
+      },
       { kind: 'circle', c: bar, r: 2.5, fill: 'ink0' },
     ],
   };

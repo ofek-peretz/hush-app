@@ -1,136 +1,113 @@
 /**
- * Barbell Bench Press — the first Motion System benchmark (template: press_horizontal).
+ * Barbell Bench Press — the Motion System benchmark (template: press_horizontal), presented
+ * FRONT-VIEW from the head-end camera per §3.4 Amendment 7 (the chest family is a frontal
+ * identity family by founder directive, 2026-07-08).
  *
- * The ONLY thing the timeline drives is the bar height. Everything else is anchored, and the
- * elbow is solved by two-bone IK from the fixed shoulder to the bar — so the hand can never leave
- * the bar and the forearm stacks under it by construction. The lockout height is derived from a
- * target elbow angle, so the "full press" predicate holds by geometry, not by a hand-tuned number.
+ * The head-end frame is the honest camera for a lying press: the stroke is world-VERTICAL, so it
+ * lives fully in the drawing plane (rule 5 satisfied face-on — the one frontal staging where a
+ * chest press draws its whole path), and the lockout arm is CANONICAL 25/23 in-plane — the old
+ * side view's abduction license is no longer needed at the top. The single projected fold sits at
+ * the chest endpoint (rule 3): the humerus tucks toward the feet as the bar descends, so its
+ * frontal projection shortens 25 → 17 across the rep — which is what lands the elbows just wide
+ * of the pad with the forearms stacked vertically under the bar, the classic frontal bottom.
  *
- * Embodiment (v2): the athlete LIES ON the bench — the trunk silhouette's glutes and upper back
- * meet the pad (the lumbar hollow reads as the arch), the head rests on the pad, the legs take the
- * real ATHLETE lengths with feet planted wide of the bench, and the plate is a true-scale 45cm
- * ghost. Arm segments remain SIDE-VIEW projections (shorter than canonical — the humerus abducts
- * into depth on a bench) per the documented anthro exception.
+ * What this camera states that the side view never could: SYMMETRY (both arms, both plates, the
+ * full bar crossing the frame), the straddle of the legs over the end-on bench, and the RACK —
+ * two uprights with J-hooks framing the athlete, the goalpost that names a bench station from
+ * the equipment alone (§3.5).
  *
- * Canon (MOTION_FORM_STANDARD_V1 §2): bar touches the chest line · straight vertical bar path ·
- * feet/hips/shoulders/head fixed · elbow near-straight at the top, never hyperextended.
+ * Canon (MOTION_FORM_STANDARD_V1 §2, unchanged): bar touches the chest line · straight vertical
+ * bar path · feet/hips/shoulders/head fixed · lockout derived from the 172° elbow, never ≥179°.
  */
-import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
+import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';
-import { barPathTicks, floorScene, plateGhost } from '../kit';
+import { ATHLETE } from '../anthro';
+import { barPathTicks, barbellFront, benchEndOn, floorScene, rackUprights } from '../kit';
+import { FLOOR_Y, supineFrontCore } from '../bodies';
 
-// ── tuned constants (frame units; 352×220 media frame, athlete lying head-left) ──
-const FLOOR_Y = 193;
-const BENCH_TOP = 160; // pad surface — the contact plane the trunk is laid onto
+const CX = 176;
+const core = supineFrontCore(CX);
 
-const SHOULDER: Vec2 = { x: 114, y: 151 }; // spine centerline ~9u above the pad → back meets pad
-const HIP: Vec2 = { x: 172, y: 151.5 };
-const HEAD: Vec2 = { x: 99, y: 151.5 }; // resting ON the pad (head bottom ≈ pad surface)
-const HEAD_R = 8;
-const UPPER = 20; // shoulder → elbow, projected (humerus abducted into depth)
-const FORE = 22; // elbow → hand, near-plane
-const BAR_X = 130; // over the chest peak of the trunk silhouette — vertical path, clear of the face
-const LOCKOUT_ANGLE = 172; // elbow angle (deg) at the top of the press
-const CHEST_Y = 140; // bar center at chest contact (trunk chest surface ≈ 142 + bar radius)
+const U = ATHLETE.upperArm;
+const F = ATHLETE.foreArm;
+const U_PROJ = 17; // humerus tucked toward the feet at the chest — the rule-3 projected fold
+const LOCKOUT_ANGLE = 172;
+const REACH = Math.sqrt(U * U + F * F - 2 * U * F * Math.cos((LOCKOUT_ANGLE * Math.PI) / 180));
 
-/** Hand height on the x=BAR_X line that puts the elbow at a given angle (hand above the shoulder). */
-function handYForElbowAngle(deg: number): number {
-  const rad = (deg * Math.PI) / 180;
-  const d = Math.sqrt(UPPER * UPPER + FORE * FORE - 2 * UPPER * FORE * Math.cos(rad));
-  const dx = BAR_X - SHOULDER.x;
-  const dy = Math.sqrt(Math.max(0, d * d - dx * dx));
-  return SHOULDER.y - dy;
-}
-
-const LOCKOUT_Y = handYForElbowAngle(LOCKOUT_ANGLE);
-
-// static (anchored) legs — canonical lengths, feet planted past the bench end
-const KNEE: Vec2 = { x: 211, y: 152.5 };
-const ANKLE: Vec2 = { x: 224, y: 186 };
-const HEEL: Vec2 = { x: 218, y: FLOOR_Y };
-const TOE: Vec2 = { x: 243, y: FLOOR_Y };
-const FAR_HIP: Vec2 = { x: 177, y: 153 };
-const FAR_KNEE: Vec2 = { x: 216, y: 154 };
-const FAR_ANKLE: Vec2 = { x: 229, y: 187 };
-const FAR_HEEL: Vec2 = { x: 223, y: FLOOR_Y };
-const FAR_TOE: Vec2 = { x: 248, y: FLOOR_Y };
+const GRIP = 27; // bench grip half-width — hands fixed on the bar, wider than the shoulders
+const CHEST_Y = 140; // bar center meeting the chest dome's crest
+const LOCK_Y = core.shoulderR.y - Math.sqrt(REACH * REACH - (GRIP - 15.5) ** 2);
+const RACK_X = 42; // uprights inside the plates (±62), outside the grip (±27)
 
 function poseAt(rom: number): Pose {
-  const handY = lerp(LOCKOUT_Y, CHEST_Y, rom);
-  const hand: Vec2 = { x: BAR_X, y: handY };
-  const elbow = twoBoneIK(SHOULDER, hand, UPPER, FORE, 1);
+  const handY = lerp(LOCK_Y, CHEST_Y, rom);
+  const uEff = lerp(U, U_PROJ, rom); // in-plane at lockout, tucked into depth at the chest
+  const handR: Vec2 = { x: CX + GRIP, y: handY };
+  const handL: Vec2 = { x: CX - GRIP, y: handY };
   return {
-    headR: HEAD_R,
+    headR: ATHLETE.headR,
     j: {
-      head: HEAD,
-      shoulder: SHOULDER,
-      elbow,
-      hand,
-      hip: HIP,
-      knee: KNEE,
-      ankle: ANKLE,
-      heel: HEEL,
-      toe: TOE,
-      farHip: FAR_HIP,
-      farKnee: FAR_KNEE,
-      farAnkle: FAR_ANKLE,
-      farHeel: FAR_HEEL,
-      farToe: FAR_TOE,
+      ...core,
+      handR,
+      handL,
+      elbowR: twoBoneIK(core.shoulderR, handR, uEff, F, 1),
+      elbowL: twoBoneIK(core.shoulderL, handL, uEff, F, -1),
+      bar: { x: CX, y: handY },
     },
   };
 }
 
-// ── decoration: bench + plate + bar-path + range ticks ──────────────────────────
-const bench: Primitive[] = [
-  { kind: 'line', a: { x: 92, y: BENCH_TOP + 10 }, b: { x: 92, y: FLOOR_Y }, w: 3, color: 'ink3' },
-  { kind: 'line', a: { x: 172, y: BENCH_TOP + 10 }, b: { x: 172, y: FLOOR_Y }, w: 3, color: 'ink3' },
-  { kind: 'rect', x: 74, y: BENCH_TOP, width: 112, height: 10, rx: 4, fill: 'paper3', stroke: 'ink3', w: 2 },
-];
-
 function decorAt(rom: number): Decor {
-  const bar: Vec2 = { x: BAR_X, y: lerp(LOCKOUT_Y, CHEST_Y, rom) };
+  const barY = lerp(LOCK_Y, CHEST_Y, rom);
   return {
-    back: [...bench, ...barPathTicks(BAR_X, LOCKOUT_Y, CHEST_Y)],
-    front: plateGhost(bar),
+    back: [
+      ...benchEndOn(CX, 160, FLOOR_Y),
+      ...rackUprights(CX, RACK_X, LOCK_Y + 6, FLOOR_Y),
+      ...barPathTicks(CX + 52, LOCK_Y, CHEST_Y),
+      // the bar is beyond the fists from this camera, so it draws behind the figure; the fists
+      // close over it — grip stated by z-order, exactly as the hands read on a real unrack
+      ...barbellFront(CX, barY),
+    ],
+    front: [],
   };
 }
-
-const scene: Primitive[] = floorScene(FLOOR_Y, 168, 92);
 
 const formspec: FormSpec = {
   tempo: DEFAULT_TEMPO,
   start: [
-    { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 165, max: 179, label: 'elbow lockout (full press)' },
+    { kind: 'jointAngle', joint: 'elbowR', neighbors: ['shoulderR', 'handR'], min: 165, max: 179, label: 'elbow lockout (full press) — the unrack' },
   ],
   end: [
-    { kind: 'contactY', a: 'hand', y: CHEST_Y, tol: 2, label: 'bar touches the chest line' },
+    { kind: 'contactY', a: 'bar', y: CHEST_Y, tol: 2, label: 'bar touches the chest line' },
   ],
-  path: { track: 'hand', kind: 'vertical', tol: 1.5 },
+  path: { track: 'handR', kind: 'vertical', tol: 1.5 },
   invariants: [
-    { kind: 'pointFixed', point: 'ankle', tol: 1.0, label: 'near foot planted' },
-    { kind: 'pointFixed', point: 'toe', tol: 1.0, label: 'near toe planted' },
-    { kind: 'pointFixed', point: 'hip', tol: 1.0, label: 'hips on the bench' },
-    { kind: 'pointFixed', point: 'shoulder', tol: 1.0, label: 'shoulders on the bench' },
+    { kind: 'pointFixed', point: 'ankleR', tol: 1.0, label: 'feet planted' },
+    { kind: 'pointFixed', point: 'toeR', tol: 1.0, label: 'toes planted' },
+    { kind: 'pointFixed', point: 'hipC', tol: 1.0, label: 'hips on the bench' },
+    { kind: 'pointFixed', point: 'shoulderR', tol: 1.0, label: 'shoulders on the bench' },
     { kind: 'pointFixed', point: 'head', tol: 1.0, label: 'head still' },
-    { kind: 'angleNever', joint: 'elbow', neighbors: ['shoulder', 'hand'], aboveDeg: 179, label: 'no elbow hyperextension' },
+    { kind: 'angleNever', joint: 'elbowR', neighbors: ['shoulderR', 'handR'], aboveDeg: 179, label: 'no elbow hyperextension' },
   ],
 };
 
 export const bbBenchPress: Rig = {
   id: 'bb_bench_press',
   chains: {
-    torso: ['hip', 'shoulder'],
-    neck: ['shoulder', 'head'],
+    torso: ['hipC', 'neckBase'],
+    neck: ['neckBase', 'head'],
     head: 'head',
-    nearArm: ['shoulder', 'elbow', 'hand'],
-    nearLeg: ['hip', 'knee', 'ankle'],
-    nearFoot: ['heel', 'toe'],
-    farLeg: ['farHip', 'farKnee', 'farAnkle'],
-    farFoot: ['farHeel', 'farToe'],
+    view: 'front',
+    nearArm: ['shoulderR', 'elbowR', 'handR'],
+    farArm: ['shoulderL', 'elbowL', 'handL'],
+    nearLeg: ['hipR', 'kneeR', 'ankleR'],
+    farLeg: ['hipL', 'kneeL', 'ankleL'],
+    nearFoot: ['heelR', 'toeR'],
+    farFoot: ['heelL', 'toeL'],
   },
   formspec,
   poseAt,
   decorAt,
-  scene,
+  scene: floorScene(FLOOR_Y, CX, 62),
 };

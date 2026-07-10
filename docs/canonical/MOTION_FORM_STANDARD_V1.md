@@ -93,6 +93,12 @@ the cue it draws.)*
 - **Bottom:** bar **contacts the chest line** (visible meeting + 400 ms hold) — *"Lower to the chest with control."*
 - **Path:** vertical, x fixed ±1.5 units — *"Drive the bar straight up."*
 - **Invariants:** hips and shoulders fixed on bench; head fixed; **feet planted, zero movement** — *"Keep your feet planted."*
+- **Camera (Amendment 7, 2026-07-08):** FRONT-VIEW from the head-end — the spotter's frame. The
+  lying press's stroke is world-vertical, so face-on it lives fully in the drawing plane, with
+  canonical 25/23 in-plane arms at lockout (the old side view's abduction license retires at the
+  top; the one projected fold, per §3.4 rule 3, is the humerus tucking toward the feet at the
+  chest). The frame adds what the side view never stated: both arms, both plates, the straddle
+  over the end-on bench, and the **rack goalpost**. All predicates above are unchanged.
 
 ### Barbell Back Squat — template: squat pattern
 - **Start/end of rep:** standing tall — hips and knees fully extended, bar over midfoot.
@@ -156,6 +162,21 @@ dot) in front of the figure — behind-the-head z-order concession only where th
 the face (back squat draws the head above the plate). Poses, FormSpecs, tempo, and the validator
 are untouched by the skin.
 
+**Amendment 3 (2026-07-07) — the knockout seam + honest dumbbell (skin v2.1).** Pre-rollout
+first-principles review of the visual language found one systemic weakness: the working limb
+(`ink0`) dissolved into the trunk (`ink1`) wherever it crossed the body — in seated, overhead,
+and press rigs the very limb the demonstration exists to show was the least readable element.
+The fix is the classic pictogram **knockout seam**: every near-plane element (working arm, near
+leg, head, fist) is drawn over a copy of itself widened by a 2u `paper1` gap. Over the pale
+media field the seam is near-invisible; over the dark body it becomes the crisp gap that keeps
+the moving limb readable — contrast appears exactly where mass overlaps mass, by construction.
+In `view:'front'` there is no far side, so both limbs draw after the trunk in `ink1` with the
+same seam. Side-view far limbs stay faint (`ink4`), behind the trunk, seamless. Second: the
+end-on dumbbell was retuned to HONEST scale in the barbell's ghost grammar — a working dumbbell
+head ≈18cm → **r8** ghost disc (barbell plate r16), solid handle-end center; size hierarchy
+alone now says barbell vs dumbbell. Poses, FormSpecs, tempo, and the validator remain untouched
+by the skin.
+
 ### 3.2 Is the current architecture sufficient? — **Yes, structurally — upgraded in one place.**
 
 The planned pipeline (pose keyframes + 2-bone IK contact constraints + interpolation) already
@@ -182,6 +203,298 @@ and stochastic or hand-animated pipelines don't. What the shift genuinely adds i
 - endpoint holds and canonical tempo as normative, not stylistic — adopted;
 - rejected: muscle highlighting, multi-view v1, annotation overlays — richness that doesn't
   serve the mental model, and clutter risks contradicting the paper/ink restraint.
+
+### 3.4 View selection — the camera is a CATEGORY property (ratified 2026-07-07 · posture primacy ratified 2026-07-08)
+
+Every rig draws from exactly one of two cameras — `view: 'side'` (default) or `view: 'front'`
+(the symmetric frontal figure) — and **the view belongs to the template, never to an individual
+exercise.** All members of a template share one camera; a member may not override it. Founder
+directive: future exercises inherit their camera by category.
+
+**Posture primacy (founder ratification, 2026-07-08).** The primary recognition signal is the
+**defining posture**, not the movement path: a gym-goer names an exercise from what the body
+instantly looks like, and reads the trajectory second. This was always rule 2's engine — the
+rack goalpost and the face-pull goalpost that forced the frontal camera are *postures* — and it
+is now the explicit ordering: **stage the defining posture first; stage the stroke inside
+whatever camera holds it.** Two consequences: (a) a posture is only "defining" if it names THIS
+exercise — a posture that equally names another family fails the primary rule itself (Amendment
+5's no-shared-signature law applies to postures before cameras are even compared); (b) when the
+posture-camera and the stroke-camera genuinely conflict, posture wins and the stroke degrades to
+a projected fold at one endpoint (the face pull precedent — its reach travels partly along the
+camera axis, accepted for the goalpost).
+
+The selection rule, in order:
+
+1. **Side view is the default.** Most gym movements articulate in the sagittal plane — presses
+   on benches, rows, hinges, squats, curls, extensions — and the side camera shows their joint
+   fold, path, and depth landmarks at full length.
+2. **A rig MUST be front-view when its defining recognition cue lives in the frontal plane** —
+   when the fold, flare, or silhouette that *identifies* the movement points along the side
+   camera's axis and would foreshorten to nothing. The proof case is press_vertical: the rack
+   position (elbows ~90°, upper arms parallel to the floor) is a fold into depth that side view
+   cannot draw — the 2-bone IK crushes the arm and the start frame vanishes. Same class:
+   **face_pull** (the goalpost finish — both elbows flared at shoulder height, forearms up — is
+   a TWO-ARM frontal silhouette; a single side-view arm reads as a curl, proven twice in founder
+   review), hip_abduction, lateral_raise, and any defining ROTATION that only projects face-on
+   (the Arnold spin rides its template's front view). **Recognition outranks projection**
+   (founder directive 2026-07-07): the test is "does the nameless silhouette identify the
+   exercise at a glance," not "is every segment strictly projected."
+3. **When neither plane holds the whole movement**, keep the view that holds the *recognition
+   endpoint* and let the other endpoint be a projected fold — e.g. the front-view face pull's
+   reaching start: arms toward the viewer-side pulley project shortened, which is honest
+   projection and costs nothing, because the start is not the identifying frame.
+4. FormSpec predicates are always stated in the drawing plane; the validator is view-agnostic.
+   Where an endpoint is a projected fold, its predicates assert POSITION (contact points), not
+   in-plane joint angles (the front-view face pull's reach asserts hands-together-at-the-rope,
+   not an arm-length angle).
+5. **Among stagings that hold the defining posture, the working stroke must live in the drawing
+   plane** *(the depth-stroke theorem — proven by the frontal chest-press prototype, founder
+   exploration 2026-07-07; SUBORDINATED to posture primacy 2026-07-08)*. The projection is
+   orthographic, so a stroke along the camera axis leaves no pixels — and worse, it is
+   AMBIGUOUS: extension away from the camera and flexion toward it render identically frame by
+   frame. A projected fold is permitted at ONE endpoint (rule 3); the stroke between the
+   endpoints should not be — but where posture and stroke genuinely conflict, **posture wins**
+   (posture-primacy consequence (b); the face pull is the precedent). This rule is a tiebreaker
+   and a warning, no longer an absolute.
+
+   *The chest-press resolution (2026-07-08), recorded as the worked example:* the conflict there
+   was **illusory on both sides**. The frontal chest press's "winning posture" — elbows wide at
+   chest height, face-on — is the pec deck fly's reserved signature, so it fails posture primacy
+   consequence (a): it names the wrong exercise before the stroke is even considered. And the
+   side view's "losing posture" was an authoring flaw, not a camera property: the arm was drawn
+   TUCKED (full-length 25/23), folding the elbow 24u below the shoulder into the deep vertical V
+   that reads as elbow-flexion (curl/row language). A machine chest press holds its elbows at
+   ~60° flare; side-projected honestly (upper arm 12, forearm 22 — the same documented abduction
+   license as the bench benchmark's 20/22), the elbow coils FLAT BEHIND the hand at chest height:
+   the loaded press-Z, a posture owned by pressing in the side plane. Posture primacy, applied
+   with Amendment-5 rigor, selects the side camera for the horizontal press — and demands the
+   posture be authored as the press posture within it. *(The camera half of this resolution was
+   SUPERSEDED the same day by Amendment 7 below — the founder converted the question from a
+   per-rig trade into a product identity decision. The posture findings stand: the frontal home
+   posture must be authored apart from the fly's signature, and the tucked arm remains the
+   documented mis-authoring.)*
+
+**AMENDMENT 7 (founder directive, 2026-07-08) — the frontal identity families.** The camera for
+every **chest-family and shoulder-family** exercise is `view: 'front'`, as a **product decision**:
+these movements' identity lives in upper-body SYMMETRY, and their family must be obvious from
+posture, symmetry, and overall visual impression before biomechanics or equipment are even read.
+This is a directive, not the outcome of rules 1–5 — it covers press_horizontal, press_vertical
+(already frontal), the chest and shoulder members of arc_fly (pec deck, cable/machine flies,
+lateral and front raises, rear-delt flies), and **any future chest or shoulder movement**. Members
+still may not override their template's camera; what changed is how the template's camera is
+assigned for these two families. Two stagings implement it:
+
+- **Lying presses — the head-end camera (the spotter's frame).** A lying press's stroke is
+  world-vertical, so face-on it stays fully in the drawing plane: rule 5 is SATISFIED, not
+  bought off — this is the one frontal staging where a chest press draws its entire path, with
+  canonical in-plane arms at lockout. The supine body draws as the chest cross-section (the
+  frontal trunk profile over a short spine), the head nested at its center crown-toward-camera
+  (the featureless-head license of Amendment 4's "turn the athlete"), legs straddling the end-on
+  bench. The one projected fold (rule 3) is at the chest endpoint: the humerus tucks toward the
+  feet as the implement descends (documented 25 → 17; 14 on the close grip), which stacks the
+  forearms vertically under the grip — the classic frontal bottom. Barbell members draw the
+  **rack goalpost** (uprights + J-hooks); incline members raise the shoulder line against a
+  visible reclined pad; dumbbell members converge honestly toward the top and carry no rack.
+
+- **Toward-camera strokes — the PERSPECTIVE LICENSE.** Where the press axis is the camera axis
+  (the seated machine chest press), orthographic projection leaves no pixels — that finding
+  stands, and rule 5 is hereby scoped to it: *the depth-stroke theorem is a theorem about
+  orthographic projection.* The frontal staging therefore draws **depth as scale**:
+  `screen = center + offset · D/(D−depth)` (machine chest press: D = 72, true stroke 30). The
+  fists (`Pose.fistR`), handles, and press-arm struts GROW as they near the viewer; the elbow
+  flare sweeps from wide-at-the-chest to gone-behind-the-fists; the stack rides the true 3D
+  stroke 1:1, and the range ticks live on the tower — the one in-plane image of the depth
+  stroke, where the plate top lands on a tick at each endpoint hold. FormSpec predicates for
+  projected endpoints stay positional (rule 4), and the true stroke is exposed to the validator
+  as a measurable `stroke` pseudo-joint, so the depth axis is data, not vibes. The license is
+  narrow: it exists to draw a stroke the camera cannot otherwise show, never to decorate — and
+  the perspective center, D, and stroke are declared constants, honest and testable.
+
+  *Signature separation (Amendment 5 rigor):* the frontal chest press's home posture is authored
+  apart from the pec deck's reserved signature — the press shows GRIPPED handles with the elbow
+  UNFOLDING toward the viewer and scale change along the stroke; the fly keeps frozen elbows
+  sweeping wing pads through a wide arc with no scale change. The pec deck's reserved registry
+  entry is refined accordingly (§3.5).
+
+### 3.5 The Recognition Layer — equipment is a first-class component (ratified 2026-07-07 · rewritten by Amendment 4, same day)
+
+**The founder's reframe:** the catalog had been optimizing for **pose recognition**; the product
+requirement is **exercise recognition**. A half-second glance at a nameless demonstration must
+answer three questions:
+
+1. What is the body doing? *(the motion layer — already governed by §§0–3)*
+2. What equipment is being used?
+3. **Where does the resistance come from?**
+
+The proof case is the frontal face pull: the goalpost silhouette is correct (which proves §3.4's
+camera rules), but with the machine behind the camera the drawing carried no statement that this
+is a *cable* exercise — the same pose could be any elbows-beside-the-head movement. The failure
+was never the camera; the resistance source had become invisible.
+
+**Amendment 4 (founder directive, 2026-07-07): recognition first, reduction second.** The first
+version of this section kept minimalism as the governing objective ("the *minimum* visual context
+for instant recognition… never a complete machine"). That order is now inverted. Every equipment
+family starts from **the clearest possible representation of the exercise** — the complete
+station where the station is what identifies the exercise — and is simplified only afterwards,
+and only where removal does not weaken recognition. Designing minimal and adding recognition back
+has proven the harder direction; it is no longer permitted.
+
+**The recognition test.** Cover the athlete: a gym-goer must still be able to name the station
+from the equipment alone. Machine exercises are *named after their machines* — the machine is the
+exercise's noun and the movement is its verb, and a canonical demonstration draws both. A drawing
+that fails the covered-athlete test is under-specified no matter how clean it looks.
+
+**Every station makes four statements** (the force-chain law below is the third, retained
+verbatim from the original ratification):
+
+1. **Frame** — the machine stands on the floor: uprights, base feet, ground contact. A machine
+   that floats reads as marks, not a machine.
+2. **Resistance** — the mass is visible whenever the camera can honestly see it: the weight
+   stack in its tower, the plates on the sleeve or shaft. On cable/selectorized machines the
+   **selected plate rides the cable**: the top slab visibly rises with the pull and settles on
+   the return, in exact proportion to handle travel — the resistance is not a symbol, it moves.
+3. **Transmission** — the taut force chain from resistance to fist (the table below).
+4. **Interface** — seat, pads, footplates, handles: where the body meets the machine. A pad that
+   anchors the athlete is part of the form statement and is drawn **attached to the frame**,
+   never floating in space.
+
+**The law: the force chain is drawn.** Every demonstration must visibly connect
+**resistance source → transmission → athlete** in every frame of the loop:
+
+- **Barbell:** plates → bar → fist. *(Side view: the true-scale ghost plate + end-on bar dot.
+  Front view: the bar crossing the frame + edge-on plate slabs.)*
+- **Dumbbell:** dumbbell → fist. *(The honest r8 ghost disc / side-on handle / front projection.)*
+- **Cable:** weight stack → pulley → cable → handle → fist. The cable is TAUT from a stated
+  origin; when the station is in frame, a **simplified weight stack** sits in its tower.
+- **Lever machine:** frame/pivot → press arm → handle → fist. The lever must **track the handle**
+  through the whole rep — a static lever that detaches from its moving handle breaks the chain.
+- **Rail machine:** rail → carriage → handle → fist. The handle visibly rides its rail (slider +
+  link), never floats beside it.
+- **T-bar / landmine:** floor pivot → lever shaft (drawn in the BAR voice, never the cable
+  stroke) → plates near the handle.
+- **Bodyweight (future templates):** the anchor — bar, floor, dip bars — is the resistance
+  statement.
+
+*The shroud license (Amendment 4):* where the real machine encloses its routing — selectorized
+presses and lever rows hide their cables inside the frame — the drawing may too. The chain then
+reads **frame-fused**: the mechanical member (ram, arm, carriage) visibly enters the frame, the
+stack tower is part of that same frame, and the selected plate moves in exact sync with the
+handle — which is precisely what a gym-goer's eye sees. Cable stations (pulldown, cable rows,
+face pull, pushdowns) draw their routing explicitly, pulley by pulley. Drawing an invented
+external cable on a machine that hides its own would be decoration, not honesty.
+
+**Staging: turn the athlete, not the machine** *(Amendment 4 — supersedes the "camera-side
+origins" rule)*. When the machine stands where the camera does, the rig is staged with the
+athlete **facing the station**, camera behind them: the figure is the unchanged frontal figure
+(the head has no facial features, so a front-view body reads identically from behind), and the
+complete station draws in the far plane — honestly occluded by the athlete's body where it
+passes behind it, visible everywhere else. The proof case is face_pull: mast rising past the
+head to the top of the frame, high pulley above the head, rope V taut from the pulley to both
+fists. Near-camera mount stubs and rope-from-the-frame-edge devices are retired — they stated
+an origin without ever drawing the machine.
+
+**Recognition sets the floor; restraint sets the voice.** Equipment stays in the established
+quiet machine voice (`ink3` structure strokes, `paper3` upholstery, slab stacks, ghost plate
+mass); the athlete remains the hero and the only dark, richly drawn element. Recognition comes
+from **completeness of silhouette**, never from contrast or detail rendering — a complete
+machine in the quiet voice does not compete with the figure, so drawing all of it does not
+violate §0 corollary 1. Simplification happens after the recognition test passes, and may only
+remove what the naming does not need (fasteners, gussets, cosmetic bends) — never one of the
+four statements.
+
+**System property, not per-exercise fixes.** The recognition grammar belongs to the **equipment
+family** exactly as the camera belongs to the category (§3.4). A rig states which family it
+draws; the family defines the **canonical station** (its four statements and its signature
+silhouette), and members parameterize it — pulley height, pad position, handle travel. Audits
+run across the whole catalog against this section — individual exercises may not invent their
+own equipment language. The station assemblies live in `src/motion/machines.ts`; the shared
+vocabulary (plates, cables, pulleys, pads, benches) stays in `src/motion/kit.ts`.
+
+**Amendment 5 (founder review of the equipment pass, 2026-07-07): one station, one signature.**
+Amendment 4 made the force chain visible; the founder's review of that pass moved the question
+from *"how much equipment is shown"* to *"how distinct does each equipment family feel."* The
+strongest systems recognize at three levels — athlete silhouette, movement silhouette,
+**equipment silhouette** — and the third has its own test, stricter than the covered-athlete
+naming test: with the athlete covered and no motion playing, each station must be distinguishable
+**from every other station in the catalog**. Three laws:
+
+1. **The stack is the shared voice, never the identity.** All weight stacks look alike — in the
+   drawing as in a real gym — so a station may not rely on its tower for naming. Identity lives
+   in the **interface and linkage**: the pads, arms, benches, and attachments the body meets.
+2. **Each equipment family owns exactly one signature** — the element a gym-goer would name the
+   machine by — and **no two families may share it**. The signature must survive the
+   covered-athlete test *and* thumbnail scale. A station whose first read matches another
+   family's signature is mis-drawn even if every one of Amendment 4's four statements is present:
+   the proof case is the shoulder press, whose rail-and-carriage staging made all four statements
+   and still read as a **Smith machine** (the full-height gate with a sliding crossbar is the
+   Smith's signature, and is now reserved for it — the shoulder press draws twin press arms
+   folding up from short side pillars instead, moving it from rail-machine to lever-machine
+   grammar in the force-chain table).
+3. **The attachment is a word.** Cable attachments are how gym-goers tell cable exercises apart,
+   so each draws its true silhouette, never a generic tick: the pulldown's wide bar with
+   **downswept tips**, the seated row's **V-grip yoke** (the cable attaches at the apex — never
+   6u short of it), the face pull's **ball-ended rope**.
+
+*The signature registry (ratified · machine chest press and bench stations re-ratified under
+Amendment 7, 2026-07-08):* lat pulldown = cantilevered high beam + swept-tip bar + thigh pad ·
+seated cable row = long low bench + braced footplate + low exit pulley + V-grip · machine row =
+floating chest pad on its column + pull arm folding from a high pivot · machine chest press =
+**high-back seat** (the pad runs past the shoulder to head height) + twin GROWING handles at
+chest height on perspective press-arm struts (front view, §3.4 Am. 7) · barbell bench station =
+**the rack goalpost** (two uprights + J-hooks framing the athlete) + end-on bench + full bar
+crossing the frame (front view; the incline adds its reclined back pad; dumbbell benches carry
+NO rack — the empty-handed bench is their statement) · machine shoulder press = twin folding
+press arms beside the shoulders (front view) · face pull = height-adjustable mast + high pulley
++ ball-ended rope V · t-bar row = floor hinge + lever shaft in the bar voice + plates at the
+working end.
+
+*Reserved signatures (rollout families — the signature is designed before the exercise ships,
+so no future station can collide):* pec deck = twin wing pads sweeping face-on **with frozen
+elbows through a wide arc, no scale change** (refined by Am. 7 to stay disjoint from the
+frontal press's unfolding-elbow + growing-handle read) · leg extension = shin roller in front
+of the seat · leg curl = ankle roller over an angled bench · leg press = 45° sled rails with
+the footplate above the athlete · cable pushdown = high pulley + short straight bar at standing
+height · Smith machine = the full-height gate + sliding crossbar.
+
+### 3.6 Temporal staging — the clock is a camera (Amendment 6, founder presentation review 2026-07-07)
+
+The founder's one-second test ("hide the labels; the first word must be *Press*") is a claim
+about the **emphasized phase**: in a 4-second rep, whatever the slow 2-second stroke does is what
+the exercise reads as. The camera (§3.4) stages the movement in space; the tempo stages it in
+time — and a rig can pass every spatial rule and still tell the wrong story if its clock leads
+with the wrong stroke.
+
+**The diagnosis.** In side view, a horizontal press and a horizontal pull collapse spatially:
+seated athlete, fixed torso, hands traveling horizontally. The discriminator that remains is
+temporal — *which direction the emphasized stroke travels relative to the body*. Every
+press_vertical rig opens at the rack and PRESSES through its 2s stroke (this — more than the
+symmetry — is why the machine shoulder press reads "press" instantly). machine_chest_press had
+copied the barbell bench's rep anchor (rom 0 = lockout), so its emphasized stroke traveled
+**toward the torso — the pull's direction** — and the side view duly read "row". The machine was
+never the problem; the front-view camera was investigated and rejected (the press axis IS the
+camera axis: the lockout points at the lens, both arm segments foreshorten to nothing, and §3.4
+rule 3 cannot rotate a toward-camera endpoint into the drawing plane — the recognition endpoint
+must be *reachable* in-plane). The side camera was right; the clock was wrong. *(§3.4 Amendment 7
+later moved the family to the front view under the perspective license — the orthographic finding
+here stands, and this section's LAW is camera-independent: the machine still opens at the chest
+and presses first, now toward the viewer.)*
+
+**The law.** *The loop opens where the equipment honestly rests, and the emphasized 2s stroke is
+therefore the rep's first working action.*
+
+- **Barbell presses** rest at lockout — the unrack is real — so they open at lockout and lower
+  first (bench, inclines, overhead barbell from the front-rack).
+- **Selectorized machines** rest with the stack seated and the handles home, so they open at the
+  body and PRESS first (machine_chest_press: rom 0 = handles at the chest, rom 1 = lockout). A
+  machine physically cannot begin at lockout; borrowing the barbell's anchor was a modeling
+  error, not a style choice.
+- **Rows and pulldowns** rest with the stack seated and the arms long, so they open at the
+  stretch and PULL first — which they already did.
+- `startAt: 'bottom'` remains the mechanism for lifts whose canonical rom keeps lockout at 0 but
+  whose rep opens at the stretch (deadlift from the floor).
+
+A useful corollary for authoring: **presses press first; pulls pull first.** If the emphasized
+stroke of a press travels toward the body, the rep anchor is wrong.
 
 ## 4. The category model (ratification artifact — requested 2026-07-06)
 
@@ -221,11 +534,11 @@ template and filling parameters; inventing a new template is a deliberate, revie
 
 | Template | Start → End (canonical ROM) | Path / tracked point | Stability & invariants | Members (params) |
 |---|---|---|---|---|
-| **press_horizontal** | Lockout over shoulder (elbow 175°) → **bar/handle contacts chest line** | vertical, bar | hips+shoulders on bench, head fixed, feet planted (zero movement) | bb_bench_press · incline_bb_press (30° bench) · db_bench_press · incline_db_press · machine_chest_press (seated; horizontal handle path) · close_grip_bench (grip param) — **6** |
-| **press_vertical** | Bar at collarbone → lockout overhead, bar over mid-foot | vertical, bar | torso vertical ±3° (no layback), knees fixed, feet planted | bb_overhead_press · db_shoulder_press (start at ears) · machine_shoulder_press · arnold_press (rotation param, path unchanged) — **4** |
-| **pull_row** | Arms long (elbow 175°) → **handle contacts torso landmark** | vertical (hinged) or horizontal (seated/supported), handle | **torso angle frozen ±3° for the whole rep**; knees fixed | bb_row (45° hinge, lower ribs) · t_bar_row (chest) · db_row (bench-supported, hip) · cable_row (seated upright, waist) · machine_row (chest pad, elbows back) · face_pull (high cable, endpoint forehead, elbows lead) — **6** |
+| **press_horizontal** | Lockout (elbow 175°) ↔ **bar/handle contacts chest line**; rep anchor per §3.6 — barbell/db members open at lockout (the unrack), machine_chest_press opens at the chest (the stack rests there) and **presses first**. **FRONT-VIEW per §3.4 Am. 7 (frontal identity family)**: lying members from the head-end camera (world-vertical stroke fully in-plane; humerus tuck at the chest is the one rule-3 fold, 25→17, close grip 14; barbell members draw the rack goalpost, incline members the reclined pad, db members no rack), the seated machine under the **perspective license** (depth as scale, D=72) | vertical at fixed grip x on benches (the incline groove tilts along the DEPTH axis, so it projects vertical from the head-end camera — honest); a slight converging `line` per hand for dumbbells (the honest arc); the machine's true 3D stroke is the **`stroke` pseudo-joint** (30u, `horizontal`), its only in-plane image the 1:1 stack ride | hips+shoulders on bench/pad, head fixed, feet planted (zero movement); symmetry by construction (left mirrors right); db members draw BOTH dumbbells | bb_bench_press · incline_bb_press (raised shoulder line, upper-chest contact) · db_bench_press · incline_db_press · machine_chest_press (seated; perspective press) · close_grip_bench (grip param) — **6** |
+| **press_vertical** | **Rack position → lockout overhead**, presented FRONT-VIEW (the rack — elbows ~90°, upper arms parallel to the floor, forearms vertical — is a depth fold a side view cannot draw; the Arnold rotation only reads face-on). Barbell racks lower: bar at the chin, elbows bent under it (~55°) | vertical, hands | torso vertical ±3° (no layback), hips/knees fixed, head still | bb_overhead_press (front-rack) · db_shoulder_press (goalpost, dumbbells side-on) · machine_shoulder_press (goalpost, twin folding press arms per §3.5 Am. 5) · arnold_press (**palms-in → palms-forward spin drawn by honest projection**, path unchanged) — **4** *(re-authored per founder movement-accuracy review 2026-07-07)* |
+| **pull_row** | Arms long (elbow 175°) → **handle contacts torso landmark** | vertical (hinged) or horizontal (seated/supported), handle | **torso: frozen ±3° where the body is braced** (bb_row's strict hinge — its defining cue; db_row's bench support; machine_row's chest pad; face_pull standing tall) **or a small AUTHORED torso contribution where real technique includes one, capped by the invariant** (t_bar_row: 8° hip drive about fixed hips, ≤10°; cable_row: 15° controlled hinge — reach forward at the stretch, finish tall — ≤18°); knees fixed *(members split per founder movement-accuracy review 2026-07-07)* | bb_row (45° hinge, lower ribs) · t_bar_row (chest, hip drive) · db_row (bench-supported, hip) · cable_row (seated hinge, waist) · machine_row (chest pad, elbows back) · face_pull (**FRONT-VIEW per §3.4 rule 2** — rope from a high pulley pulled into the goalpost: elbows flared at shoulder height, forearms up, hands beside the head; staged FACING the station per §3.5 Amendment 4 — camera behind the athlete, mast + high pulley + rope V drawn in the far plane) — **6** |
 | **pull_vertical** | Full overhead stretch (elbow 175°, lats long) → **bar at collarbone line, never lower** | vertical, bar | torso lean frozen ~15° ±3° (no swing), hips on seat, thighs under pad | lat_pulldown — **1** |
-| **arc_fly** | Arms open/low → arms together / **raised to shoulder height, never higher** | arc about shoulder; **elbow angle frozen (soft, ~160°)** | shoulder (pivot) fixed; torso fixed; no shrug (shoulder y constant) | pec_deck · cable_fly · rear_delt_fly (reverse direction) · lateral_raise (endpoint = shoulder height per cue) · cable_lateral_raise — **5** |
+| **arc_fly** | Arms open/low → arms together / **raised to shoulder height, never higher**. **FRONT-VIEW per §3.4 Am. 7** (frontal identity family — flare and symmetry ARE the identity; staging authored at rollout, pec deck against its refined reserved signature: frozen elbows, wide arc, no scale change) | arc about shoulder; **elbow angle frozen (soft, ~160°)** | shoulder (pivot) fixed; torso fixed; no shrug (shoulder y constant) | pec_deck · cable_fly · rear_delt_fly (reverse direction) · lateral_raise (endpoint = shoulder height per cue) · cable_lateral_raise — **5** |
 | **elbow_flexion** | Elbow 175° at side → full flexion (~55°) | arc about elbow; **elbow point pinned ±1** (the "no swinging" cue as geometry) | torso vertical fixed; shoulder fixed; wrist neutral | bb_curl · db_curl · hammer_curl (grip param) · preacher_curl (elbow pinned on pad param) — **4** |
 | **elbow_extension** | Full flexion → elbow 175° lockout | arc about elbow; elbow pinned ±1 | upper-arm orientation param is **frozen** (at side / overhead / lying-vertical); torso fixed | triceps_pushdown (upper arm at side) · overhead_triceps_ext (overhead) · skullcrusher (lying, upper arm vertical) — **3** |
 | **knee_extension** | Knee ~90° seated → knee 175° | arc about knee; knee pinned | hips on seat, torso fixed ("sit tall") | leg_extension — **1** |

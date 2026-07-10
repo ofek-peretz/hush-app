@@ -8,13 +8,22 @@ import { bbBenchPress } from './library/bbBenchPress';
 import { bbBackSquat } from './library/bbBackSquat';
 import { bbRow } from './library/bbRow';
 import { latPulldown } from './library/latPulldown';
+import { closeGripBench, dbBenchPress, inclineBbPress, inclineDbPress, machineChestPress } from './library/pressHorizontal';
+import { arnoldPress, bbOverheadPress, dbShoulderPress, machineShoulderPress } from './library/pressVertical';
+import { cableRow, dbRow, facePull, machineRow, tBarRow } from './library/pullRow';
 
-export const EXERCISE_MOTION: Record<string, Rig> = {
-  bb_bench_press: bbBenchPress,
-  bb_back_squat: bbBackSquat,
-  bb_row: bbRow,
-  lat_pulldown: latPulldown,
-};
+const RIGS: Rig[] = [
+  // benchmarks
+  bbBenchPress, bbBackSquat, bbRow, latPulldown,
+  // press_horizontal
+  inclineBbPress, dbBenchPress, inclineDbPress, machineChestPress, closeGripBench,
+  // press_vertical
+  bbOverheadPress, dbShoulderPress, machineShoulderPress, arnoldPress,
+  // pull_row
+  tBarRow, dbRow, cableRow, machineRow, facePull,
+];
+
+export const EXERCISE_MOTION: Record<string, Rig> = Object.fromEntries(RIGS.map((r) => [r.id, r]));
 
 export function exerciseMotion(exerciseId: string | null | undefined): Rig | null {
   if (!exerciseId) return null;

@@ -18,6 +18,13 @@ export interface Vec2 {
 export interface Pose {
   j: Record<string, Vec2>;
   headR: number;
+  /** Spinal flexion for crunch patterns: bows the trunk silhouette toward its front (units). */
+  trunkBow?: number;
+  /**
+   * Fist radius override (defaults to LIMB_W.handR). The perspective license (§3.4 Amendment 7)
+   * draws depth as scale: a fist pressing toward the camera grows with its stroke.
+   */
+  fistR?: number;
 }
 
 /** Token-keyed colors so RN (design tokens) and the harness (inlined hex) stay identical. */
@@ -55,6 +62,8 @@ export interface FigureChains {
   head: string; // head-center joint name
   /** Which side of the hip→shoulder vector is the athlete's front (+1 = rot90 of the spine). */
   facing?: 1 | -1;
+  /** 'front' renders the symmetric frontal trunk; limbs are then left/right, both near-ink. */
+  view?: 'side' | 'front';
   nearArm?: string[]; // e.g. ['shoulder','elbow','hand']
   farArm?: string[];
   nearLeg?: string[]; // e.g. ['hip','knee','ankle']
@@ -83,6 +92,8 @@ export type PosePredicate =
   | { kind: 'jointAngle'; joint: string; neighbors: [string, string]; min?: number; max?: number; label?: string }
   /** `a.y` reaches `y` within `tol` — a canonical contact endpoint (bar to chest, bar to collarbone). */
   | { kind: 'contactY'; a: string; y: number; tol: number; label?: string }
+  /** `a.x` reaches `x` within `tol` — a horizontal contact endpoint (fly hands meeting center). */
+  | { kind: 'contactX'; a: string; x: number; tol: number; label?: string }
   /** `a` is below `b` by at least `by` (screen y grows downward) — e.g. squat depth. */
   | { kind: 'jointBelow'; a: string; b: string; by: number; label?: string };
 
@@ -92,7 +103,9 @@ export type Invariant =
   /** The angle of segment `a`→`b` stays within `tolDeg` of its start value, across the whole rep. */
   | { kind: 'segmentAngleFixed'; a: string; b: string; tolDeg: number; label?: string }
   /** The interior angle at `joint` never exceeds `aboveDeg` (no hyperextension). */
-  | { kind: 'angleNever'; joint: string; neighbors: [string, string]; aboveDeg: number; label?: string };
+  | { kind: 'angleNever'; joint: string; neighbors: [string, string]; aboveDeg: number; label?: string }
+  /** a–b–c stay within `tolDeg` of a straight line (the push-up plank line, drawn as a rule). */
+  | { kind: 'colinear'; a: string; b: string; c: string; tolDeg: number; label?: string };
 
 export interface FormSpec {
   tempo: Tempo;
@@ -100,8 +113,12 @@ export interface FormSpec {
   start: PosePredicate[];
   /** Predicates asserted at the working endpoint (rom 1). */
   end: PosePredicate[];
-  /** The tracked path: which joint travels, and its constraint. */
-  path: { track: string; kind: 'vertical' | 'horizontal' | 'arc'; tol: number };
+  /**
+   * The tracked path: which joint travels, and its constraint. 'line' constrains to the declared
+   * axis `dir` (a machine rail); 'arc' declares a joint-pivot arc — its constraint is the pivot
+   * invariant (pointFixed), not an axis.
+   */
+  path: { track: string; kind: 'vertical' | 'horizontal' | 'line' | 'arc'; tol: number; dir?: Vec2 };
   /** Held for the entire rep, sampled every frame. */
   invariants: Invariant[];
 }

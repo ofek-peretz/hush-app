@@ -36,6 +36,11 @@ function checkPredicate(pose: Pose, p: PosePredicate): string | null {
     if (Math.abs(a.y - p.y) > p.tol) return `${p.label ?? p.a} y=${a.y.toFixed(1)} not within ${p.tol} of contact line ${p.y}`;
     return null;
   }
+  if (p.kind === 'contactX') {
+    const a = need(pose, p.a);
+    if (Math.abs(a.x - p.x) > p.tol) return `${p.label ?? p.a} x=${a.x.toFixed(1)} not within ${p.tol} of contact line ${p.x}`;
+    return null;
+  }
   // jointBelow
   const a = need(pose, p.a);
   const b = need(pose, p.b);
@@ -55,9 +60,14 @@ function checkInvariant(pose: Pose, start: Pose, inv: Invariant): string | null 
     if (Math.abs(cur - ref) > inv.tolDeg) return `${inv.label ?? `${inv.a}→${inv.b}`} angle drifted ${Math.abs(cur - ref).toFixed(1)}° (> ${inv.tolDeg}°)`;
     return null;
   }
-  // angleNever
-  const a = angleAt(need(pose, inv.neighbors[0]), need(pose, inv.joint), need(pose, inv.neighbors[1]));
-  if (a > inv.aboveDeg) return `${inv.label ?? inv.joint} angle ${a.toFixed(1)}° exceeded ${inv.aboveDeg}°`;
+  if (inv.kind === 'angleNever') {
+    const a = angleAt(need(pose, inv.neighbors[0]), need(pose, inv.joint), need(pose, inv.neighbors[1]));
+    if (a > inv.aboveDeg) return `${inv.label ?? inv.joint} angle ${a.toFixed(1)}° exceeded ${inv.aboveDeg}°`;
+    return null;
+  }
+  // colinear — a–b–c hold a straight line within tolDeg for the whole rep
+  const bend = 180 - angleAt(need(pose, inv.a), need(pose, inv.b), need(pose, inv.c));
+  if (bend > inv.tolDeg) return `${inv.label ?? `${inv.a}–${inv.b}–${inv.c}`} bent ${bend.toFixed(1)}° off the line (> ${inv.tolDeg}°)`;
   return null;
 }
 
@@ -103,6 +113,16 @@ export function validate(rig: Rig, samples = 120): ValidationResult {
       const ty = need(pose, spec.path.track).y;
       if (Math.abs(ty - refY) > spec.path.tol) {
         violations.push({ where: `path@rom=${rom.toFixed(2)}`, detail: `${spec.path.track} y=${ty.toFixed(2)} left the horizontal axis (ref ${refY.toFixed(2)}, tol ${spec.path.tol})` });
+      }
+    }
+    if (spec.path.kind === 'line' && spec.path.dir && refX != null && refY != null) {
+      // perpendicular deviation from the declared rail through the start point
+      const d = spec.path.dir;
+      const len = Math.hypot(d.x, d.y) || 1;
+      const tp0 = need(pose, spec.path.track);
+      const dev = Math.abs((tp0.x - refX) * (-d.y / len) + (tp0.y - refY) * (d.x / len));
+      if (dev > spec.path.tol) {
+        violations.push({ where: `path@rom=${rom.toFixed(2)}`, detail: `${spec.path.track} left the declared rail by ${dev.toFixed(2)} (tol ${spec.path.tol})` });
       }
     }
     const tp = need(pose, spec.path.track);
