@@ -6,7 +6,7 @@
  * Rest is Hush-owned and not user-adjustable (UX §10.8); these are the fixed
  * defaults. "Ready" (endRest) is the only rest agency.
  */
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, similarExercises, type Exercise } from '@/data/exercises';
 import { db } from '@/data/local/db';
@@ -24,7 +24,7 @@ import {
   type SessionEvent,
   type SessionMachine,
 } from '@/state/machines/sessionState';
-import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS } from '@/state/sessionRecovery';
+import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
@@ -355,6 +355,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // a ref keeps its deps from closing over a stale modeState/program).
   const appRef = useRef(app);
   appRef.current = app;
+
+  /**
+   * Credit a salvaged workout (founder 2026-07-11). The app died mid-workout; if the athlete had
+   * nonetheless TRAINED it (>= half the prescribed sets — sessionRecovery stamps the verdict), it
+   * counts exactly like a workout finished by hand: the session count advances (free trial +
+   * calibration) and the workout is done for the week. A crash is not the athlete's fault, and a
+   * PARTIAL salvage still credits nothing but its real work. Best-effort: never blocks a start.
+   *
+   * (The BOOT path credits the same salvage itself, before the app store publishes its state —
+   * see appStore. This is the in-session path: an orphan salvaged as the athlete starts a fresh
+   * workout, or when a stale resume is discarded.)
+   */
+  const creditSalvage = useCallback(async (salvaged: SalvageResult) => {
+    if (!salvaged.trained) return;
+    try {
+      await appRef.current.recordSessionCompleted();
+      if (salvaged.programDayId) await appRef.current.markWorkoutCompleted(salvaged.programDayId);
+      void track('session_recovered_credited', { programDayId: salvaged.programDayId });
+    } catch {
+      /* the work is already in History; the next boot's heal reconciles the week */
+    }
+  }, []);
   // Reconcile watch-local session records: the watch executed a workout AS THE
   // LOCAL AUTHORITY (phone absent) and durably queued the result. Delivery is
   // at-least-once (OS userInfo transfer), apply is idempotent, and the ack is
@@ -702,7 +724,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       async start(day, targets) {
         // The athlete chose a FRESH workout while an interrupted one was still resumable
         // (or a stale orphan lingered): salvage its logged work first, then compose cleanly.
-        await salvageOrphanSession();
+        await creditSalvage(await salvageOrphanSession());
         setRestResumeRemainingS(null);
         const plan2 = buildPlan(day, targets);
         const session: Session = {
@@ -763,7 +785,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           );
           if (!r) {
             // Unusable (stale / fully completed) → salvage so the next Begin composes cleanly.
-            await salvageOrphanSession();
+            await creditSalvage(await salvageOrphanSession());
             return false;
           }
           sessionRef.current = active;

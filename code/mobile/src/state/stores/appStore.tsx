@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Session, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
-import { salvageOrphanSession, RESUME_WINDOW_MS } from '@/state/sessionRecovery';
+import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
 import { agedProfile } from '@/domain/profileAge';
 import { CONSENT_VERSION } from '@/domain/consent';
@@ -285,6 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Anything stale or unusable is salvaged as before: completed sets become an
       // "ended early" history entry (queued for sync) and the orphan is cleared. An
       // interrupted session does NOT advance calibration (§2.3).
+      let salvaged: SalvageResult = { trained: false, programDayId: null };
       const active = await db.loadActiveSession();
       if (active) {
         let fresh = false;
@@ -299,7 +300,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch {
           /* unreadable snapshot → salvage */
         }
-        if (!fresh) await salvageOrphanSession();
+        if (!fresh) salvaged = await salvageOrphanSession();
       }
 
       const [storedProfile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
@@ -323,9 +324,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           void track('age_auto_advanced', { age: aged.age });
         }
       }
-      const mode: AthleteModeState = persistedMode
+      let mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
+      // CREDIT A SALVAGED WORKOUT (founder 2026-07-11): the app died mid-workout, but the athlete
+      // TRAINED it (>= half the prescribed sets) — a crash is not their fault, so it counts exactly
+      // like a workout they finished by hand: the session count advances (free trial + calibration),
+      // and the week's DONE flag follows from the heal below. A PARTIAL salvage credits nothing.
+      // Persisted immediately so a second boot cannot double-credit (the session is de-duped in
+      // History, and salvage only reports a FRESH write).
+      if (salvaged.trained) {
+        mode = athleteModeReducer(mode, { type: 'SESSION_COMPLETED' });
+        await db.saveMode({ mode: mode.mode, completedSessions: mode.completedSessions, portrait: mode.portrait });
+        void track('session_recovered_credited', { programDayId: salvaged.programDayId, completedSessions: mode.completedSessions });
+      }
       // Gate on the CACHED entitlement immediately (offline-safe); the live store
       // value is reconciled just after boot (below).
       dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });

@@ -128,14 +128,35 @@ export function reconcileResume<S extends ResumeStep>(
   return { machine: settled, restStartedAtMs: null, restExtraS: 0, restRemainingS: null };
 }
 
+/** What a salvage actually recovered, so the caller can credit it (see salvageOrphanSession). */
+export interface SalvageResult {
+  /** A TRAINED session (>= half the prescribed sets) was newly written to History — the caller
+   *  must credit it exactly like a normal finish: advance the session count and finish the
+   *  workout for the week. False for a partial, a duplicate, or nothing to salvage. */
+  trained: boolean;
+  /** The workout it belongs to (only when `trained`). */
+  programDayId: string | null;
+}
+
+const NOTHING_SALVAGED: SalvageResult = { trained: false, programDayId: null };
+
 /**
  * Salvage an orphaned active session: whatever completed becomes an "ended early" history
  * entry (queued for sync), then the orphan is cleared so the next start composes cleanly.
  * De-duped by session id (a prior crash may have saved-but-not-cleared). Never throws.
  * Shared by the boot path (stale/unusable snapshot) and by start() (the athlete chose a
  * fresh workout instead of resuming).
+ *
+ * CREDIT (founder 2026-07-11 — supersedes the old §2.3 "an interrupted session does not advance
+ * calibration"): a crash is not the athlete's fault. A salvaged session that TRAINED the workout
+ * (domain/completion) counts exactly like one the athlete finished by hand — same session count
+ * (free trial + calibration), same DONE flag for the week. That rule was written when we had no
+ * way to judge how much of the workout was actually done; now we do. A PARTIAL salvage still
+ * counts for nothing but its real work (History + the engine + every non-count milestone).
+ * The caller performs the credit; this function reports it.
  */
-export async function salvageOrphanSession(): Promise<void> {
+export async function salvageOrphanSession(): Promise<SalvageResult> {
+  let result: SalvageResult = NOTHING_SALVAGED;
   try {
     const active = await db.loadActiveSession();
     if (active) {
@@ -143,16 +164,15 @@ export async function salvageOrphanSession(): Promise<void> {
         const history = await db.loadHistory();
         if (!history.some((h) => h.id === active.id)) {
           // Stamp the TRAINED verdict (domain/completion) like any other save, so the workout-count
-          // milestones and the week heal read a salvaged session exactly as they read a finished
-          // one. (Whether a salvaged session ADVANCES the session count is a separate, unchanged
-          // rule — see §2.3: an interrupted session does not.)
+          // milestones and the week heal read a salvaged session exactly as they read a finished one.
           const program = await db.loadProgram().catch(() => null);
           const day = program?.days.find((d) => d.id === active.programDayId);
+          const trained = sessionTrained(active, day);
           const saved: Session = {
             ...active,
             state: 'SAVED',
             earlyFinish: true,
-            trained: sessionTrained(active, day),
+            trained,
             annotation: 'ended_early',
           };
           await db.appendCompletedSession(saved);
@@ -168,7 +188,9 @@ export async function salvageOrphanSession(): Promise<void> {
             })),
             earlyFinish: true,
           });
-          void track('session_recovered', { sessionId: saved.id, sets: saved.sets.length });
+          // Credited only on a FRESH write — a de-duped replay must never count twice.
+          result = trained ? { trained: true, programDayId: saved.programDayId } : NOTHING_SALVAGED;
+          void track('session_recovered', { sessionId: saved.id, sets: saved.sets.length, trained });
         }
       }
       await db.clearActiveSession();
@@ -181,4 +203,5 @@ export async function salvageOrphanSession(): Promise<void> {
   } catch {
     /* best-effort */
   }
+  return result;
 }
