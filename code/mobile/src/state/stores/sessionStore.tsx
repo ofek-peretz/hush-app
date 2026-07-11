@@ -554,13 +554,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await db.appendCompletedSession(saved);
       await db.clearActiveSession();
       await db.clearSessionResume().catch(() => {});
-      const { unlockedPortrait } = await app.recordSessionCompleted();
       // PARTIAL vs TRAINED (founder 2026-07-11, domain/completion): the workout is finished for
       // the week only if at least HALF its prescribed sets were logged. Below that the work is
       // still real — it is in History and the engine folds every set performed — but the workout
       // STAYS on the week's list, so one exercise out of six never costs the athlete the session.
       const programDay = app.program?.days.find((d) => d.id === session.programDayId);
       const trained = sessionTrained(saved, programDay);
+      // A COMPLETED SESSION is a completed WORKOUT — so only a trained one advances the count.
+      // The count gates the free trial (7 sessions) and calibration: a partial that leaves the
+      // workout open must not burn a free session, or an athlete who finishes that same workout
+      // in a second visit would pay twice for one workout.
+      const { unlockedPortrait } = trained
+        ? await app.recordSessionCompleted()
+        : { unlockedPortrait: false };
       if (trained) {
         // Mark this workout DONE for the week so Program shows the green DONE chip and
         // Home advances to the next unfinished workout (Rest once all are done).

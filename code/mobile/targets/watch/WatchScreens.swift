@@ -703,21 +703,36 @@ struct ActiveSetScreen: View {
 
   private var editor: some View {
     VStack(spacing: 8) {
-      Button { if !bodyweight { field = .weight } } label: {
-        HStack(alignment: .firstTextBaseline, spacing: 2) {
-          Text(bodyweight ? WatchCopy.bodyweight : fmtW(w)).font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
-          if !bodyweight { Text(" " + WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2) }
+      // Bodyweight has no load field to adjust, so it carries no load MARK either (founder
+      // 2026-07-11) — just a quiet legend where the kg would be, and the reps take the size.
+      if bodyweight {
+        Legend(WatchCopy.bodyweightQuiet, size: 10)
+        Button { field = .reps } label: {
+          HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text("\(Int(r))").font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
+            Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+          }
+          .foregroundStyle(Palette.ink0)
+          .overlay(alignment: .bottom) { underline(true) }
         }
-        .foregroundStyle(field == .weight ? Palette.ink0 : Palette.ink2)
-        .overlay(alignment: .bottom) { underline(field == .weight && !bodyweight) }
+        .buttonStyle(.plain)
+      } else {
+        Button { field = .weight } label: {
+          HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(fmtW(w)).font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
+            Text(" " + WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+          }
+          .foregroundStyle(field == .weight ? Palette.ink0 : Palette.ink2)
+          .overlay(alignment: .bottom) { underline(field == .weight) }
+        }
+        .buttonStyle(.plain)
+        Button { field = .reps } label: {
+          Text("× \(Int(r))").font(.system(size: 22, weight: .semibold, design: .monospaced))
+            .foregroundStyle(field == .reps ? Palette.ink0 : Palette.ink2)
+            .overlay(alignment: .bottom) { underline(field == .reps) }
+        }
+        .buttonStyle(.plain)
       }
-      .buttonStyle(.plain).disabled(bodyweight)
-      Button { field = .reps } label: {
-        Text("× \(Int(r))").font(.system(size: 22, weight: .semibold, design: .monospaced))
-          .foregroundStyle(field == .reps ? Palette.ink0 : Palette.ink2)
-          .overlay(alignment: .bottom) { underline(field == .reps) }
-      }
-      .buttonStyle(.plain)
       // No −/+ buttons: the Digital Crown is the adjuster (whole steps), so the
       // hint spans the full row and reads clearly instead of truncating to "CROWN TO AD…".
       HStack(spacing: 5) {
@@ -784,11 +799,19 @@ struct ConfirmScreen: View {
         DrawCheck(size: 22)
         Legend(WatchCopy.setLogged(index, total), size: 11)
       }
+      // The mark of what was logged. A bodyweight set logs REPS — that is the whole record
+      // (founder 2026-07-11; phone parity, which shows the rep count alone). A loaded set logs
+      // "load × reps".
       HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(weight == nil ? WatchCopy.bodyweight : fmtW(weight!))
-          .font(.system(size: Fit.s(56), weight: .semibold, design: .monospaced)).monospacedDigit()
-        Text("×").font(.system(size: Fit.s(24), design: .monospaced)).foregroundStyle(Palette.ink2)
+        if let wt = weight {
+          Text(fmtW(wt))
+            .font(.system(size: Fit.s(56), weight: .semibold, design: .monospaced)).monospacedDigit()
+          Text("×").font(.system(size: Fit.s(24), design: .monospaced)).foregroundStyle(Palette.ink2)
+        }
         Text("\(reps)").font(.system(size: Fit.s(56), weight: .semibold, design: .monospaced)).monospacedDigit()
+        if weight == nil {
+          Text(WatchCopy.reps).font(.system(size: Fit.s(18), design: .monospaced)).foregroundStyle(Palette.ink2)
+        }
       }
       // A heavy load ("112.5 × 12") must stay ONE line on the 40 mm case — scale
       // down before ever wrapping or clipping.
@@ -1064,8 +1087,9 @@ struct CompleteScreen: View {
       Spacer(minLength: 8)
       StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16, action: onDone)
     }
+    // Deliberately NOT stageFill(): this screen's proportions are approved as they are —
+    // only its middle metric changed (sets → kcal).
     .padding(.horizontal, 12).padding(.bottom, 8)
-    .stageFill()
   }
 }
 

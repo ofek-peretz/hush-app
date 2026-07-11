@@ -204,8 +204,13 @@ final class WatchModel: ObservableObject {
     let phoneLive = ["active_set", "rest_inter", "rest_transition", "paused"].contains(mirror?.phase ?? "")
 
     // A NEW live workout always wins a completion the athlete never dismissed (they walked away
-    // from the wrist and started the next session on the phone) — the held frame is stale.
-    if phoneLive { completeHold = nil }
+    // from the wrist and started the next session on the phone) — the held frame is stale. The
+    // same goes for a run/walk summary still sitting on the stage.
+    if phoneLive {
+      completeHold = nil
+      completeKcal = nil
+      cardioSummary = nil
+    }
 
     // Two authorities can never run at once. The Begin FALLBACK starts a local session when
     // the phone doesn't answer in time — if that phone then answers LATE with a live session,
