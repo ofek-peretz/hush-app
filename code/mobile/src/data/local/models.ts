@@ -158,6 +158,13 @@ export interface SessionSummary {
 export interface Session {
   id: string;
   programDayId: string;
+  /** Did this session TRAIN the workout (>= half its prescribed sets — domain/completion)?
+   *  Stamped at save so the verdict is durable and retroactively readable: the workout-COUNT
+   *  milestones ("N workouts") only count trained sessions, since that family is about whole
+   *  workouts. Every other milestone family (tonnage / clubs / engine) counts a partial's work
+   *  in full — the athlete lifted it (founder 2026-07-11). Absent on sessions saved before the
+   *  rule => counted (they finished the workout under the old law). */
+  trained?: boolean;
   // Day name captured AT START so History reads stably even after the program
   // regenerates with fresh day ids (the backend composes a new id per session).
   // Optional: sessions saved before this field fall back to a program lookup.

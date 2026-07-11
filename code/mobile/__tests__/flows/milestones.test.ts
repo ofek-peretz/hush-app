@@ -68,6 +68,37 @@ describe('count family', () => {
     expect(earnedMilestones(reversed).map((m) => m.id)).toEqual(earnedMilestones(sessions).map((m) => m.id));
   });
 
+  it('a PARTIAL session is not a workout — it never ticks the count (founder 2026-07-11)', () => {
+    // 9 whole workouts + 3 partials: still 9. The count family asks for WHOLE workouts.
+    const whole = Array.from({ length: 9 }, (_, i) => session(i, [log('lat_pulldown', 35)]));
+    const partials = Array.from({ length: 3 }, (_, i) => ({
+      ...session(10 + i, [log('lat_pulldown', 35)]),
+      trained: false,
+    }));
+    expect(earnedMilestones([...whole, ...partials]).filter((m) => m.family === 'count')).toEqual([]);
+    // The 10th WHOLE workout earns it — and it is the one credited, not a later partial.
+    const tenth = session(20, [log('lat_pulldown', 35)]);
+    const counts = earnedMilestones([...whole, ...partials, tenth]).filter((m) => m.family === 'count');
+    expect(counts).toHaveLength(1);
+    expect(counts[0].sessionId).toBe(tenth.id);
+  });
+
+  it('but a partial session STILL breaks every other mark — the work was real', () => {
+    // A short session in which the athlete genuinely lifted a club load keeps the club mark.
+    const partial = { ...session(1, [log('bb_back_squat', 100)]), trained: false };
+    const clubs = earnedMilestones([partial]).filter((m) => m.family === 'club');
+    expect(clubs.map((m) => m.id)).toContain('club_bb_back_squat_100');
+    expect(earnedMilestones([partial]).filter((m) => m.family === 'count')).toEqual([]);
+  });
+
+  it('nextUp counts only whole workouts toward the next count mark', () => {
+    const whole = Array.from({ length: 4 }, (_, i) => session(i, [log('lat_pulldown', 35)]));
+    const partial = { ...session(9, [log('lat_pulldown', 35)]), trained: false };
+    const next = nextUp([...whole, partial]).find((n) => n.milestone.family === 'count')!;
+    expect(next.current).toBe(4); // the partial is not counted
+    expect(next.target).toBe(10);
+  });
+
   it('ignores unsaved / empty sessions', () => {
     const real = Array.from({ length: 9 }, (_, i) => session(i, [log('lat_pulldown', 35)]));
     const empty = session(20, []);

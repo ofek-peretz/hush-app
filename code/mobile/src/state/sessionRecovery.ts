@@ -17,6 +17,7 @@
 import { sessionReducer, type SessionMachine } from '@/state/machines/sessionState';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
+import { sessionTrained } from '@/domain/completion';
 import type { Session } from '@/data/local/models';
 
 /** How long an interrupted session stays resumable. Past this, the gym visit is over —
@@ -141,7 +142,19 @@ export async function salvageOrphanSession(): Promise<void> {
       if (active.sets.length > 0) {
         const history = await db.loadHistory();
         if (!history.some((h) => h.id === active.id)) {
-          const saved: Session = { ...active, state: 'SAVED', earlyFinish: true, annotation: 'ended_early' };
+          // Stamp the TRAINED verdict (domain/completion) like any other save, so the workout-count
+          // milestones and the week heal read a salvaged session exactly as they read a finished
+          // one. (Whether a salvaged session ADVANCES the session count is a separate, unchanged
+          // rule — see §2.3: an interrupted session does not.)
+          const program = await db.loadProgram().catch(() => null);
+          const day = program?.days.find((d) => d.id === active.programDayId);
+          const saved: Session = {
+            ...active,
+            state: 'SAVED',
+            earlyFinish: true,
+            trained: sessionTrained(active, day),
+            annotation: 'ended_early',
+          };
           await db.appendCompletedSession(saved);
           await db.enqueuePendingSync({
             sessionId: saved.id,

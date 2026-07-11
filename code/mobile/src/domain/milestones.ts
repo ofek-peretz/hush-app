@@ -4,7 +4,9 @@
  * The ONE licensed loud moment in an otherwise quiet instrument. Four families,
  * all founder-ratified, all tuned so a consistent athlete sees roughly one mark
  * a month in year one and rarer after ("not something you see every two days"):
- *   • count   — cumulative workouts (10 … 1000). Pure count, NO streak mechanics.
+ *   • count   — cumulative WHOLE workouts (10 … 1000). Pure count, NO streak mechanics. A partial
+ *               session (under half the prescribed sets) is not a workout and never ticks it —
+ *               this is the only family that asks the question (founder 2026-07-11).
  *   • tonnage — cumulative kg moved, HUGE thresholds only (250 t … 10,000 t);
  *               each is a real-world object the athlete has now "moved".
  *   • club    — an actually-logged set at a landmark load on the five barbell
@@ -102,6 +104,17 @@ function chronological(sessions: Session[]): Session[] {
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 }
 
+/**
+ * Does this session count as a WORKOUT for the count family (founder 2026-07-11)?
+ *
+ * The count family — "N workouts" — is the ONE family about whole workouts, so a PARTIAL session
+ * (under half the prescribed sets; `trained === false`, stamped at save via domain/completion)
+ * does not tick it. Every OTHER family counts a partial's work in full: the kilos were moved, the
+ * club set was lifted, the engine's raise was real — a short session that broke a mark KEEPS it.
+ * Sessions saved before the rule carry no verdict (undefined) and count, as they did then.
+ */
+const countsAsWorkout = (s: Session): boolean => s.trained !== false;
+
 const sessionTonnage = (s: Session): number =>
   s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
 
@@ -129,11 +142,13 @@ export function earnedMilestones(sessions: Session[]): EarnedMilestone[] {
   const doubled = new Set<string>();
 
   for (const s of hist) {
-    // count
-    count += 1;
-    while (countIdx < COUNT_THRESHOLDS.length && count >= COUNT_THRESHOLDS[countIdx]) {
-      earn({ id: `count_${COUNT_THRESHOLDS[countIdx]}`, family: 'count', value: COUNT_THRESHOLDS[countIdx] }, s);
-      countIdx += 1;
+    // count — WHOLE workouts only (a partial session never ticks this family)
+    if (countsAsWorkout(s)) {
+      count += 1;
+      while (countIdx < COUNT_THRESHOLDS.length && count >= COUNT_THRESHOLDS[countIdx]) {
+        earn({ id: `count_${COUNT_THRESHOLDS[countIdx]}`, family: 'count', value: COUNT_THRESHOLDS[countIdx] }, s);
+        countIdx += 1;
+      }
     }
 
     // tonnage
@@ -225,7 +240,7 @@ export function nextUp(sessions: Session[]): NextMilestone[] {
   const earned = new Set(earnedMilestones(hist).map((m) => m.id));
   const out: NextMilestone[] = [];
 
-  const count = hist.length;
+  const count = hist.filter(countsAsWorkout).length; // whole workouts only (see countsAsWorkout)
   const nextCount = COUNT_THRESHOLDS.find((n) => !earned.has(`count_${n}`));
   if (nextCount != null) {
     out.push({ milestone: { id: `count_${nextCount}`, family: 'count', value: nextCount }, current: count, target: nextCount });

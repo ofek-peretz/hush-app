@@ -537,6 +537,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         return notStartedResult;
       }
 
+      // PARTIAL vs TRAINED (founder 2026-07-11, domain/completion): a session finishes the workout
+      // only at HALF its prescribed sets or more. The verdict is stamped ON the session so it is
+      // durable (the workout-count milestones read it long after the program has changed shape).
+      const programDay = app.program?.days.find((d) => d.id === session.programDayId);
+      const trained = sessionTrained(session, programDay);
+
       // Owner-voice annotation only when Hush acted or the athlete ended early
       // (§4.10). Early-finish takes precedence; otherwise an increase this session.
       const increasedStep = plan.find((s) => s.target.reasonType === 'increase');
@@ -544,6 +550,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ...session,
         state: 'SAVED',
         earlyFinish,
+        trained,
         annotation: earlyFinish ? 'ended_early' : increasedStep ? 'increased' : null,
         annotationCapability:
           !earlyFinish && increasedStep ? exerciseById(increasedStep.exerciseId)?.capability : undefined,
@@ -554,12 +561,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await db.appendCompletedSession(saved);
       await db.clearActiveSession();
       await db.clearSessionResume().catch(() => {});
-      // PARTIAL vs TRAINED (founder 2026-07-11, domain/completion): the workout is finished for
-      // the week only if at least HALF its prescribed sets were logged. Below that the work is
-      // still real — it is in History and the engine folds every set performed — but the workout
-      // STAYS on the week's list, so one exercise out of six never costs the athlete the session.
-      const programDay = app.program?.days.find((d) => d.id === session.programDayId);
-      const trained = sessionTrained(saved, programDay);
+      // Below the TRAINED bar the work is still real — it is in History and the engine folds every
+      // set performed — but the workout STAYS on the week's list, so one exercise out of six never
+      // costs the athlete the session.
       // A COMPLETED SESSION is a completed WORKOUT — so only a trained one advances the count.
       // The count gates the free trial (7 sessions) and calibration: a partial that leaves the
       // workout open must not burn a free session, or an athlete who finishes that same workout

@@ -131,16 +131,19 @@ export async function applyWatchSessionRecord(raw: unknown, deps: WatchReconcile
       return;
     }
 
-    const session = watchRecordToSession(record);
-    // Same order as finalize(): save history first (§8.4), then advance mode +
-    // week state, then best-effort backend sync with an offline queue.
-    await deps.appendCompletedSession(session);
     // PARTIAL vs TRAINED (domain/completion) — identical to the phone's finalize: a wrist session
     // under half the workout's prescribed sets is real work, but it does NOT finish the workout;
     // it stays on the week's list and does not spend a session from the count (which gates the
-    // free trial + calibration). The day comes from the phone's program (the authority).
+    // free trial + calibration). The day comes from the phone's program (the authority); the
+    // verdict is stamped on the session so the workout-count milestones can read it later.
     const day = deps.programDay?.(record.workoutId);
-    if (sessionTrained(session, day)) {
+    const base = watchRecordToSession(record);
+    const trained = sessionTrained(base, day);
+    const session: Session = { ...base, trained };
+    // Same order as finalize(): save history first (§8.4), then advance mode +
+    // week state, then best-effort backend sync with an offline queue.
+    await deps.appendCompletedSession(session);
+    if (trained) {
       await deps.recordSessionCompleted();
       await deps.markWorkoutCompleted(record.workoutId);
     }
