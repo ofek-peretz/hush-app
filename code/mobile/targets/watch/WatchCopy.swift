@@ -22,6 +22,10 @@ enum WatchCopy {
   static let crownToAdjust = "Crown to adjust"
   static let kg = "kg"
   static let bodyweight = "BW"
+  // Bodyweight on the LIVE stage: the reps are the hero, and "bodyweight" is a whisper under
+  // them (founder 2026-07-11 — the athlete on a pull-up already knows what they are lifting).
+  static let reps = "reps"
+  static let bodyweightQuiet = "Bodyweight"
   // Equipment-native setup line (item 11)
   static let perHand = "per hand"
   static let pin = "pin"

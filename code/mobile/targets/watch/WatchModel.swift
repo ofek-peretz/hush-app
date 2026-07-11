@@ -107,6 +107,11 @@ final class WatchModel: ObservableObject {
   /// which used to overwrite the complete frame within a second, so the athlete never saw it.
   /// The completion belongs to the watch until dismissed; lobby envelopes still land underneath.
   private var completeHold: WireMirror?
+  /// Active calories for that finished workout, captured as the frame lands — the OS runtime
+  /// clears its live metrics while it persists the HKWorkout, so reading them later gives nil.
+  private var completeKcal: Int?
+  /// Read by the Complete screen (the workout's energy replaced its set count).
+  var completedKcal: Int? { completeKcal }
 
   // Begin fallback (founder 2026-07-10, "it froze — wouldn't let me start"): a
   // reachable phone whose app never answers the start intent must not strand the
@@ -244,6 +249,7 @@ final class WatchModel: ObservableObject {
       setConfirmToken += 1
       setConfirm = nil
       completeHold = m
+      completeKcal = liveMetrics.activeKcal // BEFORE syncWorkoutRuntime finishes + clears them
     }
     syncRestHaptics(prev: prev, next: mirror)
     syncWorkoutRuntime(phase: mirror?.phase)
@@ -296,6 +302,7 @@ final class WatchModel: ObservableObject {
     setConfirmToken += 1
     setConfirm = nil
     completeHold = frame
+    completeKcal = liveMetrics.activeKcal // captured before the runtime finishes + clears them
     let prev = localMirror
     localMirror = frame
     syncRestHaptics(prev: prev, next: frame)
@@ -522,6 +529,7 @@ final class WatchModel: ObservableObject {
 
   func dismissComplete() {
     completeHold = nil // the athlete closed the completion — the lobby may take the stage again
+    completeKcal = nil
     // Local authority: the record is already durable in the outbox and the active
     // session cleared — dismissal just tears the local presentation down (the
     // phone's state, or the offline Start lobby, takes over).

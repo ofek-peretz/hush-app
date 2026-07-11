@@ -425,7 +425,7 @@ struct WatchRootView: View {
     case let .connectionLost(m):
       ConnectionLostScreen(mirror: m)
     case let .workoutComplete(m):
-      CompleteScreen(mirror: m, onDone: model.dismissComplete)
+      CompleteScreen(mirror: m, kcal: model.completedKcal, onDone: model.dismissComplete)
     case let .setConfirmation(weight, reps, index, total):
       ConfirmScreen(weight: weight, reps: reps, index: index, total: total, onTap: model.dismissSetConfirm)
     case let .activeSet(m, draft):
@@ -647,23 +647,35 @@ struct ActiveSetScreen: View {
     }
   }
 
+  /// LOADED hierarchy (canonical-first): LOAD (hero) → INSTRUCTION (what to do now) → REPS → Δ.
+  ///
+  /// BODYWEIGHT is the one exercise where the load is NOT the hero (founder 2026-07-11): an
+  /// athlete on a pull-up knows they are lifting themselves — shouting "BW" tells them nothing.
+  /// The number that carries the work, and the one Hush actually progresses on a bodyweight lift,
+  /// is the REP COUNT. So reps take the hero mark and "bodyweight" drops to a quiet legend under
+  /// it. The block keeps the LOADED case's height (minHeight) so the top strip and the exercise
+  /// name never shift between a loaded lift and a bodyweight one.
   private var readout: some View {
-    // Hierarchy (canonical-first): LOAD (hero) → INSTRUCTION (what to do now) → REPS → Δ.
     VStack(spacing: 6) {
-      HStack(alignment: .firstTextBaseline, spacing: 4) {
-        if let wt = shownWeight {
+      if let wt = shownWeight {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
           Text(fmtW(wt)).font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
           Text(WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
-        } else {
-          Text(WatchCopy.bodyweight).font(.system(size: Fit.s(28), weight: .semibold)).foregroundStyle(Palette.ink0)
         }
-      }
-      instruction
-      HStack(spacing: 10) {
-        Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
-        if (mirror.loadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0, fontSize: 10) }
+        instruction
+        HStack(spacing: 10) {
+          Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
+          if (mirror.loadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0, fontSize: 10) }
+        }
+      } else {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+          Text("\(shownReps)").font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
+          Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+        }
+        Legend(WatchCopy.bodyweightQuiet, size: 10)
       }
     }
+    .frame(minHeight: Fit.s(92)) // one rhythm for both cases — the strip above never moves
   }
 
   /// The execution instruction, directly under the load. TO-LOAD = a bright imperative chip; once a
@@ -1024,6 +1036,10 @@ struct CardioCompleteScreen: View {
 
 struct CompleteScreen: View {
   let mirror: WireMirror
+  /// Active calories for the finished workout, snapshotted from the OS runtime as the complete
+  /// frame landed (it clears its live metrics while persisting the HKWorkout). Founder
+  /// 2026-07-11: the set COUNT is not interesting at the close — the energy spent is.
+  let kcal: Int?
   let onDone: () -> Void
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -1037,7 +1053,9 @@ struct CompleteScreen: View {
       if let s = mirror.summary {
         HStack(spacing: 8) {
           Metric(value: s.timeLabel, label: WatchCopy.metricTime)
-          Metric(value: "\(s.sets)", label: WatchCopy.metricSets)
+          // Kcal replaces the set count. Absent (HealthKit denied / no data) → an honest dash,
+          // never a modelled number.
+          Metric(value: kcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
           Metric(value: "\(s.up) ↑", label: WatchCopy.metricUp)
         }
         .padding(.top, 16)
@@ -1047,6 +1065,7 @@ struct CompleteScreen: View {
       StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16, action: onDone)
     }
     .padding(.horizontal, 12).padding(.bottom, 8)
+    .stageFill()
   }
 }
 

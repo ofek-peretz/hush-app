@@ -512,9 +512,22 @@ function ActiveSet({
 
         {!editing ? (
           <>
-            {/* 1 · LOAD — Hush's decision, the hero (set before you arrived). */}
+            {/* 1 · LOAD — Hush's decision, the hero (set before you arrived).
+                  BODYWEIGHT is the one exception (founder 2026-07-11): an athlete on a pull-up
+                  knows what they are lifting — shouting "BODYWEIGHT" tells them nothing. The
+                  number that carries the work (and the one Hush actually progresses on a
+                  bodyweight lift) is the REP COUNT, so it takes the hero mark and "bodyweight"
+                  drops to a whisper beneath it. */}
             {isBodyweight ? (
-              <Text style={styles.bodyweight}>{t('workout.bodyweight')}</Text>
+              <>
+                <View style={styles.heroRow}>
+                  <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
+                    {target.recommendedReps}
+                  </Text>
+                  <Text style={styles.heroUnit}>{t('workout.repsUnit')}</Text>
+                </View>
+                <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
+              </>
             ) : (
               <View style={styles.heroRow}>
                 <Text style={styles.hero} accessibilityLabel={`${heroValue} ${unitLabel(units)}`}>{heroValue}</Text>
@@ -525,12 +538,15 @@ function ActiveSet({
             {/* 2 · INSTRUCTION — what the athlete physically does now (part of the prescription). */}
             {setup ? <ExecInstruction setup={setup} toLoad={session.toLoad} units={units} /> : null}
 
-            {/* 3 · REPS — the execution target. */}
-            <View style={styles.repsPill}>
-              <Text style={styles.repsTimes}>×</Text>
-              <Text style={styles.repsNum}>{target.recommendedReps}</Text>
-              <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
-            </View>
+            {/* 3 · REPS — the execution target. Absent on a bodyweight lift: the reps ARE the hero
+                  above, and repeating them here would say the same thing twice. */}
+            {!isBodyweight ? (
+              <View style={styles.repsPill}>
+                <Text style={styles.repsTimes}>×</Text>
+                <Text style={styles.repsNum}>{target.recommendedReps}</Text>
+                <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
+              </View>
+            ) : null}
 
             {/* 4 · WHY / Δ — optional reasoning, demoted below the instruction so it never competes
                   with it. The delta is shown when the load changed; the row taps through to "why". */}
@@ -970,6 +986,15 @@ const styles = StyleSheet.create({
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false },
   heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginStart: 6, marginBottom: 12 },
   bodyweight: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], color: stage.ink0, marginTop: 28 },
+  // The whisper under a bodyweight hero — a quiet fact, never a headline (founder 2026-07-11).
+  bodyweightQuiet: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale['2xs'],
+    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
+    textTransform: 'uppercase',
+    color: stage.ink2,
+    marginTop: 6,
+  },
   repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2 },
 
   // Inline edit
