@@ -8,17 +8,19 @@
  * locked/background delivery path: a 7 s WARNING and a rest-COMPLETE alert, anchored to
  * the absolute rest-end instant (drift-proof, same anchor the timer uses).
  *
- * Ownership model (founder-ratified):
- *  - An active Apple Watch workout OWNS haptics → the phone schedules NOTHING.
- *  - No active watch workout → the PHONE owns → schedule the backstop.
- * The proxy for "watch workout active" is watch reachability. Until the watchOS target
- * ships, reachability is always false, so the phone owns by default (the desired
- * fallback). Reachability is snapshotted at arm() time (a watch that connects mid-rest
- * won't retroactively silence an already-scheduled phone alert — an accepted v1 limit).
+ * Ownership model (founder-ratified; AMENDED 2026-07-11 — "the 7 s alert still doesn't light
+ * the screen"):
+ *  - The alerts are ALWAYS scheduled. A locked phone must light up and show the rest ending —
+ *    that is the whole point of the backstop, and a paired watch does not change it. The old
+ *    rule ("watch reachable → the phone schedules NOTHING") silenced the phone for every
+ *    athlete who simply owns a watch, which is exactly the reported defect.
+ *  - The WRIST still owns the BUZZ: when the watch is reachable it plays the countdown, so the
+ *    phone's alert is scheduled SILENT (`sound: false`). It still breaks through the lock
+ *    screen (timeSensitive) and lights the display — no double buzz, no dead screen.
  *
  * Foreground: the existing Core Haptics beats fire, and the notification handler
- * (notifications.ts) suppresses these `rest_*` alerts while foregrounded — no double buzz.
- * Locked/background: the handler doesn't run, so the scheduled alert plays (sound: true).
+ * (notifications.ts) suppresses these `rest_*` alerts while the app is ACTIVE — no double buzz.
+ * Locked/background: the handler doesn't run, so the scheduled alert wakes the screen.
  */
 import * as Notifications from 'expo-notifications';
 import i18next from 'i18next';
@@ -74,10 +76,11 @@ export const restHaptics: RestHaptics = {
     try {
       // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule).
       await cancelBoth();
-      if (!phoneOwnsRestHaptics()) return; // watch owns → nothing on the phone
       const { warnInS, doneInS } = restAlertDelays(endAtMs, Date.now());
       if (warnInS == null && doneInS == null) return; // rest already over / sub-second
       if (!(await ensureNotificationPermission())) return;
+      // The wrist owns the BUZZ when it is there; the phone still lights up (silent).
+      const sound = phoneOwnsRestHaptics();
 
       if (warnInS != null) {
         await Notifications.scheduleNotificationAsync({
@@ -86,7 +89,7 @@ export const restHaptics: RestHaptics = {
             title: i18next.t('notifications.restWarnTitle'),
             body: i18next.t('notifications.restWarnBody'),
             data: { kind: 'rest_warn' }, // rest_* → suppressed in foreground by the handler
-            sound: true, // must alert when locked/backgrounded
+            sound, // silent when the wrist is buzzing; still wakes the screen (timeSensitive)
             // A rest timer must pierce the LOCK SCREEN + Focus modes. Default `.active`
             // is held silently when the screen is off; `timeSensitive` is Apple's
             // sanctioned break-through level (needs the time-sensitive entitlement).
@@ -102,13 +105,13 @@ export const restHaptics: RestHaptics = {
             title: i18next.t('notifications.restDoneTitle'),
             body: i18next.t('notifications.restDoneBody'),
             data: { kind: 'rest_done' },
-            sound: true,
+            sound,
             interruptionLevel: 'timeSensitive', // break through lock screen + Focus (see rest_warn)
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: doneInS, repeats: false },
         });
       }
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'rest_alerts', warnInS, doneInS });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'rest_alerts', warnInS, doneInS, sound });
     } catch {
       // never throw — a rest-notification failure must not break the workout
     }

@@ -99,7 +99,8 @@
     "hubHistorySub": "כל אימון שהושלם",
     "hubProgress": "התקדמות",
     "hubProgressSub": "מאז שהתחלת",
-    "restNext": "השבוע הבא שלך נפתח ביום ראשון בבוקר"
+    "restNext": "השבוע הבא שלך נפתח ביום ראשון בבוקר",
+    "doneThisWeek": "בוצע השבוע"
   },
   "recovery": {
     "sunShort": "א׳",
@@ -358,7 +359,8 @@
     "notStartedLegend": "לא התחיל",
     "notStartedTitle": "האימון לא התחיל",
     "notStartedBody": "לא הושלמו תרגילים. שום דבר לא נשמר — אפשר להתחיל מחדש בכל רגע.",
-    "partialTitle": "אימון חלקי נשמר."
+    "partialTitle": "אימון חלקי נשמר.",
+    "stillOpen": "נרשם. האימון הזה נשאר ברשימת השבוע — תשלים אותו כשתהיה מוכן."
   },
   "milestones": {
     "legend": "אבן דרך",
@@ -494,7 +496,8 @@
     "moveDown": "הזז למטה",
     "done": "בוצע",
     "perExercise": "{{weight}} · {{sets}} × {{reps}}",
-    "perExerciseBw": "משקל גוף · {{sets}} × {{reps}}"
+    "perExerciseBw": "משקל גוף · {{sets}} × {{reps}}",
+    "doneThisWeek": "אומן השבוע"
   },
   "swap": {
     "title": "החלפת תרגיל",
@@ -796,7 +799,9 @@
     "save": "שמירת שינויים",
     "saved": "השינויים נשמרו.",
     "savedDays": "נשמר. השבוע נבנה מחדש בהתאם.",
-    "daysNote": "שינוי כאן בונה מחדש את שבוע האימונים בהתאם לתדירות החדשה."
+    "daysNote": "שינוי כאן בונה מחדש את שבוע האימונים בהתאם לתדירות החדשה.",
+    "saving": "שומר…",
+    "savedShort": "נשמר"
   },
   "exec": {
     "load": "טען",

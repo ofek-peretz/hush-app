@@ -8,7 +8,11 @@
  *
  * Corrections must never reset progression: height/weight inform the next weekly
  * regeneration + cold starts; a changed weekly frequency rebuilds the week immediately
- * (the split must match). Saving confirms with a toast — a change is never silent.
+ * (the split must match).
+ *
+ * A save is ACKNOWLEDGED before the screen closes (founder 2026-07-11): the button itself
+ * turns into "Saved ✓" with a confirm haptic and holds for a beat, so the athlete SEES the
+ * change land — a toast on the screen behind is not felt as feedback.
  */
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
@@ -36,18 +40,33 @@ export function ProfileEdit({ navigation }: Props) {
   // Weight is edited in the athlete's display units, stored as kg.
   const [weight, setWeight] = useState(displayWeight(p?.weightKg ?? 82, units) ?? 82);
   const [days, setDays] = useState(p?.daysPerWeek ?? 4);
+  // The save is ACKNOWLEDGED on this screen before it closes (founder 2026-07-11: a toast on the
+  // screen behind is not felt as feedback). The button itself confirms — "Saved ✓" — the athlete
+  // sees it land, and only then does the screen step back (where the toast still greets them).
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const wStep = units === 'kg' ? 0.5 : 1;
+  const dirty =
+    height !== (p?.heightCm ?? 178) ||
+    weight !== (displayWeight(p?.weightKg ?? 82, units) ?? 82) ||
+    days !== (p?.daysPerWeek ?? 4);
 
   async function onSave() {
-    haptics.confirm();
+    if (saving !== 'idle') return; // one save per tap — never double-submit a rebuild
+    setSaving('saving');
     const weightKg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     const daysChanged = days !== p?.daysPerWeek;
-    await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days });
-    // Acknowledge the change (founder 2026-07-10: a save is never silent). The toast
-    // provider lives above navigation, so it survives the goBack.
+    try {
+      await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days });
+    } catch {
+      setSaving('idle'); // nothing persisted — let the athlete try again rather than lie
+      return;
+    }
+    haptics.confirm();
+    setSaving('saved');
     toast.show(daysChanged ? t('profileEdit.savedDays') : t('profileEdit.saved'));
-    navigation.goBack();
+    // Hold the confirmation long enough to be READ, then step back.
+    setTimeout(() => navigation.goBack(), 750);
   }
 
   return (
@@ -86,7 +105,21 @@ export function ProfileEdit({ navigation }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button variant="primary" size="lg" block label={t('profileEdit.save')} onPress={() => void onSave()} />
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          label={
+            saving === 'saved'
+              ? t('profileEdit.savedShort')
+              : saving === 'saving'
+                ? t('profileEdit.saving')
+                : t('profileEdit.save')
+          }
+          leading={saving === 'saved' ? <Icon name="check" size={18} color={color.onAccent} strokeWidth={2.6} /> : undefined}
+          disabled={saving !== 'idle' || !dirty}
+          onPress={() => void onSave()}
+        />
       </View>
     </SafeAreaView>
   );

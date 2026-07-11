@@ -123,12 +123,26 @@ describe('arm — phone owns (no watch)', () => {
   });
 });
 
-describe('arm — watch owns (reachable)', () => {
-  it('schedules nothing on the phone, but still clears any stale pair', async () => {
+describe('arm — watch present (reachable)', () => {
+  // Founder 2026-07-11: the phone alert is ALWAYS scheduled — a locked phone must light up when
+  // rest ends, and owning a watch never changes that. The WRIST keeps the buzz, so the phone's
+  // alert goes out SILENT: no double buzz, and the screen still wakes (timeSensitive).
+  it('still schedules both alerts, silently, and clears any stale pair first', async () => {
     mockState.reachable = true;
     await restHaptics.arm(at(90));
-    expect(mockScheduled).toHaveLength(0);
+    expect(mockScheduled).toHaveLength(2);
+    for (const n of mockScheduled) {
+      expect(n.content.sound).toBe(false); // the watch buzzes; the phone only lights up
+      expect(n.content.interruptionLevel).toBe('timeSensitive'); // breaks through the lock screen
+    }
     expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('with NO watch, the alerts carry sound (the phone owns the cue)', async () => {
+    mockState.reachable = false;
+    await restHaptics.arm(at(90));
+    expect(mockScheduled).toHaveLength(2);
+    for (const n of mockScheduled) expect(n.content.sound).toBe(true);
   });
 });
 

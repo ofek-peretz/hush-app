@@ -28,6 +28,15 @@ struct EditDraft: Equatable {
   var reps: Int
 }
 
+/// The closing record of a wrist run/walk — snapshotted at Finish (the OS runtime clears its
+/// live metrics as it persists the HKWorkout, so the summary must be captured first).
+struct CardioSummary: Equatable {
+  var gait: String
+  var elapsedS: TimeInterval
+  var distanceKm: Double?
+  var kcal: Int?
+}
+
 /// The screen to render, with the data each one needs.
 enum WatchScreen: Equatable {
   case idle
@@ -42,6 +51,7 @@ enum WatchScreen: Equatable {
   /// Watch-local run/walk (founder 2026-07-10): recorded on the wrist via the OS
   /// workout runtime (HR/kcal/distance), persisted to Health — never engine state.
   case cardio(gait: String, paused: Bool)
+  case cardioComplete(CardioSummary)
 }
 
 final class WatchModel: ObservableObject {
@@ -88,6 +98,15 @@ final class WatchModel: ObservableObject {
   private var cardioStartedAt: Date?
   private var cardioPausedAt: Date?
   private var cardioPausedTotal: TimeInterval = 0
+  /// The finished run/walk, held until the athlete taps Done (the wrist CLOSES the activity —
+  /// it never just vanishes back to the lobby).
+  private var cardioSummary: CardioSummary?
+
+  /// A completed WORKOUT frame, held until Done (founder 2026-07-11: "the completion screen is
+  /// gone from the watch"). The phone republishes its lobby the instant the program updates —
+  /// which used to overwrite the complete frame within a second, so the athlete never saw it.
+  /// The completion belongs to the watch until dismissed; lobby envelopes still land underneath.
+  private var completeHold: WireMirror?
 
   // Begin fallback (founder 2026-07-10, "it froze — wouldn't let me start"): a
   // reachable phone whose app never answers the start intent must not strand the
@@ -179,6 +198,10 @@ final class WatchModel: ObservableObject {
 
     let phoneLive = ["active_set", "rest_inter", "rest_transition", "paused"].contains(mirror?.phase ?? "")
 
+    // A NEW live workout always wins a completion the athlete never dismissed (they walked away
+    // from the wrist and started the next session on the phone) — the held frame is stale.
+    if phoneLive { completeHold = nil }
+
     // Two authorities can never run at once. The Begin FALLBACK starts a local session when
     // the phone doesn't answer in time — if that phone then answers LATE with a live session,
     // it reclaims authority here: the untouched local session (no set logged) is discarded
@@ -215,10 +238,12 @@ final class WatchModel: ObservableObject {
     }
     // The workout is over: the completion experience supersedes any in-flight per-set confirmation,
     // so clear it immediately (otherwise the 1.5s Set Confirmation would mask Workout Complete — the
-    // "watch doesn't show the completion experience" defect, item 3).
-    if mirror?.phase == "complete" {
+    // "watch doesn't show the completion experience" defect, item 3). The frame is also HELD (see
+    // completeHold) so the phone's next lobby publish can't wipe the completion off the wrist.
+    if let m = mirror, m.phase == "complete" {
       setConfirmToken += 1
       setConfirm = nil
+      completeHold = m
     }
     syncRestHaptics(prev: prev, next: mirror)
     syncWorkoutRuntime(phase: mirror?.phase)
@@ -267,9 +292,10 @@ final class WatchModel: ObservableObject {
 
   private func localCompleted(record: WireSessionRecord, frame: WireMirror) {
     // The completion experience supersedes any in-flight set confirmation (same
-    // rule as the phone-authority path).
+    // rule as the phone-authority path) and is held until Done.
     setConfirmToken += 1
     setConfirm = nil
+    completeHold = frame
     let prev = localMirror
     localMirror = frame
     syncRestHaptics(prev: prev, next: frame)
@@ -288,6 +314,7 @@ final class WatchModel: ObservableObject {
     let targetId = offlineQueuedWorkoutId ?? lobby?.workoutId
     guard let workout = remaining.first(where: { $0.id == targetId }) ?? remaining.first else { return }
     offlineQueuedWorkoutId = nil
+    completeHold = nil // a fresh workout supersedes an undismissed completion
     let engine = LocalWorkoutEngine(workout: workout, plan: stored.plan, store: store)
     fallbackStarted = viaFallback
     adoptLocal(engine)
@@ -494,6 +521,7 @@ final class WatchModel: ObservableObject {
   }
 
   func dismissComplete() {
+    completeHold = nil // the athlete closed the completion — the lobby may take the stage again
     // Local authority: the record is already durable in the outbox and the active
     // session cleared — dismissal just tears the local presentation down (the
     // phone's state, or the offline Start lobby, takes over).
@@ -542,6 +570,9 @@ final class WatchModel: ObservableObject {
   }
 
   func selectWorkout(_ id: String) {
+    // A workout already trained this week is FINISHED (founder 2026-07-11) — it can be
+    // read, never re-queued. The list renders it as done; this is the defense in depth.
+    if lobby?.workouts.first(where: { $0.id == id })?.done == true { return }
     if manager.isReachable {
       sendIntent(type: "select_workout", workoutId: id)
     } else {
@@ -565,6 +596,7 @@ final class WatchModel: ObservableObject {
 
   func startCardio(gait: String) {
     guard cardioGait == nil, localEngine == nil else { return }
+    completeHold = nil // a fresh activity supersedes an undismissed completion
     cardioGait = gait
     cardioPaused = false
     cardioStartedAt = Date()
@@ -589,18 +621,27 @@ final class WatchModel: ObservableObject {
     recompute()
   }
 
-  /// Elapsed seconds for the cardio stage: the OS runtime's pause-aware clock when it is
-  /// live, else the watch's own (equally pause-aware) wall-clock read — so a denied or
-  /// unavailable HealthKit degrades the METRICS, never the clock.
+  /// Elapsed seconds for the cardio stage. The WATCH owns this clock (founder 2026-07-11:
+  /// "pause doesn't stop the time"): it is computed from our own start/pause bookkeeping, so a
+  /// Pause stops it instantly and deterministically — never dependent on whether HealthKit
+  /// accepted the session pause, or on HealthKit being available at all. HealthKit remains the
+  /// source for HR / kcal / distance only.
   func cardioElapsed() -> TimeInterval {
-    if let s = liveMetrics.elapsed() { return s }
     guard let started = cardioStartedAt else { return 0 }
     let pausedNow = cardioPausedAt.map { Date().timeIntervalSince($0) } ?? 0
     return max(0, Date().timeIntervalSince(started) - cardioPausedTotal - pausedNow)
   }
 
   func endCardio() {
-    guard cardioGait != nil else { return }
+    guard let gait = cardioGait else { return }
+    // Snapshot the record BEFORE finishing: the runtime clears its live metrics as it persists
+    // the HKWorkout, and the completion screen must show what the athlete actually did.
+    cardioSummary = CardioSummary(
+      gait: gait,
+      elapsedS: cardioElapsed(),
+      distanceKm: liveMetrics.distanceKm,
+      kcal: liveMetrics.activeKcal
+    )
     cardioGait = nil
     cardioPaused = false
     cardioStartedAt = nil
@@ -610,6 +651,13 @@ final class WatchModel: ObservableObject {
     // engine never sees it — recorded, never coached.
     workoutRuntime.finish()
     onEntryHaptic.send(.workoutSaved)
+    recompute() // → the completion screen, held until Done
+  }
+
+  /// Done on the run/walk completion — the wrist hands the stage back to the phone's state.
+  func dismissCardioComplete() {
+    guard cardioSummary != nil else { return }
+    cardioSummary = nil
     // Phone state was ingested but never acted on while the recording owned the wrist —
     // re-apply its side effects now that it is the authority again (a live phone workout
     // gets its rest haptics + OS runtime back; no phone session ends as a no-op).
@@ -654,9 +702,18 @@ final class WatchModel: ObservableObject {
   }
 
   private func project() -> WatchScreen {
-    // A live wrist recording owns the display until ended.
+    // A live wrist recording owns the display until ended, then its completion holds the
+    // stage until Done — a recording never just vanishes back to the lobby.
     if let gait = cardioGait {
       return .cardio(gait: gait, paused: cardioPaused)
+    }
+    if let s = cardioSummary {
+      return .cardioComplete(s)
+    }
+    // A finished WORKOUT holds the stage until Done, whatever the phone publishes next
+    // (it republishes its lobby the moment the program updates — that used to erase this).
+    if let c = completeHold {
+      return .workoutComplete(c)
     }
     // The Reconnecting viewer only makes sense when the PHONE is the live authority:
     // a local session needs no phone at all, and pre-session an unreachable phone
@@ -696,7 +753,7 @@ final class WatchModel: ObservableObject {
     case .workoutComplete: return .workoutSaved
     case .paused: return .paused
     case .setConfirmation: return .setLogged
-    default: return nil
+    default: return nil // cardioComplete plays its own beat in endCardio()
     }
   }
 
@@ -705,7 +762,7 @@ final class WatchModel: ObservableObject {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
          (.workoutComplete, .workoutComplete), (.setConfirmation, .setConfirmation),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
-         (.paused, .paused), (.cardio, .cardio):
+         (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete):
       return true
     default:
       return false

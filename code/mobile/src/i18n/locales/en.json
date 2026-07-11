@@ -99,7 +99,8 @@
     "hubHistorySub": "Every completed session",
     "hubProgress": "Progress",
     "hubProgressSub": "Since you started",
-    "restNext": "Your next week opens Sunday morning"
+    "restNext": "Your next week opens Sunday morning",
+    "doneThisWeek": "Done this week"
   },
   "recovery": {
     "sunShort": "Sun",
@@ -359,7 +360,8 @@
     "notStartedLegend": "Not started",
     "notStartedTitle": "Workout not started",
     "notStartedBody": "No exercises completed. Nothing was saved — start again whenever you're ready.",
-    "partialTitle": "Partial session logged."
+    "partialTitle": "Partial session logged.",
+    "stillOpen": "Logged. This workout stays on this week's list — finish it when you're ready."
   },
   "milestones": {
     "legend": "Milestone",
@@ -495,7 +497,8 @@
     "moveDown": "Move down",
     "done": "Done",
     "perExercise": "{{weight}} · {{sets}} × {{reps}}",
-    "perExerciseBw": "Bodyweight · {{sets}} × {{reps}}"
+    "perExerciseBw": "Bodyweight · {{sets}} × {{reps}}",
+    "doneThisWeek": "Trained this week"
   },
   "swap": {
     "title": "Swap exercise",
@@ -797,7 +800,9 @@
     "save": "Save changes",
     "saved": "Changes saved.",
     "savedDays": "Saved. Your week was rebuilt to match.",
-    "daysNote": "Changing this rebuilds your training week to fit the new frequency."
+    "daysNote": "Changing this rebuilds your training week to fit the new frequency.",
+    "saving": "Saving…",
+    "savedShort": "Saved"
   },
   "exec": {
     "load": "Load",

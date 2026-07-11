@@ -30,6 +30,9 @@ export interface HomeWorkoutOption {
   id: string;
   name: string;
   muscles: string;
+  /** Already trained this week — a record, not an option (founder 2026-07-11): it shows
+   *  as DONE and cannot be queued again. */
+  done?: boolean;
 }
 
 export interface HomeViewProps {
@@ -227,18 +230,32 @@ export function HomeView(props: HomeViewProps) {
           <Legend style={styles.sheetLegend}>{t('home.chooseAnother')}</Legend>
           {props.workouts.map((w, i) => {
             const current = w.name === props.dayName;
+            // A finished workout is a RECORD, not an option: it reads as done and is inert
+            // (choosing it would let the athlete train the same session twice in a week).
+            const done = !!w.done;
             return (
               <ListRow
                 key={w.id}
                 title={w.name}
-                subtitle={w.muscles}
-                chevron={!current}
+                subtitle={done ? t('home.doneThisWeek') : w.muscles}
+                chevron={!current && !done}
+                muted={done}
                 last={i === props.workouts.length - 1}
-                onPress={() => {
-                  if (!current) props.onChooseWorkout(w.id);
-                  setChoosing(false);
-                }}
-                trailing={current ? <Icon name="check" size={18} color={color.up} strokeWidth={2.2} /> : undefined}
+                // A done row carries no press handler at all — it renders as a plain,
+                // inert record rather than a button that quietly does nothing.
+                onPress={
+                  done
+                    ? undefined
+                    : () => {
+                        if (!current) props.onChooseWorkout(w.id);
+                        setChoosing(false);
+                      }
+                }
+                trailing={
+                  done || current ? (
+                    <Icon name="check" size={18} color={color.up} strokeWidth={2.2} />
+                  ) : undefined
+                }
               />
             );
           })}

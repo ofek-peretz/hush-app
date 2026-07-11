@@ -37,13 +37,17 @@ export function Home({ navigation, route }: Props) {
   // "Choose workout" (top-right) swaps the workout shown on Home immediately. Local,
   // session-scoped, takes priority over the default next workout (matches the prototype).
   const [chosenId, setChosenId] = useState<string | null>(null);
+  // A FINISHED workout can never be queued again (founder 2026-07-11) — the chooser marks it
+  // done and never selects it, so `!d.completed` gates the chosen day exactly as it gates focus.
   const chosenDay =
-    chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
+    chosenId && program
+      ? program.days.find((d) => d.id === chosenId && !d.isRest && !d.completed) ?? null
+      : null;
   const day = chosenDay ?? focusDay ?? (program ? nextWorkout(program) : null);
   // Every non-rest workout in the week, with its muscle groups, for the chooser.
   const workouts = (program?.days ?? [])
     .filter((d) => !d.isRest)
-    .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups) }));
+    .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups), done: !!d.completed }));
   const isFocused = useIsFocused();
 
   const nowMs = Date.now();

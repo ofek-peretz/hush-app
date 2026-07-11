@@ -13,6 +13,7 @@ import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
 import { loadSetup } from '@/domain/loadPresentation';
+import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { WatchSession } from '@/platform/watch/watchBridge';
 import type { WatchLobby, WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { applyWatchSessionRecord } from '@/platform/watch/watchReconcile';
@@ -367,6 +368,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         appendCompletedSession: (s) => db.appendCompletedSession(s),
         recordSessionCompleted: () => appRef.current.recordSessionCompleted(),
         markWorkoutCompleted: (id) => appRef.current.markWorkoutCompleted(id),
+        programDay: (id) => appRef.current.program?.days.find((d) => d.id === id),
         recordToModel: (args) => appRef.current.model.recordSession(args),
         enqueuePendingSync: (args) => db.enqueuePendingSync(args),
         track: (type, data) => void track(type, data),
@@ -553,9 +555,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await db.clearActiveSession();
       await db.clearSessionResume().catch(() => {});
       const { unlockedPortrait } = await app.recordSessionCompleted();
-      // Mark this workout DONE for the week so Program shows the green DONE chip and
-      // Home advances to the next unfinished workout (Rest once all are done).
-      await app.markWorkoutCompleted(session.programDayId);
+      // PARTIAL vs TRAINED (founder 2026-07-11, domain/completion): the workout is finished for
+      // the week only if at least HALF its prescribed sets were logged. Below that the work is
+      // still real — it is in History and the engine folds every set performed — but the workout
+      // STAYS on the week's list, so one exercise out of six never costs the athlete the session.
+      const programDay = app.program?.days.find((d) => d.id === session.programDayId);
+      const trained = sessionTrained(saved, programDay);
+      if (trained) {
+        // Mark this workout DONE for the week so Program shows the green DONE chip and
+        // Home advances to the next unfinished workout (Rest once all are done).
+        await app.markWorkoutCompleted(session.programDayId);
+      }
+      void track('session_finished', {
+        sessionId: saved.id,
+        programDayId: session.programDayId,
+        sets: saved.sets.length,
+        prescribed: programDay ? prescribedSets(programDay) : null,
+        earlyFinish,
+        trained,
+      });
 
       // Publish the terminal "complete" frame to the watch BEFORE teardown (deterministic — not
       // reliant on the [state] effect's scheduling). The wrist then shows Workout Complete with the
@@ -613,6 +631,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         progressed,
         durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
         earlyFinish,
+        // False => the workout stays on this week's list (PARTIAL); Well Done says so.
+        trained,
       };
       const result: CompleteResult = { ended: true, unlockedPortrait, summary };
       setEndResult(result);

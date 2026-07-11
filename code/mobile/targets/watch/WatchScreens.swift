@@ -328,12 +328,13 @@ private struct Metric: View {
 private struct ControlsScreen: View {
   @ObservedObject var metrics: LiveMetrics
   let workoutName: String?
+  var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      // (The LIFT strip is the pager's — one shared, pinned position on every page.)
+      TopStrip(lift: lift) // the same strip, at the same y, as the stage page beside it
       VStack(alignment: .leading, spacing: 2) {
         Legend(WatchCopy.controls)
         if let name = workoutName, !name.isEmpty {
@@ -355,6 +356,7 @@ private struct ControlsScreen: View {
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
   }
 
   private var elapsedText: String {
@@ -368,8 +370,10 @@ private struct ControlsScreen: View {
 /// Index dots are suppressed — they would sit on the primary action on the small cases;
 /// the swipe is the same muscle memory as Apple Workout.
 ///
-/// The LIFT strip lives HERE, above the pager (founder 2026-07-10): one shared strip,
-/// pinned at one exact position, so it can never sit lower on Rest than on the live set.
+/// The pager holds ONLY the TabView (founder 2026-07-11): a strip lifted above it stole
+/// height from the page and pushed the whole stage down (the Complete button fell off the
+/// 41 mm case). Every page owns its own TopStrip and pins itself to the top via
+/// `stageFill()`, which is what actually keeps LIFT at one exact position everywhere.
 private struct ExecutionPager<Content: View>: View {
   @ObservedObject var metrics: LiveMetrics
   let workoutName: String?
@@ -380,14 +384,21 @@ private struct ExecutionPager<Content: View>: View {
   @State private var page = 1
 
   var body: some View {
-    VStack(spacing: 0) {
-      TopStrip(lift: lift).padding(.horizontal, 10)
-      TabView(selection: $page) {
-        ControlsScreen(metrics: metrics, workoutName: workoutName, onPause: onPause, onEnd: onEnd).tag(0)
-        content().tag(1)
-      }
-      .tabViewStyle(.page(indexDisplayMode: .never))
+    TabView(selection: $page) {
+      ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPause: onPause, onEnd: onEnd).tag(0)
+      content().tag(1)
     }
+    .tabViewStyle(.page(indexDisplayMode: .never))
+  }
+}
+
+/// Every stage screen FILLS its canvas and hangs from the TOP. Without this a screen whose
+/// content is shorter than the case (the rest screens) is centred by SwiftUI — which is why
+/// LIFT sat lower on Rest than on the live set (founder 2026-07-10). With it, the top strip
+/// is at the same y on every screen and the interior Spacers distribute the slack.
+private extension View {
+  func stageFill() -> some View {
+    frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 }
 
@@ -439,9 +450,11 @@ struct WatchRootView: View {
     case .paused:
       PausedScreen(onResume: model.resume, onEnd: model.endWorkout)
     case let .cardio(gait, paused):
-      CardioScreen(gait: gait, paused: paused, metrics: model.liveMetrics,
-                   elapsed: model.cardioElapsed,
-                   onPauseToggle: model.toggleCardioPause, onEnd: model.endCardio)
+      CardioPager(gait: gait, paused: paused, metrics: model.liveMetrics,
+                  elapsed: model.cardioElapsed,
+                  onPauseToggle: model.toggleCardioPause, onEnd: model.endCardio)
+    case let .cardioComplete(summary):
+      CardioCompleteScreen(summary: summary, onDone: model.dismissCardioComplete)
     }
   }
 }
@@ -518,21 +531,32 @@ struct ChooseOverlay: View {
   var body: some View {
     List {
       ForEach(lobby.workouts, id: \.id) { w in
+        // A workout already trained this week is FINISHED (founder 2026-07-11): it reads as a
+        // record — dimmed, marked DONE, and NOT selectable. Only unfinished work can be queued.
+        let done = w.done == true
         Button { onSelect(w.id) } label: {
           VStack(alignment: .leading, spacing: 3) {
             HStack {
-              Text(w.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
+              Text(w.name).font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(done ? Palette.ink2 : Palette.ink0)
               Spacer()
-              if w.done == true { Legend(WatchCopy.done, size: 9) }
+              if done {
+                HStack(spacing: 3) {
+                  Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.up)
+                  Legend(WatchCopy.done, size: 9)
+                }
+              }
             }
             Text("\(w.lifts ?? 0) lifts · \(w.muscles ?? "")")
               .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2).lineLimit(1)
           }
         }
+        .disabled(done)
         .listRowBackground(
           RoundedRectangle(cornerRadius: 10)
             .fill(Palette.stage1)
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(w.id == lobby.workoutId ? Palette.signal : .clear, lineWidth: 2))
+            .opacity(done ? 0.5 : 1)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(w.id == lobby.workoutId && !done ? Palette.signal : .clear, lineWidth: 2))
         )
       }
       // Open training — the same two honest recordings the phone offers.
@@ -579,7 +603,7 @@ struct ActiveSetScreen: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      // (LIFT strip is the pager's — shared, pinned.)
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
       header
       Spacer(minLength: 2)
       if editing { editor } else { readout }
@@ -593,6 +617,7 @@ struct ActiveSetScreen: View {
       footer
     }
     .padding(.horizontal, 8).padding(.bottom, 6)
+    .stageFill()
     .focusable(editing)
     .digitalCrownRotation(
       $crown,
@@ -778,10 +803,10 @@ struct InterRestScreen: View {
     // NO SCROLL: the ring, the next-set line, the equipment setup, and BOTH actions stay on screen
     // at once on every case size (founder: nothing scrolls during execution). The ring is sized
     // down and the two actions share one row so all of it fits even on the 40/41 mm case.
-    // The ring hugs the TOP (fixed 4 pt gap — founder 2026-07-10: lift the rest clock); the
-    // freed room goes to the line under the exercise name, which reads a size up.
+    // The ring hugs the TOP (founder 2026-07-10: lift the rest clock); the freed room goes to
+    // the line under the exercise name, which reads a size up. stageFill() pins the strip.
     VStack(spacing: 0) {
-      Color.clear.frame(height: 4)
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
       Spacer(minLength: 3)
       // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
@@ -800,6 +825,7 @@ struct InterRestScreen: View {
       RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
   }
 
   private var targetText: String {
@@ -821,11 +847,11 @@ struct TransitionRestScreen: View {
   var body: some View {
     // NO SCROLL: ring + the next lift (name, load·reps, the execution setup line, the change) + BOTH
     // actions all stay visible at once. A plain block (no boxed card) keeps it within the 40/41 mm
-    // height so nothing is ever clipped or scrolled during execution. Ring hugs the top (fixed
-    // gap); the line under the name reads a size up (founder 2026-07-10). Swap is ONE TAP —
-    // Hush already picked the replacement (phone parity).
+    // height so nothing is ever clipped or scrolled during execution. Ring hugs the top; the line
+    // under the name reads a size up (founder 2026-07-10). Swap is ONE TAP — Hush already picked
+    // the replacement (phone parity).
     VStack(spacing: 0) {
-      Color.clear.frame(height: 4)
+      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1))
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(78), restingLabel: "NEXT")
       Spacer(minLength: 3)
       VStack(spacing: 2) {
@@ -851,6 +877,7 @@ struct TransitionRestScreen: View {
       RestActions(ready: ready, primaryTitle: WatchCopy.startNextLift, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
   }
 
   private var nextTargetText: String {
@@ -861,34 +888,52 @@ struct TransitionRestScreen: View {
 
 // MARK: Cardio (watch-local run / walk — recorded, never coached)
 
-/// Live wrist recording: elapsed hero, HR / kcal / distance from the OS runtime,
-/// Pause / End. The record persists to Health on End; the strength engine never
-/// sees it (the same "Open training" contract as the phone).
+/// The run/walk stage, paged exactly like a lift (founder 2026-07-11): the main page carries
+/// ONLY the work (the clock + the live body metrics); swipe right for the controls (Pause /
+/// Finish & save). Same muscle memory as the strength screens and as Apple's own Workout app.
+struct CardioPager: View {
+  let gait: String
+  let paused: Bool
+  @ObservedObject var metrics: LiveMetrics
+  /// Pause-aware elapsed seconds — the watch's own clock (HealthKit only supplies HR/kcal/km).
+  let elapsed: () -> TimeInterval
+  let onPauseToggle: () -> Void
+  let onEnd: () -> Void
+  @State private var page = 1
+
+  var body: some View {
+    TabView(selection: $page) {
+      CardioControlsScreen(gait: gait, paused: paused, elapsed: elapsed, onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
+      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed).tag(1)
+    }
+    .tabViewStyle(.page(indexDisplayMode: .never))
+  }
+}
+
+/// Live wrist recording (the stage page): elapsed hero + HR / kcal / distance. No controls —
+/// they live one swipe away. The record persists to Health when the athlete finishes; the
+/// strength engine never sees it (the same "Open training" contract as the phone).
 struct CardioScreen: View {
   let gait: String
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
-  /// Pause-aware elapsed seconds — the OS runtime's clock, or the watch's own when
-  /// HealthKit is unavailable/denied (the clock never freezes on a real run).
   let elapsed: () -> TimeInterval
-  let onPauseToggle: () -> Void
-  let onEnd: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
       TopStrip()
       HStack(spacing: 6) {
         Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
-          .font(.system(size: 12)).foregroundStyle(Palette.signal)
+          .font(.system(size: 12)).foregroundStyle(paused ? Palette.ink2 : Palette.signal)
         Legend(paused ? WatchCopy.pausedTitle : (gait == "run" ? WatchCopy.running : WatchCopy.walking), size: 10)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       Spacer(minLength: 4)
       TimelineView(.periodic(from: .now, by: 1)) { _ in
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
           Text(fmtTime(elapsed()))
             .font(.system(size: Fit.s(40), weight: .semibold, design: .monospaced)).monospacedDigit()
-            .foregroundStyle(Palette.ink0).lineLimit(1).minimumScaleFactor(0.6)
+            .foregroundStyle(paused ? Palette.ink2 : Palette.ink0).lineLimit(1).minimumScaleFactor(0.6)
           HStack(spacing: 6) {
             Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
             Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
@@ -897,12 +942,81 @@ struct CardioScreen: View {
         }
       }
       Spacer(minLength: 6)
+      // The stage carries no buttons — the swipe hint stands where they used to be.
+      HStack(spacing: 4) {
+        Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
+        Legend(WatchCopy.controls, size: 9)
+      }
+      .foregroundStyle(Palette.ink2)
+      .frame(maxWidth: .infinity)
+    }
+    .padding(.horizontal, 10).padding(.bottom, 8)
+    .stageFill()
+  }
+}
+
+/// The cardio controls page (swipe right): Pause / Resume + Finish & save, plus the clock so
+/// the athlete never loses it while deciding.
+private struct CardioControlsScreen: View {
+  let gait: String
+  let paused: Bool
+  let elapsed: () -> TimeInterval
+  let onPauseToggle: () -> Void
+  let onEnd: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      VStack(alignment: .leading, spacing: 2) {
+        Legend(WatchCopy.controls)
+        Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
+          .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink1).lineLimit(1)
+      }
+      Spacer(minLength: 4)
+      TimelineView(.periodic(from: .now, by: 1)) { _ in
+        Text(fmtTime(elapsed()))
+          .font(.system(size: Fit.s(26), weight: .semibold, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(Palette.ink0).frame(maxWidth: .infinity)
+      }
+      Spacer(minLength: 6)
       VStack(spacing: 6) {
-        StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: paused ? .primary : .onstage, height: 44, fontSize: 16, action: onPauseToggle)
-        StageButton(title: WatchCopy.finishSave, kind: paused ? .onstage : .ghost, height: 36, fontSize: 14, action: onEnd)
+        StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPauseToggle)
+        StageButton(title: WatchCopy.finishSave, kind: .ghost, height: 34, fontSize: 13, action: onEnd)
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
+  }
+}
+
+/// The run/walk completion (founder 2026-07-11: the wrist must close the activity, not just
+/// vanish back to the lobby). The same honest record the phone shows: time, distance, pace,
+/// kcal — recorded, never graded.
+struct CardioCompleteScreen: View {
+  let summary: CardioSummary
+  let onDone: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      Spacer(minLength: 4)
+      HStack(spacing: 8) { DrawCheck(size: 18); Legend(WatchCopy.recordedLegend, size: 11) }
+      Text(WatchCopy.complete(summary.gait == "run" ? WatchCopy.run : WatchCopy.walk))
+        .font(.system(size: Fit.s(24), weight: .semibold)).foregroundStyle(Palette.ink0)
+        .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 8)
+      HStack(spacing: 8) {
+        Metric(value: fmtTime(summary.elapsedS), label: WatchCopy.metricTime)
+        Metric(value: summary.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
+        Metric(value: summary.kcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+      }
+      .padding(.top, 14)
+      .overlay(alignment: .top) { Rectangle().fill(Palette.stage2).frame(height: 1).offset(y: 7) }
+      Spacer(minLength: 8)
+      StageButton(title: WatchCopy.done, kind: .primary, height: 46, fontSize: 16, action: onDone)
+    }
+    .padding(.horizontal, 12).padding(.bottom, 8)
+    .stageFill()
   }
 }
 

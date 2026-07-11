@@ -17,6 +17,7 @@ import {
   bucketStart,
   healWeekCompletion,
 } from '@/domain/weekCadence';
+import { prescribedSets, workoutTrained } from '@/domain/completion';
 import type { Profile, Program, Session } from '@/data/local/models';
 
 describe('cardioPerformed — record admission', () => {
@@ -121,23 +122,42 @@ describe('healWeekCompletion — a mid-week rebuild never resurrects finished wo
   const trainedAt = new Date(weekOpen + 12 * 60 * 60 * 1000).toISOString(); // this week
   const lastWeek = new Date(weekOpen - 3 * 24 * 60 * 60 * 1000).toISOString();
 
-  const session = (id: string, dayId: string, name: string | undefined, startedAt: string): Session => ({
+  const logged = (n: number, at: string): Session['sets'] =>
+    Array.from({ length: n }, (_, i) => ({
+      exerciseId: 'bb_bench_press',
+      setIndex: i,
+      recommendedWeight: 50,
+      recommendedReps: 8,
+      actualWeight: 50,
+      actualReps: 8,
+      edited: false,
+      persistedAt: at,
+    }));
+  const session = (id: string, dayId: string, name: string | undefined, startedAt: string, sets = 8): Session => ({
     id,
     programDayId: dayId,
     programDayName: name,
     startedAt,
     state: 'SAVED',
     earlyFinish: false,
-    sets: [],
+    sets: logged(sets, startedAt),
+  });
+  // Each day prescribes 8 work sets (2 lifts × 4) → TRAINED at 4+, PARTIAL below.
+  const day = (id: string, name: string) => ({
+    id,
+    name,
+    muscleGroups: [],
+    isRest: false,
+    completed: false,
+    slots: [
+      { capability: 'horizontal_push' as const, exerciseId: 'bb_bench_press', setCount: 4 },
+      { capability: 'horizontal_pull' as const, exerciseId: 'bb_row', setCount: 4 },
+    ],
   });
   const program = (): Program => ({
     id: 'p',
     frequency: 3,
-    days: [
-      { id: 'day_0', name: 'Push A', muscleGroups: [], isRest: false, slots: [], completed: false },
-      { id: 'day_1', name: 'Pull A', muscleGroups: [], isRest: false, slots: [], completed: false },
-      { id: 'day_2', name: 'Legs A', muscleGroups: [], isRest: false, slots: [], completed: false },
-    ],
+    days: [day('day_0', 'Push A'), day('day_1', 'Pull A'), day('day_2', 'Legs A')],
   });
 
   it('re-marks a workout trained THIS week (matched by the captured day name)', () => {
@@ -167,5 +187,51 @@ describe('healWeekCompletion — a mid-week rebuild never resurrects finished wo
     const history = [session('s1', 'day_2', 'Legs A', trainedAt)];
     const healed = healWeekCompletion(program(), history, future, now)!;
     expect(healed.days[2].completed).toBe(true);
+  });
+
+  it('a PARTIAL session (under half the prescribed sets) never marks the workout done', () => {
+    // 3 of 8 prescribed sets — real work, but not the session (founder 2026-07-11).
+    const history = [session('s1', 'day_0', 'Push A', trainedAt, 3)];
+    expect(healWeekCompletion(program(), history, weekOpen, now)).toBeNull();
+  });
+
+  it('exactly HALF the prescribed sets finishes the workout', () => {
+    const history = [session('s1', 'day_0', 'Push A', trainedAt, 4)];
+    expect(healWeekCompletion(program(), history, weekOpen, now)!.days[0].completed).toBe(true);
+  });
+});
+
+describe('workoutTrained — the partial-workout law (founder 2026-07-11)', () => {
+  const day = (sets: number[]) => ({
+    id: 'd',
+    name: 'Push A',
+    muscleGroups: [],
+    isRest: false,
+    slots: sets.map((n) => ({ capability: 'horizontal_push' as const, exerciseId: 'bb_bench_press', setCount: n })),
+  });
+
+  it('prescribedSets sums every slot (core included — it is prescribed work)', () => {
+    expect(prescribedSets(day([4, 4, 3, 3]))).toBe(14);
+  });
+
+  it('zero sets is never a workout', () => {
+    expect(workoutTrained(0, day([4, 4]))).toBe(false);
+  });
+
+  it('one lift out of six is PARTIAL — the workout stays open', () => {
+    const d = day([4, 4, 4, 3, 3, 3]); // 21 prescribed → needs 11
+    expect(workoutTrained(4, d)).toBe(false); // one lift done
+    expect(workoutTrained(10, d)).toBe(false); // just under half
+  });
+
+  it('half or more FINISHES the workout', () => {
+    const d = day([4, 4, 4, 3, 3, 3]); // 21 prescribed → ceil(10.5) = 11
+    expect(workoutTrained(11, d)).toBe(true);
+    expect(workoutTrained(21, d)).toBe(true);
+  });
+
+  it('an unknown day (the plan moved under the session) counts any logged work', () => {
+    expect(workoutTrained(1, undefined)).toBe(true);
+    expect(workoutTrained(0, undefined)).toBe(false);
   });
 });

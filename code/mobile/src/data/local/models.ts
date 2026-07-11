@@ -149,6 +149,10 @@ export interface SessionSummary {
   progressed: number; // distinct lifts whose load increased this session
   durationMs: number; // start → finish
   earlyFinish: boolean;
+  /** The session FINISHED the workout for the week (>= half the prescribed sets — see
+   *  domain/completion). False = a partial session: real work, saved and folded by the
+   *  engine, but the workout stays on this week's list. */
+  trained?: boolean;
 }
 
 export interface Session {

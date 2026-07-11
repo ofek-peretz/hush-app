@@ -146,7 +146,16 @@ export function ProgramDetail({ navigation, route }: Props) {
         </ScrollView>
       )}
 
-      {day ? (
+      {/* A FINISHED workout is a record, not an offer (founder 2026-07-11): "Begin" is gone —
+          the screen just states, quietly, that this one is already trained this week. */}
+      {day && day.completed ? (
+        <View style={styles.footer}>
+          <View style={styles.doneRow}>
+            <Icon name="check" size={16} color={color.up} strokeWidth={2.4} />
+            <Text style={styles.doneText}>{t('program.doneThisWeek')}</Text>
+          </View>
+        </View>
+      ) : day ? (
         <View style={styles.footer}>
           <Button
             variant="primary"
@@ -224,4 +233,6 @@ const styles = StyleSheet.create({
   lockBtnOn: { backgroundColor: color.accentWash, borderWidth: 1, borderColor: color.accent },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
+  doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12 },
+  doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary },
 });

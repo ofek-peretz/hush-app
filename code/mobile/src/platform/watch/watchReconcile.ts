@@ -19,8 +19,9 @@
  *
  * Deps are injected so the whole flow is unit-testable without native modules.
  */
-import type { Session, SetLog } from '@/data/local/models';
+import type { ProgramDay, Session, SetLog } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
+import { sessionTrained } from '@/domain/completion';
 import { HttpError } from '@/data/api/httpErrors';
 import { WATCH_EVENTS } from '@/platform/events';
 import { parseSessionRecord, type WatchSessionRecord } from './protocol';
@@ -39,6 +40,10 @@ export interface WatchReconcileDeps {
   appendCompletedSession: (s: Session) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   markWorkoutCompleted: (programDayId: string) => Promise<void>;
+  /** The program day a watch record belongs to — its prescription decides whether the session
+   *  FINISHED the workout (domain/completion). Absent (or unknown day) => any logged work
+   *  finishes it, preserving the pre-rule behavior. */
+  programDay?: (programDayId: string) => ProgramDay | undefined;
   /** Backend model sync (app.model.recordSession). Throws offline — then queued. */
   recordToModel: (args: { programDayId: string; sets: WatchSyncSet[]; earlyFinish: boolean }) => Promise<unknown>;
   enqueuePendingSync: (args: {
@@ -131,7 +136,13 @@ export async function applyWatchSessionRecord(raw: unknown, deps: WatchReconcile
     // week state, then best-effort backend sync with an offline queue.
     await deps.appendCompletedSession(session);
     await deps.recordSessionCompleted();
-    await deps.markWorkoutCompleted(record.workoutId);
+    // PARTIAL vs TRAINED (domain/completion) — identical to the phone's finalize: a wrist session
+    // under half the workout's prescribed sets is real work, but it does NOT finish the workout;
+    // it stays on the week's list. The day is resolved from the phone's program (the authority).
+    const day = deps.programDay?.(record.workoutId);
+    if (sessionTrained(session, day)) {
+      await deps.markWorkoutCompleted(record.workoutId);
+    }
 
     const syncSets: WatchSyncSet[] = session.sets.map((s) => ({
       exerciseId: s.exerciseId,

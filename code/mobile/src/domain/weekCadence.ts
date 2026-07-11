@@ -11,7 +11,8 @@
  *
  * Pure + I/O-free so it is fully unit-testable and deterministic given a clock.
  */
-import type { Program, Session } from '@/data/local/models';
+import type { Program, ProgramDay, Session } from '@/data/local/models';
+import { sessionTrained } from '@/domain/completion';
 
 export const WEEK_OPEN_DOW = 6; // Saturday (JS Date.getDay(): 0=Sun … 6=Sat)
 export const WEEK_OPEN_HOUR = 23; // 23:xx local
@@ -120,8 +121,11 @@ export function bucketStart(bucketOpenMs: number | null, nowMs: number): number 
  *
  * A session is matched by its captured day NAME first — stable across a re-split, where the
  * positional `day_N` ids shift (4×/week `day_3` = "Upper B" but 5×/week `day_3` = "Push B") —
- * falling back to the id for sessions saved before names were captured. Pure: returns the healed
- * program, or null when nothing changed.
+ * falling back to the id for sessions saved before names were captured.
+ *
+ * Only a TRAINED session finishes a workout (domain/completion): a PARTIAL session — under half the
+ * prescribed sets — leaves the workout on the week's list, and this heal must never quietly promote
+ * it to done. Pure: returns the healed program, or null when nothing changed.
  */
 export function healWeekCompletion(
   program: Program,
@@ -131,10 +135,12 @@ export function healWeekCompletion(
 ): Program | null {
   const start = bucketStart(bucketOpenMs, nowMs);
   const thisWeek = history.filter((s) => Date.parse(s.startedAt) >= start);
-  const doneIds = new Set(thisWeek.map((s) => s.programDayId));
-  const doneNames = new Set(thisWeek.map((s) => s.programDayName).filter((n): n is string => !!n));
+  const matches = (d: ProgramDay, s: Session) =>
+    s.programDayName ? s.programDayName === d.name : s.programDayId === d.id;
   const days = program.days.map((d) =>
-    !d.completed && !d.isRest && (doneNames.has(d.name) || doneIds.has(d.id)) ? { ...d, completed: true } : d,
+    !d.completed && !d.isRest && thisWeek.some((s) => matches(d, s) && sessionTrained(s, d))
+      ? { ...d, completed: true }
+      : d,
   );
   return days.some((d, i) => d.completed !== program.days[i].completed) ? { ...program, days } : null;
 }

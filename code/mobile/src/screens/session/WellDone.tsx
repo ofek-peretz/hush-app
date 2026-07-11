@@ -67,6 +67,9 @@ export function WellDone({ navigation, route }: Props) {
   const early = summary?.earlyFinish ?? false;
   // Partial = ended early but real work was logged; Full = completed every set.
   const partial = !notStarted && early && (summary?.sets ?? 0) > 0;
+  // …and a partial that didn't reach half the prescribed sets leaves the workout OPEN for the
+  // week (domain/completion). `trained === false` says exactly that.
+  const stillOpen = partial && summary?.trained === false;
   const reduced = useReducedMotion();
 
   const [history, setHistory] = useState<Session[] | null>(null);
@@ -256,6 +259,10 @@ export function WellDone({ navigation, route }: Props) {
                 ? `${bidi(summary.workoutName)} ${partial ? t('complete.savedWord') : t('complete.completeWord')}`
                 : partial ? t('complete.savedWord') : t('complete.completeWord')}
             </Text>
+            {/* PARTIAL that did not finish the workout (under half the prescribed sets, founder
+                2026-07-11): the work counts — it is logged and the engine folds it — but the
+                workout is still on this week's list. Say so plainly; never imply it is gone. */}
+            {stillOpen ? <Text style={styles.stillOpen}>{t('complete.stillOpen')}</Text> : null}
 
             {lifts.length > 0 ? (
               <View style={styles.reading}>
@@ -363,6 +370,7 @@ const styles = StyleSheet.create({
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   savedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0] },
   savedTitle: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], lineHeight: Math.round(textScale['3xl'] * 1.02), letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: stage.ink0, marginTop: 14 },
+  stillOpen: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: stage.ink2, marginTop: 10 },
   reading: { marginTop: 34 },
   readingHead: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
   readingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: stage.ink1 },

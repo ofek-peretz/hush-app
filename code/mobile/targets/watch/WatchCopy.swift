@@ -87,6 +87,7 @@ enum WatchCopy {
   static let walking = "Walking"
   static let finishSave = "Finish & save"
   static let metricKm = "Km"
+  static let recordedLegend = "Recorded"
 
   // Connection
   static let reconnecting = "Reconnecting"
