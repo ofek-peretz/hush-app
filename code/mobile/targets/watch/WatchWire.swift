@@ -94,6 +94,9 @@ struct WireLobby: Codable, Equatable {
   var lifts: Int?
   var durationLabel: String?
   var resting: Bool?
+  /// Training is behind the paywall (free sessions spent, no membership). The watch then
+  /// neither proposes a start nor runs one standalone — the purchase belongs to the phone.
+  var gated: Bool?
   var workouts: [WireLobbyWorkout]
 }
 

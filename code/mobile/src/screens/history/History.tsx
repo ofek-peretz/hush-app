@@ -28,6 +28,7 @@ import { db } from '@/data/local/db';
 import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
 import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
 import { fmtClock } from '@/platform/cardio/cardioTracker';
+import { cardioPerformed } from '@/domain/cardio';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -86,15 +87,20 @@ export function History({ navigation }: Props) {
 
   const dayName = (s: Session) => sessionDayName(s, app.program);
 
+  // Only PERFORMED work is a record (founder 2026-07-10): a session with zero
+  // completed sets or a cardio false-start never shows here. Writers already gate
+  // these; this display gate also covers records persisted before the rule existed.
+  const strength = (sessions ?? []).filter((s) => s.sets.length > 0);
+  const performedCardio = cardio.filter((a) => cardioPerformed(a.durationSec, a.distanceKm));
+
   // Unified, reverse-chronological timeline (newest first).
   const items: HistoryItem[] = [
-    ...(sessions ?? []).map((s): HistoryItem => ({ kind: 'strength', ...s })),
-    ...cardio,
+    ...strength.map((s): HistoryItem => ({ kind: 'strength', ...s })),
+    ...performedCardio,
   ].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
   // Header summary — the STRENGTH work so far (the engine's record; cardio is
   // never graded and never counted as "kg moved").
-  const strength = sessions ?? [];
   const totalSessions = strength.length;
   const totalKg = Math.round(strength.reduce((sum, s) => sum + sessionVolumeKg(s), 0));
   const totalVol = displayWeight(totalKg, units) ?? 0;

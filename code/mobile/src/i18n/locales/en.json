@@ -528,7 +528,8 @@
     "acrossLifts": "across {{count}} lifts",
     "initialPeak": "started {{value}} {{unit}}",
     "best": "now {{value}} {{unit}}",
-    "weekRange": "Weeks {{from}}–{{to}}"
+    "weekRange": "Weeks {{from}}–{{to}}",
+    "repsUnit": "reps"
   },
   "progress": {
     "title": "Progress",
@@ -596,7 +597,8 @@
     "trialNote": "You're only billed after your seven free sessions — never during. Choose a plan when you're ready.",
     "healthImporting": "Heart rate · calories · distance",
     "healthNote": "Hush reads heart rate, calories and distance for the runs and walks you record. It never writes to Health, and none of it touches your lifting program.",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "daysSummary": "{{n}}×/week"
   },
   "settings": {
     "units": "Units",
@@ -791,8 +793,11 @@
   "profileEdit": {
     "legend": "Account",
     "title": "Edit your details",
-    "sub": "Update your body data and training experience. Corrections never reset your progress.",
-    "save": "Save changes"
+    "sub": "Height, weight and how many sessions you train each week. Sex and age are remembered — age updates by itself each year — and your level is read from your real progress. Corrections never reset your progress.",
+    "save": "Save changes",
+    "saved": "Changes saved.",
+    "savedDays": "Saved. Your week was rebuilt to match.",
+    "daysNote": "Changing this rebuilds your training week to fit the new frequency."
   },
   "exec": {
     "load": "Load",

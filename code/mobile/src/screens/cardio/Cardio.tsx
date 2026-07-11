@@ -26,6 +26,7 @@ import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useCardioTracker, fmtClock, fmtPace, hrZone } from '@/platform/cardio/cardioTracker';
+import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import type { CardioActivity, CardioGait, CardioGoalKind } from '@/data/local/models';
@@ -98,6 +99,13 @@ export function Cardio({ navigation }: Props) {
   // dark on blur so Home/History never inherit invisible glyphs.
   useFocusedStatusBar(phase === 'select' ? 'dark' : 'light');
 
+  // Swipe-back works on the SELECT step like any other paper screen (founder
+  // 2026-07-10); once the activity is live the gesture is off — a live GPS
+  // recording must never be dismissed by an accidental edge swipe.
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: phase === 'select' });
+  }, [navigation, phase]);
+
   // Countdown 3 → 2 → 1 → Go → active.
   useEffect(() => {
     if (phase !== 'countdown') return;
@@ -116,6 +124,13 @@ export function Cardio({ navigation }: Props) {
     setPhase('countdown');
   };
   const finish = () => {
+    // NOT PERFORMED (founder 2026-07-10): finishing with no real activity is not a
+    // workout — nothing is recorded, nothing enters History (parity with the strength
+    // "not started" rule). The unmount effect ends the Live Activity.
+    if (!cardioPerformed(elapsedSec, distanceKm)) {
+      navigation.goBack();
+      return;
+    }
     setPaused(true);
     setPhase('complete');
   };
@@ -412,6 +427,9 @@ function CardioComplete(props: {
   useEffect(() => {
     if (saved.current) return;
     saved.current = true;
+    // Defense in depth: never persist a not-performed record even if this screen is
+    // ever reached without the finish() gate.
+    if (!cardioPerformed(elapsedSec, distanceKm)) return;
     const activity: CardioActivity = {
       kind: 'cardio',
       id: `cardio_${Date.now()}`,

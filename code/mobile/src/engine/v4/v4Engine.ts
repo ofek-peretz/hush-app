@@ -344,6 +344,10 @@ export async function maybeAdvance(
   seedFor: SeedFor,
   lockedSlotIds: ReadonlySet<string> = new Set(),
   nowMs: number = Date.now(),
+  /** The Sat-23:59 the CURRENT program bucket was built for (db.loadWeekOpen). The engine never
+   *  advances ahead of the bucket the athlete is executing — see the anchor stamp in doAdvance.
+   *  Absent → the current week-open (the ordinary case; identity). */
+  bucketOpenMs?: number,
 ): Promise<void> {
   // Finding 14: coalesce concurrent advances (Home fires several sessionTargets at once) so the
   // read-modify-write of the persisted engine state never interleaves — the in-flight advance
@@ -352,7 +356,7 @@ export async function maybeAdvance(
     await advanceInFlight.catch(() => {});
     return;
   }
-  advanceInFlight = doAdvance(program, profile, history, seedFor, lockedSlotIds, nowMs);
+  advanceInFlight = doAdvance(program, profile, history, seedFor, lockedSlotIds, nowMs, bucketOpenMs);
   try {
     await advanceInFlight;
   } finally {
@@ -367,6 +371,7 @@ async function doAdvance(
   seedFor: SeedFor,
   lockedSlotIds: ReadonlySet<string> = new Set(),
   nowMs: number = Date.now(),
+  bucketOpenMs?: number,
 ): Promise<void> {
   const state = await ensureSlots(program, profile, history, seedFor, lockedSlotIds);
   const slots = slotsRecord(state);
@@ -538,7 +543,14 @@ async function doAdvance(
   }
   // Move the anchor to the current week (even with no work to fold), so the next roll is the NEXT
   // Sat 23:59; on the very first run this only establishes the baseline (rolled was false → no fold).
-  state.lastAdvanceWeekOpen = weekOpen;
+  //
+  // The engine advances with the PROGRAM BUCKET, never ahead of it (founder 2026-07-10): a mid-week
+  // signup's first bucket is stamped for the NEXT Sat 23:59 (domain/weekCadence.firstBucketOpen) so
+  // the athlete's first plan gets a full runway — and the engine must not bump loads (or publish a
+  // Weekly Update) in the MIDDLE of a plan the athlete is still executing. Anchoring to the bucket
+  // makes the first roll land exactly when that bucket expires. In the ordinary case the bucket
+  // anchor IS the current week-open, so this is the identity.
+  state.lastAdvanceWeekOpen = Math.max(weekOpen, bucketOpenMs ?? weekOpen);
   await saveState(state);
 }
 

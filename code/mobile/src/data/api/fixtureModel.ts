@@ -5,8 +5,9 @@
  * It builds best-practice, market-standard programs and personalized cold-start loads:
  *  - generateProgram: a recognized split chosen by (sex × daysPerWeek) — Full Body,
  *    Upper/Lower, or Push/Pull/Legs — built from the curated catalog. Every weekly plan
- *    covers ALL major muscle groups (incl. calves and core); women's splits carry the
- *    lower-body / glute emphasis they typically train for.
+ *    covers ALL major muscle groups (core included; calves in the MEN's splits only —
+ *    founder 2026-07-10); women's splits carry the lower-body / glute emphasis they
+ *    typically train for.
  *  - sessionTargets: starting weights personalized by sex × bodyweight × experience × age
  *    (conservative — "weights start light, deliberate"); reps AND set counts by
  *    goal × exercise tier × age.
@@ -37,7 +38,7 @@ import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
-import { trainingWeekNumber } from '@/domain/weekCadence';
+import { displayWeekNumber, trainingWeekNumber } from '@/domain/weekCadence';
 import type { Pattern, Equipment } from '@/engine/v4/types';
 import { db, EMPTY_PREFERENCES, type OwnedPreferences } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
@@ -52,10 +53,11 @@ const MAX_SETS = 4;
 // ───────────────────────────── split library (market-standard) ─────────────────────────────
 // Each day = a recognized session built from the catalog. Days are ordered big→small
 // (compound first, isolation/finisher last). Every weekly plan covers all major groups,
-// with calves on every lower/full-body session and core worked across the week. Men's and
-// women's pools differ: women's days carry the lower-body / glute emphasis (hip thrust,
-// RDL, split squat, glute bridge, pull-through, abduction, kickback) typical of how women
-// train.
+// with core worked across the week. Men's and women's pools differ: men keep calves on
+// lower/full-body sessions; women's days spend those slots on the lower-body / glute
+// emphasis (hip thrust, RDL, split squat, glute bridge, pull-through, abduction,
+// kickback) typical of how women train — calves are OUT of the women's splits
+// (founder 2026-07-10).
 
 // Only blueprints referenced by a split below are kept (dead, never-referenced blueprints
 // were removed 2026-06-23). Core is NOT listed here — it is supplemental work added once per
@@ -81,18 +83,21 @@ const MEN: Record<string, string[]> = {
   'Legs B': ['front_squat', 'hip_thrust', 'hack_squat', 'walking_lunge', 'seated_calf_raise'],
 };
 
+// Calves are OUT of the women's splits (founder 2026-07-10) — the slot goes to the
+// glute / lower-body emphasis women's programming is built around instead (kickback /
+// abduction / machine quad work). Calf work stays in the catalog + men's splits.
 const WOMEN: Record<string, string[]> = {
-  'Full Body A': ['bb_back_squat', 'hip_thrust', 'db_bench_press', 'lat_pulldown', 'leg_curl', 'standing_calf_raise'],
+  'Full Body A': ['bb_back_squat', 'hip_thrust', 'db_bench_press', 'lat_pulldown', 'leg_curl', 'cable_kickback'],
   'Upper A': ['db_bench_press', 'lat_pulldown', 'db_shoulder_press', 'cable_row', 'lateral_raise'],
   'Upper B': ['incline_db_press', 'cable_row', 'lateral_raise', 'face_pull', 'bb_curl'],
-  'Lower A': ['hip_thrust', 'bb_back_squat', 'bb_rdl', 'leg_curl', 'cable_pull_through', 'standing_calf_raise'],
-  'Lower B': ['bulgarian_split_squat', 'hip_thrust', 'leg_press', 'leg_curl', 'hip_abduction', 'seated_calf_raise'],
+  'Lower A': ['hip_thrust', 'bb_back_squat', 'bb_rdl', 'leg_curl', 'cable_pull_through', 'hip_abduction'],
+  'Lower B': ['bulgarian_split_squat', 'hip_thrust', 'leg_press', 'leg_curl', 'hip_abduction', 'cable_kickback'],
   // Legs A (P3, approved 2026-07-06): the 4-day athlete's ADDED lower day was half of Lower A
   // re-run (hip thrust ×3/week, squat + RDL duplicated). Same glute-focused identity, now
   // genuinely distinct: bridge + DB hinge + machine quad work — the week's three lower days
   // become barbell-hinge / unilateral+machine / bridge+machine-quad.
-  'Legs A': ['glute_bridge', 'db_rdl', 'hack_squat', 'cable_kickback', 'hip_abduction', 'standing_calf_raise'],
-  'Legs B': ['bulgarian_split_squat', 'glute_bridge', 'walking_lunge', 'leg_extension', 'cable_pull_through', 'seated_calf_raise'],
+  'Legs A': ['glute_bridge', 'db_rdl', 'hack_squat', 'cable_kickback', 'hip_abduction', 'leg_extension'],
+  'Legs B': ['bulgarian_split_squat', 'glute_bridge', 'walking_lunge', 'leg_extension', 'cable_pull_through', 'cable_kickback'],
 };
 
 // daysPerWeek → ordered day names. The frequency philosophy is founder-directed
@@ -718,8 +723,12 @@ export const fixtureModel: ModelClient = {
     const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: program?.frequency ?? 4 });
     const seedFor = (id: string) => smartSeed(id, profile, history);
     const prefs = await loadPreferencesSafe(); // Lock System: locked slots gate engine swaps at rollover
+    // The bucket the athlete is actually executing (null pre-upgrade). The engine advances WITH it,
+    // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
+    // change (weekCadence.firstBucketOpen).
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
     if (program)
-      await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots)).catch((e) =>
+      await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots), Date.now(), bucketOpenMs).catch((e) =>
         void track('engine_error', { op: 'maybeAdvance', message: String(e) }),
       );
     // Finding 8: currentTargets failing means EVERY exercise silently falls back to cold-start
@@ -733,7 +742,9 @@ export const fixtureModel: ModelClient = {
     // go up or down vs the athlete's last logged weight — so the WHY sheet, Home's "lifts up", and
     // Well Done reflect what Hush actually did. WEEK 1 is the learning week: silent (the WHY sheet
     // shows the learning note instead). Attached to the first set only (the ratified convention).
-    const week = trainingWeekNumber(profile.memberSince, Date.now());
+    // displayWeekNumber (not the raw calendar count): a mid-week signup's extended first bucket is
+    // still week 1 — the same gate the WHY sheet uses, so the two can never disagree.
+    const week = displayWeekNumber(profile.memberSince, bucketOpenMs ?? null, Date.now());
     const lastLogged = new Map<string, number>();
     for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
 

@@ -217,6 +217,20 @@ export function addNotificationResponseListener(
 }
 
 /**
+ * Consume the native "last notification response". It survives until cleared, so a tap
+ * that has already been ROUTED must be consumed — otherwise a later manual launch reads
+ * it again and deep-links the athlete somewhere they never asked to go. Called on BOTH
+ * routing paths (the cold-start read below and Root's stash-and-flush). Never throws.
+ */
+export async function consumeLastNotificationResponse(): Promise<void> {
+  try {
+    await Notifications.clearLastNotificationResponseAsync();
+  } catch {
+    /* older module without clear — the per-process cold-start guard still bounds it */
+  }
+}
+
+/**
  * The intent of the notification the app was COLD-STARTED from (tapped while not
  * running), or null. Used once at launch to deep-link to the Weekly Update / Quarterly Report.
  */
@@ -224,7 +238,10 @@ export async function getInitialNotificationIntent(): Promise<NotificationIntent
   try {
     const response = await Notifications.getLastNotificationResponseAsync();
     const intent = intentFromResponse(response);
-    if (intent) void track(NOTIFICATION_EVENTS.opened, { kind: intent.kind, coldStart: true });
+    if (intent) {
+      void track(NOTIFICATION_EVENTS.opened, { kind: intent.kind, coldStart: true });
+      await consumeLastNotificationResponse();
+    }
     return intent;
   } catch {
     return null;

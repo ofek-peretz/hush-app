@@ -37,11 +37,14 @@ interface Props {
 
 export function ProgressReportView({ title, legend, entries, loaded, units, onBack, milestones }: Props) {
   const { t } = useCopy();
-  const totalGainKg = entries.reduce((a, e) => a + Math.max(0, e.deltaKg), 0);
+  // The header total is a kg story — bodyweight (reps-mode) gains are real progress
+  // but never counted as "kg added".
+  const loadEntries = entries.filter((e) => e.mode !== 'reps');
+  const totalGainKg = loadEntries.reduce((a, e) => a + Math.max(0, e.deltaKg), 0);
   const totalGain = displayWeight(Math.round(totalGainKg * 10) / 10, units) ?? 0;
   // Baseline (founder 2026-07-09): no gains yet (the first week) — the screen shows the athlete's
-  // starting point, NOT a "+0 added". Each lift's first load is the mark every later gain measures against.
-  const isBaseline = entries.length > 0 && totalGainKg === 0;
+  // starting point, NOT a "+0 added". Each lift's first mark is what every later gain measures against.
+  const isBaseline = entries.length > 0 && entries.every((e) => e.deltaKg === 0);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -67,9 +70,11 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
           <Text style={styles.empty}>{t('report.empty')}</Text>
         ) : (
           <>
-            {/* total strength added — or, in the first week, the starting-point framing */}
+            {/* total strength added — or, before any gain, the starting-point framing.
+                (Reps-only gains keep the starting-point header — the kg total would lie —
+                while their per-lift rows below still show the rep progress.) */}
             <View style={styles.totalBlock}>
-              {isBaseline ? (
+              {isBaseline || totalGainKg <= 0 ? (
                 <>
                   <Legend>{t('report.startingPoint')}</Legend>
                   <Text style={styles.startingSub}>{t('report.startingPointSub')}</Text>
@@ -81,7 +86,7 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                     <Text style={styles.totalValue}>+{totalGain}</Text>
                     <Text style={styles.totalUnit}>{unitLabel(units)}</Text>
                     <View style={styles.totalBadge}>
-                      <Badge tone="up">{t('report.acrossLifts', { count: entries.length })}</Badge>
+                      <Badge tone="up">{t('report.acrossLifts', { count: loadEntries.length })}</Badge>
                     </View>
                   </View>
                 </>
@@ -91,9 +96,13 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
             {/* per-lift rows */}
             <View style={styles.lifts}>
               {entries.map((e) => {
-                const initial = displayWeight(e.initialPeakKg, units) ?? 0;
-                const best = displayWeight(e.periodPeakKg, units) ?? 0;
-                const deltaDisp = displayWeight(e.deltaKg, units) ?? 0;
+                // Bodyweight movements progress by REPS (founder 2026-07-10): raw rep
+                // counts, never unit-converted; the row reads "12 reps" instead of kg.
+                const isReps = e.mode === 'reps';
+                const initial = isReps ? e.initialPeakKg : displayWeight(e.initialPeakKg, units) ?? 0;
+                const best = isReps ? e.periodPeakKg : displayWeight(e.periodPeakKg, units) ?? 0;
+                const deltaDisp = isReps ? e.deltaKg : displayWeight(e.deltaKg, units) ?? 0;
+                const unit = isReps ? t('report.repsUnit') : unitLabel(units);
                 const ceiling = Math.round(best * 1.08) || best + 1;
                 return (
                   <View key={e.exerciseId} style={styles.lift}>
@@ -102,17 +111,17 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                       <View style={styles.liftRight}>
                         <Text style={styles.liftBest}>
                           {best}
-                          <Text style={styles.liftBestUnit}> {unitLabel(units)}</Text>
+                          <Text style={styles.liftBestUnit}> {unit}</Text>
                         </Text>
-                        {/* No gain yet (first performance / held) → the weight IS the starting
+                        {/* No gain yet (first performance / held) → the mark IS the starting
                             point; a "+0" would misread as a result. Show the delta only once it rises. */}
-                        {e.deltaKg > 0 ? <LoadDelta value={deltaDisp} unit={unitLabel(units)} size="sm" /> : null}
+                        {e.deltaKg > 0 ? <LoadDelta value={deltaDisp} unit={unit} size="sm" /> : null}
                       </View>
                     </View>
                     <ProgressMeter value={best} max={ceiling} mark={initial} tone="up" />
                     <View style={styles.liftFoot}>
-                      <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit: unitLabel(units) })}</Text>
-                      <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit: unitLabel(units) })}</Text>
+                      <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit })}</Text>
+                      <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit })}</Text>
                     </View>
                   </View>
                 );

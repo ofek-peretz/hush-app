@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HealthKit
 import SwiftUI
 
 // The watch's single source of *presentation* state. It holds the latest phone
@@ -38,6 +39,9 @@ enum WatchScreen: Equatable {
   case interRest(WireMirror)
   case transitionRest(WireMirror)
   case paused
+  /// Watch-local run/walk (founder 2026-07-10): recorded on the wrist via the OS
+  /// workout runtime (HR/kcal/distance), persisted to Health — never engine state.
+  case cardio(gait: String, paused: Bool)
 }
 
 final class WatchModel: ObservableObject {
@@ -60,6 +64,9 @@ final class WatchModel: ObservableObject {
   private var offlineQueuedWorkoutId: String?
   /// The frame to render from: the local authority when live, else the phone's.
   private var effectiveMirror: WireMirror? { localMirror ?? mirror }
+  /// Training is behind the paywall right now (the phone's live lobby wins; falls back to
+  /// the last flag it published this process).
+  private var gatedNow: Bool { lobby?.gated ?? lastKnownGated }
   // Optimistic: assume connected until a sustained drop proves otherwise (item 5). The honest
   // "Reconnecting" viewer must be rare — a brief unreachable blip (display asleep, phone app
   // backgrounded) is normal and applicationContext still syncs, so we keep showing the last mirror.
@@ -70,6 +77,29 @@ final class WatchModel: ObservableObject {
   private var editDraft: EditDraft?
   private var setConfirm: (weight: Double?, reps: Int, index: Int, total: Int)?
   private var setConfirmToken = 0
+
+  // Watch-local cardio (run/walk): a live recording OWNS the display + the OS runtime
+  // until ended. Pure watch state — the strength engine/mirror never sees it.
+  private var cardioGait: String?
+  private var cardioPaused = false
+  // The clock must never freeze. HKLiveWorkoutBuilder.elapsedTime is the truth when the OS
+  // runtime is live, but HealthKit can be unavailable or denied — then these carry an honest
+  // wall-clock elapsed (pause-aware) so the athlete still sees their time running.
+  private var cardioStartedAt: Date?
+  private var cardioPausedAt: Date?
+  private var cardioPausedTotal: TimeInterval = 0
+
+  // Begin fallback (founder 2026-07-10, "it froze — wouldn't let me start"): a
+  // reachable phone whose app never answers the start intent must not strand the
+  // athlete on Start — after a short grace the watch runs the stored plan itself.
+  // `fallbackStarted` marks a local session created this way: it is provisional, so a
+  // phone that answers late (before any set is logged) reclaims authority in apply().
+  private var beginFallback: DispatchWorkItem?
+  private var fallbackStarted = false
+  /// The paywall gate as last published by the phone. A gated athlete must not be able to
+  /// start a workout from the wrist — not through the phone (it would only open the
+  /// paywall, leaving Begin dead) and not standalone (which would bypass the purchase).
+  private var lastKnownGated = false
 
   // Connection grace: only fall back to the Reconnecting viewer after a SUSTAINED unreachable gap.
   private var graceWork: DispatchWorkItem?
@@ -92,6 +122,19 @@ final class WatchModel: ObservableObject {
     manager.model = self
     manager.activate()
     workoutRuntime.requestAuthorization()
+    // A recovered still-live RUN/WALK re-enters the cardio presentation (founder batch
+    // 2026-07-10): without this, cardioGait is lost across a relaunch and the next
+    // phone envelope (no live phase) would abandon() the athlete's recording.
+    workoutRuntime.onAdoptedActivity = { [weak self] activity in
+      guard let self, self.cardioGait == nil, self.localEngine == nil else { return }
+      switch activity {
+      case .running: self.cardioGait = "run"
+      case .walking: self.cardioGait = "walk"
+      default: return // strength — the phone / local authority drives it as before
+      }
+      self.cardioPaused = false
+      self.recompute()
+    }
     workoutRuntime.recoverActiveSession()
     // Standalone recovery: a local session that survived an app termination
     // resumes exactly where it was (elapsed rests are caught up wall-clock).
@@ -111,6 +154,7 @@ final class WatchModel: ObservableObject {
   func appBecameActive() { signalReturnToWorkout() }
 
   private func signalReturnToWorkout() {
+    guard cardioGait == nil else { return } // a run/walk is its own stage — no lift cue on it
     guard let m = effectiveMirror, m.phase != "complete", m.phase != "paused" else { return }
     let now = Date()
     guard now.timeIntervalSince(lastReturnHaptic) > 2 else { return }
@@ -131,13 +175,36 @@ final class WatchModel: ObservableObject {
     let prev = mirror
     mirror = envelope.mirror
     lobby = envelope.lobby
+    if let l = envelope.lobby { lastKnownGated = l.gated == true }
 
-    // A live LOCAL session owns the display, the haptics, and the OS runtime —
-    // phone state is recorded above (it takes over after dismissal) but must not
-    // drive side effects while the athlete is mid-local-workout.
-    if localEngine != nil {
+    let phoneLive = ["active_set", "rest_inter", "rest_transition", "paused"].contains(mirror?.phase ?? "")
+
+    // Two authorities can never run at once. The Begin FALLBACK starts a local session when
+    // the phone doesn't answer in time — if that phone then answers LATE with a live session,
+    // it reclaims authority here: the untouched local session (no set logged) is discarded
+    // without a trace. Once the athlete has logged a set on the wrist, the local session is
+    // the truth and keeps it (the phone's session reconciles against the transferred record).
+    if let engine = localEngine, fallbackStarted, phoneLive, engine.state.sets.isEmpty {
+      engine.discard()
+      localEngine = nil
+      localMirror = nil
+      fallbackStarted = false
+      cancelRestHaptics() // beats scheduled against the discarded local rest
+    }
+
+    // A live LOCAL session (strength engine or a wrist run/walk) owns the display,
+    // the haptics, and the OS runtime — phone state is recorded above (it takes over
+    // after dismissal) but must not drive side effects mid-local-activity (a phone
+    // frame must never abandon() the runtime out from under a live recording).
+    if localEngine != nil || cardioGait != nil {
       recompute()
       return
+    }
+
+    // A live frame answers a pending Begin — the fallback is no longer needed.
+    if phoneLive {
+      beginFallback?.cancel()
+      beginFallback = nil
     }
 
     let phaseChanged = prev?.phase != mirror?.phase
@@ -213,13 +280,16 @@ final class WatchModel: ObservableObject {
 
   /// Begin with the phone unreachable: run the stored plan locally. No plan / all
   /// workouts done → inert (the Start screen would not have been shown).
-  private func startLocalWorkout() {
-    guard localEngine == nil, let stored = store.loadPlan() else { return }
+  /// `viaFallback` marks a session started because a REACHABLE phone never answered —
+  /// provisional, so a late phone answer can still reclaim authority (see apply()).
+  private func startLocalWorkout(viaFallback: Bool = false) {
+    guard localEngine == nil, !gatedNow, let stored = store.loadPlan() else { return }
     let remaining = stored.plan.workouts.filter { !stored.doneWorkoutIds.contains($0.id) }
     let targetId = offlineQueuedWorkoutId ?? lobby?.workoutId
     guard let workout = remaining.first(where: { $0.id == targetId }) ?? remaining.first else { return }
     offlineQueuedWorkoutId = nil
     let engine = LocalWorkoutEngine(workout: workout, plan: stored.plan, store: store)
+    fallbackStarted = viaFallback
     adoptLocal(engine)
     engine.activate()
   }
@@ -239,6 +309,10 @@ final class WatchModel: ObservableObject {
       lifts: lifts,
       durationLabel: "~\(lifts * 8) min",
       resting: false,
+      // The last gate the phone published (in this process). Unknown after a relaunch →
+      // false, which preserves the standalone contract: an offline athlete who already
+      // has a plan can train; the paywall is settled the next time the phone is present.
+      gated: lastKnownGated,
       workouts: stored.plan.workouts.map { w in
         WireLobbyWorkout(
           id: w.id,
@@ -319,9 +393,17 @@ final class WatchModel: ObservableObject {
       (0, isTransition ? .exerciseBoundary : .restElapsed),
     ]
     for (offset, event) in plan {
-      let delay = endsAt.addingTimeInterval(offset).timeIntervalSince(now)
+      let intended = endsAt.addingTimeInterval(offset)
+      let delay = intended.timeIntervalSince(now)
       guard delay > 0.05 else { continue } // beats already in the past are skipped (no buzz storm)
       let work = DispatchWorkItem { [weak self] in
+        // Late-delivery guard (founder 2026-07-10: "the 7s buzz fired at 3s"): a beat the
+        // system delivered late — a briefly suspended runloop batches its timers on wake —
+        // is STALE. Buzzing the wrong count teaches the wrong rhythm; skip it. The GO beat
+        // (offset 0) gets a wider window so the rest-over signal itself is never lost.
+        let lateBy = -intended.timeIntervalSinceNow
+        let tolerance: TimeInterval = offset == 0 ? 3.0 : 1.2
+        guard lateBy < tolerance else { return }
         self?.onEntryHaptic.send(event)
       }
       restHaptics.append(work)
@@ -418,6 +500,7 @@ final class WatchModel: ObservableObject {
     if localEngine != nil {
       localEngine = nil
       localMirror = nil
+      fallbackStarted = false
       recompute()
       return
     }
@@ -430,10 +513,28 @@ final class WatchModel: ObservableObject {
   }
 
   func begin() {
-    guard localEngine == nil else { return }
+    guard localEngine == nil, cardioGait == nil else { return }
+    // Paywall: a gated athlete starts nothing from the wrist (the phone owns the purchase).
+    // The Start screen already renders the "continue on iPhone" state, so this is defense
+    // in depth — and it keeps the Begin fallback below from bypassing the gate.
+    guard !gatedNow else { return }
     if manager.isReachable {
       // The phone is present — it stays the authority over the session lifecycle.
       sendIntent(type: "start_workout", workoutId: lobby?.workoutId)
+      // …but a phone that never ANSWERS (app killed / asleep — sendMessage silently
+      // evaporates) must not leave a dead Begin button. If no live frame arrives
+      // within the grace and a plan snapshot exists, the watch starts the workout
+      // itself; the standalone record reconciles to the phone later (de-duped).
+      beginFallback?.cancel()
+      let work = DispatchWorkItem { [weak self] in
+        guard let self else { return }
+        self.beginFallback = nil
+        let live = ["active_set", "rest_inter", "rest_transition", "paused"].contains(self.mirror?.phase ?? "")
+        guard !live, self.localEngine == nil, self.cardioGait == nil else { return }
+        self.startLocalWorkout(viaFallback: true)
+      }
+      beginFallback = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     } else {
       // Phone absent — the watch runs the stored plan itself (standalone).
       startLocalWorkout()
@@ -452,9 +553,69 @@ final class WatchModel: ObservableObject {
 
   func swap(_ exerciseId: String) {
     // Exercise selection belongs to the phone's model; the offline mirror offers no
-    // swap options, so this can only fire under phone authority.
+    // swap options, so this can only fire under phone authority. One-tap (founder
+    // 2026-07-10): Hush already picked the replacement — apply it immediately, ack by
+    // feel, and the next mirror frame shows the new lift (exact parity with the phone).
     guard localEngine == nil else { return }
     sendIntent(type: "swap_exercise", exerciseId: exerciseId)
+    onEntryHaptic.send(.exerciseBusyApplied)
+  }
+
+  // MARK: Watch-local cardio (run / walk)
+
+  func startCardio(gait: String) {
+    guard cardioGait == nil, localEngine == nil else { return }
+    cardioGait = gait
+    cardioPaused = false
+    cardioStartedAt = Date()
+    cardioPausedAt = nil
+    cardioPausedTotal = 0
+    workoutRuntime.trackLive(paused: false, activity: gait == "run" ? .running : .walking, indoor: false)
+    onEntryHaptic.send(.readyTapped)
+    recompute()
+  }
+
+  func toggleCardioPause() {
+    guard cardioGait != nil else { return }
+    cardioPaused.toggle()
+    if cardioPaused {
+      cardioPausedAt = Date()
+    } else if let at = cardioPausedAt {
+      cardioPausedTotal += Date().timeIntervalSince(at)
+      cardioPausedAt = nil
+    }
+    workoutRuntime.trackLive(paused: cardioPaused)
+    onEntryHaptic.send(cardioPaused ? .paused : .resumed)
+    recompute()
+  }
+
+  /// Elapsed seconds for the cardio stage: the OS runtime's pause-aware clock when it is
+  /// live, else the watch's own (equally pause-aware) wall-clock read — so a denied or
+  /// unavailable HealthKit degrades the METRICS, never the clock.
+  func cardioElapsed() -> TimeInterval {
+    if let s = liveMetrics.elapsed() { return s }
+    guard let started = cardioStartedAt else { return 0 }
+    let pausedNow = cardioPausedAt.map { Date().timeIntervalSince($0) } ?? 0
+    return max(0, Date().timeIntervalSince(started) - cardioPausedTotal - pausedNow)
+  }
+
+  func endCardio() {
+    guard cardioGait != nil else { return }
+    cardioGait = nil
+    cardioPaused = false
+    cardioStartedAt = nil
+    cardioPausedAt = nil
+    cardioPausedTotal = 0
+    // Persist the honest record to Health (HR / kcal / distance); the strength
+    // engine never sees it — recorded, never coached.
+    workoutRuntime.finish()
+    onEntryHaptic.send(.workoutSaved)
+    // Phone state was ingested but never acted on while the recording owned the wrist —
+    // re-apply its side effects now that it is the authority again (a live phone workout
+    // gets its rest haptics + OS runtime back; no phone session ends as a no-op).
+    syncRestHaptics(prev: nil, next: mirror)
+    syncWorkoutRuntime(phase: mirror?.phase)
+    recompute()
   }
 
   private func sendIntent(
@@ -493,6 +654,10 @@ final class WatchModel: ObservableObject {
   }
 
   private func project() -> WatchScreen {
+    // A live wrist recording owns the display until ended.
+    if let gait = cardioGait {
+      return .cardio(gait: gait, paused: cardioPaused)
+    }
     // The Reconnecting viewer only makes sense when the PHONE is the live authority:
     // a local session needs no phone at all, and pre-session an unreachable phone
     // must yield the (offline) Start screen, not a connection error.
@@ -540,7 +705,7 @@ final class WatchModel: ObservableObject {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
          (.workoutComplete, .workoutComplete), (.setConfirmation, .setConfirmation),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
-         (.paused, .paused):
+         (.paused, .paused), (.cardio, .cardio):
       return true
     default:
       return false

@@ -3,10 +3,11 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Units, WeeklyVolume } from '@/data/local/models';
+import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Session, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { salvageOrphanSession, RESUME_WINDOW_MS } from '@/state/sessionRecovery';
-import { currentWeekOpen, shouldRollWeek } from '@/domain/weekCadence';
+import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
+import { agedProfile } from '@/domain/profileAge';
 import { CONSENT_VERSION } from '@/domain/consent';
 import {
   athleteModeReducer,
@@ -169,15 +170,19 @@ interface AppApi extends AppState {
   ensurePortraitSnapshot: () => Promise<void>;
   /** Switch units (kg/lb); restyles every weight display instantly (§10.1). */
   setUnits: (units: Units) => Promise<void>;
-  /** Edit post-onboarding profile info (body data + experience) from Settings. Persists the merged
-   *  profile. Body-data corrections must NOT reset progression, so the current program is left
-   *  untouched — a changed experience/body informs the next weekly regeneration + cold starts. */
+  /** Edit post-onboarding profile info from Settings (founder 2026-07-10: the edit surface is
+   *  height + weight + days/week only — sex is fixed, age advances yearly by itself, experience is
+   *  derived from progression). Persists the merged profile. Body-data corrections must NOT reset
+   *  progression, so the current program is left untouched — they inform the next weekly
+   *  regeneration + cold starts. A daysPerWeek change is the exception: the split must match the
+   *  chosen frequency, so it rebuilds the week immediately (like setVolume). */
   updateProfileInfo: (fields: {
     age?: number;
     heightCm?: number;
     weightKg?: number;
     sex?: 'male' | 'female';
     experience?: Experience;
+    daysPerWeek?: number;
   }) => Promise<void>;
   /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
   setVolume: (volume: WeeklyVolume) => Promise<void>;
@@ -297,7 +302,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!fresh) await salvageOrphanSession();
       }
 
-      const [profile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
+      const [storedProfile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
         db.loadProfile(),
         db.loadProgram(),
         db.loadMode(),
@@ -306,6 +311,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         db.loadEntitlement(),
         db.loadWeekOpen(),
       ]);
+      // Age upkeep (founder 2026-07-10): age is asked once — the app advances it a
+      // year per full year elapsed, so program construction always sees the current
+      // age. Best-effort persist; the aged value is used this session regardless.
+      let profile = storedProfile;
+      if (storedProfile) {
+        const aged = agedProfile(storedProfile, Date.now());
+        if (aged) {
+          profile = aged;
+          void db.saveProfile(aged).catch(() => {});
+          void track('age_auto_advanced', { age: aged.age });
+        }
+      }
       const mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
@@ -321,12 +338,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           if (!program) return;
-          const hist = await db.loadHistory();
-          const weekOpen = weekOpenMs ?? currentWeekOpen(Date.now());
-          const doneThisWeek = new Set(hist.filter((s) => Date.parse(s.startedAt) >= weekOpen).map((s) => s.programDayId));
-          const days = program.days.map((d) => (!d.completed && !d.isRest && doneThisWeek.has(d.id) ? { ...d, completed: true } : d));
-          if (days.some((d, i) => d.completed !== program.days[i].completed)) {
-            const healed: Program = { ...program, days };
+          const healed = healWeekCompletion(program, await db.loadHistory(), weekOpenMs, Date.now());
+          if (healed) {
             await db.saveProgram(healed);
             dispatch({ type: 'PROGRAM_UPDATED', program: healed, recents });
           }
@@ -431,6 +444,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           heightCm: inputs.heightCm,
           weightKg: inputs.weightKg,
           age: inputs.age,
+          // Anchor for the yearly age auto-advance (domain/profileAge).
+          ...(inputs.age != null ? { ageUpdatedAt: new Date().toISOString() } : {}),
           units: inputs.units,
           goal: inputs.goal,
           experience: inputs.experience,
@@ -478,9 +493,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
         if (baseline) emitCapabilitySnapshot(baseline, 'onboarding', 0);
 
-        // Stamp the calendar-week anchor so the bucket first turns over at the NEXT Saturday 23:59,
-        // not immediately (calendar-primary cadence, founder 2026-07-09).
-        const weekOpenMs = currentWeekOpen(Date.now());
+        // Stamp the calendar-week anchor (calendar-primary cadence, founder 2026-07-09).
+        // Mid-week signup (founder 2026-07-10): when the remaining days cannot fit the chosen
+        // frequency (e.g. Thursday + 4×/week), the first bucket is stamped for the NEXT open so
+        // it survives the first Saturday roll — the athlete's first program gets a full runway.
+        const weekOpenMs = firstBucketOpen(Date.now(), inputs.daysPerWeek);
         await Promise.all([db.saveProfile(profile), db.saveProgram(program), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
@@ -606,20 +623,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async updateProfileInfo(fields) {
         if (!state.profile) return;
+        const daysChanged = fields.daysPerWeek != null && fields.daysPerWeek !== state.profile.daysPerWeek;
         // Merge only the provided fields; undefined leaves the existing value intact.
         const profile: Profile = {
           ...state.profile,
-          ...(fields.age != null ? { age: fields.age } : {}),
+          // Setting age re-anchors the yearly auto-advance (domain/profileAge).
+          ...(fields.age != null ? { age: fields.age, ageUpdatedAt: new Date().toISOString() } : {}),
           ...(fields.heightCm != null ? { heightCm: fields.heightCm } : {}),
           ...(fields.weightKg != null ? { weightKg: fields.weightKg } : {}),
           ...(fields.sex ? { sex: fields.sex } : {}),
           ...(fields.experience ? { experience: fields.experience } : {}),
+          ...(fields.daysPerWeek != null ? { daysPerWeek: fields.daysPerWeek } : {}),
         };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('profile_edited', {
           changed: Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null),
         });
+        // A changed weekly frequency reshapes the split — carry it to the model strategy
+        // and rebuild the week now (athlete-owned pins/order re-apply through
+        // generateProgram). Best-effort; otherwise it applies at the next regeneration.
+        if (daysChanged) {
+          try {
+            await model.setWeeklyFrequency(profile.daysPerWeek);
+          } catch {
+            /* non-fatal — generateProgram below still uses the profile's frequency */
+          }
+          try {
+            const fresh = await model.generateProgram(profile);
+            // A MID-WEEK rebuild must not resurrect finished work: the fresh days come back
+            // `completed: false`, so re-apply this week's DONE flags from the history (else
+            // Home re-offers a workout the athlete already trained).
+            const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
+            await db.saveProgram(program);
+            dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+            void track('program_generated', { reason: 'frequency', frequency: program.frequency });
+          } catch {
+            /* offline — applies on the next weekly regeneration */
+          }
+        }
       },
 
       async setVolume(volume) {
@@ -631,7 +673,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Volume changes the set scheme → rebuild the week now (athlete-owned pins/order re-apply
         // through generateProgram). Best-effort; otherwise it takes effect on the next regeneration.
         try {
-          const program = await model.generateProgram(profile);
+          const fresh = await model.generateProgram(profile);
+          // Same mid-week rule as the frequency change: the rebuild must keep this week's
+          // finished workouts finished (generateProgram returns them `completed: false`).
+          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
           await db.saveProgram(program);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
           void track('program_generated', { reason: 'volume', frequency: program.frequency });

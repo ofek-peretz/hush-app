@@ -181,6 +181,19 @@ final class LocalWorkoutEngine {
     finish(early: true)
   }
 
+  /// Tear the local session down WITHOUT recording anything. Only valid while nothing
+  /// has been logged (asserted by the caller): the Begin fallback starts a local session
+  /// when the phone doesn't answer, and if the phone then answers late, the phone reclaims
+  /// authority — the never-used local session must leave no record and no persisted state.
+  func discard() {
+    guard !finished, state.sets.isEmpty else { return }
+    finished = true
+    cancelRestAdvance()
+    onFrame = nil
+    onComplete = nil
+    store.clearActiveSession()
+  }
+
   // MARK: Internals
 
   private func isResting(_ phase: String) -> Bool {

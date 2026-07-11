@@ -84,12 +84,14 @@ describe('every sex × days × goal yields a complete program', () => {
             for (const c of CAPS) expect(caps.has(c)).toBe(true);
           }
 
-          // Any multi-day week includes calves and direct core work.
+          // Any multi-day week includes direct core work. Calves are a MEN's-split
+          // prescription only (founder 2026-07-10): women's splits spend those slots
+          // on the glute / lower-body emphasis instead and never assign calf work.
           if (days >= 2) {
             const muscles = new Set(
               prog.days.flatMap((d) => d.slots.map((s) => exerciseById(s.exerciseId)!.muscle)),
             );
-            expect(muscles.has('Calves')).toBe(true);
+            expect(muscles.has('Calves')).toBe(sex === 'male');
             expect(muscles.has('Core')).toBe(true);
           }
         });

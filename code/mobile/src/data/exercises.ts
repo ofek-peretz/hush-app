@@ -109,6 +109,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'triceps_pushdown', name: 'Triceps Pushdown', capability: 'horizontal_push', muscle: 'Triceps', equipment: 'cable', tier: 'isolation', baseKg: 20, cues: ['Pin the elbows to your sides.', 'Extend fully.', 'Resist on the way up.'], synonyms: ['pushdown'] },
   { id: 'overhead_triceps_ext', name: 'Overhead Triceps Extension', capability: 'horizontal_push', muscle: 'Triceps', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Elbows by your ears.', 'Stretch behind the head.', 'Extend to lockout.'] },
   { id: 'skullcrusher', name: 'Skullcrusher', capability: 'horizontal_push', muscle: 'Triceps', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pointed up.', 'Lower to the forehead.', 'Extend to lockout.'], synonyms: ['lying triceps extension'] },
+  { id: 'machine_dip', name: 'Seated Dip Machine', capability: 'horizontal_push', muscle: 'Triceps', equipment: 'machine', tier: 'compound', baseKg: 40, cues: ['Chest tall, shoulders down.', 'Press the handles to lockout.', 'Control the return.'], synonyms: ['triceps dip machine', 'seated dip'] },
 
   // ───────────────────────── horizontal_pull · Back ─────────────────────────
   { id: 'bb_row', name: 'Barbell Row', capability: 'horizontal_pull', muscle: 'Back', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Hinge to about 45°.', 'Pull to your lower ribs.', 'Control the descent.'] },
@@ -135,6 +136,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'arnold_press', name: 'Arnold Press', capability: 'vertical_push', muscle: 'Shoulders', equipment: 'dumbbell', tier: 'compound', baseKg: 12, cues: ['Start palms facing you.', 'Rotate as you press.', 'Lower with control.'] },
   { id: 'lateral_raise', name: 'Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', equipment: 'dumbbell', tier: 'isolation', baseKg: 7, cues: ['Soft elbows.', 'Raise to shoulder height.', 'Lower slowly.'], synonyms: ['side raise'] },
   { id: 'cable_lateral_raise', name: 'Cable Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', equipment: 'cable', tier: 'isolation', baseKg: 6, cues: ['Lead with the elbow.', 'Raise to shoulder height.', 'Resist on the way down.'] },
+  { id: 'machine_lateral_raise', name: 'Machine Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', equipment: 'machine', tier: 'isolation', baseKg: 20, cues: ['Set the seat so pads sit at the elbows.', 'Raise to shoulder height.', 'Lower slowly.'], synonyms: ['lateral raise machine', 'side raise machine'] },
 
   // ───────────────────────── knee_dominant · Quads ─────────────────────────
   { id: 'bb_back_squat', name: 'Barbell Back Squat', capability: 'knee_dominant', muscle: 'Quads', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Big breath, brace.', 'Sit between the hips.', 'Drive up evenly.'], synonyms: ['squat'] },
@@ -167,6 +169,8 @@ export const EXERCISES: Exercise[] = [
   { id: 'cable_pull_through', name: 'Cable Pull-Through', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'cable', tier: 'isolation', baseKg: 25, cues: ['Hinge at the hips.', 'Push the hips back.', 'Snap the hips forward.'] },
   { id: 'hip_abduction', name: 'Hip Abduction', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Press the knees out.', 'Control the return.'], synonyms: ['abductor machine'] },
   { id: 'cable_kickback', name: 'Cable Glute Kickback', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'cable', tier: 'isolation', baseKg: 10, cues: ['Hinge slightly forward.', 'Drive the heel back.', 'Squeeze the glute.'], synonyms: ['glute kickback'] },
+  { id: 'machine_hip_thrust', name: 'Machine Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Upper back settled on the pad.', 'Drive through the heels.', 'Squeeze the glutes at the top.'], synonyms: ['hip thrust machine', 'glute drive'] },
+  { id: 'hip_adduction', name: 'Hip Adduction', capability: 'hip_dominant', muscle: 'Glutes', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Squeeze the knees together.', 'Control the return.'], synonyms: ['adductor machine', 'inner thigh machine'] },
 
   // ───────────────────────── hip_dominant · Core ─────────────────────────
   // Generation pool = the accessible movements (cable/machine crunch); hanging leg raise and the
@@ -191,16 +195,17 @@ export const EXERCISES: Exercise[] = [
  * generated program (a blueprint slot or the weekly core insertion).
  */
 export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
-  // horizontal_push
-  'machine_chest_press', 'push_up', 'knee_push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher',
+  // horizontal_push (machine_dip added 2026-07-10 — common-machines pass)
+  'machine_chest_press', 'push_up', 'knee_push_up', 'pec_deck', 'cable_fly', 'close_grip_bench', 'skullcrusher', 'machine_dip',
   // horizontal_pull (preacher_curl generates since P2 — men's 5-day Pull B)
   'chin_up', 'db_row', 'machine_row', 'db_curl',
-  // vertical_push
-  'machine_shoulder_press', 'arnold_press',
+  // vertical_push (machine_lateral_raise added 2026-07-10 — common-machines pass)
+  'machine_shoulder_press', 'arnold_press', 'machine_lateral_raise',
   // knee_dominant
   'leg_press_calf_raise', 'goblet_squat',
-  // hip_dominant (alternate hinges; deadlift IS auto-generated — men's Pull; db_rdl since P3 — women's Legs A)
-  'sumo_deadlift', 'back_extension',
+  // hip_dominant (alternate hinges; deadlift IS auto-generated — men's Pull; db_rdl since P3 — women's
+  // Legs A; machine_hip_thrust + hip_adduction added 2026-07-10 — common-machines pass, founder ask)
+  'sumo_deadlift', 'back_extension', 'machine_hip_thrust', 'hip_adduction',
   // core — advanced movements are never assigned by default (generation pool = cable/machine crunch)
   'hanging_leg_raise', 'ab_wheel',
 ]);

@@ -67,6 +67,9 @@ const ITEM_W = { md: 60, lg: 72 } as const;
 const WINDOW = 56;
 /** Re-anchor when the active detent drifts this far from the window anchor. */
 const WINDOW_GUARD = 24;
+/** Minimum spacing between detent ticks — the fling can cross detents far faster than a
+ *  haptic should fire (see onScroll). */
+const HAPTIC_MIN_MS = 45;
 
 /** Build the value track min..max inclusive (rounded to kill float drift). */
 function buildValues(min: number, max: number, step: number): number[] {
@@ -110,6 +113,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
+  const lastHapticRef = useRef(0);
 
   const clampIndex = useCallback(
     (i: number) => Math.min(values.length - 1, Math.max(0, i)),
@@ -145,12 +149,21 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
 
   // Track the centered detent as the wheel moves — fire a tick + report on change, and
   // slide the render window along when the detent nears its edge.
+  //
+  // The tick is THROTTLED (founder 2026-07-10, with the fling physics): a momentum fling now
+  // sweeps tens of detents, and one selection haptic per detent would be a continuous buzz —
+  // and tens of native calls per second. A tick at most every HAPTIC_MIN_MS keeps the texture
+  // of a wheel passing under the finger while a fast spin just hums quietly.
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const idx = clampIndex(wheelIndexFromOffset(e.nativeEvent.contentOffset.x, itemW));
       if (idx !== activeIndex) {
         setActiveIndex(idx);
-        selectionHaptic();
+        const now = Date.now();
+        if (now - lastHapticRef.current >= HAPTIC_MIN_MS) {
+          lastHapticRef.current = now;
+          selectionHaptic();
+        }
       }
       if (Math.abs(idx - anchor) > WINDOW_GUARD) setAnchor(idx);
     },
@@ -210,9 +223,13 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             ref={listRef}
             horizontal
             showsHorizontalScrollIndicator={false}
+            // Fling physics (founder 2026-07-10): a flick must GLIDE — reaching a value
+            // 20+ detents away is one light swipe, not ten. `disableIntervalMomentum`
+            // (which killed every fling at the very next detent) is deliberately absent,
+            // and deceleration is "normal" so momentum carries across long tracks;
+            // snapToInterval still lands the settle exactly on a detent.
             snapToInterval={itemW}
-            decelerationRate="fast"
-            disableIntervalMomentum
+            decelerationRate="normal"
             style={styles.scroller}
             contentContainerStyle={{ paddingHorizontal: sidePad }}
             // Re-assert the centered value once the track is measured — the imperative

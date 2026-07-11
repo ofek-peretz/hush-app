@@ -235,6 +235,10 @@ export interface WatchLobby {
   durationLabel?: string;
   /** True when the week is locked (resting) — Begin is replaced by a recovery note. */
   resting?: boolean;
+  /** True when training is GATED behind the paywall (free sessions spent, no active
+   *  membership). The watch must then neither propose a start nor run one standalone —
+   *  the purchase decision belongs to the phone. Absent = not gated (back-compatible). */
+  gated?: boolean;
   workouts: WatchLobbyWorkout[];
 }
 

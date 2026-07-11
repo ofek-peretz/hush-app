@@ -1,23 +1,25 @@
 /**
- * Edit profile (§4.28, founder 2026-06-30) — manage body data + training experience AFTER
- * onboarding. Settings → Body data / Experience open this. Same controls as the onboarding steps
- * (Sex / Age / Height / Weight WheelPickers + Experience OptStack), seeded from the saved profile.
+ * Edit profile (§4.28; founder 2026-07-10) — the edit surface is exactly HEIGHT,
+ * WEIGHT and SESSIONS PER WEEK. Nothing else:
+ *  - Sex is fixed at onboarding (it never changes, so it is never re-asked).
+ *  - Age is asked once and the app advances it yearly by itself (domain/profileAge) —
+ *    programs always see the current age without the athlete maintaining it.
+ *  - Experience is derived from the athlete's real progression, not self-reported twice.
  *
- * Corrections must never reset progression: this only persists the merged profile (the current
- * program is left intact; a changed experience/body informs the next weekly regeneration).
+ * Corrections must never reset progression: height/weight inform the next weekly
+ * regeneration + cold starts; a changed weekly frequency rebuilds the week immediately
+ * (the split must match). Saving confirms with a toast — a change is never silent.
  */
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend, SegmentedControl, WheelPicker, Button } from '@/components/ds';
-import { OptStack } from '@/components/onboarding/OptStack';
+import { Legend, WheelPicker, Button, useToast } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import * as haptics from '@/platform/haptics';
-import type { Experience } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -26,22 +28,25 @@ type Props = NativeStackScreenProps<MainParamList, 'ProfileEdit'>;
 export function ProfileEdit({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const toast = useToast();
   const p = app.profile;
   const units = p?.units ?? 'kg';
 
-  const [sex, setSex] = useState<'female' | 'male'>(p?.sex ?? 'male');
-  const [age, setAge] = useState(p?.age ?? 28);
   const [height, setHeight] = useState(p?.heightCm ?? 178);
   // Weight is edited in the athlete's display units, stored as kg.
   const [weight, setWeight] = useState(displayWeight(p?.weightKg ?? 82, units) ?? 82);
-  const [experience, setExperience] = useState<Experience>(p?.experience ?? 'intermediate');
+  const [days, setDays] = useState(p?.daysPerWeek ?? 4);
 
   const wStep = units === 'kg' ? 0.5 : 1;
 
   async function onSave() {
     haptics.confirm();
     const weightKg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
-    await app.updateProfileInfo({ age, heightCm: height, weightKg, sex, experience });
+    const daysChanged = days !== p?.daysPerWeek;
+    await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days });
+    // Acknowledge the change (founder 2026-07-10: a save is never silent). The toast
+    // provider lives above navigation, so it survives the goBack.
+    toast.show(daysChanged ? t('profileEdit.savedDays') : t('profileEdit.saved'));
     navigation.goBack();
   }
 
@@ -63,20 +68,7 @@ export function ProfileEdit({ navigation }: Props) {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <Text style={styles.sub}>{t('profileEdit.sub')}</Text>
 
-        <Legend style={styles.sectionLegend}>{t('ob.bodyTitle')}</Legend>
         <View style={styles.rows}>
-          <View style={styles.col}>
-            <Legend>{t('ob.sex')}</Legend>
-            <SegmentedControl
-              options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
-              value={sex}
-              onChange={(v) => setSex(v as 'female' | 'male')}
-            />
-          </View>
-          <View style={styles.col}>
-            <Legend>{t('ob.age')}</Legend>
-            <WheelPicker value={age} onChange={setAge} min={14} max={90} label={t('ob.age')} style={styles.wheel} />
-          </View>
           <View style={styles.col}>
             <Legend>{t('ob.height')}</Legend>
             <WheelPicker value={height} onChange={setHeight} min={120} max={220} unit="cm" label={t('ob.height')} style={styles.wheel} />
@@ -85,18 +77,12 @@ export function ProfileEdit({ navigation }: Props) {
             <Legend>{t('ob.weight')}</Legend>
             <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} unit={unitLabel(units)} label={t('ob.weight')} style={styles.wheel} />
           </View>
+          <View style={styles.col}>
+            <Legend>{t('ob.daysSection')}</Legend>
+            <WheelPicker value={days} onChange={setDays} min={2} max={6} unit={t('ob.daysUnitShort')} label={t('ob.daysUnit')} style={styles.wheel} />
+            <Text style={styles.note}>{t('profileEdit.daysNote')}</Text>
+          </View>
         </View>
-
-        <Legend style={styles.sectionLegend}>{t('profile.experience')}</Legend>
-        <OptStack
-          value={experience}
-          onChange={(v) => setExperience(v as Experience)}
-          options={[
-            { value: 'beginner', label: t('ob.expBeginner'), desc: t('ob.expBeginnerDesc') },
-            { value: 'intermediate', label: t('ob.expIntermediate'), desc: t('ob.expIntermediateDesc') },
-            { value: 'advanced', label: t('ob.expAdvanced'), desc: t('ob.expAdvancedDesc') },
-          ]}
-        />
       </ScrollView>
 
       <View style={styles.footer}>
@@ -113,10 +99,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 6, paddingBottom: 24 },
-  sub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, marginBottom: 8 },
-  sectionLegend: { marginTop: 22, marginBottom: 10 },
+  sub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, marginBottom: 16 },
   rows: { gap: 18 },
   col: { gap: 8 },
   wheel: { alignSelf: 'stretch' },
+  note: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 19, color: color.textTertiary, marginTop: 2 },
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 14, borderTopWidth: 1, borderTopColor: color.border },
 });

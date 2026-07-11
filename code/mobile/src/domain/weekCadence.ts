@@ -11,6 +11,7 @@
  *
  * Pure + I/O-free so it is fully unit-testable and deterministic given a clock.
  */
+import type { Program, Session } from '@/data/local/models';
 
 export const WEEK_OPEN_DOW = 6; // Saturday (JS Date.getDay(): 0=Sun … 6=Sat)
 export const WEEK_OPEN_HOUR = 23; // 23:xx local
@@ -56,6 +57,86 @@ export function trainingWeekNumber(memberSinceIso: string | null | undefined, no
   const cur = currentWeekOpen(nowMs);
   const weeks = Math.round((cur - first) / WEEK_MS);
   return Math.max(1, weeks + 1);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Local calendar days from `nowMs` through `untilMs` inclusive (e.g. Thu → Sat = 3). */
+export function trainableDaysUntil(nowMs: number, untilMs: number): number {
+  const a = new Date(nowMs);
+  const b = new Date(untilMs);
+  const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+  const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+  return Math.max(0, Math.round((b0 - a0) / DAY_MS) + 1);
+}
+
+/**
+ * The week-open the FIRST bucket (onboarding) is built for (founder 2026-07-10):
+ * a mid-week signup whose remaining calendar days cannot fit the chosen weekly
+ * frequency (e.g. Thursday + 4×/week) would otherwise lose its very first program
+ * at the coming Saturday 23:59 with no chance of completing it. In that case the
+ * bucket is stamped as built for the NEXT open, so it survives the first roll and
+ * the athlete gets a full runway; from then on the calendar rhythm applies
+ * unchanged. A signup whose window fits (e.g. Sunday + 4×) anchors normally.
+ */
+export function firstBucketOpen(nowMs: number, daysPerWeek: number): number {
+  const next = nextWeekOpen(nowMs);
+  return trainableDaysUntil(nowMs, next) >= daysPerWeek ? currentWeekOpen(nowMs) : next;
+}
+
+/**
+ * The "Week N" shown on product surfaces. While the (possibly extended) first
+ * bucket is still ahead of the calendar (`bucketOpenMs` in the future — only ever
+ * true for a mid-week signup's first bucket), the athlete is still in week 1;
+ * afterwards it is the plain Saturday-window count since the account was created.
+ */
+export function displayWeekNumber(
+  memberSinceIso: string | null | undefined,
+  bucketOpenMs: number | null,
+  nowMs: number,
+): number {
+  if (bucketOpenMs != null && bucketOpenMs > nowMs) return 1;
+  return trainingWeekNumber(memberSinceIso, nowMs);
+}
+
+/**
+ * The instant the CURRENT week's work started counting. Normally the bucket's own anchor, but a
+ * first bucket stamped for the NEXT open (mid-week signup, `firstBucketOpen`) lies in the FUTURE —
+ * its work starts NOW, so it clamps to the current calendar week-open.
+ */
+export function bucketStart(bucketOpenMs: number | null, nowMs: number): number {
+  const current = currentWeekOpen(nowMs);
+  return Math.min(bucketOpenMs ?? current, current);
+}
+
+/**
+ * Re-apply this week's DONE flags to a program from the session history — the single place that
+ * answers "which of these workouts did the athlete already train this week?".
+ *
+ * Needed in two situations: healing a crashed completion at boot (a kill between the history write
+ * and the flag write), and after ANY mid-week regeneration (a volume or FREQUENCY change), because
+ * generateProgram returns fresh days with `completed: false` and would otherwise re-offer a workout
+ * the athlete already trained.
+ *
+ * A session is matched by its captured day NAME first — stable across a re-split, where the
+ * positional `day_N` ids shift (4×/week `day_3` = "Upper B" but 5×/week `day_3` = "Push B") —
+ * falling back to the id for sessions saved before names were captured. Pure: returns the healed
+ * program, or null when nothing changed.
+ */
+export function healWeekCompletion(
+  program: Program,
+  history: Session[],
+  bucketOpenMs: number | null,
+  nowMs: number,
+): Program | null {
+  const start = bucketStart(bucketOpenMs, nowMs);
+  const thisWeek = history.filter((s) => Date.parse(s.startedAt) >= start);
+  const doneIds = new Set(thisWeek.map((s) => s.programDayId));
+  const doneNames = new Set(thisWeek.map((s) => s.programDayName).filter((n): n is string => !!n));
+  const days = program.days.map((d) =>
+    !d.completed && !d.isRest && (doneNames.has(d.name) || doneIds.has(d.id)) ? { ...d, completed: true } : d,
+  );
+  return days.some((d, i) => d.completed !== program.days[i].completed) ? { ...program, days } : null;
 }
 
 /**

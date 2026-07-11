@@ -17,6 +17,7 @@ import { navigationRef, navigateMain } from './navigationRef';
 import {
   addNotificationDeliveryListener,
   addNotificationResponseListener,
+  consumeLastNotificationResponse,
   getInitialNotificationIntent,
   type NotificationIntent,
 } from '@/platform/notifications';
@@ -98,7 +99,9 @@ function MainNavigator() {
       <MainStack.Screen name="ProgramDetail" component={ProgramDetail} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
-      {/* Open training (run / walk) — full-screen focus; fades in like the session flow. */}
+      {/* Open training (run / walk) — full-screen focus; fades in like the session flow.
+          Swipe-back is enabled on the select step only (the screen flips gestureEnabled
+          per phase; a live recording is never swipe-dismissable). */}
       <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
       <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
@@ -125,6 +128,15 @@ export function Root() {
   const enrolledRef = useRef(false);
   enrolledRef.current = !!app.profile;
   const coldStartRouted = useRef(false);
+  // A tap that arrives BEFORE the container is ready (cold start emits the response
+  // event during boot, while Root still renders the empty canvas) must not be lost —
+  // navigateMain would silently no-op. Stash it; onReady flushes it.
+  const pendingIntentRef = useRef<NotificationIntent | null>(null);
+  const routeOrStash = (intent: NotificationIntent | null) => {
+    if (!intent) return;
+    if (navigationRef.isReady()) routeNotificationIntent(intent, enrolledRef.current);
+    else pendingIntentRef.current = intent;
+  };
 
   // Soft reload: a language change flips I18nManager direction, then asks for a
   // remount so the new direction (RTL ⇄ LTR) applies without a process relaunch.
@@ -132,11 +144,10 @@ export function Root() {
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => onReloadRequested(() => setReloadKey((k) => k + 1)), []);
 
-  // Warm taps: app already running. Route every notification response.
+  // Warm taps: app already running. Route every notification response (or stash a
+  // boot-time one until the container mounts).
   useEffect(() => {
-    const remove = addNotificationResponseListener((intent) =>
-      routeNotificationIntent(intent, enrolledRef.current),
-    );
+    const remove = addNotificationResponseListener(routeOrStash);
     // Foreground deliveries → telemetry (delivered-vs-opened reconstructability).
     const removeDelivery = addNotificationDeliveryListener();
     return () => {
@@ -155,6 +166,18 @@ export function Root() {
       ref={navigationRef}
       theme={navTheme}
       onReady={() => {
+        // A tap stashed while the container was still mounting routes first.
+        if (pendingIntentRef.current) {
+          const intent = pendingIntentRef.current;
+          pendingIntentRef.current = null;
+          routeNotificationIntent(intent, enrolledRef.current);
+          coldStartRouted.current = true; // the stashed tap IS the launch intent
+          // …and it must be CONSUMED here too: this path skips
+          // getInitialNotificationIntent, and an unconsumed native response would be
+          // replayed (and re-routed) by the next manual launch.
+          void consumeLastNotificationResponse();
+          return;
+        }
         // Cold start: the app was launched by tapping a notification. Route once,
         // after the container is mounted (so navigateMain can act).
         if (coldStartRouted.current) return;

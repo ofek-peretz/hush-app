@@ -9,6 +9,8 @@ import HealthKit
 final class LiveMetrics: ObservableObject {
   @Published var heartRateBpm: Int?
   @Published var activeKcal: Int?
+  /// Distance in km (running/walking sessions only; nil for strength).
+  @Published var distanceKm: Double?
   /// Pause-aware elapsed seconds, read straight from the live builder at render time
   /// (a TimelineView polls it once a second). Returns nil with no active session.
   var elapsed: () -> TimeInterval? = { nil }
@@ -16,6 +18,7 @@ final class LiveMetrics: ObservableObject {
   func clear() {
     heartRateBpm = nil
     activeKcal = nil
+    distanceKm = nil
     elapsed = { nil }
   }
 }
@@ -44,6 +47,11 @@ final class WorkoutRuntime: NSObject {
   private var wantsPause = false
   /// Live HR / kcal / elapsed for the Controls page (observed by the UI).
   let metrics = LiveMetrics()
+  /// Fired (on main) when a relaunch RECOVERS a still-live session, with its activity
+  /// type — so the model can re-enter the matching presentation (a recovered run/walk
+  /// re-opens the cardio screen instead of being silently abandoned by the next
+  /// phone frame). Set before recoverActiveSession().
+  var onAdoptedActivity: ((HKWorkoutActivityType) -> Void)?
 
   private static var available: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -58,6 +66,7 @@ final class WorkoutRuntime: NSObject {
     var read: Set<HKObjectType> = [HKObjectType.workoutType()]
     if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) { read.insert(hr) }
     if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) { read.insert(energy) }
+    if let dist = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) { read.insert(dist) }
     store.requestAuthorization(toShare: share, read: read) { _, _ in }
   }
 
@@ -94,17 +103,20 @@ final class WorkoutRuntime: NSObject {
     default:
       state = .live
       applyPauseState()
+      onAdoptedActivity?(recovered.workoutConfiguration.activityType)
     }
   }
 
   // MARK: Lifecycle (idempotent — safe to call on every authoritative frame)
 
   /// A LIVE phase is showing: start the OS workout session on the first live frame, then
-  /// keep the pause state in step on every subsequent one.
-  func trackLive(paused: Bool) {
+  /// keep the pause state in step on every subsequent one. `activity` shapes the very
+  /// first frame only (strength by default; the watch-local run/walk passes its gait) —
+  /// an already-running session never changes type.
+  func trackLive(paused: Bool, activity: HKWorkoutActivityType = .traditionalStrengthTraining, indoor: Bool = true) {
     wantsPause = paused
     switch state {
-    case .idle: begin()
+    case .idle: begin(activity: activity, indoor: indoor)
     case .live: applyPauseState()
     case .starting, .ending: break // pause state is re-applied when the transition settles
     }
@@ -116,11 +128,11 @@ final class WorkoutRuntime: NSObject {
   /// The session evaporated without completing (abandoned on the authority) — discard.
   func abandon() { end(save: false) }
 
-  private func begin() {
+  private func begin(activity: HKWorkoutActivityType, indoor: Bool) {
     guard Self.available, state == .idle else { return }
     let config = HKWorkoutConfiguration()
-    config.activityType = .traditionalStrengthTraining
-    config.locationType = .indoor
+    config.activityType = activity
+    config.locationType = indoor ? .indoor : .outdoor
     let started: HKWorkoutSession
     do {
       started = try HKWorkoutSession(healthStore: store, configuration: config)
@@ -128,7 +140,17 @@ final class WorkoutRuntime: NSObject {
       return // no OS runtime this workout; the rendered experience is unaffected
     }
     let liveBuilder = started.associatedWorkoutBuilder()
-    liveBuilder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: config)
+    let dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: config)
+    // Belt-and-braces (founder 2026-07-10, "the metrics page shows dashes"): the default
+    // types usually cover these, but enable the streams the Controls page renders
+    // EXPLICITLY so a live HR / kcal readout never depends on the defaults.
+    if let hr = HKQuantityType.quantityType(forIdentifier: .heartRate) { dataSource.enableCollection(for: hr, predicate: nil) }
+    if let energy = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) { dataSource.enableCollection(for: energy, predicate: nil) }
+    if activity == .running || activity == .walking,
+       let dist = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) {
+      dataSource.enableCollection(for: dist, predicate: nil)
+    }
+    liveBuilder.dataSource = dataSource
     started.delegate = self
     liveBuilder.delegate = self
     session = started
@@ -211,6 +233,10 @@ extension WorkoutRuntime: HKLiveWorkoutBuilderDelegate {
         case HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned):
           if let kcal = stats.sumQuantity()?.doubleValue(for: .kilocalorie()) {
             self.metrics.activeKcal = Int(kcal.rounded())
+          }
+        case HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning):
+          if let meters = stats.sumQuantity()?.doubleValue(for: .meter()) {
+            self.metrics.distanceKm = meters / 1000
           }
         default:
           break

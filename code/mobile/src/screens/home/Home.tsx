@@ -14,7 +14,7 @@ import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
-import { trainingWeekNumber } from '@/domain/weekCadence';
+import { displayWeekNumber } from '@/domain/weekCadence';
 import { isTrainingGated } from '@/domain/entitlement';
 import { muscleGroupsLabel } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
@@ -53,8 +53,16 @@ export function Home({ navigation, route }: Props) {
   // structural (no fresh bucket exists before Sunday), so no separate lock is needed here.
   const resting = !!program && program.days.length > 0 && !day;
 
-  // Training-week counter ("Week N"), counted from account creation in Sunday-04:00 windows.
-  const weekNumber = trainingWeekNumber(app.profile?.memberSince, nowMs);
+  // Training-week counter ("Week N") — a mid-week signup's extended first bucket
+  // stays "Week 1" until it actually rolls (domain/weekCadence.displayWeekNumber).
+  const weekNumber = displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, nowMs);
+
+  // Free-trial gate (Subscription + Apple Payments): once the free sessions are
+  // spent and no membership is active, starting another session opens the paywall.
+  // Declared here (before the watch-lobby effect) because the watch must know: a gated
+  // athlete can neither start from the wrist nor run a standalone workout there — the
+  // purchase decision belongs to the phone.
+  const gated = isTrainingGated(app.modeState.completedSessions, app.entitlement.active);
 
   // Prefetched targets for the next workout, so Slide-to-start launches with no
   // network wait (the round-trip happens while the athlete is on Home, not after
@@ -147,6 +155,7 @@ export function Home({ navigation, route }: Props) {
       // Rough estimate (no per-day duration on the model yet): ~8 min per lift.
       durationLabel: lifts ? `~${lifts * 8} min` : undefined,
       resting,
+      gated,
       workouts: (program?.days ?? [])
         .filter((d) => !d.isRest)
         .map((d) => ({
@@ -158,7 +167,7 @@ export function Home({ navigation, route }: Props) {
         })),
     }, watchPlan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day?.id, day?.name, resting, workouts.length, watchPlan]);
+  }, [day?.id, day?.name, resting, gated, workouts.length, watchPlan]);
 
   // Let the watch Start screen run the EXACT same Begin / Choose the phone does (start + navigate /
   // queue another workout). Bound while Home is MOUNTED — not just focused — so a watch Begin works
@@ -179,10 +188,6 @@ export function Home({ navigation, route }: Props) {
     return () => session.setWatchHomeActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day?.id, resting]);
-
-  // Free-trial gate (Subscription + Apple Payments): once the free sessions are
-  // spent and no membership is active, starting another session opens the paywall.
-  const gated = isTrainingGated(app.modeState.completedSessions, app.entitlement.active);
 
   // Mid-workout resume (S3): an interrupted (app-killed) session younger than the resume
   // window replaces Begin with "Continue {workout}". Re-checked on every focus; cleared the

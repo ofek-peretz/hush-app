@@ -20,7 +20,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { weekProgress } from '@/domain/schedule';
-import { trainingWeekNumber } from '@/domain/weekCadence';
+import { displayWeekNumber } from '@/domain/weekCadence';
 import { muscleGroupsLabel } from '@/data/exercises';
 import type { ProgramDay, Session } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
@@ -59,7 +59,7 @@ export function Program({ navigation }: Props) {
   const completed = workouts.filter((d) => d.completed);
   const upcoming = workouts.filter((d) => !d.completed);
   const prog = program ? weekProgress(program) : { done: 0, total: 0 };
-  const weekNumber = trainingWeekNumber(app.profile?.memberSince, Date.now());
+  const weekNumber = displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, Date.now());
 
   const openDay = (id: string) => navigation.navigate('ProgramDetail', { dayId: id });
 

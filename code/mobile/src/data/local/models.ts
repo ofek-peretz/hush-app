@@ -40,6 +40,10 @@ export interface Profile {
   heightCm?: number;
   weightKg?: number;
   age?: number;
+  /** ISO instant age was last set/advanced — the auto-yearly-update anchor (founder
+   *  2026-07-10: age is asked once; the app keeps it current by itself). Absent on
+   *  older profiles → falls back to memberSince (see domain/profileAge). */
+  ageUpdatedAt?: string;
   units: Units;
   goal: Goal;
   experience?: Experience; // drives starting weights; collected in onboarding

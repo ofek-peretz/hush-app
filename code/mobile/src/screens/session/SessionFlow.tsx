@@ -28,7 +28,7 @@ import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { swapLadder } from '@/domain/replacement';
-import { trainingWeekNumber } from '@/domain/weekCadence';
+import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
@@ -859,7 +859,9 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   const { t } = useCopy();
   const session = useSession();
   const app = useApp();
-  const week = trainingWeekNumber(app.profile?.memberSince, Date.now());
+  // displayWeekNumber: an extended first bucket (mid-week signup) is still the
+  // learning week — the Why sheet keeps the learning note until it rolls.
+  const week = displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, Date.now());
   const target = session.currentTarget;
   const exName = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
   if (!target) return null;

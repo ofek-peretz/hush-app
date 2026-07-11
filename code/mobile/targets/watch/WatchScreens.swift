@@ -218,20 +218,31 @@ private struct DrawCheck: View {
 /// The countdown ring — a CONTINUOUS, fluid linear sweep, mono time at centre. Drift-proof
 /// + Always-On safe: `TimelineView(.animation)` recomputes the arc from the phone-supplied
 /// ABSOLUTE end on every display frame (not in 0.5 s steps), so the sweep is smooth — matching
-/// the iPhone ring — and a +15 s top-up (the end + total both move out) simply fills forward and
-/// keeps draining without a stutter. Whenever it is shown it is correct (the gym-defining glance).
+/// the iPhone ring. A +15 s top-up moves the end out — the arc EASES to its new fill over
+/// ~0.4 s (founder 2026-07-10: the ring must visibly rise like the phone's, never snap) via a
+/// short blend from the last drawn fraction; the mono time itself updates instantly (honest).
 private struct RestRing: View {
   let endsAt: String?
   let totalS: Int
   let diameter: CGFloat
   /// The label under the time while counting (design: "REST" inter-set, "NEXT" on transition).
   var restingLabel: String = "REST"
+
+  /// The last DRAWN fraction (a plain box — written during render, read when the end moves;
+  /// deliberately not @State so per-frame writes never re-invalidate the view).
+  private final class DrawnFrac { var value: Double = 0 }
+  @State private var drawn = DrawnFrac()
+  /// Active blend after the end moved: ease from `from` starting at `at`.
+  @State private var blend: (from: Double, at: Date)? = nil
+  private static let blendDuration: TimeInterval = 0.4
+
   var body: some View {
     let end = WatchWire.parseDate(endsAt)
     let stroke = max(5, diameter * 0.055)
     TimelineView(.animation) { ctx in
       let remaining = max(0, end.map { $0.timeIntervalSince(ctx.date) } ?? 0)
-      let frac = totalS > 0 ? min(1, max(0, remaining / Double(totalS))) : 0
+      let liveFrac = totalS > 0 ? min(1, max(0, remaining / Double(totalS))) : 0
+      let frac = blended(liveFrac, at: ctx.date)
       let ready = remaining <= 0.5
       ZStack {
         Circle().stroke(Palette.stage2, lineWidth: stroke)
@@ -247,6 +258,23 @@ private struct RestRing: View {
       }
     }
     .frame(width: diameter, height: diameter)
+    .onChange(of: endsAt) { _, _ in
+      // The end moved (+15 / a new rest): ease from what is currently on screen.
+      blend = (from: drawn.value, at: Date())
+    }
+  }
+
+  private func blended(_ liveFrac: Double, at now: Date) -> Double {
+    var frac = liveFrac
+    if let b = blend {
+      let t = now.timeIntervalSince(b.at) / Self.blendDuration
+      if t < 1 {
+        let e = t * t * (3 - 2 * t) // smoothstep
+        frac = b.from + (liveFrac - b.from) * e
+      }
+    }
+    drawn.value = frac
+    return frac
   }
 }
 
@@ -281,7 +309,10 @@ private struct Metric: View {
   let label: String
   var body: some View {
     VStack(spacing: 2) {
+      // A wide mark ("12:34") must SCALE into its column, never ellipsize (founder
+      // 2026-07-10: elapsed read "12:…" on the 40 mm case — unreadable).
       Text(value).font(.system(size: Fit.s(18), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
+        .lineLimit(1).minimumScaleFactor(0.55)
       Legend(label, size: 9)
     }
     .frame(maxWidth: .infinity)
@@ -302,7 +333,7 @@ private struct ControlsScreen: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      TopStrip() // top-right stays clear for the Apple Watch clock
+      // (The LIFT strip is the pager's — one shared, pinned position on every page.)
       VStack(alignment: .leading, spacing: 2) {
         Legend(WatchCopy.controls)
         if let name = workoutName, !name.isEmpty {
@@ -336,20 +367,27 @@ private struct ControlsScreen: View {
 /// stage (default). Recreated on phase change, so it always re-opens ON the stage.
 /// Index dots are suppressed — they would sit on the primary action on the small cases;
 /// the swipe is the same muscle memory as Apple Workout.
+///
+/// The LIFT strip lives HERE, above the pager (founder 2026-07-10): one shared strip,
+/// pinned at one exact position, so it can never sit lower on Rest than on the live set.
 private struct ExecutionPager<Content: View>: View {
   @ObservedObject var metrics: LiveMetrics
   let workoutName: String?
+  var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
   @ViewBuilder let content: () -> Content
   @State private var page = 1
 
   var body: some View {
-    TabView(selection: $page) {
-      ControlsScreen(metrics: metrics, workoutName: workoutName, onPause: onPause, onEnd: onEnd).tag(0)
-      content().tag(1)
+    VStack(spacing: 0) {
+      TopStrip(lift: lift).padding(.horizontal, 10)
+      TabView(selection: $page) {
+        ControlsScreen(metrics: metrics, workoutName: workoutName, onPause: onPause, onEnd: onEnd).tag(0)
+        content().tag(1)
+      }
+      .tabViewStyle(.page(indexDisplayMode: .never))
     }
-    .tabViewStyle(.page(indexDisplayMode: .never))
   }
 }
 
@@ -372,7 +410,7 @@ struct WatchRootView: View {
         Text(WatchCopy.idleWaiting).font(.system(size: 12)).foregroundStyle(Palette.ink2)
       }
     case let .start(lobby):
-      StartScreen(lobby: lobby, onBegin: model.begin, onSelect: model.selectWorkout)
+      StartScreen(lobby: lobby, onBegin: model.begin, onSelect: model.selectWorkout, onCardio: model.startCardio)
     case let .connectionLost(m):
       ConnectionLostScreen(mirror: m)
     case let .workoutComplete(m):
@@ -380,20 +418,30 @@ struct WatchRootView: View {
     case let .setConfirmation(weight, reps, index, total):
       ConfirmScreen(weight: weight, reps: reps, index: index, total: total, onTap: model.dismissSetConfirm)
     case let .activeSet(m, draft):
-      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName, onPause: model.pause, onEnd: model.endWorkout) {
+      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
+                     lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
+                     onPause: model.pause, onEnd: model.endWorkout) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
                         onComplete: model.completeSet, onSwap: model.swap)
       }
     case let .interRest(m):
-      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName, onPause: model.pause, onEnd: model.endWorkout) {
+      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
+                     lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
+                     onPause: model.pause, onEnd: model.endWorkout) {
         InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
       }
     case let .transitionRest(m):
-      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName, onPause: model.pause, onEnd: model.endWorkout) {
+      ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
+                     lift: (i: (m.liftIndex ?? 1) + 1, n: m.liftCount ?? 1),
+                     onPause: model.pause, onEnd: model.endWorkout) {
         TransitionRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest, onSwap: model.swap)
       }
     case .paused:
       PausedScreen(onResume: model.resume, onEnd: model.endWorkout)
+    case let .cardio(gait, paused):
+      CardioScreen(gait: gait, paused: paused, metrics: model.liveMetrics,
+                   elapsed: model.cardioElapsed,
+                   onPauseToggle: model.toggleCardioPause, onEnd: model.endCardio)
     }
   }
 }
@@ -404,8 +452,13 @@ struct StartScreen: View {
   let lobby: WireLobby
   let onBegin: () -> Void
   let onSelect: (String) -> Void
+  let onCardio: (String) -> Void
   @State private var showList = false
   private var resting: Bool { lobby.resting == true }
+  /// Behind the paywall: the wrist neither starts a workout nor runs one standalone — the
+  /// purchase belongs to the phone, so the stage says so plainly instead of offering a
+  /// Begin button that could never work.
+  private var gated: Bool { lobby.gated == true }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -416,7 +469,9 @@ struct StartScreen: View {
         Legend(WatchCopy.nextWorkout)
         Text(resting ? "Recovery" : lobby.workoutName)
           .font(.system(size: Fit.s(26), weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(2)
-        if resting {
+        if gated {
+          Text(WatchCopy.membershipNeeded).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(3)
+        } else if resting {
           Text(WatchCopy.recovery).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(3)
         } else {
           HStack(spacing: 6) {
@@ -435,15 +490,21 @@ struct StartScreen: View {
       .padding(.top, 2)
       Spacer(minLength: 10)
       VStack(spacing: 6) {
-        if !resting {
+        if !resting && !gated {
           StageButton(title: WatchCopy.begin, kind: .primary, height: 50, fontSize: 18, action: onBegin)
         }
+        // Open training (run / walk) is never gated — it is recorded, never coached — so the
+        // chooser stays reachable even behind the paywall.
         StageButton(title: WatchCopy.chooseWorkout, kind: .ghost, height: 36, fontSize: 14) { showList = true }
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 8)
     .sheet(isPresented: $showList) {
-      ChooseOverlay(lobby: lobby) { id in onSelect(id); showList = false }
+      ChooseOverlay(
+        lobby: lobby,
+        onSelect: { id in onSelect(id); showList = false },
+        onCardio: { gait in onCardio(gait); showList = false }
+      )
     }
   }
 }
@@ -451,6 +512,9 @@ struct StartScreen: View {
 struct ChooseOverlay: View {
   let lobby: WireLobby
   let onSelect: (String) -> Void
+  /// Run / walk on the wrist (founder 2026-07-10): recorded via the OS workout
+  /// runtime straight to Health — never coached, never engine state.
+  let onCardio: (String) -> Void
   var body: some View {
     List {
       ForEach(lobby.workouts, id: \.id) { w in
@@ -470,6 +534,22 @@ struct ChooseOverlay: View {
             .fill(Palette.stage1)
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(w.id == lobby.workoutId ? Palette.signal : .clear, lineWidth: 2))
         )
+      }
+      // Open training — the same two honest recordings the phone offers.
+      Section {
+        ForEach(["run", "walk"], id: \.self) { gait in
+          Button { onCardio(gait) } label: {
+            HStack(spacing: 8) {
+              Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
+                .font(.system(size: 15)).foregroundStyle(Palette.signal)
+              Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
+            }
+          }
+          .listRowBackground(RoundedRectangle(cornerRadius: 10).fill(Palette.stage1))
+        }
+      } header: {
+        Legend(WatchCopy.openTraining, size: 9)
       }
     }
     .listStyle(.carousel)
@@ -491,7 +571,6 @@ struct ActiveSetScreen: View {
   @State private var w: Double = 0
   @State private var r: Double = 0
   @State private var crown: Double = 0
-  @State private var showSwap = false
 
   private var bodyweight: Bool { mirror.targetWeight == nil }
   private var shownWeight: Double? { draft?.weight ?? mirror.targetWeight }
@@ -500,7 +579,7 @@ struct ActiveSetScreen: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
+      // (LIFT strip is the pager's — shared, pinned.)
       header
       Spacer(minLength: 2)
       if editing { editor } else { readout }
@@ -526,24 +605,18 @@ struct ActiveSetScreen: View {
       if field == .weight { if !bodyweight { w = max(0, v.rounded()) } } else { r = max(0, v.rounded()) }
     }
     .onChange(of: field) { _, f in crown = f == .weight ? w : r }
-    .sheet(isPresented: $showSwap) {
-      SwapOverlay(
-        currentName: mirror.exerciseName,
-        options: swaps,
-        onPick: { id in onSwap(id); showSwap = false },
-        onCancel: { showSwap = false }
-      )
-    }
   }
 
   private var header: some View {
     // Muscle group intentionally omitted (founder: drop CHEST/BACK everywhere to
     // open the small screen) — just the exercise name + the swap affordance.
+    // Swap is ONE TAP (founder 2026-07-10, phone parity): Hush already picked the
+    // best replacement (options[0], phone-ranked) — apply it immediately, no picker.
     HStack(spacing: 6) {
       Text(mirror.exerciseName).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.75) // long names shrink before truncating
-      if !swaps.isEmpty && !editing {
-        Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 13)) }
+      if let best = swaps.first, !editing {
+        Button { onSwap(best.id) } label: { Image(systemName: "repeat").font(.system(size: 13)) }
           .buttonStyle(.plain).foregroundStyle(Palette.ink2)
       }
     }
@@ -705,24 +778,25 @@ struct InterRestScreen: View {
     // NO SCROLL: the ring, the next-set line, the equipment setup, and BOTH actions stay on screen
     // at once on every case size (founder: nothing scrolls during execution). The ring is sized
     // down and the two actions share one row so all of it fits even on the 40/41 mm case.
+    // The ring hugs the TOP (fixed 4 pt gap — founder 2026-07-10: lift the rest clock); the
+    // freed room goes to the line under the exercise name, which reads a size up.
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
-      Spacer(minLength: 2)
+      Color.clear.frame(height: 4)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
-      Spacer(minLength: 2)
+      Spacer(minLength: 3)
       // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
       // execution-grade setup line (how to load it).
-      VStack(spacing: 1) {
+      VStack(spacing: 2) {
         Text(mirror.exerciseName).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0)
           .lineLimit(1).minimumScaleFactor(0.75)
         Text("\(mirror.setLabel) · \(targetText)")
-          .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2)
+          .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.7)
         if let line = setupLine(mirror.loadSetup) {
-          Text(line).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
+          Text(line).font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
         }
       }
-      Spacer(minLength: 2)
+      Spacer(minLength: 3)
       RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
@@ -741,50 +815,42 @@ struct TransitionRestScreen: View {
   let onReady: () -> Void
   let onAdd: () -> Void
   let onSwap: (String) -> Void
-  @State private var showSwap = false
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
   private var swaps: [WireSwapOption] { mirror.nextSwapOptions ?? [] }
 
   var body: some View {
     // NO SCROLL: ring + the next lift (name, load·reps, the execution setup line, the change) + BOTH
     // actions all stay visible at once. A plain block (no boxed card) keeps it within the 40/41 mm
-    // height so nothing is ever clipped or scrolled during execution.
+    // height so nothing is ever clipped or scrolled during execution. Ring hugs the top (fixed
+    // gap); the line under the name reads a size up (founder 2026-07-10). Swap is ONE TAP —
+    // Hush already picked the replacement (phone parity).
     VStack(spacing: 0) {
-      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1))
-      Spacer(minLength: 2)
+      Color.clear.frame(height: 4)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(78), restingLabel: "NEXT")
-      Spacer(minLength: 2)
+      Spacer(minLength: 3)
       VStack(spacing: 2) {
         HStack(spacing: 6) {
           Text(mirror.nextExerciseName ?? "").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0)
             .lineLimit(1).minimumScaleFactor(0.75)
-          if !swaps.isEmpty {
-            Button { showSwap = true } label: { Image(systemName: "repeat").font(.system(size: 12)) }
+          if let best = swaps.first {
+            Button { onSwap(best.id) } label: { Image(systemName: "repeat").font(.system(size: 12)) }
               .buttonStyle(.plain).foregroundStyle(Palette.ink2)
           }
         }
         HStack(spacing: 6) {
           Text(nextTargetText)
-            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2)
+            .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
             .lineLimit(1).minimumScaleFactor(0.7)
           if (mirror.nextLoadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: 9) }
         }
         if let line = setupLine(mirror.nextLoadSetup) {
-          Text(line).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
+          Text(line).font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
         }
       }
-      Spacer(minLength: 2)
+      Spacer(minLength: 3)
       RestActions(ready: ready, primaryTitle: WatchCopy.startNextLift, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
-    .sheet(isPresented: $showSwap) {
-      SwapOverlay(
-        currentName: mirror.nextExerciseName ?? "",
-        options: swaps,
-        onPick: { id in onSwap(id); showSwap = false },
-        onCancel: { showSwap = false }
-      )
-    }
   }
 
   private var nextTargetText: String {
@@ -793,52 +859,50 @@ struct TransitionRestScreen: View {
   }
 }
 
-// MARK: Swap overlay
+// MARK: Cardio (watch-local run / walk — recorded, never coached)
 
-struct SwapOverlay: View {
-  let currentName: String
-  let options: [WireSwapOption]
-  let onPick: (String) -> Void
-  let onCancel: () -> Void
+/// Live wrist recording: elapsed hero, HR / kcal / distance from the OS runtime,
+/// Pause / End. The record persists to Health on End; the strength engine never
+/// sees it (the same "Open training" contract as the phone).
+struct CardioScreen: View {
+  let gait: String
+  let paused: Bool
+  @ObservedObject var metrics: LiveMetrics
+  /// Pause-aware elapsed seconds — the OS runtime's clock, or the watch's own when
+  /// HealthKit is unavailable/denied (the clock never freezes on a real run).
+  let elapsed: () -> TimeInterval
+  let onPauseToggle: () -> Void
+  let onEnd: () -> Void
+
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 8) {
-        Legend(WatchCopy.swapTitle, size: 10)
-        Text(WatchCopy.swapHint).font(.system(size: 11)).foregroundStyle(Palette.ink2)
-          .padding(.bottom, 2)
-        // The current exercise — highlighted, not re-selectable.
-        HStack {
-          Text(currentName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(1)
-          Spacer()
-          Text(WatchCopy.current.uppercased())
-            .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(0.6)
-            .foregroundStyle(Palette.signal)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-          RoundedRectangle(cornerRadius: 12).fill(Palette.stage1)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.signal, lineWidth: 2))
-        )
-        // The 2 closest-in-effect alternatives.
-        ForEach(options, id: \.id) { o in
-          Button { onPick(o.id) } label: {
-            Text(o.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.horizontal, 12).padding(.vertical, 12)
-              .background(RoundedRectangle(cornerRadius: 12).fill(Palette.stage1))
-          }
-          .buttonStyle(.plain)
-        }
-        Button(action: onCancel) {
-          Text(WatchCopy.cancel).font(.system(size: 15)).foregroundStyle(Palette.ink1)
-            .frame(maxWidth: .infinity).padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
+    VStack(spacing: 0) {
+      TopStrip()
+      HStack(spacing: 6) {
+        Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
+          .font(.system(size: 12)).foregroundStyle(Palette.signal)
+        Legend(paused ? WatchCopy.pausedTitle : (gait == "run" ? WatchCopy.running : WatchCopy.walking), size: 10)
       }
-      .padding(.horizontal, 10).padding(.vertical, 6)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      Spacer(minLength: 4)
+      TimelineView(.periodic(from: .now, by: 1)) { _ in
+        VStack(spacing: 6) {
+          Text(fmtTime(elapsed()))
+            .font(.system(size: Fit.s(40), weight: .semibold, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.ink0).lineLimit(1).minimumScaleFactor(0.6)
+          HStack(spacing: 6) {
+            Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
+            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
+            Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+          }
+        }
+      }
+      Spacer(minLength: 6)
+      VStack(spacing: 6) {
+        StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: paused ? .primary : .onstage, height: 44, fontSize: 16, action: onPauseToggle)
+        StageButton(title: WatchCopy.finishSave, kind: paused ? .onstage : .ghost, height: 36, fontSize: 14, action: onEnd)
+      }
     }
-    .background(Palette.stage0)
+    .padding(.horizontal, 10).padding(.bottom, 6)
   }
 }
 

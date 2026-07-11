@@ -82,17 +82,41 @@ describe('allTimePeakProgress', () => {
     expect(out[0].deltaKg).toBe(0); // still a single day → no gain yet
   });
 
-  test('bodyweight sets (null load) are ignored; sorted by biggest gain', () => {
+  test('bodyweight sets progress by REPS (founder 2026-07-10); load entries sort first', () => {
+    const bwSet = (reps: number, tsMs: number): SetLog => ({
+      ...set('pullup', 0, tsMs),
+      actualWeight: null,
+      recommendedWeight: null,
+      actualReps: reps,
+    });
     const sessions = [
-      session('s1', base, [set('bench', 40, base), { ...set('pullup', 0, base), actualWeight: null, recommendedWeight: null }]),
-      session('s2', base + WEEK, [set('bench', 55, base + WEEK)]),
+      session('s1', base, [set('bench', 40, base), bwSet(6, base)]),
+      session('s2', base + WEEK, [set('bench', 55, base + WEEK), bwSet(10, base + WEEK)]),
       session('s3', base, [set('row', 50, base)]),
       session('s4', base + WEEK, [set('row', 52, base + WEEK)]),
     ];
     const out = allTimePeakProgress(sessions, base + 2 * WEEK);
     const ids = out.map((e) => e.exerciseId);
-    expect(ids).not.toContain('pullup'); // bodyweight excluded
     expect(ids[0]).toBe('bench'); // +15 sorts before row's +2
     expect(out.find((e) => e.exerciseId === 'bench')!.deltaKg).toBe(15);
+    // Bodyweight movement: tracked by best reps per day, flagged mode:'reps', after loads.
+    const pull = out.find((e) => e.exerciseId === 'pullup')!;
+    expect(pull.mode).toBe('reps');
+    expect(pull.initialPeakKg).toBe(6);
+    expect(pull.periodPeakKg).toBe(10);
+    expect(pull.deltaKg).toBe(4);
+    expect(ids.indexOf('pullup')).toBeGreaterThan(ids.indexOf('row')); // reps list after loads
+    // Load entries never carry the reps flag.
+    expect(out.find((e) => e.exerciseId === 'bench')!.mode).toBeUndefined();
+  });
+
+  test('an exercise with ANY loaded sets reports by load, never doubled as a reps entry', () => {
+    const sessions = [
+      session('s1', base, [set('dip', 20, base)]),
+      session('s2', base + WEEK, [{ ...set('dip', 0, base + WEEK), actualWeight: null, recommendedWeight: null, actualReps: 12 }]),
+    ];
+    const out = allTimePeakProgress(sessions, base + 2 * WEEK);
+    expect(out.filter((e) => e.exerciseId === 'dip')).toHaveLength(1);
+    expect(out[0].mode).toBeUndefined(); // the load entry tells the story
   });
 });

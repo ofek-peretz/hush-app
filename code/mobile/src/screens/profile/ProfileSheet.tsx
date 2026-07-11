@@ -25,6 +25,7 @@ import { health } from '@/platform/health';
 import { setLocale, currentLocale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { displayWeight, unitLabel } from '@/domain/schedule';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -73,15 +74,16 @@ export function ProfileSheet({ navigation }: Props) {
     setOverlay('delete');
   }
 
-  // Body data + experience summaries (only the parts we actually have). Goal is no longer a per-user
-  // setting — Hush is hypertrophy-first for everyone — so it's no longer surfaced as a profile field.
+  // Body data summary — exactly what the edit screen manages (founder 2026-07-10:
+  // height + weight + sessions/week; sex/age/experience are system-maintained, so
+  // they are neither shown here nor editable). Goal is no longer a per-user setting.
   const bodyBits = [
-    p?.age != null ? `${p.age}` : null,
     p?.heightCm != null ? `${p.heightCm} cm` : null,
-    p?.weightKg != null ? `${p.weightKg} kg` : null,
+    // The athlete's OWN unit (an lb athlete never reads their bodyweight in kg).
+    p?.weightKg != null ? `${displayWeight(p.weightKg, units)} ${unitLabel(units)}` : null,
+    p?.daysPerWeek != null ? t('profile.daysSummary', { n: p.daysPerWeek }) : null,
   ].filter(Boolean);
   const bodyData = bodyBits.length ? bodyBits.join(' · ') : null;
-  const experienceLabel = p?.experience ? t(`experience.${p.experience}`) : null;
 
   // Membership (Subscription + Apple Payments): active → plan name, tapping opens
   // the system manage-subscriptions screen; inactive → free-trial status, tapping
@@ -191,10 +193,9 @@ export function ProfileSheet({ navigation }: Props) {
         <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
 
         <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
-        {/* Body data + Experience are now EDITABLE post-onboarding (item 9) — tap to open the
-            edit screen. Always shown (even if unset) so missing details can be added. */}
-        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
-        <Row label={t('profile.experience')} sub={experienceLabel ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} last />
+        {/* ONE edit entry (founder 2026-07-10): body data + training frequency. The old second
+            "Experience" row opened the same screen and experience is now derived, not edited. */}
+        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} last />
 
         {__DEV__ ? (
           <>

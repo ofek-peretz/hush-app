@@ -10,6 +10,8 @@ enum WatchCopy {
   static let chooseWorkout = "Choose workout"
   // Calendar-primary cadence: the week rolls SUNDAY 04:00 (keep in step with en.json).
   static let recovery = "Recovery — your next workout opens Sunday"
+  // Paywall: training is gated on the phone; the wrist never starts (or bypasses) it.
+  static let membershipNeeded = "Continue on iPhone — your membership needs attention"
   static func lifts(_ n: Int) -> String { "\(n) lifts" }
   static let idleWaiting = "Open Hush on iPhone"
 
@@ -74,11 +76,17 @@ enum WatchCopy {
   static let metricSets = "Sets"
   static let metricUp = "Up"
 
-  // Swap
+  // Swap (one-tap — Hush picks; kept for accessibility labels)
   static let swapTitle = "Swap exercise"
-  static let swapHint = "Hush recalibrates the load."
-  static let current = "Current"
-  static let cancel = "Cancel"
+
+  // Open training (run / walk on the wrist — recorded to Health, never coached)
+  static let openTraining = "Open training"
+  static let run = "Run"
+  static let walk = "Walk"
+  static let running = "Running"
+  static let walking = "Walking"
+  static let finishSave = "Finish & save"
+  static let metricKm = "Km"
 
   // Connection
   static let reconnecting = "Reconnecting"
