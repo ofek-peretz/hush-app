@@ -506,7 +506,7 @@
     "samePattern": "{{pattern}} · same pattern",
     "current": "{{equipment}} · current",
     "close": "Close",
-    "body": "Equipment busy? Choose an alternative for the same muscle group. Hush keeps your load progression intact.",
+    "body": "Equipment busy? These are the closest substitutes, nearest first — the same movement, a different station. Hush keeps your load progression intact.",
     "currentSub": "Current selection",
     "currentBadge": "Current",
     "swappedTo": "Swapped to {{name}}",

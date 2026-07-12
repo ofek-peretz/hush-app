@@ -8,7 +8,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, type Exercise } from '@/data/exercises';
+import { exerciseById, catalogIdFromEngine, type Exercise } from '@/data/exercises';
 import { swapCandidates } from '@/domain/swapPool';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
@@ -276,12 +276,27 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
 }
 
 /**
+ * Is this lift ALREADY in the session? The last line of defence before a swap is applied, on both
+ * surfaces (a phone tap and a watch intent land here).
+ *
+ * Compared in ONE id space (founder 2026-07-12). The plan can carry the engine's bare ids
+ * ('back_squat') while a swap option is a catalog id ('bb_back_squat') — a naive `===` between the
+ * two spaces matches nothing, so the guard silently passes and the athlete gets the lift they just
+ * finished. That is exactly the class of bug this whole pass exists to close, and a guard that can
+ * be defeated by a naming convention is not a guard.
+ */
+function alreadyInPlan(plan: Step[], exerciseId: string): boolean {
+  const target = catalogIdFromEngine(exerciseId);
+  return plan.some((s) => catalogIdFromEngine(s.exerciseId) === target);
+}
+
+/**
  * Name-resolve the live plan into canonical mirror steps — shared by the live mirror effect AND
  * the terminal complete-frame publish (so the watch/Live Activity always get the same projection).
  * Attaches the equipment-native load setup (kg) so the watch can show how to load the weight (item
  * 11), and the in-class swap alternatives at the start of each exercise.
  */
-function buildMirrorSteps(plan: Step[]): MirrorStep[] {
+export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
   // THE session's lifts — every one of them, computed ONCE for the whole plan. The watch's swap
   // options are chosen against this list (founder 2026-07-12).
   //
@@ -930,13 +945,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       swapNextExercise(exerciseId) {
         const startIdx = machine.setIndex + 1; // the upcoming exercise
         if (!plan[startIdx]) return;
-        if (plan.some((s) => s.exerciseId === exerciseId)) return; // never duplicate a lift already in the session
+        if (alreadyInPlan(plan, exerciseId)) return; // never duplicate a lift already in the session
         dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       swapCurrentExercise(exerciseId) {
         const startIdx = machine.setIndex; // the current exercise
         if (!plan[startIdx]) return;
-        if (plan.some((s) => s.exerciseId === exerciseId)) return; // never duplicate a lift already in the session
+        if (alreadyInPlan(plan, exerciseId)) return; // never duplicate a lift already in the session
         dispatch({ type: 'SWAP_PLAN', plan: retargetPlanForSwap(plan, state.targets, startIdx, exerciseId) });
       },
       markEquipmentOccupied() {
