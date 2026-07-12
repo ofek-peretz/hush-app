@@ -5,7 +5,6 @@
 export { Card } from './Card';
 export { Badge } from './Badge';
 export { Button } from './Button';
-export { HoldButton, HOLD_MS } from './HoldButton';
 export { IconButton } from './IconButton';
 export { Legend } from './Legend';
 export { Metric } from './Metric';

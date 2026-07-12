@@ -11,7 +11,6 @@ import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 
 import { WheelPicker } from '@/components/ds/WheelPicker';
-import { HoldButton } from '@/components/ds/HoldButton';
 import { TextField } from '@/components/ds/TextField';
 import { Button } from '@/components/ds/Button';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
@@ -92,49 +91,6 @@ describe('WheelPicker mounts as a measuring rule', () => {
 
   it('renders on the inverted stage too (the in-workout Edit Result)', () => {
     expect(() => mount(<WheelPicker onStage value={60} onChange={() => {}} min={0} max={500} step={0.5} unit="kg" />)).not.toThrow();
-  });
-});
-
-describe('HoldButton is a hold, not a tap', () => {
-  it('does NOT fire on a press alone — a stray tap can never end a run', () => {
-    const onComplete = jest.fn();
-    const r = mount(<HoldButton onStage block label="Hold to finish" onComplete={onComplete} />);
-    // The Pressable that owns the hold. (The completion path is driven by the Animated
-    // timing callback, which is a real animation clock — that half is exercised on device;
-    // what MUST hold here is the safety property: nothing fires without a completed hold.)
-    const pressable = r.root.findAll((n) => typeof n.props?.onPressIn === 'function')[0];
-
-    act(() => pressable.props.onPressIn());
-    expect(onComplete).not.toHaveBeenCalled(); // the hold has only begun
-
-    act(() => pressable.props.onPressOut()); // let go early
-    expect(onComplete).not.toHaveBeenCalled(); // …and nothing happened
-
-    act(() => r.unmount()); // the sweep animation is torn down with the view
-  });
-
-  it('carries its label', () => {
-    const r = mount(<HoldButton label="Hold to finish" onComplete={() => {}} />);
-    expect(texts(r)).toContain('Hold to finish');
-  });
-
-  it('inks its label in the tone of the surface it is ON while holding', () => {
-    // The "holding" colour used to be a single hardcoded stage ink. On a PAPER HoldButton that
-    // is near-white on near-white — the label would vanish at the exact moment the athlete is
-    // watching it to know the hold has taken.
-    for (const onStage of [false, true]) {
-      const r = mount(<HoldButton onStage={onStage} label="Hold to finish" onComplete={() => {}} />);
-      const pressable = r.root.findAll((n) => typeof n.props?.onPressIn === 'function')[0];
-      act(() => pressable.props.onPressIn());
-
-      const json = JSON.stringify(r.toJSON());
-      // The label must never be drawn in the OTHER surface's ink.
-      expect(json).toContain(onStage ? stage.ink0 : color.textPrimary);
-      expect(json).not.toContain(onStage ? color.textPrimary : stage.ink0);
-
-      act(() => pressable.props.onPressOut());
-      act(() => r.unmount());
-    }
   });
 });
 
