@@ -130,6 +130,24 @@ private struct Legend: View {
   }
 }
 
+// MARK: The way to the Controls page (an environment action)
+//
+// The stages are built by the ROOT, one level above the pager that owns the page index —
+// so the "go to Controls" action travels down the environment rather than through every
+// screen's initializer. Reading it costs a stage nothing, and the pager is the only thing
+// that ever knows what a page number is.
+
+private struct GoControlsKey: EnvironmentKey {
+  static let defaultValue: () -> Void = {}
+}
+
+private extension EnvironmentValues {
+  var goControls: () -> Void {
+    get { self[GoControlsKey.self] }
+    set { self[GoControlsKey.self] = newValue }
+  }
+}
+
 /// The top strip: the lift counter, pinned top-LEFT. The Apple Watch draws its
 /// clock at top-RIGHT of every app — that whole corner is OURS TO LEAVE EMPTY, so
 /// the strip holds exactly one element, leading-aligned, and nothing else. Pause
@@ -140,8 +158,9 @@ private struct TopStrip: View {
   /// On the execution stages: the compact "‹ ⏸" affordance — the page one swipe right
   /// holds Pause / End. Tappable (it goes where the swipe goes), quiet, and glyphic:
   /// the pause mark says what is there better than any word did (founder 2026-07-12,
-  /// "Controls" was opaque).
-  var onControls: (() -> Void)? = nil
+  /// "Controls" was opaque — a word nobody reads mid-set).
+  var controlsHint: Bool = false
+  @Environment(\.goControls) private var goControls
   var body: some View {
     HStack(spacing: 8) {
       if let lift {
@@ -149,8 +168,8 @@ private struct TopStrip: View {
           .font(.system(size: 11, design: .monospaced)).tracking(0.6)
           .foregroundStyle(Palette.ink2)
       }
-      if let onControls {
-        Button(action: onControls) {
+      if controlsHint {
+        Button(action: goControls) {
           HStack(spacing: 3) {
             Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold))
             Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
@@ -391,6 +410,10 @@ private struct ControlsScreen: View {
   @ObservedObject var metrics: LiveMetrics
   let workoutName: String?
   var lift: (i: Int, n: Int)? = nil
+  /// This page is the one on screen. An armed end-guard DISARMS the moment the athlete
+  /// swipes back to the stage — a guard they walked away from must never be waiting for
+  /// them, cocked, the next time they come to pause.
+  var onPage: Bool = true
   let onPause: () -> Void
   let onEnd: () -> Void
   @State private var confirmingEnd = false
@@ -401,6 +424,7 @@ private struct ControlsScreen: View {
         title: WatchCopy.endConfirmTitle, confirmTitle: WatchCopy.endAndSave, lift: lift,
         onConfirm: onEnd, onKeep: { confirmingEnd = false }
       )
+      .onChange(of: onPage) { _, on in if !on { confirmingEnd = false } }
     } else {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip(lift: lift) // the same strip, at the same y, as the stage page beside it
@@ -478,15 +502,18 @@ private struct ExecutionPager<Content: View>: View {
   var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
-  /// The stage page, handed the way IN to the Controls page — the "‹ ⏸" hint taps
-  /// through to the same place the swipe reaches.
-  @ViewBuilder let content: (_ goControls: @escaping () -> Void) -> Content
+  @ViewBuilder let content: () -> Content
   @State private var page = 1
 
   var body: some View {
     TabView(selection: $page) {
-      ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPause: onPause, onEnd: onEnd).tag(0)
-      content({ withAnimation { page = 0 } }).tag(1)
+      ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPage: page == 0,
+                     onPause: onPause, onEnd: onEnd).tag(0)
+      // The stage is handed the way IN to the Controls page: the "‹ ⏸" hint taps through
+      // to exactly where the swipe lands. The page index never leaves this view.
+      content()
+        .environment(\.goControls, { withAnimation { page = 0 } })
+        .tag(1)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
   }
@@ -531,29 +558,27 @@ struct WatchRootView: View {
     case let .activeSet(m, draft):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
+                     onPause: model.pause, onEnd: model.endWorkout) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
                         onComplete: model.completeSet,
-                        onSwap: { model.swap($0, replacing: m.exerciseName, context: .current) },
-                        undo: model.undoContext == .current ? model.undoOption : nil,
-                        onUndo: model.undoSwap,
-                        onControls: goControls)
+                        onSwap: { model.swapCurrent($0, replacing: m.exerciseName) },
+                        undo: model.currentUndo,
+                        onUndo: model.undoSwap)
       }
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
-        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest, onControls: goControls)
+                     onPause: model.pause, onEnd: model.endWorkout) {
+        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
       }
     case let .transitionRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: (m.liftIndex ?? 1) + 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
+                     onPause: model.pause, onEnd: model.endWorkout) {
         TransitionRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest,
-                             onSwap: { model.swap($0, replacing: m.nextExerciseName ?? "", context: .next) },
-                             undo: model.undoContext == .next ? model.undoOption : nil,
-                             onUndo: model.undoSwap,
-                             onControls: goControls)
+                             onSwap: { model.swapNext($0, replacing: m.nextExerciseName ?? "") },
+                             undo: model.nextUndo,
+                             onUndo: model.undoSwap)
       }
     case .paused:
       PausedScreen(onResume: model.resume, onEnd: model.endWorkout)
@@ -706,7 +731,6 @@ struct ActiveSetScreen: View {
   /// The way back for the 6 s after a one-tap swap (founder 2026-07-12) — nil once it lapses.
   let undo: WireSwapOption?
   let onUndo: () -> Void
-  let onControls: () -> Void
 
   @State private var editing = false
   @State private var field: EditField = .weight
@@ -721,7 +745,9 @@ struct ActiveSetScreen: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), onControls: onControls)
+      // No swipe hint while EDITING: the crown owns the screen, and the pager's horizontal
+      // swipe is already suppressed by focus — an affordance that does nothing is a lie.
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: !editing)
       header
       Spacer(minLength: 2)
       if editing { editor } else { readout }
@@ -980,7 +1006,6 @@ struct InterRestScreen: View {
   let mirror: WireMirror
   let onReady: () -> Void
   let onAdd: () -> Void
-  let onControls: () -> Void
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
 
   var body: some View {
@@ -990,7 +1015,7 @@ struct InterRestScreen: View {
     // The ring hugs the TOP (founder 2026-07-10: lift the rest clock); the freed room goes to
     // the line under the exercise name, which reads a size up. stageFill() pins the strip.
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), onControls: onControls)
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: true)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
       Spacer(minLength: 3)
       // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
@@ -1028,7 +1053,6 @@ struct TransitionRestScreen: View {
   /// The way back for the 6 s after a one-tap swap of the NEXT lift (founder 2026-07-12).
   let undo: WireSwapOption?
   let onUndo: () -> Void
-  let onControls: () -> Void
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
   private var swaps: [WireSwapOption] { mirror.nextSwapOptions ?? [] }
 
@@ -1039,7 +1063,7 @@ struct TransitionRestScreen: View {
     // under the name reads a size up (founder 2026-07-10). Swap is ONE TAP — Hush already picked
     // the replacement (phone parity).
     VStack(spacing: 0) {
-      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), onControls: onControls)
+      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), controlsHint: true)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(78), restingLabel: "NEXT")
       Spacer(minLength: 3)
       VStack(spacing: 2) {
@@ -1100,9 +1124,10 @@ struct CardioPager: View {
   var body: some View {
     TabView(selection: $page) {
       CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
-                           onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
-      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
-                   onControls: { withAnimation { page = 0 } }).tag(1)
+                           onPage: page == 0, onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
+      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed)
+        .environment(\.goControls, { withAnimation { page = 0 } })
+        .tag(1)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
   }
@@ -1116,7 +1141,7 @@ struct CardioScreen: View {
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
   let elapsed: () -> TimeInterval
-  let onControls: () -> Void
+  @Environment(\.goControls) private var goControls
 
   var body: some View {
     VStack(spacing: 0) {
@@ -1147,14 +1172,15 @@ struct CardioScreen: View {
       Spacer(minLength: 6)
       // The stage carries no big buttons — the ‹ ⏸ PAUSE affordance stands where they
       // used to be: it names what the swipe reaches, and tapping it goes there too
-      // (founder 2026-07-12: "CONTROLS" was opaque and read as a dead label).
-      Button(action: onControls) {
+      // (founder 2026-07-12: "CONTROLS" was opaque and read as a dead label). It tells the
+      // TRUTH about the run's state: a paused recording offers the way back to Resume.
+      Button(action: goControls) {
         HStack(spacing: 4) {
           Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
-          Image(systemName: "pause.fill").font(.system(size: 10, weight: .semibold))
-          Legend(WatchCopy.pause, size: 9)
+          Image(systemName: paused ? "play.fill" : "pause.fill").font(.system(size: 10, weight: .semibold))
+          Legend(paused ? WatchCopy.resume : WatchCopy.pause, size: 9)
         }
-        .foregroundStyle(Palette.ink2)
+        .foregroundStyle(paused ? Palette.signal : Palette.ink2)
         .frame(maxWidth: .infinity).frame(height: Fit.s(22))
         .contentShape(Rectangle())
       }
@@ -1172,6 +1198,8 @@ private struct CardioControlsScreen: View {
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
   let elapsed: () -> TimeInterval
+  /// See ControlsScreen.onPage — an armed guard disarms when the athlete swipes away.
+  var onPage: Bool = true
   let onPauseToggle: () -> Void
   let onEnd: () -> Void
   @State private var confirmingEnd = false
@@ -1182,6 +1210,7 @@ private struct CardioControlsScreen: View {
         title: WatchCopy.finishConfirmTitle, confirmTitle: WatchCopy.finishSave,
         onConfirm: onEnd, onKeep: { confirmingEnd = false }
       )
+      .onChange(of: onPage) { _, on in if !on { confirmingEnd = false } }
     } else {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip()

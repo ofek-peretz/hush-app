@@ -98,9 +98,13 @@ final class WatchModel: ObservableObject {
   // domain/swapPool ranks both ways), so no protocol change is needed. If the original
   // doesn't surface among them (rare deep pool), the offer simply never appears.
   private var pendingUndo: (name: String, at: Date, context: SwapUndoContext)?
-  @Published private(set) var undoOption: WireSwapOption?
-  private(set) var undoContext: SwapUndoContext?
+  @Published private var undoOption: WireSwapOption?
+  private var undoContext: SwapUndoContext?
   private var undoExpiry: DispatchWorkItem?
+  /// The live undo offer for the CURRENT lift (Active Set reads this), and for the NEXT
+  /// one (Transition Rest). Exactly one can be live at a time.
+  var currentUndo: WireSwapOption? { undoContext == SwapUndoContext.current ? undoOption : nil }
+  var nextUndo: WireSwapOption? { undoContext == SwapUndoContext.next ? undoOption : nil }
 
   // Km-split beat (founder 2026-07-12): one strong haptic per whole kilometre of a wrist
   // run/walk — the wrist is the runner's eyes. Reset at every cardio start.
@@ -161,7 +165,14 @@ final class WatchModel: ObservableObject {
   /// Fired when a screen is entered, so the view can play the entry haptic.
   let onEntryHaptic = PassthroughSubject<HapticEvent, Never>()
 
+  /// Start is driven from the root view's onAppear, which can fire more than once in a
+  /// process — every subscription and activation here must happen exactly once (a second
+  /// pass would, among other things, double every km-split beat).
+  private var didStart = false
+
   func start() {
+    guard !didStart else { return }
+    didStart = true
     manager.model = self
     manager.activate()
     workoutRuntime.requestAuthorization()
@@ -176,6 +187,15 @@ final class WatchModel: ObservableObject {
       default: return // strength — the phone / local authority drives it as before
       }
       self.cardioPaused = false
+      // The watch owns the cardio clock (founder 2026-07-11), so a RECOVERED run must
+      // recover its clock too — without this the relaunch showed 0:00 for a run already
+      // 40 minutes old. The OS builder's elapsed is the honest anchor; km splits resume
+      // from the distance already collected instead of re-firing every past kilometre.
+      let alreadyRun = self.workoutRuntime.metrics.elapsed() ?? 0
+      self.cardioStartedAt = Date().addingTimeInterval(-alreadyRun)
+      self.cardioPausedAt = nil
+      self.cardioPausedTotal = 0
+      self.lastKmSplit = Int(self.workoutRuntime.metrics.distanceKm ?? 0)
       self.recompute()
     }
     workoutRuntime.recoverActiveSession()
@@ -623,14 +643,27 @@ final class WatchModel: ObservableObject {
     }
   }
 
-  func swap(_ exerciseId: String, replacing originalName: String, context: SwapUndoContext) {
+  /// Swap the CURRENT lift (Active Set). `originalName` is the lift being replaced — it is
+  /// what the undo offer resolves against.
+  func swapCurrent(_ exerciseId: String, replacing originalName: String) {
+    swap(exerciseId, replacing: originalName, context: .current)
+  }
+
+  /// Swap the NEXT lift (Transition Rest).
+  func swapNext(_ exerciseId: String, replacing originalName: String) {
+    swap(exerciseId, replacing: originalName, context: .next)
+  }
+
+  private func swap(_ exerciseId: String, replacing originalName: String, context: SwapUndoContext) {
     // Exercise selection belongs to the phone's model; the offline mirror offers no
     // swap options, so this can only fire under phone authority. One-tap (founder
     // 2026-07-10): Hush already picked the replacement — apply it immediately, ack by
     // feel, and the next mirror frame shows the new lift (exact parity with the phone).
     // The original's NAME is remembered so the post-swap frame can offer the way back.
     guard localEngine == nil else { return }
-    pendingUndo = (name: originalName, at: Date(), context: context)
+    // A nameless original (a version-skewed frame) simply gets no undo offer — it must never
+    // cost the athlete the swap itself.
+    pendingUndo = originalName.isEmpty ? nil : (name: originalName, at: Date(), context: context)
     sendIntent(type: "swap_exercise", exerciseId: exerciseId)
     onEntryHaptic.send(.exerciseBusyApplied)
   }
