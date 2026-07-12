@@ -25,6 +25,7 @@ enum HapticEvent {
   case resumed // gentle affirm
   case receiptEarned // firm even double
   case exerciseBusyApplied // action ack
+  case kmSplit // strong single — a whole kilometre closed mid-run (felt without looking)
 }
 
 enum WatchHaptics {
@@ -71,6 +72,9 @@ enum WatchHaptics {
     case .receiptEarned:
       // firm even double — "Hush was right".
       return [Beat(delay: 0, type: .success), Beat(delay: 0.14, type: .success)]
+    case .kmSplit:
+      // one strong notification beat — unmistakable through a stride, used by nothing else.
+      return [Beat(delay: 0, type: .notification)]
     }
   }
 }

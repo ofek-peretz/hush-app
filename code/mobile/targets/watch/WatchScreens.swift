@@ -40,7 +40,9 @@ enum Palette {
   static let ink1 = Color(red: 0.702, green: 0.694, blue: 0.678) // secondary
   static let ink2 = Color(red: 0.463, green: 0.455, blue: 0.443) // muted
   static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent
-  static let onAccent = Color(red: 0.984, green: 0.980, blue: 0.973)
+  // Charcoal-on-ochre (founder app law 2026-07-12, WCAG): the mark INSIDE an ochre button
+  // is the warm graphite, never white — a measuring-instrument read under gym light.
+  static let onAccent = Color(red: 0.098, green: 0.090, blue: 0.078)
   static let up = Color(red: 0.349, green: 0.498, blue: 0.376) // sage (increase)
   static let upWash = Color(red: 0.890, green: 0.945, blue: 0.898)
   static let down = Color(red: 0.627, green: 0.376, blue: 0.298) // clay (decrease)
@@ -55,7 +57,10 @@ private func fmtW(_ w: Double) -> String {
   w.rounded() == w ? String(Int(w)) : String(format: "%.1f", w)
 }
 private func fmtTime(_ s: Double) -> String {
-  let t = max(0, Int(s.rounded())); return "\(t / 60):" + String(format: "%02d", t % 60)
+  let t = max(0, Int(s.rounded()))
+  // Above the hour the honest mark is h:mm:ss — "90:00" reads as a broken clock.
+  if t >= 3600 { return "\(t / 3600):" + String(format: "%02d:%02d", (t % 3600) / 60, t % 60) }
+  return "\(t / 60):" + String(format: "%02d", t % 60)
 }
 
 /// Compact equipment-native setup line (kg) for the wrist — so the athlete never does mental math
@@ -132,12 +137,30 @@ private struct Legend: View {
 /// (swipe right), keeping the main stage pure execution.
 private struct TopStrip: View {
   var lift: (i: Int, n: Int)? = nil
+  /// On the execution stages: the compact "‹ ⏸" affordance — the page one swipe right
+  /// holds Pause / End. Tappable (it goes where the swipe goes), quiet, and glyphic:
+  /// the pause mark says what is there better than any word did (founder 2026-07-12,
+  /// "Controls" was opaque).
+  var onControls: (() -> Void)? = nil
   var body: some View {
-    HStack {
+    HStack(spacing: 8) {
       if let lift {
         Text("LIFT \(lift.i)/\(lift.n)")
           .font(.system(size: 11, design: .monospaced)).tracking(0.6)
           .foregroundStyle(Palette.ink2)
+      }
+      if let onControls {
+        Button(action: onControls) {
+          HStack(spacing: 3) {
+            Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold))
+            Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
+          }
+          .foregroundStyle(Palette.ink2)
+          .padding(.horizontal, 7).padding(.vertical, 3)
+          .background(Palette.stage1).clipShape(Capsule())
+          .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
       }
       Spacer(minLength: 40) // the trailing half stays clear of the watch clock
     }
@@ -145,9 +168,11 @@ private struct TopStrip: View {
   }
 }
 
-/// The affordance to act. primary = ochre; onstage = white-on-dark; ghost = quiet.
+/// The affordance to act. primary = ochre; onstage = white-on-dark; quiet = raised tile
+/// (secondary but visibly a button); danger = clay (the irreversible act inside the end
+/// guard); ghost = bare.
 struct StageButton: View {
-  enum Kind { case primary, onstage, ghost }
+  enum Kind { case primary, onstage, quiet, danger, ghost }
   let title: String
   var kind: Kind = .primary
   var height: CGFloat = 44
@@ -164,8 +189,24 @@ struct StageButton: View {
     }
     .buttonStyle(.plain)
   }
-  private var fg: Color { kind == .primary ? Palette.onAccent : kind == .onstage ? Palette.stage0 : Palette.ink1 }
-  private var bg: Color { kind == .primary ? Palette.signal : kind == .onstage ? Palette.ink0 : .clear }
+  private var fg: Color {
+    switch kind {
+    case .primary: return Palette.onAccent
+    case .onstage: return Palette.stage0
+    case .quiet: return Palette.ink0
+    case .danger: return Palette.ink0
+    case .ghost: return Palette.ink1
+    }
+  }
+  private var bg: Color {
+    switch kind {
+    case .primary: return Palette.signal
+    case .onstage: return Palette.ink0
+    case .quiet: return Palette.stage1
+    case .danger: return Palette.down
+    case .ghost: return .clear
+    }
+  }
 }
 
 private struct Triangle: Shape {
@@ -212,6 +253,25 @@ private struct DrawCheck: View {
   var size: CGFloat = 22
   var body: some View {
     Image(systemName: "checkmark").font(.system(size: size, weight: .bold)).foregroundStyle(Palette.up)
+  }
+}
+
+/// The way back after a one-tap swap: an ochre "Undo" pill beside the (new) exercise
+/// name, alive for a few seconds. Tapping restores the lift the athlete had.
+private struct SwapUndoChip: View {
+  let action: () -> Void
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 3) {
+        Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold))
+        Text(WatchCopy.undo).font(.system(size: 11, weight: .semibold))
+      }
+      .foregroundStyle(Palette.signal)
+      .padding(.horizontal, 9).padding(.vertical, 5)
+      .background(Palette.stage1).clipShape(Capsule())
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
   }
 }
 
@@ -307,11 +367,13 @@ private struct RestActions: View {
 private struct Metric: View {
   let value: String
   let label: String
+  /// Mid-run marks read at a stride: the cardio stage doubles its two columns up.
+  var valueSize: CGFloat = Fit.s(18)
   var body: some View {
     VStack(spacing: 2) {
       // A wide mark ("12:34") must SCALE into its column, never ellipsize (founder
       // 2026-07-10: elapsed read "12:…" on the 40 mm case — unreadable).
-      Text(value).font(.system(size: Fit.s(18), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
+      Text(value).font(.system(size: valueSize, weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.55)
       Legend(label, size: 9)
     }
@@ -331,37 +393,73 @@ private struct ControlsScreen: View {
   var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
+  @State private var confirmingEnd = false
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      TopStrip(lift: lift) // the same strip, at the same y, as the stage page beside it
-      VStack(alignment: .leading, spacing: 2) {
-        Legend(WatchCopy.controls)
-        if let name = workoutName, !name.isEmpty {
-          Text(name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink1).lineLimit(1)
+    if confirmingEnd {
+      EndConfirmScreen(
+        title: WatchCopy.endConfirmTitle, confirmTitle: WatchCopy.endAndSave, lift: lift,
+        onConfirm: onEnd, onKeep: { confirmingEnd = false }
+      )
+    } else {
+      VStack(alignment: .leading, spacing: 0) {
+        TopStrip(lift: lift) // the same strip, at the same y, as the stage page beside it
+        VStack(alignment: .leading, spacing: 2) {
+          Legend(WatchCopy.controlsLegend)
+          if let name = workoutName, !name.isEmpty {
+            Text(name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink1).lineLimit(1)
+          }
+        }
+        Spacer(minLength: 4)
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+          HStack(spacing: 6) {
+            Metric(value: elapsedText, label: WatchCopy.metricElapsed)
+            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
+            Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+          }
+        }
+        Spacer(minLength: 6)
+        VStack(spacing: 6) {
+          StageButton(title: WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPause)
+          // End only ARMS the guard; the irreversible act lives behind EndConfirmScreen
+          // (founder 2026-07-12: a mis-tap near Pause must never close a workout).
+          StageButton(title: WatchCopy.endWorkout, kind: .quiet, height: 34, fontSize: 13) { confirmingEnd = true }
         }
       }
-      Spacer(minLength: 4)
-      TimelineView(.periodic(from: .now, by: 1)) { _ in
-        HStack(spacing: 6) {
-          Metric(value: elapsedText, label: WatchCopy.metricElapsed)
-          Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
-          Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
-        }
-      }
-      Spacer(minLength: 6)
-      VStack(spacing: 6) {
-        StageButton(title: WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPause)
-        StageButton(title: WatchCopy.endWorkout, kind: .ghost, height: 34, fontSize: 13, action: onEnd)
-      }
+      .padding(.horizontal, 10).padding(.bottom, 6)
+      .stageFill()
     }
-    .padding(.horizontal, 10).padding(.bottom, 6)
-    .stageFill()
   }
 
   private var elapsedText: String {
     guard let s = metrics.elapsed() else { return "–:––" }
     return fmtTime(s)
+  }
+}
+
+/// The gatekeeper before an irreversible end. "Keep going" takes the primary mark and the
+/// position the finger already knows; the end action is a deliberate clay button below it.
+private struct EndConfirmScreen: View {
+  let title: String
+  let confirmTitle: String
+  var lift: (i: Int, n: Int)? = nil
+  let onConfirm: () -> Void
+  let onKeep: () -> Void
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip(lift: lift)
+      Spacer(minLength: 4)
+      Text(title)
+        .font(.system(size: Fit.s(22), weight: .semibold)).foregroundStyle(Palette.ink0)
+        .lineLimit(2).minimumScaleFactor(0.8)
+      Spacer(minLength: 8)
+      VStack(spacing: 6) {
+        StageButton(title: WatchCopy.keepGoing, kind: .primary, height: 46, fontSize: 16, action: onKeep)
+        StageButton(title: confirmTitle, kind: .danger, height: 40, fontSize: 14, action: onConfirm)
+      }
+    }
+    .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
   }
 }
 
@@ -380,13 +478,15 @@ private struct ExecutionPager<Content: View>: View {
   var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
-  @ViewBuilder let content: () -> Content
+  /// The stage page, handed the way IN to the Controls page — the "‹ ⏸" hint taps
+  /// through to the same place the swipe reaches.
+  @ViewBuilder let content: (_ goControls: @escaping () -> Void) -> Content
   @State private var page = 1
 
   var body: some View {
     TabView(selection: $page) {
       ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPause: onPause, onEnd: onEnd).tag(0)
-      content().tag(1)
+      content({ withAnimation { page = 0 } }).tag(1)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
   }
@@ -431,21 +531,29 @@ struct WatchRootView: View {
     case let .activeSet(m, draft):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
+                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
-                        onComplete: model.completeSet, onSwap: model.swap)
+                        onComplete: model.completeSet,
+                        onSwap: { model.swap($0, replacing: m.exerciseName, context: .current) },
+                        undo: model.undoContext == .current ? model.undoOption : nil,
+                        onUndo: model.undoSwap,
+                        onControls: goControls)
       }
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
-        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
+                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
+        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest, onControls: goControls)
       }
     case let .transitionRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: (m.liftIndex ?? 1) + 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
-        TransitionRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest, onSwap: model.swap)
+                     onPause: model.pause, onEnd: model.endWorkout) { goControls in
+        TransitionRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest,
+                             onSwap: { model.swap($0, replacing: m.nextExerciseName ?? "", context: .next) },
+                             undo: model.undoContext == .next ? model.undoOption : nil,
+                             onUndo: model.undoSwap,
+                             onControls: goControls)
       }
     case .paused:
       PausedScreen(onResume: model.resume, onEnd: model.endWorkout)
@@ -507,8 +615,9 @@ struct StartScreen: View {
           StageButton(title: WatchCopy.begin, kind: .primary, height: 50, fontSize: 18, action: onBegin)
         }
         // Open training (run / walk) is never gated — it is recorded, never coached — so the
-        // chooser stays reachable even behind the paywall.
-        StageButton(title: WatchCopy.chooseWorkout, kind: .ghost, height: 36, fontSize: 14) { showList = true }
+        // chooser stays reachable even behind the paywall. A quiet raised tile, so it READS
+        // as a button at a glance (founder 2026-07-12) — the target was always full-width.
+        StageButton(title: WatchCopy.chooseWorkout, kind: .quiet, height: 36, fontSize: 14) { showList = true }
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 8)
@@ -529,8 +638,12 @@ struct ChooseOverlay: View {
   /// runtime straight to Health — never coached, never engine state.
   let onCardio: (String) -> Void
   var body: some View {
+    // Unfinished work leads (founder 2026-07-12): a DONE workout is a record, not an offer —
+    // it reads at the tail, after everything still trainable. Order within each group is
+    // the plan's own.
+    let ordered = lobby.workouts.filter { $0.done != true } + lobby.workouts.filter { $0.done == true }
     List {
-      ForEach(lobby.workouts, id: \.id) { w in
+      ForEach(ordered, id: \.id) { w in
         // A workout already trained this week is FINISHED (founder 2026-07-11): it reads as a
         // record — dimmed, marked DONE, and NOT selectable. Only unfinished work can be queued.
         let done = w.done == true
@@ -550,6 +663,7 @@ struct ChooseOverlay: View {
             Text("\(w.lifts ?? 0) lifts · \(w.muscles ?? "")")
               .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2).lineLimit(1)
           }
+          .padding(.vertical, 3) // the muscle line must not hug the card's edge (founder 2026-07-12)
         }
         .disabled(done)
         .listRowBackground(
@@ -589,6 +703,10 @@ struct ActiveSetScreen: View {
   let onSave: (Double?, Int) -> Void
   let onComplete: () -> Void
   let onSwap: (String) -> Void
+  /// The way back for the 6 s after a one-tap swap (founder 2026-07-12) — nil once it lapses.
+  let undo: WireSwapOption?
+  let onUndo: () -> Void
+  let onControls: () -> Void
 
   @State private var editing = false
   @State private var field: EditField = .weight
@@ -603,7 +721,7 @@ struct ActiveSetScreen: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), onControls: onControls)
       header
       Spacer(minLength: 2)
       if editing { editor } else { readout }
@@ -637,12 +755,24 @@ struct ActiveSetScreen: View {
     // open the small screen) — just the exercise name + the swap affordance.
     // Swap is ONE TAP (founder 2026-07-10, phone parity): Hush already picked the
     // best replacement (options[0], phone-ranked) — apply it immediately, no picker.
-    HStack(spacing: 6) {
+    HStack(spacing: 4) {
       Text(mirror.exerciseName).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.75) // long names shrink before truncating
-      if let best = swaps.first, !editing {
-        Button { onSwap(best.id) } label: { Image(systemName: "repeat").font(.system(size: 13)) }
-          .buttonStyle(.plain).foregroundStyle(Palette.ink2)
+      if !editing {
+        if undo != nil {
+          // The 6 s after a one-tap swap carry the way back (founder 2026-07-12).
+          SwapUndoChip(action: onUndo)
+        } else if let best = swaps.first {
+          // One tap swaps IMMEDIATELY, so the target must be honest: a full-size
+          // hit area around the small glyph (founder 2026-07-12 — it was 13 pt bare).
+          Button { onSwap(best.id) } label: {
+            Image(systemName: "repeat").font(.system(size: 13))
+              .foregroundStyle(Palette.ink2)
+              .frame(width: 44, height: 28)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+        }
       }
     }
   }
@@ -655,23 +785,38 @@ struct ActiveSetScreen: View {
   /// is the REP COUNT. So reps take the hero mark and "bodyweight" drops to a quiet legend under
   /// it. The block keeps the LOADED case's height (minHeight) so the top strip and the exercise
   /// name never shift between a loaded lift and a bodyweight one.
+  /// The numbers themselves are the most natural way in to Edit (founder 2026-07-12):
+  /// tapping the load focuses the load, tapping the reps focuses the reps. The pencil
+  /// below stays as the discoverable route — same destination.
   private var readout: some View {
     VStack(spacing: 6) {
       if let wt = shownWeight {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-          Text(fmtW(wt)).font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
-          Text(WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Button { enterEdit(.weight) } label: {
+          HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(fmtW(wt)).font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
+            Text(WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+          }
+          .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         instruction
         HStack(spacing: 10) {
-          Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
+          Button { enterEdit(.reps) } label: {
+            Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
           if (mirror.loadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0, fontSize: 10) }
         }
       } else {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-          Text("\(shownReps)").font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
-          Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Button { enterEdit(.reps) } label: {
+          HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text("\(shownReps)").font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
+            Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+          }
+          .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         Legend(WatchCopy.bodyweightQuiet, size: 10)
       }
     }
@@ -753,16 +898,18 @@ struct ActiveSetScreen: View {
     HStack(spacing: 8) {
       // A bare glyph that sits ON the stage (no raised tile) — keeps a real tap
       // target via contentShape, but reads as part of the black, not a button.
-      Button {
-        if editing { commit() } else { enterEdit() }
-      } label: {
-        Image(systemName: editing ? "checkmark" : "pencil")
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(Palette.ink1)
-          .frame(width: 36, height: Fit.s(48)) // matches the Complete button's scaled height
-          .contentShape(Rectangle())
+      // While EDITING the glyph disappears: Save alone commits (founder 2026-07-12 —
+      // the ✓ beside Save was the same action twice, pure mis-tap surface).
+      if !editing {
+        Button { enterEdit(.weight) } label: {
+          Image(systemName: "pencil")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(Palette.ink1)
+            .frame(width: 36, height: Fit.s(48)) // matches the Complete button's scaled height
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
       }
-      .buttonStyle(.plain)
       StageButton(title: editing ? WatchCopy.save : WatchCopy.completeSet, kind: .primary, height: 48, fontSize: 17) {
         if editing { commit() } else { onComplete() }
       }
@@ -770,10 +917,11 @@ struct ActiveSetScreen: View {
     .padding(.top, 4)
   }
 
-  private func enterEdit() {
+  /// Open the inline editor with `f` focused (bodyweight always edits reps — there is no load).
+  private func enterEdit(_ f: EditField) {
     w = (shownWeight ?? 0).rounded() // whole kg — no decimals on the watch
     r = Double(shownReps)
-    field = bodyweight ? .reps : .weight
+    field = bodyweight ? .reps : f
     crown = field == .weight ? w : r
     editing = true
   }
@@ -832,6 +980,7 @@ struct InterRestScreen: View {
   let mirror: WireMirror
   let onReady: () -> Void
   let onAdd: () -> Void
+  let onControls: () -> Void
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
 
   var body: some View {
@@ -841,7 +990,7 @@ struct InterRestScreen: View {
     // The ring hugs the TOP (founder 2026-07-10: lift the rest clock); the freed room goes to
     // the line under the exercise name, which reads a size up. stageFill() pins the strip.
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1))
+      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), onControls: onControls)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
       Spacer(minLength: 3)
       // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
@@ -876,6 +1025,10 @@ struct TransitionRestScreen: View {
   let onReady: () -> Void
   let onAdd: () -> Void
   let onSwap: (String) -> Void
+  /// The way back for the 6 s after a one-tap swap of the NEXT lift (founder 2026-07-12).
+  let undo: WireSwapOption?
+  let onUndo: () -> Void
+  let onControls: () -> Void
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
   private var swaps: [WireSwapOption] { mirror.nextSwapOptions ?? [] }
 
@@ -886,16 +1039,24 @@ struct TransitionRestScreen: View {
     // under the name reads a size up (founder 2026-07-10). Swap is ONE TAP — Hush already picked
     // the replacement (phone parity).
     VStack(spacing: 0) {
-      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1))
+      TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), onControls: onControls)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(78), restingLabel: "NEXT")
       Spacer(minLength: 3)
       VStack(spacing: 2) {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
           Text(mirror.nextExerciseName ?? "").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0)
             .lineLimit(1).minimumScaleFactor(0.75)
-          if let best = swaps.first {
-            Button { onSwap(best.id) } label: { Image(systemName: "repeat").font(.system(size: 12)) }
-              .buttonStyle(.plain).foregroundStyle(Palette.ink2)
+          if undo != nil {
+            SwapUndoChip(action: onUndo)
+          } else if let best = swaps.first {
+            // Same honest hit area as the live-set swap glyph (founder 2026-07-12).
+            Button { onSwap(best.id) } label: {
+              Image(systemName: "repeat").font(.system(size: 12))
+                .foregroundStyle(Palette.ink2)
+                .frame(width: 40, height: 24)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
           }
         }
         HStack(spacing: 6) {
@@ -938,8 +1099,10 @@ struct CardioPager: View {
 
   var body: some View {
     TabView(selection: $page) {
-      CardioControlsScreen(gait: gait, paused: paused, elapsed: elapsed, onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
-      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed).tag(1)
+      CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
+                           onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
+      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
+                   onControls: { withAnimation { page = 0 } }).tag(1)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
   }
@@ -953,6 +1116,7 @@ struct CardioScreen: View {
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
   let elapsed: () -> TimeInterval
+  let onControls: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -969,21 +1133,32 @@ struct CardioScreen: View {
           Text(fmtTime(elapsed()))
             .font(.system(size: Fit.s(40), weight: .semibold, design: .monospaced)).monospacedDigit()
             .foregroundStyle(paused ? Palette.ink2 : Palette.ink0).lineLimit(1).minimumScaleFactor(0.6)
-          HStack(spacing: 6) {
-            Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
-            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
-            Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+          // TWO columns, doubled up — the marks a runner actually reads at a stride
+          // (founder 2026-07-12: three small columns were unreadable mid-run). Kcal
+          // lives one swipe away on the controls page.
+          HStack(spacing: 8) {
+            Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––",
+                   label: WatchCopy.metricKm, valueSize: Fit.s(26))
+            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––",
+                   label: WatchCopy.metricHeart, valueSize: Fit.s(26))
           }
         }
       }
       Spacer(minLength: 6)
-      // The stage carries no buttons — the swipe hint stands where they used to be.
-      HStack(spacing: 4) {
-        Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
-        Legend(WatchCopy.controls, size: 9)
+      // The stage carries no big buttons — the ‹ ⏸ PAUSE affordance stands where they
+      // used to be: it names what the swipe reaches, and tapping it goes there too
+      // (founder 2026-07-12: "CONTROLS" was opaque and read as a dead label).
+      Button(action: onControls) {
+        HStack(spacing: 4) {
+          Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
+          Image(systemName: "pause.fill").font(.system(size: 10, weight: .semibold))
+          Legend(WatchCopy.pause, size: 9)
+        }
+        .foregroundStyle(Palette.ink2)
+        .frame(maxWidth: .infinity).frame(height: Fit.s(22))
+        .contentShape(Rectangle())
       }
-      .foregroundStyle(Palette.ink2)
-      .frame(maxWidth: .infinity)
+      .buttonStyle(.plain)
     }
     .padding(.horizontal, 10).padding(.bottom, 8)
     .stageFill()
@@ -995,32 +1170,51 @@ struct CardioScreen: View {
 private struct CardioControlsScreen: View {
   let gait: String
   let paused: Bool
+  @ObservedObject var metrics: LiveMetrics
   let elapsed: () -> TimeInterval
   let onPauseToggle: () -> Void
   let onEnd: () -> Void
+  @State private var confirmingEnd = false
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      TopStrip()
-      VStack(alignment: .leading, spacing: 2) {
-        Legend(WatchCopy.controls)
-        Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
-          .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink1).lineLimit(1)
+    if confirmingEnd {
+      EndConfirmScreen(
+        title: WatchCopy.finishConfirmTitle, confirmTitle: WatchCopy.finishSave,
+        onConfirm: onEnd, onKeep: { confirmingEnd = false }
+      )
+    } else {
+      VStack(alignment: .leading, spacing: 0) {
+        TopStrip()
+        VStack(alignment: .leading, spacing: 2) {
+          Legend(WatchCopy.controlsLegend)
+          Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
+            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink1).lineLimit(1)
+        }
+        Spacer(minLength: 4)
+        // The full body readout lives HERE (parity with the strength controls page):
+        // the stage keeps only the two marks a runner reads at a stride.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+          VStack(spacing: 6) {
+            Text(fmtTime(elapsed()))
+              .font(.system(size: Fit.s(26), weight: .semibold, design: .monospaced)).monospacedDigit()
+              .foregroundStyle(Palette.ink0).frame(maxWidth: .infinity)
+            HStack(spacing: 6) {
+              Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
+              Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
+              Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+            }
+          }
+        }
+        Spacer(minLength: 6)
+        VStack(spacing: 6) {
+          StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPauseToggle)
+          // Finish only ARMS the guard (founder 2026-07-12) — the save happens behind it.
+          StageButton(title: WatchCopy.finishSave, kind: .quiet, height: 34, fontSize: 13) { confirmingEnd = true }
+        }
       }
-      Spacer(minLength: 4)
-      TimelineView(.periodic(from: .now, by: 1)) { _ in
-        Text(fmtTime(elapsed()))
-          .font(.system(size: Fit.s(26), weight: .semibold, design: .monospaced)).monospacedDigit()
-          .foregroundStyle(Palette.ink0).frame(maxWidth: .infinity)
-      }
-      Spacer(minLength: 6)
-      VStack(spacing: 6) {
-        StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPauseToggle)
-        StageButton(title: WatchCopy.finishSave, kind: .ghost, height: 34, fontSize: 13, action: onEnd)
-      }
+      .padding(.horizontal, 10).padding(.bottom, 6)
+      .stageFill()
     }
-    .padding(.horizontal, 10).padding(.bottom, 6)
-    .stageFill()
   }
 }
 
@@ -1098,19 +1292,29 @@ struct CompleteScreen: View {
 struct PausedScreen: View {
   let onResume: () -> Void
   let onEnd: () -> Void
+  @State private var confirmingEnd = false
   var body: some View {
-    VStack(spacing: 0) {
-      TopStrip()
-      Spacer()
-      Legend(WatchCopy.workoutHeld, size: 11)
-      Text(WatchCopy.pausedTitle).font(.system(size: Fit.s(34), weight: .semibold)).foregroundStyle(Palette.ink0).padding(.top, 6)
-      Spacer()
-      VStack(spacing: 6) {
-        StageButton(title: WatchCopy.resume, kind: .primary, height: 52, fontSize: 18, action: onResume)
-        StageButton(title: WatchCopy.endWorkout, kind: .ghost, height: 40, fontSize: 14, action: onEnd)
+    if confirmingEnd {
+      EndConfirmScreen(
+        title: WatchCopy.endConfirmTitle, confirmTitle: WatchCopy.endAndSave,
+        onConfirm: onEnd, onKeep: { confirmingEnd = false }
+      )
+    } else {
+      VStack(spacing: 0) {
+        TopStrip()
+        Spacer()
+        Legend(WatchCopy.workoutHeld, size: 11)
+        Text(WatchCopy.pausedTitle).font(.system(size: Fit.s(34), weight: .semibold)).foregroundStyle(Palette.ink0).padding(.top, 6)
+        Spacer()
+        VStack(spacing: 6) {
+          StageButton(title: WatchCopy.resume, kind: .primary, height: 52, fontSize: 18, action: onResume)
+          // Ending is guarded here too (founder 2026-07-12) — Paused is exactly where a
+          // sleeve brushes the screen.
+          StageButton(title: WatchCopy.endWorkout, kind: .quiet, height: 40, fontSize: 14) { confirmingEnd = true }
+        }
       }
+      .padding(.horizontal, 10).padding(.bottom, 8)
     }
-    .padding(.horizontal, 10).padding(.bottom, 8)
   }
 }
 

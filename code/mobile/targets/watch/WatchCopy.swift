@@ -62,8 +62,17 @@ enum WatchCopy {
   static let resume = "Resume"
   static let endWorkout = "End workout"
 
-  // Controls page (swipe left — the Apple Workout idiom)
-  static let controls = "Controls"
+  // End guard (founder 2026-07-12): ending is irreversible, so it asks first. "Keep going"
+  // is the big safe default; the end action is a deliberate second button.
+  static let endConfirmTitle = "End workout?"
+  static let finishConfirmTitle = "Finish & save?"
+  static let keepGoing = "Keep going"
+  static let endAndSave = "End & save"
+
+  // Controls page (swipe right — the Apple Workout idiom). The legend names what is
+  // actually THERE (founder 2026-07-12: "Controls" was opaque); the swipe hint on the
+  // stages is the ‹ ⏸ glyph pair + PAUSE.
+  static let controlsLegend = "Pause · End"
   static let pause = "Pause"
   static let metricElapsed = "Elapsed"
   static let metricHeart = "Heart"
@@ -78,10 +87,14 @@ enum WatchCopy {
   static let done = "Done"
   static let metricTime = "Time"
   static let metricSets = "Sets"
-  static let metricUp = "Up"
+  // The count of lifts whose load the model raised this session ("Up" read as a cipher —
+  // founder 2026-07-12).
+  static let metricUp = "Raised"
 
   // Swap (one-tap — Hush picks; kept for accessibility labels)
   static let swapTitle = "Swap exercise"
+  // The moment after a one-tap swap carries a way back (founder 2026-07-12).
+  static let undo = "Undo"
 
   // Open training (run / walk on the wrist — recorded to Health, never coached)
   static let openTraining = "Open training"

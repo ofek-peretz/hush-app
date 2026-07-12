@@ -28,6 +28,10 @@ struct EditDraft: Equatable {
   var reps: Int
 }
 
+/// Which slot a one-tap swap replaced — the CURRENT lift (Active Set) or the NEXT one
+/// (Transition Rest). The undo offer resolves against the matching option pool only.
+enum SwapUndoContext { case current, next }
+
 /// The closing record of a wrist run/walk — snapshotted at Finish (the OS runtime clears its
 /// live metrics as it persists the HKWorkout, so the summary must be captured first).
 struct CardioSummary: Equatable {
@@ -87,6 +91,21 @@ final class WatchModel: ObservableObject {
   private var editDraft: EditDraft?
   private var setConfirm: (weight: Double?, reps: Int, index: Int, total: Int)?
   private var setConfirmToken = 0
+
+  // One-tap swap safety net (founder 2026-07-12): the tap applies instantly, so the moment
+  // after it carries an Undo. The original lift is re-identified BY NAME among the NEW
+  // exercise's own alternatives once the post-swap frame lands (the synonym pool is mutual —
+  // domain/swapPool ranks both ways), so no protocol change is needed. If the original
+  // doesn't surface among them (rare deep pool), the offer simply never appears.
+  private var pendingUndo: (name: String, at: Date, context: SwapUndoContext)?
+  @Published private(set) var undoOption: WireSwapOption?
+  private(set) var undoContext: SwapUndoContext?
+  private var undoExpiry: DispatchWorkItem?
+
+  // Km-split beat (founder 2026-07-12): one strong haptic per whole kilometre of a wrist
+  // run/walk — the wrist is the runner's eyes. Reset at every cardio start.
+  private var lastKmSplit = 0
+  private var cancellables = Set<AnyCancellable>()
 
   // Watch-local cardio (run/walk): a live recording OWNS the display + the OS runtime
   // until ended. Pure watch state — the strength engine/mirror never sees it.
@@ -160,6 +179,11 @@ final class WatchModel: ObservableObject {
       self.recompute()
     }
     workoutRuntime.recoverActiveSession()
+    // The km-split beat: fires on every WHOLE kilometre a wrist run/walk collects.
+    workoutRuntime.metrics.$distanceKm
+      .compactMap { $0 }
+      .sink { [weak self] km in self?.kmTicked(km) }
+      .store(in: &cancellables)
     // Standalone recovery: a local session that survived an app termination
     // resumes exactly where it was (elapsed rests are caught up wall-clock).
     if localEngine == nil,
@@ -245,7 +269,11 @@ final class WatchModel: ObservableObject {
     if phaseChanged || indexChanged {
       // A new set invalidates any in-flight Edit override.
       if mirror?.phase != "active_set" || indexChanged { editDraft = nil }
+      // …and closes the swap-undo window: the offer belongs to the moment of the swap.
+      // (The swap frame itself changes neither phase nor globalIndex — same slot.)
+      clearUndo()
     }
+    resolveUndo(with: mirror)
     // The workout is over: the completion experience supersedes any in-flight per-set confirmation,
     // so clear it immediately (otherwise the 1.5s Set Confirmation would mask Workout Complete — the
     // "watch doesn't show the completion experience" defect, item 3). The frame is also HELD (see
@@ -595,13 +623,68 @@ final class WatchModel: ObservableObject {
     }
   }
 
-  func swap(_ exerciseId: String) {
+  func swap(_ exerciseId: String, replacing originalName: String, context: SwapUndoContext) {
     // Exercise selection belongs to the phone's model; the offline mirror offers no
     // swap options, so this can only fire under phone authority. One-tap (founder
     // 2026-07-10): Hush already picked the replacement — apply it immediately, ack by
     // feel, and the next mirror frame shows the new lift (exact parity with the phone).
+    // The original's NAME is remembered so the post-swap frame can offer the way back.
     guard localEngine == nil else { return }
+    pendingUndo = (name: originalName, at: Date(), context: context)
     sendIntent(type: "swap_exercise", exerciseId: exerciseId)
+    onEntryHaptic.send(.exerciseBusyApplied)
+  }
+
+  /// The post-swap frame landed: if the lift the athlete HAD now reads as one of the new
+  /// lift's own alternatives, offer it back for a short window.
+  private func resolveUndo(with m: WireMirror?) {
+    guard let p = pendingUndo, let m else { return }
+    guard Date().timeIntervalSince(p.at) < 10 else {
+      pendingUndo = nil
+      return
+    }
+    switch p.context {
+    case .current:
+      guard m.exerciseName != p.name,
+            let hit = (m.swapOptions ?? []).first(where: { $0.name == p.name }) else { return }
+      offerUndo(hit, context: .current)
+    case .next:
+      guard let nextName = m.nextExerciseName, nextName != p.name,
+            let hit = (m.nextSwapOptions ?? []).first(where: { $0.name == p.name }) else { return }
+      offerUndo(hit, context: .next)
+    }
+  }
+
+  private func offerUndo(_ option: WireSwapOption, context: SwapUndoContext) {
+    pendingUndo = nil
+    undoOption = option
+    undoContext = context
+    undoExpiry?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.undoOption = nil
+      self.undoContext = nil
+    }
+    undoExpiry = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
+  }
+
+  private func clearUndo() {
+    pendingUndo = nil
+    undoExpiry?.cancel()
+    undoExpiry = nil
+    if undoOption != nil {
+      undoOption = nil
+      undoContext = nil
+    }
+  }
+
+  /// Undo tap: swap straight back to the lift the athlete had. Routed like any swap —
+  /// the phone resolves current-vs-next by its own live phase.
+  func undoSwap() {
+    guard let u = undoOption else { return }
+    clearUndo()
+    sendIntent(type: "swap_exercise", exerciseId: u.id)
     onEntryHaptic.send(.exerciseBusyApplied)
   }
 
@@ -615,6 +698,7 @@ final class WatchModel: ObservableObject {
     cardioStartedAt = Date()
     cardioPausedAt = nil
     cardioPausedTotal = 0
+    lastKmSplit = 0 // the split beat counts THIS recording's kilometres
     workoutRuntime.trackLive(paused: false, activity: gait == "run" ? .running : .walking, indoor: false)
     onEntryHaptic.send(.readyTapped)
     recompute()
@@ -632,6 +716,17 @@ final class WatchModel: ObservableObject {
     workoutRuntime.trackLive(paused: cardioPaused)
     onEntryHaptic.send(cardioPaused ? .paused : .resumed)
     recompute()
+  }
+
+  /// A whole kilometre closed during a wrist run/walk → the strong split beat (founder
+  /// 2026-07-12). Only during a live, unpaused recording; never for strength (distance
+  /// is nil there by construction).
+  private func kmTicked(_ km: Double) {
+    guard cardioGait != nil, !cardioPaused else { return }
+    let whole = Int(km)
+    guard whole > lastKmSplit else { return }
+    lastKmSplit = whole
+    onEntryHaptic.send(.kmSplit)
   }
 
   /// Elapsed seconds for the cardio stage. The WATCH owns this clock (founder 2026-07-11:
