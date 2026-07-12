@@ -317,7 +317,7 @@ export function HomeView(props: HomeViewProps) {
               <ListRow
                 key={w.id}
                 title={w.name}
-                subtitle={done ? t('home.doneThisWeek') : w.muscles}
+                subtitle={done ? t('home.doneThisWeek') : current ? t('home.nextUpThisWeek') : w.muscles}
                 chevron={!current && !done}
                 muted={done}
                 last={i === props.workouts.length - 1}
@@ -331,9 +331,16 @@ export function HomeView(props: HomeViewProps) {
                         setChoosing(false);
                       }
                 }
+                // THE TWO STATES MUST NOT LOOK THE SAME (founder 2026-07-12). They both carried
+                // a green check, so "the workout I just finished" and "the workout I am about to
+                // do" were indistinguishable — the one question this list exists to answer.
+                // A check means DONE, and nothing else. The one that is queued gets the ochre
+                // index dot: the same "you are here" mark the rest of the instrument uses.
                 trailing={
-                  done || current ? (
+                  done ? (
                     <Icon name="check" size={18} color={color.up} strokeWidth={2.2} />
+                  ) : current ? (
+                    <View style={styles.currentDot} />
                   ) : undefined
                 }
               />
@@ -432,6 +439,8 @@ const styles = StyleSheet.create({
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
   chooseAnother: { justifyContent: 'space-between' },
+  // "You are here" — the ochre index, never a check (a check means done).
+  currentDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: signal[0] },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },

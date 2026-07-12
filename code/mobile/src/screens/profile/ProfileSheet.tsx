@@ -18,10 +18,12 @@ import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
-import { Avatar, SegmentedControl, Switch, Legend, Button, Badge } from '@/components/ds';
+import { Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { health } from '@/platform/health';
+import type { HealthPermissionState } from '@/platform/health/healthModel';
+import * as haptics from '@/platform/haptics';
 import { setLocale, currentLocale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -36,6 +38,7 @@ type Overlay = 'none' | 'delete' | 'signout';
 export function ProfileSheet({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const toast = useToast();
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
 
@@ -60,23 +63,48 @@ export function ProfileSheet({ navigation }: Props) {
     // Apply the new writing direction (RTL ⇄ LTR) immediately — no manual relaunch.
     reloadApp();
   }
+  /**
+   * Apple Health, on and off.
+   *
+   * FOUNDER 2026-07-12: "if I didn't turn Health on at the start, Settings won't let me turn it
+   * on." Two faults, and both are fixed here:
+   *
+   *  1. The switch had no writer. Nothing in this screen ever persisted `healthConnected` — only
+   *     onboarding did — so the flip could not stick no matter what the permission flow returned.
+   *     It now writes through `app.setHealthConnected`.
+   *
+   *  2. iOS never re-prompts. Once the athlete has answered the HealthKit sheet — even by
+   *     declining — `requestAuthorization` resolves immediately without showing anything, and
+   *     read-grants are opaque by design (Apple will not tell an app it was denied). So a
+   *     "request" here can neither prompt nor report. The only place the connection can actually
+   *     be turned on after a first refusal is the system Settings app, and that is where a
+   *     never-asked athlete lands too if the sheet does not appear.
+   */
   async function onHealth() {
-    // Connected already → there is nothing more to grant in-app (iOS only revokes from
-    // system Settings), so route there to MANAGE the connection. Otherwise request access.
+    // On → off: ours to drop. iOS keeps its own grant (only Settings revokes that), but Hush
+    // stops reading, and the switch stops claiming a connection.
     if (p?.healthConnected) {
-      void Linking.openSettings();
+      await app.setHealthConnected(false);
       return;
     }
-    // A throw here (HealthKit unavailable, the system sheet failing) must not become an
-    // unhandled rejection — it means the same thing a denial means: send them to Settings,
-    // where the connection actually lives.
-    let granted = false;
+    let state: HealthPermissionState = 'unknown';
     try {
-      granted = await health.requestPermission();
+      await health.requestPermission(); // shows the sheet ONLY if it has never been shown
+      state = await health.permissionState();
     } catch {
-      granted = false;
+      state = 'unavailable';
     }
-    if (!granted) void Linking.openSettings();
+    if (state === 'granted') {
+      // Determined — the sheet was answered (now or once before). Whether the answer was yes is
+      // not knowable; readability gates the actual adoption, so a refusal simply yields no
+      // samples rather than a lie. Turn the switch on and let the data speak.
+      await app.setHealthConnected(true);
+      haptics.success();
+      return;
+    }
+    // Not determined, or HealthKit is unavailable: nothing more can happen in-app.
+    toast.show(t('profile.healthOpenSettings'));
+    void Linking.openSettings();
   }
 
   // Both confirms use the in-theme BottomSheet (not the system ActionSheet's garish

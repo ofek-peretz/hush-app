@@ -314,8 +314,12 @@ export function WellDone({ navigation, route }: Props) {
             <Icon name="checkCheck" size={16} color={up[0]} strokeWidth={2} />
             <Text style={styles.savedLegend}>{t('complete.logged')}</Text>
           </View>
+          {/* The big line stands alone (founder 2026-07-12). "I'll account for the shortened
+              session in your next recommendation" is a promise the athlete has already been
+              given — at the moment they chose to end early, on the confirm sheet, which is the
+              only moment it could have changed their mind. Repeating it under the finish line
+              turns a closing beat into an explanation. */}
           <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
-          {early ? <Text style={styles.copy}>{t('complete.bodyEarly')}</Text> : null}
 
           {topSet ? (
             <View style={styles.topCard}>

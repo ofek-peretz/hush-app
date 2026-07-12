@@ -67,14 +67,27 @@ interface Props {
 /**
  * The horizontal chevrons are DIRECTIONAL (back / forward / disclosure) everywhere
  * they're used in this app, so they must mirror under RTL — a frozen SVG glyph won't.
- * `play`, `trendingUp`, and `swap` are intentionally NOT mirrored (iOS convention
- * keeps media/trend/exchange glyphs fixed). Vertical chevrons are direction-neutral.
+ * `trendingUp` and `swap` are NOT mirrored (a rising trend rises the same way in every
+ * language; an exchange glyph is a cycle, not a direction). Vertical chevrons are neutral.
+ *
+ * `play` DOES mirror now (founder 2026-07-12: "the start-workout arrow points the opposite
+ * way to every other arrow on the screen"). The iOS convention that freezes a play triangle
+ * is about a MEDIA TRANSPORT — the ▶ on a video, which means "run the tape", not "go that
+ * way". Ours is not that. It sits on "Begin Push A" and "Start run", beside a row of
+ * disclosure chevrons that all point to the start of the line, and it means GO FORWARD.
+ * Forward in Hebrew is leftward. `playCircle` (the Form video) stays frozen — that one
+ * really is a transport control.
  */
 function resolveDirection(name: IconName): IconName {
   if (!I18nManager.isRTL) return name;
   if (name === 'chevronLeft') return 'chevronRight';
   if (name === 'chevronRight') return 'chevronLeft';
   return name;
+}
+
+/** Glyphs whose SVG geometry must be flipped (no mirrored twin exists to swap to). */
+function mirrorsGeometry(name: IconName): boolean {
+  return I18nManager.isRTL && name === 'play';
 }
 
 export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled }: Props) {
@@ -88,7 +101,14 @@ export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth 
   };
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      // A geometric flip about the glyph's own centre — the triangle points the way the
+      // language reads (see mirrorsGeometry).
+      style={mirrorsGeometry(name) ? { transform: [{ scaleX: -1 }] } : undefined}
+    >
       {render(resolveDirection(name), { stroke, strokeWidth, filled: !!filled, common })}
     </Svg>
   );

@@ -33,11 +33,12 @@ import {
   MIN_SPEED_MS,
   haversineM,
   kcalForKm,
+  movementCredit,
   segmentCounts,
 } from './cardioMath';
 
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
-export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, segmentCounts } from './cardioMath';
+export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, movementCredit, segmentCounts } from './cardioMath';
 
 export type GpsState = 'idle' | 'acquiring' | 'ready' | 'denied' | 'unavailable';
 
@@ -101,6 +102,11 @@ export function useCardioTracker(
     lastFix: null as Fix | null,
     gps: 'idle' as GpsState,
     route: [] as CardioPoint[],
+    // The movement proof (see cardioMath): where the activity started, how far the athlete
+    // has actually got from it, and how many consecutive fixes have looked like real movement.
+    origin: null as Fix | null,
+    departedM: 0,
+    movingRun: 0,
   });
 
   const elapsedSecNow = () => {
@@ -135,8 +141,10 @@ export function useCardioTracker(
         clearInterval(id);
         s.activeMs += Date.now() - s.resumedAtMs;
         s.resumedAtMs = 0;
-        // A pause breaks the GPS segment — no distance is credited across it.
+        // A pause breaks the GPS segment — no distance is credited across it, and the
+        // movement has to prove itself again on resume (a paused athlete is a still one).
         s.lastFix = null;
+        s.movingRun = 0;
         s.paceSec = 0;
         publish();
       };
@@ -163,6 +171,8 @@ export function useCardioTracker(
           return;
         }
         sub = await Location.watchPositionAsync(
+          // (expo-location's foreground `watchPositionAsync` does not expose CLActivityType —
+          // it is a background-task option only — so the movement proof is entirely ours.)
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
           (loc) => {
             const { latitude, longitude, accuracy, speed } = loc.coords;
@@ -170,26 +180,40 @@ export function useCardioTracker(
             const goodFix = accuracy != null && accuracy <= MAX_ACCURACY_M;
             if (goodFix && s.gps !== 'ready') s.gps = 'ready';
             if (pausedRef.current || !goodFix) {
-              if (!goodFix) s.lastFix = null; // a poor fix breaks the segment
+              if (!goodFix) {
+                s.lastFix = null; // a poor fix breaks the segment
+                s.movingRun = 0; // …and the movement has to prove itself again
+              }
               return;
             }
             const prev = s.lastFix;
             s.lastFix = { lat: latitude, lon: longitude, tsMs };
+            // The origin is the first fix good enough to trust. Everything the athlete has to
+            // beat — the departure test — is measured from here.
+            if (!s.origin) s.origin = { lat: latitude, lon: longitude, tsMs };
+            s.departedM = haversineM(s.origin.lat, s.origin.lon, latitude, longitude);
             if (!prev) return;
 
             const dtS = (tsMs - prev.tsMs) / 1000;
             const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
-            const counts = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
+            const plausible = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
+            // A plausible segment still has to PROVE itself: movement that holds across
+            // consecutive fixes, from a phone that has actually left where it started. This is
+            // what a chair cannot fake (founder 2026-07-12 — see cardioMath).
+            const credit = movementCredit(plausible, { movingRun: s.movingRun, departedM: s.departedM });
+            s.movingRun = credit.movingRun;
 
-            // Pace shows recent MOVEMENT, never elapsed/position artifacts: a light
-            // EMA over Doppler speed while moving; blank the moment movement stops.
-            if (speed != null && speed >= MIN_SPEED_MS) {
+            // Pace shows recent MOVEMENT, never elapsed/position artifacts: a light EMA over
+            // Doppler speed while moving; blank the moment movement stops. It follows the same
+            // proof as the distance — a pace with no credited distance behind it is the exact
+            // "5:39 /km on a table" lie this whole file exists to prevent.
+            if (credit.counts && speed != null && speed >= MIN_SPEED_MS) {
               const inst = 1000 / speed; // sec/km
               s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : Math.round(inst);
-            } else {
+            } else if (!plausible) {
               s.paceSec = 0;
             }
-            if (!counts) return;
+            if (!credit.counts) return;
 
             const g = gaitRef.current;
             // The trace records only fixes that COUNTED — the same gate as the distance, so the

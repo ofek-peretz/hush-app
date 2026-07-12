@@ -27,7 +27,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend, Button, HoldButton, SegmentedControl, WheelPicker } from '@/components/ds';
+import { Legend, Button, SegmentedControl, WheelPicker } from '@/components/ds';
+import { BottomSheet } from '@/components/BottomSheet';
 import { RouteTrace, MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
 import { db } from '@/data/local/db';
@@ -61,6 +62,7 @@ export function Cardio({ navigation }: Props) {
   const [goalTime, setGoalTime] = useState(30); // min
   const [count, setCount] = useState(3);
   const [paused, setPaused] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const startedAtRef = useRef<string>('');
 
   // GPS warms up during the 3·2·1 countdown (active from 'countdown' on); the clock and
@@ -344,19 +346,26 @@ export function Cardio({ navigation }: Props) {
             </View>
             <View style={styles.pauseActions}>
               <Button variant="onstage" size="lg" block label={t('cardio.resume')} onPress={() => setPaused(false)} leading={<Icon name="play" size={18} color={stageC[0]} />} />
-              {/* HOLD to finish (founder 2026-07-12). A single stray tap here used to end a
-                  10 km run — the exact event that gets an app deleted. Ending is now an act
-                  of intent: the fill sweeps, the wrist gets the warning texture, and letting
-                  go early cancels. */}
-              <HoldButton
-                onStage
-                block
-                label={t('cardio.holdFinish')}
-                onComplete={finish}
-                leading={<Icon name="flag" size={18} color={stageC.ink1} />}
-              />
+              {/* Ending ASKS (founder 2026-07-12). A stray tap must not end a 10 km run — but a
+                  press-and-hold is not the answer either: it is a gesture the athlete has to be
+                  TAUGHT, performed with a shaking hand, on a phone held at arm's length, out of
+                  breath. The watch already guards this correctly with a confirm screen; the
+                  phone now does the same thing. One tap to propose, one tap to mean it. */}
+              <Button variant="danger" size="lg" block label={t('cardio.finish')} onPress={() => setConfirmEnd(true)} leading={<Icon name="flag" size={18} color={stageC.ink0} />} />
             </View>
           </View>
+        ) : null}
+
+        {confirmEnd ? (
+          <BottomSheet onClose={() => setConfirmEnd(false)}>
+            <Legend style={styles.sheetLegend}>{t('cardio.endLegend')}</Legend>
+            <Text style={styles.sheetTitle}>{gait === 'run' ? t('cardio.endTitleRun') : t('cardio.endTitleWalk')}</Text>
+            <Text style={styles.sheetBody}>{t('cardio.endBody')}</Text>
+            <View style={styles.sheetActions}>
+              <Button variant="primary" block label={t('cardio.keepGoing')} onPress={() => setConfirmEnd(false)} />
+              <Button variant="danger" block label={t('cardio.finish')} onPress={finish} />
+            </View>
+          </BottomSheet>
         ) : null}
       </SafeAreaView>
     </View>
@@ -389,16 +398,10 @@ function CardioSelect(props: {
         </View>
       </View>
 
+      {/* The explanation card is GONE (founder 2026-07-12): "Run or walk" is the whole screen,
+          and a paragraph about how I record but do not grade your runs is a disclaimer, not an
+          instruction. The athlete came here to go outside. */}
       <ScrollView contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.introCard}>
-          <Icon name="runner" size={16} color={color.textMuted} strokeWidth={2} />
-          <Text style={styles.introText}>
-            {t('cardio.introPre')}
-            <Text style={styles.introStrong}>{t('cardio.introRecords')}</Text>
-            {t('cardio.introPost')}
-          </Text>
-        </View>
-
         <Legend style={styles.fieldLegend}>{t('cardio.mode')}</Legend>
         <SegmentedControl
           block
@@ -423,7 +426,8 @@ function CardioSelect(props: {
           ]}
         />
 
-        {props.goalKind === 'open' ? <Text style={styles.goalNote}>{t('cardio.goalOpenNote')}</Text> : null}
+        {/* "No goal. Move as long as you like" is what the OPEN segment already says by being
+            selected — the helper line under it was the button explaining itself (founder). */}
         {props.goalKind === 'distance' ? (
           <View style={styles.goalCol}>
             <Text style={styles.goalRowLabel}>{t('cardio.targetDistance')}</Text>
@@ -685,6 +689,12 @@ const styles = StyleSheet.create({
   pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },
   pauseStat: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
   pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
+
+  // the end-confirm sheet (paper — it is a decision, not part of the stage)
+  sheetLegend: { marginBottom: 10 },
+  sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, textAlign: 'left' },
+  sheetBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
+  sheetActions: { marginTop: 22, gap: 10 },
 
   // complete
   completeScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16 },

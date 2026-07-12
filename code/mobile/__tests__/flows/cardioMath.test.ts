@@ -9,6 +9,9 @@
  */
 import {
   segmentCounts,
+  movementCredit,
+  MIN_MOVING_RUN,
+  MIN_DEPARTURE_M,
   kcalForKm,
   haversineM,
   fmtPace,
@@ -32,9 +35,21 @@ describe('segmentCounts — the stationary-indoor case never accrues distance', 
   });
 
   it('rejects loose fixes (indoor accuracy is typically tens of meters)', () => {
+    expect(segmentCounts({ ...good, accuracyM: 21 })).toBe(false);
     expect(segmentCounts({ ...good, accuracyM: 31 })).toBe(false);
     expect(segmentCounts({ ...good, accuracyM: 65 })).toBe(false);
     expect(segmentCounts({ ...good, accuracyM: null })).toBe(false);
+  });
+
+  it('rejects the INCOHERENT segment — a WiFi hop wearing a runner\'s speed', () => {
+    // The chair session (founder, 2026-07-12): indoors, iOS trilaterates off WiFi. It reports a
+    // flattering accuracy, hops 15 m between reference points, and derives a "speed" from those
+    // hops — so the fix arrives looking like a person running. What gives it away is that the
+    // geometry and the Doppler disagree: a real runner covers ≈ speed × dt, a hop does not.
+    expect(segmentCounts({ accuracyM: 14, dopplerSpeedMs: 3.7, segmentM: 15, dtS: 1 })).toBe(false); // 15 m/s geo vs 3.7 doppler
+    expect(segmentCounts({ accuracyM: 14, dopplerSpeedMs: 3.0, segmentM: 1.1, dtS: 1 })).toBe(false); // doppler claims 3 m/s, went 1.1 m
+    // …while a real runner's two numbers agree, and pass.
+    expect(segmentCounts({ accuracyM: 6, dopplerSpeedMs: 3.2, segmentM: 3.3, dtS: 1 })).toBe(true);
   });
 
   it('rejects teleports, sub-meter noise, and broken time deltas', () => {
@@ -46,6 +61,82 @@ describe('segmentCounts — the stationary-indoor case never accrues distance', 
 
   it('accepts a brisk walk (the slowest honest movement)', () => {
     expect(segmentCounts({ accuracyM: 12, dopplerSpeedMs: 1.3, segmentM: 1.4, dtS: 1 })).toBe(true);
+  });
+});
+
+describe('movementCredit — the movement has to prove itself (founder 2026-07-12)', () => {
+  it('a lone plausible fix credits NOTHING — one fix is noise, a run of them is a person', () => {
+    const c = movementCredit(true, { movingRun: 0, departedM: 100 });
+    expect(c.counts).toBe(false);
+    expect(c.movingRun).toBe(1);
+  });
+
+  it('credits once the movement has held AND the athlete has left where they started', () => {
+    const c = movementCredit(true, { movingRun: MIN_MOVING_RUN - 1, departedM: MIN_DEPARTURE_M });
+    expect(c.counts).toBe(true);
+  });
+
+  it('never credits while the athlete is still orbiting the origin — jitter goes nowhere', () => {
+    // Every fix looks like movement, forever, and the phone has not left the room.
+    let state = { movingRun: 0, departedM: 12 };
+    for (let i = 0; i < 200; i++) {
+      const c = movementCredit(true, state);
+      expect(c.counts).toBe(false);
+      state = { movingRun: c.movingRun, departedM: 12 };
+    }
+  });
+
+  it('a single implausible fix resets the proof — movement must be continuous', () => {
+    expect(movementCredit(false, { movingRun: 9, departedM: 500 })).toEqual({ counts: false, movingRun: 0 });
+  });
+
+  it('THE CHAIR SESSION: sitting still indoors records 0.00 km and an EMPTY route', () => {
+    // Replays the founder's session: he sat in a chair and did not move, and the summary drew a
+    // 70 m zig-zag. Every fix here is the indoor worst case — flattering accuracy, a hop of a
+    // few metres, and a Doppler speed that says "running".
+    const fixes = Array.from({ length: 300 }, (_, i) => ({
+      accuracyM: 12 + (i % 5),
+      dopplerSpeedMs: 1.6 + (i % 3) * 0.7,
+      segmentM: 3 + (i % 7),
+      dtS: 1,
+      departedM: (i % 9) * 2, // wanders around the chair, never leaves it
+    }));
+
+    let state = { movingRun: 0, departedM: 0 };
+    let distM = 0;
+    let routePoints = 0;
+    for (const f of fixes) {
+      const plausible = segmentCounts(f);
+      const credit = movementCredit(plausible, { movingRun: state.movingRun, departedM: f.departedM });
+      if (credit.counts) {
+        distM += f.segmentM;
+        routePoints++;
+      }
+      state = { movingRun: credit.movingRun, departedM: f.departedM };
+    }
+
+    expect(distM).toBe(0);
+    expect(routePoints).toBe(0);
+  });
+
+  it('THE REAL RUN: a 5 km run is credited in full, from the third fix on', () => {
+    let state = { movingRun: 0, departedM: 0 };
+    let distM = 0;
+    let credited = 0;
+    for (let i = 0; i < 1200; i++) {
+      const f = { accuracyM: 6, dopplerSpeedMs: 3.2, segmentM: 3.2, dtS: 1 };
+      const departedM = i * 3.2; // he is actually going somewhere
+      const credit = movementCredit(segmentCounts(f), { movingRun: state.movingRun, departedM });
+      if (credit.counts) {
+        distM += f.segmentM;
+        credited++;
+      }
+      state = { movingRun: credit.movingRun, departedM };
+    }
+    // Everything after the proof window is credited: 1200 fixes minus the handful spent
+    // clearing MIN_MOVING_RUN and the 25 m departure (~8 fixes at 3.2 m each).
+    expect(credited).toBeGreaterThan(1180);
+    expect(distM / 1000).toBeCloseTo(3.8, 1);
   });
 });
 

@@ -41,7 +41,8 @@
     "hubProgress": "Progress",
     "hubProgressSub": "Since you started",
     "restNext": "Your next week opens Sunday morning",
-    "doneThisWeek": "Done this week"
+    "doneThisWeek": "Done this week",
+    "nextUpThisWeek": "Next up"
   },
   "recovery": {
     "sunShort": "Sun",
@@ -51,17 +52,13 @@
     "legend": "Open training",
     "title": "Run or walk",
     "recordedNotCoached": "Recorded, not coached",
-    "introPre": "I coach your lifts. Your runs, I simply ",
-    "introRecords": "records",
-    "introPost": " — no targets, no grading. The effort is yours.",
     "mode": "Mode",
     "run": "Run",
     "walk": "Walk",
-    "goalLegend": "Personal goal · optional",
+    "goalLegend": "Personal goal",
     "goalOpen": "Open",
     "goalDistance": "Distance",
     "goalTime": "Time",
-    "goalOpenNote": "No goal. Move as long as you like — I keep the log either way.",
     "targetDistance": "Target distance",
     "targetTime": "Target time",
     "startRun": "Start run",
@@ -98,8 +95,13 @@
     "gpsAcquiring": "Acquiring GPS signal",
     "gpsOff": "No location access — recording time only",
     "minUnit": "min",
-    "holdFinish": "Hold to finish",
-    "routeLegend": "Route"
+    "routeLegend": "Route",
+    "endLegend": "Finish",
+    "endTitleRun": "Finish the run here?",
+    "endTitleWalk": "Finish the walk here?",
+    "endBody": "The distance, the time and the route are saved to your log.",
+    "keepGoing": "Keep going",
+    "finish": "Finish & save"
   },
   "ob": {
     "continue": "Continue",
@@ -210,13 +212,16 @@
     "actualReps": "Actual reps",
     "editDone": "Done",
     "setSaveFailed": "That set did not save. Complete it again.",
-    "finishFailed": "That did not finish. Your completed sets are saved."
+    "finishFailed": "That did not finish. Your completed sets are saved.",
+    "tapToEdit": "Tap to edit",
+    "actualWeightWith": "Actual weight · {{unit}}"
   },
   "finishSheet": {
-    "legend": "Finish early",
-    "body": "End this session now? Everything you did counts toward the next program I build for you.",
-    "save": "Finish & save",
-    "keep": "Keep training"
+    "legend": "End workout",
+    "body": "Everything you have done so far is saved, and counts toward the next program I build for you.",
+    "save": "End workout",
+    "keep": "Keep training",
+    "title": "End the workout here?"
   },
   "reasonSheet": {
     "header": "Why {{weight}}",
@@ -235,7 +240,6 @@
   "pauseSheet": {
     "legend": "Workout",
     "title": "Workout paused",
-    "body": "End this session now? Everything you did counts toward the next program I build for you.",
     "resume": "Resume workout",
     "showExercise": "Show exercise",
     "finishEarly": "Finish early",
@@ -248,12 +252,13 @@
     "verdictDown": "Matched",
     "verdictHold": "Held",
     "trigger": "Why this load",
-    "learning": "A week of getting to know you. From next week I match the loads and the reps to you precisely.",
+    "learning": "From next week I match the loads and the reps to you precisely.",
     "lineUp": "Your last sessions cleared the top of the range here, so I moved the load up {{delta}} {{unit}}.",
     "lineDown": "Your recent sets came in under range, so I matched the load to what you're lifting clean — and kept every set.",
     "lineHold": "Right on target — strong, but I held the load until the signal is clean.",
     "note": "I never move a load on a single session. I read the pattern, then act — your job is just to lift.",
-    "got": "Got it"
+    "got": "Got it",
+    "learningTitle": "A week of getting to know each other."
   },
   "rest": {
     "ready": "Ready"
@@ -460,7 +465,7 @@
   "report": {
     "title": "Your progress",
     "subtitle": "Your strongest lifts, then and now.",
-    "empty": "Train a lift twice and I can show you the distance between then and now.",
+    "empty": "Strength is the one thing that only shows up in the looking back. Train, and I will show you how far you came.",
     "totalAdded": "Total strength added",
     "startingPoint": "Your starting point",
     "startingPointSub": "This is where you begin. Every gain from here is measured against it.",
@@ -485,7 +490,7 @@
     "duration": "Duration",
     "setsLabel": "Sets",
     "volumeLabel": "Volume",
-    "empty": "Every set you complete is written here, and nothing else ever is.",
+    "empty": "Every workout you finish is written here. Go and write the first one.",
     "count": "You completed {{n}} sessions.",
     "annIncreased": "I increased your {{target}}.",
     "annSwapped": "I swapped in {{exercise}} — the rack was taken.",
@@ -496,7 +501,7 @@
     "minutesShort": "{{min}} min",
     "summaryMoved_one": " moved across {{count}} week. Every rep you’ve done is here.",
     "summaryMoved_other": " moved across {{count}} weeks. Every rep you’ve done is here.",
-    "emptyTitle": "The ledger is clean."
+    "emptyTitle": "The first page is blank."
   },
   "profile": {
     "units": "Units",
@@ -541,7 +546,8 @@
     "healthImporting": "Heart rate · calories · distance",
     "healthNote": "I read heart rate, calories and distance for the runs and walks you record. I never write to Health, and none of it touches your lifting program.",
     "notSet": "Not set",
-    "daysSummary": "{{n}}×/week"
+    "daysSummary": "{{n}}×/week",
+    "healthOpenSettings": "Opening Settings — Health is granted there"
   },
   "settings": {
     "units": "Units",

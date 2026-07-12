@@ -35,11 +35,11 @@ import { db } from '@/data/local/db';
 import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius } from '@/design/tokens';
+import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'reasoning' | 'demo' | 'firstGym';
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym';
 type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -295,14 +295,32 @@ export function SessionFlow({ navigation }: Props) {
         )}
       </SafeAreaView>
 
+      {/* PAUSED — two doors, no essay (founder 2026-07-12). The paragraph explaining that
+          completed sets are saved was reassurance for a fear the athlete does not have while
+          the workout is merely PAUSED. What they want here is to go back in, or to stop. */}
       {overlay === 'pause' ? (
         <BottomSheet onClose={resume}>
           <Legend style={styles.sheetLegend}>{t('pauseSheet.legend')}</Legend>
           <Text style={styles.sheetTitle}>{t('pauseSheet.title')}</Text>
-          <Text style={styles.sheetBody}>{t('pauseSheet.body')}</Text>
           <View style={styles.sheetActions}>
             <Button variant="primary" block label={t('pauseSheet.resume')} onPress={resume} />
-            <Button variant="danger" block label={t('pauseSheet.finishWorkout')} onPress={finish} />
+            <Button variant="danger" block label={t('pauseSheet.finishWorkout')} onPress={() => setOverlay('endConfirm')} />
+          </View>
+        </BottomSheet>
+      ) : null}
+
+      {/* ENDING IS GUARDED — the same law the watch already holds (2026-07-12). Ending a workout
+          is destructive of the rest of it, so it ASKS, and the answer tells the athlete the one
+          thing that matters: nothing you did is lost. Keep going is the primary; the end act is
+          the clay danger button. */}
+      {overlay === 'endConfirm' ? (
+        <BottomSheet onClose={() => setOverlay('pause')}>
+          <Legend style={styles.sheetLegend}>{t('finishSheet.legend')}</Legend>
+          <Text style={styles.sheetTitle}>{t('finishSheet.title')}</Text>
+          <Text style={styles.sheetBody}>{t('finishSheet.body')}</Text>
+          <View style={styles.sheetActions}>
+            <Button variant="primary" block label={t('finishSheet.keep')} onPress={() => setOverlay('pause')} />
+            <Button variant="danger" block label={t('finishSheet.save')} onPress={finish} />
           </View>
         </BottomSheet>
       ) : null}
@@ -339,16 +357,26 @@ export function SessionFlow({ navigation }: Props) {
 }
 
 /* --------------------------------------------------------------- Stage chrome */
-function StageBar({ center, onExit }: { center: string; onExit: () => void }) {
+/**
+ * The stage's one chrome element: the way out.
+ *
+ * FOUNDER 2026-07-12: "the pause mark gets swallowed — you can't see it at all, and it even
+ * touches the ring." Both true. It was a bare 20px stroke in ink1 (a mid grey) floating on
+ * black with no ground of its own, and on the rest screen the ring came up to meet it. It is
+ * now a real control — a bordered graphite chip, ink0 glyph, on a bar tall enough to keep the
+ * ring off it. It is also a PAUSE, so it says pause: an ✕ reads as "discard", which is exactly
+ * the wrong promise for a button that saves everything.
+ */
+function StageBar({ center, onExit }: { center?: string; onExit: () => void }) {
   const { t } = useCopy();
   return (
     <View style={styles.stageBar}>
       <View style={styles.stageBarSide}>
-        <IconButton onStage accessibilityLabel={t('pauseSheet.title')} onPress={onExit}>
-          <Icon name="close" size={20} color={stage.ink1} strokeWidth={2} />
+        <IconButton onStage bordered accessibilityLabel={t('pauseSheet.title')} onPress={onExit} style={styles.pauseBtn}>
+          <Icon name="pause" size={18} color={stage.ink0} strokeWidth={2.2} />
         </IconButton>
       </View>
-      <Text style={styles.stageBarCenter}>{center}</Text>
+      {center ? <Text style={styles.stageBarCenter}>{center}</Text> : <View style={styles.flex} />}
       <View style={[styles.stageBarSide, styles.stageBarRight]} />
     </View>
   );
@@ -543,9 +571,18 @@ function ActiveSet({
 
   return (
     <>
-      <StageBar center={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
+      {/* WHERE AM I, IN ONE LINE (founder 2026-07-12: "1 / 6 is so small you cannot notice it
+          at all"). The ordinal used to be a micro-legend in the top bar, physically as far from
+          the athlete's eye as it could be. It now rides WITH the muscle group — the two facts
+          that answer "where am I" belong together, at a size a person can read at arm's length,
+          mid-set, out of breath. */}
+      <StageBar onExit={onExit} />
       <View style={styles.stageBody}>
-        {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
+        <View style={styles.groupRow}>
+          {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
+          {group ? <View style={styles.groupSep} /> : null}
+          <Text style={styles.exOrdinal}>{t('workout.exerciseCount', { n: exNo, N: total })}</Text>
+        </View>
         <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
 
         {!editing ? (
@@ -556,22 +593,37 @@ function ActiveSet({
                   number that carries the work (and the one Hush actually progresses on a
                   bodyweight lift) is the REP COUNT, so it takes the hero mark and "bodyweight"
                   drops to a whisper beneath it. */}
-            {isBodyweight ? (
-              <>
+            {/* THE NUMBER IS THE DOOR TO THE EDIT (founder 2026-07-12: "I love that pressing the
+                number opens the set edit — it just has to be OBVIOUS that it does, and then the
+                pencil at the bottom can go"). So the hero is a real control now: it carries a
+                dashed rule beneath it — the universal "this value is editable" mark — and the
+                pencil ghost is gone from the footer. One affordance, on the thing it edits. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('workout.editResult')}
+              onPress={onToggleEdit}
+              hitSlop={12}
+              style={({ pressed }) => [styles.heroPress, pressed && styles.heroPressed]}
+            >
+              {isBodyweight ? (
+                <>
+                  <View style={styles.heroRow}>
+                    <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
+                      {target.recommendedReps}
+                    </Text>
+                    <Text style={styles.heroUnit}>{t('workout.repsUnit')}</Text>
+                  </View>
+                  <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
+                </>
+              ) : (
                 <View style={styles.heroRow}>
-                  <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
-                    {target.recommendedReps}
-                  </Text>
-                  <Text style={styles.heroUnit}>{t('workout.repsUnit')}</Text>
+                  <Text style={styles.hero} accessibilityLabel={`${heroValue} ${unitLabel(units)}`}>{heroValue}</Text>
+                  <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
                 </View>
-                <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
-              </>
-            ) : (
-              <View style={styles.heroRow}>
-                <Text style={styles.hero} accessibilityLabel={`${heroValue} ${unitLabel(units)}`}>{heroValue}</Text>
-                <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
-              </View>
-            )}
+              )}
+              <View style={styles.heroEditRule} />
+              <Text style={styles.heroEditHint}>{t('workout.tapToEdit').toUpperCase()}</Text>
+            </Pressable>
 
             {/* 2 · INSTRUCTION — what the athlete physically does now (part of the prescription). */}
             {setup ? <ExecInstruction setup={setup} toLoad={session.toLoad} units={units} /> : null}
@@ -611,16 +663,20 @@ function ActiveSet({
             ) : null}
           </>
         ) : (
+          /* EDIT (founder 2026-07-12): the unit chips are gone from both rules — the field
+             labels say what these numbers are, and they say it bigger now, because "actual
+             weight" and "actual reps" are the whole reason this screen exists and the athlete
+             must not have to work out which rule is which. */
           <View style={styles.editBlock}>
             {!isBodyweight ? (
               <View style={styles.editRow}>
-                <Text style={styles.editLabel}>{t('workout.actualWeight')}</Text>
-                <WheelPicker value={weight ?? 0} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} unit={unitLabel(units)} label={t('workout.actualWeight')} onStage style={styles.editWheel} />
+                <Text style={styles.editLabel}>{t('workout.actualWeightWith', { unit: unitLabel(units) })}</Text>
+                <WheelPicker value={weight ?? 0} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} label={t('workout.actualWeight')} onStage style={styles.editWheel} />
               </View>
             ) : null}
             <View style={styles.editRow}>
               <Text style={styles.editLabel}>{t('workout.actualReps')}</Text>
-              <WheelPicker value={target.recommendedReps} onChange={setReps} step={1} min={0} max={50} unit={t('workout.repsUnit')} label={t('workout.actualReps')} onStage style={styles.editWheel} />
+              <WheelPicker value={target.recommendedReps} onChange={setReps} step={1} min={0} max={50} label={t('workout.actualReps')} onStage style={styles.editWheel} />
             </View>
           </View>
         )}
@@ -640,7 +696,9 @@ function ActiveSet({
           onPress={onComplete}
         />
         <View style={styles.ghostRow}>
-          <StageGhost icon={editing ? 'check' : 'pencil'} label={editing ? t('workout.editDone') : t('workout.editResult')} onPress={onToggleEdit} />
+          {/* The pencil is GONE (founder 2026-07-12) — the number itself is the edit affordance.
+              While editing, one ghost remains: the way back out without saving. */}
+          {editing ? <StageGhost icon="check" label={t('workout.editDone')} onPress={onToggleEdit} /> : null}
           <StageGhost icon="playCircle" label={t('workout.form')} onPress={onDemo} />
           {canSwap ? <StageGhost icon="repeat" label={t('workout.swapAction')} onPress={onSwap} /> : null}
         </View>
@@ -699,6 +757,8 @@ function Rest({
   const nextReps = nextTarget?.recommendedReps ?? 0;
   const nextSet = session.nextSetLabel;
   const nextDelta = nextTarget?.reasonType;
+  // On a TRANSITION the load is an instruction, so it comes with how to build it (per side).
+  const nextSetup = isTransition ? loadSetup(session.nextExerciseId, nextWeight, units) : null;
 
   // The countdown is anchored to an ABSOLUTE end instant on the wall clock, NOT a
   // per-second decrement. iOS suspends JS timers while backgrounded/locked, so a
@@ -838,6 +898,16 @@ function Rest({
           label={remaining <= 0 ? t('workout.ready') : t('workout.rest')}
         />
 
+        {/* ═══ THE UP-NEXT LAW (founder 2026-07-12, phone AND watch, both languages) ═══
+            REST BETWEEN SETS: the lift's name and which set. Nothing else. The load and the
+            reps were on the stage thirty seconds ago and will be on it again in thirty more —
+            printing them during the rest is noise the athlete has to re-read every time, and it
+            competes with the only number that matters here, the one counting down in the ring.
+
+            REST BEFORE A NEW EXERCISE: the same, PLUS the load and how to build it — how much
+            goes on each side. That is the one moment the athlete stands up and walks to a
+            station, and it is the only rest where a number is an instruction rather than a
+            reminder. The reps still do not appear: you cannot load reps onto a bar. */}
         <View style={styles.upNext}>
           <Legend tone="onStage" style={styles.upNextLegend}>{t('workout.upNext')}</Legend>
           <Card stage pad="md">
@@ -845,29 +915,33 @@ function Rest({
               <View style={styles.upInfo}>
                 {isTransition && nextGroup ? <Text style={styles.upGroup}>{t(`muscle.${nextGroup}`).toUpperCase()}</Text> : null}
                 <Text style={styles.upName} numberOfLines={2}>{nextName}</Text>
-                <Text style={styles.upMeta}>
-                  {isTransition
-                    ? t('workout.setsAnd', { sets: nextSet?.m ?? 1, reps: nextReps })
-                    : `${t('workout.setOfM', { n: nextSet?.n ?? 1, m: nextSet?.m ?? 1 })} · × ${nextReps}`}
-                </Text>
+                <Text style={styles.upMeta}>{t('workout.setOfM', { n: nextSet?.n ?? 1, m: nextSet?.m ?? 1 })}</Text>
               </View>
-              <View style={styles.upRight}>
-                <Text style={styles.upWeight}>
-                  {nextWeight != null ? nextWeight : t('workout.bodyweight')}
-                  {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
-                </Text>
-                {isTransition && nextDelta ? (
-                  <View style={styles.upDelta}>
-                    <LoadDelta
-                      direction={nextDelta === 'increase' ? 'up' : 'down'}
-                      value={displayWeight(Math.abs(nextTarget?.reasonDelta ?? 0), units) ?? 0}
-                      unit={unitLabel(units)}
-                      size="sm"
-                    />
-                  </View>
-                ) : null}
-              </View>
+              {isTransition ? (
+                <View style={styles.upRight}>
+                  <Text style={styles.upWeight}>
+                    {nextWeight != null ? nextWeight : t('workout.bodyweight')}
+                    {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
+                  </Text>
+                  {nextDelta ? (
+                    <View style={styles.upDelta}>
+                      <LoadDelta
+                        direction={nextDelta === 'increase' ? 'up' : 'down'}
+                        value={displayWeight(Math.abs(nextTarget?.reasonDelta ?? 0), units) ?? 0}
+                        unit={unitLabel(units)}
+                        size="sm"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
+            {/* How to BUILD that load — the plates per side, the pin, the pair of dumbbells. */}
+            {isTransition && nextSetup ? (
+              <View style={styles.upSetup}>
+                <ExecInstruction setup={nextSetup} toLoad units={units} />
+              </View>
+            ) : null}
             {isTransition ? (
               <View style={styles.upActions}>
                 <StageGhost icon="playCircle" label={t('workout.form')} onPress={onDemo} />
@@ -923,17 +997,17 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   // Week 1 is the LEARNING week (founder 2026-07-09): Hush is still getting to know the athlete, so
   // there is no up/down yet — pressing Why explains exactly that instead of a load change.
   if (week <= 1) {
+    // TWO LINES, NOTHING ELSE (founder 2026-07-12). In week one there is no decision to explain
+    // — there is no history to have made one from — so the sheet had been padding the silence
+    // with the lift's name, a shield, and a paragraph about how I don't move loads on a single
+    // session. All of that is answering a question the athlete did not ask. What they asked is
+    // "why this load", and in week one the whole honest answer is: I don't know you yet, and
+    // next week I will.
     return (
       <BottomSheet onClose={onClose}>
         <Legend style={styles.sheetLegend}>{t('whyLoad.legend')}</Legend>
-        <View style={styles.whyHead}>
-          <Text style={styles.whyName} numberOfLines={1}>{exName}</Text>
-        </View>
+        <Text style={styles.whyLearnTitle}>{t('whyLoad.learningTitle')}</Text>
         <Text style={styles.whyLine}>{t('whyLoad.learning')}</Text>
-        <View style={styles.whyNote}>
-          <Icon name="shield" size={16} color={color.textTertiary} strokeWidth={2} />
-          <Text style={styles.whyNoteText}>{t('whyLoad.note')}</Text>
-        </View>
         <Button variant="primary" block label={t('whyLoad.got')} onPress={onClose} style={styles.whyGot} />
       </BottomSheet>
     );
@@ -987,7 +1061,10 @@ const styles = StyleSheet.create({
   center: { flex: 1 },
 
   // Stage chrome
-  stageBar: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
+  flex: { flex: 1 },
+  // Taller (the rest ring used to come up and touch the control) + a real, bordered chip.
+  stageBar: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
+  pauseBtn: { backgroundColor: stage[1] },
   stageBarSide: { width: 44 },
   stageBarRight: { alignItems: 'flex-end' },
   stageBarCenter: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
@@ -996,11 +1073,20 @@ const styles = StyleSheet.create({
   stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 14, gap: 10 },
 
   // Active set
-  group: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10, textAlign: 'left' },
+  // "Where am I" — the muscle group and the ordinal, one line, legible at arm's length.
+  groupRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 12 },
+  group: { fontFamily: font.sansSemibold, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
+  groupSep: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: stage.ink2 },
+  exOrdinal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   loadBtnPressed: { opacity: 0.55 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  // The hero IS the edit control — a dashed rule under an editable value, and a whispered hint.
+  heroPress: { alignItems: 'center' },
+  heroPressed: { opacity: press.opacity },
+  heroEditRule: { alignSelf: 'stretch', height: 0, borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: stage[2], marginTop: 6 },
+  heroEditHint: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: stage.ink2, marginTop: 7, textAlign: 'center' },
   // Instruction-first execution: the imperative chip (TO-LOAD) + the quiet confirmation (LOADED),
   // sitting directly under the load — the athlete's "what do I do now?".
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
@@ -1039,7 +1125,8 @@ const styles = StyleSheet.create({
   editBlock: { marginTop: 30, width: '100%', maxWidth: 300, gap: 16 },
   editRow: { gap: 8 },
   editWheel: { alignSelf: 'stretch' },
-  editLabel: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
+  // The field labels ARE the units now (the chips came off the rules) — so they are read, not squinted at.
+  editLabel: { fontFamily: font.sansSemibold, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
 
   dotsWrap: { marginTop: 24, alignItems: 'center' },
   dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
@@ -1077,6 +1164,7 @@ const styles = StyleSheet.create({
   upWeight: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   upDelta: { marginTop: 4 },
+  upSetup: { marginTop: 12, alignItems: 'center' },
   upActions: { flexDirection: 'row', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: stage[2] },
 
   // Sheets
@@ -1095,6 +1183,7 @@ const styles = StyleSheet.create({
   whyTo: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -0.7, textAlign: 'left' },
   whyKg: { fontFamily: font.mono, fontSize: textScale.md, color: color.textMuted, textAlign: 'left' },
   whyLine: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 23, marginTop: 14, textAlign: 'left' },
+  whyLearnTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 10, textAlign: 'left' },
   whyNote: { flexDirection: 'row', gap: 9, marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: color.border },
   whyNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20, textAlign: 'left' },
   whyGot: { marginTop: 18 },

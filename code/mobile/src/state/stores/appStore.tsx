@@ -191,6 +191,8 @@ interface AppApi extends AppState {
   }) => Promise<void>;
   /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
   setVolume: (volume: WeeklyVolume) => Promise<void>;
+  /** Persist the Apple Health connection (Settings). The switch's only writer. */
+  setHealthConnected: (connected: boolean) => Promise<void>;
   /** Deliberate replacement: persist the chosen exercise as the slot's preference (R18). */
   replaceSlotExercise: (dayId: string, slotIndex: number, exerciseId: string) => Promise<void>;
   /** Lock System: toggle the athlete lock on a slot. A locked slot is never auto-swapped by the
@@ -690,6 +692,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             /* offline — applies on the next weekly regeneration */
           }
         }
+      },
+
+      /**
+       * Persist the Health connection (Settings → Apple Health).
+       *
+       * FOUNDER 2026-07-12: "if I didn't turn Apple Health on at the start, Settings won't let
+       * me turn it on." Exactly right, and the reason is that the switch had NO WRITER — it read
+       * `profile.healthConnected`, which only onboarding ever set. Running the permission flow
+       * again changed nothing the switch could see, so it snapped straight back to off.
+       */
+      async setHealthConnected(connected) {
+        if (!state.profile || state.profile.healthConnected === connected) return;
+        const profile: Profile = { ...state.profile, healthConnected: connected };
+        await db.saveProfile(profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile });
+        void track('health_connection_changed', { connected });
       },
 
       async setVolume(volume) {
