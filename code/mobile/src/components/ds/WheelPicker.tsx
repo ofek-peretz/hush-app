@@ -40,7 +40,7 @@
  * the active detent between two exact-width spacers, so content size never changes and
  * far targets are always populated.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -292,6 +292,8 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const win = wheelWindow(anchor, values.length);
   const numRest = onStage ? stage.ink0 : color.textPrimary;
   const anchorGeo = anchorGeometry(h);
+  /** What the scale is standing on RIGHT NOW — the edge fades have to dissolve into it. */
+  const surfaceNow = onStage ? stage[1] : live ? color.accentWash : color.surface;
 
   return (
     <View
@@ -388,8 +390,8 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
         <View pointerEvents="none" style={[styles.baseline, onStage && styles.baselineStage, { bottom: anchorGeo.bottom + OVERSHOOT }]} />
         {/* The scale runs off both ends rather than stopping at a wall: the numerals dissolve
             into the surface, so the rule reads as a window onto a longer track. */}
-        <EdgeFade side="start" color={onStage ? stage[1] : color.surface} />
-        <EdgeFade side="end" color={onStage ? stage[1] : color.surface} />
+        <EdgeFade side="start" color={surfaceNow} />
+        <EdgeFade side="end" color={surfaceNow} />
         {/* THE ANCHOR — an ochre index line THROUGH the scale, overshooting the tick band top
             and bottom. Not a pair of decorative ticks: the one unambiguous statement of
             "this is the value". Its geometry is derived from the scale (anchorGeometry), so it
@@ -399,7 +401,9 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
         </View>
       </View>
       {unit ? (
-        <View style={[styles.unitBox, onStage && styles.unitBoxStage]}>
+        // The unit cell shares the rule's surface — including while it is lit, or it would sit as
+        // a cream tab welded onto an ochre instrument.
+        <View style={[styles.unitBox, onStage && styles.unitBoxStage, live && !onStage && styles.unitBoxLive]}>
           <Text style={[styles.unit, onStage && styles.unitStage]}>{unit}</Text>
         </View>
       ) : null}
@@ -407,9 +411,18 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   );
 }
 
-/** A soft dissolve at one end of the scale — the surface colour fading to nothing over 34px. */
+/**
+ * A soft dissolve at one end of the scale — the surface colour fading to nothing over 34px.
+ *
+ * `color` is the colour of the surface the scale is ACTUALLY on right now, which changes: the
+ * rule tints ochre under the finger. A fade hardcoded to the resting surface would paint a cream
+ * smudge over the tint at the exact moment the athlete is looking at it (i.e. mid-scroll).
+ *
+ * The gradient id is per-INSTANCE (`useId`). Three of these mount side by side on Body data, and
+ * a shared `url(#…)` reference is precisely the kind of thing that resolves to the wrong brush.
+ */
 function EdgeFade({ side, color: c }: { side: 'start' | 'end'; color: string }) {
-  const id = `wheelFade-${side}`;
+  const id = `wheelFade-${side}-${useId()}`;
   return (
     <View pointerEvents="none" style={[styles.fade, side === 'start' ? styles.fadeStart : styles.fadeEnd]}>
       <Svg width="100%" height="100%">
@@ -489,6 +502,7 @@ const styles = StyleSheet.create({
 
   // Inverted "stage" treatment — graphite surface + ink, ochre anchor (unchanged).
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
+  unitBoxLive: { backgroundColor: color.accentWash, borderStartColor: signal[0] },
   unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
   unitStage: { color: stage.ink2 },
 });

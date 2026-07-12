@@ -10,6 +10,7 @@
 import {
   segmentCounts,
   movementCredit,
+  requiredDepartureM,
   MIN_MOVING_RUN,
   MIN_DEPARTURE_M,
   kcalForKm,
@@ -34,9 +35,14 @@ describe('segmentCounts — the stationary-indoor case never accrues distance', 
     expect(segmentCounts({ ...good, dopplerSpeedMs: null })).toBe(false);
   });
 
-  it('rejects loose fixes (indoor accuracy is typically tens of meters)', () => {
-    expect(segmentCounts({ ...good, accuracyM: 21 })).toBe(false);
-    expect(segmentCounts({ ...good, accuracyM: 31 })).toBe(false);
+  it('rejects USELESS fixes — but keeps the merely loose ones a real run produces', () => {
+    // The cap is 30 m, not 20. A street of tall buildings or heavy tree cover reports 20–35 m
+    // routinely, and a tighter cap would hand a real 10 km back to the athlete as 0.00 km. The
+    // loose-but-real fix is kept and made to prove itself by DEPARTURE instead (movementCredit),
+    // which is the honest test: go further than your own error bar.
+    expect(segmentCounts({ ...good, accuracyM: 21 })).toBe(true); // a real run under trees
+    expect(segmentCounts({ ...good, accuracyM: 29 })).toBe(true); // a real run in a city canyon
+    expect(segmentCounts({ ...good, accuracyM: 31 })).toBe(false); // past this a fix says nothing
     expect(segmentCounts({ ...good, accuracyM: 65 })).toBe(false);
     expect(segmentCounts({ ...good, accuracyM: null })).toBe(false);
   });
@@ -65,29 +71,62 @@ describe('segmentCounts — the stationary-indoor case never accrues distance', 
 });
 
 describe('movementCredit — the movement has to prove itself (founder 2026-07-12)', () => {
+  const GOOD_FIX = 6; // metres of accuracy — an honest outdoor GPS fix
+  const far = { movingRun: 0, departedM: 500, accuracyM: GOOD_FIX, proven: false };
+
   it('a lone plausible fix credits NOTHING — one fix is noise, a run of them is a person', () => {
-    const c = movementCredit(true, { movingRun: 0, departedM: 100 });
+    const c = movementCredit(true, far);
     expect(c.counts).toBe(false);
     expect(c.movingRun).toBe(1);
+    expect(c.proven).toBe(false);
   });
 
   it('credits once the movement has held AND the athlete has left where they started', () => {
-    const c = movementCredit(true, { movingRun: MIN_MOVING_RUN - 1, departedM: MIN_DEPARTURE_M });
+    const c = movementCredit(true, { ...far, movingRun: MIN_MOVING_RUN - 1, departedM: MIN_DEPARTURE_M });
     expect(c.counts).toBe(true);
+    expect(c.proven).toBe(true);
   });
 
   it('never credits while the athlete is still orbiting the origin — jitter goes nowhere', () => {
-    // Every fix looks like movement, forever, and the phone has not left the room.
-    let state = { movingRun: 0, departedM: 12 };
+    let state = { movingRun: 0, departedM: 12, accuracyM: 14, proven: false };
     for (let i = 0; i < 200; i++) {
       const c = movementCredit(true, state);
       expect(c.counts).toBe(false);
-      state = { movingRun: c.movingRun, departedM: 12 };
+      state = { ...state, movingRun: c.movingRun, proven: c.proven };
     }
   });
 
-  it('a single implausible fix resets the proof — movement must be continuous', () => {
-    expect(movementCredit(false, { movingRun: 9, departedM: 500 })).toEqual({ counts: false, movingRun: 0 });
+  it('YOU MUST OUT-MOVE YOUR OWN ERROR BAR — a loose fix has to go further to be believed', () => {
+    // A ±30 m fix can land 30 m from the truth while the phone has not moved. Asking it for a
+    // flat 25 m departure asks it for less than its own noise, which is asking for nothing.
+    expect(requiredDepartureM(6)).toBe(MIN_DEPARTURE_M); // a tight fix: the floor governs
+    expect(requiredDepartureM(30)).toBe(60); // a loose one: twice its uncertainty
+    expect(requiredDepartureM(null)).toBe(60); // unknown accuracy is treated as the worst case
+
+    const loose = { movingRun: MIN_MOVING_RUN, departedM: 40, accuracyM: 30, proven: false };
+    expect(movementCredit(true, loose).counts).toBe(false); // 40 m is inside a ±30 m fix's noise
+    expect(movementCredit(true, { ...loose, departedM: 61 }).counts).toBe(true); // 61 m is not
+  });
+
+  it('a single implausible fix breaks the RUN but never un-proves the activity', () => {
+    const c = movementCredit(false, { movingRun: 9, departedM: 500, accuracyM: GOOD_FIX, proven: true });
+    expect(c).toEqual({ counts: false, movingRun: 0, proven: true });
+  });
+
+  it('THE TRAFFIC LIGHT: a proven runner who stops and starts loses nothing', () => {
+    // The proof is about the ACTIVITY — this person is outdoors and running. Re-demanding it
+    // after every stop would throw away three fixes each time, which over a city 10 km is a
+    // hundred metres of real distance surrendered to guard against a chair they are not in.
+    let state = { movingRun: 6, departedM: 900, accuracyM: GOOD_FIX, proven: true };
+    // …stopped at the light: the fixes stop looking like movement.
+    for (let i = 0; i < 20; i++) {
+      const c = movementCredit(false, state);
+      expect(c.counts).toBe(false);
+      state = { ...state, movingRun: c.movingRun, proven: c.proven };
+    }
+    // …green. The very first stride back is credited — no re-trial.
+    const first = movementCredit(true, state);
+    expect(first.counts).toBe(true);
   });
 
   it('THE CHAIR SESSION: sitting still indoors records 0.00 km and an EMPTY route', () => {
@@ -102,39 +141,71 @@ describe('movementCredit — the movement has to prove itself (founder 2026-07-1
       departedM: (i % 9) * 2, // wanders around the chair, never leaves it
     }));
 
-    let state = { movingRun: 0, departedM: 0 };
+    let state = { movingRun: 0, proven: false };
     let distM = 0;
     let routePoints = 0;
     for (const f of fixes) {
       const plausible = segmentCounts(f);
-      const credit = movementCredit(plausible, { movingRun: state.movingRun, departedM: f.departedM });
+      const credit = movementCredit(plausible, {
+        movingRun: state.movingRun,
+        departedM: f.departedM,
+        accuracyM: f.accuracyM,
+        proven: state.proven,
+      });
       if (credit.counts) {
         distM += f.segmentM;
         routePoints++;
       }
-      state = { movingRun: credit.movingRun, departedM: f.departedM };
+      state = { movingRun: credit.movingRun, proven: credit.proven };
     }
 
     expect(distM).toBe(0);
     expect(routePoints).toBe(0);
   });
 
-  it('THE REAL RUN: a 5 km run is credited in full, from the third fix on', () => {
-    let state = { movingRun: 0, departedM: 0 };
+  it('THE CITY RUNNER: a real run under tall buildings is credited, not zeroed', () => {
+    // The first cut of this fix capped accuracy at 20 m, which reads a street of tall buildings
+    // (20–35 m fixes are routine there) as "not moving" and hands a real 10 km back as 0.00 km.
+    // Zeroing a real run is a far worse failure than over-counting a chair.
+    let state = { movingRun: 0, proven: false };
+    let distM = 0;
+    for (let i = 0; i < 1200; i++) {
+      const f = { accuracyM: 24, dopplerSpeedMs: 3.2, segmentM: 3.2, dtS: 1 };
+      const departedM = i * 3.2;
+      const credit = movementCredit(segmentCounts(f), {
+        movingRun: state.movingRun,
+        departedM,
+        accuracyM: f.accuracyM,
+        proven: state.proven,
+      });
+      if (credit.counts) distM += f.segmentM;
+      state = { movingRun: credit.movingRun, proven: credit.proven };
+    }
+    // Everything after the proof (a 24 m fix must depart 48 m ≈ 15 fixes) is credited in full.
+    expect(distM / 1000).toBeGreaterThan(3.7);
+  });
+
+  it('THE REAL RUN: a clean 5 km is credited in full, from the third fix on', () => {
+    let state = { movingRun: 0, proven: false };
     let distM = 0;
     let credited = 0;
     for (let i = 0; i < 1200; i++) {
-      const f = { accuracyM: 6, dopplerSpeedMs: 3.2, segmentM: 3.2, dtS: 1 };
+      const f = { accuracyM: GOOD_FIX, dopplerSpeedMs: 3.2, segmentM: 3.2, dtS: 1 };
       const departedM = i * 3.2; // he is actually going somewhere
-      const credit = movementCredit(segmentCounts(f), { movingRun: state.movingRun, departedM });
+      const credit = movementCredit(segmentCounts(f), {
+        movingRun: state.movingRun,
+        departedM,
+        accuracyM: f.accuracyM,
+        proven: state.proven,
+      });
       if (credit.counts) {
         distM += f.segmentM;
         credited++;
       }
-      state = { movingRun: credit.movingRun, departedM };
+      state = { movingRun: credit.movingRun, proven: credit.proven };
     }
-    // Everything after the proof window is credited: 1200 fixes minus the handful spent
-    // clearing MIN_MOVING_RUN and the 25 m departure (~8 fixes at 3.2 m each).
+    // Everything after the proof window is credited: 1200 fixes minus the handful spent clearing
+    // MIN_MOVING_RUN and the 25 m departure (~8 fixes at 3.2 m each).
     expect(credited).toBeGreaterThan(1180);
     expect(distM / 1000).toBeCloseTo(3.8, 1);
   });

@@ -23,7 +23,7 @@
  * Locked/background: the handler doesn't run, so the scheduled alert wakes the screen.
  */
 import * as Notifications from 'expo-notifications';
-import i18next from 'i18next';
+import { tg } from '@/i18n';
 import { ensureNotificationPermission } from '@/platform/notifications';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import { track } from '@/platform/telemetry';
@@ -86,8 +86,8 @@ export const restHaptics: RestHaptics = {
         await Notifications.scheduleNotificationAsync({
           identifier: WARN_ID,
           content: {
-            title: i18next.t('notifications.restWarnTitle'),
-            body: i18next.t('notifications.restWarnBody'),
+            title: tg('notifications.restWarnTitle'),
+            body: tg('notifications.restWarnBody'),
             data: { kind: 'rest_warn' }, // rest_* → suppressed in foreground by the handler
             sound, // silent when the wrist is buzzing; still wakes the screen (timeSensitive)
             // A rest timer must pierce the LOCK SCREEN + Focus modes. Default `.active`
@@ -102,8 +102,8 @@ export const restHaptics: RestHaptics = {
         await Notifications.scheduleNotificationAsync({
           identifier: DONE_ID,
           content: {
-            title: i18next.t('notifications.restDoneTitle'),
-            body: i18next.t('notifications.restDoneBody'),
+            title: tg('notifications.restDoneTitle'),
+            body: tg('notifications.restDoneBody'),
             data: { kind: 'rest_done' },
             sound,
             interruptionLevel: 'timeSensitive', // break through lock screen + Focus (see rest_warn)

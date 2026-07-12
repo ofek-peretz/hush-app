@@ -19,7 +19,7 @@
  */
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import i18next from 'i18next';
+import { tg } from '@/i18n';
 import type { SessionMirror } from './sessionMirror';
 import type { CardioGait } from '@/data/local/models';
 
@@ -121,10 +121,18 @@ export function liveActivityStateFromMirror(mirror: SessionMirror): LiveActivity
     workoutName: mirror.workoutName,
     phase: phaseFromMirror(mirror.phase),
     exerciseName: mirror.exerciseName,
-    // The Live Activity is a PHONE surface, so its set label follows the app
-    // language (the watch is English-only and keeps the raw English mirror.setLabel).
-    // Exercise/workout names stay English by product rule.
-    setLabel: i18next.t('workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
+    // The Live Activity is a PHONE surface, so its set label follows the app language (the watch
+    // is English-only and keeps the raw English mirror labels). Names stay English by product rule.
+    //
+    // DURING A REST, THE SET IS THE NEXT ONE. The machine holds `setIndex` on the set that has
+    // just been completed until the rest ends, so `setNumber` on a rest frame is the set the
+    // athlete already did — and the Lock Screen was showing it back to them while they waited to
+    // do the following one. The mirror now says which set is coming; on a rest, that is the only
+    // set worth naming.
+    setLabel:
+      isResting && mirror.nextSetNumber > 0
+        ? tg('workout.setOfM', { n: mirror.nextSetNumber, m: mirror.nextSetsInExercise })
+        : tg('workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
     liftIndex: mirror.liftIndex,
     liftCount: mirror.liftCount,
     targetWeight: mirror.targetWeight,

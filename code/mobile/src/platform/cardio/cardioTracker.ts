@@ -102,11 +102,13 @@ export function useCardioTracker(
     lastFix: null as Fix | null,
     gps: 'idle' as GpsState,
     route: [] as CardioPoint[],
-    // The movement proof (see cardioMath): where the activity started, how far the athlete
-    // has actually got from it, and how many consecutive fixes have looked like real movement.
+    // The movement proof (see cardioMath): where the activity started, how far the athlete has
+    // actually got from it, how many consecutive fixes have looked like real movement — and
+    // whether the activity has already proven itself (once proven, it stays proven).
     origin: null as Fix | null,
     departedM: 0,
     movingRun: 0,
+    proven: false,
   });
 
   const elapsedSecNow = () => {
@@ -198,10 +200,17 @@ export function useCardioTracker(
             const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
             const plausible = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
             // A plausible segment still has to PROVE itself: movement that holds across
-            // consecutive fixes, from a phone that has actually left where it started. This is
-            // what a chair cannot fake (founder 2026-07-12 — see cardioMath).
-            const credit = movementCredit(plausible, { movingRun: s.movingRun, departedM: s.departedM });
+            // consecutive fixes, from a phone that has gone further than its own error bar. This
+            // is what a chair cannot fake (founder 2026-07-12 — see cardioMath). The proof is
+            // made once per activity, not once per stride.
+            const credit = movementCredit(plausible, {
+              movingRun: s.movingRun,
+              departedM: s.departedM,
+              accuracyM: accuracy,
+              proven: s.proven,
+            });
             s.movingRun = credit.movingRun;
+            s.proven = credit.proven;
 
             // Pace shows recent MOVEMENT, never elapsed/position artifacts: a light EMA over
             // Doppler speed while moving; blank the moment movement stops. It follows the same

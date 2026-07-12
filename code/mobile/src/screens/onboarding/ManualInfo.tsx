@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Legend, WheelPicker, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { getGender } from '@/i18n/gender';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
@@ -21,7 +22,12 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
 export function ManualInfo({ navigation, route }: Props) {
   const { t } = useCopy();
   const healthConnected = route.params?.healthConnected ?? false;
-  const sex = route.params?.sex ?? 'male';
+  // The pick itself is the source of truth, not the params it rode in on. If the route param is
+  // ever lost (state restoration, a nav reset, a deep link), falling back to a hardcoded 'male'
+  // would write a MAN's starting loads into a woman's profile while the copy around her went on
+  // addressing her correctly — a divergence nobody would ever see and the engine would never
+  // recover from. The gender store holds what she actually chose on the previous screen.
+  const sex = route.params?.sex ?? getGender();
   const [age, setAge] = useState(28);
   const [height, setHeight] = useState(178);
   // Weight is entered by hand — Health is now read for cardio metrics, not bodyweight.

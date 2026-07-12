@@ -62,6 +62,9 @@ interface Props {
   color?: string;
   strokeWidth?: number;
   filled?: boolean; // tab glyphs: solid when active
+  /** Opt OUT of RTL geometry mirroring — for a glyph that is a MEDIA TRANSPORT rather than a
+   *  direction of travel (the ▶ on a video). See the note above `resolveDirection`. */
+  noMirror?: boolean;
 }
 
 /**
@@ -75,8 +78,11 @@ interface Props {
  * is about a MEDIA TRANSPORT — the ▶ on a video, which means "run the tape", not "go that
  * way". Ours is not that. It sits on "Begin Push A" and "Start run", beside a row of
  * disclosure chevrons that all point to the start of the line, and it means GO FORWARD.
- * Forward in Hebrew is leftward. `playCircle` (the Form video) stays frozen — that one
- * really is a transport control.
+ * Forward in Hebrew is leftward.
+ *
+ * The one place `play` IS a transport is the video player (components/FormMedia), and a
+ * backwards ▶ on a video is nonsense in any language — that call site passes `noMirror`.
+ * `playCircle` never mirrors: it is only ever a transport.
  */
 function resolveDirection(name: IconName): IconName {
   if (!I18nManager.isRTL) return name;
@@ -90,7 +96,7 @@ function mirrorsGeometry(name: IconName): boolean {
   return I18nManager.isRTL && name === 'play';
 }
 
-export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled }: Props) {
+export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled, noMirror }: Props) {
   const stroke = color;
   const common = {
     stroke,
@@ -107,7 +113,7 @@ export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth 
       viewBox="0 0 24 24"
       // A geometric flip about the glyph's own centre — the triangle points the way the
       // language reads (see mirrorsGeometry).
-      style={mirrorsGeometry(name) ? { transform: [{ scaleX: -1 }] } : undefined}
+      style={!noMirror && mirrorsGeometry(name) ? { transform: [{ scaleX: -1 }] } : undefined}
     >
       {render(resolveDirection(name), { stroke, strokeWidth, filled: !!filled, common })}
     </Svg>

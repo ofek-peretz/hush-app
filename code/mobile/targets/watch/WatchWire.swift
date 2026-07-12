@@ -53,9 +53,16 @@ struct WireMirror: Codable, Equatable {
   var phase: String // active_set | rest_inter | rest_transition | paused | complete
   var exerciseName: String
   var exerciseGroup: String?
+  /// The CURRENT step — which during a rest is the set the athlete has just FINISHED (the phone's
+  /// machine holds `setIndex` until the rest ends). Never render this on a rest screen; render
+  /// `nextSetLabel`, which is the set they are about to do. This screen used to get it wrong and
+  /// the load beside it hid the fact.
   var setLabel: String
   var setNumber: Int?
   var setsInExercise: Int?
+  /// The set that is COMING. Present on every rest frame; nil on an active set / the last set.
+  var nextSetLabel: String?
+  var nextSetNumber: Int?
   var nextSetsInExercise: Int?
   var globalIndex: Int
   var totalSets: Int

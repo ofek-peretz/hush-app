@@ -146,6 +146,30 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
     expect(fields).toEqual(expect.arrayContaining(['style', 'perSide', 'plates', 'barKg']));
   });
 
+  /**
+   * THE WATCH BUILDS ITS OWN MIRRORS TOO.
+   *
+   * `LocalWorkoutEngine.swift` is the standalone runtime — the athlete who trains with the phone
+   * in a locker. It does not receive frames; it PROJECTS them, from its own copy of the plan, with
+   * a hand-written `WireMirror(...)`. So it is a second implementation of the same projector, in
+   * another language, that no TypeScript test has ever looked at — and when `nextSetLabel` was
+   * added to fix the off-by-one set on the wrist, that engine kept sending nil and kept the bug
+   * alive for exactly the athlete the standalone runtime exists for.
+   *
+   * This test reads the Swift and holds it to the same contract: every field the phone's projector
+   * sets on a live frame, the watch's own projector has to set too.
+   */
+  it("the watch's STANDALONE engine projects the same fields the phone does", () => {
+    const engine = readFileSync(join(__dirname, '../../targets/watch/LocalWorkoutEngine.swift'), 'utf8');
+    // The fields that carry meaning on a REST frame — the frame both projectors have got wrong.
+    for (const field of ['nextSetLabel', 'nextSetNumber', 'nextExerciseName', 'nextTargetWeight', 'nextSetsInExercise']) {
+      expect({ field, projected: new RegExp(`m\\.${field}\\s*=`).test(engine) }).toEqual({ field, projected: true });
+    }
+    // …and the closing read-back, which only the watch can build for a standalone workout.
+    expect(engine).toMatch(/lifts:\s*summaryLifts\(\)/);
+    expect(engine).toMatch(/func summaryLifts\(\)\s*->\s*\[WireSummaryLift\]/);
+  });
+
   it('the frame round-trips through JSON without losing a key (the actual transport)', () => {
     const mirror = widestMirror();
     const round = JSON.parse(JSON.stringify(mirror)) as SessionMirror;

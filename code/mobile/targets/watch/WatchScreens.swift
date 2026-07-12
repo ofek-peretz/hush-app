@@ -1041,7 +1041,11 @@ struct InterRestScreen: View {
       VStack(spacing: 3) {
         Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
           .lineLimit(1).minimumScaleFactor(0.75)
-        Text(mirror.setLabel)
+        // THE SET THAT IS COMING — never `setLabel`, which on a rest frame is the set the athlete
+        // has just finished (the phone's machine holds its index until the rest ends). The wrist
+        // was counting the set behind them; nobody caught it because the load printed beside it
+        // was the same either way, and the load is what the eye went to.
+        Text(mirror.nextSetLabel ?? mirror.setLabel)
           .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.7)
       }
@@ -1277,54 +1281,74 @@ struct CompleteScreen: View {
     }
   }
 
+  /// A watchOS workout is six to eight lifts, and eight rows do not fit on a 41 mm case — this
+  /// is the one screen in the app where a scroll is CORRECT (the workout is over; nothing is
+  /// being executed). It follows the read: the list scrolls itself so the check that is landing
+  /// is always the one under the athlete's eye, and the crown still works if they want to look back.
   private var readBack: some View {
     VStack(alignment: .leading, spacing: 0) {
       TopStrip()
       Legend(WatchCopy.reading, size: 10).padding(.top, 2)
-      Spacer(minLength: 4)
-      VStack(alignment: .leading, spacing: 5) {
-        ForEach(Array(lifts.enumerated()), id: \.offset) { i, lift in
-          HStack(spacing: 7) {
-            Group {
-              if i < read {
-                if lift.done {
-                  DrawCheck(size: 12)
-                } else {
-                  // Not a failure — a fact. A lift the athlete did not reach reads as a quiet
-                  // dash, never a red cross.
-                  Rectangle().fill(Palette.ink2).frame(width: 9, height: 1.5)
+      ScrollViewReader { proxy in
+        ScrollView {
+          VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(lifts.enumerated()), id: \.offset) { i, lift in
+              HStack(spacing: 7) {
+                Group {
+                  if i < read {
+                    if lift.done {
+                      DrawCheck(size: 12)
+                    } else {
+                      // Not a failure — a fact. A lift the athlete did not reach reads as a quiet
+                      // dash, never a red cross.
+                      Rectangle().fill(Palette.ink2).frame(width: 9, height: 1.5)
+                    }
+                  } else {
+                    Circle().fill(Palette.stage2).frame(width: 5, height: 5)
+                  }
                 }
-              } else {
-                Circle().fill(Palette.stage2).frame(width: 5, height: 5)
+                .frame(width: 14)
+                Text(lift.name)
+                  .font(.system(size: 13))
+                  .foregroundStyle(i < read ? Palette.ink0 : Palette.ink2)
+                  .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
               }
+              .id(i)
+              .opacity(i < read ? 1 : 0.45)
+              .animation(.easeOut(duration: 0.22), value: read)
             }
-            .frame(width: 14)
-            Text(lift.name)
-              .font(.system(size: 13))
-              .foregroundStyle(i < read ? Palette.ink0 : Palette.ink2)
-              .lineLimit(1).minimumScaleFactor(0.7)
-            Spacer(minLength: 0)
           }
-          .opacity(i < read ? 1 : 0.45)
-          .animation(.easeOut(duration: 0.22), value: read)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, 6)
+        }
+        .onChange(of: read) { _, r in
+          guard r > 0 else { return }
+          withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(r - 1, anchor: .center) }
         }
       }
-      Spacer(minLength: 4)
     }
     .padding(.horizontal, 12).padding(.bottom, 8)
     .contentShape(Rectangle())
     .onTapGesture { finishReading() }
     .task {
+      // `1...0` is not an empty range in Swift — it TRAPS. The branch above cannot reach here
+      // with an empty list, but a crash on a wrist is not a thing to leave to an invariant.
+      guard !lifts.isEmpty else {
+        reading = false
+        return
+      }
       // One tick per lift, then a beat to let the last check land before the result.
-      for i in 1...max(1, lifts.count) {
+      for i in 1...lifts.count {
         try? await Task.sleep(nanoseconds: 260_000_000)
-        if !reading { return }
+        if Task.isCancelled || !reading { return }
         read = i
         // A tap per lift — the machine chewing through the evidence, felt with the wrist down
         // (phone parity: the same tick lands under each check as it appears).
         WatchHaptics.play(.restApproach)
       }
       try? await Task.sleep(nanoseconds: 600_000_000)
+      if Task.isCancelled { return }
       if reading { withAnimation { reading = false } }
     }
   }

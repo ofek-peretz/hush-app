@@ -59,7 +59,7 @@ export function FormMedia({ exerciseId, title }: Props) {
       )}
       {hasVideo ? (
         <View style={styles.center} pointerEvents="none">
-          <Icon name="play" size={28} color={color.textSecondary} />
+          <Icon name="play" size={28} color={color.textSecondary} noMirror />
         </View>
       ) : null}
 

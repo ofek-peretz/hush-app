@@ -164,12 +164,19 @@ export function WellDone({ navigation, route }: Props) {
     return () => clearTimeout(t);
   }, [reduced]);
 
-  // The "reading" checks fill in as the session's lifts resolve. Each check that lands
-  // taps the wrist (founder 2026-07-12): the copy says HUSH IS READING YOUR SESSION, and a
-  // tick per lift is what makes that felt rather than claimed — the machine is chewing
-  // through the evidence, and the athlete can feel it doing so with the phone in a pocket.
+  // The "reading" checks fill in as the session's lifts resolve. Each check that lands taps the
+  // wrist: the copy says the session is being READ, and a tick per lift is what makes that felt
+  // rather than claimed — the machine chewing through the evidence, felt with the phone in a pocket.
+  //
+  // GATED ON THE BEAT IT BELONGS TO. These timers used to be scheduled once and left to run, so
+  // an athlete who tapped to skip — or who moved fast enough to reach the milestone stamp — kept
+  // getting tapped on the wrist by a beat that was no longer on screen, right through the one
+  // moment in the app that is supposed to be silent before it lands. Same family of fault as the
+  // stale phase timer above: a timer that outlives its beat. The dependency on `phase` means the
+  // cleanup cancels every pending tick the instant the beat is over.
   useEffect(() => {
     if (reduced || lifts.length === 0) return;
+    if (phase !== 'saved') return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const STEP = 260;
     const START = 500;
@@ -182,7 +189,7 @@ export function WellDone({ navigation, route }: Props) {
       );
     }
     return () => timers.forEach(clearTimeout);
-  }, [reduced, lifts.length]);
+  }, [reduced, lifts.length, phase]);
 
   function skip() {
     setRead(lifts.length);

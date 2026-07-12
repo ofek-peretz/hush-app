@@ -30,6 +30,7 @@
  * bodyweight.
  */
 import i18next from 'i18next';
+import { getGender } from '@/i18n/gender';
 import type { Capability } from './local/models';
 
 export type EquipmentFamily = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
@@ -493,19 +494,33 @@ export function exerciseDisplayName(id: string | null | undefined): string {
 }
 
 /**
- * Localized technique cues for an exercise. The catalog's English cues are the
- * canonical source; a locale overrides them under `cues.<exerciseId>.<0|1|2>`
- * (Hebrew ships the full library — technique guidance follows the app language even
- * though exercise NAMES stay English by product rule). Falls back to the catalog
- * string per-cue, so a missing translation never blanks a note.
+ * Localized technique cues for an exercise. The catalog's English cues are the canonical source;
+ * a locale overrides them under `cues.<exerciseId>.<0|1|2>` (Hebrew ships the full library —
+ * technique guidance follows the app language even though exercise NAMES stay English by product
+ * rule). Falls back to the catalog string per-cue, so a missing translation never blanks a note.
+ *
+ * GENDER (founder 2026-07-12). Every Hebrew cue that carries a verb is an IMPERATIVE — "הורד
+ * לחזה בשליטה" — and an imperative in Hebrew is gendered. The library was masculine throughout,
+ * so a woman was being commanded in the wrong person on the one screen whose entire job is to
+ * teach her how to move safely. `cues.<id>_female` carries her forms.
+ *
+ * This does NOT go through i18next's `context`, and cannot: context appends its suffix to the
+ * whole key, which for an indexed array lookup would ask for `cues.bb_bench_press.0_female` —
+ * a path that does not and cannot exist inside a JSON array. The gendered ARRAY is selected
+ * first, and the masculine cue is its fallback, so an exercise with no feminine variant (a
+ * gender-neutral note like "מרפקים צמודים לגוף") simply keeps the one line it always had.
  */
 export function exerciseCues(id: string | null | undefined): string[] {
   if (!id) return [];
   const ex = BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id));
   if (!ex) return [];
-  return ex.cues.map((cue, i) =>
-    i18next.isInitialized ? i18next.t(`cues.${ex.id}.${i}`, { defaultValue: cue }) : cue,
-  );
+  if (!i18next.isInitialized) return [...ex.cues];
+  const female = getGender() === 'female';
+  return ex.cues.map((cue, i) => {
+    const base = i18next.t(`cues.${ex.id}.${i}`, { defaultValue: cue });
+    if (!female) return base;
+    return i18next.t(`cues.${ex.id}_female.${i}`, { defaultValue: base });
+  });
 }
 
 /**

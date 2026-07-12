@@ -109,10 +109,22 @@ export interface SessionMirror {
   exerciseName: string;
   /** Primary muscle group of the current exercise (Active Set legend); '' if none. */
   exerciseGroup: string;
+  /**
+   * The CURRENT step, which during a REST is the set the athlete has JUST FINISHED — the state
+   * machine does not advance `setIndex` until the rest ends (sessionState: END_REST). That is a
+   * deliberate design (the rest belongs to the set that earned it), and it is a trap for every
+   * surface that renders a rest, because what a resting athlete wants to know is what is COMING.
+   * Use `nextSetLabel` / `nextSetNumber` on a rest frame. Both the watch and the Live Activity
+   * read `setLabel` here and were quietly showing the set the athlete had already done.
+   */
   setLabel: string; // e.g. "Set 2 of 4"
   /** Numeric set position within the current exercise (1-based) + total, for set dots. */
   setNumber: number;
   setsInExercise: number;
+  /** The set the athlete is about to do — the ONLY set worth naming during a rest. Null when
+   *  there is no next step (an active set, or the last set of the session). */
+  nextSetLabel: string | null;
+  nextSetNumber: number;
   /** Total sets of the UPCOMING exercise (transition card "{n} sets"); 0 if none. */
   nextSetsInExercise: number;
   globalIndex: number; // 0-based position within the session
@@ -307,6 +319,8 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       setLabel,
       setNumber: cur.setIndexInExercise + 1,
       setsInExercise: cur.totalSetsInExercise,
+      nextSetLabel: null,
+      nextSetNumber: 0,
       nextSetsInExercise: 0,
       globalIndex: cur.globalIndex,
       totalSets: total,
@@ -377,6 +391,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     setLabel,
     setNumber: cur.setIndexInExercise + 1,
     setsInExercise: cur.totalSetsInExercise,
+    // The set that is COMING — see the field docs. On a rest frame this is the only honest
+    // answer to "which set am I on"; `setLabel` above is the one that is already behind them.
+    nextSetLabel: next ? `Set ${next.setIndexInExercise + 1} of ${next.totalSetsInExercise}` : null,
+    nextSetNumber: next ? next.setIndexInExercise + 1 : 0,
     nextSetsInExercise: next ? next.totalSetsInExercise : 0,
     globalIndex: cur.globalIndex,
     totalSets: total,

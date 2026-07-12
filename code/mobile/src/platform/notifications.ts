@@ -19,7 +19,7 @@
  * i18n (project copy law) — never a string literal here.
  */
 import * as Notifications from 'expo-notifications';
-import i18next from 'i18next';
+import { tg } from '@/i18n';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
@@ -150,7 +150,7 @@ export const notifierExpo: Notifier = {
       await Notifications.scheduleNotificationAsync({
         identifier: QUARTERLY_ID,
         // data carries the routing intent so a tap opens QuarterlyReport.
-        content: { title: i18next.t('notifications.quarterlyReportTitle'), body: '', data: buildPayload('quarterly_report') },
+        content: { title: tg('notifications.quarterlyReportTitle'), body: '', data: buildPayload('quarterly_report') },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: QUARTERLY_INTERVAL_S,

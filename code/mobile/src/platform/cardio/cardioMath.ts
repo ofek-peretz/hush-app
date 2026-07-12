@@ -34,9 +34,17 @@ import type { CardioGait } from '@/data/local/models';
  * EMPTY route, and it must do so by construction rather than by luck.
  */
 
-/** A fix must be at least this tight (meters, horizontal) to be used at all. GPS outdoors is
- *  3–10 m; a 20 m cap keeps the WiFi-grade fixes that produced the chair "run" out entirely. */
-export const MAX_ACCURACY_M = 20;
+/**
+ * A fix must be at least this tight (meters, horizontal) to be used at all.
+ *
+ * This stays at 30, NOT the 20 the first cut of this fix used. A tight cap looks like the obvious
+ * answer to the chair, and it is the wrong one: a real run down a street of tall buildings, or
+ * under heavy tree cover, reports 20–35 m routinely, and a 20 m cap silently records that run as
+ * 0.00 km. Zeroing a real 10 km is a far worse failure than over-counting a chair, and the chair
+ * is caught properly below — by asking the athlete to move FURTHER THAN THEIR OWN ERROR BAR,
+ * which is the physics rather than a guess.
+ */
+export const MAX_ACCURACY_M = 30;
 /** Doppler speed below this is standing still / indoor jitter — no distance, no pace. */
 export const MIN_SPEED_MS = 0.5;
 /** Displacement implying faster than this is a GPS teleport — discarded. */
@@ -58,9 +66,27 @@ export const MIN_MOVING_RUN = 3;
  */
 export const COHERENCE_LO = 0.45;
 export const COHERENCE_HI = 2.2;
-/** Nothing is credited until the athlete has actually LEFT where they started (meters). Jitter
- *  orbits its origin forever; 25 m is a handful of strides and outside any indoor cloud. */
+/**
+ * Nothing is credited until the athlete has actually LEFT where they started — and "left" is
+ * measured against THEIR OWN UNCERTAINTY, not a fixed number.
+ *
+ * A fix that reports ±30 m of accuracy can land 30 m from where the phone really is while the
+ * phone has not moved at all. Asking such a session for a flat 25 m departure asks it for less
+ * than its own error bar, which is asking for nothing. So the requirement is the LARGER of a
+ * floor (a handful of strides) and a multiple of the reported accuracy: to be believed, you must
+ * have gone further than the instrument could be wrong by.
+ *
+ * A real runner clears this in seconds (a 6 m fix needs 25 m; even a 30 m city-canyon fix needs
+ * 60 m, which is fifteen seconds of jogging). A phone on a bench never clears it at all — its
+ * "departure" is bounded by the noise, and the noise is exactly what it is being measured against.
+ */
 export const MIN_DEPARTURE_M = 25;
+export const DEPARTURE_ACCURACY_FACTOR = 2;
+
+export function requiredDepartureM(accuracyM: number | null): number {
+  const acc = accuracyM ?? MAX_ACCURACY_M;
+  return Math.max(MIN_DEPARTURE_M, DEPARTURE_ACCURACY_FACTOR * acc);
+}
 
 /** Net energy cost per km per kg of bodyweight (run ≈ level running, walk ≈ brisk). */
 export const KCAL_PER_KG_KM: Record<CardioGait, number> = { run: 1.03, walk: 0.55 };
@@ -105,13 +131,26 @@ export function segmentCounts(args: {
   return true;
 }
 
-/** What the tracker remembers between fixes, so the run-of-movement and departure rules can
- *  be decided by a pure function rather than scattered through the GPS callback. */
+/** What the tracker remembers between fixes, so the proof rules can be decided by a pure
+ *  function rather than scattered through the GPS callback. */
 export interface MovementState {
   /** Consecutive plausible-movement segments immediately before this one. */
   movingRun: number;
   /** Straight-line distance from where the activity's first good fix landed (meters). */
   departedM: number;
+  /** Horizontal accuracy of the fix being judged — the athlete's own error bar. */
+  accuracyM: number | null;
+  /**
+   * Has this ACTIVITY already proven itself? Sticky, and deliberately so.
+   *
+   * The proof is expensive because it has to be: a run of movement that holds, from a phone that
+   * has gone further than its own uncertainty. But it is a proof about the ACTIVITY — this person
+   * is outdoors and running — and once it is made, it does not need remaking. Re-demanding it
+   * after every traffic light would drop three fixes each time the athlete stops, which over a
+   * 10 km run through a city is a hundred metres of real distance thrown away to guard against a
+   * chair the athlete demonstrably is not sitting in.
+   */
+  proven: boolean;
 }
 
 export interface MovementCredit {
@@ -119,21 +158,27 @@ export interface MovementCredit {
   counts: boolean;
   /** The new consecutive-movement run to carry to the next fix. */
   movingRun: number;
+  /** Whether the activity has now proven itself (carried forward for the rest of it). */
+  proven: boolean;
 }
 
 /**
- * The FULL gate: a plausible segment is credited only once the movement has proven itself —
- * it has held for MIN_MOVING_RUN consecutive fixes, and the athlete has actually left the
- * place they started.
+ * The FULL gate. A plausible segment is credited once the ACTIVITY has proven itself:
+ *   • the movement HELD — MIN_MOVING_RUN consecutive plausible fixes, so one noisy fix is not a run;
+ *   • and the athlete WENT somewhere — further from where they started than the fix could be
+ *     wrong by (requiredDepartureM).
+ * After that, any plausible segment counts; a stop at a light is a stop, not a re-trial.
  *
- * Pure, and exported, because this rule is the product promise ("a phone on a bench records
- * nothing") and it is worth pinning under test with the founder's own chair session.
+ * Pure, and exported, because this rule IS the product promise ("a phone on a bench records
+ * nothing, a real run records all of itself") and both halves are pinned under test.
  */
 export function movementCredit(plausible: boolean, state: MovementState): MovementCredit {
-  if (!plausible) return { counts: false, movingRun: 0 };
+  if (!plausible) return { counts: false, movingRun: 0, proven: state.proven };
   const movingRun = state.movingRun + 1;
-  const proven = movingRun >= MIN_MOVING_RUN && state.departedM >= MIN_DEPARTURE_M;
-  return { counts: proven, movingRun };
+  const proven =
+    state.proven ||
+    (movingRun >= MIN_MOVING_RUN && state.departedM >= requiredDepartureM(state.accuracyM));
+  return { counts: proven, movingRun, proven };
 }
 
 /** Distance-based calorie estimate; 0 when bodyweight is unknown (never guessed). */

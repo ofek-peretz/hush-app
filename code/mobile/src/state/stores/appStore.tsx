@@ -31,7 +31,7 @@ import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
-import { setGender } from '@/i18n/gender';
+import { setGender, resetGender } from '@/i18n/gender';
 import { billing, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
 import { BILLING_EVENTS } from '@/platform/events';
 import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
@@ -258,6 +258,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clearToken();
         resetModelSelection();
         modelRef.current = await selectModel();
+        // The device goes back to a stranger. Nothing about the last athlete may survive into the
+        // next one's onboarding: not their gender (the app would address the next person in her
+        // person, in Hebrew, all the way to the step where they finally get to say who they are),
+        // and certainly not their NAME, which is still sitting in the pending ref.
+        resetGender();
+        pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       })();
     });
@@ -903,6 +909,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clearToken(); // sign out of the issued invite
         resetModelSelection();
         modelRef.current = await selectModel();
+        // The device goes back to a stranger. Nothing about the last athlete may survive into the
+        // next one's onboarding: not their gender (the app would address the next person in her
+        // person, in Hebrew, all the way to the step where they finally get to say who they are),
+        // and certainly not their NAME, which is still sitting in the pending ref.
+        resetGender();
+        pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       },
 
@@ -923,6 +935,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await clearToken();
         resetModelSelection();
         modelRef.current = await selectModel();
+        // The device goes back to a stranger. Nothing about the last athlete may survive into the
+        // next one's onboarding: not their gender (the app would address the next person in her
+        // person, in Hebrew, all the way to the step where they finally get to say who they are),
+        // and certainly not their NAME, which is still sitting in the pending ref.
+        resetGender();
+        pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       },
     };

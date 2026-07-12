@@ -105,7 +105,6 @@
   },
   "ob": {
     "continue": "Continue",
-    "skip": "Skip",
     "apple": "Continue with Apple",
     "google": "Continue with Google",
     "signinTagline": "Everything around the training — the plan, the loads, the rest, the pace. You just lift.",
@@ -197,7 +196,6 @@
     "recorded": "Set recorded.",
     "vsLast": "vs. last session",
     "repsUnit": "reps",
-    "setsAnd": "{{sets}} sets · × {{reps}}",
     "upNext": "Up next",
     "form": "Form",
     "looping": "Looping",
@@ -286,7 +284,6 @@
     "saved": "Saved",
     "completeWord": "complete.",
     "savedWord": "saved.",
-    "bodyEarly": "Session saved. I read the shortened session into your next recommendation.",
     "duration": "Duration",
     "kcal": "kcal",
     "logged": "Logged",

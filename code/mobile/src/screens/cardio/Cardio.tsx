@@ -15,12 +15,15 @@
  * action in the thumb zone — Pause; while paused there are exactly two — Resume and
  * finish. No hidden gestures, no second finish path.
  *
- * Founder 2026-07-12, four changes, all about a body in motion rather than a body at a desk:
+ * Founder 2026-07-12, all about a body in motion rather than a body at a desk:
  *  • The 3·2·1 is FELT (rising haptics, sustained on GO) — the phone is in a pocket by then.
  *  • The run/walk toggle moved to the TOP BAR. It sat millimetres above Pause; a wet,
  *    imprecise thumb reaching to stop the run could hit "Walk" instead, and vice versa.
- *  • Finishing is a HOLD, not a tap. One stray tap must never end a 10 km run.
+ *  • Finishing ASKS. A stray tap must never end a 10 km run — but a press-and-hold was the wrong
+ *    cure: a gesture the athlete has to be taught, performed with a shaking hand, out of breath.
+ *    It is a confirm sheet now, the same guard the watch has always had.
  *  • The summary draws the ROUTE — the shape of what they actually did (components/RouteTrace).
+ *  • The explanation card is gone: the athlete came here to go outside, not to read a disclaimer.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -345,7 +348,17 @@ export function Cardio({ navigation }: Props) {
               <Text style={styles.pauseStat}>{fmtPace(paceSec)} {t('cardio.perKm')}</Text>
             </View>
             <View style={styles.pauseActions}>
-              <Button variant="onstage" size="lg" block label={t('cardio.resume')} onPress={() => setPaused(false)} leading={<Icon name="play" size={18} color={stageC[0]} />} />
+              <Button
+                variant="onstage"
+                size="lg"
+                block
+                label={t('cardio.resume')}
+                onPress={() => {
+                  setConfirmEnd(false); // going back to the run disarms the guard
+                  setPaused(false);
+                }}
+                leading={<Icon name="play" size={18} color={stageC[0]} />}
+              />
               {/* Ending ASKS (founder 2026-07-12). A stray tap must not end a 10 km run — but a
                   press-and-hold is not the answer either: it is a gesture the athlete has to be
                   TAUGHT, performed with a shaking hand, on a phone held at arm's length, out of
@@ -356,7 +369,10 @@ export function Cardio({ navigation }: Props) {
           </View>
         ) : null}
 
-        {confirmEnd ? (
+        {/* Bound to the SAME condition as the overlay that arms it. An `confirmEnd` left standing
+            after the run ends could otherwise greet the athlete on their NEXT run, asking them to
+            confirm the end of something they have not started. */}
+        {confirmEnd && paused && phase === 'active' ? (
           <BottomSheet onClose={() => setConfirmEnd(false)}>
             <Legend style={styles.sheetLegend}>{t('cardio.endLegend')}</Legend>
             <Text style={styles.sheetTitle}>{gait === 'run' ? t('cardio.endTitleRun') : t('cardio.endTitleWalk')}</Text>
@@ -613,12 +629,8 @@ const styles = StyleSheet.create({
   headTitles: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
   selectScroll: { paddingHorizontal: space.gutter, paddingTop: 4, paddingBottom: 24 },
-  introCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, padding: 14, backgroundColor: color.surface3, borderRadius: radius.lg, marginBottom: 22 },
-  introText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20, textAlign: 'left' },
-  introStrong: { fontFamily: font.sansMedium, color: color.textPrimary, textAlign: 'left' },
   fieldLegend: { marginBottom: 10 },
   fieldLegendGoal: { marginTop: 26, marginBottom: 10 },
-  goalNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 14, marginHorizontal: 2, lineHeight: 20, textAlign: 'left' },
   goalCol: { marginTop: 16, gap: 8 },
   goalWheel: { alignSelf: 'stretch' },
   goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },

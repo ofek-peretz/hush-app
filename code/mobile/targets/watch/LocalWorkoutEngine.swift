@@ -338,6 +338,11 @@ final class LocalWorkoutEngine {
       setLabel: "Set \(cur.setIndexInExercise + 1) of \(cur.totalSetsInExercise)",
       setNumber: cur.setIndexInExercise + 1,
       setsInExercise: cur.totalSetsInExercise,
+      // Passed explicitly rather than leaning on the memberwise initializer's implicit nil for an
+      // optional: this file is only ever compiled on EAS, so a wrong assumption here costs a whole
+      // build to discover. `project()` fills them in on a rest frame.
+      nextSetLabel: nil,
+      nextSetNumber: nil,
       nextSetsInExercise: nil,
       globalIndex: cur.globalIndex,
       totalSets: state.steps.count,
@@ -366,13 +371,40 @@ final class LocalWorkoutEngine {
     )
   }
 
+  /**
+   * The workout, read back lift by lift — the wrist's closing beat (founder 2026-07-12).
+   *
+   * Port of the phone's `summaryLifts`. A standalone workout finishes on the WATCH, with no phone
+   * in the room to project a summary for it, so without this the read-back simply would not play
+   * for the athlete who trained furthest from their phone — which is the athlete the standalone
+   * runtime exists for. A lift is DONE when every set it was prescribed sits behind the athlete's
+   * completion frontier; anything else is a lift they started and did not finish, or never reached.
+   */
+  private func summaryLifts() -> [WireSummaryLift] {
+    let frontier = state.sets.count
+    var order: [String] = []
+    var total: [String: Int] = [:]
+    var done: [String: Int] = [:]
+    for (i, step) in state.steps.enumerated() {
+      if total[step.exerciseName] == nil {
+        order.append(step.exerciseName)
+        total[step.exerciseName] = 0
+        done[step.exerciseName] = 0
+      }
+      total[step.exerciseName, default: 0] += 1
+      if i < frontier { done[step.exerciseName, default: 0] += 1 }
+    }
+    return order.map { WireSummaryLift(name: $0, done: (done[$0] ?? 0) >= (total[$0] ?? 0)) }
+  }
+
   private func completeFrame() -> WireMirror {
     let cur = state.steps[min(state.currentIndex, state.steps.count - 1)]
     var m = baseMirror(cur: cur, phase: "complete")
     m.summary = WireSummary(
       timeLabel: timeLabel(fromISO: state.startedAt),
       sets: state.sets.count,
-      up: progressedLifts()
+      up: progressedLifts(),
+      lifts: summaryLifts()
     )
     return m
   }
@@ -405,6 +437,15 @@ final class LocalWorkoutEngine {
     m.nextTargetWeight = next?.targetWeight
     m.nextTargetReps = next?.targetReps
     m.nextSetsInExercise = next?.totalSetsInExercise
+    // THE SET THAT IS COMING (parity with the phone's projector, 2026-07-12). The presented step
+    // during a rest is the one just FINISHED — so a rest screen that renders `setLabel` counts the
+    // set behind the athlete. This engine had the `next` step in its hand and never published its
+    // label; standalone workouts were showing the wrong set number on the wrist for exactly as
+    // long as the mirrored ones were.
+    if let n = next {
+      m.nextSetLabel = "Set \(n.setIndexInExercise + 1) of \(n.totalSetsInExercise)"
+      m.nextSetNumber = n.setIndexInExercise + 1
+    }
     if state.phase == "rest_transition" {
       m.completedExerciseName = cur.exerciseName
       m.nextLoadDeltaKg = signedDelta(next)
