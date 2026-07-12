@@ -69,10 +69,12 @@ export function ManualInfo({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // Compact enough that all four controls + the pinned footer fit the viewport
-  // whole on every supported iPhone — onboarding never scrolls.
-  rows: { gap: 14 },
-  col: { gap: 7 },
-  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 16, color: color.textTertiary, marginTop: 1 },
+  // The tightest height budget in the app: FOUR controls plus a pinned footer, on a step that
+  // must not scroll (OnboardingScaffold). The 2026-07-12 pass added height to every wheel and a
+  // "why we ask" line under Sex, which together spent the margin this step used to have — so the
+  // rhythm here is deliberately tighter than elsewhere to pay for them back.
+  rows: { gap: 12 },
+  col: { gap: 6 },
+  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 15, color: color.textTertiary },
   wheel: { alignSelf: 'stretch' },
 });

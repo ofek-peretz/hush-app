@@ -72,17 +72,24 @@ interface Props {
 }
 
 const ITEM_W = { md: 60, lg: 72 } as const;
-/** The scale is taller than a plain control: numerals live above, the engraved ticks below.
- *  Also the touch target — a hand in a gym should not have to land inside 44pt of box. */
-const HEIGHT = { md: 62, lg: 72 } as const;
+/**
+ * The scale is taller than a plain control: numerals live above, the engraved ticks below.
+ * It is also the touch target — a hand in a gym should not have to land inside a 44pt box.
+ *
+ * But it is NOT free. Body data (onboarding) stacks four of these plus a footer on a screen
+ * that must never scroll, so every point here is spent four times over on the smallest phone
+ * we support. 56 buys the ruler its numeral row, a legible tick band, and a target 27% larger
+ * than the 44pt box it replaced — without eating the step's height budget.
+ */
+export const WHEEL_HEIGHT = { md: 56, lg: 66 } as const;
 
 /* The scale's geometry, in one place — the anchor line is POSITIONED from it rather than
  * eyeballed, so the index mark always crosses the ticks it is indexing. */
-const NUM_SLOT_H = 30; // the numeral's fixed row (a scaled numeral must not move the ticks)
-const TICK_H = 10; // a whole-unit tick
-const ITEM_PAD_B = 8; // air under the ticks
-const ITEM_H = NUM_SLOT_H + TICK_H + ITEM_PAD_B;
-const OVERSHOOT = 5; // how far the anchor runs past the tick band, top and bottom
+export const NUM_SLOT_H = 26; // the numeral's fixed row (a scaled numeral must not move the ticks)
+export const TICK_H = 9; // a whole-unit tick
+export const ITEM_PAD_B = 6; // air under the ticks
+export const ITEM_H = NUM_SLOT_H + TICK_H + ITEM_PAD_B;
+const OVERSHOOT = 4; // how far the anchor runs past the tick band, top and bottom
 
 /** The ochre index line's height and its offset from the control's bottom edge, derived from
  *  the scale above. Pure + exported so the "the anchor crosses the ticks" invariant is tested,
@@ -164,7 +171,7 @@ function isWholeUnit(v: number): boolean {
 
 export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, style }: Props) {
   const itemW = ITEM_W[size];
-  const h = HEIGHT[size];
+  const h = WHEEL_HEIGHT[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);

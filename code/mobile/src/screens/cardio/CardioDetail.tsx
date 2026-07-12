@@ -58,8 +58,13 @@ export function CardioDetail({ navigation, route }: Props) {
           <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
         </View>
 
-        {/* the route travelled — the same engraved trace the summary showed */}
-        <View style={styles.traceWrap} onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}>
+        {/* The route travelled — the same engraved trace the summary showed. Records made
+            before routes existed, and treadmill runs, carry none: the block then takes no
+            space at all rather than leaving a gap. */}
+        <View
+          style={hasRoute ? styles.traceWrap : styles.traceWrapEmpty}
+          onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}
+        >
           {hasRoute && traceW > 0 ? (
             <>
               <Legend style={styles.splitsLegend}>{t('cardio.routeLegend')}</Legend>
@@ -143,6 +148,7 @@ const styles = StyleSheet.create({
   statUnit: { fontFamily: font.sansMedium, fontSize: 12, color: color.textMuted },
 
   traceWrap: { marginTop: 24 },
+  traceWrapEmpty: { height: 0 },
   splitsWrap: { marginTop: 28 },
   splitsLegend: { marginBottom: 14 },
   splitsList: { gap: 9 },

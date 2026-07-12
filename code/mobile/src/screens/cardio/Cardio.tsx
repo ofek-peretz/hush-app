@@ -513,9 +513,14 @@ function CardioComplete(props: {
             <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
           </View>
 
-          {/* THE ROUTE (founder 2026-07-12) — the shape of what they actually did. Not a
-              tiled map: the GPS trace itself, engraved. See components/RouteTrace. */}
-          <View style={styles.traceWrap} onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}>
+          {/* THE ROUTE (founder 2026-07-12) — the shape of what they actually did. Not a tiled
+              map: the GPS trace itself, engraved. See components/RouteTrace.
+              A run with no lock (a treadmill, a denied permission) has no route, and this block
+              takes NO space at all — not an empty frame, and not a silent 24px of air. */}
+          <View
+            style={hasRoute ? styles.traceWrap : styles.traceWrapEmpty}
+            onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}
+          >
             {hasRoute && traceW > 0 ? (
               <>
                 <Text style={styles.splitsLegend}>{t('cardio.routeLegend').toUpperCase()}</Text>
@@ -691,6 +696,9 @@ const styles = StyleSheet.create({
   completeMetricUnit: { fontFamily: font.sansMedium, fontSize: 12, color: stageC.ink2 },
 
   traceWrap: { marginTop: 24 },
+  // Zero-height, but still laid out — so onLayout can hand us the column width even on a
+  // run that has no route to draw.
+  traceWrapEmpty: { height: 0 },
   splitsWrap: { marginTop: 28 },
   splitsLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 14 },
   splitsList: { gap: 9 },

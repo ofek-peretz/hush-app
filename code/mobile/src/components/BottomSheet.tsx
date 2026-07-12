@@ -78,9 +78,6 @@ export interface SheetScroll {
   };
 }
 
-/** A sheet with no scrolling content is, definitionally, always at the top. */
-const ALWAYS_AT_TOP = { value: true } as SharedValue<boolean>;
-
 /**
  * Wire a sheet's inner ScrollView to its drag-to-dismiss.
  *
@@ -112,6 +109,11 @@ export function BottomSheet({
   style,
 }: Props) {
   const ty = useSharedValue(0);
+  // A sheet with no scrolling content is, definitionally, always at the top. This is a REAL
+  // shared value rather than a plain object cast to one: it is read inside the pan worklet, and
+  // a hand-rolled `{ value: true }` would be relying on how Reanimated happens to capture plain
+  // objects across the worklet boundary.
+  const alwaysAtTop = useSharedValue(true);
   // Where the sheet's OWN drag starts, in the gesture's coordinates. It is not always zero: a
   // finger can begin its pull halfway down a scrolled list and only reach the top of that list
   // mid-gesture. Without re-baselining at that instant, the sheet would leap by the whole
@@ -120,7 +122,7 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   // Sheets with no scrolling content are always "at the top" — they can be pulled from
   // anywhere, always.
-  const atTop = scroll?.atTop ?? ALWAYS_AT_TOP;
+  const atTop = scroll?.atTop ?? alwaysAtTop;
 
   let pan = Gesture.Pan()
     // Only a deliberate vertical drag claims the gesture — a tap, a press, and the horizontal

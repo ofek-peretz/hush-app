@@ -4,12 +4,23 @@
  * bar, the head (legend → title → sub), the body, and a pinned footer.
  * One decision per screen, nothing optional dressed up as required.
  *
- * Founder 2026-07-10: onboarding NEVER scrolls — every step is designed to fit
- * the viewport whole, so the body is a plain View (not a ScrollView). A step
- * that doesn't fit is a copy/layout bug on that step, not a reason to scroll.
+ * Founder 2026-07-10: onboarding NEVER scrolls — every step is designed to fit the viewport
+ * whole. A step that doesn't fit is a copy/layout bug on that step, not a reason to scroll.
+ *
+ * That law still holds, and the body still LOOKS like a plain View: on every device where the
+ * step fits, nothing moves and there is no scroll indicator (2026-07-12). What changed is the
+ * failure mode. The body was literally a View, so a step that overflowed simply had its bottom
+ * — including the footer's Continue — pushed off the screen with no way to reach it: an
+ * unrecoverable dead end during onboarding, on the smallest phones, where the athlete has not
+ * even reached the app yet. It is now a ScrollView with `flexGrow: 1`, which does not scroll
+ * while the content fits and yields rather than clips when it doesn't.
+ *
+ * This is a SAFETY NET, not a licence. A step that actually scrolls on the reference frame is
+ * still a bug on that step. But "the athlete cannot press Continue" must never be the way we
+ * find out.
  */
 import React from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
@@ -31,14 +42,21 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
   const { t } = useCopy();
 
   const Body = (
-    <View style={[styles.flex, styles.body]}>
+    <ScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.body}
+      // Reads as a static page until the moment it cannot be one.
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.head}>
         {legend ? <Legend style={styles.legend}>{legend}</Legend> : null}
         <Text style={styles.title} accessibilityRole="header">{title}</Text>
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
       {children}
-    </View>
+    </ScrollView>
   );
 
   return (
@@ -82,7 +100,9 @@ const styles = StyleSheet.create({
   segOn: { backgroundColor: signal[0] },
   segOff: { backgroundColor: color.fillSubtleStrong },
 
-  body: { paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
+  // flexGrow (not flex) — the content keeps its natural height and only takes the full
+  // viewport when it is SHORTER than it, which is what makes the page read as static.
+  body: { flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
   head: { marginBottom: 22 },
   legend: { marginBottom: 8 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary },

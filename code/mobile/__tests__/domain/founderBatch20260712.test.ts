@@ -9,7 +9,15 @@
  */
 import { durationMinutes, fmtMinutes, fmtMinutesFromMs } from '@/domain/duration';
 import { parsePriceAmount, annualSavingPct } from '@/domain/pricing';
-import { wheelFocus, anchorGeometry } from '@/components/ds/WheelPicker';
+import {
+  wheelFocus,
+  anchorGeometry,
+  WHEEL_HEIGHT,
+  NUM_SLOT_H,
+  TICK_H,
+  ITEM_PAD_B,
+  ITEM_H,
+} from '@/components/ds/WheelPicker';
 import { projectRoute, simplifyRoute, MAX_ROUTE_POINTS } from '@/components/RouteTrace';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { COUNT_THRESHOLDS, TONNAGE_THRESHOLDS_KG, CLUB_THRESHOLDS_KG, type Milestone } from '@/domain/milestones';
@@ -94,23 +102,33 @@ describe('the wheel reads as a measuring rule', () => {
   });
 
   it('crosses the ochre index line THROUGH the tick band, at both sizes', () => {
-    // The scale (numeral slot 30 + tick 10 + 8 of air) is centred in the control, so the
-    // tick band sits at a different height on the md and lg wheels. The anchor is derived
-    // from that geometry rather than eyeballed — an index mark floating off the ticks it
-    // indexes is exactly the "numbers in a box" look this replaced.
-    for (const controlH of [62, 72]) {
+    // The scale is centred in the control, so the tick band sits at a different height on the
+    // md and lg wheels. The anchor is DERIVED from that geometry rather than eyeballed — an
+    // index mark floating off the ticks it indexes is exactly the "numbers in a box" look this
+    // replaced. Every figure below comes from the component's own constants, so retuning the
+    // wheel's height can never quietly leave the anchor behind.
+    for (const controlH of [WHEEL_HEIGHT.md, WHEEL_HEIGHT.lg]) {
       const { height, bottom } = anchorGeometry(controlH);
       const anchorTop = controlH - bottom - height;
       const anchorBottom = controlH - bottom;
-      const contentTop = (controlH - 48) / 2;
-      const tickTop = contentTop + 30; // under the numeral slot
-      const tickBottom = tickTop + 10;
+      const contentTop = (controlH - ITEM_H) / 2;
+      const tickTop = contentTop + NUM_SLOT_H; // the ticks sit under the numeral slot
+      const tickBottom = tickTop + TICK_H;
 
       expect(anchorTop).toBeLessThan(tickTop); // overshoots above
       expect(anchorBottom).toBeGreaterThan(tickBottom); // …and below
       expect(anchorBottom).toBeLessThanOrEqual(controlH); // never escapes the control
       expect(anchorTop).toBeGreaterThanOrEqual(0);
+      expect(contentTop + ITEM_H - ITEM_PAD_B).toBeCloseTo(tickBottom); // the scale adds up
     }
+  });
+
+  it('stays a 44pt+ touch target while paying for the height it costs onboarding', () => {
+    // Body data stacks FOUR of these plus a pinned footer on a step that must not scroll, so
+    // the wheel's height is a shared budget, not a free parameter.
+    expect(WHEEL_HEIGHT.md).toBeGreaterThanOrEqual(44); // never smaller than the box it replaced
+    expect(WHEEL_HEIGHT.md).toBeLessThanOrEqual(56); // …and never so tall Body data overflows
+    expect(WHEEL_HEIGHT.lg).toBeGreaterThanOrEqual(WHEEL_HEIGHT.md);
   });
 });
 
