@@ -448,7 +448,9 @@ function execGlyph(style: LoadSetup['style']): IconName {
     case 'cable':
       return 'pin';
     default:
-      return 'layers'; // barbell, plate_loaded
+      // The athlete is about to pick up PLATES — so the glyph is a plate (founder 2026-07-12).
+      // It was `layers`: two stacked rhombi that read as a pair of squares.
+      return 'plate'; // barbell, plate_loaded
   }
 }
 

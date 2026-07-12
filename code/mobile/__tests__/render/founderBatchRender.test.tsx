@@ -201,6 +201,14 @@ describe('the icon set', () => {
   it('draws the new runner glyph', () => {
     expect(mount(<Icon name="runner" size={20} />).toJSON()).toBeTruthy();
   });
+
+  it('draws a real weight PLATE for the load instruction', () => {
+    // It was lucide `layers` — two stacked rhombi, which an athlete at a bar read as two squares.
+    const r = mount(<Icon name="plate" size={18} />);
+    const json = JSON.stringify(r.toJSON());
+    expect(r.toJSON()).toBeTruthy();
+    expect(json).toContain('Circle'); // a disc, not a polygon
+  });
 });
 
 describe('primary buttons carry charcoal on ochre (WCAG)', () => {

@@ -42,6 +42,7 @@ export type IconName =
   | 'calendar' // calendar-range
   | 'trendingUp' // trending-up
   | 'layers' // layers
+  | 'plate' // a weight plate, face-on — the "add N + N per side" instruction
   | 'lock' // lock
   | 'pin' // pin — "pinned / protected" (the lock affordance; not a security padlock)
   | 'minus' // minus — calm "matched / held" verdict mark
@@ -319,6 +320,21 @@ function render(
         <G {...common}>
           <Path d="M4 16v-2.4a2 2 0 0 1 .6-1.5C5.3 11.4 6 10.3 6 8.5 6 6 5 4 6.5 4S9 6 9 8.5c0 1.6.4 3 .7 4.1.2.7-.4 1.4-1.1 1.4H5.2A1.2 1.2 0 0 0 4 15.2" />
           <Path d="M20 20v-2.4a2 2 0 0 0-.6-1.5c-.7-.7-1.4-1.8-1.4-3.6 0-2.5 1-4.5-.5-4.5S15 10 15 12.5c0 1.6-.4 3-.7 4.1-.2.7.4 1.4 1.1 1.4h3.4a1.2 1.2 0 0 1 1.2 1.2" />
+        </G>
+      );
+    case 'plate':
+      // A WEIGHT PLATE, seen face-on: the disc, its rim, and the collar hole.
+      //
+      // Founder 2026-07-12: this instruction ("Add 20 + 20 per side") used to carry lucide's
+      // `layers` glyph — two stacked rhombi, which read as a pair of squares and meant nothing to
+      // an athlete standing at a bar. The one thing they are about to pick up is a round plate, so
+      // that is what the icon is: the disc and its collar hole, and nothing else. It renders at
+      // 18px, where a third ring would close up into mush — two circles is what stays legible in
+      // the fraction of a second an athlete gives it.
+      return (
+        <G {...common}>
+          <Circle cx="12" cy="12" r="9" />
+          <Circle cx="12" cy="12" r="3" />
         </G>
       );
     case 'runner':

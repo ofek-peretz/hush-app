@@ -3,9 +3,13 @@
  * swap (ui_kits/app/Program.jsx → WorkoutSheet swap, ui_kits/app/LiveWorkout.jsx
  * → Overlay 'swap'). A light sheet, not dark cards: a `Swap · {muscle}` legend,
  * a short line, the current exercise as a muted row carrying a "Current" badge,
- * then the alternatives as plain rows — each labelled by its MUSCLE GROUP (not
- * equipment) with a chevron. Selecting one replaces the slot's exercise; Hush
- * keeps the load progression intact.
+ * then the alternatives as plain rows, each with a chevron. Selecting one replaces the slot's
+ * exercise; Hush keeps the load progression intact.
+ *
+ * Each row is labelled by its EQUIPMENT (founder 2026-07-12, reversing the original design).
+ * The rows used to carry the MUSCLE GROUP — which, on a muscle-scoped list, is the same word on
+ * every line: "Quads · Quads · Quads". It told the athlete nothing. The one thing they need to
+ * know, standing in front of a taken machine, is WHICH STATION to walk to.
  *
  * The list is CLOSEST-FIRST (domain/swapPool, founder 2026-07-12): a swap is a synonym, not a
  * variation. The top of this sheet is the exercise that most nearly does what the slot was put
@@ -20,7 +24,7 @@ import { BottomSheet, useSheetScroll } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { exerciseById, muscleOf } from '@/data/exercises';
+import { exerciseById, muscleOf, type Exercise } from '@/data/exercises';
 import { swapCandidates } from '@/domain/swapPool';
 import { color, font, textScale, tracking, trackingPx, signal, press } from '@/design/tokens';
 
@@ -48,6 +52,9 @@ export function SwapSheet({ currentExerciseId, sessionExerciseIds, onSelect, onC
   const current = exerciseById(currentExerciseId);
   const muscle = muscleOf(currentExerciseId);
   const muscleLabel = muscle ? t(`muscle.${muscle}`) : '';
+  // The station, not the muscle — see the header. The muscle still names the SHEET (every option
+  // trains it), so it is said once, at the top, instead of on every row.
+  const equipmentLabel = (ex: Exercise) => t(`equipment.${ex.equipment}`);
   // The full admissible set for this slot, CLOSEST-FIRST. The pool applies the hard gates (same
   // muscle, same functional family, nothing already in the workout) — this sheet just renders.
   const alternatives = swapCandidates(currentExerciseId, { sessionExerciseIds });
@@ -58,12 +65,12 @@ export function SwapSheet({ currentExerciseId, sessionExerciseIds, onSelect, onC
       <Text style={styles.body}>{t('swap.body')}</Text>
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false} {...sheetScroll.scrollProps}>
-        {current ? <SwapRow title={current.name} subtitle={muscleLabel} currentBadge muted /> : null}
+        {current ? <SwapRow title={current.name} subtitle={equipmentLabel(current)} currentBadge muted /> : null}
         {alternatives.map((ex, i) => (
           <SwapRow
             key={ex.id}
             title={ex.name}
-            subtitle={muscleLabel}
+            subtitle={equipmentLabel(ex)}
             last={i === alternatives.length - 1}
             onPress={() => onSelect(ex.id)}
           />
