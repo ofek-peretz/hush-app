@@ -38,6 +38,7 @@ export function ProgramCreated({ route }: Props) {
   const { inputs } = route.params;
   const [phase, setPhase] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const reduced = useReducedMotion();
 
   // Cosmetic, sequenced reveal (the real build runs on the CTA → completeOnboarding).
@@ -74,10 +75,20 @@ export function ProgramCreated({ route }: Props) {
   // Hush is hypertrophy-first for everyone — the focus is fixed, no longer chosen in onboarding.
   const focus = t('ob.focusHypertrophy');
 
-  function onDone() {
+  async function onDone() {
     if (busy) return;
     setBusy(true);
-    void app.completeOnboarding(inputs); // sets profile → Root swaps to Home
+    setFailed(false);
+    try {
+      // Builds the program and writes the profile → Root swaps to Home.
+      await app.completeOnboarding(inputs);
+    } catch {
+      // A storage failure here used to reject into the void, leaving `busy` true forever —
+      // the CTA disabled, and the athlete unable to finish onboarding AT ALL. It is the last
+      // screen before the app; it must always offer a way through. Let them press again.
+      setBusy(false);
+      setFailed(true);
+    }
   }
 
   return (
@@ -141,7 +152,8 @@ export function ProgramCreated({ route }: Props) {
       </View>
       {ready ? (
         <View style={styles.footer}>
-          <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={onDone} disabled={busy} />
+          {failed ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
+          <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={() => void onDone()} disabled={busy} />
         </View>
       ) : null}
     </SafeAreaView>
@@ -201,5 +213,6 @@ const styles = StyleSheet.create({
   },
   readyNote: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', marginTop: 22, maxWidth: 320 },
   readyNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary },
-  footer: { paddingHorizontal: space.gutter, paddingBottom: 24 },
+  footer: { paddingHorizontal: space.gutter, paddingBottom: 24, gap: 10 },
+  error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center' },
 });

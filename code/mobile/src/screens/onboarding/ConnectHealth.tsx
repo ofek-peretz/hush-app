@@ -40,11 +40,20 @@ export function ConnectHealth({ navigation }: Props) {
     }
     if (asking) return;
     setAsking(true);
-    const granted = await health.requestPermission();
-    recordPermissionOutcome(granted, (type, data) => void track(type, data));
-    setAsking(false);
-    setConnected(granted);
-    if (granted) haptics.success();
+    try {
+      const granted = await health.requestPermission();
+      recordPermissionOutcome(granted, (type, data) => void track(type, data));
+      setConnected(granted);
+      if (granted) haptics.success();
+    } catch {
+      // HealthKit refused to even ask (unavailable, or the system sheet failed). Health stays
+      // off — it is optional by design — and the athlete moves on.
+      setConnected(false);
+    } finally {
+      // ALWAYS: a throw here used to leave `asking` true, which disabled the only button on
+      // the screen. Onboarding must never be a dead end.
+      setAsking(false);
+    }
   }
 
   function onContinue() {

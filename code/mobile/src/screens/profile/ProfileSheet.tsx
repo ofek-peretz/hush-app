@@ -61,7 +61,15 @@ export function ProfileSheet({ navigation }: Props) {
       void Linking.openSettings();
       return;
     }
-    const granted = await health.requestPermission();
+    // A throw here (HealthKit unavailable, the system sheet failing) must not become an
+    // unhandled rejection — it means the same thing a denial means: send them to Settings,
+    // where the connection actually lives.
+    let granted = false;
+    try {
+      granted = await health.requestPermission();
+    } catch {
+      granted = false;
+    }
     if (!granted) void Linking.openSettings();
   }
 

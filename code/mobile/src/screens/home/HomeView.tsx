@@ -84,23 +84,34 @@ export function HomeView(props: HomeViewProps) {
     if (!props.resting) return;
     let active = true;
     const week = String(props.weekNumber);
-    void AsyncStorage.getItem(RECOVERY_SEAL_KEY).then((stored) => {
+
+    // Storage NEVER decides whether the mark is drawn — only whether it is celebrated. A
+    // rejected read used to leave `sealed` false forever, which held the seal's reserved box
+    // open as a permanent 72pt hole above "Recovery." The flag is a nice-to-have; the mark is
+    // the screen.
+    const settle = (celebrate: boolean) => {
       if (!active) return;
-      if (stored === week) {
-        seal.setValue(1); // already celebrated — the mark is simply there
-        setSealed(true);
-        return;
-      }
-      void AsyncStorage.setItem(RECOVERY_SEAL_KEY, week).catch(() => {});
       setSealed(true);
-      if (reduced) {
-        seal.setValue(1);
-        haptics.weekComplete();
+      if (!celebrate || reduced) {
+        seal.setValue(1); // already celebrated (or motion is off) — the mark is simply there
+        if (celebrate) haptics.weekComplete();
         return;
       }
       haptics.weekComplete();
       Animated.timing(seal, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    });
+    };
+
+    AsyncStorage.getItem(RECOVERY_SEAL_KEY)
+      .then((stored) => {
+        if (!active) return;
+        const firstTime = stored !== week;
+        if (firstTime) void AsyncStorage.setItem(RECOVERY_SEAL_KEY, week).catch(() => {});
+        settle(firstTime);
+      })
+      // Storage is gone: draw the mark, stay silent. A stray celebration on every open would
+      // be worse than a missed one.
+      .catch(() => settle(false));
+
     return () => {
       active = false;
     };

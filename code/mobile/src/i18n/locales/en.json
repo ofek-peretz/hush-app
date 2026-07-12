@@ -168,7 +168,7 @@
     "google": "Continue with Google",
     "signinTagline": "A strength coach that owns the decisions, so you can own the work.",
     "nameLegend": "Optional",
-    "nameTitle": "What should Hush call you?",
+    "nameTitle": "What to call you?",
     "nameSub": "Used only to address you. Leave it blank to stay anonymous.",
     "nameLabel": "Name",
     "namePlaceholder": "Your name",
@@ -218,7 +218,8 @@
     "signinLegalTerms": "Terms & Privacy",
     "signinLegalPost": ".",
     "sexWhy": "Used for physiological calculations only — starting loads and weekly volume.",
-    "healthCardOn": "Connected — heart rate, calories, distance"
+    "healthCardOn": "Connected — heart rate, calories, distance",
+    "signinTrust": "Your data is used only for your recommendations. It is never sold."
   },
   "menu": {
     "title": "Menu",

@@ -90,6 +90,12 @@ export function Authentication({ navigation }: Props) {
           <Text style={styles.legalStrong}>{t('ob.signinLegalTerms')}</Text>
           {t('ob.signinLegalPost')}
         </Text>
+        {/* THE TRUST ANCHOR (founder 2026-07-12). Folding the Consent screen into this one
+            took its reassurance card with it — and that card carried the only promise Hush
+            makes about the athlete's data. The promise is what earns the tap; the legal line
+            above only records it. So it comes back here, quieter than the agreement and
+            directly under the hand that is about to press. */}
+        <Text style={styles.trust}>{t('ob.signinTrust')}</Text>
       </View>
     </SafeAreaView>
   );
@@ -194,4 +200,6 @@ const styles = StyleSheet.create({
   // The legal line is READ, not decoration: secondary ink, not the near-invisible tertiary.
   legal: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 19 },
   legalStrong: { fontFamily: font.sansSemibold, color: color.textSecondary },
+  // Quieter than the agreement — a promise, not a clause.
+  trust: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 6, lineHeight: 17, maxWidth: 320, alignSelf: 'center' },
 });
