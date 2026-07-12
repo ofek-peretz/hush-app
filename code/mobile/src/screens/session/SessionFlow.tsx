@@ -27,7 +27,7 @@ import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
-import { swapLadder } from '@/domain/replacement';
+import { inWorkoutLadder } from '@/domain/replacement';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
@@ -259,8 +259,10 @@ export function SessionFlow({ navigation }: Props) {
     } catch {
       prefs = undefined;
     }
-    // Exclude every OTHER lift already in this session so a swap never creates a duplicate.
-    const ladder = swapLadder(exId, prefs, session.sessionExerciseIds.filter((id) => id !== exId));
+    // The whole session goes in — the pool excludes it (and normalises the id space, so an engine
+    // id like 'back_squat' still matches the catalog's 'bb_back_squat'). Same function the WATCH
+    // now calls, so the two surfaces can never disagree about what a legal swap is.
+    const ladder = inWorkoutLadder(exId, { sessionExerciseIds: session.sessionExerciseIds, prefs });
     if (!ladder.length) return;
     quickSwapRef.current = { target, originalId: exId, ladder, idx: 0 };
     presentSwapChoice(ladder[0]);

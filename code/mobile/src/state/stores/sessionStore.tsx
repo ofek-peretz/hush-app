@@ -8,7 +8,8 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, similarExercises, type Exercise } from '@/data/exercises';
+import { exerciseById, type Exercise } from '@/data/exercises';
+import { swapCandidates } from '@/domain/swapPool';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
@@ -281,11 +282,22 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
  * 11), and the in-class swap alternatives at the start of each exercise.
  */
 function buildMirrorSteps(plan: Step[]): MirrorStep[] {
+  // THE session's lifts — every one of them, computed ONCE for the whole plan. The watch's swap
+  // options are chosen against this list (founder 2026-07-12).
+  //
+  // This is the bug the founder caught. The phone's quick swap excluded the session's other lifts;
+  // the watch's did not, because it called a different pool with no exclusion at all. So an
+  // athlete who had squatted, then reached the leg press and pressed Swap ON THE WRIST, was offered
+  // a Barbell Back Squat. Both surfaces now ask the SAME function, and the exclusion is not an
+  // optional argument anybody can forget.
+  const sessionExerciseIds = [...new Set(plan.map((st) => st.exerciseId))];
   return plan.map((st) => {
     const ex = exerciseById(st.exerciseId);
     const swapOptions =
       ex && st.exerciseSetIndex === 0
-        ? similarExercises(ex.id, 2).map((e) => ({ id: e.id, name: e.name }))
+        ? swapCandidates(ex.id, { sessionExerciseIds })
+            .slice(0, 2)
+            .map((e) => ({ id: e.id, name: e.name }))
         : [];
     const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
     return {

@@ -6,6 +6,10 @@
  * then the alternatives as plain rows — each labelled by its MUSCLE GROUP (not
  * equipment) with a chevron. Selecting one replaces the slot's exercise; Hush
  * keeps the load progression intact.
+ *
+ * The list is CLOSEST-FIRST (domain/swapPool, founder 2026-07-12): a swap is a synonym, not a
+ * variation. The top of this sheet is the exercise that most nearly does what the slot was put
+ * there to do — same movement, comparable demand, different station.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -16,19 +20,27 @@ import { BottomSheet, useSheetScroll } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { exerciseById, similarExercises, muscleOf } from '@/data/exercises';
+import { exerciseById, muscleOf } from '@/data/exercises';
+import { swapCandidates } from '@/domain/swapPool';
 import { color, font, textScale, tracking, trackingPx, signal, press } from '@/design/tokens';
 
 interface Props {
   currentExerciseId: string;
-  /** Exercises already in THIS workout — never offered, so a swap can't create a duplicate lift
-   *  in the same session (founder 2026-07-09). */
-  exclude?: readonly string[];
+  /**
+   * Every exercise already in THIS workout — never offered, so a swap can never create a duplicate
+   * lift in one session (founder 2026-07-09).
+   *
+   * REQUIRED, deliberately (founder 2026-07-12). It was optional, and an optional guard is a guard
+   * somebody eventually forgets — which is exactly how the watch shipped offering the athlete a
+   * lift they had already finished. A caller with genuinely nothing to exclude passes `[]` and
+   * says so out loud.
+   */
+  sessionExerciseIds: readonly string[];
   onSelect: (exerciseId: string) => void;
   onClose: () => void;
 }
 
-export function SwapSheet({ currentExerciseId, exclude, onSelect, onClose }: Props) {
+export function SwapSheet({ currentExerciseId, sessionExerciseIds, onSelect, onClose }: Props) {
   const { t } = useCopy();
   // Swipe-down-to-dismiss works from anywhere on the sheet, and defers to this list
   // whenever it is scrolled away from the top (see BottomSheet).
@@ -36,10 +48,9 @@ export function SwapSheet({ currentExerciseId, exclude, onSelect, onClose }: Pro
   const current = exerciseById(currentExerciseId);
   const muscle = muscleOf(currentExerciseId);
   const muscleLabel = muscle ? t(`muscle.${muscle}`) : '';
-  // Program editor: the FULL set for this muscle (wide variety), best-match first — minus anything
-  // already in the workout (no duplicate lift in one session).
-  const excludeSet = new Set(exclude ?? []);
-  const alternatives = similarExercises(currentExerciseId).filter((e) => !excludeSet.has(e.id));
+  // The full admissible set for this slot, CLOSEST-FIRST. The pool applies the hard gates (same
+  // muscle, same functional family, nothing already in the workout) — this sheet just renders.
+  const alternatives = swapCandidates(currentExerciseId, { sessionExerciseIds });
 
   return (
     <BottomSheet onClose={onClose} heightFraction={0.74} scroll={sheetScroll}>

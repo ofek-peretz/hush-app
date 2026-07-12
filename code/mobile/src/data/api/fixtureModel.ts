@@ -33,7 +33,8 @@ import type {
   Slot,
   WeeklyVolume,
 } from '@/data/local/models';
-import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, patternFamily, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { swapScore } from '@/domain/swapPool';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
@@ -566,15 +567,49 @@ function rotateOneInDay(
   const cur = exerciseById(chosen.exerciseId);
   if (!cur) return;
   const inDay = new Set(day.slots.map((sl) => sl.exerciseId));
-  const pool = exercisesForMuscle(cur.muscle).filter(
-    (e) => e.tier === cur.tier && !isSwapOnly(e.id) && !inDay.has(e.id) && e.id !== chosen.exerciseId,
-  );
+  // A ROTATION IS NOT A SWAP — and conflating the two is a mistake worth naming (2026-07-12).
+  //
+  //   A SWAP answers "the station is busy, I still need to do THIS slot's work right now", so it
+  //   must be a synonym: the closest possible substitute (domain/swapPool). Handing the athlete a
+  //   different movement there silently rewrites the workout they came to do.
+  //
+  //   A ROTATION is the ENGINE deliberately re-designing the slot for a fresh stimulus every third
+  //   cycle. Alternating a flat bench with an incline over months is not drift — it IS the point,
+  //   it is announced in the weekly update, and it is why the pool stays "same muscle, same tier".
+  //
+  // So the pool keeps its breadth. Two things it now inherits from the swap law:
+  //   • the FAMILY gate — no cycle may ever turn a hip ABduction slot into an ADduction one, which
+  //     the old "same muscle, same tier" filter would happily have done.
+  //   • fidelity ORDER — it reaches for the nearest variation first and only drifts further out as
+  //     it walks the pool, instead of picking whatever sat highest in the catalog file.
+  const pool = exercisesForMuscle(cur.muscle)
+    .filter(
+      (e) =>
+        e.tier === cur.tier &&
+        patternFamily(e.pattern) === patternFamily(cur.pattern) &&
+        !isSwapOnly(e.id) &&
+        !inDay.has(e.id) &&
+        e.id !== chosen.exerciseId,
+    )
+    .sort((a, b) => swapScore(cur, a) - swapScore(cur, b));
   if (!pool.length) return; // no real alternative — leave this workout unchanged this cycle
   let used = prefs.rotationUsed[slotId] ?? [];
   let fresh = pool.filter((e) => !used.includes(e.id));
   if (!fresh.length) {
-    used = []; // whole pool cycled → start over (the current lift is excluded, so still no ping-pong)
-    fresh = pool;
+    // The whole pool has been cycled → start over. But NOT from a blank slate: the last entry in
+    // `used` is the lift this slot held one cycle ago, and wiping it lets the very next choice
+    // land back on it — an A → B → A bounce across the reset boundary.
+    //
+    // The old code got away with a blank reset only because the pool happened to be in catalog
+    // order; re-ordering it by fidelity exposed the latent bug immediately. Carry the most recent
+    // lift across the reset so a lift can never return until at least two others have been used.
+    const previous = used[used.length - 1];
+    used = previous ? [previous] : [];
+    fresh = pool.filter((e) => !used.includes(e.id));
+    if (!fresh.length) {
+      used = []; // a pool of exactly one — nothing else to alternate with
+      fresh = pool;
+    }
   }
   const next = fresh[0].id; // deterministic → the refresh is reproducible + testable
   prefs.rotations[slotId] = next;

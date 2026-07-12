@@ -16,11 +16,12 @@ import {
   isSwapOnly,
   SWAP_ONLY_IDS,
   progressionRule,
-  defaultBackup,
   catalogIdFromEngine,
   engineIdFromCatalog,
   LOAD_STEP_KG,
 } from '@/data/exercises';
+// defaultBackup moved to domain/swapPool 2026-07-12 — the catalog no longer ranks substitutes.
+import { defaultBackup } from '@/domain/swapPool';
 import type { Capability, Profile } from '@/data/local/models';
 
 const CAPS: Capability[] = [

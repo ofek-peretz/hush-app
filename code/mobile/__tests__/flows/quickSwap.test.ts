@@ -1,37 +1,42 @@
 /**
- * One-tap swap (S4, approved 2026-07-06). Hush decides the replacement — the athlete never
- * evaluates a list mid-workout. Two pure pieces:
- *   • swapLadder — the decision order: saved substitute → saved backup → catalog default
- *     (different equipment first) → similar-effect candidates; always in-muscle, de-duplicated.
- *   • retargetPlanForSwap — the swapped-in exercise carries ITS OWN prescription (a bench
- *     60 kg never rides onto a machine pin); remaining sets only, logged sets untouched.
+ * One-tap swap (S4, approved 2026-07-06; taxonomy rebuilt 2026-07-12). Hush decides the
+ * replacement — the athlete never evaluates a list mid-workout. Two pure pieces:
+ *   • the swap LADDER — the athlete's standing substitute, then their backup, then the catalog's
+ *     closest substitute by fidelity (domain/swapPool). Always in-muscle, de-duplicated, and never
+ *     a lift already in today's session.
+ *   • retargetPlanForSwap — the swapped-in exercise carries ITS OWN prescription (a bench 60 kg
+ *     never rides onto a machine pin); remaining sets only, logged sets untouched.
  */
-import { swapLadder } from '@/domain/replacement';
+import { inWorkoutLadder } from '@/domain/replacement';
 import { retargetPlanForSwap, type Step } from '@/state/stores/sessionStore';
 import { exerciseById, muscleOf } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 
-describe('swapLadder', () => {
-  it('orders substitute → backup → default → similar, in-muscle, de-duplicated', () => {
-    const ladder = swapLadder('bb_bench_press', {
-      substitutes: { bb_bench_press: 'db_bench_press' },
-      backups: { bb_bench_press: 'machine_chest_press' },
+/** The ladder with nothing in the session — the plain catalog answer. */
+const ladderOf = (id: string, prefs?: Parameters<typeof inWorkoutLadder>[1]['prefs']) =>
+  inWorkoutLadder(id, { sessionExerciseIds: [], prefs });
+
+describe('the swap ladder', () => {
+  it("leads with the athlete's own standing choices, then fidelity", () => {
+    const ladder = ladderOf('bb_bench_press', {
+      substitutes: { bb_bench_press: 'machine_chest_press' },
+      backups: { bb_bench_press: 'push_up' },
     });
-    expect(ladder[0]).toBe('db_bench_press'); // the athlete's standing choice leads
-    expect(ladder[1]).toBe('machine_chest_press'); // then their equipment-busy backup
+    expect(ladder[0]).toBe('machine_chest_press'); // the athlete's standing choice leads
+    expect(ladder[1]).toBe('push_up'); // then their equipment-busy backup
     expect(new Set(ladder).size).toBe(ladder.length); // no duplicates
     for (const id of ladder) expect(muscleOf(id)).toBe('Chest'); // never leaves the muscle
     expect(ladder).not.toContain('bb_bench_press'); // never offers itself
   });
 
-  it('without preferences, leads with the catalog default (different equipment family)', () => {
-    const ladder = swapLadder('bb_bench_press');
-    expect(ladder.length).toBeGreaterThanOrEqual(3);
-    expect(exerciseById(ladder[0])!.equipment).not.toBe('barbell'); // station-busy motive
+  it('without preferences, leads with the CLOSEST substitute on other equipment', () => {
+    const ladder = ladderOf('bb_bench_press');
+    expect(ladder[0]).toBe('db_bench_press'); // same movement, same demand, off the rack
+    expect(exerciseById(ladder[0])!.equipment).not.toBe('barbell'); // the busy station is the motive
   });
 
-  it('ignores a cross-muscle or unknown preference (contract holds)', () => {
-    const ladder = swapLadder('bb_bench_press', {
+  it('ignores a cross-muscle or unknown preference (the capability contract holds)', () => {
+    const ladder = ladderOf('bb_bench_press', {
       substitutes: { bb_bench_press: 'lat_pulldown' }, // Back — invalid here
       backups: { bb_bench_press: 'not_a_lift' },
     });
@@ -40,9 +45,18 @@ describe('swapLadder', () => {
     expect(ladder).not.toContain('not_a_lift');
   });
 
+  it('a preference never resurrects a lift already done today', () => {
+    const ladder = inWorkoutLadder('bb_bench_press', {
+      sessionExerciseIds: ['bb_bench_press', 'db_bench_press'],
+      prefs: { substitutes: { bb_bench_press: 'db_bench_press' } },
+    });
+    expect(ladder).not.toContain('db_bench_press'); // pinned, but already in the workout
+    expect(ladder.length).toBeGreaterThan(0);
+  });
+
   it('every catalog exercise yields a non-empty ladder', () => {
-    for (const id of ['bb_back_squat', 'leg_curl', 'lateral_raise', 'cable_crunch', 'pull_up']) {
-      expect(swapLadder(id).length).toBeGreaterThan(0);
+    for (const id of ['bb_back_squat', 'leg_curl', 'lateral_raise', 'cable_crunch', 'pull_up', 'hip_abduction']) {
+      expect(ladderOf(id).length).toBeGreaterThan(0);
     }
   });
 });

@@ -178,7 +178,7 @@ export function ProgramDetail({ navigation, route }: Props) {
       {swapping ? (
         <SwapSheet
           currentExerciseId={swapping.currentExerciseId}
-          exclude={day?.slots.map((s) => s.exerciseId) ?? []}
+          sessionExerciseIds={day?.slots.map((s) => s.exerciseId) ?? []}
           onSelect={onSelectSwap}
           onClose={() => setSwapping(null)}
         />
