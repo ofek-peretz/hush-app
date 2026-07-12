@@ -65,11 +65,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     color: color.textPrimary,
     lineHeight: undefined,
+    textAlign: 'left',
   },
   unit: {
     fontFamily: font.monoMedium,
     color: color.textMuted,
     marginStart: 4,
     marginBottom: 3,
+    textAlign: 'left',
   },
 });

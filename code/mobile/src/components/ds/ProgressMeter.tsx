@@ -47,7 +47,7 @@ export function ProgressMeter({ value = 0, max = 100, label, valueLabel, tone = 
 const styles = StyleSheet.create({
   wrap: { flexDirection: 'column', gap: 8, width: '100%' },
   head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  value: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary },
+  value: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
   track: { position: 'relative', height: 6, backgroundColor: color.fillSubtleStrong, borderRadius: 999, overflow: 'hidden' },
   trackLg: { height: 10 },
   fill: { position: 'absolute', top: 0, bottom: 0, start: 0, borderRadius: 999 },

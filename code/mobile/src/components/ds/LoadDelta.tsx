@@ -56,7 +56,7 @@ function Glyph({ dir, tint }: { dir: Dir; tint: string }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pill: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 4 },
-  text: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'] },
+  text: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], textAlign: 'left' },
   tri: { width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   hold: { width: 7, height: 2, borderRadius: 1 },
 });

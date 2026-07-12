@@ -7,13 +7,14 @@
  * Created (assembles the full inputs). Progress 4 / 4.
  */
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { Legend, WheelPicker, Button } from '@/components/ds';
+import { WheelPicker, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
+import { color, font, textScale } from '@/design/tokens';
 import type { Experience } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -55,7 +56,10 @@ export function Training({ navigation, route }: Props) {
     >
       <View style={styles.sections}>
         <View style={styles.section}>
-          <Legend>{t('ob.expSection')}</Legend>
+          {/* The section labels are QUESTIONS now (founder 2026-07-12) — "Experience" and
+              "Sessions per week" are the names of the fields, not what we are asking. A
+              question is asked in sentence case, so these are not uppercase Legends. */}
+          <Text style={styles.question}>{t('ob.expSection')}</Text>
           <OptStack
             value={experience}
             onChange={(v) => setExperience(v as Experience)}
@@ -67,14 +71,15 @@ export function Training({ navigation, route }: Props) {
           />
         </View>
         <View style={styles.section}>
-          <Legend>{t('ob.daysSection')}</Legend>
+          <Text style={styles.question}>{t('ob.daysSection')}</Text>
+          {/* No "/wk" chip: the question above already says "a week", and the rule reads
+              cleaner without a unit hanging off its end (founder 2026-07-12). */}
           <WheelPicker
             value={days}
             onChange={setDays}
             min={2}
             max={6}
             size="lg"
-            unit={t('ob.daysUnitShort')}
             label={t('ob.daysUnit')}
             style={styles.wheel}
           />
@@ -85,7 +90,8 @@ export function Training({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  sections: { gap: 20 },
+  sections: { gap: 24 },
   section: { gap: 10 },
+  question: { fontFamily: font.sansSemibold, fontSize: textScale.md, lineHeight: 22, color: color.textPrimary, textAlign: 'left' },
   wheel: { alignSelf: 'stretch' },
 });

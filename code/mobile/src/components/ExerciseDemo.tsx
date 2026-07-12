@@ -51,12 +51,12 @@ export function ExerciseDemo({ title, cues, formGuideLabel, doneLabel, onDone, e
 
 const styles = StyleSheet.create({
   body: { flex: 1 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 14 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 14, textAlign: 'left' },
   media: { marginBottom: 16 },
   cuesScroll: { flex: 1 },
   cues: { gap: 6, paddingBottom: 4 },
   cueRow: { flexDirection: 'row', gap: 8 },
-  bullet: { fontFamily: font.sans, fontSize: textScale.base, color: color.textMuted, lineHeight: 24 },
-  cue: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 24 },
+  bullet: { fontFamily: font.sans, fontSize: textScale.base, color: color.textMuted, lineHeight: 24, textAlign: 'left' },
+  cue: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 24, textAlign: 'left' },
   close: { marginTop: 16 },
 });

@@ -97,5 +97,5 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  chipText: { fontFamily: font.sansMedium, fontSize: 9.5, letterSpacing: trackingPx(9.5, tracking.legend), color: color.textMuted, textTransform: 'uppercase' },
+  chipText: { fontFamily: font.sansMedium, fontSize: 9.5, letterSpacing: trackingPx(9.5, tracking.legend), color: color.textMuted, textTransform: 'uppercase', textAlign: 'left' },
 });

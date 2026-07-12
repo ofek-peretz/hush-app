@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   solid: { backgroundColor: ink[0], borderColor: ink[0] },
-  text: { fontFamily: font.monoMedium, color: color.textSecondary, textTransform: 'uppercase' },
+  text: { fontFamily: font.monoMedium, color: color.textSecondary, textTransform: 'uppercase', textAlign: 'left' },
   textSolid: { color: paper[0] },
 });

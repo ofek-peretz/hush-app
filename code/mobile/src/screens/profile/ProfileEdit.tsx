@@ -87,19 +87,21 @@ export function ProfileEdit({ navigation }: Props) {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <Text style={styles.sub}>{t('profileEdit.sub')}</Text>
 
+        {/* The unit cells are gone from the rules (founder 2026-07-12) — a number under a legend
+            that says Height is a height. Where the unit is genuinely ambiguous (kg vs lb) it now
+            rides the LEGEND, which is where a field's unit belongs anyway. */}
         <View style={styles.rows}>
           <View style={styles.col}>
             <Legend>{t('ob.height')}</Legend>
-            <WheelPicker value={height} onChange={setHeight} min={120} max={220} unit="cm" label={t('ob.height')} style={styles.wheel} />
+            <WheelPicker value={height} onChange={setHeight} min={120} max={220} label={t('ob.height')} style={styles.wheel} />
           </View>
           <View style={styles.col}>
-            <Legend>{t('ob.weight')}</Legend>
-            <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} unit={unitLabel(units)} label={t('ob.weight')} style={styles.wheel} />
+            <Legend>{t('ob.weightWith', { unit: unitLabel(units) })}</Legend>
+            <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} label={t('ob.weight')} style={styles.wheel} />
           </View>
           <View style={styles.col}>
-            <Legend>{t('ob.daysSection')}</Legend>
-            <WheelPicker value={days} onChange={setDays} min={2} max={6} unit={t('ob.daysUnitShort')} label={t('ob.daysUnit')} style={styles.wheel} />
-            <Text style={styles.note}>{t('profileEdit.daysNote')}</Text>
+            <Legend>{t('ob.daysLabel')}</Legend>
+            <WheelPicker value={days} onChange={setDays} min={2} max={6} label={t('ob.daysUnit')} style={styles.wheel} />
           </View>
         </View>
       </ScrollView>
@@ -129,13 +131,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 4, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headerTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary },
+  headerTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, textAlign: 'left' },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 6, paddingBottom: 24 },
-  sub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, marginBottom: 16 },
+  sub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, marginBottom: 16, textAlign: 'left' },
   rows: { gap: 18 },
   col: { gap: 8 },
   wheel: { alignSelf: 'stretch' },
-  note: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 19, color: color.textTertiary, marginTop: 2 },
+  note: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 19, color: color.textTertiary, marginTop: 2, textAlign: 'left' },
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 14, borderTopWidth: 1, borderTopColor: color.border },
 });

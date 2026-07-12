@@ -25,11 +25,27 @@ export function bidi(s: string): string {
 }
 
 /**
- * Logical text alignment as concrete `textAlign` values. RN's `textAlign` has no
- * `start`/`end` tokens, so these resolve against the locked layout direction
- * (`I18nManager.isRTL` is fixed for the app session — RTL needs a relaunch). For
- * START alignment, prefer simply omitting `textAlign` (RN already aligns unset text
- * to the start, mirroring under RTL); use `textEnd` for the rarer end-alignment.
+ * Logical text alignment. THIS FILE USED TO SAY THE OPPOSITE, AND THAT WAS THE BUG
+ * (founder device review, 2026-07-12: "every screen is stuck on the left in Hebrew").
+ *
+ * The old doctrine — "for START alignment simply omit `textAlign`, RN mirrors it" — is
+ * false on iOS. An omitted alignment is `NSTextAlignmentNatural`, which RN does NOT flip;
+ * it resolves LTR and freezes every heading and paragraph to the physical left, even
+ * under `I18nManager.isRTL`. What RN DOES flip is an EXPLICIT physical value: in an RTL
+ * layout it swaps 'left' <-> 'right' before handing the alignment to the platform.
+ *
+ * So in React Native the explicit physical value IS the logical one:
+ *     textAlign: 'left'   -> renders at the START of the line (right, in Hebrew)
+ *     textAlign: 'right'  -> renders at the END of the line   (left, in Hebrew)
+ * and an I18nManager-conditional value (what these constants used to be) DOUBLE-flips
+ * and lands on the wrong edge.
+ *
+ * Every text style in the app therefore declares an alignment — `scripts/lint-rtl.cjs`
+ * fails the build on a `fontFamily` without one, because "no alignment" is not a neutral
+ * default: it is a silent LTR lock.
  */
-export const textEnd: TextStyle['textAlign'] = I18nManager.isRTL ? 'left' : 'right';
-export const textStart: TextStyle['textAlign'] = I18nManager.isRTL ? 'right' : 'left';
+export const textStart: TextStyle['textAlign'] = 'left';
+export const textEnd: TextStyle['textAlign'] = 'right';
+
+/** True while the app is laid out right-to-left (Hebrew). Latched at module load. */
+export const rtl = I18nManager.isRTL;

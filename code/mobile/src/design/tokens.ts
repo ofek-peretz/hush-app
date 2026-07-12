@@ -383,4 +383,5 @@ export const trackingPx = (size: number, em: number) => size * em;
 export const heroTitle = (size: number, em = tracking.display) => ({
   fontFamily: font.sansBold,
   letterSpacing: size * em,
+  textAlign: 'left',
 });

@@ -98,7 +98,7 @@ export function CardioDetail({ navigation, route }: Props) {
                       <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? signal[0] : color.fillSubtleStrong }]} />
                       {s.gait === 'walk' ? <Text style={styles.splitWalkTag}>{t('cardio.walkTag')}</Text> : null}
                     </View>
-                    <Text style={[styles.splitPace, isFast && { color: color.accentText, fontFamily: font.monoSemibold }]}>{fmtPace(s.paceSec)}</Text>
+                    <Text style={[styles.splitPace, isFast && { color: color.accentText, fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
                   </View>
                 );
               })}
@@ -133,19 +133,19 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 12 },
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono digit tops.
-  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: color.textPrimary },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginStart: 6, marginBottom: 8 },
+  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: color.textPrimary, textAlign: 'left' },
+  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginStart: 6, marginBottom: 8, textAlign: 'left' },
 
   metrics: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 18, marginTop: 24, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
   stat: { width: '50%', gap: 4 },
   statRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  statVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: color.textPrimary },
-  statUnit: { fontFamily: font.sansMedium, fontSize: 12, color: color.textMuted },
+  statVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: color.textPrimary, textAlign: 'left' },
+  statUnit: { fontFamily: font.sansMedium, fontSize: 12, color: color.textMuted, textAlign: 'left' },
 
   traceWrap: { marginTop: 24 },
   traceWrapEmpty: { height: 0 },
@@ -153,12 +153,12 @@ const styles = StyleSheet.create({
   splitsLegend: { marginBottom: 14 },
   splitsList: { gap: 9 },
   splitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted },
+  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   splitTrack: { flex: 1, height: 22, backgroundColor: color.fillSubtle, borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
   splitFill: { height: '100%', borderRadius: 4 },
-  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: color.textMuted, textTransform: 'uppercase' },
+  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: color.textMuted, textTransform: 'uppercase', textAlign: 'left' },
   splitPace: { width: 52, textAlign: textEnd, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary },
 
   note: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, paddingTop: 16, borderTopWidth: 1, borderTopColor: color.border },
-  noteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20 },
+  noteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20, textAlign: 'left' },
 });

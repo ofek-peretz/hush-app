@@ -113,6 +113,7 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
               fontVariant: ['tabular-nums'],
               fontSize: valueSize,
               color: text,
+              textAlign: 'left',
             }}
             numberOfLines={1}
           >
@@ -128,6 +129,7 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
               textTransform: 'uppercase',
               color: engrave,
               marginTop: 1,
+              textAlign: 'left',
             }}
             numberOfLines={1}
           >

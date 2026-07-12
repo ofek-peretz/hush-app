@@ -204,10 +204,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
   body: { paddingHorizontal: space.gutter, paddingBottom: 24 },
-  intro: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20, paddingTop: 2, paddingBottom: 8 },
-  yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginBottom: 4 },
+  intro: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20, paddingTop: 2, paddingBottom: 8, textAlign: 'left' },
+  yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginBottom: 4, textAlign: 'left' },
 
   lift: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: color.border },
   liftLast: { borderBottomWidth: 0 },
@@ -221,14 +221,14 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   badgeLocked: { borderColor: color.accent, backgroundColor: color.accentWash },
-  badgeText: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  badgeText: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   badgeTextLocked: { color: color.accentText },
   liftBody: { flex: 1, minWidth: 0 },
-  liftName: { fontFamily: font.sansMedium, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary },
+  liftName: { fontFamily: font.sansMedium, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary, textAlign: 'left' },
   liftMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 3 },
-  setsReps: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
+  setsReps: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   lockedTag: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  lockedTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.accentText },
+  lockedTagText: { fontFamily: font.sansSemibold, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.accentText, textAlign: 'left' },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   // Design RowAction "emphasis": a quiet sunken tile with an ink glyph — NOT a
@@ -241,5 +241,5 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
   doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12 },
-  doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary },
+  doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
 });

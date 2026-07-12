@@ -117,6 +117,7 @@ const styles = StyleSheet.create({
     fontFamily: font.sansSemibold,
     fontSize: textScale.base,
     letterSpacing: trackingPx(textScale.base, tracking.tight),
+    textAlign: 'left',
   },
   labelPaper: { color: color.textSecondary },
   labelStage: { color: stageC.ink1 },

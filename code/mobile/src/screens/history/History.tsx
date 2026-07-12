@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
   emptyMark: {
     width: 56,
@@ -228,10 +228,10 @@ const styles = StyleSheet.create({
 
   summary: { paddingTop: 6, paddingBottom: 20, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: color.border },
   summaryCountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 8 },
-  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -1.4, color: color.textPrimary },
-  summaryCountLabel: { fontFamily: font.sans, fontSize: textScale.md, color: color.textSecondary },
-  summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary },
-  summaryStrong: { fontFamily: font.mono, fontVariant: ['tabular-nums'], color: color.textPrimary },
+  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -1.4, color: color.textPrimary, textAlign: 'left' },
+  summaryCountLabel: { fontFamily: font.sans, fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },
+  summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
+  summaryStrong: { fontFamily: font.mono, fontVariant: ['tabular-nums'], color: color.textPrimary, textAlign: 'left' },
 
   monthLegend: { marginTop: 20, marginBottom: 4 },
 
@@ -245,5 +245,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  vol: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted },
+  vol: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
 });

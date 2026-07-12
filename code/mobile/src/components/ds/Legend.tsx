@@ -38,5 +38,5 @@ export function Legend({ children, size = textScale['2xs'], tone = 'muted', alig
 }
 
 const styles = StyleSheet.create({
-  base: { fontFamily: font.sansMedium, textTransform: 'uppercase' },
+  base: { fontFamily: font.sansMedium, textTransform: 'uppercase', textAlign: 'left' },
 });

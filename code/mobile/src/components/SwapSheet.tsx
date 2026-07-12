@@ -123,14 +123,14 @@ function SwapRow({
 
 const styles = StyleSheet.create({
   legend: { marginBottom: 6 },
-  body: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textMuted, marginBottom: 8 },
+  body: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textMuted, marginBottom: 8, textAlign: 'left' },
   list: { paddingBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
   info: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary },
+  title: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
   titleMuted: { color: color.textSecondary },
-  sub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
+  sub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
   badge: { backgroundColor: signal.wash, borderRadius: 4, paddingHorizontal: 8, height: 22, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText },
+  badgeText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText, textAlign: 'left' },
 });

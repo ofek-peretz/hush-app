@@ -31,6 +31,7 @@ import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
+import { setGender } from '@/i18n/gender';
 import { billing, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
 import { BILLING_EVENTS } from '@/platform/events';
 import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
@@ -157,6 +158,9 @@ interface AppApi extends AppState {
   /** Store the athlete's chosen name (NameEntry screen) for the profile built at
    *  completeOnboarding. Overrides any Apple-provided name. */
   setPendingName: (name: string) => void;
+  /** Publish the athlete's gender to the copy layer the moment it is picked (NameEntry).
+   *  The value itself travels to the profile through the onboarding draft. */
+  setPendingSex: (sex: 'male' | 'female') => void;
   completeOnboarding: (inputs: OnboardingInputs) => Promise<void>;
   recordSessionCompleted: () => Promise<{ unlockedPortrait: boolean }>;
   clearPortraitFlag: () => void;
@@ -341,6 +345,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       // Gate on the CACHED entitlement immediately (offline-safe); the live store
       // value is reconciled just after boot (below).
+      // The copy layer must know who it is speaking to BEFORE the first screen renders
+      // (Hebrew conjugates every verb by gender — i18n/gender.ts).
+      setGender(profile?.sex);
       dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
 
       // Finding 5: heal a crashed completion. If a session for a program day is in THIS week's
@@ -450,6 +457,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         pendingNameRef.current = trimmed.length > 0 ? trimmed : null;
       },
 
+      setPendingSex(sex) {
+        // Published to the copy layer AT THE PICK, not at completeOnboarding: the four
+        // screens that follow (Health, Body, Training, Ready) already address the athlete
+        // in the second person, and in Hebrew that sentence has a gender.
+        setGender(sex);
+      },
+
       async completeOnboarding(inputs) {
         const profile: Profile = {
           name: inputs.name ?? pendingNameRef.current ?? undefined,
@@ -512,6 +526,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // it survives the first Saturday roll — the athlete's first program gets a full runway.
         const weekOpenMs = firstBucketOpen(Date.now(), inputs.daysPerWeek);
         await Promise.all([db.saveProfile(profile), db.saveProgram(program), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
+        setGender(profile.sex);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
         void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });

@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
   block: { alignSelf: 'stretch', width: '100%' },
   pressed: { transform: [{ translateY: 1 }] },
   disabled: { opacity: 0.4 },
-  label: { fontFamily: font.sansSemibold },
+  label: { fontFamily: font.sansSemibold, textAlign: 'left' },
 });

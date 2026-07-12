@@ -104,6 +104,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     color: color.textPrimary,
     letterSpacing: -0.5,
+    textAlign: 'left',
   },
   // Final-seconds (Approach window) — the readout inks in signal ochre, both themes.
   timeClosing: { color: signal[0] },

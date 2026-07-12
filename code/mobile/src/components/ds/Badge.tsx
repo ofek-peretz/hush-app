@@ -70,6 +70,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   outline: { borderColor: color.borderControl },
-  text: { fontFamily: font.monoMedium, fontSize: textScale['2xs'], letterSpacing: 0.2 },
-  legendText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], textTransform: 'uppercase' },
+  text: { fontFamily: font.monoMedium, fontSize: textScale['2xs'], letterSpacing: 0.2, textAlign: 'left' },
+  legendText: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], textTransform: 'uppercase', textAlign: 'left' },
 });

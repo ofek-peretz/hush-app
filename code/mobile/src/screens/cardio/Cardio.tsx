@@ -553,7 +553,7 @@ function CardioComplete(props: {
                         <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? signal[0] : stageC[2] }]} />
                         {s.gait === 'walk' ? <Text style={styles.splitWalkTag}>{t('cardio.walkTag')}</Text> : null}
                       </View>
-                      <Text style={[styles.splitPace, isFast && { color: signal[0], fontFamily: font.monoSemibold }]}>{fmtPace(s.paceSec)}</Text>
+                      <Text style={[styles.splitPace, isFast && { color: signal[0], fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
                     </View>
                   );
                 })}
@@ -607,17 +607,17 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
   selectScroll: { paddingHorizontal: space.gutter, paddingTop: 4, paddingBottom: 24 },
   introCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, padding: 14, backgroundColor: color.surface3, borderRadius: radius.lg, marginBottom: 22 },
-  introText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20 },
-  introStrong: { fontFamily: font.sansMedium, color: color.textPrimary },
+  introText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, lineHeight: 20, textAlign: 'left' },
+  introStrong: { fontFamily: font.sansMedium, color: color.textPrimary, textAlign: 'left' },
   fieldLegend: { marginBottom: 10 },
   fieldLegendGoal: { marginTop: 26, marginBottom: 10 },
-  goalNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 14, marginHorizontal: 2, lineHeight: 20 },
+  goalNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 14, marginHorizontal: 2, lineHeight: 20, textAlign: 'left' },
   goalCol: { marginTop: 16, gap: 8 },
   goalWheel: { alignSelf: 'stretch' },
-  goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary },
+  goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
   startWrap: { marginTop: 32 },
   gpsNote: { textAlign: 'center', fontFamily: font.sans, fontSize: textScale['2xs'], color: color.textTertiary, marginTop: 14, letterSpacing: 0.2 },
 
@@ -630,25 +630,25 @@ const styles = StyleSheet.create({
   // countdown
   countdownWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Read at arm's length, one second before the athlete starts moving.
-  startingLegend: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.legend), color: stageC.ink1, marginBottom: 28 },
-  countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0 },
+  startingLegend: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.legend), color: stageC.ink1, marginBottom: 28, textAlign: 'left' },
+  countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0, textAlign: 'left' },
 
   // active hero
   activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  heroLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12 },
+  heroLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono
   // digit tops — the 0.95 the web design tolerates is unsafe here (see SessionFlow `hero`).
-  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0 },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8 },
+  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0, textAlign: 'left' },
+  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8, textAlign: 'left' },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
   gpsSlot: { height: 28, justifyContent: 'flex-end' },
-  gpsStatus: { fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3 },
-  paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2 },
+  gpsStatus: { fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
+  paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2, textAlign: 'left' },
   paceValRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0 },
-  paceUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stageC.ink2 },
+  paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0, textAlign: 'left' },
+  paceUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
 
   dotsRow: { flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', marginTop: 26, minHeight: 7, flexWrap: 'wrap', maxWidth: 280 },
   dot: { height: 7, borderRadius: 4 },
@@ -657,22 +657,22 @@ const styles = StyleSheet.create({
   timeBarFill: { height: '100%', backgroundColor: signal[0], borderRadius: 2 },
   timeBarLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   // A LIVE clock: tabular figures or the whole label shivers every time a 1 becomes an 8.
-  timeBarLabel: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2 },
+  timeBarLabel: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
 
   metricCluster: { flexDirection: 'row', alignItems: 'stretch', marginTop: 40, paddingTop: 26, borderTopWidth: 1, borderTopColor: stageC[2], width: '100%', maxWidth: 320 },
   clusterDivider: { width: 1, backgroundColor: stageC[2], alignSelf: 'center', height: 34 },
   cardioStat: { flex: 1, alignItems: 'center', gap: 5 },
   cardioStatRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  cardioStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['2xl'], letterSpacing: -0.6, color: stageC.ink0 },
-  cardioStatUnit: { fontFamily: font.sansMedium, fontSize: 13, color: stageC.ink2 },
-  cardioStatLabel: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: trackingPx(10, tracking.legend), color: stageC.ink2, textTransform: 'uppercase' },
+  cardioStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['2xl'], letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
+  cardioStatUnit: { fontFamily: font.sansMedium, fontSize: 13, color: stageC.ink2, textAlign: 'left' },
+  cardioStatLabel: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: trackingPx(10, tracking.legend), color: stageC.ink2, textTransform: 'uppercase', textAlign: 'left' },
 
   // active footer — one action, alone in the thumb zone
   activeFooter: { paddingHorizontal: 20, paddingBottom: 16 },
   gaitToggle: { flexDirection: 'row', gap: 2, padding: 3, backgroundColor: stageC[1], borderRadius: radius.full },
   gaitPill: { paddingVertical: 8, paddingHorizontal: 22, borderRadius: radius.full },
   gaitPillActive: { backgroundColor: stageC.ink0 },
-  gaitPillText: { fontFamily: font.sansSemibold, fontSize: 13, color: stageC.ink1 },
+  gaitPillText: { fontFamily: font.sansSemibold, fontSize: 13, color: stageC.ink1, textAlign: 'left' },
   gaitPillTextActive: { color: stageC[0] },
 
   // pause overlay
@@ -680,38 +680,38 @@ const styles = StyleSheet.create({
   // live metrics behind bled through and collided with the "Finish & save" flag +
   // label, reading as a stray floating flag. A solid cover keeps the pause panel clean.
   pauseOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,17,14,0.985)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12 },
-  pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0 },
+  pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
+  pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0, textAlign: 'left' },
   pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },
-  pauseStat: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1 },
+  pauseStat: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
   pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
 
   // complete
   completeScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16 },
   recordedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordedText: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: up[0] },
-  loggedTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stageC.ink0, marginTop: 12 },
+  recordedText: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: up[0], textAlign: 'left' },
+  loggedTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stageC.ink0, marginTop: 12, textAlign: 'left' },
   completeHero: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 24 },
   completeMetrics: { flexDirection: 'row', marginTop: 26, paddingTop: 22, borderTopWidth: 1, borderTopColor: stageC[2] },
   completeMetric: { flex: 1, gap: 4 },
-  completeMetricVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: stageC.ink0 },
-  completeMetricUnit: { fontFamily: font.sansMedium, fontSize: 12, color: stageC.ink2 },
+  completeMetricVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
+  completeMetricUnit: { fontFamily: font.sansMedium, fontSize: 12, color: stageC.ink2, textAlign: 'left' },
 
   traceWrap: { marginTop: 24 },
   // Zero-height, but still laid out — so onLayout can hand us the column width even on a
   // run that has no route to draw.
   traceWrapEmpty: { height: 0 },
   splitsWrap: { marginTop: 28 },
-  splitsLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 14 },
+  splitsLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 14, textAlign: 'left' },
   splitsList: { gap: 9 },
   splitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2 },
+  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
   splitTrack: { flex: 1, height: 22, backgroundColor: stageC[1], borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
   splitFill: { height: '100%', borderRadius: 4 },
-  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: stageC.ink1, textTransform: 'uppercase' },
+  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: stageC.ink1, textTransform: 'uppercase', textAlign: 'left' },
   splitPace: { width: 52, textAlign: textEnd, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink0 },
 
   savedNoteRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, paddingTop: 16, borderTopWidth: 1, borderTopColor: stageC[2] },
-  savedNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink1, lineHeight: 20 },
+  savedNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink1, lineHeight: 20, textAlign: 'left' },
   completeFooter: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: stageC[2] },
 });

@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     ...shadow.lg,
   },
-  text: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary },
+  text: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
   action: { paddingVertical: 4, paddingStart: 10 },
-  actionLabel: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accent },
+  actionLabel: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accent, textAlign: 'left' },
 });

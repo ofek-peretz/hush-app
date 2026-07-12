@@ -274,13 +274,14 @@ const styles = StyleSheet.create({
     lineHeight: Math.round(textScale['3xl'] * 1.04),
     letterSpacing: trackingPx(textScale['3xl'], tracking.display),
     marginBottom: space[3],
+    textAlign: 'left',
   },
-  body: { color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, marginBottom: space[5], maxWidth: 330 },
+  body: { color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, marginBottom: space[5], maxWidth: 330, textAlign: 'left' },
 
   benefits: { gap: 9, marginBottom: space[5] },
   benefit: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   benefitCheck: { width: 22, height: 22, borderRadius: 11, backgroundColor: color.accentWash, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  benefitText: { flex: 1, color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.base, lineHeight: 21 },
+  benefitText: { flex: 1, color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.base, lineHeight: 21, textAlign: 'left' },
 
   reassure: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 },
   reassureText: { flexShrink: 1, color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center' },
@@ -314,8 +315,8 @@ const styles = StyleSheet.create({
   radioInner: { width: 10, height: 10, borderRadius: radius.full, backgroundColor: signal[0] },
   planText: { flex: 1, minWidth: 0, gap: 2 },
   planTopRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md },
-  planTrial: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm },
+  planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md, textAlign: 'left' },
+  planTrial: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'left' },
   // The saving tag — the one figure on this screen allowed to be loud.
   saveTag: { backgroundColor: signal[0], borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
   saveTagText: {
@@ -324,10 +325,11 @@ const styles = StyleSheet.create({
     fontSize: textScale['2xs'],
     letterSpacing: trackingPx(textScale['2xs'], tracking.wide),
     textTransform: 'uppercase',
+    textAlign: 'left',
   },
   planPriceCol: { alignItems: 'flex-end' },
-  planPrice: { color: color.textPrimary, fontFamily: font.monoSemibold, fontSize: textScale.lg },
-  planPeriod: { color: color.textMuted, fontFamily: font.mono, fontSize: textScale.xs },
+  planPrice: { color: color.textPrimary, fontFamily: font.monoSemibold, fontSize: textScale.lg, textAlign: 'left' },
+  planPeriod: { color: color.textMuted, fontFamily: font.mono, fontSize: textScale.xs, textAlign: 'left' },
 
   error: { color: color.down, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
 

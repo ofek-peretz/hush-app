@@ -31,7 +31,7 @@ function make(size: number, family: string, lineHeight: number, em: number) {
       <Text
         {...rest}
         style={[
-          { fontFamily: family, fontSize: size, lineHeight, letterSpacing: trackingPx(size, em), color: TONE[tone] },
+          { fontFamily: family, fontSize: size, lineHeight, letterSpacing: trackingPx(size, em), color: TONE[tone], textAlign: 'left' },
           center && stylesCenter,
           style,
         ]}

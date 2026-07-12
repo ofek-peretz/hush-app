@@ -72,8 +72,6 @@ export function ProgramCreated({ route }: Props) {
   }, [ready, reduced, seal]);
 
   const steps = [t('ob.buildStep1'), t('ob.buildStep2'), t('ob.buildStep3'), t('ob.buildStep4')];
-  // Hush is hypertrophy-first for everyone — the focus is fixed, no longer chosen in onboarding.
-  const focus = t('ob.focusHypertrophy');
 
   async function onDone() {
     if (busy) return;
@@ -140,13 +138,12 @@ export function ProgramCreated({ route }: Props) {
             </Animated.View>
             <Text style={styles.readyLegend}>{t('ob.readyLegend').toUpperCase()}</Text>
             <Text style={styles.readyTitle} accessibilityRole="header">{t('ob.readyTitle')}</Text>
-            <Text style={styles.readySub}>{t('ob.readySub', { focus, days: inputs.daysPerWeek })}</Text>
-            {/* the philosophy in one sentence — given its own weight (handoff §1/§9) */}
-            <Text style={styles.readyOwnership}>{t('ob.readyOwnership')}</Text>
-            <View style={styles.readyNote}>
-              <Icon name="shield" size={16} color={up[0]} strokeWidth={2} />
-              <Text style={styles.readyNoteText}>{t('ob.readyNote')}</Text>
-            </View>
+            {/* "Hypertrophy focus" is GONE (founder 2026-07-12): the average athlete does not
+                know the word, and a program screen is a bad place to teach it. The frequency is
+                the only fact worth stating here. The ownership couplet and the shield note went
+                with it — the moment the program lands is not the moment for a manifesto. */}
+            <Text style={styles.readySub}>{t('ob.readySub', { days: inputs.daysPerWeek })}</Text>
+            <Text style={styles.readyBody}>{t('ob.readyBody')}</Text>
           </View>
         )}
       </View>
@@ -169,13 +166,14 @@ const styles = StyleSheet.create({
     letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
     textTransform: 'uppercase',
     color: color.textMuted,
+    textAlign: 'left',
   },
-  buildingTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: color.textPrimary, marginTop: 8, marginBottom: 28 },
+  buildingTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: color.textPrimary, marginTop: 8, marginBottom: 28, textAlign: 'left' },
   steps: { gap: 16 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepIcon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.textTertiary },
-  stepText: { fontFamily: font.sans, fontSize: textScale.base },
+  stepText: { fontFamily: font.sans, fontSize: textScale.base, textAlign: 'left' },
 
   // ready — one centred block; the mark leads it
   readyBlock: { alignItems: 'center' },
@@ -190,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 26,
   },
-  readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: up[0] },
+  readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: up[0], textAlign: 'left' },
   readyTitle: {
     fontFamily: font.sansSemibold,
     fontSize: textScale['3xl'],
@@ -201,18 +199,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   readySub: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 12, maxWidth: 300 },
-  readyOwnership: {
-    fontFamily: font.sansSemibold,
-    fontSize: textScale.lg,
-    lineHeight: 26,
-    letterSpacing: trackingPx(textScale.lg, tracking.tight),
-    color: color.textPrimary,
-    textAlign: 'center',
-    marginTop: 22,
-    maxWidth: 320,
-  },
-  readyNote: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', marginTop: 22, maxWidth: 320 },
-  readyNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary },
+  readyBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 22, maxWidth: 330 },
   footer: { paddingHorizontal: space.gutter, paddingBottom: 24, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center' },
 });

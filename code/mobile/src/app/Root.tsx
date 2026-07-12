@@ -59,14 +59,29 @@ const navTheme = {
 function OnboardingNavigator() {
   return (
     <OnboardingStack.Navigator
-      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bgBase }, animation: 'fade', gestureEnabled: false }}
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: color.bgBase },
+        animation: 'fade',
+        // ONBOARDING SWIPES BACK (founder 2026-07-12). It used to be forward-only, with the
+        // arrow as the single way back — which is not how a phone works: the athlete drags from
+        // the edge, nothing happens, and the app feels stuck. Every step here is reversible
+        // (nothing is committed until the program is built), so the gesture is simply correct.
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      }}
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />
       <OnboardingStack.Screen name="Training" component={Training} />
-      <OnboardingStack.Screen name="ProgramCreated" component={ProgramCreated} />
+      {/* The build/ready step is the ONE place with no way back: the program exists. */}
+      <OnboardingStack.Screen
+        name="ProgramCreated"
+        component={ProgramCreated}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
     </OnboardingStack.Navigator>
   );
 }

@@ -20,8 +20,8 @@ export function installGlobalFontDefault(): void {
     Comp.defaultProps = Comp.defaultProps || {};
     const prev = (Comp.defaultProps.style as object[] | object | undefined) ?? null;
     Comp.defaultProps.style = prev
-      ? [{ fontFamily: font.sans }, prev]
-      : { fontFamily: font.sans };
+      ? [{ fontFamily: font.sans, textAlign: 'left' }, prev]
+      : { fontFamily: font.sans, textAlign: 'left' };
   };
   apply(Text as unknown as { defaultProps?: { style?: unknown } });
   apply(TextInput as unknown as { defaultProps?: { style?: unknown } });

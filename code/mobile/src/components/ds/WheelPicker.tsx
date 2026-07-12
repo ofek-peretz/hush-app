@@ -51,6 +51,7 @@ import {
   type NativeScrollEvent,
   type ViewStyle,
 } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { color, radius, font, textScale, stage, signal } from '@/design/tokens';
 import { selection as selectionHaptic } from '@/platform/haptics';
 
@@ -169,6 +170,23 @@ function isWholeUnit(v: number): boolean {
   return Math.abs(v - Math.round(v)) < 1e-6;
 }
 
+/**
+ * THE ENGRAVING (founder 2026-07-12: "the rules work perfectly, but they look plain").
+ *
+ * A real measuring rule does not draw every graduation the same. It has a HIERARCHY, and that
+ * hierarchy is what lets a machinist read a caliper without reading a single digit:
+ *   • major  — every fifth whole unit: full height, inked. These are the landmarks the eye counts.
+ *   • whole  — a whole unit: two thirds height, quiet.
+ *   • half   — a fraction (16.5 kg): a third, quieter still.
+ * Pure + exported so the scale's grammar is a tested fact, not a styling accident.
+ */
+export type TickKind = 'major' | 'whole' | 'half';
+
+export function tickKind(v: number, step: number): TickKind {
+  if (step < 1 && !isWholeUnit(v)) return 'half';
+  return Math.abs(v) % 5 < 1e-6 ? 'major' : 'whole';
+}
+
 export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, style }: Props) {
   const itemW = ITEM_W[size];
   const h = WHEEL_HEIGHT[size];
@@ -177,9 +195,8 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
   const lastHapticRef = useRef(0);
-  // A fractional step means the scale has half-detents — the tick language only has two
-  // heights when there is genuinely something to distinguish.
-  const fractional = step < 1;
+  /** A finger is on the rule right now — the instrument lights up (see `wrapLive`). */
+  const [live, setLive] = useState(false);
 
   const clampIndex = useCallback(
     (i: number) => Math.min(values.length - 1, Math.max(0, i)),
@@ -241,6 +258,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const idx = clampIndex(wheelIndexFromOffset(e.nativeEvent.contentOffset.x, itemW));
       lastIndexRef.current = idx;
+      setLive(false);
       const v = values[idx];
       if (v !== value) onChange(v);
     },
@@ -277,7 +295,17 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
 
   return (
     <View
-      style={[styles.wrap, onStage && styles.wrapStage, { height: h }, style]}
+      style={[
+        styles.wrap,
+        onStage && styles.wrapStage,
+        // THE INSTRUMENT LIGHTS UP under the finger (founder 2026-07-12): the ochre that
+        // marks the value also rings the rule while it is being read. It is the same signal
+        // saying the same thing — "this is live" — and it is the whole difference between a
+        // control that feels machined and one that feels like a box with numbers in it.
+        live && (onStage ? styles.wrapLiveStage : styles.wrapLive),
+        { height: h },
+        style,
+      ]}
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
@@ -305,6 +333,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             onContentSizeChange={positionToValue}
             onScroll={onScroll}
             scrollEventThrottle={16}
+            onScrollBeginDrag={() => setLive(true)}
             onMomentumScrollEnd={onSettle}
             onScrollEndDrag={onSettle}
             importantForAccessibility="no-hide-descendants"
@@ -315,7 +344,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
               const index = win.start + k;
               const dist = index - activeIndex;
               const { scale, opacity } = wheelFocus(dist);
-              const whole = !fractional || isWholeUnit(item);
+              const kind = tickKind(item, step);
               const active = dist === 0;
               return (
                 <View key={item} style={[styles.item, { width: itemW }]}>
@@ -339,11 +368,11 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
                       </Text>
                     ) : null}
                   </View>
-                  {/* the engraved scale — a long tick on a whole unit, a short one on a fraction */}
+                  {/* the engraved scale — major / whole / half (see tickKind) */}
                   <View
                     style={[
                       styles.scaleTick,
-                      whole ? styles.scaleTickWhole : styles.scaleTickHalf,
+                      kind === 'major' ? styles.tickMajor : kind === 'whole' ? styles.tickWhole : styles.tickHalf,
                       onStage && styles.scaleTickStage,
                       active && styles.scaleTickHidden, // the anchor draws this detent itself
                     ]}
@@ -354,6 +383,13 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             <View style={{ width: (values.length - win.end) * itemW }} />
           </ScrollView>
         ) : null}
+        {/* The rule's BASELINE — the hairline every graduation stands on. Without it the ticks
+            are a row of floating dashes; with it they are a scale. */}
+        <View pointerEvents="none" style={[styles.baseline, onStage && styles.baselineStage, { bottom: anchorGeo.bottom + OVERSHOOT }]} />
+        {/* The scale runs off both ends rather than stopping at a wall: the numerals dissolve
+            into the surface, so the rule reads as a window onto a longer track. */}
+        <EdgeFade side="start" color={onStage ? stage[1] : color.surface} />
+        <EdgeFade side="end" color={onStage ? stage[1] : color.surface} />
         {/* THE ANCHOR — an ochre index line THROUGH the scale, overshooting the tick band top
             and bottom. Not a pair of decorative ticks: the one unambiguous statement of
             "this is the value". Its geometry is derived from the scale (anchorGeometry), so it
@@ -370,6 +406,26 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
     </View>
   );
 }
+
+/** A soft dissolve at one end of the scale — the surface colour fading to nothing over 34px. */
+function EdgeFade({ side, color: c }: { side: 'start' | 'end'; color: string }) {
+  const id = `wheelFade-${side}`;
+  return (
+    <View pointerEvents="none" style={[styles.fade, side === 'start' ? styles.fadeStart : styles.fadeEnd]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1={side === 'start' ? '0' : '1'} y1="0" x2={side === 'start' ? '1' : '0'} y2="0">
+            <Stop offset="0" stopColor={c} stopOpacity={1} />
+            <Stop offset="1" stopColor={c} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
+  );
+}
+
+const FADE_W = 34;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -397,17 +453,28 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     fontSize: textScale.md,
     includeFontPadding: false,
+    textAlign: 'left',
   },
   numLg: { fontSize: textScale.lg },
   // The centred value carries the weight — it is a reading, not a list item.
-  numActive: { fontFamily: font.monoSemibold },
+  numActive: { fontFamily: font.monoSemibold, textAlign: 'left' },
 
-  // the engraved scale
+  // the engraved scale — three graduations, the way a real rule is cut
   scaleTick: { width: 1, borderRadius: 0.5, backgroundColor: color.borderControl },
-  scaleTickWhole: { height: TICK_H },
-  scaleTickHalf: { height: TICK_H / 2, opacity: 0.55 },
+  tickMajor: { height: TICK_H, width: 1.5, backgroundColor: color.textTertiary },
+  tickWhole: { height: TICK_H * 0.62 },
+  tickHalf: { height: TICK_H * 0.34, opacity: 0.6 },
   scaleTickStage: { backgroundColor: stage[2] },
   scaleTickHidden: { opacity: 0 },
+
+  // the hairline the graduations stand on
+  baseline: { position: 'absolute', start: 0, end: 0, height: StyleSheet.hairlineWidth, backgroundColor: color.borderControl },
+  baselineStage: { backgroundColor: stage[2] },
+
+  // the ends dissolve into the surface
+  fade: { position: 'absolute', top: 0, bottom: 0, width: FADE_W },
+  fadeStart: { start: 0 },
+  fadeEnd: { end: 0 },
 
   // the ochre index line (height + offset come from anchorGeometry)
   anchor: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center' },
@@ -415,7 +482,11 @@ const styles = StyleSheet.create({
 
   // The unit sits in its own bordered cell, separate from the scrolling digits.
   unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
-  unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
+  unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  // Under the finger: the ochre closes the loop between the index line and the rule itself.
+  wrapLive: { borderColor: signal[0], backgroundColor: color.accentWash },
+  wrapLiveStage: { borderColor: signal[0] },
+
   // Inverted "stage" treatment — graphite surface + ink, ochre anchor (unchanged).
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
   unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },

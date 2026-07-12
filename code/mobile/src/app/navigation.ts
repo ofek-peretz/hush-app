@@ -25,13 +25,14 @@ export type OnboardingParamList = {
   // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
   // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
-  // "What should we call you?" — captures the name (fallback to the Apple-provided name).
+  // "How should I address you?" — the NAME and the GENDER (moved here from Body data,
+  // founder 2026-07-12: Hebrew conjugates the second person, so the copy layer needs it
+  // before the next screen speaks). Sex rides the params from here to the profile.
   NameEntry: undefined;
-  ConnectHealth: undefined;
-  // Single screen, four fields (§4.3) — now shown to EVERYONE (sex/age/height/weight
-  // are needed for the program; HealthKit only reliably gives steps/weight). The flag
-  // records whether Health was connected (for weight prefill + the profile).
-  ManualInfo: { healthConnected: boolean } | undefined;
+  ConnectHealth: { sex: 'male' | 'female' } | undefined;
+  // Age / height / weight (§4.3) — shown to EVERYONE (HealthKit is read for cardio only).
+  // `healthConnected` records whether Health was connected; `sex` is carried from NameEntry.
+  ManualInfo: { healthConnected: boolean; sex?: 'male' | 'female' } | undefined;
   // Training (merged Experience + Days per week, 2026-07-10): experience drives the
   // starting weights, frequency shapes the split — one screen, whole in the viewport.
   Training: { profile: OnboardingProfileDraft };

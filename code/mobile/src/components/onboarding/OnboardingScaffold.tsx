@@ -105,8 +105,8 @@ const styles = StyleSheet.create({
   body: { flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
   head: { marginBottom: 22 },
   legend: { marginBottom: 8 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary },
-  sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary, textAlign: 'left' },
+  sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 12, gap: 10 },
 });

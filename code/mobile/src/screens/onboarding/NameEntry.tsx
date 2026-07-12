@@ -1,15 +1,29 @@
 /**
- * NameEntry — "What should Hush call you?" (after Consent), re-skinned to the
- * design onboarding step: legend → title → sub → a labelled TextField → Continue /
- * Skip. Optional; the name is how Hush addresses the athlete. Progress 1 / 5.
+ * NameEntry — "How should I address you?" (step 2). Two answers, one question:
+ * the athlete's NAME and their GENDER.
+ *
+ * FOUNDER 2026-07-12 — three changes, and they are one change:
+ *  - The name is no longer optional-with-a-Skip. "Leave it blank to stay anonymous" plus a
+ *    Skip button is an escape hatch nobody asked for, on the step where the product first
+ *    speaks to a person. Both are gone, and the step is the better for the room they freed.
+ *  - GENDER MOVED HERE, from Body data. It sat down there as the fourth control on the most
+ *    crowded step in the app, drowned between three wheels — while every Hebrew sentence
+ *    from this screen onward needs it, because Hebrew conjugates the second person. Asked at
+ *    the door, it is answered before the first sentence that depends on it (i18n/gender.ts).
+ *  - It is published the moment it is picked, not at the end of onboarding: the four screens
+ *    that follow already address the athlete directly.
+ *
+ * Sex remains a physiological input to the starting loads and the split — the one line under
+ * the control says so, at the moment it is asked.
  */
 import React, { useState } from 'react';
-import { Keyboard } from 'react-native';
+import { View, Text, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { TextField, Button } from '@/components/ds';
+import { TextField, Button, Legend, SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'NameEntry'>;
@@ -18,15 +32,20 @@ export function NameEntry({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const [name, setName] = useState(app.profile?.name ?? '');
+  const [sex, setSex] = useState<'female' | 'male'>(app.profile?.sex ?? 'male');
+
+  function pickSex(v: string) {
+    const next = v as 'female' | 'male';
+    setSex(next);
+    // The rest of onboarding speaks to this person — in Hebrew, in their gender.
+    app.setPendingSex(next);
+  }
 
   function onContinue() {
     Keyboard.dismiss();
     app.setPendingName(name);
-    navigation.navigate('ConnectHealth');
-  }
-  function onSkip() {
-    Keyboard.dismiss();
-    navigation.navigate('ConnectHealth');
+    app.setPendingSex(sex);
+    navigation.navigate('ConnectHealth', { sex });
   }
 
   return (
@@ -34,28 +53,39 @@ export function NameEntry({ navigation }: Props) {
       onBack={() => navigation.goBack()}
       progress={{ index: 1, total: 4 }}
       keyboard
-      legend={t('ob.nameLegend')}
       title={t('ob.nameTitle')}
-      sub={t('ob.nameSub')}
-      footer={
-        <>
-          <Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />
-          <Button variant="quiet" block label={t('ob.skip')} onPress={onSkip} />
-        </>
-      }
+      footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
-      <TextField
-        block
-        label={t('ob.nameLabel')}
-        value={name}
-        onChangeText={setName}
-        placeholder={t('ob.namePlaceholder')}
-        autoCapitalize="words"
-        autoCorrect={false}
-        maxLength={40}
-        returnKeyType="done"
-        onSubmitEditing={onContinue}
-      />
+      <View style={styles.rows}>
+        <TextField
+          block
+          label={t('ob.nameLabel')}
+          value={name}
+          onChangeText={setName}
+          placeholder={t('ob.namePlaceholder')}
+          autoCapitalize="words"
+          autoCorrect={false}
+          maxLength={40}
+          returnKeyType="done"
+          onSubmitEditing={onContinue}
+        />
+        <View style={styles.col}>
+          <Legend>{t('ob.sex')}</Legend>
+          <SegmentedControl
+            block
+            options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
+            value={sex}
+            onChange={pickSex}
+          />
+          <Text style={styles.why}>{t('ob.sexWhy')}</Text>
+        </View>
+      </View>
     </OnboardingScaffold>
   );
 }
+
+const styles = StyleSheet.create({
+  rows: { gap: 26 },
+  col: { gap: 8 },
+  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 17, color: color.textTertiary, textAlign: 'left' },
+});

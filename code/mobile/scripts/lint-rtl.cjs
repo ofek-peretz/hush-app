@@ -1,15 +1,23 @@
 /**
- * RTL style linter — bans physical, non-mirroring edge properties in the app source
- * so the Hebrew (RTL) build stays native. Run in CI: `npm run lint:rtl`.
+ * RTL style linter — keeps the Hebrew build native. Run in CI: `npm run lint:rtl`.
  *
- * React Native auto-mirrors layout only when styles are LOGICAL. Physical edges
- * (marginLeft, paddingRight, borderLeftWidth, textAlign:'left'/'right') freeze to
- * LTR and silently break RTL. Use the logical equivalents instead:
- *   marginLeft/Right     -> marginStart/marginEnd
- *   paddingLeft/Right    -> paddingStart/paddingEnd
- *   borderLeft/RightWidth-> borderStartWidth/borderEndWidth   (…Color likewise)
- *   textAlign:'left'      -> omit (RN aligns to the start, mirroring); 'right' -> textEnd
- *   absolute left:/right: -> start:/end:
+ * TWO rules, and the second one is the fix for the founder's 2026-07-12 device review
+ * ("in Hebrew everything is stuck on the left"):
+ *
+ * 1. LAYOUT — React Native auto-mirrors a BOX only when its edges are logical. Physical
+ *    edges freeze to LTR:
+ *      marginLeft/Right     -> marginStart / marginEnd
+ *      paddingLeft/Right    -> paddingStart / paddingEnd
+ *      borderLeft/RightWidth-> borderStartWidth / borderEndWidth   (…Color likewise)
+ *      absolute left:/right:-> start: / end:
+ *
+ * 2. TEXT — the OPPOSITE is true, and this linter used to enforce the wrong half of it.
+ *    RN flips an EXPLICIT `textAlign: 'left'` to the right edge under RTL, so 'left' IS
+ *    the logical start. An OMITTED alignment is iOS's `natural`, which RN does not flip:
+ *    it lands on the physical left and freezes Hebrew there. So "no alignment" is not a
+ *    neutral default — it is a silent LTR lock, and every text style must declare one.
+ *    The rule: a style object that sets `fontFamily` must also set `textAlign`
+ *    ('left' = start, 'right' = end, 'center' = centred).
  *
  * Escape hatch: append `rtl-ok` in a comment on the line for an intentional, verified
  * exception (e.g. a brand lockup pinned LTR, or a symmetric inset). Symmetric pairs
@@ -28,8 +36,47 @@ const RULES = [
   [/\bpadding(Left|Right)\b/, 'physical padding — use paddingStart / paddingEnd'],
   [/\bborder(Left|Right)Width\b/, 'physical border width — use borderStartWidth / borderEndWidth'],
   [/\bborder(Left|Right)Color\b/, 'physical border color — use borderStartColor / borderEndColor'],
-  [/textAlign:\s*['"](left|right)['"]/, "physical textAlign — omit for start, or use textEnd from '@/i18n/bidi'"],
 ];
+
+/**
+ * Rule 2 — every text style declares its alignment. Resolves the object literal that
+ * encloses each `fontFamily:` and requires a `textAlign` inside it. Returns the 1-based
+ * line of each offending `fontFamily`.
+ */
+function unalignedTextStyles(src) {
+  const hits = [];
+  let idx = 0;
+  while ((idx = src.indexOf('fontFamily:', idx)) !== -1) {
+    let depth = 0;
+    let open = -1;
+    for (let i = idx - 1; i >= 0; i--) {
+      const c = src[i];
+      if (c === '}') depth++;
+      else if (c === '{') {
+        if (depth === 0) { open = i; break; }
+        depth--;
+      }
+    }
+    let close = -1;
+    if (open !== -1) {
+      let d = 0;
+      for (let i = open + 1; i < src.length; i++) {
+        const c = src[i];
+        if (c === '{') d++;
+        else if (c === '}') {
+          if (d === 0) { close = i; break; }
+          d--;
+        }
+      }
+    }
+    const body = open !== -1 && close !== -1 ? src.slice(open + 1, close) : '';
+    const line = src.slice(0, idx).split('\n').length;
+    const lineText = src.split('\n')[line - 1] ?? '';
+    if (!/\btextAlign\s*:/.test(body) && !lineText.includes('rtl-ok')) hits.push(line);
+    idx = close !== -1 ? close : idx + 11;
+  }
+  return hits;
+}
 
 /** Allow a symmetric pair on one line (left & right together = direction-neutral). */
 function isSymmetric(line) {
@@ -50,21 +97,33 @@ const files = [];
 
 const out = [];
 for (const file of files) {
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const src = readFileSync(file, 'utf8');
+  const rel = relative(join(__dirname, '..'), file);
+  const lines = src.split('\n');
+  for (const line of unalignedTextStyles(src)) {
+    out.push({
+      file: rel,
+      line,
+      text: (lines[line - 1] ?? '').trim(),
+      msg: "text style without textAlign — declare 'left' (start), 'right' (end) or 'center'; omitting it freezes the text LTR",
+    });
+  }
   lines.forEach((line, i) => {
     if (line.includes('rtl-ok')) return;
     if (isSymmetric(line)) return;
     for (const [re, msg] of RULES) {
       if (re.test(line)) {
-        out.push({ file: relative(join(__dirname, '..'), file), line: i + 1, text: line.trim(), msg });
+        out.push({ file: rel, line: i + 1, text: line.trim(), msg });
         break;
       }
     }
   });
 }
 
+out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+
 if (out.length > 0) {
-  console.error(`\nRTL style violations (${out.length}) — physical edge properties don't mirror:\n`);
+  console.error(`\nRTL style violations (${out.length}):\n`);
   for (const v of out) {
     console.error(`  x ${v.file}:${v.line}\n    ${v.text}\n    -> ${v.msg}\n`);
   }

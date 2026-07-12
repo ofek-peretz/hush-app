@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   // The wordmark + accent dot is a brand lockup — it stays LTR ("Hush·") in every
   // locale rather than mirroring to "·Hush".
   brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, direction: 'ltr' },
-  wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary },
+  wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary, textAlign: 'left' },
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 }, // rtl-ok: inside LTR brand lockup
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
@@ -390,8 +390,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardioText: { flex: 1, minWidth: 0 },
-  cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary },
-  cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
+  cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   // metadata pills — scanned, not read
   groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 6 },
@@ -406,12 +406,13 @@ const styles = StyleSheet.create({
     fontSize: textScale.xs,
     letterSpacing: 0.2,
     color: color.textSecondary,
+    textAlign: 'left',
   },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   // a sentence, in the speaking voice (never the measuring one)
-  restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
+  restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
 
   // the week's seal
   restSeal: {

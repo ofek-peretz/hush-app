@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   itemBlock: { flex: 1 },
   itemStack: { flex: 0, alignItems: 'flex-start', justifyContent: 'center', width: '100%' },
   itemActive: { backgroundColor: color.surface, ...(shadow.md as object) },
-  label: { fontFamily: font.sansMedium, color: color.textSecondary },
-  labelActive: { fontFamily: font.sansSemibold, color: color.textPrimary },
+  label: { fontFamily: font.sansMedium, color: color.textSecondary, textAlign: 'left' },
+  labelActive: { fontFamily: font.sansSemibold, color: color.textPrimary, textAlign: 'left' },
 });

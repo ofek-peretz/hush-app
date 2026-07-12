@@ -26,8 +26,9 @@ import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
 
-export function ConnectHealth({ navigation }: Props) {
+export function ConnectHealth({ navigation, route }: Props) {
   const { t } = useCopy();
+  const sex = route.params?.sex;
   const [connected, setConnected] = useState(false);
   const [asking, setAsking] = useState(false);
 
@@ -58,7 +59,7 @@ export function ConnectHealth({ navigation }: Props) {
 
   function onContinue() {
     if (!connected) void track('health_skipped', {});
-    navigation.navigate('ManualInfo', { healthConnected: connected });
+    navigation.navigate('ManualInfo', { healthConnected: connected, sex });
   }
 
   return (
@@ -123,6 +124,6 @@ const styles = StyleSheet.create({
   cardPressed: { backgroundColor: color.fillSubtle },
   iconBox: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: color.fillSubtle, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: color.textPrimary },
-  sub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
+  title: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
+  sub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 });

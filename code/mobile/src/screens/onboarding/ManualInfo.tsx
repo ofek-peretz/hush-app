@@ -1,16 +1,19 @@
 /**
- * Body data (§4.3) — re-skinned to the design onboarding step: legend → title →
- * sub → four labelled controls (Sex via SegmentedControl, Age / Height / Weight
- * via horizontal WheelPickers — swipe straight to your value). Calibrates starting
- * loads. Continue → Experience, carrying the draft. Progress 3 / 5.
+ * Body data (§4.3) — legend → title → sub → three labelled WheelPickers (Age / Height /
+ * Weight — swipe straight to your value). Calibrates starting loads. Continue → Training,
+ * carrying the draft.
+ *
+ * SEX IS NO LONGER ASKED HERE (founder 2026-07-12). It was the fourth control on the most
+ * crowded step in the app and it drowned; it now lives on the NAME step, where it is also
+ * early enough for the copy layer to conjugate Hebrew for the right person. It still travels
+ * in this draft (route param) so the profile and the starting-load model are unchanged.
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Legend, SegmentedControl, WheelPicker, Button } from '@/components/ds';
+import { Legend, WheelPicker, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
@@ -18,7 +21,7 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
 export function ManualInfo({ navigation, route }: Props) {
   const { t } = useCopy();
   const healthConnected = route.params?.healthConnected ?? false;
-  const [sex, setSex] = useState<'female' | 'male'>('male');
+  const sex = route.params?.sex ?? 'male';
   const [age, setAge] = useState(28);
   const [height, setHeight] = useState(178);
   // Weight is entered by hand — Health is now read for cardio metrics, not bodyweight.
@@ -41,27 +44,19 @@ export function ManualInfo({ navigation, route }: Props) {
     >
       <View style={styles.rows}>
         <View style={styles.col}>
-          <Legend>{t('ob.sex')}</Legend>
-          <SegmentedControl
-            options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
-            value={sex}
-            onChange={(v) => setSex(v as 'female' | 'male')}
-          />
-          {/* Say WHY, in one line, at the moment it is asked (founder 2026-07-12): this is a
-              physiological input to the starting loads and the split, not a gender question. */}
-          <Text style={styles.why}>{t('ob.sexWhy')}</Text>
-        </View>
-        <View style={styles.col}>
           <Legend>{t('ob.age')}</Legend>
           <WheelPicker value={age} onChange={setAge} min={14} max={90} label={t('ob.age')} style={styles.wheel} />
         </View>
+        {/* No unit cells (founder 2026-07-12): "178" under a legend that says Height is a
+            height in centimetres, and "82.5" under Weight is kilograms. The chip was a label
+            for a number that already labels itself, and it cost the scale its full width. */}
         <View style={styles.col}>
           <Legend>{t('ob.height')}</Legend>
-          <WheelPicker value={height} onChange={setHeight} min={120} max={220} unit="cm" label={t('ob.height')} style={styles.wheel} />
+          <WheelPicker value={height} onChange={setHeight} min={120} max={220} label={t('ob.height')} style={styles.wheel} />
         </View>
         <View style={styles.col}>
           <Legend>{t('ob.weight')}</Legend>
-          <WheelPicker value={weight} onChange={setWeight} step={0.5} min={35} max={250} unit="kg" label={t('ob.weight')} style={styles.wheel} />
+          <WheelPicker value={weight} onChange={setWeight} step={0.5} min={35} max={250} label={t('ob.weight')} style={styles.wheel} />
         </View>
       </View>
     </OnboardingScaffold>
@@ -69,12 +64,9 @@ export function ManualInfo({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // The tightest height budget in the app: FOUR controls plus a pinned footer, on a step that
-  // must not scroll (OnboardingScaffold). The 2026-07-12 pass added height to every wheel and a
-  // "why we ask" line under Sex, which together spent the margin this step used to have — so the
-  // rhythm here is deliberately tighter than elsewhere to pay for them back.
-  rows: { gap: 12 },
-  col: { gap: 6 },
-  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 15, color: color.textTertiary },
+  // Sex moved to the Name step (2026-07-12), which gave this step its air back: three wheels
+  // instead of four controls, so the rhythm can breathe again.
+  rows: { gap: 22 },
+  col: { gap: 8 },
   wheel: { alignSelf: 'stretch' },
 });

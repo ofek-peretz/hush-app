@@ -53,6 +53,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: color.textMuted,
     marginBottom: 8,
+    textAlign: 'left',
   },
   // The rule: a baseline the value is written on. No box, no fill.
   well: {
@@ -69,5 +70,6 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     padding: 0,
     letterSpacing: trackingPx(textScale.lg, tracking.tight),
+    textAlign: 'left',
   },
 });

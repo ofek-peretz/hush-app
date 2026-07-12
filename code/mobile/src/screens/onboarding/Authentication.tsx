@@ -17,14 +17,18 @@
  * Apple users — and neither is what Apple's or Google's sign-in guidelines permit. Neither
  * button is the primary action here; the ACCOUNT is.
  */
-import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, Animated, Easing, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HushMark } from '@/components/HushMark';
+import { SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { setLocale, currentLocale, type Locale } from '@/i18n';
+import { reloadApp } from '@/app/reload';
+import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, ink, paper, press } from '@/design/tokens';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -34,8 +38,33 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'Authentication'>;
 export function Authentication({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const reduced = useReducedMotion();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const locale = currentLocale();
+
+  /**
+   * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12). It used to be buried in Settings,
+   * which meant a Hebrew athlete read the whole of onboarding in English before discovering
+   * they never had to. The switch is here, above the fold, before the first decision — and
+   * because the writing DIRECTION changes with it, the app tree is remounted (reloadApp) so
+   * the very next frame is already right-to-left.
+   */
+  async function pickLocale(next: string) {
+    if (next === locale) return;
+    await setLocale(next as Locale);
+    reloadApp();
+  }
+
+  /** The ochre ignition: the instrument coming to life, once, under the mark. */
+  const halo = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduced) {
+      halo.setValue(1);
+      return;
+    }
+    Animated.timing(halo, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [halo, reduced]);
 
   async function onSignIn(provider: AuthProvider) {
     if (busy) return;
@@ -55,8 +84,28 @@ export function Authentication({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root}>
+      <View style={styles.topBar}>
+        <SegmentedControl
+          style={styles.langSwitch}
+          options={[{ value: 'he', label: 'עב' }, { value: 'en', label: 'EN' }]}
+          value={locale}
+          onChange={(v) => void pickLocale(v)}
+        />
+      </View>
       <View style={styles.hero}>
-        <HushMark size={46} />
+        <View style={styles.markWrap}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.halo,
+              {
+                opacity: halo.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.55, 0.16] }),
+                transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }],
+              },
+            ]}
+          />
+          <HushMark size={46} />
+        </View>
         <View style={[styles.brand, styles.brandSpacing]}>
           <Text style={styles.wordmark}>hush</Text>
           <View style={styles.dot} />
@@ -90,12 +139,10 @@ export function Authentication({ navigation }: Props) {
           <Text style={styles.legalStrong}>{t('ob.signinLegalTerms')}</Text>
           {t('ob.signinLegalPost')}
         </Text>
-        {/* THE TRUST ANCHOR (founder 2026-07-12). Folding the Consent screen into this one
-            took its reassurance card with it — and that card carried the only promise Hush
-            makes about the athlete's data. The promise is what earns the tap; the legal line
-            above only records it. So it comes back here, quieter than the agreement and
-            directly under the hand that is about to press. */}
-        <Text style={styles.trust}>{t('ob.signinTrust')}</Text>
+        {/* The "your data is only used for your recommendations, they are never sold" line is
+            GONE (founder 2026-07-12). Nobody arrives at a training app suspecting we sell them;
+            volunteering the denial is what plants the thought. The agreement above is the record;
+            the promise belongs in the policy it links to, not on the front door. */}
       </View>
     </SafeAreaView>
   );
@@ -166,11 +213,16 @@ function GoogleG({ size = 19 }: { size?: number }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
+  topBar: { paddingHorizontal: space.gutter, paddingTop: 6, alignItems: 'flex-end' },
+  langSwitch: { width: 116 },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  markWrap: { alignItems: 'center', justifyContent: 'center' },
+  // The ignition — an ochre ring that opens once behind the mark and settles.
+  halo: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1.5, borderColor: signal[0] },
   // Brand lockup stays LTR ("Hush·") in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
   brandSpacing: { marginTop: 18 },
-  wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary },
+  wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary, textAlign: 'left' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 }, // rtl-ok: inside LTR brand lockup
   tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
@@ -189,7 +241,7 @@ const styles = StyleSheet.create({
   },
   providerPressed: { transform: [{ translateY: press.translateY }] },
   providerDisabled: { opacity: 0.4 },
-  providerLabel: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight) },
+  providerLabel: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), textAlign: 'left' },
   apple: { backgroundColor: ink[0] },
   applePressed: { backgroundColor: '#000000' },
   appleLabel: { color: paper[0] },
@@ -199,7 +251,5 @@ const styles = StyleSheet.create({
 
   // The legal line is READ, not decoration: secondary ink, not the near-invisible tertiary.
   legal: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 19 },
-  legalStrong: { fontFamily: font.sansSemibold, color: color.textSecondary },
-  // Quieter than the agreement — a promise, not a clause.
-  trust: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 6, lineHeight: 17, maxWidth: 320, alignSelf: 'center' },
+  legalStrong: { fontFamily: font.sansSemibold, color: color.textSecondary, textAlign: 'center' },
 });
