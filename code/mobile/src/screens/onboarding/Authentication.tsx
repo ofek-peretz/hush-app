@@ -52,7 +52,15 @@ export function Authentication({ navigation }: Props) {
    */
   async function pickLocale(next: string) {
     if (next === locale) return;
-    await setLocale(next as Locale);
+    try {
+      await setLocale(next as Locale);
+    } catch {
+      // The language did not switch. Reloading anyway would remount the app in the OLD language
+      // and read as a dead control — so do nothing, and leave the switch where it is. (Letting
+      // this reject would also be an unhandled promise rejection, from a `void`-ed call.)
+      return;
+    }
+    // Apply the new writing direction (RTL ⇄ LTR) immediately — no manual relaunch.
     reloadApp();
   }
 

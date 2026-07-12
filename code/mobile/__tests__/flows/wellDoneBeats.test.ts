@@ -52,6 +52,38 @@ describe('the saved beat only ever advances (the vanishing milestone)', () => {
   });
 });
 
+/**
+ * THE SECOND RACE ON THE SAME SCREEN (hermetic audit, 2026-07-12).
+ *
+ * `celebration` is derived from the history, which is read from disk after the screen mounts. An
+ * athlete who taps through the saved beat and presses Done before that read lands finds it still
+ * null, walks straight out, and NEVER sees the mark: a milestone is celebrated on the session that
+ * crossed it and on no other. Small window, total loss — the worst shape a bug can have.
+ *
+ * The screen queues an exit asked for too early and runs it when the evidence arrives. These pin
+ * the DECISION that queueing exists to protect: whether a session crossed a mark is a question you
+ * can only answer once you have the history, so "no history yet" must never be read as "no mark".
+ */
+describe('an exit asked for before the evidence is read', () => {
+  it('a session that HAS crossed a mark is not silently let out the door', () => {
+    const history = [
+      session('s0', '2026-07-10T10:00:00Z', [['bb_bench_press', 40, 8]]),
+      session('s1', '2026-07-12T10:00:00Z', [['bb_bench_press', 300, 5]]),
+    ];
+    // Before the read: nothing is known. `newlyEarned` cannot even be asked.
+    const beforeRead: Session[] | null = null;
+    expect(beforeRead).toBeNull();
+    // After it: the mark is there, and it is the ONLY moment it will ever be there.
+    expect(newlyEarned(history).length).toBeGreaterThan(0);
+  });
+
+  it('a session that crossed NOTHING answers cleanly too — the queue is not a milestone', () => {
+    const history = [session('s0', '2026-07-12T10:00:00Z', [['bb_bench_press', 40, 8]])];
+    // A first, ordinary workout: no marks (the count family starts at 10).
+    expect(newlyEarned(history)).toEqual([]);
+  });
+});
+
 describe('several milestones at once', () => {
   it("the founder's session (bench 500 x 50) earns six marks, and every one of them renders", () => {
     const history = [

@@ -107,6 +107,8 @@ export function WellDone({ navigation, route }: Props) {
   const celebration = useMemo(() => (history ? newlyEarned(history)[0] ?? null : null), [history]);
   const celebrated = useRef(false);
   const pendingExit = useRef<(() => void) | null>(null);
+  /** An exit the athlete asked for before the history had been read (see `leave`). */
+  const pendingLeave = useRef<(() => void) | null>(null);
 
   // The stamp: a beat of black, the heavy plate-lock haptic, and the emblem lands.
   const stamp = useRef(new Animated.Value(0)).current;
@@ -203,8 +205,22 @@ export function WellDone({ navigation, route }: Props) {
     app.clearPortraitFlag();
     navigation.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'History' }] });
   }
-  /** Any exit from the result passes through the milestone beat exactly once. */
+  /**
+   * Any exit from the result passes through the milestone beat exactly once.
+   *
+   * AND IT WAITS FOR THE EVIDENCE. `celebration` is derived from the history, which is read from
+   * disk after mount — so an athlete who taps through the saved beat and presses Done before that
+   * read lands would find `celebration` still null, walk straight out, and NEVER see the mark they
+   * had just earned: a milestone is celebrated on the session that crossed it and on no other. The
+   * window is small and the loss is total, which is the worst shape a bug can have. So an exit
+   * requested before the history is in is QUEUED, and runs the moment it arrives — through this
+   * same function, with the answer known. The athlete perceives nothing; the read is milliseconds.
+   */
   function leave(exit: () => void) {
+    if (history === null && !notStarted) {
+      pendingLeave.current = exit;
+      return;
+    }
     if (celebration && !celebrated.current) {
       celebrated.current = true;
       pendingExit.current = exit;
@@ -213,6 +229,23 @@ export function WellDone({ navigation, route }: Props) {
     }
     exit();
   }
+
+  // The history landed — run the exit the athlete already asked for, now that we can answer the
+  // only question it was waiting on: did this session cross a mark?
+  useEffect(() => {
+    if (history === null) return;
+    const queued = pendingLeave.current;
+    if (!queued) return;
+    pendingLeave.current = null;
+    if (celebration && !celebrated.current) {
+      celebrated.current = true;
+      pendingExit.current = queued;
+      setPhase('milestone');
+      return;
+    }
+    queued();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, celebration]);
 
   const setLabel = (s: SetLog) => `${displayWeight(s.actualWeight, units) ?? t('workout.bodyweight')} × ${s.actualReps}`;
 

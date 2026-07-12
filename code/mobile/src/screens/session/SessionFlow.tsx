@@ -372,7 +372,7 @@ function StageBar({ center, onExit }: { center?: string; onExit: () => void }) {
   return (
     <View style={styles.stageBar}>
       <View style={styles.stageBarSide}>
-        <IconButton onStage bordered accessibilityLabel={t('pauseSheet.title')} onPress={onExit} style={styles.pauseBtn}>
+        <IconButton onStage bordered accessibilityLabel={t('workout.pauseAction')} onPress={onExit} style={styles.pauseBtn}>
           <Icon name="pause" size={18} color={stage.ink0} strokeWidth={2.2} />
         </IconButton>
       </View>
@@ -598,9 +598,19 @@ function ActiveSet({
                 pencil at the bottom can go"). So the hero is a real control now: it carries a
                 dashed rule beneath it — the universal "this value is editable" mark — and the
                 pencil ghost is gone from the footer. One affordance, on the thing it edits. */}
+            {/* The LABEL is the load, not the action. Making the hero a button merges its children
+                into one accessibility element, so an `accessibilityLabel` of "Edit result" would
+                have replaced the announcement of the WEIGHT — VoiceOver would tell a blind athlete
+                that there is an edit button here and never tell them what to lift. The value is
+                the label; the action is the hint. */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t('workout.editResult')}
+              accessibilityLabel={
+                isBodyweight
+                  ? `${target.recommendedReps} ${t('workout.repsUnit')} · ${t('workout.bodyweight')}`
+                  : `${heroValue} ${unitLabel(units)}`
+              }
+              accessibilityHint={t('workout.tapToEdit')}
               onPress={onToggleEdit}
               hitSlop={12}
               style={({ pressed }) => [styles.heroPress, pressed && styles.heroPressed]}
@@ -671,7 +681,10 @@ function ActiveSet({
             {!isBodyweight ? (
               <View style={styles.editRow}>
                 <Text style={styles.editLabel}>{t('workout.actualWeightWith', { unit: unitLabel(units) })}</Text>
-                <WheelPicker value={weight ?? 0} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} label={t('workout.actualWeight')} onStage style={styles.editWheel} />
+                {/* The wheel's LABEL carries the unit for VoiceOver. The visible unit chip is gone
+                    (founder), and the chip was also what fed `accessibilityValue` — so without this
+                    a blind athlete would hear "44" and never hear "kilograms". */}
+                <WheelPicker value={weight ?? 0} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} label={t('workout.actualWeightWith', { unit: unitLabel(units) })} onStage style={styles.editWheel} />
               </View>
             ) : null}
             <View style={styles.editRow}>
@@ -754,7 +767,8 @@ function Rest({
   const nextTarget = session.nextTarget;
   // The upcoming load is the engine's prescribed value verbatim (same number the athlete will lift).
   const nextWeight = displayWeight(nextTarget?.recommendedWeight ?? null, units);
-  const nextReps = nextTarget?.recommendedReps ?? 0;
+  // (The upcoming REPS are deliberately absent — see the up-next law below. They were read here
+  // and printed on the rest card; nothing reads them now.)
   const nextSet = session.nextSetLabel;
   const nextDelta = nextTarget?.reasonType;
   // On a TRANSITION the load is an instruction, so it comes with how to build it (per side).

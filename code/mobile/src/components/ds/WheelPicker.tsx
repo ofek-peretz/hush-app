@@ -422,7 +422,10 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
  * a shared `url(#…)` reference is precisely the kind of thing that resolves to the wrong brush.
  */
 function EdgeFade({ side, color: c }: { side: 'start' | 'end'; color: string }) {
-  const id = `wheelFade-${side}-${useId()}`;
+  // React's useId returns a value wrapped in COLONS (":r3:"). A colon is not legal in an SVG
+  // fragment reference — `url(#:r3:)` is not a reference to anything — so it is stripped down to
+  // the bare token before it is ever used as an id.
+  const id = `wheelFade-${side}-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <View pointerEvents="none" style={[styles.fade, side === 'start' ? styles.fadeStart : styles.fadeEnd]}>
       <Svg width="100%" height="100%">

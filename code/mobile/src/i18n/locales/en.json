@@ -212,7 +212,8 @@
     "setSaveFailed": "That set did not save. Complete it again.",
     "finishFailed": "That did not finish. Your completed sets are saved.",
     "tapToEdit": "Tap to edit",
-    "actualWeightWith": "Actual weight · {{unit}}"
+    "actualWeightWith": "Actual weight · {{unit}}",
+    "pauseAction": "Pause workout"
   },
   "finishSheet": {
     "legend": "End workout",

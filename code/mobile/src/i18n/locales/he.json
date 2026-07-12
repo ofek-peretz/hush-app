@@ -226,7 +226,8 @@
     "setSaveFailed": "הסט הזה לא נשמר. השלם אותו שוב.",
     "finishFailed": "הסיום לא הושלם. הסטים שהשלמת שמורים.",
     "tapToEdit": "הקש לעריכה",
-    "actualWeightWith": "משקל בפועל · {{unit}}"
+    "actualWeightWith": "משקל בפועל · {{unit}}",
+    "pauseAction": "השהיית אימון"
   },
   "finishSheet": {
     "legend": "סיום אימון",

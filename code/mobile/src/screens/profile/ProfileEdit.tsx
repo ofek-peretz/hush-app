@@ -97,7 +97,7 @@ export function ProfileEdit({ navigation }: Props) {
           </View>
           <View style={styles.col}>
             <Legend>{t('ob.weightWith', { unit: unitLabel(units) })}</Legend>
-            <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} label={t('ob.weight')} style={styles.wheel} />
+            <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} label={t('ob.weightWith', { unit: unitLabel(units) })} style={styles.wheel} />
           </View>
           <View style={styles.col}>
             <Legend>{t('ob.daysLabel')}</Legend>
@@ -138,6 +138,5 @@ const styles = StyleSheet.create({
   rows: { gap: 18 },
   col: { gap: 8 },
   wheel: { alignSelf: 'stretch' },
-  note: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 19, color: color.textTertiary, marginTop: 2, textAlign: 'left' },
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 14, borderTopWidth: 1, borderTopColor: color.border },
 });
