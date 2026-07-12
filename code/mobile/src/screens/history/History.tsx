@@ -9,11 +9,15 @@
  * cardio row opens its activity details (CardioDetail). Records without
  * interpreting — no praise, no PRs, and no grade on a run.
  *
- * Founder 2026-07-10 (design pass): the timeline reads in month chapters (a
- * quiet legend when the month changes — a wall of rows isn't a record), and a
- * strength row's trailing figure is the session's TOP SET load, not its total
- * volume (volume is "not interesting" per-workout; the lifetime total in the
- * header keeps the tonnage story).
+ * Founder 2026-07-10 (design pass): the timeline reads in month chapters — a quiet
+ * legend when the month changes; a wall of rows isn't a record.
+ *
+ * Founder 2026-07-12: a strength row carries NO trailing figure. It used to print the
+ * session's top-set load, which read as an unexplained "17 kg" beside a whole workout —
+ * top set? average? heaviest? A number the athlete has to guess at costs more trust than
+ * it earns. The lifetime total in the header keeps the tonnage story; the chevron says the
+ * rest is inside. Durations everywhere read in MINUTES ("63 min"), never as a clock —
+ * "1:03" next to a date reads as one in the morning (see domain/duration).
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -27,21 +31,19 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
 import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
-import { fmtClock } from '@/platform/cardio/cardioTracker';
+import { fmtMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'History'>;
 
-function sessionDurationLabel(s: Session): string {
+/** Wall-clock seconds from the session's start to its last logged set. */
+function sessionDurationSec(s: Session): number {
   const start = Date.parse(s.startedAt);
   const ends = s.sets.map((x) => Date.parse(x.persistedAt)).filter((n) => !Number.isNaN(n));
   const end = ends.length ? Math.max(...ends) : start;
-  const total = Math.max(0, Math.round((end - start) / 1000));
-  const m = Math.floor(total / 60);
-  const sec = total % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
+  return Math.max(0, Math.round((end - start) / 1000));
 }
 
 function sessionVolumeKg(s: Session): number {
@@ -55,13 +57,6 @@ function dateLabelOf(iso: string): string {
 /** Month chapter label — "July 2026", locale-aware. */
 function monthLabelOf(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-}
-
-/** The session's heaviest logged load (the top set) — null for bodyweight-only sessions. */
-function sessionTopKg(s: Session): number | null {
-  let top = 0;
-  for (const x of s.sets) if (x.actualWeight != null && x.actualWeight > top) top = x.actualWeight;
-  return top > 0 ? top : null;
 }
 
 export function History({ navigation }: Props) {
@@ -128,7 +123,13 @@ export function History({ navigation }: Props) {
       </View>
 
       {isEmpty ? (
+        // The first day is not a blank page (founder 2026-07-12) — it is the ledger, open
+        // and clean. An empty state is a chance to say what this place IS.
         <View style={styles.emptyWrap}>
+          <View style={styles.emptyMark}>
+            <Icon name="history" size={24} color={color.textTertiary} strokeWidth={1.75} />
+          </View>
+          <Text style={styles.emptyTitle}>{t('history.emptyTitle')}</Text>
           <Text style={styles.empty}>{t('history.empty')}</Text>
         </View>
       ) : (
@@ -142,7 +143,9 @@ export function History({ navigation }: Props) {
               </View>
               <Text style={styles.summaryBody}>
                 <Text style={styles.summaryStrong}>{totalVol.toLocaleString()} {unitLabel(units)}</Text>
-                {t('history.summaryMoved', { weeks })}
+                {/* "…across 1 week" / "…across 6 weeks" — i18next plural forms. A product that
+                    prints "1 weeks" is not a premium product (founder 2026-07-12). */}
+                {t('history.summaryMoved', { count: weeks })}
               </Text>
             </View>
           ) : null}
@@ -157,21 +160,23 @@ export function History({ navigation }: Props) {
               item.kind === 'cardio' ? (
                 <ListRow
                   title={item.gait === 'run' ? t('cardio.run') : t('cardio.walk')}
-                  subtitle={`${dateLabelOf(item.startedAt)} · ${fmtClock(item.durationSec)}`}
+                  // "Sat, 11 Jul · 63 min" — a duration, never a clock (see domain/duration).
+                  subtitle={`${dateLabelOf(item.startedAt)} · ${fmtMinutes(item.durationSec, t('common.minShort'))}`}
                   chevron
                   last={last}
                   onPress={() => navigation.navigate('CardioDetail', { activity: item })}
                   leading={
                     <View style={styles.iconBox}>
-                      <Icon name="footprints" size={16} color={color.textSecondary} strokeWidth={2} />
+                      <Icon name={item.gait === 'run' ? 'runner' : 'footprints'} size={16} color={color.textSecondary} strokeWidth={2} />
                     </View>
                   }
+                  // Distance is what a run IS — it stays.
                   trailing={<Text style={styles.vol}>{item.distanceKm.toFixed(2)} {t('cardio.km')}</Text>}
                 />
               ) : (
                 <ListRow
                   title={dayName(item)}
-                  subtitle={`${dateLabelOf(item.startedAt)} · ${sessionDurationLabel(item)}`}
+                  subtitle={`${dateLabelOf(item.startedAt)} · ${fmtMinutes(sessionDurationSec(item), t('common.minShort'))}`}
                   chevron
                   last={last}
                   onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.id })}
@@ -180,13 +185,10 @@ export function History({ navigation }: Props) {
                       <Icon name="dumbbell" size={16} color={color.textSecondary} strokeWidth={2} />
                     </View>
                   }
-                  trailing={
-                    sessionTopKg(item) != null ? (
-                      <Text style={styles.vol}>
-                        {displayWeight(sessionTopKg(item)!, units)} {unitLabel(units)}
-                      </Text>
-                    ) : undefined
-                  }
+                  // No trailing figure (founder 2026-07-12). A bare "17 kg" beside a whole
+                  // workout answered no question anyone was asking — top set? average? — and
+                  // a number the athlete cannot interpret costs more trust than it buys. The
+                  // chevron says the only true thing: the record is inside.
                 />
               );
             return (
@@ -209,7 +211,19 @@ const styles = StyleSheet.create({
   headTitles: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
-  empty: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'center' },
+  emptyMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
+  empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
   list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 
   summary: { paddingTop: 6, paddingBottom: 20, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: color.border },
@@ -217,7 +231,7 @@ const styles = StyleSheet.create({
   summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -1.4, color: color.textPrimary },
   summaryCountLabel: { fontFamily: font.sans, fontSize: textScale.md, color: color.textSecondary },
   summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary },
-  summaryStrong: { fontFamily: font.mono, color: color.textPrimary },
+  summaryStrong: { fontFamily: font.mono, fontVariant: ['tabular-nums'], color: color.textPrimary },
 
   monthLegend: { marginTop: 20, marginBottom: 4 },
 
@@ -231,5 +245,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  vol: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
+  vol: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted },
 });

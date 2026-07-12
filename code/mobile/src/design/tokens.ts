@@ -76,11 +76,18 @@ export const signal = {
 export const up = { 0: '#597f60', wash: '#e3f1e5' } as const; // sage — increase / progress
 export const down = { 0: '#a0604c', wash: '#fee9e1' } as const; // clay — decrease
 
-/** Inverted "stage" palette — the live workout focus surface. */
+/**
+ * Inverted "stage" palette — the live workout focus surface.
+ *
+ * Founder 2026-07-12: deepened toward black (OLED: darker pixels, less battery on a
+ * long session) while KEEPING the warm graphite law — a true #000 would break the
+ * ochre-as-foil reading the whole instrument is built on. Separation on the stage is
+ * carried by TONE, never by a border: `1` is the raised card, `2` the faintest rule.
+ */
 export const stage = {
-  0: '#191714', // stage background
-  1: '#25221f', // raised on stage
-  2: '#35322e', // line on stage
+  0: '#131110', // stage background — near-black, still warm
+  1: '#201d1a', // raised on stage (floating card: LOAD, TOP SET)
+  2: '#2f2c29', // faint rule on stage
   ink0: '#f4f3f0', // primary text on stage
   ink1: '#b3b1ad', // secondary on stage
   ink2: '#767471', // muted on stage
@@ -121,7 +128,14 @@ export const color = {
   accentHover: signal[1],
   accentText: signal.ink,
   accentWash: signal.wash,
-  onAccent: paper[0], // text/glyph on an accent fill
+  /**
+   * Text/glyph ON an ochre fill. Founder 2026-07-12 — an ACCESSIBILITY fix, not a
+   * taste change: paper-on-ochre measures 2.4:1, which fails WCAG AA (4.5:1) and is
+   * genuinely unreadable in direct sun, which is exactly where a gym athlete stands.
+   * Charcoal-on-ochre measures 7.0:1 (AAA) and is what luxury brands do with a warm
+   * accent anyway. The primary button now reads as struck metal, not printed paper.
+   */
+  onAccent: ink[0],
 
   // Semantic load states
   up: up[0],
@@ -322,7 +336,7 @@ export const button = {
     height: control.hLg, // 56
     radius: radius.md, // 6
     bg: signal[0], // ochre
-    fg: paper[0], // on-accent
+    fg: ink[0], // on-accent — charcoal, 7.0:1 (see color.onAccent)
     pressedBg: signal[1],
     fontSize: textScale.md, // 17
     fontWeight: weight.semibold,

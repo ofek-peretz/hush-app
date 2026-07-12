@@ -14,17 +14,22 @@
  *
  * The container (Home.tsx) wires state + navigation.
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
 import { BottomSheet } from '@/components/BottomSheet';
-import { TextAction } from '@/components/TextAction';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
-import { color, space, font, textScale, signal, radius } from '@/design/tokens';
+import * as haptics from '@/platform/haptics';
+import { useReducedMotion } from '@/platform/reducedMotion';
+import { color, space, font, textScale, signal, radius, up } from '@/design/tokens';
+
+/** The week whose Recovery moment has already been given (never repeat a celebration). */
+const RECOVERY_SEAL_KEY = 'hush.recovery.sealed';
 
 export interface HomeWorkoutOption {
   id: string;
@@ -60,10 +65,46 @@ export interface HomeViewProps {
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
   const [choosing, setChoosing] = useState(false);
+  const reduced = useReducedMotion();
 
   const total = props.workouts.length || 0;
   const done = Math.min(props.trainedThisWeek, total);
   const groups = props.muscles ? props.muscles.split(' · ').filter(Boolean) : [];
+
+  /* ---- the Recovery moment (founder 2026-07-12) ----------------------------------
+   * Finishing a week is the biggest thing an athlete does here and the app said nothing.
+   * Not confetti — a SEAL: the sage mark draws itself closed as the screen settles, with
+   * the week-complete haptic (two soft beats resolving into one, like something being set
+   * down). Once per week, ever: the flag is keyed by the week number, so it never fires
+   * twice on the same achievement no matter how often Home is reopened.
+   * -------------------------------------------------------------------------------*/
+  const seal = useRef(new Animated.Value(0)).current;
+  const [sealed, setSealed] = useState(false); // true once we know this week's flag state
+  useEffect(() => {
+    if (!props.resting) return;
+    let active = true;
+    const week = String(props.weekNumber);
+    void AsyncStorage.getItem(RECOVERY_SEAL_KEY).then((stored) => {
+      if (!active) return;
+      if (stored === week) {
+        seal.setValue(1); // already celebrated — the mark is simply there
+        setSealed(true);
+        return;
+      }
+      void AsyncStorage.setItem(RECOVERY_SEAL_KEY, week).catch(() => {});
+      setSealed(true);
+      if (reduced) {
+        seal.setValue(1);
+        haptics.weekComplete();
+        return;
+      }
+      haptics.weekComplete();
+      Animated.timing(seal, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    });
+    return () => {
+      active = false;
+    };
+  }, [props.resting, props.weekNumber, reduced, seal]);
 
   return (
     <View style={styles.root}>
@@ -89,6 +130,20 @@ export function HomeView(props: HomeViewProps) {
 
           {props.resting ? (
             <View style={styles.block}>
+              {/* the seal — the week, closed. It draws itself in once, the first time the
+                  athlete lands here having finished every session. */}
+              {sealed ? (
+                <Animated.View
+                  style={[
+                    styles.restSeal,
+                    { opacity: seal, transform: [{ scale: seal.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] },
+                  ]}
+                >
+                  <Icon name="check" size={26} color={up[0]} strokeWidth={2.6} />
+                </Animated.View>
+              ) : (
+                <View style={styles.restSealSlot} />
+              )}
               <Display>{t('home.restTitle')}</Display>
               <BodyL tone="secondary" style={styles.restCopy}>
                 {t('home.restSub')}
@@ -103,21 +158,24 @@ export function HomeView(props: HomeViewProps) {
                   size="lg"
                 />
               </View>
-              {/* the one fact recovery is waiting on — when the next week opens */}
+              {/* The one fact recovery is waiting on. It is a SENTENCE, not a measurement —
+                  so it is set in the speaking voice. It was in JetBrains Mono, which made it
+                  read as a placeholder somebody forgot to replace (founder 2026-07-12). */}
               <View style={styles.metaRow}>
                 <Icon name="calendar" size={15} color={color.textTertiary} strokeWidth={2} />
-                <Text style={styles.metaMono}>{t('home.restNext')}</Text>
+                <Text style={styles.restNext}>{t('home.restNext')}</Text>
               </View>
             </View>
           ) : (
             <View style={styles.block}>
               <Display>{props.dayName ?? ''}</Display>
+              {/* The muscle groups are METADATA, not a sentence — pills, so the eye takes
+                  them in one pass instead of parsing a run of interpuncts (founder 2026-07-12). */}
               {groups.length ? (
                 <View style={styles.groups}>
-                  {groups.map((g, i) => (
-                    <View key={g} style={styles.groupItem}>
-                      <Body tone="secondary">{g}</Body>
-                      {i < groups.length - 1 ? <Text style={styles.sep}>·</Text> : null}
+                  {groups.map((g) => (
+                    <View key={g} style={styles.pill}>
+                      <Text style={styles.pillText}>{g}</Text>
                     </View>
                   ))}
                 </View>
@@ -165,9 +223,19 @@ export function HomeView(props: HomeViewProps) {
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : null}
-                {/* the athlete owns the week's order — a quiet path to queue a different workout */}
+                {/* The athlete owns the week's order. This was floating text with no frame,
+                    no colour and no glyph — nothing said it could be pressed, so athletes
+                    missed that the option existed (founder 2026-07-12). It is now a ghost
+                    button: a hairline outline and a chevron. Quiet, but unmistakably a control. */}
                 {!props.resumable && props.workouts.length > 1 ? (
-                  <TextAction label={t('home.chooseAnother')} onPress={() => setChoosing(true)} />
+                  <Button
+                    variant="secondary"
+                    block
+                    label={t('home.chooseAnother')}
+                    onPress={() => setChoosing(true)}
+                    trailing={<Icon name="chevronRight" size={16} color={color.textSecondary} strokeWidth={2} />}
+                    style={styles.chooseAnother}
+                  />
                 ) : null}
               </View>
             </View>
@@ -183,7 +251,8 @@ export function HomeView(props: HomeViewProps) {
               style={({ pressed }) => [styles.cardioCard, pressed && styles.cardioCardPressed]}
             >
               <View style={styles.cardioIconBox}>
-                <Icon name="footprints" size={19} color={color.textSecondary} strokeWidth={2} />
+                {/* a running figure, not the old footprints — which read as two cups */}
+                <Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />
               </View>
               <View style={styles.cardioText}>
                 <Text style={styles.cardioTitle}>{t('cardio.title')}</Text>
@@ -313,16 +382,44 @@ const styles = StyleSheet.create({
   cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary },
   cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2 },
 
-  groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, alignItems: 'center' },
-  groupItem: { flexDirection: 'row', alignItems: 'center' },
-  sep: { marginHorizontal: 10, color: color.textTertiary, fontFamily: font.sans, fontSize: textScale.base },
+  // metadata pills — scanned, not read
+  groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 6 },
+  pill: {
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: radius.full,
+    backgroundColor: color.fillSubtle,
+  },
+  pillText: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale.xs,
+    letterSpacing: 0.2,
+    color: color.textSecondary,
+  },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  // a sentence, in the speaking voice (never the measuring one)
+  restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted },
+
+  // the week's seal
+  restSeal: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: color.up,
+    backgroundColor: color.upWash,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  restSealSlot: { height: 72 }, // reserve the seal's box so the copy never jumps in
 
   meterWrap: { marginTop: 28 },
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
+  chooseAnother: { justifyContent: 'space-between' },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },

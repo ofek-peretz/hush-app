@@ -27,7 +27,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { wellDone as wellDoneHaptic } from '@/platform/haptics';
+import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -35,6 +35,7 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { strengthSessionKcal } from '@/domain/energy';
+import { fmtMinutesFromMs } from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import type { Session, SetLog } from '@/data/local/models';
@@ -44,13 +45,6 @@ import type { MainParamList } from '@/app/navigation';
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
 
 const vol = (s: SetLog) => (s.actualWeight ?? 0) * s.actualReps;
-
-function fmtDuration(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 
 interface Lift {
   exerciseId: string;
@@ -146,13 +140,23 @@ export function WellDone({ navigation, route }: Props) {
     return () => clearTimeout(t);
   }, [reduced]);
 
-  // The "reading" checks fill in as the session's lifts resolve (purely cosmetic).
+  // The "reading" checks fill in as the session's lifts resolve. Each check that lands
+  // taps the wrist (founder 2026-07-12): the copy says HUSH IS READING YOUR SESSION, and a
+  // tick per lift is what makes that felt rather than claimed — the machine is chewing
+  // through the evidence, and the athlete can feel it doing so with the phone in a pocket.
   useEffect(() => {
     if (reduced || lifts.length === 0) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const STEP = 260;
     const START = 500;
-    for (let i = 1; i <= lifts.length; i++) timers.push(setTimeout(() => setRead(i), START + i * STEP));
+    for (let i = 1; i <= lifts.length; i++) {
+      timers.push(
+        setTimeout(() => {
+          setRead(i);
+          tickHaptic();
+        }, START + i * STEP),
+      );
+    }
     return () => timers.forEach(clearTimeout);
   }, [reduced, lifts.length]);
 
@@ -223,7 +227,9 @@ export function WellDone({ navigation, route }: Props) {
             >
               <Text style={styles.milestoneLegend}>{t('milestones.legend').toUpperCase()}</Text>
               <View style={styles.milestoneEmblem}>
-                <MilestoneEmblem size={216} onStage value={mc.value} caption={mc.caption} />
+                {/* the one licensed loud moment — the medallion gives off heat here, and
+                    nowhere else in the app (founder 2026-07-12) */}
+                <MilestoneEmblem size={216} onStage pulse value={mc.value} caption={mc.caption} glyph={mc.glyph} />
               </View>
               <Text style={styles.milestoneTitle} accessibilityRole="header">{mc.title}</Text>
               {mc.sub ? <Text style={styles.milestoneSub}>{mc.sub}</Text> : null}
@@ -327,10 +333,15 @@ export function WellDone({ navigation, route }: Props) {
           ) : null}
 
           <View style={styles.stats}>
-            <View style={styles.stat}><Metric onStage value={fmtDuration(durationMs)} label={t('complete.duration')} size="md" /></View>
+            <View style={styles.stat}>
+              <Metric onStage value={fmtMinutesFromMs(durationMs, t('common.minShort'))} label={t('complete.duration')} size="md" />
+            </View>
             {kcal != null ? (
               <View style={styles.stat}>
-                <Metric onStage value={`≈${kcal}`} unit={t('complete.kcal')} label={t('complete.calories')} size="md" />
+                {/* No "≈". The tilde was the one hedging mark in an app that never hedges —
+                    the LABEL carries the honesty ("EST. CALORIES") and the figure stays
+                    clean (founder 2026-07-12). */}
+                <Metric onStage value={kcal} unit={t('complete.kcal')} label={t('complete.caloriesEst')} size="md" />
               </View>
             ) : null}
           </View>

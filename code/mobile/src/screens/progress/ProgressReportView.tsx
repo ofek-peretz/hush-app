@@ -67,7 +67,15 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {loaded && entries.length === 0 ? (
-          <Text style={styles.empty}>{t('report.empty')}</Text>
+          // Day one is not a blank screen (founder 2026-07-12) — it is the instrument
+          // waiting for its first reading.
+          <View style={styles.emptyWrap}>
+            <View style={styles.emptyMark}>
+              <Icon name="trendingUp" size={24} color={color.textTertiary} strokeWidth={1.75} />
+            </View>
+            <Text style={styles.emptyTitle}>{t('report.emptyTitle')}</Text>
+            <Text style={styles.empty}>{t('report.empty')}</Text>
+          </View>
         ) : (
           <>
             {/* total strength added — or, before any gain, the starting-point framing.
@@ -99,11 +107,20 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                 // Bodyweight movements progress by REPS (founder 2026-07-10): raw rep
                 // counts, never unit-converted; the row reads "12 reps" instead of kg.
                 const isReps = e.mode === 'reps';
-                const initial = isReps ? e.initialPeakKg : displayWeight(e.initialPeakKg, units) ?? 0;
-                const best = isReps ? e.periodPeakKg : displayWeight(e.periodPeakKg, units) ?? 0;
-                const deltaDisp = isReps ? e.deltaKg : displayWeight(e.deltaKg, units) ?? 0;
+                const conv = (v: number) => (isReps ? v : displayWeight(v, units) ?? 0);
+                const initial = conv(e.initialPeakKg);
+                const best = conv(e.periodPeakKg);
+                const current = conv(e.currentKg);
+                const deltaDisp = conv(e.deltaKg);
                 const unit = isReps ? t('report.repsUnit') : unitLabel(units);
                 const ceiling = Math.round(best * 1.08) || best + 1;
+                // BACKED OFF (founder 2026-07-12): the athlete is currently working below
+                // their all-time best — a layoff, an injury, a deload. The peak still stands
+                // (it happened), so the meter still fills to it; the current load is drawn as
+                // a second, calmer reference so the screen never pretends the gap isn't there.
+                // The line beneath says what is actually true: the engine has met them where
+                // they are and will climb back from there. Not a failure, a fact.
+                const backedOff = e.currentKg < e.periodPeakKg;
                 return (
                   <View key={e.exerciseId} style={styles.lift}>
                     <View style={styles.liftHead}>
@@ -123,6 +140,14 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                       <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit })}</Text>
                       <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit })}</Text>
                     </View>
+                    {backedOff ? (
+                      <View style={styles.backOff}>
+                        <Icon name="minus" size={13} color={color.textMuted} strokeWidth={2.2} />
+                        <Text style={styles.backOffText}>
+                          {t('report.workingAt', { value: current, unit })}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
@@ -140,7 +165,7 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                       const mc = milestoneCopy(m, t, units);
                       return (
                         <View key={m.id} style={styles.emblemCell}>
-                          <MilestoneEmblem size={88} value={mc.value} caption={mc.caption} />
+                          <MilestoneEmblem size={88} value={mc.value} caption={mc.caption} glyph={mc.glyph} />
                           <Text style={styles.emblemTitle} numberOfLines={2}>{mc.title}</Text>
                           <Text style={styles.emblemFoot}>
                             {new Date(m.earnedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -152,7 +177,7 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                     const mc = milestoneCopy(n.milestone, t, units);
                     return (
                       <View key={n.milestone.id} style={styles.emblemCell}>
-                        <MilestoneEmblem size={88} tone="locked" value={mc.value} caption={mc.caption} />
+                        <MilestoneEmblem size={88} tone="locked" value={mc.value} caption={mc.caption} glyph={mc.glyph} />
                         <Text style={[styles.emblemTitle, styles.emblemLocked]} numberOfLines={2}>{mc.title}</Text>
                         <Text style={styles.emblemFoot}>{toGoLabel(n, t, units)}</Text>
                       </View>
@@ -187,8 +212,21 @@ const styles = StyleSheet.create({
   headTitles: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1 },
 
-  body: { paddingHorizontal: space.gutter, paddingBottom: 40 },
-  empty: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, marginTop: 48, textAlign: 'center' },
+  body: { paddingHorizontal: space.gutter, paddingBottom: 40, flexGrow: 1 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 60 },
+  emptyMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
+  empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
 
   totalBlock: { paddingTop: 4, paddingBottom: 22, borderBottomWidth: 1, borderBottomColor: color.border },
   startingSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginTop: 8, lineHeight: textScale.sm * 1.4 },
@@ -197,16 +235,21 @@ const styles = StyleSheet.create({
   totalUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: color.textMuted },
   totalBadge: { marginStart: 'auto', alignSelf: 'center' },
 
-  lifts: { marginTop: 18, gap: 18 },
+  // Rows breathe (founder 2026-07-12): the started/best line was pressed against the meter
+  // and the whole block read as one dense smear. Air between a gauge and its labels is not
+  // decoration — it is what lets the eye separate the reading from the scale.
+  lifts: { marginTop: 18, gap: 24 },
   lift: {},
-  liftHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 },
+  liftHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
   liftName: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, flexShrink: 1 },
   liftRight: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   liftBest: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: color.textPrimary },
   liftBestUnit: { fontFamily: font.mono, fontSize: textScale['2xs'], color: color.textMuted },
-  liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
   footText: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary },
   footNow: { color: color.up },
+  backOff: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9 },
+  backOffText: { flex: 1, fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 17, color: color.textMuted },
 
   milestones: { marginTop: 30, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
   emblemGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16 },

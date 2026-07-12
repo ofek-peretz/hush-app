@@ -86,3 +86,67 @@ export function milestone(): void {
   void Haptics.impactAsync(I.Heavy);
   beat(180, I.Rigid);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * The haptic blueprint (founder 2026-07-12). Three named textures the whole app
+ * shares, so the phone FEELS like one instrument rather than a set of screens
+ * each inventing its own buzz.
+ *
+ *   tick     — the lightest transient. A thing was scanned / counted / passed.
+ *   success  — a double pulse. Something the athlete DID landed and is now a fact.
+ *   warning  — a slow, heavier pair. An unusual, hard-to-undo action is underway.
+ *
+ * Still no notification haptics anywhere: transients only.
+ * ──────────────────────────────────────────────────────────────────────────*/
+
+/** The lightest transient — one item scanned (the Well Done read), one step of a build. */
+export function tick(): void {
+  void Haptics.impactAsync(I.Light);
+}
+
+/**
+ * Success — a double pulse, felt as a heartbeat: the set was saved, the profile was
+ * written, the week closed. Distinct from `setLogged`'s single tap by having TWO beats;
+ * distinct from `restFinished` by being level, not ascending.
+ */
+export function success(): void {
+  void Haptics.impactAsync(I.Medium);
+  beat(90, I.Medium);
+}
+
+/**
+ * Warning — the body's signal that something irreversible is happening (finishing a
+ * workout early, ending a run). Slow and heavy, the opposite texture to `success`: the
+ * beats are FAR apart, so it reads as a hesitation rather than a confirmation.
+ */
+export function warning(): void {
+  void Haptics.impactAsync(I.Heavy);
+  beat(260, I.Medium);
+}
+
+/**
+ * The cardio 3·2·1·GO countdown. The athlete is pocketing the phone or strapping it to an
+ * arm — they are NOT watching the screen — so the count has to arrive through the wrist.
+ * Rising salience per number, then a sustained double on GO that cannot be mistaken for a
+ * count beat. (Audio beeps are the natural partner and need `expo-audio`; deferred by
+ * founder decision 2026-07-12 rather than faked.)
+ */
+export function countdownBeat(n: number): void {
+  if (n <= 0) {
+    void Haptics.impactAsync(I.Heavy);
+    beat(110, I.Heavy);
+    return;
+  }
+  void Haptics.impactAsync(n >= 3 ? I.Soft : n >= 2 ? I.Light : I.Medium);
+}
+
+/**
+ * A week closed — the athlete has landed on Recovery having finished every session. Rarer
+ * than a workout, softer than a milestone: a settling, not a stamp. Two soft beats resolving
+ * into one medium, like something being set down.
+ */
+export function weekComplete(): void {
+  void Haptics.impactAsync(I.Soft);
+  beat(140, I.Soft);
+  beat(420, I.Medium);
+}

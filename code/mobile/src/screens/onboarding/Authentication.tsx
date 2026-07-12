@@ -1,19 +1,31 @@
 /**
- * Authentication (§4.1) — the front door, re-skinned to the design sign-in: the
- * "hush·" wordmark centred with the product line, then Continue with Apple
- * (primary) and Continue with Google (secondary), and a calm legal line. Sells
- * nothing. On success → Consent.
+ * Authentication (§4.1) — the front door. The "hush·" wordmark centred with the
+ * product line, then Continue with Apple and Continue with Google, and the legal line.
+ * Sells nothing.
+ *
+ * MERGED WITH CONSENT (founder 2026-07-12). There was a whole screen between the front
+ * door and the first real question whose only job was to say "terms and privacy". That is
+ * a speed bump, not a step — every serious product records agreement AT the sign-in with
+ * one line beneath the buttons. Consent is still affirmative, still versioned, still
+ * idempotent (OD-3 / BB-33): pressing a provider button IS the agreement, `acceptConsent()`
+ * records it the moment the provider returns, and the line above the buttons says so before
+ * a finger lands on one. On success → NameEntry.
+ *
+ * The provider buttons follow the PLATFORM's brand guidelines, not ours (founder 2026-07-12):
+ * Apple is black with a white mark; Google is white with the four-colour G and a hairline.
+ * Painting Apple in the Hush ochre and leaving Google plain white read as a preference for
+ * Apple users — and neither is what Apple's or Google's sign-in guidelines permit. Neither
+ * button is the primary action here; the ACCOUNT is.
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '@/components/ds';
 import { HushMark } from '@/components/HushMark';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, space, font, textScale, tracking, trackingPx, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, ink, paper, press } from '@/design/tokens';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -31,7 +43,9 @@ export function Authentication({ navigation }: Props) {
     setError(false);
     try {
       await app.signIn(provider);
-      navigation.navigate('Consent');
+      // Continuing IS the agreement (see header) — recorded before the first question.
+      void app.acceptConsent();
+      navigation.navigate('NameEntry');
     } catch (e) {
       if (!(e instanceof SignInCanceledError)) setError(true);
     } finally {
@@ -51,31 +65,78 @@ export function Authentication({ navigation }: Props) {
       </View>
       <View style={styles.actions}>
         {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
-        <Button
-          variant="primary"
-          size="lg"
-          block
+        <ProviderButton
           label={t('ob.apple')}
-          leading={<AppleLogo color={color.onAccent} />}
           onPress={() => onSignIn('apple')}
           disabled={busy}
+          logo={<AppleLogo color={paper[0]} />}
+          style={styles.apple}
+          pressedStyle={styles.applePressed}
+          labelStyle={styles.appleLabel}
         />
-        <Button
-          variant="secondary"
-          size="lg"
-          block
+        <ProviderButton
           label={t('ob.google')}
-          leading={<GoogleG />}
           onPress={() => onSignIn('google')}
           disabled={busy}
+          logo={<GoogleG />}
+          style={styles.google}
+          pressedStyle={styles.googlePressed}
+          labelStyle={styles.googleLabel}
         />
-        <Text style={styles.legal}>{t('ob.signinLegal')}</Text>
+        {/* The agreement, in one line, where the decision is actually made. Legible ink —
+            a legal line the athlete cannot read is not consent (founder 2026-07-12). */}
+        <Text style={styles.legal}>
+          {t('ob.signinLegalPre')}
+          <Text style={styles.legalStrong}>{t('ob.signinLegalTerms')}</Text>
+          {t('ob.signinLegalPost')}
+        </Text>
       </View>
     </SafeAreaView>
   );
 }
 
-function AppleLogo({ color: c, size = 18 }: { color: string; size?: number }) {
+/** A platform sign-in button. Both providers get the SAME geometry, weight and icon size —
+ *  only the platform's own colours differ, so neither reads as the favoured path. */
+function ProviderButton({
+  label,
+  logo,
+  onPress,
+  disabled,
+  style,
+  pressedStyle,
+  labelStyle,
+}: {
+  label: string;
+  logo: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  style: object;
+  pressedStyle: object;
+  labelStyle: object;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.provider,
+        style,
+        pressed && !disabled && styles.providerPressed,
+        pressed && !disabled && pressedStyle,
+        disabled && styles.providerDisabled,
+      ]}
+    >
+      {logo}
+      <Text numberOfLines={1} style={[styles.providerLabel, labelStyle]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function AppleLogo({ color: c, size = 19 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -86,7 +147,7 @@ function AppleLogo({ color: c, size = 18 }: { color: string; size?: number }) {
   );
 }
 
-function GoogleG({ size = 18 }: { size?: number }) {
+function GoogleG({ size = 19 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       <Path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
@@ -108,5 +169,29 @@ const styles = StyleSheet.create({
   tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
-  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 6, lineHeight: 18 },
+
+  // provider buttons — identical geometry, platform-native colour
+  provider: {
+    height: control.hLg,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  providerPressed: { transform: [{ translateY: press.translateY }] },
+  providerDisabled: { opacity: 0.4 },
+  providerLabel: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight) },
+  apple: { backgroundColor: ink[0] },
+  applePressed: { backgroundColor: '#000000' },
+  appleLabel: { color: paper[0] },
+  google: { backgroundColor: '#ffffff', borderColor: color.borderControl },
+  googlePressed: { backgroundColor: color.fillSubtle },
+  googleLabel: { color: ink[0] },
+
+  // The legal line is READ, not decoration: secondary ink, not the near-invisible tertiary.
+  legal: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 19 },
+  legalStrong: { fontFamily: font.sansSemibold, color: color.textSecondary },
 });

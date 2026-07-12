@@ -5,7 +5,8 @@
  * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18; Goal step removed
  * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
  * Experience + Days per week merged into one Training step 2026-07-10):
- *   Authentication → Consent → Name → Connect Health → Manual Info
+ *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
+ *   → Manual Info
  *   → Training → Program Created → Home.
  * Invite-token enrollment is removed.
  */
@@ -21,8 +22,9 @@ export interface OnboardingProfileDraft {
 }
 
 export type OnboardingParamList = {
+  // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
+  // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
-  Consent: undefined;
   // "What should we call you?" — captures the name (fallback to the Apple-provided name).
   NameEntry: undefined;
   ConnectHealth: undefined;

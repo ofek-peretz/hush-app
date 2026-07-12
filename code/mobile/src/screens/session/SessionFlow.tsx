@@ -122,6 +122,11 @@ export function SessionFlow({ navigation }: Props) {
     setOverlay('none');
   }
   async function finish() {
+    // Ending a workout early is the one irreversible thing the athlete can do mid-session, so
+    // the body is told (founder 2026-07-12): the slow, heavy WARNING texture — the opposite of
+    // the crisp double-pulse a save gets. It says "this is not a normal action" before the
+    // screen has had a chance to.
+    haptics.warning();
     // Navigation is driven by the `endResult` effect above (one path for phone + watch).
     await session.finishEarly();
   }
@@ -146,7 +151,11 @@ export function SessionFlow({ navigation }: Props) {
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
     confirmRunning.current = true;
-    haptics.setLogged(); // the set is captured — a light, affirmative tick
+    // The set is captured — a double pulse, felt as a heartbeat (founder 2026-07-12). It was a
+    // single light tap, which is the same texture as a wheel detent: the most important
+    // confirmation in the workout felt identical to scrolling past a number. A save is a FACT
+    // now; it gets its own beat.
+    haptics.success();
     const corrected = correctedRef.current;
     correctedRef.current = false;
     const id = setTimeout(async () => {

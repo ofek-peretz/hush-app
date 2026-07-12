@@ -4,16 +4,18 @@
  * pace, heart rate, calories, per-km splits). Records without interpreting: Hush
  * never grades a run and never attaches a coaching or engine decision to it.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { fmtClock, fmtPace } from '@/platform/cardio/cardioTracker';
+import { fmtPace } from '@/platform/cardio/cardioTracker';
+import { fmtMinutes } from '@/domain/duration';
+import { RouteTrace, MIN_ROUTE_POINTS } from '@/components/RouteTrace';
 import { textEnd } from '@/i18n/bidi';
-import { color, space, font, textScale, radius, tracking, trackingPx, press, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'CardioDetail'>;
@@ -24,6 +26,10 @@ export function CardioDetail({ navigation, route }: Props) {
   const dateLabel = new Date(a.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   const fastest = a.splits.length ? Math.min(...a.splits.map((s) => s.paceSec)) : 0;
   const slowest = a.splits.length ? Math.max(...a.splits.map((s) => s.paceSec)) : 0;
+  const [traceW, setTraceW] = useState(0);
+  // Records made before routes existed (and treadmill runs) carry none — the frame is
+  // simply absent rather than empty.
+  const hasRoute = (a.route?.length ?? 0) >= MIN_ROUTE_POINTS;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -52,9 +58,20 @@ export function CardioDetail({ navigation, route }: Props) {
           <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
         </View>
 
+        {/* the route travelled — the same engraved trace the summary showed */}
+        <View style={styles.traceWrap} onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}>
+          {hasRoute && traceW > 0 ? (
+            <>
+              <Legend style={styles.splitsLegend}>{t('cardio.routeLegend')}</Legend>
+              <RouteTrace route={a.route!} width={traceW} height={Math.round(traceW * 0.62)} />
+            </>
+          ) : null}
+        </View>
+
         {/* core metrics */}
         <View style={styles.metrics}>
-          <Stat value={fmtClock(a.durationSec)} label={t('cardio.duration')} />
+          {/* a recorded duration is minutes, never a clock (domain/duration) */}
+          <Stat value={fmtMinutes(a.durationSec, t('common.minShort'))} label={t('cardio.duration')} />
           <Stat value={fmtPace(a.avgPaceSec)} unit={t('cardio.perKm')} label={t('cardio.avgPace')} />
           {a.avgHr ? <Stat value={a.avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} /> : null}
           {a.calories ? <Stat value={a.calories} unit={t('cardio.kcal')} label={t('cardio.calories')} /> : null}
@@ -125,11 +142,12 @@ const styles = StyleSheet.create({
   statVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: color.textPrimary },
   statUnit: { fontFamily: font.sansMedium, fontSize: 12, color: color.textMuted },
 
+  traceWrap: { marginTop: 24 },
   splitsWrap: { marginTop: 28 },
   splitsLegend: { marginBottom: 14 },
   splitsList: { gap: 9 },
   splitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  splitKm: { width: 16, fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted },
+  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted },
   splitTrack: { flex: 1, height: 22, backgroundColor: color.fillSubtle, borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
   splitFill: { height: '100%', borderRadius: 4 },
   splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: color.textMuted, textTransform: 'uppercase' },

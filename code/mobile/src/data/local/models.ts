@@ -207,8 +207,14 @@ export interface CardioSplit {
   gait: CardioGait; // gait held during this km
 }
 
+/** One GPS fix on the route actually travelled. */
+export interface CardioPoint {
+  lat: number;
+  lon: number;
+}
+
 /** A recorded run/walk. Stored in History; opening it shows its own activity
- *  details (distance, duration, pace, heart rate, calories) — no coaching. */
+ *  details (distance, duration, pace, heart rate, calories, route) — no coaching. */
 export interface CardioActivity {
   kind: 'cardio'; // discriminator in the unified History timeline
   id: string;
@@ -220,6 +226,12 @@ export interface CardioActivity {
   avgHr?: number; // bpm — present only when a heart-rate source was available
   calories?: number; // kcal — present only when estimable
   splits: CardioSplit[];
+  /**
+   * The path travelled (founder 2026-07-12). Absent on activities recorded before routes
+   * existed, and on any activity with no GPS lock — a run indoors on a treadmill has no
+   * route, and the summary simply omits the trace rather than drawing a lie.
+   */
+  route?: CardioPoint[];
 }
 
 /** Unified History timeline entry: a completed strength Session or a recorded

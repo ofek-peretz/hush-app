@@ -1,12 +1,17 @@
 /**
- * TextField — 1:1 from the design `components/forms/TextField.jsx`.
- * A quiet labelled input. Label above (legend voice), value in a bordered well
- * that firms its border on focus. Used in onboarding (name) and anywhere the
- * athlete types free text.
+ * TextField — a quiet labelled input. Label above (legend voice), value written on a
+ * RULE, not inside a box.
+ *
+ * Founder 2026-07-12: the bordered well read as a generic form field — the one place the
+ * instrument looked like everybody else's app. A single baseline under the text is what an
+ * instrument does: the value sits ON something, the way a figure sits on a scale. The rule
+ * inks up and turns ochre on focus, so the active field is unmistakable without a box, and
+ * the type itself steps up to display size — the athlete's name is the largest thing on
+ * the screen, because it is the answer.
  */
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
-import { color, radius, control, font, textScale } from '@/design/tokens';
+import { color, control, font, textScale, tracking, trackingPx } from '@/design/tokens';
 
 interface Props extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -49,15 +54,20 @@ const styles = StyleSheet.create({
     color: color.textMuted,
     marginBottom: 8,
   },
+  // The rule: a baseline the value is written on. No box, no fill.
   well: {
-    height: control.h,
-    borderWidth: 1,
-    borderColor: color.borderControl,
-    borderRadius: radius.md,
-    backgroundColor: color.surface,
-    paddingHorizontal: 14,
+    height: control.hLg,
+    borderBottomWidth: 1.5,
+    borderBottomColor: color.borderControl,
+    paddingHorizontal: 2,
     justifyContent: 'center',
   },
-  wellFocused: { borderColor: color.accent, borderWidth: 1.5 },
-  input: { fontFamily: font.sans, fontSize: textScale.md, color: color.textPrimary, padding: 0 },
+  wellFocused: { borderBottomColor: color.accent, borderBottomWidth: 2 },
+  input: {
+    fontFamily: font.sans,
+    fontSize: textScale.lg,
+    color: color.textPrimary,
+    padding: 0,
+    letterSpacing: trackingPx(textScale.lg, tracking.tight),
+  },
 });

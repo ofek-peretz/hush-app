@@ -27,7 +27,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
-import type { CardioGait, CardioSplit } from '@/data/local/models';
+import type { CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
 import {
   MAX_ACCURACY_M,
   MIN_SPEED_MS,
@@ -51,9 +51,16 @@ export interface CardioSample {
   calories: number; // kcal, distance-based; 0 until real distance exists
   splits: CardioSplit[];
   gps: GpsState;
+  /**
+   * The path actually travelled (founder 2026-07-12) — every counted fix, in order, so the
+   * summary can draw the route the athlete ran. Only fixes that PASSED the accuracy +
+   * movement gates are kept, so the trace is the same honest data the distance is: a
+   * stationary session records no path at all, rather than a jitter cloud around a bench.
+   */
+  route: CardioPoint[];
 }
 
-const ZERO: CardioSample = { elapsedSec: 0, distanceKm: 0, paceSec: 0, hr: null, calories: 0, splits: [], gps: 'idle' };
+const ZERO: CardioSample = { elapsedSec: 0, distanceKm: 0, paceSec: 0, hr: null, calories: 0, splits: [], gps: 'idle', route: [] };
 
 interface Fix {
   lat: number;
@@ -93,6 +100,7 @@ export function useCardioTracker(
     splitStartSec: 0,
     lastFix: null as Fix | null,
     gps: 'idle' as GpsState,
+    route: [] as CardioPoint[],
   });
 
   const elapsedSecNow = () => {
@@ -111,6 +119,7 @@ export function useCardioTracker(
       calories: s.cal,
       splits: s.splits,
       gps: s.gps,
+      route: s.route,
     });
   };
 
@@ -183,6 +192,11 @@ export function useCardioTracker(
             if (!counts) return;
 
             const g = gaitRef.current;
+            // The trace records only fixes that COUNTED — same gate as the distance, so the
+            // drawn route can never disagree with the kilometres beside it. The first point
+            // of a segment is seeded too, so a resumed leg starts where the athlete stands.
+            if (s.route.length === 0) s.route = [{ lat: prev.lat, lon: prev.lon }];
+            s.route = [...s.route, { lat: latitude, lon: longitude }];
             s.distM += segM;
             s.cal += kcalForKm(segM / 1000, g, weightRef.current);
             const kmDone = Math.floor(s.distM / 1000);

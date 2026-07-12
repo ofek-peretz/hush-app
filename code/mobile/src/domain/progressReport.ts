@@ -29,8 +29,20 @@ export interface QuarterlyProgressEntry {
   initialPeakKg: number;
   /** Best peak reached anywhere in the window (kg — or best REPS when mode is 'reps'). */
   periodPeakKg: number;
-  /** periodPeak − initialPeak (kg or reps per mode; ≥ 0 in practice; can be 0). */
+  /** periodPeak − initialPeak (kg or reps per mode; ≥ 0 by construction — peak never falls). */
   deltaKg: number;
+  /**
+   * Peak in the LATEST bucket the exercise was trained — where the athlete is right now
+   * (founder 2026-07-12). The report is built on peaks, so it can never regress; that is
+   * deliberate (a bad Tuesday must not erase a year). But it also means the screen was
+   * silent about an athlete who came back from injury or a layoff lifting less than their
+   * best — they saw a number they could no longer hit and no acknowledgement of it.
+   *
+   * `currentKg < periodPeakKg` is the honest, unashamed statement of that: the peak stands
+   * as a record, the current load is a fact, and the UI frames the gap as the engine
+   * meeting the athlete where they are — not as a loss.
+   */
+  currentKg: number;
   weeksTrained: number; // distinct buckets the exercise was performed in
   /** 'load' (default) = kg peaks; 'reps' = bodyweight movement tracked by best reps. */
   mode?: ProgressMode;
@@ -84,13 +96,16 @@ function entriesFromPeaks(peaks: PeakMaps, minBuckets: number): QuarterlyProgres
       if (skip?.has(exerciseId)) continue; // any loaded work → the load entry tells the story
       if (buckets.size < minBuckets) continue;
       const earliest = Math.min(...buckets.keys());
+      const latest = Math.max(...buckets.keys());
       const initial = buckets.get(earliest)!;
+      const current = buckets.get(latest)!;
       const peak = Math.max(...buckets.values());
       out.push({
         exerciseId,
         initialPeakKg: initial,
         periodPeakKg: peak,
         deltaKg: Math.round((peak - initial) * 10) / 10,
+        currentKg: current,
         weeksTrained: buckets.size,
         ...(mode === 'reps' ? { mode } : {}),
       });

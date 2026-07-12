@@ -8,8 +8,11 @@
  * keeps the load progression intact.
  */
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { BottomSheet } from '@/components/BottomSheet';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+// The gesture-handler ScrollView, so RNGH can run the list's scroll alongside the sheet's
+// drag-to-dismiss instead of one cancelling the other (see BottomSheet).
+import { ScrollView } from 'react-native-gesture-handler';
+import { BottomSheet, useSheetScroll } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
@@ -27,6 +30,9 @@ interface Props {
 
 export function SwapSheet({ currentExerciseId, exclude, onSelect, onClose }: Props) {
   const { t } = useCopy();
+  // Swipe-down-to-dismiss works from anywhere on the sheet, and defers to this list
+  // whenever it is scrolled away from the top (see BottomSheet).
+  const sheetScroll = useSheetScroll();
   const current = exerciseById(currentExerciseId);
   const muscle = muscleOf(currentExerciseId);
   const muscleLabel = muscle ? t(`muscle.${muscle}`) : '';
@@ -36,11 +42,11 @@ export function SwapSheet({ currentExerciseId, exclude, onSelect, onClose }: Pro
   const alternatives = similarExercises(currentExerciseId).filter((e) => !excludeSet.has(e.id));
 
   return (
-    <BottomSheet onClose={onClose} heightFraction={0.74}>
+    <BottomSheet onClose={onClose} heightFraction={0.74} scroll={sheetScroll}>
       <Legend style={styles.legend}>{t('swap.titleMuscle', { muscle: muscleLabel })}</Legend>
       <Text style={styles.body}>{t('swap.body')}</Text>
 
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false} {...sheetScroll.scrollProps}>
         {current ? <SwapRow title={current.name} subtitle={muscleLabel} currentBadge muted /> : null}
         {alternatives.map((ex, i) => (
           <SwapRow

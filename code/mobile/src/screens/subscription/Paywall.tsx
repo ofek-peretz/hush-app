@@ -23,6 +23,7 @@ import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
 import { BILLING_EVENTS } from '@/platform/events';
 import { billing, PRODUCT_IDS, type ProductId, type SubscriptionProduct } from '@/platform/billing';
+import { annualSavingPct } from '@/domain/pricing';
 import { color, space, font, textScale, tracking, trackingPx, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -125,6 +126,12 @@ export function Paywall({ navigation, route }: Props) {
                 product={p}
                 selected={selected === p.id}
                 isBest={p.period === 'annual'}
+                // The annual saving, as a NUMBER (founder 2026-07-12). "Best value" is a claim
+                // the athlete has to verify by doing arithmetic on two prices in different
+                // units; "Save 50%" is the arithmetic, done. Computed from the live store
+                // prices — never a hardcoded figure that could quietly go wrong when pricing
+                // changes, and absent entirely when the two plans don't give us the maths.
+                savingPct={p.period === 'annual' ? annualSavingPct(products) : null}
                 perPeriod={p.period === 'annual' ? t('paywall.perYear') : t('paywall.perMonth')}
                 subLabel={
                   p.introTrialLabel
@@ -141,7 +148,7 @@ export function Paywall({ navigation, route }: Props) {
 
         {!loading && products.length > 0 ? (
           <View style={styles.reassure}>
-            <Icon name="check" size={14} color={color.accentText} strokeWidth={2.2} />
+            <Icon name="check" size={14} color={color.accentText} strokeWidth={2.8} />
             <Text style={styles.reassureText}>{t('paywall.onlyBilled')}</Text>
           </View>
         ) : null}
@@ -173,11 +180,14 @@ export function Paywall({ navigation, route }: Props) {
   );
 }
 
+/** A value line. The check used to be a thin ochre stroke on white — it dissolved at a
+ *  glance (founder 2026-07-12). It now sits in an ochre wash and carries real stroke weight,
+ *  so the three reasons to pay are legible in the half-second anyone gives a paywall. */
 function Benefit({ text }: { text: string }) {
   return (
     <View style={styles.benefit}>
       <View style={styles.benefitCheck}>
-        <Icon name="check" size={13} color={color.accentText} strokeWidth={2.1} />
+        <Icon name="check" size={13} color={color.accentText} strokeWidth={2.8} />
       </View>
       <Text style={styles.benefitText}>{text}</Text>
     </View>
@@ -188,6 +198,7 @@ function PlanCard({
   product,
   selected,
   isBest,
+  savingPct,
   perPeriod,
   subLabel,
   onSelect,
@@ -195,6 +206,7 @@ function PlanCard({
   product: SubscriptionProduct;
   selected: boolean;
   isBest: boolean;
+  savingPct: number | null;
   perPeriod: string;
   subLabel: string | null;
   onSelect: () => void;
@@ -217,7 +229,15 @@ function PlanCard({
       <View style={styles.planText}>
         <View style={styles.planTopRow}>
           <Text style={styles.planName}>{name}</Text>
-          {isBest ? <Badge tone="signal" legend>{t('paywall.bestValue')}</Badge> : null}
+          {/* The number beats the adjective: "Save 50%" if we can prove it from the live
+              prices, "Best value" only as the fallback. */}
+          {savingPct != null ? (
+            <View style={styles.saveTag}>
+              <Text style={styles.saveTagText}>{t('paywall.savePct', { pct: savingPct })}</Text>
+            </View>
+          ) : isBest ? (
+            <Badge tone="signal" legend>{t('paywall.bestValue')}</Badge>
+          ) : null}
         </View>
         {subLabel ? <Text style={styles.planTrial}>{subLabel}</Text> : null}
       </View>
@@ -247,7 +267,7 @@ const styles = StyleSheet.create({
 
   benefits: { gap: 9, marginBottom: space[5] },
   benefit: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  benefitCheck: { width: 22, height: 22, borderRadius: 11, backgroundColor: color.fillSubtle, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  benefitCheck: { width: 22, height: 22, borderRadius: 11, backgroundColor: color.accentWash, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   benefitText: { flex: 1, color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.base, lineHeight: 21 },
 
   reassure: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 },
@@ -284,8 +304,9 @@ const styles = StyleSheet.create({
   planTopRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md },
   planTrial: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm },
-  bestValue: { backgroundColor: signal[0], borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 2 },
-  bestValueText: {
+  // The saving tag — the one figure on this screen allowed to be loud.
+  saveTag: { backgroundColor: signal[0], borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
+  saveTagText: {
     color: color.onAccent,
     fontFamily: font.monoSemibold,
     fontSize: textScale['2xs'],

@@ -44,7 +44,8 @@ export type IconName =
   | 'dumbbell' // dumbbell (history)
   | 'shield' // shield-check (consent)
   | 'heart' // heart-pulse (health)
-  | 'footprints' // footprints (Open training: run / walk)
+  | 'footprints' // footprints (a recorded walk)
+  | 'runner' // a running figure (Open training: run / walk)
   | 'wind' // wind (walk mode)
   | 'flag' // flag (finish a cardio activity)
   | 'checkCheck'; // check-check (cardio recorded)
@@ -313,6 +314,19 @@ function render(
         <G {...common}>
           <Path d="M4 16v-2.4a2 2 0 0 1 .6-1.5C5.3 11.4 6 10.3 6 8.5 6 6 5 4 6.5 4S9 6 9 8.5c0 1.6.4 3 .7 4.1.2.7-.4 1.4-1.1 1.4H5.2A1.2 1.2 0 0 0 4 15.2" />
           <Path d="M20 20v-2.4a2 2 0 0 0-.6-1.5c-.7-.7-1.4-1.8-1.4-3.6 0-2.5 1-4.5-.5-4.5S15 10 15 12.5c0 1.6-.4 3-.7 4.1-.2.7.4 1.4 1.1 1.4h3.4a1.2 1.2 0 0 1 1.2 1.2" />
+        </G>
+      );
+    case 'runner':
+      // A running figure — the head, the driving arm, the split stride.
+      // Founder 2026-07-12: `footprints` was abstract enough to read as two cups. Open
+      // training is a PERSON moving; the glyph should be unmistakable at 16px.
+      return (
+        <G {...common}>
+          <Circle cx="15.5" cy="4.5" r="1.9" fill={stroke} stroke="none" />
+          <Path d="M13.2 20.5l1.6-5-3.1-2.6.9-4.9" />
+          <Path d="M12.6 8l-3.4 1.6L8 12.6" />
+          <Path d="M12.6 8l3.9 1.7 2.2 3.4h2" />
+          <Path d="M11.7 12.9L7.4 15l-2.6 4.4" />
         </G>
       );
     case 'wind':

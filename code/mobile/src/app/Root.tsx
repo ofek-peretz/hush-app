@@ -26,7 +26,6 @@ import { track } from '@/platform/telemetry';
 import type { MainParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
-import { Consent } from '@/screens/onboarding/Consent';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
@@ -63,7 +62,6 @@ function OnboardingNavigator() {
       screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bgBase }, animation: 'fade', gestureEnabled: false }}
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
-      <OnboardingStack.Screen name="Consent" component={Consent} />
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />

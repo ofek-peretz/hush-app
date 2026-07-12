@@ -88,7 +88,8 @@ export function Button({
 }
 
 const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: string }> = {
-  primary: { container: { backgroundColor: signal[0] }, pressed: { backgroundColor: signal[1] }, fg: paper[0] },
+  // Charcoal on ochre — 7.0:1 (AAA). Paper on ochre measured 2.4:1 and failed AA.
+  primary: { container: { backgroundColor: signal[0] }, pressed: { backgroundColor: signal[1] }, fg: color.onAccent },
   secondary: {
     container: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.borderControl },
     pressed: { backgroundColor: color.fillSubtle, borderColor: color.borderStrong },

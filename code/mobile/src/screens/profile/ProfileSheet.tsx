@@ -204,9 +204,27 @@ export function ProfileSheet({ navigation }: Props) {
           </>
         ) : null}
 
+        {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
+            full bordered button — the heaviest control on the screen — which made logging out
+            read as the page's primary action and put a big target under an idle thumb. Both
+            exits are now plain text: reachable, unmistakable, and weighted like what they are. */}
         <View style={styles.actions}>
-          <Button variant="secondary" block label={t('profile.signOut')} onPress={confirmSignOut} />
-          <Button variant="danger" block label={t('profile.deleteAccount')} onPress={confirmDelete} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.signOut')}
+            onPress={confirmSignOut}
+            style={({ pressed }) => [styles.exit, { opacity: pressed ? 0.5 : 1 }]}
+          >
+            <Text style={styles.exitLabel}>{t('profile.signOut')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.deleteAccount')}
+            onPress={confirmDelete}
+            style={({ pressed }) => [styles.exit, { opacity: pressed ? 0.5 : 1 }]}
+          >
+            <Text style={[styles.exitLabel, styles.exitDanger]}>{t('profile.deleteAccount')}</Text>
+          </Pressable>
         </View>
         <Text style={styles.version}>{versionLabel()}</Text>
       </ScrollView>
@@ -331,7 +349,11 @@ const styles = StyleSheet.create({
   trialNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2 },
   healthNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2 },
 
-  actions: { marginTop: 28, gap: 10 },
+  // Text-only exits — still a full 44pt target, just no visual weight.
+  actions: { marginTop: 32, gap: 2 },
+  exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted },
+  exitDanger: { color: down[0] },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },
   confirmActions: { gap: 10 },

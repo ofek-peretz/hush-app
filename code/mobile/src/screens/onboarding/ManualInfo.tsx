@@ -5,11 +5,12 @@
  * loads. Continue → Experience, carrying the draft. Progress 3 / 5.
  */
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Legend, SegmentedControl, WheelPicker, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ManualInfo'>;
@@ -46,6 +47,9 @@ export function ManualInfo({ navigation, route }: Props) {
             value={sex}
             onChange={(v) => setSex(v as 'female' | 'male')}
           />
+          {/* Say WHY, in one line, at the moment it is asked (founder 2026-07-12): this is a
+              physiological input to the starting loads and the split, not a gender question. */}
+          <Text style={styles.why}>{t('ob.sexWhy')}</Text>
         </View>
         <View style={styles.col}>
           <Legend>{t('ob.age')}</Legend>
@@ -69,5 +73,6 @@ const styles = StyleSheet.create({
   // whole on every supported iPhone — onboarding never scrolls.
   rows: { gap: 14 },
   col: { gap: 7 },
+  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 16, color: color.textTertiary, marginTop: 1 },
   wheel: { alignSelf: 'stretch' },
 });

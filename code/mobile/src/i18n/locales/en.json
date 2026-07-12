@@ -1,7 +1,8 @@
 {
   "common": {
     "back": "Back",
-    "close": "Close"
+    "close": "Close",
+    "minShort": "min"
   },
   "weekly": {
     "eyebrow": "This week",
@@ -159,7 +160,9 @@
     "bpm": "bpm",
     "gpsAcquiring": "Acquiring GPS signal",
     "gpsOff": "No location access — recording time only",
-    "minUnit": "min"
+    "minUnit": "min",
+    "holdFinish": "Hold to finish",
+    "routeLegend": "Route"
   },
   "ob": {
     "continue": "Continue",
@@ -167,13 +170,6 @@
     "apple": "Continue with Apple",
     "google": "Continue with Google",
     "signinTagline": "A strength coach that owns the decisions, so you can own the work.",
-    "signinLegal": "By continuing you agree to begin setup. You can stop at any time.",
-    "consentLegend": "Before we begin",
-    "consentTitle": "Terms & privacy",
-    "consentSub": "Hush makes training decisions on your behalf. To do that responsibly, it needs your agreement on how your data is used.",
-    "consentCard": "Your training data is yours. It is used only to make your recommendations. It is never sold.",
-    "consentAccept": "Agree & continue",
-    "consentDecline": "Decline",
     "nameLegend": "Optional",
     "nameTitle": "What should Hush call you?",
     "nameSub": "Used only to address you. Leave it blank to stay anonymous.",
@@ -219,9 +215,14 @@
     "readySub": "{{focus}} focus · {{days}} sessions a week.",
     "readyOwnership": "Hush decides the loads.\nYou decide the lifts.",
     "readyNote": "Hush only adds load your last sessions have earned — steady, never guesswork.",
-    "readyCta": "Go to my next workout",
+    "readyCta": "Start my first workout",
     "focusHypertrophy": "Hypertrophy",
-    "daysUnitShort": "/wk"
+    "daysUnitShort": "/wk",
+    "signinLegalPre": "By continuing, you agree to our ",
+    "signinLegalTerms": "Terms & Privacy",
+    "signinLegalPost": ".",
+    "sexWhy": "Used for physiological calculations only — starting loads and weekly volume.",
+    "healthCardOn": "Connected — heart rate, calories, distance"
   },
   "menu": {
     "title": "Menu",
@@ -361,7 +362,8 @@
     "notStartedTitle": "Workout not started",
     "notStartedBody": "No exercises completed. Nothing was saved — start again whenever you're ready.",
     "partialTitle": "Partial session logged.",
-    "stillOpen": "Logged. This workout stays on this week's list — finish it when you're ready."
+    "stillOpen": "Logged. This workout stays on this week's list — finish it when you're ready.",
+    "caloriesEst": "Est. calories"
   },
   "milestones": {
     "legend": "Milestone",
@@ -524,7 +526,7 @@
   "report": {
     "title": "Your progress",
     "subtitle": "Your strongest lifts, then and now.",
-    "empty": "Keep training — your progress will show here.",
+    "empty": "Train a lift twice and Hush can show you the distance between then and now.",
     "totalAdded": "Total strength added",
     "startingPoint": "Your starting point",
     "startingPointSub": "This is where you begin. Every gain from here is measured against it.",
@@ -532,7 +534,9 @@
     "initialPeak": "started {{value}} {{unit}}",
     "best": "now {{value}} {{unit}}",
     "weekRange": "Weeks {{from}}–{{to}}",
-    "repsUnit": "reps"
+    "repsUnit": "reps",
+    "emptyTitle": "Nothing measured yet.",
+    "workingAt": "Working at {{value}} {{unit}} — Hush has met you where you are."
   },
   "progress": {
     "title": "Progress",
@@ -543,12 +547,11 @@
     "legend": "Completed sessions",
     "summaryLegend": "The work so far",
     "sessionsLogged": "sessions logged",
-    "summaryMoved": " moved across {{weeks}} weeks. Every rep you've done is here.",
     "recordLegend": "{{date}} · read-only record",
     "duration": "Duration",
     "setsLabel": "Sets",
     "volumeLabel": "Volume",
-    "empty": "Your first session will appear here.",
+    "empty": "Every set you complete is written here, and nothing else ever is.",
     "count": "You completed {{n}} sessions.",
     "annIncreased": "I increased your {{target}}.",
     "annSwapped": "I swapped in {{exercise}} — the rack was taken.",
@@ -556,7 +559,10 @@
     "perSet": "{{weight}} × {{reps}}",
     "setN": "Set {{n}}",
     "dateDuration": "{{date}} · {{min}} min",
-    "minutesShort": "{{min}} min"
+    "minutesShort": "{{min}} min",
+    "summaryMoved_one": " moved across {{count}} week. Every rep you’ve done is here.",
+    "summaryMoved_other": " moved across {{count}} weeks. Every rep you’ve done is here.",
+    "emptyTitle": "The ledger is clean."
   },
   "profile": {
     "units": "Units",
@@ -707,7 +713,8 @@
     "legal": "Billed through your Apple ID. A membership renews automatically until you cancel it in Settings.",
     "legalDynamic": "Prices update live from the App Store. {{plan}} auto-renews at {{price}}{{cadence}}, billed to your Apple ID until cancelled in Settings.",
     "unavailable": "The store is unavailable. Check your connection and open this again.",
-    "error": "That did not complete. Your card was not charged."
+    "error": "That did not complete. Your card was not charged.",
+    "savePct": "Save {{pct}}%"
   },
   "explain": {
     "progressReps": {
@@ -796,7 +803,7 @@
   "profileEdit": {
     "legend": "Account",
     "title": "Edit your details",
-    "sub": "Height, weight and how many sessions you train each week. Sex and age are remembered — age updates by itself each year — and your level is read from your real progress. Corrections never reset your progress.",
+    "sub": "Age and sex are locked to preserve your program’s integrity. Corrections here never reset your progress.",
     "save": "Save changes",
     "saved": "Changes saved.",
     "savedDays": "Saved. Your week was rebuilt to match.",

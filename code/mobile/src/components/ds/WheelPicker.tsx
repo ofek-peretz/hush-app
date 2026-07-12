@@ -1,14 +1,26 @@
 /**
  * WheelPicker — a horizontal, swipe-to-value wheel. Replaces the +/- Stepper everywhere a number is
  * chosen (age, height, weight, sessions/week, the in-workout Edit Result), so reaching a distant
- * value is one swipe, not forty taps. Snaps to a centered detent; the selected value is inked, its
- * neighbours fade. A light selection tick fires on each detent. Mono + tabular so digits never jump.
+ * value is one swipe, not forty taps.
+ *
+ * ── THE RULE (founder 2026-07-12) ────────────────────────────────────────────────────────────
+ * It is not a list of numbers floating in a box. It is a MEASURING RULE — a machined scale
+ * sliding under a fixed index mark, the way a caliper or a good analogue dial reads:
+ *
+ *   • Ticks. Every detent carries an engraved tick beneath its numeral: a LONG tick for a whole
+ *     unit, a SHORT one for a fraction (16.5 kg). The eye judges distance off the ticks in a
+ *     fraction of a second, without reading a single digit.
+ *   • The anchor. The centre is not "the number that happens to be middle" — it is an ochre index
+ *     line that overshoots the scale top and bottom, saying unambiguously: THIS is the value.
+ *   • Fisheye. The centred numeral is the largest and fully inked; its neighbours shrink and fade
+ *     (60% → 20%) toward the edges. Focus is atomic; the rest of the axis becomes background
+ *     texture instead of competing noise.
+ *   • Hit target. The whole control — legend, scale and the air beneath it — takes the swipe. A
+ *     sweating hand in a gym should not have to land inside a 44pt-tall box to start scrolling.
  *
  * The unit sits in its own bordered cell to the side, so the scrolling digits never run under it.
  * The control is an accessible "adjustable" element: VoiceOver reads the label + value and the
  * increment/decrement rotor steps it (parity with the Stepper it replaced).
- *
- * Props mirror the Stepper (value/onChange/min/max/step/unit/format/size).
  *
  * RTL: the wheel is a NUMERIC LTR ISLAND — values ascend left-to-right in every locale
  * (numerals are LTR; this matches rulers, steppers, sliders, and keypads even in Hebrew
@@ -39,7 +51,7 @@ import {
   type NativeScrollEvent,
   type ViewStyle,
 } from 'react-native';
-import { color, radius, control, font, textScale, stage } from '@/design/tokens';
+import { color, radius, font, textScale, stage, signal } from '@/design/tokens';
 import { selection as selectionHaptic } from '@/platform/haptics';
 
 interface Props {
@@ -60,6 +72,26 @@ interface Props {
 }
 
 const ITEM_W = { md: 60, lg: 72 } as const;
+/** The scale is taller than a plain control: numerals live above, the engraved ticks below.
+ *  Also the touch target — a hand in a gym should not have to land inside 44pt of box. */
+const HEIGHT = { md: 62, lg: 72 } as const;
+
+/* The scale's geometry, in one place — the anchor line is POSITIONED from it rather than
+ * eyeballed, so the index mark always crosses the ticks it is indexing. */
+const NUM_SLOT_H = 30; // the numeral's fixed row (a scaled numeral must not move the ticks)
+const TICK_H = 10; // a whole-unit tick
+const ITEM_PAD_B = 8; // air under the ticks
+const ITEM_H = NUM_SLOT_H + TICK_H + ITEM_PAD_B;
+const OVERSHOOT = 5; // how far the anchor runs past the tick band, top and bottom
+
+/** The ochre index line's height and its offset from the control's bottom edge, derived from
+ *  the scale above. Pure + exported so the "the anchor crosses the ticks" invariant is tested,
+ *  not assumed. */
+export function anchorGeometry(controlH: number): { height: number; bottom: number } {
+  const contentTop = (controlH - ITEM_H) / 2; // the row is vertically centred in the control
+  const tickBottom = contentTop + ITEM_H - ITEM_PAD_B;
+  return { height: TICK_H + OVERSHOOT * 2, bottom: controlH - (tickBottom + OVERSHOOT) };
+}
 
 /** Rendered cells each side of the window anchor. 56 × 60px ≈ 8 screen-widths of
  *  populated track per side — beyond what one fling covers before the next window
@@ -70,6 +102,9 @@ const WINDOW_GUARD = 24;
 /** Minimum spacing between detent ticks — the fling can cross detents far faster than a
  *  haptic should fire (see onScroll). */
 const HAPTIC_MIN_MS = 45;
+/** How many detents from the centre still render a numeral. Past this the scale is ticks only —
+ *  texture, not text (the "atomic focus" rule). */
+const FADE_SPAN = 3;
 
 /** Build the value track min..max inclusive (rounded to kill float drift). */
 function buildValues(min: number, max: number, step: number): number[] {
@@ -106,14 +141,38 @@ export function wheelWindow(anchor: number, count: number, win: number = WINDOW)
   return { start: Math.max(0, anchor - win), end: Math.min(count, anchor + win + 1) };
 }
 
+/**
+ * The fisheye: a detent's scale + opacity as a function of its distance from the centre.
+ * The centre is full size and fully inked; each step out shrinks and fades, and past
+ * FADE_SPAN the numeral is gone entirely (its tick remains). Pure + exported for coverage —
+ * this curve IS the "atomic focus" behaviour, so it is worth pinning.
+ */
+export function wheelFocus(distance: number): { scale: number; opacity: number } {
+  const d = Math.abs(distance);
+  if (d === 0) return { scale: 1, opacity: 1 };
+  if (d > FADE_SPAN) return { scale: 0.7, opacity: 0 };
+  // 1 → 0.60, 2 → 0.36, 3 → 0.20 (a decaying fade, not a linear ramp)
+  const opacity = [1, 0.6, 0.36, 0.2][d];
+  const scale = 1 - d * 0.1; // 0.9 · 0.8 · 0.7
+  return { scale, opacity };
+}
+
+/** Is this detent a whole unit (long tick) or a fraction (short tick)? */
+function isWholeUnit(v: number): boolean {
+  return Math.abs(v - Math.round(v)) < 1e-6;
+}
+
 export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, style }: Props) {
   const itemW = ITEM_W[size];
-  const h = size === 'lg' ? control.hLg : control.h;
+  const h = HEIGHT[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
   const lastHapticRef = useRef(0);
+  // A fractional step means the scale has half-detents — the tick language only has two
+  // heights when there is genuinely something to distinguish.
+  const fractional = step < 1;
 
   const clampIndex = useCallback(
     (i: number) => Math.min(values.length - 1, Math.max(0, i)),
@@ -206,6 +265,8 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
 
   const valueText = `${format ? format(value) : String(value)}${unit ? ` ${unit}` : ''}`;
   const win = wheelWindow(anchor, values.length);
+  const numRest = onStage ? stage.ink0 : color.textPrimary;
+  const anchorGeo = anchorGeometry(h);
 
   return (
     <View
@@ -245,28 +306,53 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             <View style={{ width: win.start * itemW }} />
             {values.slice(win.start, win.end).map((item, k) => {
               const index = win.start + k;
-              const active = index === activeIndex;
+              const dist = index - activeIndex;
+              const { scale, opacity } = wheelFocus(dist);
+              const whole = !fractional || isWholeUnit(item);
+              const active = dist === 0;
               return (
                 <View key={item} style={[styles.item, { width: itemW }]}>
-                  <Text
+                  {/* the numeral — fisheye scaled + faded; gone entirely past the span */}
+                  <View style={styles.numSlot}>
+                    {opacity > 0 ? (
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.num,
+                          size === 'lg' && styles.numLg,
+                          {
+                            color: active ? (onStage ? stage.ink0 : color.textPrimary) : numRest,
+                            opacity,
+                            transform: [{ scale }],
+                          },
+                          active && styles.numActive,
+                        ]}
+                      >
+                        {format ? format(item) : String(item)}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {/* the engraved scale — a long tick on a whole unit, a short one on a fraction */}
+                  <View
                     style={[
-                      styles.num,
-                      active ? (onStage ? styles.numActiveStage : styles.numActive) : onStage ? styles.numRestStage : styles.numRest,
-                      size === 'lg' && styles.numLg,
+                      styles.scaleTick,
+                      whole ? styles.scaleTickWhole : styles.scaleTickHalf,
+                      onStage && styles.scaleTickStage,
+                      active && styles.scaleTickHidden, // the anchor draws this detent itself
                     ]}
-                  >
-                    {format ? format(item) : String(item)}
-                  </Text>
+                  />
                 </View>
               );
             })}
             <View style={{ width: (values.length - win.end) * itemW }} />
           </ScrollView>
         ) : null}
-        {/* Center detent marker — a calm pair of hairline ticks, framing the active value. */}
-        <View pointerEvents="none" style={[styles.marker, { width: itemW }]}>
-          <View style={styles.tick} />
-          <View style={styles.tick} />
+        {/* THE ANCHOR — an ochre index line THROUGH the scale, overshooting the tick band top
+            and bottom. Not a pair of decorative ticks: the one unambiguous statement of
+            "this is the value". Its geometry is derived from the scale (anchorGeometry), so it
+            can never drift off the ticks it indexes. */}
+        <View pointerEvents="none" style={styles.anchor}>
+          <View style={[styles.anchorLine, { height: anchorGeo.height, marginBottom: anchorGeo.bottom }]} />
         </View>
       </View>
       {unit ? (
@@ -296,24 +382,34 @@ const styles = StyleSheet.create({
   // The scroller itself is pinned LTR too, so its native layoutDirection (and with it
   // the contentOffset coordinate space) never mirrors under forceRTL.
   scroller: { direction: 'ltr' },
-  item: { alignItems: 'center', justifyContent: 'center' },
+  item: { height: ITEM_H, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: ITEM_PAD_B },
+  // Fixed-height slot so a scaled numeral never shifts the ticks beneath it.
+  numSlot: { height: NUM_SLOT_H, alignItems: 'center', justifyContent: 'center' },
   num: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
     fontSize: textScale.md,
     includeFontPadding: false,
   },
-  numLg: { fontSize: textScale.xl },
-  numActive: { color: color.textPrimary },
-  numRest: { color: color.textTertiary },
-  numActiveStage: { color: stage.ink0 },
-  numRestStage: { color: stage.ink2 },
-  marker: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  tick: { width: 22, height: 2, borderRadius: 1, backgroundColor: color.accent },
+  numLg: { fontSize: textScale.lg },
+  // The centred value carries the weight — it is a reading, not a list item.
+  numActive: { fontFamily: font.monoSemibold },
+
+  // the engraved scale
+  scaleTick: { width: 1, borderRadius: 0.5, backgroundColor: color.borderControl },
+  scaleTickWhole: { height: TICK_H },
+  scaleTickHalf: { height: TICK_H / 2, opacity: 0.55 },
+  scaleTickStage: { backgroundColor: stage[2] },
+  scaleTickHidden: { opacity: 0 },
+
+  // the ochre index line (height + offset come from anchorGeometry)
+  anchor: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center' },
+  anchorLine: { width: 2, borderRadius: 1, backgroundColor: signal[0] },
+
   // The unit sits in its own bordered cell, separate from the scrolling digits.
   unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted },
-  // Inverted "stage" treatment — graphite surface + ink, ochre detent ticks (unchanged).
+  // Inverted "stage" treatment — graphite surface + ink, ochre anchor (unchanged).
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
   unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
   unitStage: { color: stage.ink2 },
