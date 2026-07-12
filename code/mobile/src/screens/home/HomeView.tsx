@@ -184,8 +184,8 @@ export function HomeView(props: HomeViewProps) {
                   them in one pass instead of parsing a run of interpuncts (founder 2026-07-12). */}
               {groups.length ? (
                 <View style={styles.groups}>
-                  {groups.map((g) => (
-                    <View key={g} style={styles.pill}>
+                  {groups.map((g, i) => (
+                    <View key={`${g}-${i}`} style={styles.pill}>
                       <Text style={styles.pillText}>{g}</Text>
                     </View>
                   ))}

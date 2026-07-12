@@ -210,8 +210,16 @@ export function Home({ navigation, route }: Props) {
   }, [isFocused]);
 
   async function onResume() {
-    const ok = await session.resumeSaved();
-    setResumable(null);
+    let ok = false;
+    try {
+      ok = await session.resumeSaved();
+    } catch {
+      // The snapshot could not be replayed (corrupt / storage failure). Never leave the athlete
+      // pressing a Continue button that silently does nothing: drop the offer and let them Begin.
+      ok = false;
+    } finally {
+      setResumable(null);
+    }
     if (ok) navigation.navigate('SessionFlow');
     // Not resumable after all (stale/complete) → the salvage already ran; Home falls back to Begin.
   }

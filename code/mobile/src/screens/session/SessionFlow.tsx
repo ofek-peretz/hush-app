@@ -127,8 +127,16 @@ export function SessionFlow({ navigation }: Props) {
     // the crisp double-pulse a save gets. It says "this is not a normal action" before the
     // screen has had a chance to.
     haptics.warning();
-    // Navigation is driven by the `endResult` effect above (one path for phone + watch).
-    await session.finishEarly();
+    try {
+      // Navigation is driven by the `endResult` effect above (one path for phone + watch).
+      await session.finishEarly();
+    } catch {
+      // finalize() writes the session to storage, so this can reject. If it does, the athlete is
+      // left staring at the pause sheet with no way to end the workout — and the button they just
+      // pressed appears to have done nothing. Say what happened and leave them ON the pause sheet,
+      // where Resume and Finish both still work; their logged sets are already persisted per-set.
+      toast.show(t('workout.finishFailed'));
+    }
   }
 
   // Complete set → the "Set logged" beat (§3.3), then log + advance.
@@ -165,16 +173,27 @@ export function SessionFlow({ navigation }: Props) {
     const corrected = correctedRef.current;
     correctedRef.current = false;
     const id = setTimeout(async () => {
-      const r = await session.completeSet();
-      confirmRunning.current = false;
-      setConfirm(null);
-      // Non-blocking confirmation that Hush will remember the corrected load — shown at most ONCE
-      // per workout, and NEVER when this set ends the workout (it must never float over Well Done).
-      if (corrected && !r.ended && !learnToastShownRef.current) {
-        learnToastShownRef.current = true;
-        toast.show(t('load.remembered'));
+      try {
+        const r = await session.completeSet();
+        // Non-blocking confirmation that Hush will remember the corrected load — shown at most ONCE
+        // per workout, and NEVER when this set ends the workout (it must never float over Well Done).
+        if (corrected && !r.ended && !learnToastShownRef.current) {
+          learnToastShownRef.current = true;
+          toast.show(t('load.remembered'));
+        }
+        // When r.ended, the `endResult` effect navigates to Well Done (one path for phone + watch).
+      } catch {
+        // completeSet PERSISTS the set (db.saveActiveSession), so it can reject on a storage
+        // failure. Without this, the rejection escaped into the void with `confirm` still set —
+        // and the "Set logged" beat has NO controls, so the athlete was frozen there, mid-workout,
+        // with force-quitting the app as the only way out. The set is not saved; say so, and give
+        // the athlete their set back so they can log it again.
+        toast.show(t('workout.setSaveFailed'));
+      } finally {
+        // ALWAYS: the stage must return to the athlete, saved or not.
+        confirmRunning.current = false;
+        setConfirm(null);
       }
-      // When r.ended, the `endResult` effect navigates to Well Done (one path for phone + watch).
     }, CONFIRM_DWELL_MS);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

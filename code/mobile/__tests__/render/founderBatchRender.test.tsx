@@ -19,7 +19,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { color } from '@/design/tokens';
+import { color, stage } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
@@ -116,6 +116,25 @@ describe('HoldButton is a hold, not a tap', () => {
   it('carries its label', () => {
     const r = mount(<HoldButton label="Hold to finish" onComplete={() => {}} />);
     expect(texts(r)).toContain('Hold to finish');
+  });
+
+  it('inks its label in the tone of the surface it is ON while holding', () => {
+    // The "holding" colour used to be a single hardcoded stage ink. On a PAPER HoldButton that
+    // is near-white on near-white — the label would vanish at the exact moment the athlete is
+    // watching it to know the hold has taken.
+    for (const onStage of [false, true]) {
+      const r = mount(<HoldButton onStage={onStage} label="Hold to finish" onComplete={() => {}} />);
+      const pressable = r.root.findAll((n) => typeof n.props?.onPressIn === 'function')[0];
+      act(() => pressable.props.onPressIn());
+
+      const json = JSON.stringify(r.toJSON());
+      // The label must never be drawn in the OTHER surface's ink.
+      expect(json).toContain(onStage ? stage.ink0 : color.textPrimary);
+      expect(json).not.toContain(onStage ? color.textPrimary : stage.ink0);
+
+      act(() => pressable.props.onPressOut());
+      act(() => r.unmount());
+    }
   });
 });
 

@@ -57,9 +57,16 @@ export function ProgramDetail({ navigation, route }: Props) {
 
   async function onSelectSwap(exerciseId: string) {
     if (!swapping || !day) return;
-    await app.replaceSlotExercise(day.id, swapping.slotIndex, exerciseId);
-    setYoursNow(exerciseDisplayName(exerciseId));
-    setSwapping(null);
+    try {
+      await app.replaceSlotExercise(day.id, swapping.slotIndex, exerciseId);
+      setYoursNow(exerciseDisplayName(exerciseId));
+    } catch {
+      // The swap did not persist. Say nothing false — the sheet closes and the slot still shows
+      // the exercise it actually has.
+    } finally {
+      // ALWAYS: a rejection used to leave the swap sheet open with no way to dismiss it.
+      setSwapping(null);
+    }
   }
 
   // The day's shape at a glance: exercise count + honest work-time estimate (the same

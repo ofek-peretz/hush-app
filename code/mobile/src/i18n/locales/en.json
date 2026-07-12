@@ -272,7 +272,9 @@
     "saveComplete": "Save & complete set",
     "actualWeight": "Actual weight",
     "actualReps": "Actual reps",
-    "editDone": "Done"
+    "editDone": "Done",
+    "setSaveFailed": "That set did not save. Complete it again.",
+    "finishFailed": "That did not finish. Your completed sets are saved."
   },
   "finishSheet": {
     "legend": "Finish early",

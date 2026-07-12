@@ -50,7 +50,13 @@ export function ProfileSheet({ navigation }: Props) {
   }
   async function onLanguage(v: string) {
     if (v === locale) return;
-    await setLocale(v as 'en' | 'he');
+    try {
+      await setLocale(v as 'en' | 'he');
+    } catch {
+      // The language did not switch. Reloading anyway would remount the app in the OLD language
+      // and read as a dead control — so do nothing, and leave the segmented control where it is.
+      return;
+    }
     // Apply the new writing direction (RTL ⇄ LTR) immediately — no manual relaunch.
     reloadApp();
   }

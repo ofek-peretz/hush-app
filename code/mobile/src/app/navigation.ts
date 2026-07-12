@@ -39,6 +39,13 @@ export type OnboardingParamList = {
   ProgramCreated: { inputs: OnboardingInputs };
 };
 
+/**
+ * FOUNDER RULING 2026-07-12 — CLOSED: navigation stays TAP-BASED and hub-and-spoke. A
+ * swipe-carousel across Home / This week / History / Progress was proposed and rejected:
+ * re-architecting routing purely to enable a swipe invites gesture conflicts with the controls
+ * already living on those screens (the sheets, the horizontal wheels, the full-width back
+ * swipe), and the current hierarchy is predictable and does not break. Simple, clear, tapped.
+ */
 export type MainParamList = {
   // Home is the single root. Program · History · Portrait · Settings (ProfileSheet)
   // are reached from the Home hamburger Menu (the Tab Bar was removed) and pushed

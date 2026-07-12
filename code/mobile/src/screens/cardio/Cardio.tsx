@@ -228,9 +228,11 @@ export function Cardio({ navigation }: Props) {
             {(['run', 'walk'] as CardioGait[]).map((v) => (
               <Pressable
                 key={v}
-                accessibilityRole="button"
+                // A single-select pair, not two independent buttons — VoiceOver should say
+                // "selected / not selected", not offer two unrelated actions.
+                accessibilityRole="radio"
                 accessibilityLabel={v === 'run' ? t('cardio.run') : t('cardio.walk')}
-                accessibilityState={{ selected: live === v }}
+                accessibilityState={{ selected: live === v, checked: live === v }}
                 hitSlop={{ top: 12, bottom: 12 }}
                 onPress={() => {
                   if (live !== v) haptics.confirm();

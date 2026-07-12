@@ -72,7 +72,6 @@ export function HoldButton({ label, onComplete, durationMs = HOLD_MS, onStage = 
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={label}
       onPressIn={start}
       onPressOut={cancel}
       style={[styles.base, onStage ? styles.baseStage : styles.basePaper, block && styles.block, style]}
@@ -83,7 +82,14 @@ export function HoldButton({ label, onComplete, durationMs = HOLD_MS, onStage = 
         {leading}
         <Text
           numberOfLines={1}
-          style={[styles.label, onStage ? styles.labelStage : styles.labelPaper, holding && styles.labelHolding]}
+          style={[
+            styles.label,
+            onStage ? styles.labelStage : styles.labelPaper,
+            // The label inks UP as the hold commits — in the tone of the surface it is on. A
+            // single shared "holding" colour would have turned a paper HoldButton's label
+            // near-white on near-white, i.e. invisible exactly while it matters most.
+            holding && (onStage ? styles.labelHoldingStage : styles.labelHoldingPaper),
+          ]}
         >
           {label}
         </Text>
@@ -114,5 +120,6 @@ const styles = StyleSheet.create({
   },
   labelPaper: { color: color.textSecondary },
   labelStage: { color: stageC.ink1 },
-  labelHolding: { color: stageC.ink0 },
+  labelHoldingPaper: { color: color.textPrimary },
+  labelHoldingStage: { color: stageC.ink0 },
 });

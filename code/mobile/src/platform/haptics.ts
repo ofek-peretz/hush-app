@@ -133,8 +133,12 @@ export function warning(): void {
  * The cardio 3·2·1·GO countdown. The athlete is pocketing the phone or strapping it to an
  * arm — they are NOT watching the screen — so the count has to arrive through the wrist.
  * Rising salience per number, then a sustained double on GO that cannot be mistaken for a
- * count beat. (Audio beeps are the natural partner and need `expo-audio`; deferred by
- * founder decision 2026-07-12 rather than faked.)
+ * count beat.
+ *
+ * FOUNDER RULING 2026-07-12 — CLOSED: no audio. Beeps would mean taking on `expo-audio` (a
+ * native dependency) and shipping sound assets, for a cue the WRIST already delivers — and the
+ * wrist is the surface that actually works with the phone in a pocket or on an armband, which
+ * is exactly where it is during these three seconds.
  */
 export function countdownBeat(n: number): void {
   if (n <= 0) {

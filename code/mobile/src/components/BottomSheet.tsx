@@ -44,6 +44,20 @@ import { color, radius, space } from '@/design/tokens';
 const DISMISS_DISTANCE = 90; // drag this far down (or flick) to dismiss
 const DISMISS_VELOCITY = 800;
 
+/**
+ * The scrim behind a sheet. A FLAT translucent black — not a blur.
+ *
+ * FOUNDER RULING 2026-07-12 — CLOSED: a background blur behind sheets would mean taking on
+ * `expo-blur`, a native dependency, for a purely cosmetic effect — and paying for it in
+ * stability and memory on weaker devices, every time a sheet opens. A solid layer at 0.7
+ * does the one job that matters (it kills the background as a competitor for attention),
+ * costs nothing to render, and cannot crash. Do not reopen this.
+ *
+ * 0.7, up from 0.55: at 0.55 the screen behind stayed legible enough to read, which is
+ * exactly the focus the sheet exists to take away.
+ */
+export const SCRIM_OPACITY = 0.7;
+
 interface Props {
   onClose: () => void;
   children: React.ReactNode;
@@ -53,7 +67,7 @@ interface Props {
   heightFraction?: number;
   /** Horizontal padding inside the sheet (spec: 16 or 18). */
   gutter?: number;
-  /** Scrim opacity over the parent (default 0.55). */
+  /** Scrim opacity over the parent (default: SCRIM_OPACITY). */
   scrimOpacity?: number;
   /** Optional faint-glimpse layer rendered between scrim and sheet. */
   behind?: React.ReactNode;
@@ -103,7 +117,7 @@ export function BottomSheet({
   background = color.surface,
   heightFraction,
   gutter = space.gutter,
-  scrimOpacity = 0.55,
+  scrimOpacity = SCRIM_OPACITY,
   behind,
   scroll,
   style,

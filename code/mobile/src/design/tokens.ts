@@ -278,6 +278,11 @@ export const layout = {
 
 /* ============================================================================
  * RADIUS / BORDERS — small and precise; nothing playful.
+ *
+ * FOUNDER RULING 2026-07-12 — CLOSED: plain `borderRadius`, no "squircle" / continuous-curve
+ * smoothing. React Native has no native corner smoothing, so it would mean an SVG-mask library
+ * or a heavy dependency — paid for on EVERY screen render, forever, to satisfy something only a
+ * designer with a loupe can see. The device's CPU would feel it; the athlete would not.
  * ==========================================================================*/
 export const radius = {
   xs: 2,

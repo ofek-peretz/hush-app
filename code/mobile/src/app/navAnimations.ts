@@ -1,4 +1,10 @@
 /**
+ * FOUNDER RULING 2026-07-12 — CLOSED: the platform's own transitions, nothing more. No
+ * shared-element choreography (the ochre button expanding into the black stage, the last set
+ * card sliding into Top Set). A FAKED shared element — a cross-fade wearing the costume — reads
+ * as a cheap bug, and a real one at 60fps is a large infrastructure project in React Native.
+ * Speed and reliability beat theatre. Use Push / Modal and be fast.
+ *
  * Navigation animation selection under Reduced Motion (spec §8.2, §7.1).
  * Full-layer slides and sheet slide-ups both collapse to opacity fades; the
  * product remains fully expressive through copy and layout without motion.

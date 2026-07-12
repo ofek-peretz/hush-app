@@ -6,6 +6,11 @@
  *
  * Stroke-based by default; `filled` switches the tab glyphs to a solid look for
  * the active tab. Color/size/strokeWidth are caller-controlled.
+ *
+ * FOUNDER RULING 2026-07-12 — CLOSED: the stroke weight stays as it is. It was proposed that
+ * every icon be thinned to match the font's stroke (~1.5px) for typographic harmony. Rejected:
+ * LEGIBILITY BEATS AESTHETICS. A slightly heavy glyph that is recognised in a fraction of a
+ * second across a gym is worth more than a harmonious one that disappears at 16px.
  */
 import React from 'react';
 import { I18nManager } from 'react-native';

@@ -273,7 +273,9 @@
     "saveComplete": "שמור והשלם סט",
     "actualWeight": "משקל בפועל",
     "actualReps": "חזרות בפועל",
-    "editDone": "סיום"
+    "editDone": "סיום",
+    "setSaveFailed": "הסט הזה לא נשמר. השלם אותו שוב.",
+    "finishFailed": "הסיום לא הושלם. הסטים שהשלמת שמורים."
   },
   "finishSheet": {
     "legend": "סיום מוקדם",

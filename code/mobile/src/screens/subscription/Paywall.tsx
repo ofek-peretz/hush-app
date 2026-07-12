@@ -72,19 +72,31 @@ export function Paywall({ navigation, route }: Props) {
     if (busy || products.length === 0) return;
     setBusy(true);
     setFailed(false);
-    const result = await app.purchaseSubscription(selected);
-    setBusy(false);
-    if (result.status === 'failed') setFailed(true);
-    // On success the entitlement effect above pops the screen; cancel is a no-op.
+    try {
+      const result = await app.purchaseSubscription(selected);
+      if (result.status === 'failed') setFailed(true);
+      // On success the entitlement effect above pops the screen; cancel is a no-op.
+    } catch {
+      setFailed(true);
+    } finally {
+      // ALWAYS: a throw from StoreKit used to leave `busy` true, disabling the Subscribe button
+      // for good — on the one screen whose entire job is to take money.
+      setBusy(false);
+    }
   }
 
   async function onRestore() {
     if (busy) return;
     setBusy(true);
     setFailed(false);
-    const result = await app.restorePurchases();
-    setBusy(false);
-    if (!(result.status === 'restored' && result.entitlement.active)) setFailed(true);
+    try {
+      const result = await app.restorePurchases();
+      if (!(result.status === 'restored' && result.entitlement.active)) setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const selectedProduct = products.find((p) => p.id === selected) ?? null;

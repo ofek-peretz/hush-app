@@ -1,8 +1,12 @@
 /**
  * RouteTrace — the path the athlete actually ran, drawn as an engraved line.
  *
- * Founder 2026-07-12 asked for a map on the run summary. This is deliberately NOT a
- * tiled map: a Google/Apple map tile drops a foreign visual language (someone else's
+ * FOUNDER RULING 2026-07-12 — CLOSED, do not reopen: no map SDK, ever. A tiled map drags in
+ * API keys, third-party tracking, heavy data use on a run, and it destroys the minimal language
+ * with foreign colours and street labels. The athlete is not navigating to Paris; they want to
+ * see the shape of the effort they just made. The engraved polyline on graphite is the answer.
+ *
+ * This is deliberately NOT a tiled map: a Google/Apple map tile drops a foreign visual language (someone else's
  * roads, someone else's typography, someone else's colour) into the middle of an
  * instrument that has spent its whole life avoiding decoration — and it costs a native
  * SDK, an API key, and a network round-trip to show the athlete something they already
