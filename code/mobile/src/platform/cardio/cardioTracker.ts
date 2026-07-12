@@ -192,11 +192,15 @@ export function useCardioTracker(
             if (!counts) return;
 
             const g = gaitRef.current;
-            // The trace records only fixes that COUNTED — same gate as the distance, so the
-            // drawn route can never disagree with the kilometres beside it. The first point
-            // of a segment is seeded too, so a resumed leg starts where the athlete stands.
-            if (s.route.length === 0) s.route = [{ lat: prev.lat, lon: prev.lon }];
-            s.route = [...s.route, { lat: latitude, lon: longitude }];
+            // The trace records only fixes that COUNTED — the same gate as the distance, so the
+            // drawn route can never disagree with the kilometres beside it. The first point of a
+            // segment is seeded too, so a resumed leg starts where the athlete stands.
+            //
+            // PUSHED, not re-spread: an hour's run is ~3,600 fixes, and rebuilding the array on
+            // every one is quadratic. The array identity is deliberately stable — nothing renders
+            // the route live, so a new reference each second would only churn.
+            if (s.route.length === 0) s.route.push({ lat: prev.lat, lon: prev.lon });
+            s.route.push({ lat: latitude, lon: longitude });
             s.distM += segM;
             s.cal += kcalForKm(segM / 1000, g, weightRef.current);
             const kmDone = Math.floor(s.distM / 1000);

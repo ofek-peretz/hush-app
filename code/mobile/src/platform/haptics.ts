@@ -105,9 +105,14 @@ export function tick(): void {
 }
 
 /**
- * Success — a double pulse, felt as a heartbeat: the set was saved, the profile was
- * written, the week closed. Distinct from `setLogged`'s single tap by having TWO beats;
- * distinct from `restFinished` by being level, not ascending.
+ * Success — a double pulse: a thing the athlete did is now a written fact. A profile saved, a
+ * run finished, Health connected, the program built.
+ *
+ * NOT the in-workout logged set (founder 2026-07-12). Inside a workout the five major events
+ * have to be tellable apart by rhythm alone, wrist-down, without looking — set = one tap,
+ * rest-over = ascending double, exercise = triple (WATCH_EXPERIENCE_SPEC §3). A second double in
+ * that set would blunt exactly the law that lets an athlete run a session by feel, and the watch
+ * taps once for the same action. `setLogged` owns the set; this owns everything outside the stage.
  */
 export function success(): void {
   void Haptics.impactAsync(I.Medium);

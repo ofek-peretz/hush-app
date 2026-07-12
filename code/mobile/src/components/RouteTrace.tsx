@@ -34,13 +34,39 @@ interface Props {
 export const MIN_ROUTE_POINTS = 8;
 
 /**
+ * The most points worth KEEPING for a route.
+ *
+ * GPS fires roughly once a second, so an hour's run is ~3,600 fixes. All cardio activities live
+ * in ONE AsyncStorage value, which History parses in full every time it opens — persisting raw
+ * traces would put megabytes there within a few months, for a picture that is 300px wide and
+ * cannot resolve two points a metre apart anyway. 300 points draws every loop, switchback and
+ * out-and-back a human can see, at ~7 KB a run.
+ */
+export const MAX_ROUTE_POINTS = 300;
+
+/**
+ * Thin a route to at most `max` points by even stride, always keeping the first and the last —
+ * the start and finish markers must land where the athlete actually started and stopped.
+ * Pure + exported: this runs before persistence, so getting it wrong would silently corrupt the
+ * record rather than just the picture.
+ */
+export function simplifyRoute(route: CardioPoint[], max: number = MAX_ROUTE_POINTS): CardioPoint[] {
+  if (route.length <= max) return route;
+  const out: CardioPoint[] = [];
+  const stride = (route.length - 1) / (max - 1);
+  for (let i = 0; i < max - 1; i++) out.push(route[Math.round(i * stride)]);
+  out.push(route[route.length - 1]); // the finish, exactly
+  return out;
+}
+
+/**
  * Project lat/lon into the frame, preserving the route's true ASPECT RATIO — an
  * out-and-back down one street must not be stretched into a square, or the athlete is
  * looking at a shape they never ran. Longitude is scaled by cos(latitude) so a degree of
  * east-west reads at its real ground distance. Pure + exported for unit coverage.
  */
-export function projectRoute(route: CardioPoint[], width: number, height: number, pad: number): string {
-  if (route.length < 2) return '';
+export function projectPoints(route: CardioPoint[], width: number, height: number, pad: number): Array<[number, number]> {
+  if (route.length < 2) return [];
   const lat0 = route.reduce((a, p) => a + p.lat, 0) / route.length;
   const kx = Math.cos((lat0 * Math.PI) / 180); // east-west foreshortening at this latitude
 
@@ -61,31 +87,27 @@ export function projectRoute(route: CardioPoint[], width: number, height: number
   const offX = pad + (innerW - spanX * s) / 2;
   const offY = pad + (innerH - spanY * s) / 2;
 
-  return xs
-    .map((x, i) => {
-      const px = offX + (x - minX) * s;
-      const py = offY + (ys[i] - minY) * s;
-      return `${i === 0 ? 'M' : 'L'}${px.toFixed(1)} ${py.toFixed(1)}`;
-    })
-    .join(' ');
+  return xs.map((x, i): [number, number] => [offX + (x - minX) * s, offY + (ys[i] - minY) * s]);
 }
 
-/** The projected pixel position of one point (start / finish markers). */
-function endpoints(route: CardioPoint[], width: number, height: number, pad: number): { sx: number; sy: number; ex: number; ey: number } | null {
-  const d = projectRoute(route, width, height, pad);
-  if (!d) return null;
-  const cmds = d.split(/[ML]/).filter(Boolean).map((c) => c.trim().split(' ').map(Number));
-  const first = cmds[0];
-  const last = cmds[cmds.length - 1];
-  if (!first || !last) return null;
-  return { sx: first[0], sy: first[1], ex: last[0], ey: last[1] };
+/** The SVG path for a projected route. Separated from the projection so the endpoints (the
+ *  start / finish markers) come from the SAME pass rather than a second, re-parsed one. */
+export function projectRoute(route: CardioPoint[], width: number, height: number, pad: number): string {
+  return projectPoints(route, width, height, pad)
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
 }
 
 export function RouteTrace({ route, width, height, style }: Props) {
   const pad = 18;
-  const d = projectRoute(route, width, height, pad);
-  const ends = endpoints(route, width, height, pad);
-  if (!d || !ends) return null;
+  // Thinned before drawing too — a live summary hands us the raw fix list, and a 3,600-command
+  // SVG path is a lot of work for a picture whose pixels cannot resolve it.
+  const pts = React.useMemo(() => projectPoints(simplifyRoute(route), width, height, pad), [route, width, height]);
+  if (pts.length < 2) return null;
+
+  const d = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const [sx, sy] = pts[0];
+  const [ex, ey] = pts[pts.length - 1];
 
   return (
     <View style={[styles.frame, { width, height }, style]}>
@@ -95,8 +117,8 @@ export function RouteTrace({ route, width, height, style }: Props) {
         {/* the run */}
         <Path d={d} stroke={signal[0]} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         {/* start: an open ring. finish: a filled mark. */}
-        <Circle cx={ends.sx} cy={ends.sy} r={4.5} stroke={stage.ink0} strokeWidth={1.75} fill={stage[1]} />
-        <Circle cx={ends.ex} cy={ends.ey} r={4.5} fill={up[0]} />
+        <Circle cx={sx} cy={sy} r={4.5} stroke={stage.ink0} strokeWidth={1.75} fill={stage[1]} />
+        <Circle cx={ex} cy={ey} r={4.5} fill={up[0]} />
       </Svg>
     </View>
   );

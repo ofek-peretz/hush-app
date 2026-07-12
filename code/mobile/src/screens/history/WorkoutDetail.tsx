@@ -15,6 +15,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
+import { fmtMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
 import type { Session, SetLog } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
@@ -22,13 +23,11 @@ import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WorkoutDetail'>;
 
-function durationLabel(s: Session): string {
-  if (s.sets.length === 0) return '0:00';
+/** Wall-clock seconds from the session's start to its last logged set. */
+function durationSec(s: Session): number {
+  if (s.sets.length === 0) return 0;
   const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
-  const total = Math.max(0, Math.round((last - Date.parse(s.startedAt)) / 1000));
-  const m = Math.floor(total / 60);
-  const sec = total % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
+  return Math.max(0, Math.round((last - Date.parse(s.startedAt)) / 1000));
 }
 
 export function WorkoutDetail({ navigation, route }: Props) {
@@ -82,7 +81,9 @@ export function WorkoutDetail({ navigation, route }: Props) {
           <Text style={styles.title} accessibilityRole="header">{sessionDayName(session, app.program)}</Text>
 
           <View style={styles.stats}>
-            <Metric value={durationLabel(session)} label={t('history.duration')} size="sm" />
+            {/* A recorded duration reads in MINUTES, like every other one in the app
+                (domain/duration) — "1:03" beside a date reads as one in the morning. */}
+            <Metric value={fmtMinutes(durationSec(session), t('common.minShort'))} label={t('history.duration')} size="sm" />
             <Metric value={session.sets.length} label={t('history.setsLabel')} size="sm" />
             <Metric value={volume.toLocaleString()} unit={unitLabel(units)} label={t('history.volumeLabel')} size="sm" />
           </View>

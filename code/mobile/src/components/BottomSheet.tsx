@@ -112,6 +112,11 @@ export function BottomSheet({
   style,
 }: Props) {
   const ty = useSharedValue(0);
+  // Where the sheet's OWN drag starts, in the gesture's coordinates. It is not always zero: a
+  // finger can begin its pull halfway down a scrolled list and only reach the top of that list
+  // mid-gesture. Without re-baselining at that instant, the sheet would leap by the whole
+  // distance the list had already consumed.
+  const base = useSharedValue(0);
   const insets = useSafeAreaInsets();
   // Sheets with no scrolling content are always "at the top" — they can be pulled from
   // anywhere, always.
@@ -121,13 +126,25 @@ export function BottomSheet({
     // Only a deliberate vertical drag claims the gesture — a tap, a press, and the horizontal
     // wheels inside Edit Result are never intercepted.
     .activeOffsetY([-18, 18])
+    .onBegin(() => {
+      base.value = 0;
+    })
     .onUpdate((e) => {
-      // Mid-list, a downward drag belongs to the list, not the sheet.
-      if (!atTop.value && e.translationY > 0) return;
+      // Mid-list the drag belongs to the LIST: the sheet stays put and keeps moving its origin
+      // along with the finger, so the moment the list runs out of scroll the sheet picks up from
+      // exactly where the finger is — no jump.
+      if (!atTop.value) {
+        base.value = e.translationY;
+        ty.value = 0;
+        return;
+      }
+      const dy = e.translationY - base.value;
       // Follow the finger downward; damp any upward overscroll so it can't fly up.
-      ty.value = e.translationY > 0 ? e.translationY : e.translationY * 0.2;
+      ty.value = dy > 0 ? dy : dy * 0.2;
     })
     .onEnd((e) => {
+      // The velocity path is gated on the sheet having actually MOVED, so a fast flick that was
+      // really a list scroll can never dismiss.
       if (ty.value > DISMISS_DISTANCE || (e.velocityY > DISMISS_VELOCITY && ty.value > 0)) {
         ty.value = withTiming(800, { duration: 180 }, () => runOnJS(onClose)());
       } else {

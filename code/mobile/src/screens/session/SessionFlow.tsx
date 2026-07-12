@@ -151,11 +151,17 @@ export function SessionFlow({ navigation }: Props) {
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
     confirmRunning.current = true;
-    // The set is captured — a double pulse, felt as a heartbeat (founder 2026-07-12). It was a
-    // single light tap, which is the same texture as a wheel detent: the most important
-    // confirmation in the workout felt identical to scrolling past a number. A save is a FACT
-    // now; it gets its own beat.
-    haptics.success();
+    // The set is captured — a single light tap, and it STAYS one (founder 2026-07-12, after the
+    // double-pulse "success" texture was proposed for it and rejected here).
+    //
+    // The five major workout events must be tellable apart by rhythm alone, wrist-down, without
+    // looking (WATCH_EXPERIENCE_SPEC §3): set = one tap, rest-over = ascending double, exercise =
+    // triple, workout = the signature, connection = one low sustained. A double on the set would
+    // put TWO doubles among the five and blunt the one law that lets an athlete run a session by
+    // feel — and the watch, which taps once for the same action, would stop matching the phone.
+    // `haptics.success()` is used where nothing collides: a profile saved, Health connected, the
+    // program built, a run finished.
+    haptics.setLogged();
     const corrected = correctedRef.current;
     correctedRef.current = false;
     const id = setTimeout(async () => {

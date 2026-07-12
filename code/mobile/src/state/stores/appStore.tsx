@@ -150,8 +150,9 @@ interface AppApi extends AppState {
    *  create a profile — the athlete proceeds through Consent → onboarding, which
    *  ends in completeOnboarding. Throws if sign-in is cancelled/fails. */
   signIn: (provider: AuthProvider) => Promise<void>;
-  /** Record affirmative consent (OD-3/BB-33) — the Consent screen's "I agree".
-   *  Best-effort against the backend; the server record is idempotent. */
+  /** Record affirmative consent (OD-3/BB-33). Since 2026-07-12 the Consent SCREEN is gone and
+   *  consent is recorded at sign-in — continuing with a provider IS the agreement, and the line
+   *  under the buttons says so. Best-effort against the backend; the server record is idempotent. */
   acceptConsent: () => Promise<void>;
   /** Store the athlete's chosen name (NameEntry screen) for the profile built at
    *  completeOnboarding. Overrides any Apple-provided name. */
@@ -431,7 +432,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         void track('signed_in', { provider });
         revokingRef.current = false; // re-arm the session-invalidation guard
-        // No profile yet → Root keeps the onboarding stack (Consent → … → Program Created).
+        // No profile yet → Root keeps the onboarding stack (Name → … → Program Created).
       },
 
       async acceptConsent() {

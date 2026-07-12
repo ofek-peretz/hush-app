@@ -86,7 +86,13 @@ export function ConnectHealth({ navigation }: Props) {
           <Text style={styles.title}>{t('ob.healthCardTitle')}</Text>
           <Text style={styles.sub}>{connected ? t('ob.healthCardOn') : t('ob.healthCardSub')}</Text>
         </View>
-        <Switch checked={connected} onChange={() => void toggle()} accessibilityLabel={t('ob.healthCardTitle')} />
+        {/* The switch is the card's STATE, drawn — not a second control. The card above is the
+            one Pressable and the one accessibility element; nesting a live Switch inside it
+            would announce two switches to VoiceOver and give the athlete two hit targets for
+            one decision. */}
+        <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+          <Switch checked={connected} onChange={() => void toggle()} accessibilityLabel={t('ob.healthCardTitle')} />
+        </View>
       </Pressable>
     </OnboardingScaffold>
   );

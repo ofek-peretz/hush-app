@@ -10,7 +10,7 @@
 import { durationMinutes, fmtMinutes, fmtMinutesFromMs } from '@/domain/duration';
 import { parsePriceAmount, annualSavingPct } from '@/domain/pricing';
 import { wheelFocus, anchorGeometry } from '@/components/ds/WheelPicker';
-import { projectRoute } from '@/components/RouteTrace';
+import { projectRoute, simplifyRoute, MAX_ROUTE_POINTS } from '@/components/RouteTrace';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { COUNT_THRESHOLDS, TONNAGE_THRESHOLDS_KG, CLUB_THRESHOLDS_KG, type Milestone } from '@/domain/milestones';
 import type { SubscriptionProduct } from '@/platform/billing';
@@ -143,6 +143,28 @@ describe('the route trace draws the shape the athlete actually ran', () => {
       expect(y).toBeGreaterThanOrEqual(18 - 0.5);
       expect(y).toBeLessThanOrEqual(180 - 18 + 0.5);
     }
+  });
+
+  it('thins an hour-long run down to something a record can carry', () => {
+    // GPS fires ~1/s: an hour is ~3,600 fixes, and every cardio record lives in ONE stored
+    // value that History parses whole on open. Raw traces would put megabytes there.
+    const hour = Array.from({ length: 3600 }, (_, i) => ({ lat: 32 + i * 1e-5, lon: 34 + i * 1e-5 }));
+    const thin = simplifyRoute(hour);
+    expect(thin.length).toBe(MAX_ROUTE_POINTS);
+    // The start and the finish are EXACT — the two markers must land where the athlete did.
+    expect(thin[0]).toEqual(hour[0]);
+    expect(thin[thin.length - 1]).toEqual(hour[hour.length - 1]);
+  });
+
+  it('leaves a short route untouched', () => {
+    const short = Array.from({ length: 40 }, (_, i) => ({ lat: 32 + i * 1e-4, lon: 34 }));
+    expect(simplifyRoute(short)).toBe(short);
+  });
+
+  it('never drops a point out of order while thinning', () => {
+    const run = Array.from({ length: 1000 }, (_, i) => ({ lat: 32 + i * 1e-5, lon: 34 }));
+    const thin = simplifyRoute(run);
+    for (let i = 1; i < thin.length; i++) expect(thin[i].lat).toBeGreaterThan(thin[i - 1].lat);
   });
 
   it('does NOT stretch a straight out-and-back into a square', () => {

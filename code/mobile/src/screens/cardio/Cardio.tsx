@@ -28,7 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Legend, Button, HoldButton, SegmentedControl, WheelPicker } from '@/components/ds';
-import { RouteTrace, MIN_ROUTE_POINTS } from '@/components/RouteTrace';
+import { RouteTrace, MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
@@ -487,9 +487,11 @@ function CardioComplete(props: {
       ...(avgHr != null ? { avgHr: Math.round(avgHr) } : {}),
       ...(props.calories > 0 ? { calories: Math.round(props.calories) } : {}),
       splits,
-      // Rounded to ~1m — full float precision would bloat the record for no visible gain.
+      // Thinned to a drawable trace and rounded to ~1 m. GPS fires once a second, so an hour's
+      // run is ~3,600 raw fixes — and every cardio record lives in ONE stored value that History
+      // parses on open. The full trace would put megabytes there for a picture 300px wide.
       ...(hasRoute
-        ? { route: route.map((p) => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5) })) }
+        ? { route: simplifyRoute(route).map((p) => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5) })) }
         : {}),
     };
     void db.appendCardioActivity(activity).catch(() => {});
