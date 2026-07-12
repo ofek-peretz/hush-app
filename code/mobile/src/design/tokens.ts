@@ -66,10 +66,27 @@ export const line = {
 
 /** The one accent: ochre. Used at ~1–2% coverage. */
 export const signal = {
-  0: '#cc9147', // accent fill
-  1: '#c7802b', // accent hover / pressed
+  0: '#cc9147', // the mark — index lines, dots, bars, rings. Never carries text.
+  1: '#c7802b', // the mark, pressed
   ink: '#854a0b', // accent as text on paper
   wash: '#f8ebd7', // faint accent tint surface
+
+  /**
+   * THE OCHRE THAT CARRIES TEXT — a deeper cut of the same accent (founder 2026-07-12).
+   *
+   * The ochre above is beautiful and it is 2.6:1 against cream: it cannot hold a word. The last
+   * pass fixed that by putting CHARCOAL on it, which passed WCAG and lost the product — the
+   * founder's verdict was blunt ("the black inside the brown, I liked it less; put back what
+   * was there"). Both readings are right, and the way out is not to argue about the ink: it is
+   * to darken the FILL. `signal.fill` is the same hue pulled down until cream clears AA on it
+   * (4.64:1), which restores the paper-on-ochre look the founder wants and keeps the button
+   * legible in direct sun, where a gym athlete actually stands.
+   *
+   * This is the ONLY ochre a letter may sit on. Lines, dots, rings and bars — anything with no
+   * text on it — keep signal[0], because their job is to be SEEN, not to be read.
+   */
+  fill: '#9c6522',
+  fillPressed: '#8a5a1e',
 } as const;
 
 /** Semantic: load + progress (desaturated, calm). */
@@ -129,13 +146,14 @@ export const color = {
   accentText: signal.ink,
   accentWash: signal.wash,
   /**
-   * Text/glyph ON an ochre fill. Founder 2026-07-12 — an ACCESSIBILITY fix, not a
-   * taste change: paper-on-ochre measures 2.4:1, which fails WCAG AA (4.5:1) and is
-   * genuinely unreadable in direct sun, which is exactly where a gym athlete stands.
-   * Charcoal-on-ochre measures 7.0:1 (AAA) and is what luxury brands do with a warm
-   * accent anyway. The primary button now reads as struck metal, not printed paper.
+   * Text/glyph ON an ochre fill — CREAM, on the deeper `signal.fill` (4.64:1, AA).
+   * The charcoal-on-ochre experiment is reverted; see signal.fill for why both the
+   * founder's eye and the contrast meter get what they asked for.
    */
-  onAccent: ink[0],
+  onAccent: paper[0],
+  /** The only ochre a letter may sit on. */
+  accentFill: signal.fill,
+  accentFillPressed: signal.fillPressed,
 
   // Semantic load states
   up: up[0],
@@ -340,9 +358,9 @@ export const button = {
   primary: {
     height: control.hLg, // 56
     radius: radius.md, // 6
-    bg: signal[0], // ochre
-    fg: ink[0], // on-accent — charcoal, 7.0:1 (see color.onAccent)
-    pressedBg: signal[1],
+    bg: signal.fill, // the deep ochre — the only one a letter sits on
+    fg: paper[0], // cream, 4.64:1 (see signal.fill)
+    pressedBg: signal.fillPressed,
     fontSize: textScale.md, // 17
     fontWeight: weight.semibold,
     pressedOpacity: 1, // press settles 1px down, no opacity dip

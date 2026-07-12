@@ -89,7 +89,28 @@ describe('projectSessionMirror', () => {
       completedSets: 2,
       progressedLifts: 1,
     })!;
-    expect(m.summary).toEqual({ timeLabel: '2:11', sets: 2, up: 1 });
+    expect(m.summary).toMatchObject({ timeLabel: '2:11', sets: 2, up: 1 });
+  });
+
+  it('Complete summary carries the LIFT-BY-LIFT read-back the wrist plays (founder 2026-07-12)', () => {
+    // The watch's closing beat walks the workout lift by lift and lands a check on each one that
+    // was finished. An early finish is exactly where that matters: what did I train, what did I
+    // leave? A lift is done only when every set it was prescribed sits behind the frontier.
+    const m = project({
+      machine: machine({ phase: 'SESSION_SAVED', setIndex: 1, earlyFinish: true }),
+      sessionStartedAtMs: NOW - 131_000,
+      completedSets: 2,
+      progressedLifts: 1,
+    })!;
+    expect(m.summary!.lifts.length).toBeGreaterThan(0);
+    // Each entry names a lift and says, plainly, whether it was finished.
+    for (const l of m.summary!.lifts) {
+      expect(typeof l.name).toBe('string');
+      expect(typeof l.done).toBe('boolean');
+    }
+    // …and a lift whose sets were NOT all logged is not marked done.
+    const unfinished = m.summary!.lifts.filter((l) => !l.done);
+    expect(unfinished.length).toBeGreaterThan(0);
   });
 
   it('Complete summary falls back to the planned total when no live count is supplied', () => {

@@ -79,6 +79,27 @@ export interface MirrorStep {
   loadSetup?: MirrorLoadSetup | null;
 }
 
+/**
+ * One lift, at the close of the workout: what it was, and whether the athlete finished it.
+ *
+ * The wrist earns the same closing beat the phone has (founder 2026-07-12): the workout is read
+ * back lift by lift, a check landing on each one that was completed. To do that the watch needs
+ * the LIST, and the mirror is the only thing that crosses. A lift is done when every set it was
+ * prescribed sits behind the athlete's completion frontier — so a workout ended early shows,
+ * plainly, what was trained and what was left.
+ */
+export interface MirrorSummaryLift {
+  name: string;
+  done: boolean;
+}
+
+export interface MirrorSummary {
+  timeLabel: string;
+  sets: number;
+  up: number;
+  lifts: MirrorSummaryLift[];
+}
+
 /** The canonical mirror. Every surface renders a SUBSET of this — e.g. the Live
  *  Activity shows the timer as hero and ignores target load; the watch shows the
  *  Active Set with the target. The data is the same; only the rendering differs. */
@@ -133,7 +154,7 @@ export interface SessionMirror {
   workoutName: string;
   /** Complete-frame summary (only on the terminal frame): wall-clock time, total
    *  sets logged, and lifts progressed (distinct exercises the model raised). */
-  summary: { timeLabel: string; sets: number; up: number } | null;
+  summary: MirrorSummary | null;
   /** Swap alternatives for the CURRENT exercise (Active Set glyph → overlay). */
   swapOptions: { id: string; name: string }[];
   /** Swap alternatives for the UPCOMING exercise (Transition rest card glyph). */
@@ -197,6 +218,35 @@ function formatDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * The workout read back lift by lift (see MirrorSummaryLift).
+ *
+ * `completedSets` is the athlete's frontier: the sets are walked in order, so the first N steps
+ * are the ones that were logged. A lift is DONE when every step it owns falls behind that
+ * frontier — anything else is a lift the athlete started and did not finish, or never reached,
+ * and on a workout that ended early those are exactly the ones worth showing without a check.
+ *
+ * Pure + exported so the rule is a tested fact rather than a rendering detail on a wrist.
+ */
+export function summaryLifts(steps: MirrorStep[], completedSets: number): MirrorSummaryLift[] {
+  const order: string[] = [];
+  const tally = new Map<string, { total: number; done: number }>();
+  steps.forEach((s, i) => {
+    let t = tally.get(s.exerciseName);
+    if (!t) {
+      t = { total: 0, done: 0 };
+      tally.set(s.exerciseName, t);
+      order.push(s.exerciseName);
+    }
+    t.total += 1;
+    if (i < completedSets) t.done += 1;
+  });
+  return order.map((name) => {
+    const t = tally.get(name)!;
+    return { name, done: t.done >= t.total };
+  });
+}
+
 /** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
  *  and the total number of runs ("Lift 1/6"). */
 function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
@@ -241,12 +291,13 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       steps.filter((s) => s.reasonType === 'increase').map((s) => s.exerciseName),
     ).size;
     const startedMs = inp.sessionStartedAtMs ?? null;
-    const summary = {
+    const summary: MirrorSummary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
       // Truthful: the sets the athlete ACTUALLY logged (not the planned total) — an
       // early finish must never report every planned set as done.
       sets: inp.completedSets ?? total,
       up: inp.progressedLifts ?? up,
+      lifts: summaryLifts(steps, inp.completedSets ?? total),
     };
     return {
       schema: MIRROR_SCHEMA_VERSION,

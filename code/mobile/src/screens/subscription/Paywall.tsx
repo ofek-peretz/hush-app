@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md, textAlign: 'left' },
   planTrial: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'left' },
   // The saving tag — the one figure on this screen allowed to be loud.
-  saveTag: { backgroundColor: signal[0], borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
+  saveTag: { backgroundColor: signal.fill, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
   saveTagText: {
     color: color.onAccent,
     fontFamily: font.monoSemibold,

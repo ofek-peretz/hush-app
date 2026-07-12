@@ -81,6 +81,8 @@ enum WatchCopy {
 
   // Complete
   static let saved = "Saved"
+  /// The read-back beat's legend — the workout being walked lift by lift (founder 2026-07-12).
+  static let reading = "Reading your workout"
   // Forced break so the name and "complete." stack like the design (and never
   // ellipsize on the smaller 41 mm case).
   static func complete(_ name: String) -> String { "\(name)\ncomplete." }

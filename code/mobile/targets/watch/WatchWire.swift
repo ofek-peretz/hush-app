@@ -17,10 +17,20 @@ struct WireSwapOption: Codable, Equatable {
   var name: String
 }
 
+/// One lift at the close of the workout — mirror of sessionMirror.ts `MirrorSummaryLift`.
+/// Feeds the wrist's read-back beat: a check lands on every lift the athlete finished.
+struct WireSummaryLift: Codable, Equatable {
+  var name: String
+  var done: Bool
+}
+
 struct WireSummary: Codable, Equatable {
   var timeLabel: String
   var sets: Int
   var up: Int
+  /// Optional so a phone on an older mirror schema still decodes (the read-back beat simply
+  /// does not play, and the summary lands the way it always did).
+  var lifts: [WireSummaryLift]?
 }
 
 /// Equipment-native load setup (kg) — how to physically load the prescribed weight, so the athlete

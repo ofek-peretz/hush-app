@@ -19,7 +19,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { color, stage } from '@/design/tokens';
+import { color, stage, signal } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
@@ -211,13 +211,44 @@ describe('the icon set', () => {
   });
 });
 
-describe('primary buttons carry charcoal on ochre (WCAG)', () => {
-  it('the primary label is the charcoal on-accent ink, not paper', () => {
+/**
+ * THE OCHRE THAT CARRIES TEXT (founder 2026-07-12, reversing the charcoal-on-ochre pass).
+ *
+ * The founder's verdict on charcoal-on-ochre was blunt: "the black inside the brown, I liked it
+ * less — put back what was there." The accessibility problem that caused it was real, though:
+ * cream on the bright ochre is 2.6:1 and cannot be read in sun. So the FILL got darker instead
+ * of the ink getting heavier, and both constraints are satisfied at once.
+ *
+ * This test does not take that on faith. It computes the actual WCAG contrast ratio of whatever
+ * the button renders, so the law survives anybody's future colour tweak.
+ */
+function luminance(hex: string): number {
+  const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = ch.map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('the primary button: cream on a deep ochre, and it clears WCAG AA', () => {
+  it('renders cream ink on signal.fill — not charcoal, and not on the bright signal', () => {
     const r = mount(<Button variant="primary" size="lg" block label="Begin Push A" onPress={() => {}} />);
     const json = JSON.stringify(r.toJSON());
-    expect(json).toContain(color.onAccent); // charcoal, 7.0:1 on ochre
-    expect(json).not.toContain('#fbfaf8'); // never paper on ochre again (2.4:1, fails AA)
+    expect(json).toContain(signal.fill); // the deep ochre
+    expect(json).toContain(color.onAccent); // cream
+    expect(json).not.toContain(signal[0]); // the bright ochre never carries a letter
     expect(texts(r)).toContain('Begin Push A');
+  });
+
+  it('measures at least 4.5:1 — the law, not the swatch', () => {
+    expect(contrast(signal.fill, color.onAccent)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the bright ochre is still exactly why it could not carry text', () => {
+    // Kept as the reason this whole token split exists: signal[0] is beautiful and unreadable.
+    expect(contrast(signal[0], color.onAccent)).toBeLessThan(4.5);
   });
 });
 

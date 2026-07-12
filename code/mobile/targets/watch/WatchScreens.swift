@@ -39,10 +39,15 @@ enum Palette {
   static let ink0 = Color(red: 0.957, green: 0.953, blue: 0.941) // primary text
   static let ink1 = Color(red: 0.702, green: 0.694, blue: 0.678) // secondary
   static let ink2 = Color(red: 0.463, green: 0.455, blue: 0.443) // muted
-  static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent
-  // Charcoal-on-ochre (founder app law 2026-07-12, WCAG): the mark INSIDE an ochre button
-  // is the warm graphite, never white — a measuring-instrument read under gym light.
-  static let onAccent = Color(red: 0.098, green: 0.090, blue: 0.078)
+  static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent — lines, rings, dots
+  /// The ochre that CARRIES TEXT — a deeper cut of the same hue (#9c6522), in step with the
+  /// phone's `signal.fill`. Charcoal-on-ochre was tried and reverted (founder 2026-07-12: "the
+  /// black inside the brown, I liked it less"); darkening the FILL restores the cream-on-ochre
+  /// the founder wants AND clears WCAG AA (4.64:1), so nothing has to be traded away.
+  static let signalFill = Color(red: 0.612, green: 0.396, blue: 0.133)
+  static let signalFillPressed = Color(red: 0.541, green: 0.353, blue: 0.118)
+  /// Cream — the ink on `signalFill`. Never on `signal`, which carries no text.
+  static let onAccent = Color(red: 0.984, green: 0.980, blue: 0.973)
   static let up = Color(red: 0.349, green: 0.498, blue: 0.376) // sage (increase)
   static let upWash = Color(red: 0.890, green: 0.945, blue: 0.898)
   static let down = Color(red: 0.627, green: 0.376, blue: 0.298) // clay (decrease)
@@ -219,7 +224,7 @@ struct StageButton: View {
   }
   private var bg: Color {
     switch kind {
-    case .primary: return Palette.signal
+    case .primary: return Palette.signalFill // the only ochre a letter sits on
     case .onstage: return Palette.ink0
     case .quiet: return Palette.stage1
     case .danger: return Palette.down
@@ -307,10 +312,6 @@ private struct RestRing: View {
   /// The label under the time while counting (design: "REST" inter-set, "NEXT" on transition).
   var restingLabel: String = "REST"
 
-  /// The last DRAWN fraction (a plain box — written during render, read when the end moves;
-  /// deliberately not @State so per-frame writes never re-invalidate the view).
-  private final class DrawnFrac { var value: Double = 0 }
-  @State private var drawn = DrawnFrac()
   /// Active blend after the end moved: ease from `from` starting at `at`.
   @State private var blend: (from: Double, at: Date)? = nil
   private static let blendDuration: TimeInterval = 0.4
@@ -337,23 +338,32 @@ private struct RestRing: View {
       }
     }
     .frame(width: diameter, height: diameter)
-    .onChange(of: endsAt) { _, _ in
-      // The end moved (+15 / a new rest): ease from what is currently on screen.
-      blend = (from: drawn.value, at: Date())
+    .onChange(of: endsAt) { oldEndsAt, _ in
+      // THE +15 USED TO SNAP (founder 2026-07-12: "on the watch +15 s jumps straight up instead
+      // of filling like it does on the phone"). The blend was there; it was starting from the
+      // wrong place. It read the LAST DRAWN fraction — but SwiftUI evaluates the body with the
+      // new `endsAt` BEFORE `onChange` runs, so by the time this closure fired, "the last drawn
+      // fraction" was already the new, higher one. It was easing the ring from where it had just
+      // snapped to, to exactly the same value: a 0.4 s animation of nothing.
+      //
+      // The fix is to stop asking the render what it drew and compute the start from the OLD end
+      // directly. That is a fact, not a side effect, and it cannot be raced.
+      let now = Date()
+      let previousRemaining = max(0, WatchWire.parseDate(oldEndsAt).map { $0.timeIntervalSince(now) } ?? 0)
+      blend = (from: fraction(of: previousRemaining), at: now)
     }
   }
 
+  private func fraction(of remaining: TimeInterval) -> Double {
+    totalS > 0 ? min(1, max(0, remaining / Double(totalS))) : 0
+  }
+
   private func blended(_ liveFrac: Double, at now: Date) -> Double {
-    var frac = liveFrac
-    if let b = blend {
-      let t = now.timeIntervalSince(b.at) / Self.blendDuration
-      if t < 1 {
-        let e = t * t * (3 - 2 * t) // smoothstep
-        frac = b.from + (liveFrac - b.from) * e
-      }
-    }
-    drawn.value = frac
-    return frac
+    guard let b = blend else { return liveFrac }
+    let t = now.timeIntervalSince(b.at) / Self.blendDuration
+    guard t < 1 else { return liveFrac }
+    let e = t * t * (3 - 2 * t) // smoothstep
+    return b.from + (liveFrac - b.from) * e
   }
 }
 
@@ -634,15 +644,20 @@ struct StartScreen: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.top, 2)
-      Spacer(minLength: 10)
+      Spacer(minLength: 8)
+      // TWO BUTTONS, ONE PAIR (founder 2026-07-12: "shrink Begin's padding and balance it with
+      // Choose workout — right now Choose workout is completely swallowed"). Begin was 50pt and
+      // 18pt type against a 36pt / 14pt tile, which is not a hierarchy, it is one button and a
+      // rumour: on a 41mm case the chooser was pushed off the bottom of the screen entirely.
+      // Begin stays the primary — it is ochre and it is first — but it no longer eats the stage
+      // to say so, and both targets now fit, whole, on the smallest wrist we support.
       VStack(spacing: 6) {
         if !resting && !gated {
-          StageButton(title: WatchCopy.begin, kind: .primary, height: 50, fontSize: 18, action: onBegin)
+          StageButton(title: WatchCopy.begin, kind: .primary, height: 44, fontSize: 17, action: onBegin)
         }
         // Open training (run / walk) is never gated — it is recorded, never coached — so the
-        // chooser stays reachable even behind the paywall. A quiet raised tile, so it READS
-        // as a button at a glance (founder 2026-07-12) — the target was always full-width.
-        StageButton(title: WatchCopy.chooseWorkout, kind: .quiet, height: 36, fontSize: 14) { showList = true }
+        // chooser stays reachable even behind the paywall.
+        StageButton(title: WatchCopy.chooseWorkout, kind: .quiet, height: 40, fontSize: 15) { showList = true }
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 8)
@@ -1018,28 +1033,23 @@ struct InterRestScreen: View {
       TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: true)
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
       Spacer(minLength: 3)
-      // The same exercise (next set) — name kept tight; load + reps on one mono line; then the
-      // execution-grade setup line (how to load it).
-      VStack(spacing: 2) {
-        Text(mirror.exerciseName).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0)
+      // THE UP-NEXT LAW (founder 2026-07-12, phone and watch alike): between sets, the lift and
+      // the set number. NOTHING ELSE. The load and the reps were on the stage thirty seconds ago
+      // and will be again in thirty more; reprinting them here is noise beside the only number
+      // that matters during a rest, which is the one counting down inside the ring. The bar is
+      // already loaded — there is nothing to instruct.
+      VStack(spacing: 3) {
+        Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
           .lineLimit(1).minimumScaleFactor(0.75)
-        Text("\(mirror.setLabel) · \(targetText)")
+        Text(mirror.setLabel)
           .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.7)
-        if let line = setupLine(mirror.loadSetup) {
-          Text(line).font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal).lineLimit(1)
-        }
       }
       Spacer(minLength: 3)
       RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
     .stageFill()
-  }
-
-  private var targetText: String {
-    let w = mirror.targetWeight.map { "\(fmtW($0)) \(WatchCopy.kg)" } ?? WatchCopy.bodyweight
-    return "\(w) · × \(mirror.targetReps)"
   }
 }
 
@@ -1100,9 +1110,12 @@ struct TransitionRestScreen: View {
     .stageFill()
   }
 
+  /// The load, and only the load (founder 2026-07-12). This is the one rest where a number is an
+  /// INSTRUCTION — the athlete is about to walk to a station and build it — and the setup line
+  /// below says how much goes on each side. The reps are not part of that: you cannot load reps
+  /// onto a bar, and they will be on the stage the moment the athlete gets there.
   private var nextTargetText: String {
-    let w = mirror.nextTargetWeight.map { "\(fmtW($0)) \(WatchCopy.kg)" } ?? WatchCopy.bodyweight
-    return "\(w) · × \(mirror.nextTargetReps ?? 0)"
+    mirror.nextTargetWeight.map { "\(fmtW($0)) \(WatchCopy.kg)" } ?? WatchCopy.bodyweight
   }
 }
 
@@ -1111,6 +1124,20 @@ struct TransitionRestScreen: View {
 /// The run/walk stage, paged exactly like a lift (founder 2026-07-11): the main page carries
 /// ONLY the work (the clock + the live body metrics); swipe right for the controls (Pause /
 /// Finish & save). Same muscle memory as the strength screens and as Apple's own Workout app.
+/**
+ * Cardio on the wrist — ONE SCREEN (founder 2026-07-12).
+ *
+ * It used to be two: a "stage" page with a big clock and no controls, and a controls page one
+ * swipe away with the clock, the full readout, Pause and Finish. The founder's ruling: "get rid
+ * of the main screen and make the pause screen the main one — it's better."
+ *
+ * He is right, and the reason is that the split was borrowed from the STRENGTH flow, where it
+ * earns its keep: there, the stage carries a decision (the load, the reps, the set) and the
+ * controls are an interruption you have to go and find. A run carries no decision. The only
+ * things a runner ever wants are the numbers and the pause — and putting those on two different
+ * pages means the one control they might need in a hurry is the one they have to swipe for,
+ * mid-stride, in the rain. The second page bought nothing but a bigger clock.
+ */
 struct CardioPager: View {
   let gait: String
   let paused: Bool
@@ -1119,98 +1146,31 @@ struct CardioPager: View {
   let elapsed: () -> TimeInterval
   let onPauseToggle: () -> Void
   let onEnd: () -> Void
-  @State private var page = 1
 
   var body: some View {
-    TabView(selection: $page) {
-      CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
-                           onPage: page == 0, onPauseToggle: onPauseToggle, onEnd: onEnd).tag(0)
-      CardioScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed)
-        .environment(\.goControls, { withAnimation { page = 0 } })
-        .tag(1)
-    }
-    .tabViewStyle(.page(indexDisplayMode: .never))
+    CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
+                         onPauseToggle: onPauseToggle, onEnd: onEnd)
   }
 }
 
-/// Live wrist recording (the stage page): elapsed hero + HR / kcal / distance. No controls —
-/// they live one swipe away. The record persists to Health when the athlete finishes; the
-/// strength engine never sees it (the same "Open training" contract as the phone).
-struct CardioScreen: View {
-  let gait: String
-  let paused: Bool
-  @ObservedObject var metrics: LiveMetrics
-  let elapsed: () -> TimeInterval
-  @Environment(\.goControls) private var goControls
-
-  var body: some View {
-    VStack(spacing: 0) {
-      TopStrip()
-      HStack(spacing: 6) {
-        Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
-          .font(.system(size: 12)).foregroundStyle(paused ? Palette.ink2 : Palette.signal)
-        Legend(paused ? WatchCopy.pausedTitle : (gait == "run" ? WatchCopy.running : WatchCopy.walking), size: 10)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      Spacer(minLength: 4)
-      TimelineView(.periodic(from: .now, by: 1)) { _ in
-        VStack(spacing: 8) {
-          Text(fmtTime(elapsed()))
-            .font(.system(size: Fit.s(40), weight: .semibold, design: .monospaced)).monospacedDigit()
-            .foregroundStyle(paused ? Palette.ink2 : Palette.ink0).lineLimit(1).minimumScaleFactor(0.6)
-          // TWO columns, doubled up — the marks a runner actually reads at a stride
-          // (founder 2026-07-12: three small columns were unreadable mid-run). Kcal
-          // lives one swipe away on the controls page.
-          HStack(spacing: 8) {
-            Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––",
-                   label: WatchCopy.metricKm, valueSize: Fit.s(26))
-            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––",
-                   label: WatchCopy.metricHeart, valueSize: Fit.s(26))
-          }
-        }
-      }
-      Spacer(minLength: 6)
-      // The stage carries no big buttons — the ‹ ⏸ PAUSE affordance stands where they
-      // used to be: it names what the swipe reaches, and tapping it goes there too
-      // (founder 2026-07-12: "CONTROLS" was opaque and read as a dead label). It tells the
-      // TRUTH about the run's state: a paused recording offers the way back to Resume.
-      Button(action: goControls) {
-        HStack(spacing: 4) {
-          Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
-          Image(systemName: paused ? "play.fill" : "pause.fill").font(.system(size: 10, weight: .semibold))
-          Legend(paused ? WatchCopy.resume : WatchCopy.pause, size: 9)
-        }
-        .foregroundStyle(paused ? Palette.signal : Palette.ink2)
-        .frame(maxWidth: .infinity).frame(height: Fit.s(22))
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-    }
-    .padding(.horizontal, 10).padding(.bottom, 8)
-    .stageFill()
-  }
-}
-
-/// The cardio controls page (swipe right): Pause / Resume + Finish & save, plus the clock so
-/// the athlete never loses it while deciding.
+/// The cardio screen: the clock, the readout, Pause / Resume and a guarded Finish.
 private struct CardioControlsScreen: View {
   let gait: String
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
   let elapsed: () -> TimeInterval
-  /// See ControlsScreen.onPage — an armed guard disarms when the athlete swipes away.
-  var onPage: Bool = true
   let onPauseToggle: () -> Void
   let onEnd: () -> Void
   @State private var confirmingEnd = false
 
   var body: some View {
     if confirmingEnd {
+      // (No swipe-away disarm needed any more — cardio is a single screen, so the only way off
+      // this guard is to answer it.)
       EndConfirmScreen(
         title: WatchCopy.finishConfirmTitle, confirmTitle: WatchCopy.finishSave,
         onConfirm: onEnd, onKeep: { confirmingEnd = false }
       )
-      .onChange(of: onPage) { _, on in if !on { confirmingEnd = false } }
     } else {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip()
@@ -1235,10 +1195,12 @@ private struct CardioControlsScreen: View {
           }
         }
         Spacer(minLength: 6)
+        // The same pair, in the same balance, as the lobby's Begin / Choose workout — one
+        // button language across the whole watch (founder 2026-07-12).
         VStack(spacing: 6) {
-          StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: .primary, height: 46, fontSize: 16, action: onPauseToggle)
+          StageButton(title: paused ? WatchCopy.resume : WatchCopy.pause, kind: .primary, height: 44, fontSize: 17, action: onPauseToggle)
           // Finish only ARMS the guard (founder 2026-07-12) — the save happens behind it.
-          StageButton(title: WatchCopy.finishSave, kind: .quiet, height: 34, fontSize: 13) { confirmingEnd = true }
+          StageButton(title: WatchCopy.finishSave, kind: .quiet, height: 40, fontSize: 15) { confirmingEnd = true }
         }
       }
       .padding(.horizontal, 10).padding(.bottom, 6)
@@ -1280,6 +1242,21 @@ struct CardioCompleteScreen: View {
 
 // MARK: 06 · Complete
 
+/**
+ * The wrist's closing beat, in two acts (founder 2026-07-12: "at the end of a workout on the
+ * watch I want the animation the phone has — going lift by lift and marking a check on what
+ * was done and what wasn't").
+ *
+ * ACT ONE — THE READ-BACK. The workout is walked lift by lift, a check landing on each one the
+ * athlete finished, a dash on each one they did not. It is the same beat the phone plays, and it
+ * is the whole reason the closing screen feels earned rather than administrative: it is the
+ * machine showing its work. On a workout ended early it is also the honest ledger — this is what
+ * you trained, and this is what you left.
+ *
+ * ACT TWO — the summary that was always here (time · kcal · lifts raised) and the way out.
+ *
+ * Tapping skips straight to act two: a beat you cannot skip is a beat that becomes an obstacle.
+ */
 struct CompleteScreen: View {
   let mirror: WireMirror
   /// Active calories for the finished workout, snapshotted from the OS runtime as the complete
@@ -1287,7 +1264,77 @@ struct CompleteScreen: View {
   /// 2026-07-11: the set COUNT is not interesting at the close — the energy spent is.
   let kcal: Int?
   let onDone: () -> Void
+
+  private var lifts: [WireSummaryLift] { mirror.summary?.lifts ?? [] }
+  @State private var read = 0
+  @State private var reading = true
+
   var body: some View {
+    if reading && !lifts.isEmpty {
+      readBack
+    } else {
+      result
+    }
+  }
+
+  private var readBack: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      Legend(WatchCopy.reading, size: 10).padding(.top, 2)
+      Spacer(minLength: 4)
+      VStack(alignment: .leading, spacing: 5) {
+        ForEach(Array(lifts.enumerated()), id: \.offset) { i, lift in
+          HStack(spacing: 7) {
+            Group {
+              if i < read {
+                if lift.done {
+                  DrawCheck(size: 12)
+                } else {
+                  // Not a failure — a fact. A lift the athlete did not reach reads as a quiet
+                  // dash, never a red cross.
+                  Rectangle().fill(Palette.ink2).frame(width: 9, height: 1.5)
+                }
+              } else {
+                Circle().fill(Palette.stage2).frame(width: 5, height: 5)
+              }
+            }
+            .frame(width: 14)
+            Text(lift.name)
+              .font(.system(size: 13))
+              .foregroundStyle(i < read ? Palette.ink0 : Palette.ink2)
+              .lineLimit(1).minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+          }
+          .opacity(i < read ? 1 : 0.45)
+          .animation(.easeOut(duration: 0.22), value: read)
+        }
+      }
+      Spacer(minLength: 4)
+    }
+    .padding(.horizontal, 12).padding(.bottom, 8)
+    .contentShape(Rectangle())
+    .onTapGesture { finishReading() }
+    .task {
+      // One tick per lift, then a beat to let the last check land before the result.
+      for i in 1...max(1, lifts.count) {
+        try? await Task.sleep(nanoseconds: 260_000_000)
+        if !reading { return }
+        read = i
+        // A tap per lift — the machine chewing through the evidence, felt with the wrist down
+        // (phone parity: the same tick lands under each check as it appears).
+        WatchHaptics.play(.restApproach)
+      }
+      try? await Task.sleep(nanoseconds: 600_000_000)
+      if reading { withAnimation { reading = false } }
+    }
+  }
+
+  private func finishReading() {
+    read = lifts.count
+    withAnimation { reading = false }
+  }
+
+  private var result: some View {
     VStack(alignment: .leading, spacing: 0) {
       TopStrip()
       Spacer(minLength: 4)

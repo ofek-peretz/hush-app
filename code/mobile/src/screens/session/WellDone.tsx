@@ -46,6 +46,21 @@ type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
 
 const vol = (s: SetLog) => (s.actualWeight ?? 0) * s.actualReps;
 
+/** The beats of this screen, in the only order they may be walked. */
+export type WellDonePhase = 'saved' | 'result' | 'milestone';
+
+/**
+ * The saved beat's auto-advance, as a RULE rather than a wish.
+ *
+ * A timer that fires 3.4 s after mount knows nothing about where the athlete has got to in the
+ * meantime, so it must never assert a phase — only carry the one it was scheduled for forward.
+ * Anything past the saved beat is the athlete's own progress and is left exactly as it is.
+ * (Founder 2026-07-12: the milestone stamp was being erased by this timer. See the call site.)
+ */
+export function advanceFromSaved(current: WellDonePhase): WellDonePhase {
+  return current === 'saved' ? 'result' : current;
+}
+
 interface Lift {
   exerciseId: string;
   name: string;
@@ -129,14 +144,23 @@ export function WellDone({ navigation, route }: Props) {
     };
   }, [session]);
 
-  // Beat 2 → 3: advance to the result on a fixed ceiling, INDEPENDENT of whether
-  // the session loads — so a storage failure can never trap the athlete on the
-  // (button-less) "saved" beat after a workout. The result beat reads `session`
-  // reactively, so it fills in if the data arrives late (or stays a graceful
-  // fallback if it never does).
+  // Beat 2 → 3: advance to the result on a fixed ceiling, INDEPENDENT of whether the session
+  // loads — so a storage failure can never trap the athlete on the (button-less) "saved" beat
+  // after a workout. The result beat reads `session` reactively, so it fills in if the data
+  // arrives late (or stays a graceful fallback if it never does).
+  //
+  // IT ONLY EVER ADVANCES (founder 2026-07-12 — "when several milestones land at once the
+  // screen shows none of them and pops out"). This timer used to call setPhase('result') flat,
+  // with no idea what phase it was in by the time it fired. An athlete who tapped through the
+  // saved beat and pressed Done within 3.4 s — which is what anyone does when they are eager to
+  // see what they just earned — would land on the milestone stamp, and then this stale timer
+  // would fire and THROW THEM BACK to the result. Because the stamp holds a beat of black before
+  // the emblem lands, the whole mark could come and go without ever being seen. Nothing to do
+  // with how MANY milestones landed; everything to do with how fast the athlete moved. A phase
+  // is a one-way street now: this can carry the saved beat forward and cannot touch anything else.
   useEffect(() => {
     if (reduced) return; // reduced-motion starts on 'result' already
-    const t = setTimeout(() => setPhase('result'), 3400);
+    const t = setTimeout(() => setPhase((p) => advanceFromSaved(p)), 3400);
     return () => clearTimeout(t);
   }, [reduced]);
 
