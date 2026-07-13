@@ -137,6 +137,30 @@ function reducer(s: InternalState, a: Action): InternalState {
  * performed / learned number must be the new lift's prescription, never the old lift's load
  * on different equipment. Falls back to carrying reps at the old target when absent. Pure.
  */
+/**
+ * The rest anchor after a pause is lifted: pushed forward by exactly the time the workout stood
+ * still, so the rest resumes where it was — on EVERY surface.
+ *
+ * The mirror derives the rest's end from this anchor, so if it does not move, the rest keeps
+ * burning through a pause for everyone except the phone screen (which freezes its own countdown
+ * locally). Pause for five minutes mid-rest and the wrist would say READY — and buzz GO — while
+ * the phone still showed 45 seconds. Pure, so the rule is a tested fact rather than a line inside
+ * a store method.
+ */
+export function unfrozenRestAnchor(
+  restStartedAtMs: number | null,
+  pausedAtMs: number | null,
+  nowMs: number,
+): number | null {
+  if (restStartedAtMs == null || pausedAtMs == null) return restStartedAtMs;
+  return restStartedAtMs + Math.max(0, nowMs - pausedAtMs);
+}
+
+/** Has this exact step already been logged? One set, one log — whichever surface asked (see completeSet). */
+export function hasLoggedStep(sets: readonly SetLog[], exerciseId: string, exerciseSetIndex: number): boolean {
+  return sets.some((s) => s.exerciseId === exerciseId && s.setIndex === exerciseSetIndex);
+}
+
 export function retargetPlanForSwap(
   plan: Step[],
   targets: SetTarget[],
@@ -432,6 +456,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // success timer) so they see a PAUSE that landed AFTER they were scheduled.
   const machineRef = useRef<SessionMachine>(state.machine);
   machineRef.current = state.machine;
+  /** A set write is in flight (see completeSet) — the phone and the wrist can both ask at once. */
+  const completingRef = useRef(false);
   // Temporal telemetry: when the current rest/pause began (ms epoch).
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
@@ -845,6 +871,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // scheduled. A paused session never logs a set — the workout is frozen
         // (§7.2). The set logs on Resume → Complete Set, not behind the overlay.
         if (machineRef.current.phase === 'PAUSED') return { ended: false, unlockedPortrait: false };
+        /**
+         * ONE SET, ONE LOG — WHICHEVER WRIST OR THUMB ASKED FOR IT.
+         *
+         * There are two mouths on this function now, and they can both be open at once. The phone
+         * holds a 1.4 s "Set logged" beat before it calls in; the mirror still says `active_set`
+         * for all of it, so a tap on the WATCH during that beat is a perfectly valid intent with a
+         * matching index — the bridge accepts it, the phone logs the set, and then the beat's own
+         * timer fires and logs it AGAIN. Two identical SetLogs: doubled tonnage, a doubled set in
+         * the engine's history, and a duplicated key in the crash-resume map, which keys logged
+         * sets by (exercise, set) and would now skip a set the athlete never did.
+         *
+         * So the write is made idempotent at the one place both callers pass through: an in-flight
+         * latch for the concurrent case (the two calls overlap), and the athlete's own log for the
+         * sequential one (the second call arrives after the first has landed). Neither caller has
+         * to know the other exists.
+         */
+        if (completingRef.current) return { ended: false, unlockedPortrait: false };
+        if (hasLoggedStep(session.sets, current.exerciseId, current.exerciseSetIndex)) {
+          return { ended: false, unlockedPortrait: false };
+        }
+        completingRef.current = true;
+        try {
         const setLog: SetLog = {
           exerciseId: current.exerciseId,
           setIndex: current.exerciseSetIndex,
@@ -897,6 +945,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           return finalize(false);
         }
         return { ended: false, unlockedPortrait: false };
+        } finally {
+          completingRef.current = false;
+        }
       },
 
       endRest() {
@@ -928,7 +979,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       resume() {
         if (pauseStartedAtRef.current != null) {
-          void track('resume', { sessionId: sessionRef.current?.id, pausedMs: Date.now() - pauseStartedAtRef.current });
+          const pausedMs = Math.max(0, Date.now() - pauseStartedAtRef.current);
+          /**
+           * THE REST DOES NOT RUN WHILE THE WORKOUT IS FROZEN — ON EVERY SURFACE.
+           *
+           * A paused workout is frozen (§7.2), and the phone's own Rest screen honours that: it
+           * holds its countdown at the pause instant and re-anchors from the frozen remaining when
+           * the athlete comes back. But the MIRROR does not read that screen — it derives the rest
+           * end from `restStartedAtMs`, and nobody was moving it. So the rest kept burning through
+           * the pause for everyone ELSE: pause for five minutes mid-rest and the wrist (and the
+           * Live Activity) would say READY while the phone still showed 45 seconds — and worse, the
+           * watch's own GO haptic would fire against a rest the phone had not finished. Two clocks,
+           * one workout.
+           *
+           * Push the anchor forward by exactly the time the workout stood still. The rest resumes
+           * where it was, and the phone, the wrist and the Lock Screen agree to the second.
+           */
+          restStartedAtRef.current = unfrozenRestAnchor(
+            restStartedAtRef.current,
+            pauseStartedAtRef.current,
+            Date.now(),
+          );
+          void track('resume', { sessionId: sessionRef.current?.id, pausedMs });
           pauseStartedAtRef.current = null;
         }
         dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'RESUME' }) });

@@ -104,6 +104,14 @@ export function SessionFlow({ navigation }: Props) {
     originalWeightRef.current = session.currentTarget?.recommendedWeight ?? null;
   }
 
+  // The set moved on — so the edit closes. The phone's own Complete Set already does this, but a
+  // set completed on the WATCH advances the machine without this screen ever hearing about it: the
+  // wheels would stay open and quietly start editing the NEXT set, which the athlete has not even
+  // seen yet. An editor belongs to the set it was opened on and to nothing else.
+  useEffect(() => {
+    setEditing(false);
+  }, [curIdx]);
+
   // First Start ever: a confident start haptic, and the one-time "we're learning your gym" note
   // (shown AFTER Start, never in onboarding, never twice). Mount-only.
   useEffect(() => {
@@ -138,9 +146,25 @@ export function SessionFlow({ navigation }: Props) {
     goWellDone(r);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.endResult]);
+  /**
+   * PAUSE IS A STATE OF THE WORKOUT, NOT A STATE OF THIS SCREEN.
+   *
+   * It was the latter, and the wrist made that a lie in both directions. Pause on the WATCH and the
+   * phone kept showing a live stage over a frozen workout — the rest ring stopped, and nothing said
+   * why. Resume on the WATCH while the phone had its Pause sheet up, and the sheet STAYED, a modal
+   * over a workout that was already running again, with a Resume button that did nothing (the
+   * machine was no longer paused) — the athlete's way back was to press a button that had no
+   * effect. So the sheet follows the session now, whoever paused it, and it lets go the moment the
+   * session is live again. The end-confirm sheet is the one exception: it is itself a paused-state
+   * sheet, and it stays until the athlete answers it (or the wrist resumes, which closes it too).
+   */
+  useEffect(() => {
+    if (session.paused) setOverlay((o) => (o === 'endConfirm' ? o : 'pause'));
+    else setOverlay((o) => (o === 'pause' || o === 'endConfirm' ? 'none' : o));
+  }, [session.paused]);
+
   function openPause() {
-    session.pause();
-    setOverlay('pause');
+    session.pause(); // the effect above raises the sheet — one path, phone or wrist
   }
   function resume() {
     session.resume();
