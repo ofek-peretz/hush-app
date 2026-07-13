@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  metaMono: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
+  metaMono: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   // a sentence, in the speaking voice (never the measuring one)
   restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
 

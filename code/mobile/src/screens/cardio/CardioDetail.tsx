@@ -12,7 +12,7 @@ import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { fmtPace } from '@/platform/cardio/cardioTracker';
-import { fmtMinutes } from '@/domain/duration';
+import { durationMinutes } from '@/domain/duration';
 import { RouteTrace, MIN_ROUTE_POINTS } from '@/components/RouteTrace';
 import { textEnd } from '@/i18n/bidi';
 import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
@@ -76,7 +76,7 @@ export function CardioDetail({ navigation, route }: Props) {
         {/* core metrics */}
         <View style={styles.metrics}>
           {/* a recorded duration is minutes, never a clock (domain/duration) */}
-          <Stat value={fmtMinutes(a.durationSec, t('common.minShort'))} label={t('cardio.duration')} />
+          <Stat value={durationMinutes(a.durationSec)} unit={t('common.minShort')} label={t('cardio.duration')} />
           <Stat value={fmtPace(a.avgPaceSec)} unit={t('cardio.perKm')} label={t('cardio.avgPace')} />
           {a.avgHr ? <Stat value={a.avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} /> : null}
           {a.calories ? <Stat value={a.calories} unit={t('cardio.kcal')} label={t('cardio.calories')} /> : null}
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 12 },
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono digit tops.
   heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: color.textPrimary, textAlign: 'left' },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: color.textMuted, marginStart: 6, marginBottom: 8, textAlign: 'left' },
+  heroUnit: { fontFamily: font.sansMedium, fontSize: textScale.xl, color: color.textMuted, marginStart: 6, marginBottom: 8, textAlign: 'left' },
 
   metrics: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 18, marginTop: 24, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
   stat: { width: '50%', gap: 4 },

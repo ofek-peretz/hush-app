@@ -42,7 +42,7 @@ import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import type { CardioActivity, CardioGait, CardioGoalKind, CardioPoint } from '@/data/local/models';
-import { fmtMinutes } from '@/domain/duration';
+import { durationMinutes } from '@/domain/duration';
 import * as haptics from '@/platform/haptics';
 import { textEnd } from '@/i18n/bidi';
 import { color, space, font, textScale, radius, stage as stageC, signal, up, tracking, trackingPx } from '@/design/tokens';
@@ -186,7 +186,10 @@ export function Cardio({ navigation }: Props) {
             <Text style={styles.startingLegend}>
               {(gait === 'run' ? t('cardio.run') : t('cardio.walk')).toUpperCase()} · {t('cardio.starting').toUpperCase()}
             </Text>
-            <Text style={[styles.countNum, count <= 0 && { color: signal[0] }]}>
+            {/* 3 · 2 · 1 are FIGURES (mono, tabular — they must not jitter as they count down);
+                "GO" is a WORD, and the word is what the mono font cannot even draw in Hebrew.
+                Same size, same weight, the voice that each one belongs to. */}
+            <Text style={[styles.countNum, count <= 0 && styles.countGo]}>
               {count <= 0 ? t('cardio.go') : count}
             </Text>
           </View>
@@ -553,7 +556,7 @@ function CardioComplete(props: {
 
           <View style={styles.completeMetrics}>
             {/* a recorded duration is minutes, not a clock (domain/duration) */}
-            <CompleteMetric value={fmtMinutes(elapsedSec, t('common.minShort'))} label={t('cardio.duration')} />
+            <CompleteMetric value={durationMinutes(elapsedSec)} unit={t('common.minShort')} label={t('cardio.duration')} />
             <CompleteMetric value={fmtPace(avgPace)} unit={t('cardio.perKm')} label={t('cardio.avgPace')} />
             {avgHr != null ? <CompleteMetric value={avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} /> : null}
           </View>
@@ -648,6 +651,8 @@ const styles = StyleSheet.create({
   // Read at arm's length, one second before the athlete starts moving.
   startingLegend: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.legend), color: stageC.ink1, marginBottom: 28, textAlign: 'left' },
   countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0, textAlign: 'left' },
+  // The word at the end of the count — sans (it is a word), ochre (it is the moment).
+  countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: signal[0] },
 
   // active hero
   activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
@@ -656,15 +661,15 @@ const styles = StyleSheet.create({
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono
   // digit tops — the 0.95 the web design tolerates is unsafe here (see SessionFlow `hero`).
   heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0, textAlign: 'left' },
-  heroUnit: { fontFamily: font.monoMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8, textAlign: 'left' },
+  heroUnit: { fontFamily: font.sansMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8, textAlign: 'left' },
 
   paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
   gpsSlot: { height: 28, justifyContent: 'flex-end' },
-  gpsStatus: { fontFamily: font.mono, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
+  gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
   paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2, textAlign: 'left' },
   paceValRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0, textAlign: 'left' },
-  paceUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
+  paceUnit: { fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
 
   dotsRow: { flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', marginTop: 26, minHeight: 7, flexWrap: 'wrap', maxWidth: 280 },
   dot: { height: 7, borderRadius: 4 },
@@ -699,7 +704,7 @@ const styles = StyleSheet.create({
   pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
   pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0, textAlign: 'left' },
   pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },
-  pauseStat: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
+  pauseStat: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
   pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
 
   // the end-confirm sheet (paper — it is a decision, not part of the stage)

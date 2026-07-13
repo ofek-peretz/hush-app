@@ -985,7 +985,9 @@ function Rest({
               </View>
               {isTransition ? (
                 <View style={styles.upRight}>
-                  <Text style={styles.upWeight}>
+                  {/* A load is a FIGURE (mono); "bodyweight" is a WORD, and it takes the word's voice
+                      — the mono face has no Hebrew letters to draw it with at all. */}
+                  <Text style={[styles.upWeight, nextWeight == null && styles.upWeightWord]}>
                     {nextWeight != null ? nextWeight : t('workout.bodyweight')}
                     {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
                   </Text>
@@ -1174,10 +1176,10 @@ const styles = StyleSheet.create({
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
   instrCol: { alignItems: 'flex-start' },
   instrVerb: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: signal[0], marginBottom: 2, textAlign: 'left' },
-  instrFigure: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: stage.ink0, textAlign: 'left' },
+  instrFigure: { fontFamily: font.sansSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: stage.ink0, textAlign: 'left' },
   instrVerbSolo: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: stage.ink0, textAlign: 'left' },
   instrDone: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
-  instrDoneText: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
+  instrDoneText: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   // Why / Δ — demoted below the instruction; quiet and optional, never competing with it.
   // minHeight keeps the quiet look while giving the tap a full 44pt target.
   whyDeltaRow: { marginTop: 12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
@@ -1190,7 +1192,7 @@ const styles = StyleSheet.create({
   // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
   // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, textAlign: 'left' },
-  heroUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, marginStart: 6, marginBottom: 12, textAlign: 'left' },
+  heroUnit: { fontFamily: font.sans, fontSize: textScale.lg, color: stage.ink2, marginStart: 6, marginBottom: 12, textAlign: 'left' },
   // The whisper under a bodyweight hero — a quiet fact, never a headline (founder 2026-07-11).
   bodyweightQuiet: {
     fontFamily: font.sansMedium,
@@ -1216,7 +1218,7 @@ const styles = StyleSheet.create({
   dotDone: { backgroundColor: up[0] },
   dotActive: { backgroundColor: signal[0] },
   dotRest: { backgroundColor: stage[2] },
-  setLabel: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
+  setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
 
   // Ghost actions
   ghostRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
@@ -1241,9 +1243,12 @@ const styles = StyleSheet.create({
   upInfo: { flex: 1, minWidth: 0 },
   upGroup: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
   upName: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: stage.ink0, marginTop: 3, textAlign: 'left' },
-  upMeta: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, marginTop: 2, textAlign: 'left' },
+  upMeta: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 2, textAlign: 'left' },
   upRight: { alignItems: 'flex-end', marginStart: 12 },
   upWeight: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
+  // Same slot, the other voice: the word "bodyweight" where a figure would be (and a size down —
+  // a word needs the room a two-digit number does not).
+  upWeightWord: { fontFamily: font.sansSemibold, fontSize: textScale.md },
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   upDelta: { marginTop: 4 },
   upSetup: { marginTop: 12, alignItems: 'center' },

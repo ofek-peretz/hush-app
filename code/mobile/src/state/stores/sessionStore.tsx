@@ -913,6 +913,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       extendRest(seconds: number) {
         if (restStartedAtRef.current == null) return; // only while resting
+        // Defence in depth (the watch protocol already sieves this): a non-finite or non-positive
+        // extension would poison the rest anchor — and a NaN end instant is the one value that can
+        // make the mirror's ISO conversion throw, inside the publish effect, mid-workout.
+        if (!Number.isFinite(seconds) || seconds <= 0) return;
         restExtraSecondsRef.current += seconds;
         void track('rest_extended', { sessionId: sessionRef.current?.id, seconds });
         setRestNonce((n) => n + 1); // re-run the mirror effect → republish the longer rest

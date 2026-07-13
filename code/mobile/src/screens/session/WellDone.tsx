@@ -35,7 +35,7 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { strengthSessionKcal } from '@/domain/energy';
-import { fmtMinutesFromMs } from '@/domain/duration';
+import { durationMinutes } from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import type { Session, SetLog } from '@/data/local/models';
@@ -360,7 +360,12 @@ export function WellDone({ navigation, route }: Props) {
                         {done ? <Icon name="check" size={11} color={stage[0]} strokeWidth={2.6} /> : null}
                       </View>
                       <Text style={styles.readName} numberOfLines={1}>{l.name}</Text>
-                      <Text style={styles.readBest}>{setLabel(l.best)}</Text>
+                      {/* A column of loads is a column of FIGURES — it stays mono and tabular so
+                          the numbers line up down the list. A bodyweight lift has no figure to
+                          align; it has a word, and the word takes the sans voice. */}
+                      <Text style={[styles.readBest, l.best.actualWeight == null && styles.readBestWord]}>
+                        {setLabel(l.best)}
+                      </Text>
                     </View>
                   );
                 })}
@@ -402,7 +407,9 @@ export function WellDone({ navigation, route }: Props) {
               <Text style={styles.topLegend}>{t('complete.topSet').toUpperCase()}</Text>
               <View style={styles.topRow}>
                 <Text style={styles.topName} numberOfLines={1}>{exerciseDisplayName(topSet.exerciseId)}</Text>
-                <Text style={styles.topValue}>
+                {/* The load is a figure; "bodyweight" is a word — and the mono face cannot draw a
+                    Hebrew word at all. Each takes the voice it belongs to. */}
+                <Text style={[styles.topValue, topSet.actualWeight == null && styles.topValueWord]}>
                   {displayWeight(topSet.actualWeight, units) ?? t('workout.bodyweight')}
                   {topSet.actualWeight != null ? <Text style={styles.topUnit}> {unitLabel(units)}</Text> : null}
                   <Text style={styles.topTimes}> × </Text>
@@ -414,7 +421,7 @@ export function WellDone({ navigation, route }: Props) {
 
           <View style={styles.stats}>
             <View style={styles.stat}>
-              <Metric onStage value={fmtMinutesFromMs(durationMs, t('common.minShort'))} label={t('complete.duration')} size="md" />
+              <Metric onStage value={durationMinutes(durationMs / 1000)} unit={t('common.minShort')} label={t('complete.duration')} size="md" />
             </View>
             {kcal != null ? (
               <View style={styles.stat}>
@@ -472,6 +479,7 @@ const styles = StyleSheet.create({
   readCheckDone: { backgroundColor: up[0], borderColor: up[0] },
   readName: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, textAlign: 'left' },
   readBest: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
+  readBestWord: { fontFamily: font.sans },
   // The hint itself is a target too — the whole body Pressable skips, but the label
   // must honor its own promise (44pt).
   tapSkipHit: { minHeight: 44, justifyContent: 'center', paddingBottom: 10 },
@@ -487,6 +495,7 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   topName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), color: stage.ink0, textAlign: 'left' },
   topValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
+  topValueWord: { fontFamily: font.sansSemibold, fontSize: textScale.md },
   topUnit: { fontFamily: font.mono, fontSize: 12, color: stage.ink2, textAlign: 'left' },
   topTimes: { color: stage.ink2 },
 
@@ -502,7 +511,7 @@ const styles = StyleSheet.create({
   milestoneEmblem: { marginTop: 36, marginBottom: 36 },
   milestoneTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: Math.round(textScale['2xl'] * 1.08), color: stage.ink0, textAlign: 'center' },
   milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', marginTop: 10, maxWidth: 300 },
-  milestoneDate: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, marginTop: 18, textAlign: 'left' },
+  milestoneDate: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, marginTop: 18, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: stage[2] },
   ghost: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },

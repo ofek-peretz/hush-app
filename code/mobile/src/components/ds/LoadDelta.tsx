@@ -34,7 +34,12 @@ export function LoadDelta({ value = 0, unit = 'kg', direction, pill, size = 'md'
   return (
     <View style={[styles.row, pill && [styles.pill, { backgroundColor: pillBg }], style]}>
       <Glyph dir={dir} tint={tint} />
-      {showValue ? <Text style={[styles.text, { fontSize: FONT[size], color: tint }]}>{label}</Text> : null}
+      {/* "+2.5 kg" is a FIGURE and holds the mono voice; the hold state is a WORD, and a word goes
+          in the voice that can actually draw it — the mono face carries no Hebrew at all, so
+          "ללא שינוי" was silently falling out to whatever font the OS could find. */}
+      {showValue ? (
+        <Text style={[styles.text, dir === 'hold' && styles.word, { fontSize: FONT[size], color: tint }]}>{label}</Text>
+      ) : null}
     </View>
   );
 }
@@ -57,6 +62,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pill: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 4 },
   text: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], textAlign: 'left' },
+  word: { fontFamily: font.sansMedium },
   tri: { width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   hold: { width: 7, height: 2, borderRadius: 1 },
 });

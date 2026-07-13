@@ -313,8 +313,48 @@ function isLobbyIntent(t: WatchIntentType): boolean {
   return t === 'select_workout' || t === 'start_workout';
 }
 
+/* --- The numbers the watch reports are NOT trusted (hardened 2026-07-13) --------------------
+ *
+ * This function used to check the three routing fields and then CAST the rest of the payload
+ * straight through — so every number on the wire arrived unexamined at the phone's session
+ * machine, which is the exact opposite of what this file promises ("the phone's truth wins").
+ * Two of those numbers are load-bearing:
+ *
+ *   `actualReps` / `actualWeight` are written verbatim into the athlete's set log and folded by
+ *   the engine. A corrupt frame could have logged −5 reps at 1e9 kg, permanently, and the engine
+ *   would have progressed the next session off it.
+ *
+ *   `seconds` (+15) is ADDED to the rest length. A NaN there makes the rest end `NaN`, and the
+ *   mirror's `new Date(NaN).toISOString()` THROWS — inside the store's publish effect, mid-set,
+ *   on a phone lying on the gym floor. A projection documented as total would have crashed the
+ *   workout because the wire said "seconds": "soon".
+ *
+ * So: a field that is ABSENT stays absent (the meaning of "unadjusted" is untouched), and a field
+ * that is PRESENT but not a sane number makes the whole intent malformed — the frame is corrupt,
+ * and a corrupt frame must be dropped, never half-believed.
+ */
+const MAX_STEPS = 10_000; // an absurd session is still a bounded one
+const MAX_REPS = 200;
+const MAX_WEIGHT_KG = 1_000;
+const MAX_ADD_REST_S = 600;
+
+/** Present-and-valid → the value. Absent → undefined. Present-and-invalid → `null` (malformed). */
+function num(o: Record<string, unknown>, key: string, lo: number, hi: number, integer: boolean): number | undefined | null {
+  const v = o[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) return null;
+  if (integer && !Number.isInteger(v)) return null;
+  return v;
+}
+
+function str(o: Record<string, unknown>, key: string): string | undefined | null {
+  const v = o[key];
+  if (v === undefined) return undefined;
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
 /** Parse a wire-form intent defensively. Returns null on anything that is not a
- *  readable intent of a known type. */
+ *  readable intent of a known type — INCLUDING a known type carrying a nonsense number. */
 export function parseWatchIntent(raw: unknown): WatchIntent | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -322,7 +362,42 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
     return null;
   }
   if (!INTENT_TYPES.includes(o.type as WatchIntentType)) return null;
-  return o as unknown as WatchIntent;
+
+  const expectedGlobalIndex = num(o, 'expectedGlobalIndex', 0, MAX_STEPS, true);
+  const actualReps = num(o, 'actualReps', 0, MAX_REPS, true);
+  const seconds = num(o, 'seconds', 1, MAX_ADD_REST_S, true);
+  const workoutId = str(o, 'workoutId');
+  const exerciseId = str(o, 'exerciseId');
+  // `actualWeight: null` is MEANINGFUL — it is bodyweight, and it must survive the sieve.
+  const rawWeight = o.actualWeight;
+  const actualWeight =
+    rawWeight === undefined || rawWeight === null
+      ? (rawWeight as null | undefined)
+      : num(o, 'actualWeight', 0, MAX_WEIGHT_KG, false);
+
+  if (
+    expectedGlobalIndex === null ||
+    actualReps === null ||
+    (actualWeight === null && rawWeight !== null) || // null is bodyweight; null FROM `num` is junk
+    seconds === null ||
+    workoutId === null ||
+    exerciseId === null
+  ) {
+    return null;
+  }
+
+  return {
+    v: typeof o.v === 'number' ? o.v : -1, // a non-numeric version fails the version gate below
+    type: o.type as WatchIntentType,
+    intentId: o.intentId,
+    issuedAt: o.issuedAt,
+    expectedGlobalIndex,
+    actualReps,
+    actualWeight: rawWeight === undefined ? undefined : (actualWeight as number | null),
+    workoutId,
+    exerciseId,
+    seconds,
+  };
 }
 
 function intentToAction(intent: WatchIntent): WatchPhoneAction | null {

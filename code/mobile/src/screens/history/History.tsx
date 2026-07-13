@@ -245,5 +245,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  vol: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  vol: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
 });

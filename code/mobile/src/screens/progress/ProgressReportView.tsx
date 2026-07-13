@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   liftBest: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   liftBestUnit: { fontFamily: font.mono, fontSize: textScale['2xs'], color: color.textMuted, textAlign: 'left' },
   liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
-  footText: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary, textAlign: 'left' },
+  footText: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary, textAlign: 'left' },
   footNow: { color: color.up },
   backOff: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9 },
   backOffText: { flex: 1, fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 17, color: color.textMuted, textAlign: 'left' },
@@ -256,5 +256,5 @@ const styles = StyleSheet.create({
   emblemCell: { width: '33.33%', alignItems: 'center', paddingHorizontal: 6, marginBottom: 22 },
   emblemTitle: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], color: color.textPrimary, textAlign: 'center', marginTop: 10, lineHeight: textScale['2xs'] * 1.35 },
   emblemLocked: { color: color.textMuted },
-  emblemFoot: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary, marginTop: 3, textAlign: 'left' },
+  emblemFoot: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary, marginTop: 3, textAlign: 'left' },
 });

@@ -187,7 +187,16 @@ export const color = {
  * TYPOGRAPHY — two voices.
  * ==========================================================================*/
 
-/** Font families (loaded via expo-font in app entry; see fonts task). */
+/**
+ * Font families (loaded via expo-font in app entry).
+ *
+ * THE MONO VOICE CARRIES FIGURES, NEVER WORDS — and in Hebrew that is not a matter of taste:
+ * **JetBrains Mono contains no Hebrew glyphs at all.** Every mono string that carried a translated
+ * word ("סט 1 מתוך 4", "משקל גוף", "9.5 בכל צד", "קק״ל", a milestone's date) fell back to whatever
+ * face the OS could find, mid-line, in an app whose whole claim is that it is precisely made.
+ * Digits, ×, :, /, kg, lb are what mono is for. Anything a translator touches is Hanken.
+ * Enforced by `__tests__/laws/monoCarriesNoWords.test.ts`.
+ */
 export const font = {
   sans: 'HankenGrotesk',
   sansMedium: 'HankenGrotesk-Medium',

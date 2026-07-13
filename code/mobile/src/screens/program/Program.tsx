@@ -160,5 +160,5 @@ const styles = StyleSheet.create({
   summaryMeter: { marginTop: 16 },
   group: { marginTop: 24 },
   groupLegend: { marginBottom: 2 },
-  meta: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  meta: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
 });

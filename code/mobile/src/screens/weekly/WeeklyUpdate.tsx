@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 4, minHeight: 44 },
   headSpacer: { width: 40 },
-  when: { flex: 1, textAlign: 'center', fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, letterSpacing: 0.2 },
+  when: { flex: 1, textAlign: 'center', fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, letterSpacing: 0.2 },
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 20 },
   eyebrow: { marginTop: 12, marginBottom: 10 },

@@ -419,8 +419,14 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     restTotalS = baseS;
     const startMs = restStartedAtMs ?? nowMs;
     const endMs = startMs + restS * 1000;
-    restEndsAt = new Date(endMs).toISOString();
-    restRemainingS = Math.max(0, Math.round((endMs - nowMs) / 1000));
+    // TOTAL MEANS TOTAL. `new Date(NaN).toISOString()` throws a RangeError, and this projection
+    // runs inside the store's publish effect — a single poisoned number (a corrupt +15 from the
+    // wire, a broken clock) would have taken the live workout down with it. An unusable end is
+    // simply no end: the surfaces render a rest without a countdown, and the athlete trains on.
+    if (Number.isFinite(endMs)) {
+      restEndsAt = new Date(endMs).toISOString();
+      restRemainingS = Math.max(0, Math.round((endMs - nowMs) / 1000));
+    }
   }
 
   const phase: MirrorPhase = paused

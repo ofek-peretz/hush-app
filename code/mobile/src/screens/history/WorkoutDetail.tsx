@@ -15,7 +15,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
-import { fmtMinutes } from '@/domain/duration';
+import { durationMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
 import type { Session, SetLog } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
@@ -83,7 +83,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
           <View style={styles.stats}>
             {/* A recorded duration reads in MINUTES, like every other one in the app
                 (domain/duration) — "1:03" beside a date reads as one in the morning. */}
-            <Metric value={fmtMinutes(durationSec(session), t('common.minShort'))} label={t('history.duration')} size="sm" />
+            <Metric value={durationMinutes(durationSec(session))} unit={t('common.minShort')} label={t('history.duration')} size="sm" />
             <Metric value={session.sets.length} label={t('history.setsLabel')} size="sm" />
             <Metric value={volume.toLocaleString()} unit={unitLabel(units)} label={t('history.volumeLabel')} size="sm" />
           </View>
@@ -146,5 +146,5 @@ const styles = StyleSheet.create({
   },
   chipIdx: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary, textAlign: 'left' },
   chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
-  chipUnit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  chipUnit: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
 });

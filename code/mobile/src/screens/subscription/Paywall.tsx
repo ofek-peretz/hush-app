@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   saveTag: { backgroundColor: signal.wash, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
   saveTagText: {
     color: color.accentText,
-    fontFamily: font.monoSemibold,
+    fontFamily: font.sansSemibold,
     fontSize: textScale['2xs'],
     letterSpacing: trackingPx(textScale['2xs'], tracking.wide),
     textTransform: 'uppercase',
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   },
   planPriceCol: { alignItems: 'flex-end' },
   planPrice: { color: color.textPrimary, fontFamily: font.monoSemibold, fontSize: textScale.lg, textAlign: 'left' },
-  planPeriod: { color: color.textMuted, fontFamily: font.mono, fontSize: textScale.xs, textAlign: 'left' },
+  planPeriod: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.xs, textAlign: 'left' },
 
   error: { color: color.down, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
 

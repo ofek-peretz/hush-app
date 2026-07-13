@@ -169,3 +169,61 @@ describe('serialization layer (wire ⇄ object)', () => {
     expect(parseWatchIntent(null)).toBeNull();
   });
 });
+
+/**
+ * THE NUMBERS THE WATCH REPORTS ARE NOT TRUSTED (hardened 2026-07-13).
+ *
+ * The parser used to check the three routing fields and cast the rest of the payload straight
+ * through, so a corrupt frame's numbers reached the session machine unexamined. Two of them are
+ * load-bearing: `actualReps`/`actualWeight` are written into the athlete's set log and folded by
+ * the engine forever, and `seconds` is ADDED to the rest — a NaN there makes the rest end NaN, and
+ * the mirror's `new Date(NaN).toISOString()` throws inside the store's publish effect, mid-set.
+ *
+ * A field that is ABSENT still means "unadjusted". A field that is PRESENT but not a sane number
+ * makes the whole frame malformed — corrupt is corrupt, and it is dropped, not half-believed.
+ */
+describe('a corrupt number makes the whole intent malformed', () => {
+  const junk = [NaN, Infinity, -Infinity, -1, 1e12, '7' as unknown as number, null as unknown as number];
+
+  it('rejects a nonsense +15 rather than poisoning the rest anchor', () => {
+    for (const seconds of [...junk, 0, 601, 15.5]) {
+      const d = decideWatchIntent(
+        { ...intent({ type: 'add_rest' }), seconds },
+        mirror({ phase: 'rest_inter', restRemainingS: 40, restTotalS: 90 }),
+        NOW,
+        NONE,
+      );
+      expect({ seconds, accept: d.accept, reason: d.reason }).toEqual({ seconds, accept: false, reason: 'malformed' });
+    }
+    // …and the real one still gets through.
+    const ok = decideWatchIntent(
+      { ...intent({ type: 'add_rest' }), seconds: 15 },
+      mirror({ phase: 'rest_inter', restRemainingS: 40, restTotalS: 90 }),
+      NOW,
+      NONE,
+    );
+    expect(ok.action).toEqual({ kind: 'add_rest', seconds: 15 });
+  });
+
+  it('rejects a nonsense set — the log and the engine take what this writes, forever', () => {
+    for (const actualReps of [...junk, 201, 8.5]) {
+      const d = decideWatchIntent({ ...intent(), actualReps }, mirror(), NOW, NONE);
+      expect({ actualReps, accept: d.accept }).toEqual({ actualReps, accept: false });
+    }
+    for (const actualWeight of [NaN, Infinity, -1, 1001, '60' as unknown as number]) {
+      const d = decideWatchIntent({ ...intent(), actualWeight }, mirror(), NOW, NONE);
+      expect({ actualWeight, accept: d.accept }).toEqual({ actualWeight, accept: false });
+    }
+  });
+
+  it('bodyweight (actualWeight: null) survives the sieve — it is a value, not a hole', () => {
+    const d = decideWatchIntent({ ...intent(), actualWeight: null, actualReps: 12 }, mirror(), NOW, NONE);
+    expect(d.accept).toBe(true);
+    expect(d.action).toEqual({ kind: 'complete_set', actualReps: 12, actualWeight: null });
+  });
+
+  it('an unadjusted set is still unadjusted — absent fields stay absent', () => {
+    const d = decideWatchIntent(intent(), mirror(), NOW, NONE);
+    expect(d.action).toEqual({ kind: 'complete_set', actualReps: undefined, actualWeight: undefined });
+  });
+});

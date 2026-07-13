@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   unit: {
-    fontFamily: font.monoMedium,
+    fontFamily: font.sansMedium,
     color: color.textMuted,
     marginStart: 4,
     marginBottom: 3,
