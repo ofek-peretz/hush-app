@@ -47,6 +47,17 @@ export function Home({ navigation, route }: Props) {
       ? program.days.find((d) => d.id === chosenId && !d.isRest && !d.completed) ?? null
       : null;
   const day = chosenDay ?? focusDay ?? (program ? nextWorkout(program) : null);
+
+  /**
+   * THE LAST INTENT WINS. Both doors set the queued workout: a CHIP on Home (chosenId) and Begin
+   * inside a workout's plan (which returns here with `focusDayId`). `chosenDay` is read first, so a
+   * chip tapped earlier in the session would outrank a Begin pressed just now — the athlete would
+   * open Legs, press Begin, land on Home, and be offered Pull. Arriving with a NEW focus clears the
+   * older chip choice; a chip tapped afterwards sets it again and wins, as it should.
+   */
+  useEffect(() => {
+    if (focusDayId) setChosenId(null);
+  }, [focusDayId]);
   // Every non-rest workout in the week, with its muscle groups, for the chooser.
   const workouts = (program?.days ?? [])
     .filter((d) => !d.isRest)
@@ -322,6 +333,7 @@ export function Home({ navigation, route }: Props) {
       resting={resting}
       name={app.profile?.name}
       dayName={day?.name ?? null}
+      dayId={day?.id ?? null}
       muscles={muscleGroupsLabel(day?.muscleGroups)}
       trainedThisWeek={trainedThisWeek}
       startError={startError}

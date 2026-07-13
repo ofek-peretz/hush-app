@@ -6,8 +6,7 @@
  * what do I do next? — and offers the one affordance to begin:
  *   brand (hush·) + settings · Legend(NEXT WORKOUT) · workout name · muscle
  *   groups · one quiet meta line (exercises · loads set) · week ProgressMeter ·
- *   Begin {name} · Choose another workout (bottom sheet) · THE WEEK CARD · hub
- *   rows (History / Progress).
+ *   Begin {name} · Cardio · THE WEEK CARD (the chooser) · hub rows (History / Progress).
  * Rest state centers "Recovery." with the completed-week meter, one quiet fact —
  * when the next week opens — and Open training, which on a recovery day IS the
  * day's act.
@@ -22,9 +21,9 @@
  *    the only CARD on the page, and it holds the week itself.
  *  · "Nobody can know they can edit the plan, pin a lift, or watch the clip — you have to tap
  *    This-week, then a workout, and only then does it open." The workouts are chips ON the card
- *    now: a check when trained, the ochre index on the one that is queued, and a tap goes straight
- *    into the workout's exercises. One tap from Home, not two, and the week's state is legible
- *    without entering anything.
+ *    now: a check when trained, the ochre index on the one that is queued, and the plan is reachable
+ *    from the card itself (see the second pass below for what a tap does today). The week's state is
+ *    legible without entering anything.
  *
  * ═══ ONE WEEK, ONE SURFACE (founder 2026-07-13, second pass) ═══
  *
@@ -76,6 +75,10 @@ export interface HomeViewProps {
   /** The athlete's first name, when they gave one — spoken only where Hush is speaking TO them. */
   name?: string;
   dayName: string | null;
+  /** The QUEUED workout's id. The chips key off this, never off the name: two workouts in a week
+   *  can be called the same thing, and a chip that matched by name would light the wrong one — and,
+   *  worse, open a plan when it was asked to queue one. */
+  dayId?: string | null;
   muscles: string; // "Chest · Shoulders · Triceps"
   trainedThisWeek: number;
   startError: boolean;
@@ -198,8 +201,9 @@ export function HomeView(props: HomeViewProps) {
                 <View style={styles.restSealSlot} />
               )}
               {/* THE NAME (founder 2026-07-13): "we ask for it and then never say it." A finished
-                  week is one of the four moments that earn it — the athlete is being spoken to,
-                  not reported at. Never on a working surface, never twice on one screen. */}
+                  week is one of the three moments that earn it (with the programme being handed
+                  over, and the Saturday letter) — the athlete is being spoken to, not reported at.
+                  Never on a working surface, never twice on one screen. */}
               <Display>{t('home.restTitle')}</Display>
               <BodyL tone="secondary" style={styles.restCopy}>
                 {props.name ? t('home.restSubNamed', { name: bidi(props.name) }) : t('home.restSub')}
@@ -294,7 +298,7 @@ export function HomeView(props: HomeViewProps) {
                     onPress={props.onCardio}
                     leading={<Icon name="runner" size={16} color={color.textSecondary} strokeWidth={2} />}
                     trailing={<Icon name="chevronRight" size={16} color={color.textSecondary} strokeWidth={2} />}
-                    style={styles.chooseAnother}
+                    style={styles.secondaryCta}
                   />
                 ) : null}
               </View>
@@ -350,18 +354,20 @@ export function HomeView(props: HomeViewProps) {
                 <View style={styles.chips} accessibilityLabel={t('home.weekChips')}>
                   {props.workouts.map((w) => {
                     const isDone = !!w.done;
-                    const current = !isDone && w.name === props.dayName;
+                    const current = !isDone && (props.dayId != null ? w.id === props.dayId : w.name === props.dayName);
+                    // An interrupted workout owns the CTA ("Continue …"), so queueing another one
+                    // would light a chip the Begin button does not agree with. While a session is
+                    // waiting to be resumed, a chip is a door to the plan and nothing else.
+                    const opens = isDone || current || !!props.resumable;
                     return (
                       <Pressable
                         key={w.id}
                         accessibilityRole="button"
                         accessibilityLabel={w.name}
-                        accessibilityHint={
-                          isDone ? undefined : current ? t('home.chipOpenHint') : t('home.chipChooseHint')
-                        }
+                        accessibilityHint={opens ? t('home.chipOpenHint') : t('home.chipChooseHint')}
                         accessibilityState={{ selected: current }}
                         onPress={() => {
-                          if (isDone || current) {
+                          if (opens) {
                             props.onOpenWorkout(w.id);
                             return;
                           }
@@ -393,8 +399,12 @@ export function HomeView(props: HomeViewProps) {
               ) : null}
 
               {/* The chips carry two acts now, and an athlete cannot be expected to guess the
-                  second. One quiet line, in the smallest voice on the page, says what a tap does. */}
-              {props.workouts.length > 1 ? <Text style={styles.chipsHint}>{t('home.chipsHint')}</Text> : null}
+                  second. One quiet line, in the smallest voice on the page, says what a tap does —
+                  and only while there is actually something to queue (never on a finished week,
+                  where every chip is a record and the line would be a lie). */}
+              {props.workouts.filter((w) => !w.done).length > 1 && !props.resumable ? (
+                <Text style={styles.chipsHint}>{t('home.chipsHint')}</Text>
+              ) : null}
 
               {/* Hush's sentence — what it DID to this plan. The one line that makes this a
                   managed programme rather than a nicely-drawn workout screen. It opens with the
@@ -539,7 +549,7 @@ const styles = StyleSheet.create({
   meterWrap: { marginTop: 28 },
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
-  chooseAnother: { justifyContent: 'space-between' },
+  secondaryCta: { justifyContent: 'space-between' },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },

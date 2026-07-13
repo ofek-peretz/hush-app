@@ -209,6 +209,56 @@ describe('the week is on the page, and it is a door', () => {
     expect(texts(mount(<HomeView {...props()} />)).join(' ')).toContain(tg('home.chipsHint'));
   });
 
+  it('a chip knows itself by ID, never by name — two workouts may be called the same thing', () => {
+    // Both are "Upper". Matching on the NAME would light both chips as "queued" and turn a tap
+    // meant to QUEUE the second one into a tap that opens the first one's plan.
+    const twins = [
+      { id: 'day_1', name: 'Upper', muscles: 'Chest' },
+      { id: 'day_2', name: 'Upper', muscles: 'Back' },
+    ];
+    const chosen: string[] = [];
+    const opened: string[] = [];
+    const r = mount(
+      <HomeView
+        {...props({
+          workouts: twins,
+          dayName: 'Upper',
+          dayId: 'day_1',
+          onChooseWorkout: (id) => void chosen.push(id),
+          onOpenWorkout: (id) => void opened.push(id),
+        })}
+      />,
+    );
+    const chips = r.root.findAll((n) => n.props?.accessibilityLabel === 'Upper' && typeof n.props.onPress === 'function');
+    act(() => chips[1].props.onPress()); // the one that is NOT queued
+    expect(chosen).toEqual(['day_2']);
+    expect(opened).toEqual([]);
+    act(() => chips[0].props.onPress()); // the queued one
+    expect(opened).toEqual(['day_1']);
+  });
+
+  it('an interrupted workout owns the CTA — a chip cannot queue behind its back', () => {
+    // The button says "Continue Pull A". Queueing Legs would light a chip that the CTA disagrees
+    // with, so while a session is waiting to be resumed a chip is a door to the plan and nothing else.
+    const chosen: string[] = [];
+    const opened: string[] = [];
+    const r = mount(
+      <HomeView
+        {...props({
+          resumable: { workoutName: 'Pull A' },
+          onChooseWorkout: (id) => void chosen.push(id),
+          onOpenWorkout: (id) => void opened.push(id),
+        })}
+      />,
+    );
+    act(() => {
+      byLabel(r, 'Legs A')!.props.onPress();
+    });
+    expect(chosen).toEqual([]);
+    expect(opened).toEqual(['day_3']);
+    expect(texts(r).join(' ')).not.toContain(tg('home.chipsHint')); // …and it does not claim otherwise
+  });
+
   it('a trained workout is SAGE, and the queued one is OCHRE — the two marks never trade places', () => {
     const r = mount(<HomeView {...props()} />);
     // Done: the sage check + the sage wash behind it. (Its LABEL is ink, as all legible copy is —

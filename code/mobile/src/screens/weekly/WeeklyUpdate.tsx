@@ -206,8 +206,10 @@ export function WeeklyUpdate({ navigation }: Props) {
             <View style={styles.evidence}>
               {evidence.map((e) => {
                 const reps = e.mode === 'reps';
-                const from = reps ? e.initialPeakKg : displayWeight(e.initialPeakKg, units) ?? 0;
-                const to = reps ? e.periodPeakKg : displayWeight(e.periodPeakKg, units) ?? 0;
+                // Reps are a count; a load goes through the athlete's units and the same trim every
+                // other figure on this screen uses (62.50 → 62.5, never 62.50).
+                const from = reps ? e.initialPeakKg : fmtLoad(e.initialPeakKg, units);
+                const to = reps ? e.periodPeakKg : fmtLoad(e.periodPeakKg, units);
                 return (
                   <View key={e.exerciseId} style={styles.evidenceRow}>
                     <Text style={styles.evidenceName} numberOfLines={1}>
