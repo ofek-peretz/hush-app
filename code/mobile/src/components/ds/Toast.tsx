@@ -83,6 +83,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         Animated.timing(opacity, { toValue: 0, duration: reduced ? 0 : 200, useNativeDriver: true }),
         Animated.timing(translateY, { toValue: reduced ? 0 : 12, duration: reduced ? 0 : 200, useNativeDriver: true }),
       ]).start(() => {
+        // SUPERSEDED? Then say nothing. `opacity` is one shared Animated.Value: starting the
+        // next toast's fade-IN stops this fade-OUT, and a stopped animation still calls back
+        // (finished: false). Firing `onHide` here would hand the NEW toast's owner a hide it
+        // never had — the stage would take its footer back while the new notice was still on it.
+        // The replaced toast's owner was already told, inside `show`.
+        if (nonceRef.current !== toast.nonce) return;
         // Told when the toast has actually LEFT, not when it starts to leave — a screen that gave
         // up a control for it must not reveal that control through a half-faded card.
         fireHide();

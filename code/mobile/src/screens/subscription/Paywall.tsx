@@ -318,9 +318,16 @@ const styles = StyleSheet.create({
   planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md, textAlign: 'left' },
   planTrial: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'left' },
   // The saving tag — the one figure on this screen allowed to be loud.
-  saveTag: { backgroundColor: signal.fill, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
+  //
+  // OCHRE INK ON THE OCHRE WASH, not cream on the ochre fill (2026-07-13). The fill went back to
+  // the founder's bright brown, and the exception that licenses cream on it is a SHORT SEMIBOLD
+  // LABEL ON A BIG BUTTON — not an 11 px uppercase mono tag at 2.6:1, which is the exact thing
+  // that cannot be read in a gym window's sunlight. This is also the pattern the fallback badge
+  // three lines up already uses (`Badge tone="signal"`), so the two states of one tag finally
+  // speak with one voice.
+  saveTag: { backgroundColor: signal.wash, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
   saveTagText: {
-    color: color.onAccent,
+    color: color.accentText,
     fontFamily: font.monoSemibold,
     fontSize: textScale['2xs'],
     letterSpacing: trackingPx(textScale['2xs'], tracking.wide),

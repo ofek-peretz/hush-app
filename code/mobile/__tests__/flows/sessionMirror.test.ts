@@ -172,17 +172,48 @@ describe('projectSessionMirror', () => {
       ],
     })!;
     expect(m.summary!.lifts).toEqual([
-      { name: 'Bench Press', best: '60 × 5' },
-      { name: 'Squat', best: 'BW × 12' },
+      { name: 'Bench Press', best: '60 × 5', done: true },
+      { name: 'Squat', best: 'BW × 12', done: true },
     ]);
   });
 
   it('with no logged sets supplied, the prescription stands in (pure-projection back-compat)', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
     expect(m.summary!.lifts).toEqual([
-      { name: 'Bench Press', best: '60 × 5' },
-      { name: 'Squat', best: '100 × 5' },
+      { name: 'Bench Press', best: '60 × 5', done: true },
+      { name: 'Squat', best: '100 × 5', done: true },
     ]);
+  });
+
+  it('the best set of a BODYWEIGHT lift is the longest one, not the first one', () => {
+    // Bodyweight volume is 0 by definition, so a volume-only comparison could never separate two
+    // sets of pull-ups — "your best set" silently meant "your first set", forever.
+    const bwSteps: MirrorStep[] = [
+      { exerciseName: 'Pull-up', setIndexInExercise: 0, totalSetsInExercise: 2, globalIndex: 0, targetWeight: null, targetReps: 8 },
+      { exerciseName: 'Pull-up', setIndexInExercise: 1, totalSetsInExercise: 2, globalIndex: 1, targetWeight: null, targetReps: 8 },
+    ];
+    const m = project({
+      steps: bwSteps,
+      total: 2,
+      machine: machine({ phase: 'SESSION_SAVED', setIndex: 1 }),
+      completedSets: 2,
+      loggedSets: [
+        { weight: null, reps: 8 },
+        { weight: null, reps: 11 }, // the longer set — this is the one read back
+      ],
+    })!;
+    expect(m.summary!.lifts[0].best).toBe('BW × 11');
+  });
+
+  it('keeps the deprecated `done` on the wire — an older watch binary decodes it or drops the frame', () => {
+    // The watch app updates asynchronously from the phone app; until it does, it needs this field.
+    // (Delete the field, and this test, one release after Build 30.)
+    const m = project({
+      machine: machine({ phase: 'SESSION_SAVED', setIndex: 1, earlyFinish: true }),
+      completedSets: 1, // one of Bench's two sets — performed, but NOT finished
+      loggedSets: [{ weight: 60, reps: 5 }],
+    })!;
+    expect(m.summary!.lifts).toEqual([{ name: 'Bench Press', best: '60 × 5', done: false }]);
   });
 
   it('Complete summary falls back to the planned total when no live count is supplied', () => {

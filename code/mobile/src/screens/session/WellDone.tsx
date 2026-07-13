@@ -46,6 +46,18 @@ type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
 
 const vol = (s: SetLog) => (s.actualWeight ?? 0) * s.actualReps;
 
+/**
+ * The better of two sets OF THE SAME LIFT: heavier work wins, and when the work ties — which it
+ * always does on a bodyweight lift, where volume is 0 by definition — the longer set wins.
+ *
+ * Volume alone meant "your best set of pull-ups" was whichever one you happened to do FIRST, no
+ * matter what you did afterwards. Deliberately NOT used for the session's TOP SET below, which
+ * compares across lifts: there, reps must never let a set of push-ups outrank a heavy squat.
+ * (sessionMirror.ts holds the identical comparator — the phone's read-back and the wrist's must
+ * never name different sets.)
+ */
+const betterSet = (a: SetLog, b: SetLog) => (vol(a) !== vol(b) ? vol(a) > vol(b) : a.actualReps > b.actualReps);
+
 /** The beats of this screen, in the only order they may be walked. */
 export type WellDonePhase = 'saved' | 'result' | 'milestone';
 
@@ -136,8 +148,8 @@ export function WellDone({ navigation, route }: Props) {
     for (const s of sets) {
       if (!bestByEx.has(s.exerciseId)) order.push(s.exerciseId);
       const prev = bestByEx.get(s.exerciseId);
-      if (!prev || vol(s) > vol(prev)) bestByEx.set(s.exerciseId, s);
-      if (!top || vol(s) > vol(top)) top = s;
+      if (!prev || betterSet(s, prev)) bestByEx.set(s.exerciseId, s);
+      if (!top || vol(s) > vol(top)) top = s; // ACROSS lifts: work only (see betterSet)
     }
     return {
       lifts: order.map((id): Lift => ({ exerciseId: id, name: exerciseDisplayName(id), best: bestByEx.get(id)! })),

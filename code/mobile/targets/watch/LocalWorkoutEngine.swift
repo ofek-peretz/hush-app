@@ -390,12 +390,19 @@ final class LocalWorkoutEngine {
     var order: [String] = []
     var best: [String: WireRecordSet] = [:]
     func volume(_ s: WireRecordSet) -> Double { (s.actualWeight ?? 0) * Double(s.actualReps) }
+    /// WITHIN one lift: heavier work wins; tied work — which is EVERY bodyweight set, whose volume
+    /// is 0 by definition — goes to the longer set. The phone's comparator, to the letter
+    /// (sessionMirror.ts / WellDone.tsx): a standalone workout must not read itself back
+    /// differently from a phone-driven one.
+    func better(_ a: WireRecordSet, _ b: WireRecordSet) -> Bool {
+      volume(a) != volume(b) ? volume(a) > volume(b) : a.actualReps > b.actualReps
+    }
     for (i, step) in state.steps.enumerated() where i < frontier {
       // The logged sets are written in step order, so set i belongs to step i.
       guard i < state.sets.count else { break }
       let set = state.sets[i]
       if let cur = best[step.exerciseName] {
-        if volume(set) > volume(cur) { best[step.exerciseName] = set }
+        if better(set, cur) { best[step.exerciseName] = set }
       } else {
         order.append(step.exerciseName)
         best[step.exerciseName] = set

@@ -24,7 +24,13 @@ struct WireSwapOption: Codable, Equatable {
 struct WireSummaryLift: Codable, Equatable {
   var name: String
   /// The best set of that lift, as the phone prints it: "60 × 8" / "BW × 12".
-  var best: String
+  ///
+  /// OPTIONAL, like every field added after v1 — and for a sharper reason than usual. The watch
+  /// app installs ASYNCHRONOUSLY from the phone app, so a phone on this build can talk to a watch
+  /// on the previous one for hours. A non-optional field throws inside `decodeIfPresent` when the
+  /// key is missing, and because `summary` is a nested optional that throw takes the WHOLE FRAME
+  /// down — the wrist would miss the closing screen entirely rather than miss one line of it.
+  var best: String?
 }
 
 struct WireSummary: Codable, Equatable {

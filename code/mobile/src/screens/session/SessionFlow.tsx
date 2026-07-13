@@ -61,6 +61,23 @@ export function SessionFlow({ navigation }: Props) {
    * untouchable, but still holding their space, so nothing jumps), and the notice sits alone.
    */
   const [notice, setNotice] = useState(false);
+
+  /**
+   * EVERY notice on the stage goes through here, and every notice owns the footer while it is up.
+   *
+   * Not just the swap one. If a plain `toast.show` could still land on this screen, two things
+   * would go wrong: it would half-cover the button exactly the way the swap toast did, and — worse
+   * — showing it WHILE a swap notice was up would end the swap notice (a new toast retires the old
+   * one), handing the footer back underneath a card that is still on screen. One door in, one law.
+   */
+  const notify = useCallback(
+    (message: string, actions?: ToastAction[]) => {
+      setNotice(true);
+      toast.show(message, { actions, onHide: () => setNotice(false) });
+    },
+    [toast],
+  );
+
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
@@ -143,7 +160,7 @@ export function SessionFlow({ navigation }: Props) {
       // left staring at the pause sheet with no way to end the workout — and the button they just
       // pressed appears to have done nothing. Say what happened and leave them ON the pause sheet,
       // where Resume and Finish both still work; their logged sets are already persisted per-set.
-      toast.show(t('workout.finishFailed'));
+      notify(t('workout.finishFailed'));
     }
   }
 
@@ -187,7 +204,7 @@ export function SessionFlow({ navigation }: Props) {
         // per workout, and NEVER when this set ends the workout (it must never float over Well Done).
         if (corrected && !r.ended && !learnToastShownRef.current) {
           learnToastShownRef.current = true;
-          toast.show(t('load.remembered'));
+          notify(t('load.remembered'));
         }
         // When r.ended, the `endResult` effect navigates to Well Done (one path for phone + watch).
       } catch {
@@ -196,7 +213,7 @@ export function SessionFlow({ navigation }: Props) {
         // and the "Set logged" beat has NO controls, so the athlete was frozen there, mid-workout,
         // with force-quitting the app as the only way out. The set is not saved; say so, and give
         // the athlete their set back so they can log it again.
-        toast.show(t('workout.setSaveFailed'));
+        notify(t('workout.setSaveFailed'));
       } finally {
         // ALWAYS: the stage must return to the athlete, saved or not.
         confirmRunning.current = false;
@@ -227,15 +244,6 @@ export function SessionFlow({ navigation }: Props) {
       session.swapNextExercise(id);
     }
   }
-
-  /** A notice ON the stage — it takes the footer for as long as it is up (see `notice`). */
-  const notify = useCallback(
-    (message: string, actions?: ToastAction[]) => {
-      setNotice(true);
-      toast.show(message, { actions, onHide: () => setNotice(false) });
-    },
-    [toast],
-  );
 
   function presentSwapChoice(id: string) {
     const st = quickSwapRef.current;
@@ -726,7 +734,15 @@ function ActiveSet({
         </View>
       </View>
 
-      <View style={[styles.stageFooter, notice && styles.footerStoodDown]} pointerEvents={notice ? 'none' : 'auto'}>
+      {/* `pointerEvents` stops the finger; it does NOT stop VoiceOver, which would happily focus and
+          fire an invisible Complete Set. A control that is not on screen is not on screen for
+          anybody — so the footer leaves the accessibility tree too while it is stood down. */}
+      <View
+        style={[styles.stageFooter, notice && styles.footerStoodDown]}
+        pointerEvents={notice ? 'none' : 'auto'}
+        accessibilityElementsHidden={notice}
+        importantForAccessibility={notice ? 'no-hide-descendants' : 'auto'}
+      >
         <Button
           variant="onstage"
           size="lg"
@@ -1002,7 +1018,13 @@ function Rest({
         </View>
       </View>
 
-      <View style={[styles.stageFooter, notice && styles.footerStoodDown]} pointerEvents={notice ? 'none' : 'auto'}>
+      {/* Stood down while a notice is up — out of the finger's reach AND out of VoiceOver's. */}
+      <View
+        style={[styles.stageFooter, notice && styles.footerStoodDown]}
+        pointerEvents={notice ? 'none' : 'auto'}
+        accessibilityElementsHidden={notice}
+        importantForAccessibility={notice ? 'no-hide-descendants' : 'auto'}
+      >
         <Button
           variant="onstage"
           size="lg"
@@ -1120,7 +1142,14 @@ const styles = StyleSheet.create({
   stageBarRight: { alignItems: 'flex-end' },
   stageBarCenter: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
   // The ordinal — the one thing in the bar that is READ, so it is sized to be read.
-  stageBarOrdinal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.wide), color: stage.ink1, textAlign: 'center' },
+  //
+  // SANS, not mono. "Exercise 1 / 6" is a sentence with a number in it, and the two-voice law gives
+  // sentences to Hanken; mono is for what the instrument MEASURES. It also has a hard consequence
+  // in Hebrew — JetBrains Mono carries no Hebrew, so "תרגיל" fell out to whatever font the OS
+  // could find, in the middle of the one line that says where the athlete is. Tabular figures keep
+  // the digits from dancing as the count climbs. Same face and same ink as the muscle group below,
+  // which is what the founder asked for when he said "make it the same colour".
+  stageBarOrdinal: { fontFamily: font.sansSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.wide), color: stage.ink1, textAlign: 'center' },
 
   stageBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
   stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 14, gap: 10 },

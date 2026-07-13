@@ -188,12 +188,12 @@ private struct TopStrip: View {
       }
       Spacer(minLength: 40) // the trailing half stays clear of the watch clock
     }
-    // The strip must be at least as tall as the chip it carries (founder 2026-07-13: "the pause
-    // is STILL on the ring"). It was pinned to 18 pt — shorter than the capsule — so the chip
-    // bled out of the strip's box and the rest ring, which begins the moment the strip ends,
-    // came up underneath it. A frame that lies about its height puts everything below it 4 pt
-    // too high. `minHeight` lets the chip set the truth; the rest screens add the gap.
-    .frame(minHeight: 22)
+    // 18 pt, and it stays 18 pt. The chip fits inside it (a 9 pt symbol + 6 pt of padding ≈ 17),
+    // so the strip was never what put the pause ON the ring (founder 2026-07-13) — the ring simply
+    // began at the pixel the strip ended, and its arc rises to its own box top exactly where the
+    // chip sits. The gap belongs to the RING, and the rest screens now hold one. Touching this
+    // height would have moved every execution stage on the 40 mm case to fix a rest screen.
+    .frame(height: 18)
   }
 }
 
@@ -348,7 +348,7 @@ private struct RestRing: View {
       }
     }
     .frame(width: diameter, height: diameter)
-    .onChange(of: endsAt) { oldEndsAt, _ in
+    .onChange(of: endsAt) { oldEndsAt, newEndsAt in
       // THE +15 USED TO SNAP (founder 2026-07-12: "on the watch +15 s jumps straight up instead
       // of filling like it does on the phone"). The blend was there; it was starting from the
       // wrong place. It read the LAST DRAWN fraction — but SwiftUI evaluates the body with the
@@ -360,6 +360,16 @@ private struct RestRing: View {
       // directly. That is a fact, not a side effect, and it cannot be raced.
       let now = Date()
       let previousRemaining = max(0, WatchWire.parseDate(oldEndsAt).map { $0.timeIntervalSince(now) } ?? 0)
+      let newRemaining = max(0, WatchWire.parseDate(newEndsAt).map { $0.timeIntervalSince(now) } ?? 0)
+      // A FRESH, FULL PERIOD SNAPS — it does not sweep up from wherever the last one died. That is
+      // the phone's own rule (`if (remaining >= total) frac.value = target`, RestRing.tsx), and it
+      // covers both a brand-new rest and a +15 that pushes the clock past the prescribed length.
+      // Anything else — the end moving BACKWARDS, which nothing legitimate does — snaps too rather
+      // than animating a lie.
+      guard newRemaining > previousRemaining, newRemaining < Double(totalS) else {
+        blend = nil
+        return
+      }
       blend = (from: fraction(of: previousRemaining), at: now)
     }
   }
@@ -1041,7 +1051,9 @@ struct InterRestScreen: View {
     VStack(spacing: 0) {
       TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: true)
       // The ring keeps its distance from the chrome — chrome and clock are not the same object,
-      // and on a wrist they must never look like one (founder 2026-07-13).
+      // and on a wrist they must never look like one (founder 2026-07-13). The ring pays for the
+      // gap out of its own diameter (84 → 76 + 6 of air), so the 40 mm height budget SHRINKS by
+      // 2 pt rather than growing: nothing that fitted before can stop fitting now.
       RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(76))
         .padding(.top, 6)
       Spacer(minLength: 3)
@@ -1090,7 +1102,9 @@ struct TransitionRestScreen: View {
     // the replacement (phone parity).
     VStack(spacing: 0) {
       TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), controlsHint: true)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(70), restingLabel: "NEXT")
+      // Same law as the inter-set ring: the gap is paid out of the diameter (78 → 68 + 6), so this
+      // screen — the tightest one in the app — ends up 4 pt SHORTER than it was, never taller.
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(68), restingLabel: "NEXT")
         .padding(.top, 6)
       Spacer(minLength: 3)
       VStack(spacing: 2) {
@@ -1312,8 +1326,8 @@ struct CompleteScreen: View {
                 // with the check struck through it in the stage's own black.
                 ZStack {
                   Circle()
-                    .strokeBorder(i < read ? Palette.up : Palette.stage2, lineWidth: 1.5)
-                    .background(Circle().fill(i < read ? Palette.up : Color.clear))
+                    .fill(i < read ? Palette.up : Color.clear)
+                    .overlay(Circle().strokeBorder(i < read ? Palette.up : Palette.stage2, lineWidth: 1.5))
                     .frame(width: 15, height: 15)
                   if i < read {
                     Image(systemName: "checkmark")
@@ -1327,10 +1341,12 @@ struct CompleteScreen: View {
                   .foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Text(lift.best)
-                  .font(.system(size: 11, design: .monospaced)).monospacedDigit()
-                  .foregroundStyle(Palette.ink2)
-                  .lineLimit(1).fixedSize()
+                if let best = lift.best, !best.isEmpty {
+                  Text(best)
+                    .font(.system(size: 11, design: .monospaced)).monospacedDigit()
+                    .foregroundStyle(Palette.ink2)
+                    .lineLimit(1).fixedSize()
+                }
               }
               .id(i)
               .opacity(i < read ? 1 : 0.32) // the phone's own dim for a lift not yet read
