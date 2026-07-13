@@ -45,7 +45,7 @@ import type { CardioActivity, CardioGait, CardioGoalKind, CardioPoint } from '@/
 import { durationMinutes } from '@/domain/duration';
 import * as haptics from '@/platform/haptics';
 import { textEnd } from '@/i18n/bidi';
-import { color, space, font, textScale, radius, stage as stageC, signal, up, tracking, trackingPx } from '@/design/tokens';
+import { color, space, font, textScale, radius, stage as stageC, signal, up, tracking, trackingPx, paper } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Cardio'>;
@@ -428,8 +428,11 @@ function CardioSelect(props: {
           value={props.gait}
           onChange={(v) => props.setGait(v as CardioGait)}
           options={[
-            { value: 'run', label: t('cardio.run'), icon: <Icon name="runner" size={16} color={props.gait === 'run' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
-            { value: 'walk', label: t('cardio.walk'), icon: <Icon name="wind" size={16} color={props.gait === 'walk' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
+            // The selected segment is filled ochre now (SegmentedControl, founder 2026-07-13), so
+            // the chosen gait's glyph goes cream with its label — an ink glyph would be the one
+            // dark mark left sitting on the brown.
+            { value: 'run', label: t('cardio.run'), icon: <Icon name="runner" size={16} color={props.gait === 'run' ? paper[0] : color.textSecondary} strokeWidth={2} /> },
+            { value: 'walk', label: t('cardio.walk'), icon: <Icon name="wind" size={16} color={props.gait === 'walk' ? paper[0] : color.textSecondary} strokeWidth={2} /> },
           ]}
         />
 

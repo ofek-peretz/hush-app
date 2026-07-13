@@ -1298,12 +1298,19 @@ struct CompleteScreen: View {
   let onDone: () -> Void
 
   private var lifts: [WireSummaryLift] { mirror.summary?.lifts ?? [] }
+  /// The mark this workout crossed, if it crossed one — earned on the phone, printed here
+  /// (founder 2026-07-13). Nil for the overwhelming majority of workouts, which is what makes
+  /// it worth showing at all.
+  private var milestone: WireMilestone? { mirror.summary?.milestone }
   @State private var read = 0
   @State private var reading = true
+  @State private var stamped = false
 
   var body: some View {
     if reading && !lifts.isEmpty {
       readBack
+    } else if stamped, let m = milestone {
+      milestoneBeat(m)
     } else {
       result
     }
@@ -1413,10 +1420,73 @@ struct CompleteScreen: View {
         .overlay(alignment: .top) { Rectangle().fill(Palette.stage2).frame(height: 1).offset(y: 8) }
       }
       Spacer(minLength: 8)
-      StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16, action: onDone)
+      // The way out passes through the mark, exactly as it does on the phone: any exit from the
+      // result plays beat 4 once, and only on the session that earned it.
+      StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16) {
+        guard milestone != nil else {
+          onDone()
+          return
+        }
+        WatchHaptics.play(.receiptEarned)
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.7)) { stamped = true }
+      }
     }
     // Deliberately NOT stageFill(): this screen's proportions are approved as they are —
     // only its middle metric changed (sets → kcal).
+    .padding(.horizontal, 12).padding(.bottom, 8)
+  }
+
+  /**
+   * BEAT 4 — the one licensed loud moment, on the wrist (founder 2026-07-13).
+   *
+   * The phone strikes a medallion with an engraved glyph; a 41 mm case has no room for the
+   * engraving and no business inventing a second one. So the wrist keeps what the mark IS: the
+   * figure, in the ochre ring, and the one factual line beneath it. Facts, never praise — "100
+   * workouts.", not "amazing". A mark with no figure (the first raise) simply shows its line, and
+   * the ring holds the check instead.
+   */
+  private func milestoneBeat(_ m: WireMilestone) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      Legend(WatchCopy.milestone, size: 10).padding(.top, 2)
+      Spacer(minLength: 4)
+      HStack {
+        Spacer(minLength: 0)
+        ZStack {
+          Circle().strokeBorder(Palette.signal, lineWidth: 1.5).frame(width: 72, height: 72)
+          VStack(spacing: 0) {
+            if let v = m.value, !v.isEmpty {
+              Text(v)
+                .font(.system(size: 22, weight: .semibold, design: .monospaced)).monospacedDigit()
+                .foregroundStyle(Palette.ink0)
+                .lineLimit(1).minimumScaleFactor(0.6)
+              if let c = m.caption, !c.isEmpty {
+                Text(c.uppercased())
+                  .font(.system(size: 8, weight: .medium)).tracking(1)
+                  .foregroundStyle(Palette.ink2)
+                  .lineLimit(1)
+              }
+            } else {
+              DrawCheck(size: 22)
+            }
+          }
+          .padding(.horizontal, 8)
+        }
+        Spacer(minLength: 0)
+      }
+      Text(m.title)
+        .font(.system(size: Fit.s(17), weight: .semibold)).foregroundStyle(Palette.ink0)
+        .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 10)
+      if let sub = m.sub, !sub.isEmpty {
+        Text(sub)
+          .font(.system(size: 12)).foregroundStyle(Palette.ink1)
+          .lineLimit(2).minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 3)
+      }
+      Spacer(minLength: 8)
+      StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16, action: onDone)
+    }
     .padding(.horizontal, 12).padding(.bottom, 8)
   }
 }

@@ -11,15 +11,24 @@
  * Contract (do not violate):
  *  - Quarterly Report: every ~3 months; opens the peak-weight comparison.
  *  - Receipts are NEVER notifications — receipts surface in-session only (§8.6).
- *  - The 20:00 "Weekly Program Ready" note is RETIRED (founder 2026-07-09): the
- *    weekly plan swaps in silently at Sat 23:59, so no push is sent. Only its
- *    cancel path remains, to clear the note from existing installs.
+ *  - The Weekly Update note fires at the ROLL — Saturday 20:30 local, the exact instant the new
+ *    week opens (domain/weekCadence). It is the ONE recurring push this product sends.
+ *
+ * THE WEEKLY NOTE IS BACK, AND IT IS BACK ON PURPOSE (founder 2026-07-13). It was retired on
+ * 2026-07-09 as noise: the plan swapped in silently at Sat 23:59 and the athlete would meet it
+ * whenever they next opened the app. But "silently, at midnight" is precisely why the product does
+ * not READ as one that manages a program — the single most important thing Hush does for an
+ * athlete happened while they were asleep, and by Sunday it was indistinguishable from the app
+ * simply looking the way it looks. The note is not a nag and it is not marketing: it is the
+ * receipt for the week's work, delivered at the moment the work is folded in. One per week, on the
+ * quietest evening of the week, no sound, no badge — and a tap opens the Weekly Update itself.
  *
  * Calm defaults: no sound, no badge (a quiet product, §8.6). Copy flows through
  * i18n (project copy law) — never a string literal here.
  */
 import * as Notifications from 'expo-notifications';
 import { tg } from '@/i18n';
+import { WEEK_OPEN_DOW, WEEK_OPEN_HOUR, WEEK_OPEN_MINUTE } from '@/domain/weekCadence';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
@@ -69,9 +78,20 @@ function intentFromResponse(response: unknown): NotificationIntent | null {
 }
 
 export interface Notifier {
-  /** Remove the RETIRED 20:00 weekly note (founder 2026-07-09). Idempotent; clears
-   *  any note a prior build left on an existing install. The weekly plan now swaps
-   *  in silently at Sat 23:59, so nothing is ever scheduled here again. */
+  /**
+   * Schedule the weekly update note on the roll itself — every Saturday at
+   * WEEK_OPEN_HOUR:WEEK_OPEN_MINUTE local (20:30), repeating. A tap opens the Weekly Update.
+   * Idempotent: it coalesces onto one stable id, so re-scheduling never stacks.
+   *
+   * `ask` decides whether this call may RAISE THE iOS PERMISSION DIALOG, and it defaults to false
+   * on purpose. This is re-scheduled on every boot (so it self-heals), and a product that opens a
+   * system permission prompt in the athlete's face at launch — for a note they never asked for —
+   * is exactly the kind of app Hush is not. The prompt is asked ONCE, at the end of onboarding,
+   * where the athlete has just chosen to be here. Everywhere else: schedule if already granted,
+   * and otherwise stay silent.
+   */
+  scheduleWeeklyUpdate(ask?: boolean): Promise<void>;
+  /** Remove the weekly note (sign-out, or an install that had the old 20:00 one). Idempotent. */
   cancelWeeklyProgramReady(): Promise<void>;
   /** Schedule the recurring quarterly progress report note (every ~3 months). A tap
    *  opens the QuarterlyReport comparison screen. Idempotent. */
@@ -128,11 +148,66 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   }
 }
 
+/**
+ * The weekly note's slot — the roll itself, derived from the cadence rather than hardcoded, so the
+ * note can never drift away from the thing it announces.
+ *
+ * iOS weekdays are 1-based from SUNDAY (1=Sun … 7=Sat) while `WEEK_OPEN_DOW` is a JS
+ * `Date.getDay()` (0=Sun … 6=Sat) — the +1 is the whole conversion, and getting it wrong would
+ * deliver the week's receipt on a Friday. Pinned by a test.
+ *
+ * WEEKLY, not CALENDAR. Both can express "Saturday at 20:30", but a CALENDAR trigger only recurs
+ * if you also remember to pass `repeats: true` — a weekly note that silently fires once and never
+ * again is a failure nobody would notice for a week. WEEKLY repeats by construction, and the
+ * device's own calendar makes it LOCAL time, which is what "Saturday evening" has to mean.
+ */
+const WEEKLY_TRIGGER = {
+  weekday: WEEK_OPEN_DOW + 1,
+  hour: WEEK_OPEN_HOUR,
+  minute: WEEK_OPEN_MINUTE,
+} as const;
+
+/**
+ * Is notification permission ALREADY granted? Reads, never asks — the boot-time re-schedule must
+ * be able to arm a note without ever putting a system dialog in front of an athlete who is simply
+ * opening the app.
+ */
+export async function hasNotificationPermission(): Promise<boolean> {
+  try {
+    return (await Notifications.getPermissionsAsync()).granted === true;
+  } catch {
+    return false; // no native module (web / Expo Go) → nothing to schedule
+  }
+}
+
 /** Real, on-device notifier (active in dev/preview/production builds). */
 export const notifierExpo: Notifier = {
+  async scheduleWeeklyUpdate(ask = false) {
+    try {
+      const granted = ask ? await ensureNotificationPermission() : await hasNotificationPermission();
+      if (!granted) return;
+      // Idempotent: coalesce onto a stable id so re-scheduling (every boot) never stacks.
+      await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID).catch(() => {});
+      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'weekly_program_ready' });
+      await Notifications.scheduleNotificationAsync({
+        identifier: WEEKLY_ID,
+        content: {
+          title: tg('notifications.weeklyReadyTitle'),
+          body: tg('notifications.weeklyReadyBody'),
+          data: buildPayload('weekly_program_ready'),
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          ...WEEKLY_TRIGGER,
+        },
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'weekly_program_ready', ...WEEKLY_TRIGGER });
+    } catch {
+      // never throw — a notification failure must not break boot
+    }
+  },
+
   async cancelWeeklyProgramReady() {
-    // The 20:00 weekly note is retired (founder 2026-07-09). Clear any note a prior
-    // build scheduled so existing installs stop receiving it; never throws.
     try {
       await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID);
       void track(NOTIFICATION_EVENTS.canceled, { kind: 'weekly_program_ready' });
@@ -175,6 +250,7 @@ export const notifierExpo: Notifier = {
 
 /** v1 no-op stub — the swap point for tests and any non-native environment. */
 export const notifierStub: Notifier = {
+  async scheduleWeeklyUpdate() {},
   async cancelWeeklyProgramReady() {},
   async scheduleQuarterlyReport() {},
   async cancelAll() {},

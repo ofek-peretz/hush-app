@@ -77,7 +77,7 @@ interface AppState {
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
   revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
-  weekOpenMs: number | null; // Saturday-23:59-local the current bucket was built for (calendar cadence)
+  weekOpenMs: number | null; // Saturday-20:30-local the current bucket was built for (calendar cadence)
   entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
 
@@ -278,9 +278,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await adoptDevTokenIfPresent();
       modelRef.current = await selectModel();
 
-      // The 20:00 "weekly program ready" note is retired (founder 2026-07-09) — clear it
-      // from any existing install so no stale push fires. Best-effort; never blocks boot.
-      void notifier.cancelWeeklyProgramReady();
 
       // Schema-version guard: detect persisted-shape drift (e.g. an upgrade/
       // downgrade) so corruption is OBSERVABLE rather than silent. Shapes are
@@ -357,6 +354,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // (Hebrew conjugates every verb by gender — i18n/gender.ts).
       setGender(profile?.sex);
       dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
+
+      /**
+       * THE WEEK'S RECEIPT (founder 2026-07-13). Re-scheduled on every boot rather than once at
+       * sign-up, on purpose: it is a repeating CALENDAR trigger, so re-scheduling coalesces onto
+       * the same id (never stacks), and it self-heals an install whose note was lost to a permission
+       * flip, a restore from backup, or the release that retired it. Scheduled AFTER `setGender` —
+       * the note's copy is conjugated, and a note written before the copy layer knows who it is
+       * speaking to would address half the athletes in the wrong person, once a week, forever.
+       * Only for an enrolled athlete: there is no week to report on before there is a program.
+       */
+      if (profile) void notifier.scheduleWeeklyUpdate();
+      else void notifier.cancelWeeklyProgramReady();
 
       // Finding 5: heal a crashed completion. If a session for a program day is in THIS week's
       // history but the day wasn't flagged done (a kill between the history write and the flag
@@ -541,6 +550,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Quarterly progress report — a recurring ~3-month note that opens the
         // peak-weight comparison (founder). Stub is a no-op; native build delivers.
         void notifier.scheduleQuarterlyReport();
+        // …and the weekly receipt, from the first Saturday on. `true` = this is the ONE call
+        // allowed to raise the permission dialog: the athlete has just finished building their
+        // program, which is the only honest moment to ask whether Hush may tell them it changed.
+        void notifier.scheduleWeeklyUpdate(true);
       },
 
       async recordSessionCompleted() {
@@ -620,7 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async refreshProgram() {
         if (!state.profile) return;
         // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
-        // Saturday 23:59 local, regardless of workout completion. Finishing every workout early just
+        // Saturday 20:30 local, regardless of workout completion. Finishing every workout early just
         // leaves Home in Recovery (no next workout to offer) until the calendar rolls; missed
         // workouts never carry over — each week is a fresh bucket and the engine only progresses
         // from completed, real-logged work. So the SOLE regeneration trigger is the calendar week

@@ -33,6 +33,22 @@ struct WireSummaryLift: Codable, Equatable {
   var best: String?
 }
 
+/// A milestone the workout just crossed — mirror of sessionMirror.ts `MirrorMilestone`.
+///
+/// COPY ONLY. The mark is earned on the phone, from the phone's history, and arrives here as a
+/// finished English sentence: there is no milestone engine on the wrist. Every field but the
+/// title is optional (and the whole struct is), because a phone one build behind sends no
+/// milestone at all — and a throw inside this nested optional would cost the wrist its entire
+/// closing screen, not just the medallion.
+struct WireMilestone: Codable, Equatable {
+  /// The engraved figure ("100", "250 t") — empty for a mark that is an event, not a number.
+  var value: String?
+  /// The tiny unit under the figure ("workouts", "tonnes").
+  var caption: String?
+  var title: String
+  var sub: String?
+}
+
 struct WireSummary: Codable, Equatable {
   var timeLabel: String
   var sets: Int
@@ -40,6 +56,8 @@ struct WireSummary: Codable, Equatable {
   /// Optional so a phone on an older mirror schema still decodes (the read-back beat simply
   /// does not play, and the summary lands the way it always did).
   var lifts: [WireSummaryLift]?
+  /// Present only on the session that crossed it — a mark is celebrated once, on its own workout.
+  var milestone: WireMilestone?
 }
 
 /// Equipment-native load setup (kg) — how to physically load the prescribed weight, so the athlete

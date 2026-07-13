@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
-import { color, font, textScale, tracking, trackingPx, paper, ink } from '@/design/tokens';
+import { color, font, textScale, tracking, trackingPx, paper, up } from '@/design/tokens';
 import { Icon } from '@/components/Icon';
 
 interface Props {
@@ -111,7 +111,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.border,
   },
-  idxDone: { backgroundColor: ink[0], borderColor: ink[0] },
+  // DONE IS SAGE (founder 2026-07-13: "why is a completed workout a BLACK tick? green is our
+  // colour for something that is finished"). The black square was the heaviest mark on the week's
+  // list and it said nothing — ink is the product's structural colour, not its verdict.
+  idxDone: { backgroundColor: up[0], borderColor: up[0] },
   idxText: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   bodyCol: { flex: 1, minWidth: 0, gap: 2 },
   title: {

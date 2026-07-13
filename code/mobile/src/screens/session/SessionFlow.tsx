@@ -54,6 +54,22 @@ export function SessionFlow({ navigation }: Props) {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [editing, setEditing] = useState(false);
   /**
+   * THE SET THE WRIST LOGGED IS LOGGED ON THE PHONE TOO (founder 2026-07-13: "I complete a set on
+   * the watch and the phone never shows the logged screen").
+   *
+   * The phone's own beat is a DWELL BEFORE the write (`confirm` above): the stage holds the
+   * numbers for 1.4 s, then the set is written and the rest begins. A watch completion writes at
+   * once — the wrist is already resting — so the phone plays the same beat AFTER the fact, as a
+   * layer over the rest that has already started underneath. That distinction is the whole design:
+   * if this beat replaced the stage the way `confirm` does, the Rest screen would mount 1.4 s late
+   * and anchor its countdown 1.4 s behind the wrist's. Two clocks, one workout — the exact bug the
+   * mirror was fixed for. The rest runs on time under the beat; the beat just covers it.
+   */
+  const [watchBeat, setWatchBeat] = useState<Confirm | null>(null);
+  // Anything already in the store when this screen mounts belongs to a PREVIOUS workout — never
+  // replay it as a beat on this one.
+  const seenWatchSeq = useRef(session.watchLoggedSet?.seq ?? 0);
+  /**
    * A notice is on the stage (founder 2026-07-13: "when the swapped-to badge appears it should
    * cover the WHOLE start-of-exercise part"). The swap confirmation used to float half-over the
    * Start button — a big cream button sticking out from under a card, which reads as a rendering
@@ -248,6 +264,21 @@ export function SessionFlow({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirm]);
 
+  // The wrist logged a set → play the phone's beat over the running rest, then lift it.
+  const logged = session.watchLoggedSet;
+  useEffect(() => {
+    if (!logged || logged.seq <= seenWatchSeq.current) return;
+    seenWatchSeq.current = logged.seq;
+    // The phone's own beat is already on the stage (the athlete tapped here and the wrist there,
+    // inside the same 1.4 s — the write is idempotent, and one beat is enough).
+    if (confirm) return;
+    setWatchBeat({ weight: logged.weight, reps: logged.reps, n: logged.n, m: logged.m });
+    haptics.setLogged(); // one tap — the same rhythm the phone's own capture has
+    const id = setTimeout(() => setWatchBeat(null), CONFIRM_DWELL_MS);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logged]);
+
   // ── One-tap swap (S4, approved 2026-07-06) ──
   // The athlete taps Swap; HUSH decides — their saved substitute, then their backup, then the
   // catalog's different-equipment default, then similar-effect candidates. No list, no mid-
@@ -343,6 +374,17 @@ export function SessionFlow({ navigation }: Props) {
           />
         )}
       </SafeAreaView>
+
+      {/* The wrist's set, read back on the phone — a layer, so the rest underneath keeps its
+          clock (see `watchBeat`). It swallows taps for its 1.4 s: the stage beneath is mid-beat
+          and must not be operated through it. */}
+      {watchBeat && !confirm ? (
+        <View style={styles.beatLayer}>
+          <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+            <Logged units={units} confirm={watchBeat} />
+          </SafeAreaView>
+        </View>
+      ) : null}
 
       {/* PAUSED — two doors, no essay (founder 2026-07-12). The paragraph explaining that
           completed sets are saved was reassurance for a fear the athlete does not have while
@@ -870,12 +912,28 @@ function Rest({
     setRemaining(rem);
   }, []);
 
+  // How much of the session's "+15 sec" total this screen has already folded into its countdown.
+  const appliedExtraRef = useRef(0);
+
   // A new rest period (duration changed / phase changed): reset and re-anchor.
   useEffect(() => {
     setTotal(session.restSeconds);
     setRemaining(session.restSeconds);
     remainingRef.current = session.restSeconds;
     endAtRef.current = paused ? null : Date.now() + session.restSeconds * 1000;
+    /**
+     * THE EXTENSION IS ALREADY IN THE ANCHOR — DO NOT ADD IT TWICE.
+     *
+     * On a fresh rest this is zero: the store resets the "+15" total with every new rest, and
+     * `restSeconds` is the prescribed length. But on a rest RESUMED after an app kill it is not.
+     * `sessionRecovery` rebuilds the remaining time as `base + restExtraS − elapsed`, so the
+     * seconds the athlete added before the crash are ALREADY inside `restSeconds` — while the
+     * store, correctly, still reports them as the current rest's extension. Anchoring this ref at
+     * 0 would make the effect below read a 15-second "delta" that had already been counted and
+     * hand the athlete a rest fifteen seconds longer than the one they walked away from — on the
+     * wrist too, since the phone is the clock. Anchor to what the store already knows.
+     */
+    appliedExtraRef.current = session.restExtraSeconds;
     beatsFiredRef.current.clear(); // fresh rest → re-arm the Approach countdown
     prevRemForBeatsRef.current = session.restSeconds;
     // Locked/background backstop: schedule the OS-level 7s warning + rest-over alert
@@ -959,20 +1017,42 @@ function Rest({
   }, [remaining, closing, reducedMotion, ignition]);
   const ignitionStyle = useAnimatedStyle(() => ({ opacity: ignition.value }));
 
-  // +15s: extend the absolute end but KEEP `total` fixed (the design adds only to
-  // `remaining`), so the ring visibly fills FORWARD by a clear 15/total slice — the
-  // "loading" top-up — instead of the near-imperceptible nudge you get when total
-  // grows in lock-step. Then re-sync, and tell the session store so the longer rest
-  // re-publishes to the Apple Watch / Live Activity (a phone +15 must reach the watch).
-  const addFifteen = useCallback(() => {
-    remainingRef.current += 15;
-    endAtRef.current = (endAtRef.current ?? Date.now() + remainingRef.current * 1000) + 15000;
+  /**
+   * +15s — AND THE ONLY PLACE IT LANDS, whoever pressed it (founder 2026-07-13: "+15 on the watch
+   * doesn't add on the phone; the other way round works").
+   *
+   * The button used to extend this screen's countdown itself and then tell the store, for the
+   * watch's benefit. So a +15 from the WRIST — which enters through the store — reached the mirror,
+   * the Live Activity and the watch, and never reached the one countdown the athlete was looking
+   * at. The store now holds the truth (`restExtraSeconds`, reset with every new rest) and this
+   * screen FOLLOWS it: press here or press there, the same seconds arrive by the same road.
+   *
+   * `total` stays fixed while `remaining` grows, so the ring visibly fills FORWARD by a clear
+   * 15/total slice — the "loading" top-up — instead of the imperceptible nudge you get when the
+   * total grows in lock-step (the law: `restTotalS` never grows, on any surface).
+   */
+  const extraS = session.restExtraSeconds;
+  useEffect(() => {
+    const delta = extraS - appliedExtraRef.current;
+    appliedExtraRef.current = extraS;
+    if (delta <= 0) return; // a reset (new rest) is handled by the re-anchor effect above
+    remainingRef.current += delta;
     beatsFiredRef.current.clear(); // the final-seconds window moved out — re-arm the countdown
     prevRemForBeatsRef.current = remainingRef.current;
+    if (endAtRef.current == null) {
+      // Paused: there is no end instant to move — the frozen remaining grows, and resume anchors
+      // from it (the pause effect above).
+      setRemaining(remainingRef.current);
+      return;
+    }
+    endAtRef.current += delta * 1000;
     sync();
     void restHaptics.arm(endAtRef.current); // the end moved out — reschedule the OS alerts
+  }, [extraS, sync]);
+
+  const addFifteen = useCallback(() => {
     session.extendRest(15);
-  }, [sync, session]);
+  }, [session]);
 
   return (
     <>
@@ -1156,6 +1236,8 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
+  // The watch-logged beat: the stage's own black, edge to edge, over a rest that keeps running.
+  beatLayer: { ...StyleSheet.absoluteFillObject, backgroundColor: stage[0] },
   center: { flex: 1 },
 
   // Stage chrome

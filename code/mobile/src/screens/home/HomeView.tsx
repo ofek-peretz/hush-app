@@ -6,11 +6,29 @@
  * what do I do next? — and offers the one affordance to begin:
  *   brand (hush·) + settings · Legend(NEXT WORKOUT) · workout name · muscle
  *   groups · one quiet meta line (exercises · loads set) · week ProgressMeter ·
- *   Begin {name} · Choose another workout (bottom sheet — restored 2026-07-10;
- *   the view had silently lost the phone affordance while the watch kept it) ·
- *   Open training · hub rows (This week / History / Progress).
- * Rest state centers "Recovery." with the completed-week meter and one quiet
- * fact — when the next week opens (Sunday morning, the calendar roll).
+ *   Begin {name} · Choose another workout (bottom sheet) · THE WEEK CARD · hub
+ *   rows (History / Progress).
+ * Rest state centers "Recovery." with the completed-week meter, one quiet fact —
+ * when the next week opens — and Open training, which on a recovery day IS the
+ * day's act.
+ *
+ * ═══ THE WEEK CARD (founder 2026-07-13) — three findings, one object ═══
+ *
+ *  · "The app still doesn't say what it does. It doesn't read like anyone is MANAGING my
+ *    programme." So the card opens with Hush's own sentence — what it did to this week's plan and
+ *    why (domain/weekBriefing): the loads it raised, the load it matched back down, the lift it
+ *    swapped. Not an explanation of the product; the product, narrating itself.
+ *  · "The Program section at the bottom gets swallowed." It was three quiet list rows. It is now
+ *    the only CARD on the page, and it holds the week itself.
+ *  · "Nobody can know they can edit the plan, pin a lift, or watch the clip — you have to tap
+ *    This-week, then a workout, and only then does it open." The workouts are chips ON the card
+ *    now: a check when trained, the ochre index on the one that is queued, and a tap goes straight
+ *    into the workout's exercises. One tap from Home, not two, and the week's state is legible
+ *    without entering anything.
+ *
+ * Cardio left the main path (founder 2026-07-13): Home gets exactly ONE primary action — today's
+ * workout. Open training is a real option, so it lives in the "choose another workout" sheet with
+ * the week's workouts. On a RECOVERY day it is the day's act, so there it keeps its card.
  *
  * The container (Home.tsx) wires state + navigation.
  */
@@ -24,6 +42,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
+import type { Line } from '@/domain/voice';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, font, textScale, signal, radius, up } from '@/design/tokens';
@@ -55,6 +74,14 @@ export interface HomeViewProps {
   onStart: () => void;
   workouts: HomeWorkoutOption[];
   onChooseWorkout: (id: string) => void;
+  /** Hush's sentence(s) about what it did to this week's plan (domain/weekBriefing). Null while
+   *  the engine's record is still being read — the card holds its shape and stays silent. */
+  brief: Line[] | null;
+  /** This week's update has not been opened yet — the card wears the ochre mark. */
+  briefUnseen: boolean;
+  onWeeklyUpdate: () => void;
+  /** Open ONE workout's exercises (swap · pin · form clip) straight from the week card. */
+  onOpenWorkout: (id: string) => void;
   onProgram: () => void;
   onHistory: () => void;
   onSettings: () => void;
@@ -202,13 +229,17 @@ export function HomeView(props: HomeViewProps) {
                 </Text>
               </View>
 
+              {/* DONE IS SAGE, EVERYWHERE (founder 2026-07-13: "anything to do with something
+                  that was completed should be our green"). This meter measures workouts TRAINED;
+                  it was ochre, which is the instrument's "you are here" mark, not its "this is
+                  finished" mark. The two must never be the same colour. */}
               <View style={styles.meterWrap}>
                 <ProgressMeter
                   label={t('home.weekLabel', { n: props.weekNumber })}
                   valueLabel={`${done} / ${total}`}
                   value={done}
                   max={total || 1}
-                  tone="signal"
+                  tone="up"
                 />
               </View>
 
@@ -238,7 +269,10 @@ export function HomeView(props: HomeViewProps) {
                     no colour and no glyph — nothing said it could be pressed, so athletes
                     missed that the option existed (founder 2026-07-12). It is now a ghost
                     button: a hairline outline and a chevron. Quiet, but unmistakably a control. */}
-                {!props.resumable && props.workouts.length > 1 ? (
+                {/* The sheet now holds the week's workouts AND open training, so it is offered
+                    whenever there is a session to queue — not only when there are several
+                    workouts left (that condition used to hide the only door to a run). */}
+                {!props.resumable && props.workouts.length > 0 ? (
                   <Button
                     variant="secondary"
                     block
@@ -252,37 +286,113 @@ export function HomeView(props: HomeViewProps) {
             </View>
           )}
 
-          {/* open training — run / walk, recorded not coached (sealed from the engine) */}
-          <View style={styles.openTraining}>
-            <Legend style={styles.hubLegend}>{t('home.openTraining')}</Legend>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('cardio.title')}
-              onPress={props.onCardio}
-              style={({ pressed }) => [styles.cardioCard, pressed && styles.cardioCardPressed]}
-            >
-              <View style={styles.cardioIconBox}>
-                {/* a running figure, not the old footprints — which read as two cups */}
-                <Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />
-              </View>
-              <View style={styles.cardioText}>
-                <Text style={styles.cardioTitle}>{t('cardio.title')}</Text>
-                <Text style={styles.cardioSub}>{t('cardio.recordedNotCoached')}</Text>
-              </View>
-              <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
-            </Pressable>
-          </View>
+          {/* RECOVERY ONLY: on a day with no workout to do, a run or a walk IS the day's act —
+              so here, and only here, open training keeps its card (founder 2026-07-13). During a
+              training week it is one of the options in "choose another workout", where a
+              secondary path belongs. */}
+          {props.resting ? (
+            <View style={styles.openTraining}>
+              <Legend style={styles.hubLegend}>{t('home.openTraining')}</Legend>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('cardio.title')}
+                onPress={props.onCardio}
+                style={({ pressed }) => [styles.cardioCard, pressed && styles.cardioCardPressed]}
+              >
+                <View style={styles.cardioIconBox}>
+                  {/* a running figure, not the old footprints — which read as two cups */}
+                  <Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />
+                </View>
+                <View style={styles.cardioText}>
+                  <Text style={styles.cardioTitle}>{t('cardio.title')}</Text>
+                  <Text style={styles.cardioSub}>{t('cardio.recordedNotCoached')}</Text>
+                </View>
+                <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+              </Pressable>
+            </View>
+          ) : null}
 
-          {/* hub entries */}
+          {/* ── the week, and the voice that manages it (see the header) ── */}
           <View style={styles.hub}>
             <Legend style={styles.hubLegend}>{t('home.programLegend')}</Legend>
-            <ListRow
-              title={t('home.hubThisWeek')}
-              subtitle={t('home.hubThisWeekSub', { done, remaining: Math.max(0, total - done) })}
-              chevron
-              onPress={props.onProgram}
-              leading={<Icon name="calendar" size={20} color={color.textSecondary} strokeWidth={2} />}
-            />
+            <View style={styles.weekCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('home.hubThisWeek')}
+                onPress={props.onProgram}
+                style={({ pressed }) => [styles.weekHead, pressed && styles.weekPressed]}
+              >
+                <Text style={styles.weekTitle}>{t('home.hubThisWeek')}</Text>
+                {/* The week's state as a measurement, in the measuring voice — and the trained
+                    half of it in sage, because that is what "done" is coloured in this product. */}
+                <Text style={styles.weekCount}>
+                  <Text style={styles.weekCountDone}>{done}</Text>
+                  {` / ${total}`}
+                </Text>
+                <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
+              </Pressable>
+
+              {/* the week's workouts, as chips — the state of the week, and the door into it */}
+              {props.workouts.length ? (
+                <View style={styles.chips} accessibilityLabel={t('home.weekChips')}>
+                  {props.workouts.map((w) => {
+                    const isDone = !!w.done;
+                    const current = !isDone && w.name === props.dayName;
+                    return (
+                      <Pressable
+                        key={w.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={w.name}
+                        accessibilityState={{ selected: current }}
+                        onPress={() => props.onOpenWorkout(w.id)}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          isDone && styles.chipDone,
+                          current && styles.chipCurrent,
+                          pressed && styles.weekPressed,
+                        ]}
+                      >
+                        {isDone ? (
+                          <Icon name="check" size={13} color={color.up} strokeWidth={2.6} />
+                        ) : current ? (
+                          <View style={styles.currentDotSm} />
+                        ) : null}
+                        {/* Workout names are English in every locale (the RTL law). Inside a Hebrew
+                            chip, sitting right next to a glyph, an un-isolated Latin run is exactly
+                            where the bidi algorithm reorders things — so it is isolated. */}
+                        <Text style={[styles.chipText, isDone && styles.chipTextDone]} numberOfLines={1}>
+                          {bidi(w.name)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              {/* Hush's sentence — what it DID to this plan. The one line that makes this a
+                  managed programme rather than a nicely-drawn workout screen. */}
+              {props.brief?.length ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.briefOpen')}
+                  onPress={props.onWeeklyUpdate}
+                  style={({ pressed }) => [styles.brief, pressed && styles.weekPressed]}
+                >
+                  <Text style={styles.briefText}>{props.brief.map((l) => t(l.key, l.params ?? {})).join(' ')}</Text>
+                  <View style={styles.briefLinkRow}>
+                    {props.briefUnseen ? (
+                      <View style={styles.briefNew}>
+                        <View style={styles.briefNewDot} />
+                        <Text style={styles.briefNewText}>{t('home.briefNew').toUpperCase()}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
+                    <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+
             <ListRow
               title={t('home.hubHistory')}
               subtitle={t('home.hubHistorySub')}
@@ -307,7 +417,7 @@ export function HomeView(props: HomeViewProps) {
       {/* choose another workout — the weekly bucket is unscheduled; the athlete queues any of it */}
       {choosing ? (
         <BottomSheet onClose={() => setChoosing(false)}>
-          <Legend style={styles.sheetLegend}>{t('home.chooseAnother')}</Legend>
+          <Legend style={styles.sheetLegend}>{t('home.chooseLegendWorkouts')}</Legend>
           {props.workouts.map((w, i) => {
             const current = w.name === props.dayName;
             // A finished workout is a RECORD, not an option: it reads as done and is inert
@@ -346,6 +456,21 @@ export function HomeView(props: HomeViewProps) {
               />
             );
           })}
+
+          {/* …and the run. It is a workout the athlete can choose today; it is simply not one
+              HUSH prescribes — which is exactly what the second legend says. */}
+          <Legend style={styles.sheetLegendSecond}>{t('home.openTraining')}</Legend>
+          <ListRow
+            title={t('cardio.title')}
+            subtitle={t('cardio.recordedNotCoached')}
+            chevron
+            last
+            onPress={() => {
+              setChoosing(false);
+              props.onCardio();
+            }}
+            leading={<Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />}
+          />
         </BottomSheet>
       ) : null}
     </View>
@@ -374,6 +499,7 @@ const styles = StyleSheet.create({
   restCopy: { marginTop: 14, maxWidth: 320 },
 
   sheetLegend: { marginTop: 6, marginBottom: 8 },
+  sheetLegendSecond: { marginTop: 18, marginBottom: 8 },
 
   openTraining: { marginTop: 24 },
   cardioCard: {
@@ -444,4 +570,55 @@ const styles = StyleSheet.create({
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },
+
+  // ── the week card ──
+  // A card sits on the page with a HAIRLINE, not a shadow (the design's law). It is the only
+  // card on Home, which is the point: the section that was "swallowed" is now the one object
+  // on the page with a frame around it.
+  weekCard: {
+    marginTop: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  weekPressed: { opacity: 0.62 },
+  weekHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  weekTitle: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  weekCount: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
+  weekCountDone: { fontFamily: font.monoSemibold, color: up[0] },
+
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.fillSubtle,
+  },
+  // Done = sage, and sage only. Queued = the ochre index. Never both, never swapped.
+  chipDone: { backgroundColor: color.upWash, borderColor: color.up },
+  chipCurrent: { borderColor: signal[0], backgroundColor: signal.wash },
+  chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
+  chipTextDone: { color: color.textPrimary },
+  currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: signal[0] },
+
+  brief: { marginTop: 14, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 12, paddingBottom: 10 },
+  // Hush SPEAKING — the sans voice, never the measuring one, and at reading size: this is the
+  // sentence the whole product is judged by.
+  briefText: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
+  briefLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  briefLink: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accentText, textAlign: 'left' },
+  briefNew: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: signal.wash },
+  briefNewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: signal[0] },
+  briefNewText: { fontFamily: font.sansSemibold, fontSize: 10, letterSpacing: 0.6, color: color.accentText, textAlign: 'left' },
 });

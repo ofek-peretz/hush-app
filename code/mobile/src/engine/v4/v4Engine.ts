@@ -330,7 +330,7 @@ function metaWithGridFor(history: Session[]) {
 
 /**
  * Advance the engine at the WEEKLY calendar roll (founder 2026-07-09, finding 7). A training week =
- * the Sat-23:59 window; at the roll the engine folds ALL sessions logged since the last roll into
+ * the Sat-20:30 window; at the roll the engine folds ALL sessions logged since the last roll into
  * one week's per-slot results, runs planNextWeek, and persists the updated slot state + a per-slot
  * history record. So the plan is stable all week and updates on the whole week's work (2+ sessions
  * of a muscle group feed one decision). The PURE engine is unchanged — only the cadence moved from
@@ -344,7 +344,7 @@ export async function maybeAdvance(
   seedFor: SeedFor,
   lockedSlotIds: ReadonlySet<string> = new Set(),
   nowMs: number = Date.now(),
-  /** The Sat-23:59 the CURRENT program bucket was built for (db.loadWeekOpen). The engine never
+  /** The Sat-20:30 the CURRENT program bucket was built for (db.loadWeekOpen). The engine never
    *  advances ahead of the bucket the athlete is executing — see the anchor stamp in doAdvance.
    *  Absent → the current week-open (the ordinary case; identity). */
   bucketOpenMs?: number,
@@ -425,7 +425,7 @@ async function doAdvance(
     state.lastUpdate = { weekIndex: state.weeksProcessed ?? 0, at: new Date(nowMs).toISOString(), explanations: out.explanations, plan, seen: false };
   }
 
-  // ── Weekly rollover at the Sat-23:59 calendar boundary (finding 7) ──
+  // ── Weekly rollover at the Sat-20:30 calendar boundary (finding 7) ──
   const weekOpen = currentWeekOpen(nowMs);
   const rolled = state.lastAdvanceWeekOpen != null && weekOpen > state.lastAdvanceWeekOpen;
   if (rolled && chrono.length > state.lastAdvanceAt) {
@@ -542,10 +542,10 @@ async function doAdvance(
     state.weeksProcessed = weekIndex + 1;
   }
   // Move the anchor to the current week (even with no work to fold), so the next roll is the NEXT
-  // Sat 23:59; on the very first run this only establishes the baseline (rolled was false → no fold).
+  // Sat 20:30; on the very first run this only establishes the baseline (rolled was false → no fold).
   //
   // The engine advances with the PROGRAM BUCKET, never ahead of it (founder 2026-07-10): a mid-week
-  // signup's first bucket is stamped for the NEXT Sat 23:59 (domain/weekCadence.firstBucketOpen) so
+  // signup's first bucket is stamped for the NEXT Sat 20:30 (domain/weekCadence.firstBucketOpen) so
   // the athlete's first plan gets a full runway — and the engine must not bump loads (or publish a
   // Weekly Update) in the MIDDLE of a plan the athlete is still executing. Anchoring to the bucket
   // makes the first roll land exactly when that bucket expires. In the ordinary case the bucket

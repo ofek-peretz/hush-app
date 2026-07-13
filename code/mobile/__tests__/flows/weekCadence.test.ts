@@ -1,7 +1,12 @@
 /**
- * Week cadence: the Saturday-23:59 weekly open, the lock between weeks, and the
- * "Week N" counter. Asserted by PROPERTIES (a real local Saturday at 23:59, strict
+ * Week cadence: the Saturday-20:30 weekly open, the lock between weeks, and the
+ * "Week N" counter. Asserted by PROPERTIES (a real local Saturday at the open hour, strict
  * ordering) so the suite is correct in any timezone.
+ *
+ * The properties are written against the CONSTANTS, which is right — but it means they would have
+ * gone on passing if the hour drifted anywhere. The hour is a founder decision, not an
+ * implementation detail (see the header of domain/weekCadence: an update nobody is awake for is
+ * not an update), so the first test below nails it down as a fact.
  */
 import {
   WEEK_OPEN_DOW,
@@ -24,7 +29,15 @@ function isWeekOpen(ms: number) {
 }
 
 describe('weekCadence', () => {
-  test('nextWeekOpen lands on the next Saturday 23:59, strictly after the input', () => {
+  test('THE WEEK OPENS SATURDAY 20:30 — an hour the athlete is awake for (founder 2026-07-13)', () => {
+    expect({ dow: WEEK_OPEN_DOW, hour: WEEK_OPEN_HOUR, minute: WEEK_OPEN_MINUTE }).toEqual({
+      dow: 6, // Saturday
+      hour: 20,
+      minute: 30,
+    });
+  });
+
+  test('nextWeekOpen lands on the next Saturday 20:30, strictly after the input', () => {
     for (let off = 0; off < 14; off++) {
       const now = at(2026, 5, 1) + off * DAY; // June 2026, walk two weeks
       const open = nextWeekOpen(now);
@@ -34,7 +47,7 @@ describe('weekCadence', () => {
     }
   });
 
-  test('currentWeekOpen is the most recent Saturday 23:59 at/before now', () => {
+  test('currentWeekOpen is the most recent Saturday 20:30 at/before now', () => {
     const now = at(2026, 5, 17, 15); // a Wednesday afternoon
     const open = currentWeekOpen(now);
     isWeekOpen(open);
@@ -43,7 +56,7 @@ describe('weekCadence', () => {
   });
 
   test('Saturday at exactly 23:59 belongs to the current (not next) week', () => {
-    // find a Saturday, set 23:59 exactly
+    // find a Saturday, set 20:30 exactly
     let d = new Date(2026, 5, 7, WEEK_OPEN_HOUR, WEEK_OPEN_MINUTE, 0, 0);
     while (d.getDay() !== WEEK_OPEN_DOW) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, WEEK_OPEN_HOUR, WEEK_OPEN_MINUTE, 0, 0);
     const ms = d.getTime();
@@ -73,7 +86,7 @@ describe('weekCadence', () => {
   describe('shouldRollWeek (calendar-primary bucket cadence)', () => {
     const wed = at(2026, 5, 17, 15); // a Wednesday
     const thisOpen = currentWeekOpen(wed);
-    const lastOpen = currentWeekOpen(thisOpen - DAY); // the previous Saturday-23:59 window
+    const lastOpen = currentWeekOpen(thisOpen - DAY); // the previous Saturday-20:30 window
 
     test('no bucket yet → always roll (first program / recovery from a lost program)', () => {
       expect(shouldRollWeek(null, false, wed)).toBe(true);
@@ -88,7 +101,7 @@ describe('weekCadence', () => {
 
     test('completion is irrelevant: finishing early never rolls (only the calendar does)', () => {
       // hasProgram + built-for-this-week is the only signal; there is no "completed" input at all.
-      expect(shouldRollWeek(thisOpen, true, thisOpen)).toBe(false); // Saturday 23:59 exactly, fresh
+      expect(shouldRollWeek(thisOpen, true, thisOpen)).toBe(false); // Saturday 20:30 exactly, fresh
       expect(shouldRollWeek(thisOpen, true, thisOpen + 3 * DAY)).toBe(false); // mid-week, all done
     });
 
@@ -97,7 +110,7 @@ describe('weekCadence', () => {
       expect(shouldRollWeek(thisOpen, true, nextWeekOpen(thisOpen))).toBe(true); // crossed next Saturday
     });
 
-    test('roll flips exactly at Saturday 23:59, not before', () => {
+    test('roll flips exactly at Saturday 20:30, not before', () => {
       const next = nextWeekOpen(thisOpen);
       expect(shouldRollWeek(thisOpen, true, next - 1000)).toBe(false); // one second before → hold
       expect(shouldRollWeek(thisOpen, true, next)).toBe(true); // at open → roll

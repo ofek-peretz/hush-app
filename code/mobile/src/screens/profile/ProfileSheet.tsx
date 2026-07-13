@@ -25,6 +25,7 @@ import { health } from '@/platform/health';
 import type { HealthPermissionState } from '@/platform/health/healthModel';
 import * as haptics from '@/platform/haptics';
 import { setLocale, currentLocale } from '@/i18n';
+import { notifier } from '@/platform/notifications';
 import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { displayWeight, unitLabel } from '@/domain/schedule';
@@ -60,6 +61,14 @@ export function ProfileSheet({ navigation }: Props) {
       // and read as a dead control — so do nothing, and leave the segmented control where it is.
       return;
     }
+    /**
+     * A SCHEDULED NOTE IS FROZEN COPY. The weekly update note is written once, at boot, and handed
+     * to iOS with its words already in it — so an athlete who switches to Hebrew here would go on
+     * receiving an English note every Saturday until the next COLD start (the language reload
+     * below remounts the navigator, not the store that schedules it). Re-scheduling coalesces onto
+     * the same id, so this simply rewrites the pending note in the language just chosen.
+     */
+    void notifier.scheduleWeeklyUpdate();
     // Apply the new writing direction (RTL ⇄ LTR) immediately — no manual relaunch.
     reloadApp();
   }

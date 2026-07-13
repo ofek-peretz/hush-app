@@ -64,6 +64,35 @@ describe('tg() — the copy that does not go through a screen', () => {
   });
 });
 
+/**
+ * THE VERBS THE ATHLETE PRESSES (founder 2026-07-13). A woman picked "נקבה" and the button under
+ * her thumb still said "המשך", and Home still said "התחל אימון". The buttons are where the app
+ * addresses her most often and most directly — they were the last masculine surface left.
+ */
+describe('the buttons speak to the person who is pressing them', () => {
+  it('onboarding Continue is המשיכי for a woman', () => {
+    setGender('male');
+    expect(tg('ob.continue')).toBe('המשך');
+    setGender('female');
+    expect(tg('ob.continue')).toBe('המשיכי');
+  });
+
+  it("Home's Begin / Continue conjugate too — with the workout's name intact", () => {
+    setGender('female');
+    expect(tg('home.begin', { name: 'Push A' })).toContain('התחילי');
+    expect(tg('home.begin', { name: 'Push A' })).toContain('Push A');
+    expect(tg('home.continueWorkout', { name: 'Push A' })).toContain('המשיכי');
+  });
+
+  it("Body data speaks WITH the athlete, not AT them — in both persons ('איתך', never 'אותך')", () => {
+    for (const g of ['male', 'female'] as const) {
+      setGender(g);
+      expect(tg('ob.bodySub')).toContain('להתחיל איתך');
+      expect(tg('ob.bodySub')).not.toContain('אותך');
+    }
+  });
+});
+
 describe('the cue library — the imperatives', () => {
   const BENCH = 'bb_bench_press';
 

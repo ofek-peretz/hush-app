@@ -8,8 +8,9 @@ enum WatchCopy {
   static let nextWorkout = "Next workout"
   static let begin = "Begin"
   static let chooseWorkout = "Choose workout"
-  // Calendar-primary cadence: the week rolls SUNDAY 04:00 (keep in step with en.json).
-  static let recovery = "Recovery — your next workout opens Sunday"
+  // Calendar-primary cadence: the week rolls SATURDAY 20:30 local (founder 2026-07-13 — an update
+  // nobody is awake for is not an update). Keep in step with en.json `watch.recovery`.
+  static let recovery = "Recovery — your next week opens Saturday"
   // Paywall: training is gated on the phone; the wrist never starts (or bypasses) it.
   static let membershipNeeded = "Continue on iPhone — your membership needs attention"
   static func lifts(_ n: Int) -> String { "\(n) lifts" }
@@ -87,6 +88,9 @@ enum WatchCopy {
   // ellipsize on the smaller 41 mm case).
   static func complete(_ name: String) -> String { "\(name)\ncomplete." }
   static let done = "Done"
+  /// Beat 4's legend — a mark the workout crossed (en.json `milestones.legend`). The mark's own
+  /// words arrive on the wire, already written by the phone.
+  static let milestone = "Milestone"
   static let metricTime = "Time"
   static let metricSets = "Sets"
   // The count of lifts whose load the model raised this session ("Up" read as a cipher —

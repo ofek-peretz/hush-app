@@ -8,11 +8,12 @@
  * The athlete owns exercise SELECTION (swap/replace) and the lock; the frozen
  * model owns order, load, sets, reps — and may auto-swap only UNLOCKED slots.
  * "Begin {name}" sets this as Home's offered workout and returns to Home, so the
- * actual start stays on the canonical, Saturday-23:59-gated path.
+ * actual start stays on the canonical, Saturday-20:30-gated path.
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SwapSheet } from '@/components/SwapSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
@@ -35,6 +36,20 @@ interface Swapping {
   currentExerciseId: string;
 }
 
+/**
+ * THE THREE GLYPHS NOBODY COULD READ (founder 2026-07-13: "there is no way for a user to KNOW
+ * that they can edit the plan, watch the form clip, or pin a lift").
+ *
+ * Every row on this screen already carries three controls — form clip, pin, swap — and they are
+ * three unlabelled glyphs in a row of three, which is a rebus, not an interface. A tutorial is
+ * the wrong answer (it teaches the interface, and it costs friction on the way to the product).
+ * A single line of copy, ON the screen, the first time the athlete opens it, is the right one: it
+ * names the three verbs, and then it is gone forever. Dismissed by the × or by simply using one
+ * of the three — because an athlete who has swapped a lift has learned the lesson, and a hint
+ * that outlives its lesson is clutter.
+ */
+const HINT_KEY = 'hush.program.actionsHint';
+
 export function ProgramDetail({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
@@ -44,6 +59,7 @@ export function ProgramDetail({ navigation, route }: Props) {
   const [swapping, setSwapping] = useState<Swapping | null>(null);
   const [formFor, setFormFor] = useState<number | null>(null);
   const [yoursNow, setYoursNow] = useState<string | null>(null);
+  const [hint, setHint] = useState(false);
 
   useEffect(() => {
     if (!day) return;
@@ -52,6 +68,24 @@ export function ProgramDetail({ navigation, route }: Props) {
       .sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions })
       .then(setTargets);
   }, [app.model, app.modeState.completedSessions, day]);
+
+  useEffect(() => {
+    let active = true;
+    // Storage decides only whether the hint is SHOWN. A rejected read shows nothing — a hint that
+    // reappears on every visit because storage is broken is worse than a hint never given.
+    AsyncStorage.getItem(HINT_KEY)
+      .then((seen) => active && setHint(seen == null))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /** The lesson has landed (the athlete used one of the three, or dismissed it): never again. */
+  function retireHint() {
+    setHint(false);
+    void AsyncStorage.setItem(HINT_KEY, '1').catch(() => {});
+  }
 
   const repsFor = (exId: string) => targets.find((x) => x.exerciseId === exId && x.setIndex === 0)?.recommendedReps ?? 8;
 
@@ -96,6 +130,27 @@ export function ProgramDetail({ navigation, route }: Props) {
           <Text style={styles.intro}>{t('program.dayMeta', { exercises: day.slots.length, min: estMin })}</Text>
           {yoursNow ? <Text style={styles.yoursNow}>{t('replacement.yoursNow', { exercise: bidi(yoursNow) })}</Text> : null}
 
+          {/* The three verbs, named once (see HINT_KEY). Not a modal, not a coach mark: a line. */}
+          {hint ? (
+            <View style={styles.hint}>
+              <View style={styles.hintGlyphs}>
+                <Icon name="play" size={14} color={color.textSecondary} strokeWidth={2} />
+                <Icon name="pin" size={14} color={color.textSecondary} strokeWidth={2} />
+                <Icon name="repeat" size={14} color={color.textSecondary} strokeWidth={2} />
+              </View>
+              <Text style={styles.hintText}>{t('program.hint')}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+                hitSlop={10}
+                onPress={retireHint}
+                style={({ pressed }) => [styles.hintClose, { opacity: pressed ? press.opacity : 1 }]}
+              >
+                <Icon name="close" size={15} color={color.textTertiary} strokeWidth={2} />
+              </Pressable>
+            </View>
+          ) : null}
+
           {day.slots.map((slot, i) => {
             const locked = slot.locked === true;
             const lockable = slot.locked !== undefined;
@@ -120,7 +175,10 @@ export function ProgramDetail({ navigation, route }: Props) {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t('workout.form')}
-                    onPress={() => setFormFor(i)}
+                    onPress={() => {
+                      retireHint(); // used it → learned it
+                      setFormFor(i);
+                    }}
                     style={({ pressed }) => [styles.formBtn, pressed && styles.formBtnPressed]}
                   >
                     <Icon name="play" size={18} color={color.textPrimary} />
@@ -130,7 +188,10 @@ export function ProgramDetail({ navigation, route }: Props) {
                       accessibilityRole="button"
                       accessibilityState={{ selected: locked }}
                       accessibilityLabel={locked ? t('program.unlockExercise') : t('program.lockExercise')}
-                      onPress={() => void app.toggleSlotLock(day.id, i)}
+                      onPress={() => {
+                        retireHint();
+                        void app.toggleSlotLock(day.id, i);
+                      }}
                       style={({ pressed }) => [styles.actionBtn, locked && styles.lockBtnOn, pressed && styles.actionBtnPressed]}
                     >
                       <Icon name="pin" size={17} color={locked ? color.accentText : color.textTertiary} strokeWidth={2} />
@@ -141,7 +202,10 @@ export function ProgramDetail({ navigation, route }: Props) {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t('workout.swapAction')}
-                    onPress={() => setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId })}
+                    onPress={() => {
+                      retireHint();
+                      setSwapping({ slotIndex: i, currentExerciseId: slot.exerciseId });
+                    }}
                     style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
                   >
                     <Icon name="repeat" size={17} color={color.textTertiary} strokeWidth={2} />
@@ -208,6 +272,24 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.gutter, paddingBottom: 24 },
   intro: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, lineHeight: 20, paddingTop: 2, paddingBottom: 8, textAlign: 'left' },
   yoursNow: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginBottom: 4, textAlign: 'left' },
+
+  // the one-time hint — a quiet sunken line, not a coach mark
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    backgroundColor: color.fillSubtle,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  hintGlyphs: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
+  hintText: { flex: 1, fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 18, color: color.textSecondary, textAlign: 'left' },
+  hintClose: { flexShrink: 0, padding: 2 },
 
   lift: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: color.border },
   liftLast: { borderBottomWidth: 0 },

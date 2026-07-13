@@ -1,13 +1,21 @@
 /**
- * Weekly cadence (founder 2026-07-09: moved from Sunday 04:00 to **Saturday 23:59 local**).
- * The training week is a fixed window that opens **Saturday at 23:59 local** and runs to the
- * next Saturday 23:59 — the moment the engine's updated plan swaps in for the coming week.
- * When all of a week's workouts are done the athlete is in Recovery until the next opening —
+ * Weekly cadence. The training week is a fixed window that opens **Saturday at 20:30 local** and
+ * runs to the next Saturday 20:30 — the moment the engine's updated plan swaps in for the coming
+ * week. When all of a week's workouts are done the athlete is in Recovery until the next opening —
  * the next week is genuinely LOCKED until then (no starting early).
+ *
+ * THE HOUR IS 20:30, AND THE HOUR IS THE POINT (founder 2026-07-13). It was 23:59 — chosen as the
+ * last possible instant of the week, which is exactly why nobody ever witnessed it: the update
+ * landed while the athlete was asleep and was, by morning, indistinguishable from "the app just
+ * looks like this". The weekly update is the one recurring proof that somebody is MANAGING this
+ * program, and a proof nobody sees is not a proof. 20:30 on a Saturday is a waking hour on the
+ * quietest evening of the week: the roll happens, the note arrives, and the athlete can open the
+ * app and read what changed while it is still Saturday. (It moved from Sunday 04:00 to Sat 20:30
+ * on 2026-07-09; this is the same boundary, moved to where it can be witnessed.)
  *
  * Also the source of the **training-week counter** ("Week N"), which appears all
  * over the product (Home meter, Recovery, the progress reports). Week 1 is the
- * week the account was created (`memberSince`); it increments each Saturday 23:59.
+ * week the account was created (`memberSince`); it increments each Saturday 20:30.
  *
  * Pure + I/O-free so it is fully unit-testable and deterministic given a clock.
  */
@@ -15,14 +23,14 @@ import type { Program, ProgramDay, Session } from '@/data/local/models';
 import { sessionTrained } from '@/domain/completion';
 
 export const WEEK_OPEN_DOW = 6; // Saturday (JS Date.getDay(): 0=Sun … 6=Sat)
-export const WEEK_OPEN_HOUR = 23; // 23:xx local
-export const WEEK_OPEN_MINUTE = 59; // :59 — the updated plan swaps in at Sat 23:59 (founder 2026-07-09)
+export const WEEK_OPEN_HOUR = 20; // 20:xx local
+export const WEEK_OPEN_MINUTE = 30; // :30 — the updated plan swaps in at Sat 20:30 (founder 2026-07-13)
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The most recent Saturday-23:59 at or before `nowMs` — the start of the current
+ * The most recent Saturday-20:30 at or before `nowMs` — the start of the current
  * training week. Built from local Y/M/D parts so it is DST-correct (always lands
- * on a real local 23:59, never drifting by the DST hour).
+ * on a real local 20:30, never drifting by the DST hour).
  */
 export function currentWeekOpen(nowMs: number): number {
   const d = new Date(nowMs);
@@ -34,7 +42,7 @@ export function currentWeekOpen(nowMs: number): number {
 }
 
 /**
- * The first Saturday-23:59 strictly AFTER `afterMs` — when the next training week
+ * The first Saturday-20:30 strictly AFTER `afterMs` — when the next training week
  * opens / unlocks.
  */
 export function nextWeekOpen(afterMs: number): number {
@@ -47,7 +55,7 @@ export function nextWeekOpen(afterMs: number): number {
 }
 
 /**
- * 1-based training-week number for "Week N", counted in Saturday-23:59 windows
+ * 1-based training-week number for "Week N", counted in Saturday-20:30 windows
  * since the account was created. Falls back to 1 on a missing/unparseable anchor.
  */
 export function trainingWeekNumber(memberSinceIso: string | null | undefined, nowMs: number): number {
@@ -75,7 +83,7 @@ export function trainableDaysUntil(nowMs: number, untilMs: number): number {
  * The week-open the FIRST bucket (onboarding) is built for (founder 2026-07-10):
  * a mid-week signup whose remaining calendar days cannot fit the chosen weekly
  * frequency (e.g. Thursday + 4×/week) would otherwise lose its very first program
- * at the coming Saturday 23:59 with no chance of completing it. In that case the
+ * at the coming Saturday 20:30 with no chance of completing it. In that case the
  * bucket is stamped as built for the NEXT open, so it survives the first roll and
  * the athlete gets a full runway; from then on the calendar rhythm applies
  * unchanged. A signup whose window fits (e.g. Sunday + 4×) anchors normally.
@@ -147,8 +155,8 @@ export function healWeekCompletion(
 
 /**
  * Whether the weekly bucket must be regenerated NOW (calendar-primary cadence). True when there is
- * no bucket yet, or the calendar week has advanced past the Saturday-23:59 the current bucket was
- * built for. Completion is deliberately irrelevant — the roll is purely the Saturday-23:59 boundary,
+ * no bucket yet, or the calendar week has advanced past the Saturday-20:30 the current bucket was
+ * built for. Completion is deliberately irrelevant — the roll is purely the Saturday-20:30 boundary,
  * so finishing early never rolls and an unfinished week never blocks the roll. `builtForMs == null`
  * WITH an existing bucket is pre-upgrade state → do NOT roll (the caller adopts it into the current
  * week), so upgrading never wipes an in-progress week.

@@ -46,6 +46,9 @@ export function ManualInfo({ navigation, route }: Props) {
       legend={t('ob.bodyLegend')}
       title={t('ob.bodyTitle')}
       sub={t('ob.bodySub')}
+      // The navigator's back-swipe is OFF for this step (Root) — three horizontal wheels cannot
+      // share a screen with a horizontal back gesture. The way back by hand lives in the footer.
+      onSwipeBack={() => navigation.goBack()}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
       <View style={styles.rows}>

@@ -22,6 +22,7 @@ import { IconButton, Legend, Button } from '@/components/ds';
 import { WhyTriple, type WhyKind } from '@/components/WhyTriple';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/engine/v4/v4Engine';
 import { displayWeight, unitLabel } from '@/domain/schedule';
@@ -44,11 +45,47 @@ export function WeeklyUpdate({ navigation }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  /**
+   * THE SCREEN THE SATURDAY NOTE OPENS — AND IT MUST NOT SHOW LAST WEEK (founder 2026-07-13).
+   *
+   * The roll is LAZY: nothing happens at 20:30 on a phone in a pocket. The bucket regenerates on
+   * `refreshProgram`, and the engine folds the week inside `sessionTargets` — both of which run on
+   * HOME's focus effects. But the note deep-links straight here, and this screen used to read the
+   * engine's record the instant it mounted, racing Home's effects behind it. The athlete would tap
+   * "I've updated your program", land on this screen, and read LAST week's update — the one moment
+   * in the product where being wrong is unforgivable, because it is the moment the product is
+   * claiming to have done the work.
+   *
+   * So the screen no longer races: it PERFORMS the roll it is here to report, and only then reads.
+   * Both calls are idempotent (a bucket already rolled returns immediately; `maybeAdvance` coalesces
+   * an in-flight advance and folds nothing twice), so arriving from Home — where the effects have
+   * already run — costs a no-op.
+   */
   useEffect(() => {
     let active = true;
     void (async () => {
-      const program = app.program;
-      const v = program ? await getWeeklyPlan(program) : null;
+      // 1 · the calendar roll (a new bucket, if Saturday 20:30 has passed since the last one)
+      await app.refreshProgram().catch(() => {});
+      // The store's `app.program` in this closure is the PRE-roll one; read the bucket that now
+      // exists on disk, or fall back to what we were rendered with.
+      const program = (await db.loadProgram().catch(() => null)) ?? app.program;
+      if (!active) return;
+      if (!program) {
+        setLoaded(true);
+        return;
+      }
+      // 2 · the engine's weekly fold (raises, match-downs, swaps) — it runs inside sessionTargets,
+      //     which is where the record this screen renders is actually written.
+      try {
+        const day = program.days.find((d) => !d.isRest);
+        if (day) {
+          await app.model.sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions });
+        }
+      } catch {
+        /* the engine could not advance — render whatever record exists rather than nothing */
+      }
+      // 3 · …and only now, read it.
+      const v = await getWeeklyPlan(program);
       if (!active) return;
       setView(v);
       setLoaded(true);

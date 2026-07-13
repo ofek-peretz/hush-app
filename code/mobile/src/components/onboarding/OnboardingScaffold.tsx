@@ -19,13 +19,16 @@
  * still a bug on that step. But "the athlete cannot press Continue" must never be the way we
  * find out.
  */
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, I18nManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { color, space, font, textScale, tracking, trackingPx, signal } from '@/design/tokens';
+
+/** A back-drag must travel this far (and be more horizontal than vertical) before it counts. */
+const SWIPE_BACK_DX = 56;
 
 interface Props {
   onBack?: () => void;
@@ -35,11 +38,36 @@ interface Props {
   sub?: string;
   keyboard?: boolean; // wrap the body in a KeyboardAvoidingView (typed inputs)
   footer?: React.ReactNode;
+  /**
+   * Back-drag confined to the FOOTER (founder 2026-07-13). A step whose body is made of
+   * horizontal wheels cannot also be a step you leave with a horizontal drag: on Body data the
+   * whole screen is a back gesture, so every attempt to set an age dragged the screen towards
+   * the previous step instead of turning the rule. The navigator's own gesture is switched OFF
+   * on such a step, and the way back by hand lives down here, in the one band that holds no
+   * wheel — the athlete drags across the footer and the step recedes. The arrow in the top bar
+   * is, as ever, the way back that always works.
+   */
+  onSwipeBack?: () => void;
   children?: React.ReactNode;
 }
 
-export function OnboardingScaffold({ onBack, progress, legend, title, sub, keyboard, footer, children }: Props) {
+export function OnboardingScaffold({ onBack, progress, legend, title, sub, keyboard, footer, onSwipeBack, children }: Props) {
   const { t } = useCopy();
+
+  // The drag travels in the reading direction's "back": rightwards in LTR, leftwards in RTL —
+  // the same direction the platform's own edge gesture would carry it.
+  const backPan = useMemo(() => {
+    if (!onSwipeBack) return null;
+    const back = (dx: number) => (I18nManager.isRTL ? dx <= -SWIPE_BACK_DX : dx >= SWIPE_BACK_DX);
+    return PanResponder.create({
+      // A tap must still reach the Continue button underneath — only a real horizontal travel
+      // claims the gesture.
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderRelease: (_e, g) => {
+        if (back(g.dx)) onSwipeBack();
+      },
+    });
+  }, [onSwipeBack]);
 
   const Body = (
     <ScrollView
@@ -58,6 +86,12 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
       {children}
     </ScrollView>
   );
+
+  const Footer = footer ? (
+    <View style={styles.footer} {...(backPan ? backPan.panHandlers : {})}>
+      {footer}
+    </View>
+  ) : null;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -79,12 +113,12 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
       {keyboard ? (
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {Body}
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
+          {Footer}
         </KeyboardAvoidingView>
       ) : (
         <>
           {Body}
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
+          {Footer}
         </>
       )}
     </SafeAreaView>

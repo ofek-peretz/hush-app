@@ -129,6 +129,27 @@ describe('projectSessionMirror', () => {
     expect(m.nextSetNumber).toBe(0);
   });
 
+  /**
+   * THE MARK REACHES THE WRIST (founder 2026-07-13). The milestone is earned on the phone, from
+   * the phone's history, and rides the terminal frame as finished copy — so an athlete who trained
+   * with the phone in a locker still gets beat 4. It rides ONLY that frame: a mark is celebrated
+   * on the session that crossed it and on no other.
+   */
+  it('carries the session-crossed milestone on the complete frame — and nowhere else', () => {
+    const milestone = { value: '100', caption: 'workouts', title: '100 workouts.', sub: undefined };
+    const done = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }), milestone })!;
+    expect(done.summary!.milestone).toEqual(milestone);
+
+    // A live frame has no summary at all — nothing to celebrate mid-workout.
+    const live = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }), milestone })!;
+    expect(live.summary).toBeNull();
+  });
+
+  it('a workout that crossed nothing sends no mark (the medallion is rare, or it is nothing)', () => {
+    const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
+    expect(m.summary!.milestone).toBeNull();
+  });
+
   it('Complete summary reports the ACTUAL logged sets + trained lifts, not the plan total', () => {
     // An early finish at 2:11 with only 2 of 3 planned sets done — the watch must NOT say "3 sets".
     const m = project({

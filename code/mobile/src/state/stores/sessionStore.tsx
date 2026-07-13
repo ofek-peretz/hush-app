@@ -12,7 +12,10 @@ import { exerciseById, catalogIdFromEngine, type Exercise } from '@/data/exercis
 import { swapCandidates } from '@/domain/swapPool';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
-import { projectSessionMirror, type MirrorStep } from '@/platform/sessionMirror';
+import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
+import { newlyEarned } from '@/domain/milestones';
+import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
+import { i18n } from '@/i18n';
 import { loadSetup } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { WatchSession } from '@/platform/watch/watchBridge';
@@ -191,6 +194,23 @@ export interface CompleteResult {
 /** What the SessionFlow renders underneath any overlay. */
 export type DisplayPhase = 'SET_PRESENTED' | 'REST_INTER' | 'REST_TRANSITION';
 
+/**
+ * A set the WATCH just logged — so the phone can play the beat it always plays (founder
+ * 2026-07-13: "I complete a set on the watch and the phone never shows the logged screen").
+ *
+ * The phone's own Complete Set holds the "Set logged" beat BEFORE it writes; a watch completion
+ * writes immediately, so this is the same beat played AFTER the fact, over the rest that has
+ * already started. `seq` is what the screen watches: two identical sets logged in a row are two
+ * beats, and the payload alone could not tell them apart.
+ */
+export interface WatchLoggedSet {
+  weight: number | null;
+  reps: number;
+  n: number;
+  m: number;
+  seq: number;
+}
+
 export interface SessionView {
   active: boolean;
   phase: SessionMachine['phase'];
@@ -216,6 +236,12 @@ export interface SessionView {
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
   nextSetLabel: { n: number; m: number } | null;
   restSeconds: number;
+  /** Seconds added to the CURRENT rest by "+15 sec", from EITHER surface. The phone's Rest
+   *  countdown reads this and fills forward by the delta — which is how a watch +15 reaches the
+   *  phone (its countdown is local, and nothing used to tell it the rest had grown). */
+  restExtraSeconds: number;
+  /** The last set the WATCH logged — the phone plays its "Set logged" beat over it. */
+  watchLoggedSet: WatchLoggedSet | null;
   /** Epoch ms the active session started (drives the session elapsed-time label on the mirror). */
   startedAtMs: number | null;
   // actions
@@ -466,6 +492,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // rest is republished to the watch + Live Activity.
   const restExtraSecondsRef = useRef(0);
   const [restNonce, setRestNonce] = useState(0);
+  // The set the watch last logged, published to the phone's stage so it plays the same "Set
+  // logged" beat a phone tap would (see WatchLoggedSet). Seq-stamped: two identical sets are two
+  // distinct beats.
+  const [watchLoggedSet, setWatchLoggedSet] = useState<WatchLoggedSet | null>(null);
+  const watchLogSeqRef = useRef(0);
   // The closing result of the just-finished session. Set by finalize() from a SINGLE place so the
   // phone navigates to Well Done whether the completion was triggered on the phone OR proposed from
   // the watch — a watch-driven finish previously left SessionFlow on an empty (black) stage. The
@@ -664,6 +695,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         trained,
       });
 
+      /**
+       * THE MARK, ON THE WRIST (founder 2026-07-13). The phone celebrates a milestone as beat 4 of
+       * Well Done; an athlete who trained with the phone in a locker never saw it. The mark is
+       * earned HERE — on the phone, from the phone's history, one line after the session was
+       * written to it — and rides the complete frame as finished English copy (MirrorMilestone).
+       * No milestone logic crosses to the watch: there is no second engine on the wrist.
+       *
+       * It must be computed BEFORE the frame is published (the publish is what ends the watch
+       * session), and it can only be computed after `appendCompletedSession` above — a milestone
+       * is crossed by a session that exists in history, not by one that is about to.
+       */
+      let milestone: MirrorMilestone | null = null;
+      try {
+        const earned = newlyEarned(await db.loadHistory())[0] ?? null;
+        if (earned) {
+          // English: the watch target has no i18n runtime (WatchCopy.swift is English by law).
+          const tEn = i18n.getFixedT('en') as unknown as Translate;
+          const c = milestoneCopy(earned, tEn, app.profile?.units ?? 'kg');
+          milestone = { value: c.value, caption: c.caption, title: c.title, sub: c.sub };
+        }
+      } catch {
+        // A milestone is a grace note. If history cannot be read, the wrist still gets its
+        // closing screen — it simply does not get the medallion.
+        milestone = null;
+      }
+
       // Publish the terminal "complete" frame to the watch BEFORE teardown (deterministic — not
       // reliant on the [state] effect's scheduling). The wrist then shows Workout Complete with the
       // TRUTHFUL summary; END below empties the plan so the next projection is null, which the watch
@@ -681,6 +738,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         completedSets: saved.sets.length,
         loggedSets: saved.sets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
         progressedLifts: progressedLiftCount(plan, saved.sets),
+        milestone,
       });
       if (completeMirror) watchRef.current?.publish(completeMirror);
       dispatch({ type: 'END' });
@@ -756,6 +814,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       nextTarget: resting ? next?.target ?? null : null,
       nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
       restSeconds,
+      restExtraSeconds: restExtraSecondsRef.current,
+      watchLoggedSet,
       startedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
       // Equipment Occupied applies at the START of an exercise that has a later exercise to do.
       canMarkOccupied:
@@ -1049,7 +1109,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       },
     };
-  }, [state, app, endResult, restResumeRemainingS]);
+    // restNonce: `restExtraSeconds` is read from a ref, so a "+15 sec" (from either surface)
+    // must re-memo the view or the phone's Rest screen would never see the rest grow.
+  }, [state, app, endResult, restResumeRemainingS, restNonce, watchLoggedSet]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.
@@ -1064,14 +1126,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // didn't adjust it. Processed identically to an on-phone entry — phone is the truth.
   watchCompleteRef.current = (actualReps, actualWeight) => {
     const tgt = view.currentTarget;
+    // What the phone is about to write — captured HERE, before the machine advances and the
+    // current step becomes the next one. This is what the phone's stage prints on its "Set
+    // logged" beat, so the wrist and the screen read back the same numbers.
+    const weight = actualWeight !== undefined ? actualWeight : tgt?.recommendedWeight ?? null;
+    const reps = actualReps ?? tgt?.recommendedReps ?? 0;
+    if (view.setLabel) {
+      setWatchLoggedSet({ weight, reps, n: view.setLabel.n, m: view.setLabel.m, seq: ++watchLogSeqRef.current });
+    }
     if (actualReps == null && actualWeight === undefined) {
       void view.completeSet(); // nothing adjusted → log the prescribed target
       return;
     }
-    void view.completeSet({
-      weight: actualWeight !== undefined ? actualWeight : tgt?.recommendedWeight ?? null,
-      reps: actualReps ?? tgt?.recommendedReps ?? 0,
-    });
+    void view.completeSet({ weight, reps });
   };
   // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
   watchBusyRef.current = () => view.markEquipmentOccupied();

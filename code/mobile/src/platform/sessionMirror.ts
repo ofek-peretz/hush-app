@@ -116,11 +116,33 @@ export interface MirrorLoggedSet {
   reps: number;
 }
 
+/**
+ * A milestone the session just crossed — the phone's beat 4, carried to the wrist (founder
+ * 2026-07-13: "add milestones to the watch at the end of a workout when the athlete earned one").
+ *
+ * COPY, NOT DOMAIN. The mark is earned on the phone, from the phone's history, the moment the
+ * session is written — there is no second engine on the wrist and never will be. What crosses the
+ * wire is the finished sentence (`domain/milestoneCopy`), rendered in ENGLISH: the watch target
+ * has no i18n runtime (WatchCopy.swift), and a Hebrew string in a mono face is the bug we already
+ * fixed once. The wrist shows the medallion's figure and the one factual line; the emblem itself,
+ * with its engraved glyph, stays a phone thing.
+ */
+export interface MirrorMilestone {
+  /** The engraved figure ("100", "250 t", "140 kg") — empty for a mark that is an event, not a number. */
+  value: string;
+  /** The tiny unit under the figure ("workouts", "tonnes"), when the figure has one. */
+  caption?: string;
+  title: string;
+  sub?: string;
+}
+
 export interface MirrorSummary {
   timeLabel: string;
   sets: number;
   up: number;
   lifts: MirrorSummaryLift[];
+  /** Present ONLY on the session that crossed it — a mark is celebrated once, on its own workout. */
+  milestone?: MirrorMilestone | null;
 }
 
 /** The canonical mirror. Every surface renders a SUBSET of this — e.g. the Live
@@ -237,6 +259,8 @@ export interface MirrorInputs {
   /** Distinct lifts the athlete actually trained AND that the model raised — the
    *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
   progressedLifts?: number;
+  /** The mark this session crossed (already-rendered English copy), for the terminal frame only. */
+  milestone?: MirrorMilestone | null;
   /** Whether the CURRENT set still needs the equipment set (TO-LOAD) — see SessionMirror.toLoad. */
   toLoad?: boolean;
 }
@@ -360,6 +384,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       sets: inp.completedSets ?? total,
       up: inp.progressedLifts ?? up,
       lifts: summaryLifts(steps, inp.completedSets ?? total, inp.loggedSets),
+      milestone: inp.milestone ?? null,
     };
     return {
       schema: MIRROR_SCHEMA_VERSION,

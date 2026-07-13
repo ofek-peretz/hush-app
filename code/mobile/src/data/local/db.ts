@@ -110,7 +110,7 @@ export interface EngineV4State {
   slots: Record<string, unknown>; // slotId -> SlotState
   global: unknown; // GlobalState
   lastAdvanceAt: number; // completed-session COUNT already folded into the engine (the slice marker)
-  /** The Sat-23:59 week-open the engine last advanced for (founder 2026-07-09, finding 7). The engine
+  /** The Sat-20:30 week-open the engine last advanced for (founder 2026-07-09, finding 7). The engine
    *  now progresses ONCE per training week at the calendar roll — not per N sessions — so the plan is
    *  stable all week and updates on the whole week's work. null until the first program is built. */
   lastAdvanceWeekOpen?: number;

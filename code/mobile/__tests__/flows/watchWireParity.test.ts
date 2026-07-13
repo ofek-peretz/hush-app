@@ -139,6 +139,40 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
     }
   });
 
+  /**
+   * THE MARK — and the hole this test used to have. The loop above skips OPTIONAL Swift fields,
+   * and every field added after v1 is optional (a phone on a new build must never break an old
+   * watch binary). Which means the milestone — a whole nested struct, added 2026-07-13 — crossed
+   * the wire completely unchecked: rename `caption` on one side and the wrist would stamp a
+   * medallion with a blank face, silently, on the one workout in a hundred that earned it.
+   *
+   * So the mark is held to the same standard as the rest of the frame, optional or not.
+   */
+  it('the mark the wrist stamps is the mark the phone earned', () => {
+    const milestone = { value: '100', caption: 'workouts', title: '100 workouts.', sub: 'Since you started.' };
+    const m = frame({
+      machine: { phase: 'SESSION_SAVED', setIndex: 2, paused: false },
+      completedSets: 2,
+      progressedLifts: 1,
+      milestone,
+    });
+    const summary = JSON.parse(JSON.stringify(m.summary)) as Record<string, unknown>;
+    // The wrist can only read a key the phone actually puts on the wire.
+    expect(Object.prototype.hasOwnProperty.call(summary, 'milestone')).toBe(true);
+    const sent = summary.milestone as Record<string, unknown>;
+    for (const f of swiftFields('WireMilestone')) {
+      expect({ field: f.name, sent: Object.prototype.hasOwnProperty.call(sent, f.name) }).toEqual({
+        field: f.name,
+        sent: true,
+      });
+    }
+    expect(sent).toEqual(milestone);
+
+    // …and a workout that crossed nothing sends an explicit null, which Swift's `decodeIfPresent`
+    // reads as "no mark" — never a half-decoded struct.
+    expect(widestMirror().summary!.milestone).toBeNull();
+  });
+
   it('the load setup — the plates the wrist tells the athlete to hang — survives the crossing', () => {
     // Nothing to assert about VALUES here (that is loadPresentation's job); the point is the
     // NAMES, because a renamed key is how "12 per side" becomes silence on a wrist.

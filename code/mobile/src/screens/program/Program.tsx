@@ -23,7 +23,7 @@ import { weekProgress } from '@/domain/schedule';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { muscleGroupsLabel } from '@/data/exercises';
 import type { ProgramDay, Session } from '@/data/local/models';
-import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, up } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Program'>;
@@ -90,6 +90,10 @@ export function Program({ navigation }: Props) {
         {/* Founder 2026-07-10: the sentence under the count said what the count + meter
             already say ("N to go — keep the momentum"), with a pressure tone the product
             bans elsewhere. The numbers speak; the meter shows. */}
+        {/* WHAT IS DONE IS SAGE (founder 2026-07-13). The count and the meter here measure exactly
+            one thing — the workouts the athlete has TRAINED this week — and they were in ink and
+            ochre, the instrument's structural and "you are here" colours. The number that says
+            "finished" now says it in the colour the product reserves for finished. */}
         <View style={styles.summary}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryCount}>
@@ -99,7 +103,7 @@ export function Program({ navigation }: Props) {
             <Text style={styles.summaryLabel}>{t('program.sessionsDone')}</Text>
           </View>
           <View style={styles.summaryMeter}>
-            <ProgressMeter value={prog.done} max={prog.total || 1} tone="signal" />
+            <ProgressMeter value={prog.done} max={prog.total || 1} tone="up" />
           </View>
         </View>
 
@@ -154,7 +158,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.gutter, paddingBottom: 40 },
   summary: { paddingTop: 2, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: color.border },
   summaryRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: color.textPrimary, textAlign: 'left' },
+  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: up[0], textAlign: 'left' },
   summaryTotal: { fontSize: textScale.xl, color: color.textTertiary },
   summaryLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
   summaryMeter: { marginTop: 16 },

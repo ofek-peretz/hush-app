@@ -16,6 +16,9 @@ import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { isTrainingGated } from '@/domain/entitlement';
+import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
+import type { Line } from '@/domain/voice';
+import { getWeeklyPlan, getWeeklyUpdate } from '@/engine/v4/v4Engine';
 import { muscleGroupsLabel } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
@@ -52,9 +55,9 @@ export function Home({ navigation, route }: Props) {
 
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
-  // bucket only regenerates at the Sunday-04:00 calendar roll (appStore.refreshProgram), so a week
+  // bucket only regenerates at the Saturday-20:30 calendar roll (appStore.refreshProgram), so a week
   // finished early holds Recovery until the new week opens — the "no starting early" gate is now
-  // structural (no fresh bucket exists before Sunday), so no separate lock is needed here.
+  // structural (no fresh bucket exists before the roll), so no separate lock is needed here.
   const resting = !!program && program.days.length > 0 && !day;
 
   // Training-week counter ("Week N") — a mid-week signup's extended first bucket
@@ -78,6 +81,15 @@ export function Home({ navigation, route }: Props) {
   // so the watch can execute a workout with the phone absent. Best-effort + silent:
   // a day whose targets fail to resolve just narrows the snapshot.
   const [watchPlan, setWatchPlan] = useState<WatchPlanSnapshot | null>(null);
+  /**
+   * "The engine has settled." The weekly ADVANCE (v4Engine.maybeAdvance — the thing that raises a
+   * load, matches one down, swaps a lift, and writes the record Home is about to narrate) runs
+   * inside `model.sessionTargets`, which the loop below calls for every remaining workout. So this
+   * counter, bumped when that loop finishes, is the only honest signal that the week's decisions
+   * exist to be read. Reading the briefing before it would print LAST week's sentence on the first
+   * open after the Saturday roll — the one open where being right matters most.
+   */
+  const [engineTick, setEngineTick] = useState(0);
   useEffect(() => {
     if (!isFocused || !program) return;
     let cancelled = false;
@@ -105,12 +117,60 @@ export function Home({ navigation, route }: Props) {
           restInterSFor: restInterSecondsFor,
         }),
       );
+      setEngineTick((n) => n + 1); // the week's decisions are now on disk — the briefing may read
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused, program, app.modeState.completedSessions]);
+
+  /**
+   * THE BRIEFING — Hush's own sentence about what it did to this week's plan (domain/weekBriefing).
+   * Read from the engine's captured weekly record, never recomputed: the card states what the
+   * engine ACTUALLY decided at the roll, which is the only thing that makes it evidence rather
+   * than a slogan. `changes: null` = the engine has never run an update for this athlete (week 1),
+   * where the honest sentence is the promise, not a report.
+   */
+  const [brief, setBrief] = useState<Line[] | null>(null);
+  const [briefUnseen, setBriefUnseen] = useState(false);
+  useEffect(() => {
+    if (!isFocused || !program) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        // `getWeeklyUpdate()` is the one honest test of "has the engine ever decided anything for
+        // this athlete" — it is null until the first roll folds a week in. The PLAN view alone
+        // cannot answer it: a week with no update and a week where nothing changed both read as
+        // zero changes, and those are two completely different sentences.
+        const [update, view] = await Promise.all([getWeeklyUpdate(), getWeeklyPlan(program)]);
+        if (cancelled) return;
+        const changes: BriefChange[] | null =
+          update && view
+            ? view.workouts.flatMap((w) =>
+                w.lifts
+                  .filter((l) => l.change)
+                  .map((l) => ({
+                    name: l.name,
+                    loadFrom: l.change!.snapshot.loadFrom,
+                    loadTo: l.change!.snapshot.loadTo,
+                    swapped: l.change!.snapshot.swapped,
+                  })),
+              )
+            : null; // week 1: the engine has a baseline, not a decision — Hush makes the promise
+        setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
+        setBriefUnseen(!!update && !update.seen);
+      } catch {
+        // The engine record could not be read. Say NOTHING rather than something generic — an
+        // invented sentence about decisions we cannot see would be the one unforgivable lie here.
+        if (!cancelled) setBrief(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, program, engineTick, app.profile?.units]);
 
   // Session-at-a-time: re-resolve today's session on focus; drain offline work.
   const [startError, setStartError] = useState(false);
@@ -226,7 +286,7 @@ export function Home({ navigation, route }: Props) {
 
   async function onStart() {
     if (!day) return;
-    if (resting) return; // hard gate: the next week is locked until Sunday 04:00
+    if (resting) return; // hard gate: the next week is locked until the Saturday 20:30 roll
     if (gated) {
       navigation.navigate('Paywall', { source: 'gate' });
       return;
@@ -264,6 +324,10 @@ export function Home({ navigation, route }: Props) {
       onStart={onStart}
       workouts={workouts}
       onChooseWorkout={setChosenId}
+      brief={brief}
+      briefUnseen={briefUnseen}
+      onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
+      onOpenWorkout={(id) => navigation.navigate('ProgramDetail', { dayId: id })}
       onProgram={() => navigation.navigate('Program')}
       onHistory={() => navigation.navigate('History')}
       onSettings={() => navigation.navigate('ProfileSheet')}

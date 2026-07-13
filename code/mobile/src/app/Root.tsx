@@ -74,7 +74,15 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
-      <OnboardingStack.Screen name="ManualInfo" component={ManualInfo} />
+      {/* BODY DATA DOES NOT SWIPE BACK (founder 2026-07-13). Its body is three horizontal wheels,
+          and a full-screen horizontal back gesture over them means every attempt to set an age
+          drags the STEP instead of turning the rule. The step keeps a hand-held way back — a drag
+          across its footer, the one band with no wheel in it (OnboardingScaffold.onSwipeBack). */}
+      <OnboardingStack.Screen
+        name="ManualInfo"
+        component={ManualInfo}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
       <OnboardingStack.Screen name="Training" component={Training} />
       {/* The build/ready step is the ONE place with no way back: the program exists. */}
       <OnboardingStack.Screen
