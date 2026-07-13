@@ -17,11 +17,14 @@ struct WireSwapOption: Codable, Equatable {
   var name: String
 }
 
-/// One lift at the close of the workout — mirror of sessionMirror.ts `MirrorSummaryLift`.
-/// Feeds the wrist's read-back beat: a check lands on every lift the athlete finished.
+/// One lift the athlete PERFORMED — mirror of sessionMirror.ts `MirrorSummaryLift`. Feeds the
+/// wrist's read-back: a green check lands on every lift, with its best set beside it. Lifts that
+/// were never reached are not on the wire at all (founder 2026-07-13 — the phone's read-back walks
+/// what was DONE, and the wrist plays the same beat, not a ledger of what was missed).
 struct WireSummaryLift: Codable, Equatable {
   var name: String
-  var done: Bool
+  /// The best set of that lift, as the phone prints it: "60 × 8" / "BW × 12".
+  var best: String
 }
 
 struct WireSummary: Codable, Equatable {

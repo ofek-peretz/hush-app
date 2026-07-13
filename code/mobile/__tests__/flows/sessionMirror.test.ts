@@ -140,25 +140,49 @@ describe('projectSessionMirror', () => {
     expect(m.summary).toMatchObject({ timeLabel: '2:11', sets: 2, up: 1 });
   });
 
-  it('Complete summary carries the LIFT-BY-LIFT read-back the wrist plays (founder 2026-07-12)', () => {
-    // The watch's closing beat walks the workout lift by lift and lands a check on each one that
-    // was finished. An early finish is exactly where that matters: what did I train, what did I
-    // leave? A lift is done only when every set it was prescribed sits behind the frontier.
+  it('the read-back the wrist plays is the PERFORMED lifts, and only those (founder 2026-07-13)', () => {
+    // The watch's closing beat is the phone's: it walks the lifts the athlete actually trained and
+    // lands a green check on each. A lift they never reached is not part of the workout that just
+    // happened — an early finish must not close on a list of things left undone.
     const m = project({
       machine: machine({ phase: 'SESSION_SAVED', setIndex: 1, earlyFinish: true }),
       sessionStartedAtMs: NOW - 131_000,
-      completedSets: 2,
+      completedSets: 2, // both Bench sets logged; the Squat never reached
       progressedLifts: 1,
+      loggedSets: [
+        { weight: 60, reps: 5 }, // 300 kg·rep
+        { weight: 62.5, reps: 6 }, // 375 — the best set, by volume (the phone's own rule)
+      ],
     })!;
-    expect(m.summary!.lifts.length).toBeGreaterThan(0);
-    // Each entry names a lift and says, plainly, whether it was finished.
-    for (const l of m.summary!.lifts) {
-      expect(typeof l.name).toBe('string');
-      expect(typeof l.done).toBe('boolean');
-    }
-    // …and a lift whose sets were NOT all logged is not marked done.
-    const unfinished = m.summary!.lifts.filter((l) => !l.done);
-    expect(unfinished.length).toBeGreaterThan(0);
+    expect(m.summary!.lifts.map((l) => l.name)).toEqual(['Bench Press']);
+    // The best set, formatted the way the phone prints it beside the check.
+    expect(m.summary!.lifts[0].best).toBe('62.5 × 6');
+  });
+
+  it('the read-back reports what was LIFTED, not what was prescribed', () => {
+    // An athlete who edits a set down to what they really did must see THAT number read back.
+    const m = project({
+      machine: machine({ phase: 'SESSION_SAVED', setIndex: 2 }),
+      sessionStartedAtMs: NOW - 131_000,
+      completedSets: 3,
+      loggedSets: [
+        { weight: 60, reps: 5 },
+        { weight: 60, reps: 3 },
+        { weight: null, reps: 12 }, // the Squat, logged as bodyweight
+      ],
+    })!;
+    expect(m.summary!.lifts).toEqual([
+      { name: 'Bench Press', best: '60 × 5' },
+      { name: 'Squat', best: 'BW × 12' },
+    ]);
+  });
+
+  it('with no logged sets supplied, the prescription stands in (pure-projection back-compat)', () => {
+    const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
+    expect(m.summary!.lifts).toEqual([
+      { name: 'Bench Press', best: '60 × 5' },
+      { name: 'Squat', best: '100 × 5' },
+    ]);
   });
 
   it('Complete summary falls back to the planned total when no live count is supplied', () => {

@@ -26,6 +26,13 @@ export interface ToastAction {
 
 interface ToastOptions {
   actions?: ToastAction[];
+  /**
+   * Called exactly once when this toast leaves — timed out, tapped through, or replaced by a
+   * newer one. A screen that changes itself while a toast is up (the live stage yields its
+   * footer to a swap notice, so the notice never half-covers a button) needs to know when to
+   * change back, and it must be told even if it is never told anything else.
+   */
+  onHide?: () => void;
 }
 
 interface ToastApi {
@@ -42,12 +49,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nonceRef = useRef(0);
+  /** The living toast's `onHide`, if it has one. Fired once, then dropped. */
+  const onHideRef = useRef<(() => void) | null>(null);
 
-  const show = useCallback((msg: string, opts?: ToastOptions) => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    nonceRef.current += 1;
-    setToast({ message: msg, actions: opts?.actions ?? [], nonce: nonceRef.current });
+  const fireHide = useCallback(() => {
+    const h = onHideRef.current;
+    onHideRef.current = null;
+    h?.();
   }, []);
+
+  const show = useCallback(
+    (msg: string, opts?: ToastOptions) => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      fireHide(); // the toast being replaced is gone — its owner is told before the new one arrives
+      nonceRef.current += 1;
+      onHideRef.current = opts?.onHide ?? null;
+      setToast({ message: msg, actions: opts?.actions ?? [], nonce: nonceRef.current });
+    },
+    [fireHide],
+  );
 
   // Animate in whenever a new message arrives, hold, then animate out.
   useEffect(() => {
@@ -62,17 +82,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       Animated.parallel([
         Animated.timing(opacity, { toValue: 0, duration: reduced ? 0 : 200, useNativeDriver: true }),
         Animated.timing(translateY, { toValue: reduced ? 0 : 12, duration: reduced ? 0 : 200, useNativeDriver: true }),
-      ]).start(() => setToast((t) => (t?.nonce === toast.nonce ? null : t)));
+      ]).start(() => {
+        // Told when the toast has actually LEFT, not when it starts to leave — a screen that gave
+        // up a control for it must not reveal that control through a half-faded card.
+        fireHide();
+        setToast((t) => (t?.nonce === toast.nonce ? null : t));
+      });
     }, toast.actions.length ? VISIBLE_ACTIONS_MS : VISIBLE_MS);
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
-  }, [toast, reduced, opacity, translateY]);
+  }, [toast, reduced, opacity, translateY, fireHide]);
 
   const dismiss = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
+    fireHide();
     setToast(null);
-  }, []);
+  }, [fireHide]);
 
   return (
     <Ctx.Provider value={{ show }}>

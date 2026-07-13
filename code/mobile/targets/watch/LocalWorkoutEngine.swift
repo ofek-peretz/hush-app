@@ -130,11 +130,14 @@ final class LocalWorkoutEngine {
     advancePastRest()
   }
 
-  /// "+15 sec" — extend the running rest.
+  /// "+15 sec" — extend the running rest. The END moves out; `restTotalS` does NOT (founder
+  /// 2026-07-13). It is the ring's denominator, and growing it in lock-step with the remaining
+  /// time is what made the wrist's arc lurch backwards and climb again on every +15. The phone
+  /// adds the seconds to the numerator alone, so the arc fills FORWARD; the wrist now does the
+  /// same. (The phone-driven mirror holds the identical law — see sessionMirror.ts.)
   func addRest(seconds: Int) {
     guard !finished, isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt) else { return }
     state.restEndsAt = WatchWire.iso(end.addingTimeInterval(TimeInterval(seconds)))
-    state.restTotalS = (state.restTotalS ?? 0) + seconds
     persist()
     scheduleRestAdvance()
     emit()
@@ -372,29 +375,37 @@ final class LocalWorkoutEngine {
   }
 
   /**
-   * The workout, read back lift by lift — the wrist's closing beat (founder 2026-07-12).
+   * The workout, read back lift by lift — the wrist's closing beat (founder 2026-07-12/13).
    *
-   * Port of the phone's `summaryLifts`. A standalone workout finishes on the WATCH, with no phone
-   * in the room to project a summary for it, so without this the read-back simply would not play
-   * for the athlete who trained furthest from their phone — which is the athlete the standalone
-   * runtime exists for. A lift is DONE when every set it was prescribed sits behind the athlete's
-   * completion frontier; anything else is a lift they started and did not finish, or never reached.
+   * Port of the phone's `summaryLifts`, and it holds the phone's rule exactly: ONLY the lifts the
+   * athlete performed, each with the best set they actually logged on it (best by volume). A lift
+   * they never reached is not part of the workout that just happened and does not appear.
+   *
+   * A standalone workout finishes on the WATCH, with no phone in the room to project a summary for
+   * it — so without this the read-back would not play for the athlete who trains furthest from
+   * their phone, which is precisely the athlete this runtime exists for.
    */
   private func summaryLifts() -> [WireSummaryLift] {
     let frontier = state.sets.count
     var order: [String] = []
-    var total: [String: Int] = [:]
-    var done: [String: Int] = [:]
-    for (i, step) in state.steps.enumerated() {
-      if total[step.exerciseName] == nil {
+    var best: [String: WireRecordSet] = [:]
+    func volume(_ s: WireRecordSet) -> Double { (s.actualWeight ?? 0) * Double(s.actualReps) }
+    for (i, step) in state.steps.enumerated() where i < frontier {
+      // The logged sets are written in step order, so set i belongs to step i.
+      guard i < state.sets.count else { break }
+      let set = state.sets[i]
+      if let cur = best[step.exerciseName] {
+        if volume(set) > volume(cur) { best[step.exerciseName] = set }
+      } else {
         order.append(step.exerciseName)
-        total[step.exerciseName] = 0
-        done[step.exerciseName] = 0
+        best[step.exerciseName] = set
       }
-      total[step.exerciseName, default: 0] += 1
-      if i < frontier { done[step.exerciseName, default: 0] += 1 }
     }
-    return order.map { WireSummaryLift(name: $0, done: (done[$0] ?? 0) >= (total[$0] ?? 0)) }
+    return order.map { name in
+      let s = best[name]!
+      let w = s.actualWeight.map { $0.rounded() == $0 ? String(Int($0)) : String(format: "%.1f", $0) } ?? "BW"
+      return WireSummaryLift(name: name, best: "\(w) × \(s.actualReps)")
+    }
   }
 
   private func completeFrame() -> WireMirror {

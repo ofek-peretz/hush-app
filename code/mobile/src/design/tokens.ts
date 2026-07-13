@@ -72,21 +72,24 @@ export const signal = {
   wash: '#f8ebd7', // faint accent tint surface
 
   /**
-   * THE OCHRE THAT CARRIES TEXT — a deeper cut of the same accent (founder 2026-07-12).
+   * THE OCHRE A LETTER SITS ON — and it is THE ochre (founder ruling 2026-07-13, final).
    *
-   * The ochre above is beautiful and it is 2.6:1 against cream: it cannot hold a word. The last
-   * pass fixed that by putting CHARCOAL on it, which passed WCAG and lost the product — the
-   * founder's verdict was blunt ("the black inside the brown, I liked it less; put back what
-   * was there"). Both readings are right, and the way out is not to argue about the ink: it is
-   * to darken the FILL. `signal.fill` is the same hue pulled down until cream clears AA on it
-   * (4.64:1), which restores the paper-on-ochre look the founder wants and keeps the button
-   * legible in direct sun, where a gym athlete actually stands.
+   * This slot has now been tried three ways. Cream on `signal[0]` is the brown the founder built
+   * the product around, and it is 2.6:1 — under AA. Charcoal on `signal[0]` passed AA and was
+   * rejected on sight ("the black inside the brown, I liked it less"). Darkening the fill to
+   * #9c6522 passed AA with cream on it and was rejected the moment it reached a device: "bring
+   * back the familiar brown — this dark brown is not pretty."
    *
-   * This is the ONLY ochre a letter may sit on. Lines, dots, rings and bars — anything with no
-   * text on it — keep signal[0], because their job is to be SEEN, not to be read.
+   * So the ruling is made and it is not a compromise: the accent is ONE brown, `signal[0]`, on
+   * every surface — the ring, the dot, the primary button, the button's letters' ground. The
+   * contrast cost is accepted knowingly and is bounded: it applies to the WHITE-ON-OCHRE PRIMARY
+   * LABEL only, a short, semibold, 17px word on a large filled target — never to body copy, never
+   * to a small glyph, never to anything an athlete must read to know what to lift. The load, the
+   * reps, the timer and every instruction live in ink on paper or cream on graphite, all of which
+   * clear AA comfortably. Do not "fix" this again without the founder.
    */
-  fill: '#9c6522',
-  fillPressed: '#8a5a1e',
+  fill: '#cc9147',
+  fillPressed: '#c7802b',
 } as const;
 
 /** Semantic: load + progress (desaturated, calm). */
@@ -145,13 +148,9 @@ export const color = {
   accentHover: signal[1],
   accentText: signal.ink,
   accentWash: signal.wash,
-  /**
-   * Text/glyph ON an ochre fill — CREAM, on the deeper `signal.fill` (4.64:1, AA).
-   * The charcoal-on-ochre experiment is reverted; see signal.fill for why both the
-   * founder's eye and the contrast meter get what they asked for.
-   */
+  /** Text/glyph ON an ochre fill — CREAM. See `signal.fill` for the ruling. */
   onAccent: paper[0],
-  /** The only ochre a letter may sit on. */
+  /** The ochre a letter sits on — now the same ochre as everything else. */
   accentFill: signal.fill,
   accentFillPressed: signal.fillPressed,
 
@@ -358,8 +357,8 @@ export const button = {
   primary: {
     height: control.hLg, // 56
     radius: radius.md, // 6
-    bg: signal.fill, // the deep ochre — the only one a letter sits on
-    fg: paper[0], // cream, 4.64:1 (see signal.fill)
+    bg: signal.fill, // the ochre — the familiar brown (see signal.fill)
+    fg: paper[0], // cream
     pressedBg: signal.fillPressed,
     fontSize: textScale.md, // 17
     fontWeight: weight.semibold,

@@ -168,15 +168,19 @@ describe('the icon set', () => {
 });
 
 /**
- * THE OCHRE THAT CARRIES TEXT (founder 2026-07-12, reversing the charcoal-on-ochre pass).
+ * THE ONE OCHRE (founder ruling 2026-07-13 — final, and it reverses the deep-fill pass).
  *
- * The founder's verdict on charcoal-on-ochre was blunt: "the black inside the brown, I liked it
- * less — put back what was there." The accessibility problem that caused it was real, though:
- * cream on the bright ochre is 2.6:1 and cannot be read in sun. So the FILL got darker instead
- * of the ink getting heavier, and both constraints are satisfied at once.
+ * Three attempts, in order: cream on the bright ochre (the founder's brown, 2.6:1). Charcoal on
+ * the bright ochre (AA, rejected on sight: "the black inside the brown, I liked it less"). Cream
+ * on a darkened ochre (AA, rejected on the device: "bring back the familiar brown — this dark
+ * brown is not pretty"). The founder has now chosen the same thing twice, and the choice is made:
+ * ONE brown, everywhere, with cream on it.
  *
- * This test does not take that on faith. It computes the actual WCAG contrast ratio of whatever
- * the button renders, so the law survives anybody's future colour tweak.
+ * So this suite no longer guards a contrast floor on the primary label — it guards the SHAPE of
+ * the decision, which is what can actually rot: that there is exactly one ochre, that cream (not
+ * charcoal) sits on it, and that the exception is confined to a large button's short semibold
+ * label. Everything an athlete must READ — the ink on paper, the cream on the graphite stage —
+ * still has to clear AA, and that is asserted here so the exception can never quietly spread.
  */
 function luminance(hex: string): number {
   const ch = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -188,23 +192,30 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe('the primary button: cream on a deep ochre, and it clears WCAG AA', () => {
-  it('renders cream ink on signal.fill — not charcoal, and not on the bright signal', () => {
+describe('the one ochre: the founder’s brown, with cream on it', () => {
+  it('renders cream ink on THE ochre — not charcoal, and not on some second, darker brown', () => {
     const r = mount(<Button variant="primary" size="lg" block label="Begin Push A" onPress={() => {}} />);
     const json = JSON.stringify(r.toJSON());
-    expect(json).toContain(signal.fill); // the deep ochre
+    expect(json).toContain(signal[0]); // the familiar brown — the accent, unsplit
     expect(json).toContain(color.onAccent); // cream
-    expect(json).not.toContain(signal[0]); // the bright ochre never carries a letter
+    expect(json).not.toContain(color.textPrimary); // never charcoal-on-ochre again
     expect(texts(r)).toContain('Begin Push A');
   });
 
-  it('measures at least 4.5:1 — the law, not the swatch', () => {
-    expect(contrast(signal.fill, color.onAccent)).toBeGreaterThanOrEqual(4.5);
+  it('there is exactly ONE ochre — the fill and the mark are the same colour', () => {
+    // The token split (`signal.fill` ≠ `signal[0]`) is what produced the "dark brown" the founder
+    // rejected. The name survives as a semantic seam; the VALUE may not diverge again.
+    expect(signal.fill).toBe(signal[0]);
   });
 
-  it('the bright ochre is still exactly why it could not carry text', () => {
-    // Kept as the reason this whole token split exists: signal[0] is beautiful and unreadable.
-    expect(contrast(signal[0], color.onAccent)).toBeLessThan(4.5);
+  it('the cost is knowingly taken, and it is bounded to that one label', () => {
+    // Stated, not hidden: the primary label is under AA and the founder has ruled twice that it
+    // ships. What must not happen is the exception leaking into anything an athlete READS.
+    expect(contrast(signal.fill, color.onAccent)).toBeLessThan(4.5);
+    expect(contrast(color.bg, color.textPrimary)).toBeGreaterThanOrEqual(4.5); // ink on paper
+    expect(contrast(color.bg, color.textMuted)).toBeGreaterThanOrEqual(4.5); // captions on paper
+    expect(contrast(stage[0], stage.ink0)).toBeGreaterThanOrEqual(4.5); // the live stage
+    expect(contrast(stage[0], stage.ink1)).toBeGreaterThanOrEqual(4.5); // its secondary line
   });
 });
 

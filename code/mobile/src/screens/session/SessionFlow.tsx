@@ -18,7 +18,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon, type IconName } from '@/components/Icon';
-import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast } from '@/components/ds';
+import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
@@ -53,6 +53,14 @@ export function SessionFlow({ navigation }: Props) {
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [editing, setEditing] = useState(false);
+  /**
+   * A notice is on the stage (founder 2026-07-13: "when the swapped-to badge appears it should
+   * cover the WHOLE start-of-exercise part"). The swap confirmation used to float half-over the
+   * Start button — a big cream button sticking out from under a card, which reads as a rendering
+   * fault. For the seconds a notice is up it IS the footer: the buttons stand down (invisible and
+   * untouchable, but still holding their space, so nothing jumps), and the notice sits alone.
+   */
+  const [notice, setNotice] = useState(false);
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
   const confirmRunning = useRef(false);
@@ -220,17 +228,24 @@ export function SessionFlow({ navigation }: Props) {
     }
   }
 
+  /** A notice ON the stage — it takes the footer for as long as it is up (see `notice`). */
+  const notify = useCallback(
+    (message: string, actions?: ToastAction[]) => {
+      setNotice(true);
+      toast.show(message, { actions, onHide: () => setNotice(false) });
+    },
+    [toast],
+  );
+
   function presentSwapChoice(id: string) {
     const st = quickSwapRef.current;
     if (!st) return;
     haptics.confirm();
     applySwapTo(st.target, id);
-    toast.show(t('swap.swappedTo', { name: exerciseDisplayName(id) }), {
-      actions: [
-        { label: t('swap.tryAnother'), onPress: () => swapActionsRef.current.tryAnother() },
-        { label: t('swap.undo'), onPress: () => swapActionsRef.current.undo() },
-      ],
-    });
+    notify(t('swap.swappedTo', { name: exerciseDisplayName(id) }), [
+      { label: t('swap.tryAnother'), onPress: () => swapActionsRef.current.tryAnother() },
+      { label: t('swap.undo'), onPress: () => swapActionsRef.current.undo() },
+    ]);
   }
 
   swapActionsRef.current = {
@@ -246,7 +261,7 @@ export function SessionFlow({ navigation }: Props) {
       quickSwapRef.current = null;
       haptics.confirm();
       applySwapTo(st.target, st.originalId);
-      toast.show(t('swap.restored', { name: exerciseDisplayName(st.originalId) }));
+      notify(t('swap.restored', { name: exerciseDisplayName(st.originalId) }));
     },
   };
 
@@ -277,6 +292,7 @@ export function SessionFlow({ navigation }: Props) {
           <ActiveSet
             units={units}
             editing={editing}
+            notice={notice}
             onToggleEdit={() => setEditing((v) => !v)}
             onComplete={onCompleteSet}
             onExit={openPause}
@@ -288,6 +304,7 @@ export function SessionFlow({ navigation }: Props) {
           <Rest
             units={units}
             paused={session.paused}
+            notice={notice}
             onExit={openPause}
             onDemo={() => setOverlay('demo')}
             onSwap={() => void startQuickSwap('next')}
@@ -358,25 +375,35 @@ export function SessionFlow({ navigation }: Props) {
 
 /* --------------------------------------------------------------- Stage chrome */
 /**
- * The stage's one chrome element: the way out.
+ * The stage's chrome: the way out, and where the athlete is.
  *
- * FOUNDER 2026-07-12: "the pause mark gets swallowed — you can't see it at all, and it even
- * touches the ring." Both true. It was a bare 20px stroke in ink1 (a mid grey) floating on
- * black with no ground of its own, and on the rest screen the ring came up to meet it. It is
- * now a real control — a bordered graphite chip, ink0 glyph, on a bar tall enough to keep the
- * ring off it. It is also a PAUSE, so it says pause: an ✕ reads as "discard", which is exactly
- * the wrong promise for a button that saves everything.
+ * THE PAUSE (founder 2026-07-13: "it looks gaudy — redesign it"). The last pass answered "you
+ * can't see it" by drawing a bright hairline box around it, and a bordered square on a black
+ * stage is the loudest thing on a screen whose whole job is to be quiet — it read as chrome from
+ * another app. A pause does not need a frame to be found: it needs a GROUND. It is now a soft
+ * graphite disc, borderless, with a calm ink glyph — visible at a glance, silent when ignored,
+ * and unmistakably a pause (an ✕ would promise "discard", which is a lie: nothing is lost here).
+ *
+ * THE ORDINAL rides in the centre of the bar again (founder 2026-07-13) — where it was, but at a
+ * size a person can actually read mid-set. `ordinal` is mono and legible; `center` is the quiet
+ * uppercase legend the rest screens use ("REST" / "NEXT EXERCISE").
  */
-function StageBar({ center, onExit }: { center?: string; onExit: () => void }) {
+function StageBar({ center, ordinal, onExit }: { center?: string; ordinal?: string; onExit: () => void }) {
   const { t } = useCopy();
   return (
     <View style={styles.stageBar}>
       <View style={styles.stageBarSide}>
-        <IconButton onStage bordered accessibilityLabel={t('workout.pauseAction')} onPress={onExit} style={styles.pauseBtn}>
-          <Icon name="pause" size={18} color={stage.ink0} strokeWidth={2.2} />
+        <IconButton onStage accessibilityLabel={t('workout.pauseAction')} onPress={onExit} style={styles.pauseBtn}>
+          <Icon name="pause" size={17} color={stage.ink1} strokeWidth={2.2} />
         </IconButton>
       </View>
-      {center ? <Text style={styles.stageBarCenter}>{center}</Text> : <View style={styles.flex} />}
+      {ordinal ? (
+        <Text style={styles.stageBarOrdinal}>{ordinal}</Text>
+      ) : center ? (
+        <Text style={styles.stageBarCenter}>{center}</Text>
+      ) : (
+        <View style={styles.flex} />
+      )}
       <View style={[styles.stageBarSide, styles.stageBarRight]} />
     </View>
   );
@@ -517,6 +544,7 @@ function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: b
 function ActiveSet({
   units,
   editing,
+  notice,
   onToggleEdit,
   onComplete,
   onExit,
@@ -526,6 +554,8 @@ function ActiveSet({
 }: {
   units: 'kg' | 'lb';
   editing: boolean;
+  /** A notice owns the footer while it is up — the buttons stand down (see SessionFlow.notice). */
+  notice: boolean;
   onToggleEdit: () => void;
   onComplete: () => void;
   onExit: () => void;
@@ -571,18 +601,14 @@ function ActiveSet({
 
   return (
     <>
-      {/* WHERE AM I, IN ONE LINE (founder 2026-07-12: "1 / 6 is so small you cannot notice it
-          at all"). The ordinal used to be a micro-legend in the top bar, physically as far from
-          the athlete's eye as it could be. It now rides WITH the muscle group — the two facts
-          that answer "where am I" belong together, at a size a person can read at arm's length,
-          mid-set, out of breath. */}
-      <StageBar onExit={onExit} />
+      {/* WHERE AM I (founder 2026-07-13). The ordinal goes back to the top bar — but readable, not
+          the 11px whisper it was when the founder said "1 / 6 is so small you cannot notice it at
+          all". The previous pass over-corrected by dragging it down into the body next to the
+          muscle group, which cost the muscle group its place: it belongs CENTRED over the lift's
+          name, as its eyebrow, in the same ink as the ordinal. Chrome above, the lift below. */}
+      <StageBar ordinal={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
       <View style={styles.stageBody}>
-        <View style={styles.groupRow}>
-          {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
-          {group ? <View style={styles.groupSep} /> : null}
-          <Text style={styles.exOrdinal}>{t('workout.exerciseCount', { n: exNo, N: total })}</Text>
-        </View>
+        {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
         <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
 
         {!editing ? (
@@ -700,7 +726,7 @@ function ActiveSet({
         </View>
       </View>
 
-      <View style={styles.stageFooter}>
+      <View style={[styles.stageFooter, notice && styles.footerStoodDown]} pointerEvents={notice ? 'none' : 'auto'}>
         <Button
           variant="onstage"
           size="lg"
@@ -709,9 +735,16 @@ function ActiveSet({
           onPress={onComplete}
         />
         <View style={styles.ghostRow}>
-          {/* The pencil is GONE (founder 2026-07-12) — the number itself is the edit affordance.
-              While editing, one ghost remains: the way back out without saving. */}
-          {editing ? <StageGhost icon="check" label={t('workout.editDone')} onPress={onToggleEdit} /> : null}
+          {/* TWO DOORS TO THE SAME ROOM (founder 2026-07-13: "bring the edit-set button back, and
+              also keep tapping the number opening the edit"). The pencil was removed on the theory
+              that one affordance is cleaner than two — but the athlete who has never tapped the
+              number has no way to LEARN that they can, and the footer is where a hand already goes.
+              The named button teaches it; the number stays the shortcut for anyone who knows. */}
+          {editing ? (
+            <StageGhost icon="check" label={t('workout.editDone')} onPress={onToggleEdit} />
+          ) : (
+            <StageGhost icon="pencil" label={t('workout.editResult')} onPress={onToggleEdit} />
+          )}
           <StageGhost icon="playCircle" label={t('workout.form')} onPress={onDemo} />
           {canSwap ? <StageGhost icon="repeat" label={t('workout.swapAction')} onPress={onSwap} /> : null}
         </View>
@@ -749,12 +782,15 @@ function Logged({ units, confirm }: { units: 'kg' | 'lb'; confirm: Confirm }) {
 function Rest({
   units,
   paused,
+  notice,
   onExit,
   onDemo,
   onSwap,
 }: {
   units: 'kg' | 'lb';
   paused: boolean;
+  /** A notice owns the footer while it is up — the buttons stand down (see SessionFlow.notice). */
+  notice: boolean;
   onExit: () => void;
   onDemo: () => void;
   onSwap: () => void;
@@ -966,7 +1002,7 @@ function Rest({
         </View>
       </View>
 
-      <View style={styles.stageFooter}>
+      <View style={[styles.stageFooter, notice && styles.footerStoodDown]} pointerEvents={notice ? 'none' : 'auto'}>
         <Button
           variant="onstage"
           size="lg"
@@ -1076,22 +1112,25 @@ const styles = StyleSheet.create({
 
   // Stage chrome
   flex: { flex: 1 },
-  // Taller (the rest ring used to come up and touch the control) + a real, bordered chip.
+  // Tall enough that the rest ring can never come up and touch the control.
   stageBar: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
-  pauseBtn: { backgroundColor: stage[1] },
+  // A soft graphite disc, not a bordered box: found when looked for, silent otherwise.
+  pauseBtn: { backgroundColor: stage[1], borderRadius: radius.full, borderColor: 'transparent' },
   stageBarSide: { width: 44 },
   stageBarRight: { alignItems: 'flex-end' },
   stageBarCenter: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
+  // The ordinal — the one thing in the bar that is READ, so it is sized to be read.
+  stageBarOrdinal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.wide), color: stage.ink1, textAlign: 'center' },
 
   stageBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
   stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 14, gap: 10 },
+  // A notice is up: the footer holds its space and gives up its surface (nothing peeks out
+  // from under the card, nothing under it can be pressed by mistake).
+  footerStoodDown: { opacity: 0 },
 
   // Active set
-  // "Where am I" — the muscle group and the ordinal, one line, legible at arm's length.
-  groupRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 12 },
-  group: { fontFamily: font.sansSemibold, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
-  groupSep: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: stage.ink2 },
-  exOrdinal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
+  // The muscle group — the lift's eyebrow: centred over the name, in the ordinal's ink.
+  group: { fontFamily: font.sansSemibold, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), textTransform: 'uppercase', color: stage.ink1, marginBottom: 10, textAlign: 'center' },
   exName: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stage.ink0, textAlign: 'center', maxWidth: 320 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   loadBtnPressed: { opacity: 0.55 },

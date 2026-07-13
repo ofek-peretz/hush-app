@@ -40,13 +40,13 @@ enum Palette {
   static let ink1 = Color(red: 0.702, green: 0.694, blue: 0.678) // secondary
   static let ink2 = Color(red: 0.463, green: 0.455, blue: 0.443) // muted
   static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent — lines, rings, dots
-  /// The ochre that CARRIES TEXT — a deeper cut of the same hue (#9c6522), in step with the
-  /// phone's `signal.fill`. Charcoal-on-ochre was tried and reverted (founder 2026-07-12: "the
-  /// black inside the brown, I liked it less"); darkening the FILL restores the cream-on-ochre
-  /// the founder wants AND clears WCAG AA (4.64:1), so nothing has to be traded away.
-  static let signalFill = Color(red: 0.612, green: 0.396, blue: 0.133)
-  static let signalFillPressed = Color(red: 0.541, green: 0.353, blue: 0.118)
-  /// Cream — the ink on `signalFill`. Never on `signal`, which carries no text.
+  /// The ochre a letter sits on — and it is THE ochre (founder 2026-07-13, final): the deeper
+  /// #9c6522 cut reached a device and was rejected ("bring back the familiar brown — this dark
+  /// brown is not pretty"). One brown on every surface, phone and wrist. In step with the phone's
+  /// `signal.fill`; see design/tokens.ts for the full ruling and its bounded contrast cost.
+  static let signalFill = signal
+  static let signalFillPressed = Color(red: 0.780, green: 0.502, blue: 0.169) // #c7802b
+  /// Cream — the ink on `signalFill`.
   static let onAccent = Color(red: 0.984, green: 0.980, blue: 0.973)
   static let up = Color(red: 0.349, green: 0.498, blue: 0.376) // sage (increase)
   static let upWash = Color(red: 0.890, green: 0.945, blue: 0.898)
@@ -188,7 +188,12 @@ private struct TopStrip: View {
       }
       Spacer(minLength: 40) // the trailing half stays clear of the watch clock
     }
-    .frame(height: 18)
+    // The strip must be at least as tall as the chip it carries (founder 2026-07-13: "the pause
+    // is STILL on the ring"). It was pinned to 18 pt — shorter than the capsule — so the chip
+    // bled out of the strip's box and the rest ring, which begins the moment the strip ends,
+    // came up underneath it. A frame that lies about its height puts everything below it 4 pt
+    // too high. `minHeight` lets the chip set the truth; the rest screens add the gap.
+    .frame(minHeight: 22)
   }
 }
 
@@ -302,9 +307,11 @@ private struct SwapUndoChip: View {
 /// The countdown ring — a CONTINUOUS, fluid linear sweep, mono time at centre. Drift-proof
 /// + Always-On safe: `TimelineView(.animation)` recomputes the arc from the phone-supplied
 /// ABSOLUTE end on every display frame (not in 0.5 s steps), so the sweep is smooth — matching
-/// the iPhone ring. A +15 s top-up moves the end out — the arc EASES to its new fill over
-/// ~0.4 s (founder 2026-07-10: the ring must visibly rise like the phone's, never snap) via a
-/// short blend from the last drawn fraction; the mono time itself updates instantly (honest).
+/// the iPhone ring. A +15 s top-up moves the end out and the arc FILLS FORWARD to its new value
+/// over one linear second, from exactly where it stood — the phone's gesture, on the wrist. The
+/// denominator (`totalS`) never grows with a +15; if it did, the arc would drop the instant the
+/// seconds were granted and spend a second climbing back (founder 2026-07-13). The mono time
+/// updates instantly (honest).
 private struct RestRing: View {
   let endsAt: String?
   let totalS: Int
@@ -312,9 +319,12 @@ private struct RestRing: View {
   /// The label under the time while counting (design: "REST" inter-set, "NEXT" on transition).
   var restingLabel: String = "REST"
 
-  /// Active blend after the end moved: ease from `from` starting at `at`.
+  /// Active blend after the end moved: fill from `from` starting at `at`.
   @State private var blend: (from: Double, at: Date)? = nil
-  private static let blendDuration: TimeInterval = 0.4
+  /// One second, LINEAR — the phone's ring exactly (RestRing.tsx animates the +15 s top-up with
+  /// `withTiming(1000, Easing.linear)`). A shorter eased blend was a different gesture on a
+  /// different clock; the two rings are one instrument and they fill at one rate.
+  private static let blendDuration: TimeInterval = 1.0
 
   var body: some View {
     let end = WatchWire.parseDate(endsAt)
@@ -362,8 +372,7 @@ private struct RestRing: View {
     guard let b = blend else { return liveFrac }
     let t = now.timeIntervalSince(b.at) / Self.blendDuration
     guard t < 1 else { return liveFrac }
-    let e = t * t * (3 - 2 * t) // smoothstep
-    return b.from + (liveFrac - b.from) * e
+    return b.from + (liveFrac - b.from) * t // linear — the phone's mechanical fill
   }
 }
 
@@ -1031,7 +1040,10 @@ struct InterRestScreen: View {
     // the line under the exercise name, which reads a size up. stageFill() pins the strip.
     VStack(spacing: 0) {
       TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: true)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(84))
+      // The ring keeps its distance from the chrome — chrome and clock are not the same object,
+      // and on a wrist they must never look like one (founder 2026-07-13).
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(76))
+        .padding(.top, 6)
       Spacer(minLength: 3)
       // THE UP-NEXT LAW (founder 2026-07-12, phone and watch alike): between sets, the lift and
       // the set number. NOTHING ELSE. The load and the reps were on the stage thirty seconds ago
@@ -1078,7 +1090,8 @@ struct TransitionRestScreen: View {
     // the replacement (phone parity).
     VStack(spacing: 0) {
       TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), controlsHint: true)
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(78), restingLabel: "NEXT")
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(70), restingLabel: "NEXT")
+        .padding(.top, 6)
       Spacer(minLength: 3)
       VStack(spacing: 2) {
         HStack(spacing: 4) {
@@ -1247,15 +1260,16 @@ struct CardioCompleteScreen: View {
 // MARK: 06 · Complete
 
 /**
- * The wrist's closing beat, in two acts (founder 2026-07-12: "at the end of a workout on the
- * watch I want the animation the phone has — going lift by lift and marking a check on what
- * was done and what wasn't").
+ * The wrist's closing beat, in two acts (founder 2026-07-12, corrected 2026-07-13: "read the
+ * workout on the watch EXACTLY like the phone reads it — only the exercises that were performed,
+ * with the green check animation").
  *
- * ACT ONE — THE READ-BACK. The workout is walked lift by lift, a check landing on each one the
- * athlete finished, a dash on each one they did not. It is the same beat the phone plays, and it
- * is the whole reason the closing screen feels earned rather than administrative: it is the
- * machine showing its work. On a workout ended early it is also the honest ledger — this is what
- * you trained, and this is what you left.
+ * ACT ONE — THE READ-BACK. The lifts the athlete actually trained, walked one at a time, a sage
+ * check landing on each with the best set they logged on it beside the name. It is the phone's
+ * beat, on a wrist: the machine showing its work. The first cut listed the whole PRESCRIPTION and
+ * marked what was missed with a dash — an honest ledger, but a ledger, and it made a workout that
+ * ended early close on a list of things the athlete did not do. That is not what the phone shows
+ * and it is not what the moment is for. What did not happen is simply not here.
  *
  * ACT TWO — the summary that was always here (time · kcal · lifts raised) and the way out.
  *
@@ -1293,29 +1307,33 @@ struct CompleteScreen: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(lifts.enumerated()), id: \.offset) { i, lift in
-              HStack(spacing: 7) {
-                Group {
+              HStack(spacing: 8) {
+                // The phone's mark exactly: a hollow ring that FILLS sage as the read reaches it,
+                // with the check struck through it in the stage's own black.
+                ZStack {
+                  Circle()
+                    .strokeBorder(i < read ? Palette.up : Palette.stage2, lineWidth: 1.5)
+                    .background(Circle().fill(i < read ? Palette.up : Color.clear))
+                    .frame(width: 15, height: 15)
                   if i < read {
-                    if lift.done {
-                      DrawCheck(size: 12)
-                    } else {
-                      // Not a failure — a fact. A lift the athlete did not reach reads as a quiet
-                      // dash, never a red cross.
-                      Rectangle().fill(Palette.ink2).frame(width: 9, height: 1.5)
-                    }
-                  } else {
-                    Circle().fill(Palette.stage2).frame(width: 5, height: 5)
+                    Image(systemName: "checkmark")
+                      .font(.system(size: 8, weight: .bold))
+                      .foregroundStyle(Palette.stage0)
                   }
                 }
-                .frame(width: 14)
+                .frame(width: 15, height: 15)
                 Text(lift.name)
                   .font(.system(size: 13))
-                  .foregroundStyle(i < read ? Palette.ink0 : Palette.ink2)
+                  .foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 0)
+                Spacer(minLength: 4)
+                Text(lift.best)
+                  .font(.system(size: 11, design: .monospaced)).monospacedDigit()
+                  .foregroundStyle(Palette.ink2)
+                  .lineLimit(1).fixedSize()
               }
               .id(i)
-              .opacity(i < read ? 1 : 0.45)
+              .opacity(i < read ? 1 : 0.32) // the phone's own dim for a lift not yet read
               .animation(.easeOut(duration: 0.22), value: read)
             }
           }

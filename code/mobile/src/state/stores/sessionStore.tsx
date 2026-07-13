@@ -505,6 +505,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       workoutName: state.session?.programDayName ?? '',
       sessionStartedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
       completedSets: loggedSets.length,
+      // The actuals, in step order — the wrist's read-back prints the best set of each lift, and
+      // it must print what was LIFTED, not what was asked for (they differ the moment an athlete
+      // edits a set).
+      loggedSets: loggedSets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
       progressedLifts: progressedLiftCount(plan, loggedSets),
       toLoad: isToLoad(plan, machine.setIndex, loggedSets),
     });
@@ -649,6 +653,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         workoutName: saved.programDayName ?? '',
         sessionStartedAtMs: Date.parse(saved.startedAt),
         completedSets: saved.sets.length,
+        loggedSets: saved.sets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
         progressedLifts: progressedLiftCount(plan, saved.sets),
       });
       if (completeMirror) watchRef.current?.publish(completeMirror);

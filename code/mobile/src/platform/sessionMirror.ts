@@ -80,17 +80,28 @@ export interface MirrorStep {
 }
 
 /**
- * One lift, at the close of the workout: what it was, and whether the athlete finished it.
+ * One lift the athlete PERFORMED, at the close of the workout — with its best set.
  *
- * The wrist earns the same closing beat the phone has (founder 2026-07-12): the workout is read
- * back lift by lift, a check landing on each one that was completed. To do that the watch needs
- * the LIST, and the mirror is the only thing that crosses. A lift is done when every set it was
- * prescribed sits behind the athlete's completion frontier — so a workout ended early shows,
- * plainly, what was trained and what was left.
+ * The wrist plays the phone's closing beat, and now it plays the same one (founder 2026-07-13:
+ * "read the workout on the watch exactly like the phone reads it — only the exercises that were
+ * performed, with the green check"). The first cut listed the whole prescription and marked the
+ * unreached lifts with a dash. That is a LEDGER, and the closing beat is not a ledger: the phone
+ * walks the sets the athlete actually logged (WellDone reads `session.sets`), lands a check on
+ * each lift among them, and prints the best set beside it. Nothing that did not happen appears.
+ *
+ * So the wire carries what the phone renders: the performed lifts, in the order they were trained,
+ * each with the heaviest set of work it took (best by volume — the same rule WellDone uses).
  */
 export interface MirrorSummaryLift {
   name: string;
-  done: boolean;
+  /** The lift's best set, formatted the way the phone prints it: "60 × 8", "BW × 12". */
+  best: string;
+}
+
+/** One logged set, in step order — the actuals behind the read-back's numbers. */
+export interface MirrorLoggedSet {
+  weight: number | null; // kg; null = bodyweight
+  reps: number;
 }
 
 export interface MirrorSummary {
@@ -195,8 +206,9 @@ export interface MirrorInputs {
   /** When the current rest began (ms epoch), or null when not resting. Drives the
    *  absolute restEndsAt so the timer never drifts as the mirror is re-projected. */
   restStartedAtMs: number | null;
-  /** Seconds added to the current rest via "+15 sec" (phone or watch). Extends both
-   *  restEndsAt and restTotalS so every surface agrees on the longer rest. */
+  /** Seconds added to the current rest via "+15 sec" (phone or watch). Extends `restEndsAt` —
+   *  never `restTotalS`, which stays the prescribed length so every mirrored ring fills forward
+   *  the way the phone's does (see the projection below). */
   restExtraS?: number;
   nowMs: number;
   /** The session's workout name (program day) — for the watch Complete screen. */
@@ -207,6 +219,9 @@ export interface MirrorInputs {
    *  count. Falls back to the planned `total` only when omitted (e.g. a pure-projection
    *  caller without the live session). Fixes the watch reporting all planned sets done. */
   completedSets?: number;
+  /** The logged sets themselves, in step order — the ACTUAL weight/reps behind the read-back's
+   *  best-set line. Omitted ⇒ the read-back falls back to the prescription. */
+  loggedSets?: MirrorLoggedSet[];
   /** Distinct lifts the athlete actually trained AND that the model raised — the
    *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
   progressedLifts?: number;
@@ -230,33 +245,41 @@ function formatDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** "60 × 8" · "62.5 × 6" · "BW × 12" — the read-back's one number, phone-identical. */
+function bestSetLabel(s: MirrorLoggedSet): string {
+  const w = s.weight == null ? 'BW' : String(Math.round(s.weight * 10) / 10);
+  return `${w} × ${s.reps}`;
+}
+
 /**
- * The workout read back lift by lift (see MirrorSummaryLift).
+ * The workout read back lift by lift (see MirrorSummaryLift) — ONLY what was performed.
  *
- * `completedSets` is the athlete's frontier: the sets are walked in order, so the first N steps
- * are the ones that were logged. A lift is DONE when every step it owns falls behind that
- * frontier — anything else is a lift the athlete started and did not finish, or never reached,
- * and on a workout that ended early those are exactly the ones worth showing without a check.
+ * `completedSets` is the athlete's frontier: sets are logged in step order, so the first N steps
+ * are the ones that happened. A lift appears here if ANY of its steps falls behind that frontier;
+ * a lift the athlete never reached is not part of the workout they just did and has no place in
+ * the beat that reads it back. `logged` carries the ACTUALS in the same order (what was lifted,
+ * not what was prescribed) — the best of them, by volume, is the set shown beside the check. It is
+ * optional only so a caller with no live session still projects a valid frame; then the
+ * prescription stands in for the log, which is the closest true thing available.
  *
  * Pure + exported so the rule is a tested fact rather than a rendering detail on a wrist.
  */
-export function summaryLifts(steps: MirrorStep[], completedSets: number): MirrorSummaryLift[] {
+export function summaryLifts(
+  steps: MirrorStep[],
+  completedSets: number,
+  logged?: MirrorLoggedSet[],
+): MirrorSummaryLift[] {
+  const vol = (s: MirrorLoggedSet) => (s.weight ?? 0) * s.reps;
   const order: string[] = [];
-  const tally = new Map<string, { total: number; done: number }>();
+  const best = new Map<string, MirrorLoggedSet>();
   steps.forEach((s, i) => {
-    let t = tally.get(s.exerciseName);
-    if (!t) {
-      t = { total: 0, done: 0 };
-      tally.set(s.exerciseName, t);
-      order.push(s.exerciseName);
-    }
-    t.total += 1;
-    if (i < completedSets) t.done += 1;
+    if (i >= completedSets) return; // never reached — it is not part of this workout
+    const set = logged?.[i] ?? { weight: s.targetWeight, reps: s.targetReps };
+    const cur = best.get(s.exerciseName);
+    if (!cur) order.push(s.exerciseName);
+    if (!cur || vol(set) > vol(cur)) best.set(s.exerciseName, set);
   });
-  return order.map((name) => {
-    const t = tally.get(name)!;
-    return { name, done: t.done >= t.total };
-  });
+  return order.map((name) => ({ name, best: bestSetLabel(best.get(name)!) }));
 }
 
 /** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
@@ -309,7 +332,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       // early finish must never report every planned set as done.
       sets: inp.completedSets ?? total,
       up: inp.progressedLifts ?? up,
-      lifts: summaryLifts(steps, inp.completedSets ?? total),
+      lifts: summaryLifts(steps, inp.completedSets ?? total, inp.loggedSets),
     };
     return {
       schema: MIRROR_SCHEMA_VERSION,
@@ -357,8 +380,16 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   let restRemainingS: number | null = null;
   let restTotalS: number | null = null;
   if (resting && !paused) {
-    const restS = (effPhase === 'REST_INTER' ? restInterS : restTransitionS) + (inp.restExtraS ?? 0);
-    restTotalS = restS;
+    const baseS = effPhase === 'REST_INTER' ? restInterS : restTransitionS;
+    const restS = baseS + (inp.restExtraS ?? 0);
+    // THE RING'S DENOMINATOR IS THE PRESCRIBED REST, AND +15 DOES NOT MOVE IT (founder 2026-07-13:
+    // "+15 on the watch drops the animation by 15 seconds and climbs back — I want it to rise from
+    // where it is, exactly like the phone"). The phone's ring adds the 15 s to the NUMERATOR only,
+    // so the arc fills FORWARD by a visible 15/total slice. Growing the total here made every
+    // mirrored ring (watch, Live Activity) compute a smaller fraction of a longer rest and lurch
+    // backwards before recovering — the same 15 seconds, told as a loss. The END still moves out:
+    // that is what "+15" means. Only the yardstick stays put.
+    restTotalS = baseS;
     const startMs = restStartedAtMs ?? nowMs;
     const endMs = startMs + restS * 1000;
     restEndsAt = new Date(endMs).toISOString();

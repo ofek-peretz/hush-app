@@ -13,7 +13,7 @@ export { ProgressMeter } from './ProgressMeter';
 export { RestRing } from './RestRing';
 export { ListRow } from './ListRow';
 export { WheelPicker } from './WheelPicker';
-export { ToastProvider, useToast } from './Toast';
+export { ToastProvider, useToast, type ToastAction } from './Toast';
 export { Avatar } from './Avatar';
 export { SegmentedControl } from './SegmentedControl';
 export { Switch } from './Switch';
