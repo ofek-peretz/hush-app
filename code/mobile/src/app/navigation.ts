@@ -48,13 +48,13 @@ export type OnboardingParamList = {
  * swipe), and the current hierarchy is predictable and does not break. Simple, clear, tapped.
  */
 export type MainParamList = {
-  // Home is the single root. Program · History · Portrait · Settings (ProfileSheet)
-  // are reached from the Home hamburger Menu (the Tab Bar was removed) and pushed
-  // onto this stack with a back affordance.
+  // Home is the single root. History · Progress · Settings (ProfileSheet) and a single
+  // workout's plan (ProgramDetail) are pushed onto this stack with a back affordance.
+  // The "This week" screen is GONE (founder 2026-07-13): the week card on Home holds the
+  // week — what is done, what is left, and the door into each workout.
   // `focusDayId` = the workout chosen via "Set as next"; Home offers it (if still
   // unfinished) instead of the default next workout (§4.19 / §5.8).
   Home: { focusDayId?: string } | undefined;
-  Program: undefined;
   History: undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
   // strength engine. The recorded activity lands in the unified History timeline.

@@ -158,6 +158,9 @@ interface AppApi extends AppState {
   /** Store the athlete's chosen name (NameEntry screen) for the profile built at
    *  completeOnboarding. Overrides any Apple-provided name. */
   setPendingName: (name: string) => void;
+  /** The name as given, BEFORE the profile exists — the ready screen speaks to the athlete by
+   *  name (founder 2026-07-13) and it is still one screen away from being written to disk. */
+  pendingName: () => string | null;
   /** Publish the athlete's gender to the copy layer the moment it is picked (NameEntry).
    *  The value itself travels to the profile through the onboarding draft. */
   setPendingSex: (sex: 'male' | 'female') => void;
@@ -333,6 +336,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           void db.saveProfile(aged).catch(() => {});
           void track('age_auto_advanced', { age: aged.age });
         }
+        // Backfill the milestone anchor ONCE for athletes who signed up before it existed: their
+        // ladders are frozen at the weight they carry today (which is the weight those ladders
+        // would have been cut from anyway). Without this, their next weight edit would move a
+        // ladder that has already handed out marks (models.Profile.startWeightKg).
+        if (profile && profile.startWeightKg == null && profile.weightKg != null) {
+          profile = { ...profile, startWeightKg: profile.weightKg };
+          void db.saveProfile(profile).catch(() => {});
+        }
       }
       let mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
@@ -474,6 +485,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         pendingNameRef.current = trimmed.length > 0 ? trimmed : null;
       },
 
+      pendingName() {
+        return state.profile?.name ?? pendingNameRef.current;
+      },
+
       setPendingSex(sex) {
         // Published to the copy layer AT THE PICK, not at completeOnboarding: the four
         // screens that follow (Health, Body, Training, Ready) already address the athlete
@@ -487,6 +502,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           sex: inputs.sex,
           heightCm: inputs.heightCm,
           weightKg: inputs.weightKg,
+          // The weight Hush met them at — the milestone ladders are cut from it and must never
+          // move again (models.Profile.startWeightKg).
+          startWeightKg: inputs.weightKg,
           age: inputs.age,
           // Anchor for the yearly age auto-advance (domain/profileAge).
           ...(inputs.age != null ? { ageUpdatedAt: new Date().toISOString() } : {}),

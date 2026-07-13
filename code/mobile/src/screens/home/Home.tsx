@@ -133,6 +133,9 @@ export function Home({ navigation, route }: Props) {
    * where the honest sentence is the promise, not a report.
    */
   const [brief, setBrief] = useState<Line[] | null>(null);
+  // How many lifts the engine touched — the fact Home states before Hush's sentence. Null in week
+  // one, where there is no update to count (founder 2026-07-13).
+  const [briefCount, setBriefCount] = useState<number | null>(null);
   const [briefUnseen, setBriefUnseen] = useState(false);
   useEffect(() => {
     if (!isFocused || !program) return;
@@ -157,13 +160,17 @@ export function Home({ navigation, route }: Props) {
                     swapped: l.change!.snapshot.swapped,
                   })),
               )
-            : null; // week 1: the engine has a baseline, not a decision — Hush makes the promise
+            : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
         setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
+        setBriefCount(changes ? changes.length : null);
         setBriefUnseen(!!update && !update.seen);
       } catch {
         // The engine record could not be read. Say NOTHING rather than something generic — an
         // invented sentence about decisions we cannot see would be the one unforgivable lie here.
-        if (!cancelled) setBrief(null);
+        if (!cancelled) {
+          setBrief(null);
+          setBriefCount(null);
+        }
       }
     })();
     return () => {
@@ -313,6 +320,7 @@ export function Home({ navigation, route }: Props) {
   return (
     <HomeView
       resting={resting}
+      name={app.profile?.name}
       dayName={day?.name ?? null}
       muscles={muscleGroupsLabel(day?.muscleGroups)}
       trainedThisWeek={trainedThisWeek}
@@ -325,10 +333,10 @@ export function Home({ navigation, route }: Props) {
       workouts={workouts}
       onChooseWorkout={setChosenId}
       brief={brief}
+      briefCount={briefCount}
       briefUnseen={briefUnseen}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       onOpenWorkout={(id) => navigation.navigate('ProgramDetail', { dayId: id })}
-      onProgram={() => navigation.navigate('Program')}
       onHistory={() => navigation.navigate('History')}
       onSettings={() => navigation.navigate('ProfileSheet')}
       onProgress={() => navigation.navigate('Progress')}

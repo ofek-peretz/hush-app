@@ -39,6 +39,12 @@ export interface Profile {
   sex?: 'male' | 'female';
   heightCm?: number;
   weightKg?: number;
+  /** The bodyweight Hush MET them at — written once, at onboarding, never edited (founder
+   *  2026-07-13). The milestone ladders are cut from it (domain/milestones): a ladder anchored on
+   *  the CURRENT weight would move every time the athlete edited their profile, and could take back
+   *  a mark they had already earned. Absent on older profiles → they fall back to the current
+   *  weight, which is what they were built from anyway. */
+  startWeightKg?: number;
   age?: number;
   /** ISO instant age was last set/advanced — the auto-yearly-update anchor (founder
    *  2026-07-10: age is asked once; the app keeps it current by itself). Absent on

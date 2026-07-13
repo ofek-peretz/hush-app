@@ -26,9 +26,22 @@
  *    into the workout's exercises. One tap from Home, not two, and the week's state is legible
  *    without entering anything.
  *
- * Cardio left the main path (founder 2026-07-13): Home gets exactly ONE primary action — today's
- * workout. Open training is a real option, so it lives in the "choose another workout" sheet with
- * the week's workouts. On a RECOVERY day it is the day's act, so there it keeps its card.
+ * ═══ ONE WEEK, ONE SURFACE (founder 2026-07-13, second pass) ═══
+ *
+ * "There are three screens for the same purpose." There were: the chips, the 'choose another
+ * workout' sheet, and the whole This-week screen — three lists of the same four workouts. Two are
+ * gone. The CHIPS are now the chooser:
+ *
+ *   · tap a chip            → that workout is the one queued; the Begin button renames itself to it.
+ *   · tap the queued chip   → its plan opens (swap · pin · reorder · the form clip).
+ *
+ * So choosing never leaves Home, and the editor is one further tap from the thing you just chose.
+ * The week's state — what is done, what is left, how many of how many — was always on this card;
+ * it never needed a screen of its own.
+ *
+ * That frees Home's secondary button, and cardio takes it (founder): a run is a real option, and it
+ * was buried inside the sheet we just deleted. On a RECOVERY day it is the day's ACT, so there it
+ * still gets its own card.
  *
  * The container (Home.tsx) wires state + navigation.
  */
@@ -38,7 +51,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
-import { BottomSheet } from '@/components/BottomSheet';
 import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
@@ -61,6 +73,8 @@ export interface HomeWorkoutOption {
 
 export interface HomeViewProps {
   resting: boolean;
+  /** The athlete's first name, when they gave one — spoken only where Hush is speaking TO them. */
+  name?: string;
   dayName: string | null;
   muscles: string; // "Chest · Shoulders · Triceps"
   trainedThisWeek: number;
@@ -77,12 +91,14 @@ export interface HomeViewProps {
   /** Hush's sentence(s) about what it did to this week's plan (domain/weekBriefing). Null while
    *  the engine's record is still being read — the card holds its shape and stays silent. */
   brief: Line[] | null;
+  /** How many lifts the engine changed this week — the count Home states before the sentence
+   *  (founder 2026-07-13: "say whether there are changes, and how many"). Null in week one. */
+  briefCount: number | null;
   /** This week's update has not been opened yet — the card wears the ochre mark. */
   briefUnseen: boolean;
   onWeeklyUpdate: () => void;
-  /** Open ONE workout's exercises (swap · pin · form clip) straight from the week card. */
+  /** Open ONE workout's plan (swap · pin · reorder · form clip) — the second tap on the queued chip. */
   onOpenWorkout: (id: string) => void;
-  onProgram: () => void;
   onHistory: () => void;
   onSettings: () => void;
   onProgress?: () => void;
@@ -91,7 +107,6 @@ export interface HomeViewProps {
 
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
-  const [choosing, setChoosing] = useState(false);
   const reduced = useReducedMotion();
 
   const total = props.workouts.length || 0;
@@ -182,9 +197,12 @@ export function HomeView(props: HomeViewProps) {
               ) : (
                 <View style={styles.restSealSlot} />
               )}
+              {/* THE NAME (founder 2026-07-13): "we ask for it and then never say it." A finished
+                  week is one of the four moments that earn it — the athlete is being spoken to,
+                  not reported at. Never on a working surface, never twice on one screen. */}
               <Display>{t('home.restTitle')}</Display>
               <BodyL tone="secondary" style={styles.restCopy}>
-                {t('home.restSub')}
+                {props.name ? t('home.restSubNamed', { name: bidi(props.name) }) : t('home.restSub')}
               </BodyL>
               <View style={styles.meterWrap}>
                 <ProgressMeter
@@ -265,19 +283,16 @@ export function HomeView(props: HomeViewProps) {
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : null}
-                {/* The athlete owns the week's order. This was floating text with no frame,
-                    no colour and no glyph — nothing said it could be pressed, so athletes
-                    missed that the option existed (founder 2026-07-12). It is now a ghost
-                    button: a hairline outline and a chevron. Quiet, but unmistakably a control. */}
-                {/* The sheet now holds the week's workouts AND open training, so it is offered
-                    whenever there is a session to queue — not only when there are several
-                    workouts left (that condition used to hide the only door to a run). */}
-                {!props.resumable && props.workouts.length > 0 ? (
+                {/* The second door on Home is now the RUN (founder 2026-07-13). Choosing another
+                    workout is the chips' job — it needs no button — and cardio, which had been
+                    pushed into a sheet nobody opened, gets the affordance that frees up. */}
+                {!props.resumable ? (
                   <Button
                     variant="secondary"
                     block
-                    label={t('home.chooseAnother')}
-                    onPress={() => setChoosing(true)}
+                    label={t('home.cardioCta')}
+                    onPress={props.onCardio}
+                    leading={<Icon name="runner" size={16} color={color.textSecondary} strokeWidth={2} />}
                     trailing={<Icon name="chevronRight" size={16} color={color.textSecondary} strokeWidth={2} />}
                     style={styles.chooseAnother}
                   />
@@ -316,12 +331,9 @@ export function HomeView(props: HomeViewProps) {
           <View style={styles.hub}>
             <Legend style={styles.hubLegend}>{t('home.programLegend')}</Legend>
             <View style={styles.weekCard}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('home.hubThisWeek')}
-                onPress={props.onProgram}
-                style={({ pressed }) => [styles.weekHead, pressed && styles.weekPressed]}
-              >
+              {/* The head is a STATEMENT, not a door: the screen it used to open (This week) is
+                  gone — everything it held is on this card (founder 2026-07-13). */}
+              <View style={styles.weekHead}>
                 <Text style={styles.weekTitle}>{t('home.hubThisWeek')}</Text>
                 {/* The week's state as a measurement, in the measuring voice — and the trained
                     half of it in sage, because that is what "done" is coloured in this product. */}
@@ -329,10 +341,11 @@ export function HomeView(props: HomeViewProps) {
                   <Text style={styles.weekCountDone}>{done}</Text>
                   {` / ${total}`}
                 </Text>
-                <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
-              </Pressable>
+              </View>
 
-              {/* the week's workouts, as chips — the state of the week, and the door into it */}
+              {/* THE CHIPS ARE THE CHOOSER (see the header): one tap queues the workout, a second
+                  tap on the queued one opens its plan. A finished workout is a record — it cannot be
+                  queued again (founder 2026-07-11) — so its tap goes straight to the plan it was. */}
               {props.workouts.length ? (
                 <View style={styles.chips} accessibilityLabel={t('home.weekChips')}>
                   {props.workouts.map((w) => {
@@ -343,8 +356,18 @@ export function HomeView(props: HomeViewProps) {
                         key={w.id}
                         accessibilityRole="button"
                         accessibilityLabel={w.name}
+                        accessibilityHint={
+                          isDone ? undefined : current ? t('home.chipOpenHint') : t('home.chipChooseHint')
+                        }
                         accessibilityState={{ selected: current }}
-                        onPress={() => props.onOpenWorkout(w.id)}
+                        onPress={() => {
+                          if (isDone || current) {
+                            props.onOpenWorkout(w.id);
+                            return;
+                          }
+                          haptics.tick(); // the queue changed under the finger — it should be felt
+                          props.onChooseWorkout(w.id);
+                        }}
                         style={({ pressed }) => [
                           styles.chip,
                           isDone && styles.chipDone,
@@ -369,8 +392,14 @@ export function HomeView(props: HomeViewProps) {
                 </View>
               ) : null}
 
+              {/* The chips carry two acts now, and an athlete cannot be expected to guess the
+                  second. One quiet line, in the smallest voice on the page, says what a tap does. */}
+              {props.workouts.length > 1 ? <Text style={styles.chipsHint}>{t('home.chipsHint')}</Text> : null}
+
               {/* Hush's sentence — what it DID to this plan. The one line that makes this a
-                  managed programme rather than a nicely-drawn workout screen. */}
+                  managed programme rather than a nicely-drawn workout screen. It opens with the
+                  COUNT (founder 2026-07-13): how many lifts changed, or that none did — the fact
+                  first, the sentence under it, and the WHY one tap away. */}
               {props.brief?.length ? (
                 <Pressable
                   accessibilityRole="button"
@@ -378,14 +407,23 @@ export function HomeView(props: HomeViewProps) {
                   onPress={props.onWeeklyUpdate}
                   style={({ pressed }) => [styles.brief, pressed && styles.weekPressed]}
                 >
+                  {props.briefCount != null ? (
+                    <View style={styles.briefCountRow}>
+                      <Text style={styles.briefCount}>
+                        {props.briefCount > 0
+                          ? t('home.briefChanges', { count: props.briefCount })
+                          : t('home.briefNoChanges')}
+                      </Text>
+                      {props.briefUnseen ? (
+                        <View style={styles.briefNew}>
+                          <View style={styles.briefNewDot} />
+                          <Text style={styles.briefNewText}>{t('home.briefNew').toUpperCase()}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
                   <Text style={styles.briefText}>{props.brief.map((l) => t(l.key, l.params ?? {})).join(' ')}</Text>
                   <View style={styles.briefLinkRow}>
-                    {props.briefUnseen ? (
-                      <View style={styles.briefNew}>
-                        <View style={styles.briefNewDot} />
-                        <Text style={styles.briefNewText}>{t('home.briefNew').toUpperCase()}</Text>
-                      </View>
-                    ) : null}
                     <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
                     <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
                   </View>
@@ -413,66 +451,6 @@ export function HomeView(props: HomeViewProps) {
           </View>
         </ScrollView>
       </SafeAreaView>
-
-      {/* choose another workout — the weekly bucket is unscheduled; the athlete queues any of it */}
-      {choosing ? (
-        <BottomSheet onClose={() => setChoosing(false)}>
-          <Legend style={styles.sheetLegend}>{t('home.chooseLegendWorkouts')}</Legend>
-          {props.workouts.map((w, i) => {
-            const current = w.name === props.dayName;
-            // A finished workout is a RECORD, not an option: it reads as done and is inert
-            // (choosing it would let the athlete train the same session twice in a week).
-            const done = !!w.done;
-            return (
-              <ListRow
-                key={w.id}
-                title={w.name}
-                subtitle={done ? t('home.doneThisWeek') : current ? t('home.nextUpThisWeek') : w.muscles}
-                chevron={!current && !done}
-                muted={done}
-                last={i === props.workouts.length - 1}
-                // A done row carries no press handler at all — it renders as a plain,
-                // inert record rather than a button that quietly does nothing.
-                onPress={
-                  done
-                    ? undefined
-                    : () => {
-                        if (!current) props.onChooseWorkout(w.id);
-                        setChoosing(false);
-                      }
-                }
-                // THE TWO STATES MUST NOT LOOK THE SAME (founder 2026-07-12). They both carried
-                // a green check, so "the workout I just finished" and "the workout I am about to
-                // do" were indistinguishable — the one question this list exists to answer.
-                // A check means DONE, and nothing else. The one that is queued gets the ochre
-                // index dot: the same "you are here" mark the rest of the instrument uses.
-                trailing={
-                  done ? (
-                    <Icon name="check" size={18} color={color.up} strokeWidth={2.2} />
-                  ) : current ? (
-                    <View style={styles.currentDot} />
-                  ) : undefined
-                }
-              />
-            );
-          })}
-
-          {/* …and the run. It is a workout the athlete can choose today; it is simply not one
-              HUSH prescribes — which is exactly what the second legend says. */}
-          <Legend style={styles.sheetLegendSecond}>{t('home.openTraining')}</Legend>
-          <ListRow
-            title={t('cardio.title')}
-            subtitle={t('cardio.recordedNotCoached')}
-            chevron
-            last
-            onPress={() => {
-              setChoosing(false);
-              props.onCardio();
-            }}
-            leading={<Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />}
-          />
-        </BottomSheet>
-      ) : null}
     </View>
   );
 }
@@ -497,9 +475,6 @@ const styles = StyleSheet.create({
   legendTop: { paddingTop: 24 },
   block: { paddingTop: 14 },
   restCopy: { marginTop: 14, maxWidth: 320 },
-
-  sheetLegend: { marginTop: 6, marginBottom: 8 },
-  sheetLegendSecond: { marginTop: 18, marginBottom: 8 },
 
   openTraining: { marginTop: 24 },
   cardioCard: {
@@ -565,8 +540,6 @@ const styles = StyleSheet.create({
   error: { marginTop: 16 },
   cta: { marginTop: 24, gap: 10 },
   chooseAnother: { justifyContent: 'space-between' },
-  // "You are here" — the ochre index, never a check (a check means done).
-  currentDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: signal[0] },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },
@@ -611,8 +584,12 @@ const styles = StyleSheet.create({
   chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
   chipTextDone: { color: color.textPrimary },
   currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: signal[0] },
+  chipsHint: { marginTop: 8, fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'left' },
 
   brief: { marginTop: 14, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 12, paddingBottom: 10 },
+  // The FACT, before the sentence: how many lifts changed this week (or that none did).
+  briefCountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  briefCount: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
   // Hush SPEAKING — the sans voice, never the measuring one, and at reading size: this is the
   // sentence the whole product is judged by.
   briefText: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },

@@ -20,7 +20,7 @@ import {
 } from '@/components/ds/WheelPicker';
 import { projectRoute, simplifyRoute, MAX_ROUTE_POINTS } from '@/components/RouteTrace';
 import { milestoneCopy } from '@/domain/milestoneCopy';
-import { COUNT_THRESHOLDS, TONNAGE_THRESHOLDS_KG, CLUB_THRESHOLDS_KG, type Milestone } from '@/domain/milestones';
+import { COUNT_THRESHOLDS, TONNAGE_THRESHOLDS_KG, clubLadders, type Milestone } from '@/domain/milestones';
 import type { SubscriptionProduct } from '@/platform/billing';
 
 const t = (key: string) => key; // copy is not under test here — identity is enough
@@ -225,8 +225,12 @@ describe('every milestone strikes a badge that means something', () => {
     const all: Milestone[] = [
       ...COUNT_THRESHOLDS.map((n): Milestone => ({ id: `count_${n}`, family: 'count', value: n })),
       ...TONNAGE_THRESHOLDS_KG.map((n): Milestone => ({ id: `tonnage_${n}`, family: 'tonnage', value: n })),
-      ...Object.entries(CLUB_THRESHOLDS_KG).flatMap(([exerciseId, ladder]) =>
-        ladder.map((n): Milestone => ({ id: `club_${exerciseId}_${n}`, family: 'club', value: n, exerciseId })),
+      // The club ladders are personal now (founder 2026-07-13), so every lift that can carry a
+      // club for ANY athlete must have its own badge — the woman's set and the man's, together.
+      ...[{ sex: 'female' as const }, { sex: 'male' as const }].flatMap((p) =>
+        Object.entries(clubLadders(p)).flatMap(([exerciseId, ladder]) =>
+          ladder.map((n): Milestone => ({ id: `club_${exerciseId}_${n}`, family: 'club', value: n, exerciseId })),
+        ),
       ),
       { id: 'engine_first_raise', family: 'engine' },
       { id: 'engine_doubled_bb_bench_press', family: 'engine', exerciseId: 'bb_bench_press' },

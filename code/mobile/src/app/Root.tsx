@@ -36,7 +36,6 @@ import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { ProfileEdit } from '@/screens/profile/ProfileEdit';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
-import { Program } from '@/screens/program/Program';
 import { ProgramDetail } from '@/screens/program/ProgramDetail';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
@@ -116,7 +115,6 @@ function MainNavigator() {
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
-      <MainStack.Screen name="Program" component={Program} />
       <MainStack.Screen name="ProgramDetail" component={ProgramDetail} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
@@ -138,7 +136,7 @@ function MainNavigator() {
 function routeNotificationIntent(intent: NotificationIntent | null, enrolled: boolean): void {
   if (!intent || !enrolled) return;
   void track('notification_opened', { kind: intent.kind });
-  // v4: the weekly notification opens the Weekly Update (what changed + Why); legacy path → Program.
+  // v4: the weekly notification opens the Weekly Update (what changed + Why).
   if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate'); // 1.20 (v4 Weekly Update + Why)
   else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
 }

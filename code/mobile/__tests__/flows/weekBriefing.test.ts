@@ -34,10 +34,11 @@ beforeAll(async () => {
 });
 afterEach(() => resetGender());
 
-describe('week 1 — the promise, not a report', () => {
-  it('never claims a decision it has not made yet', () => {
-    const lines = weekBriefing(null, 'kg');
-    expect(lines).toEqual([{ key: 'home.briefFirst' }]);
+describe('week 1 — silence, not a report', () => {
+  it('says NOTHING before it has decided anything (founder 2026-07-13)', () => {
+    // The promise about Saturday is made where the programme is handed over (ProgramCreated).
+    // Repeating it on the week card cost the card its top third to say what was just said.
+    expect(weekBriefing(null, 'kg')).toEqual([]);
   });
 });
 
@@ -106,8 +107,8 @@ describe('the voice', () => {
   it('is Hush speaking in the FIRST PERSON, in both languages', async () => {
     for (const [lng, mark] of [['en', 'I '], ['he', 'אני|העליתי|קראתי|בניתי|התאמתי|החלפתי|כיווננתי']] as const) {
       await i18next.changeLanguage(lng);
+      // (week 1 is not in this list: the card says nothing at all then — see the first describe.)
       const sentences = [
-        say(null),
         say([]),
         say([raise('Bench Press', 60, 62.5)]),
         say([drop('Overhead Press', 45, 40)]),

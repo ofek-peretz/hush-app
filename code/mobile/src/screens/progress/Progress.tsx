@@ -18,7 +18,8 @@ type Props = NativeStackScreenProps<MainParamList, 'Progress'>;
 
 export function Progress({ navigation }: Props) {
   const { t } = useCopy();
-  const units = useApp().profile?.units ?? 'kg';
+  const app = useApp();
+  const units = app.profile?.units ?? 'kg';
   const [sessions, setSessions] = useState<Session[] | null>(null);
 
   useEffect(() => {
@@ -32,9 +33,12 @@ export function Progress({ navigation }: Props) {
 
   // The milestones gallery — earned stamps + each family's next silhouette,
   // derived (never stored) from the same history the report reads.
+  // The club ladders are the athlete's own (cut from their onboarding answers), so the profile is
+  // an input here exactly as the history is (founder 2026-07-13).
+  const profile = app.profile;
   const milestones = useMemo(
-    () => (sessions ? { earned: earnedMilestones(sessions), next: nextUp(sessions) } : null),
-    [sessions],
+    () => (sessions ? { earned: earnedMilestones(sessions, profile), next: nextUp(sessions, profile) } : null),
+    [sessions, profile],
   );
 
   return (

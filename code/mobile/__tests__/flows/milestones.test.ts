@@ -15,8 +15,10 @@ import {
   earnedMilestones,
   newlyEarned,
   nextUp,
+  clubLadders,
   COUNT_THRESHOLDS,
   TONNAGE_THRESHOLDS_KG,
+  type MilestoneProfile,
 } from '@/domain/milestones';
 import type { Session, SetLog } from '@/data/local/models';
 
@@ -124,21 +126,29 @@ describe('tonnage family', () => {
 });
 
 describe('club family', () => {
-  it('a logged 100 kg squat set earns BOTH the 60 and 100 rungs at once', () => {
+  // No profile passed ⇒ the median man (75 kg, intermediate): squat starts at 50 kg, so his
+  // ladder is 60 · 80 · 100 · 120 · 140.
+  it('a logged 100 kg squat set earns every rung up to it at once', () => {
     const s = session(0, [log('bb_back_squat', 100, 5)]);
     const clubs = earnedMilestones([s]).filter((m) => m.family === 'club');
-    expect(clubs.map((m) => m.id)).toEqual(['club_bb_back_squat_60', 'club_bb_back_squat_100']);
+    expect(clubs.map((m) => m.id)).toEqual([
+      'club_bb_back_squat_60',
+      'club_bb_back_squat_80',
+      'club_bb_back_squat_100',
+    ]);
   });
 
   it('each rung is earned once; the next rung needs a genuinely heavier set', () => {
     const sessions = [
       session(0, [log('bb_bench_press', 60, 8)]),
-      session(2, [log('bb_bench_press', 62.5, 8)]),
+      session(2, [log('bb_bench_press', 62.5, 8)]), // heavier, but no new rung crossed
       session(4, [log('bb_bench_press', 100, 3)]),
     ];
     const clubs = earnedMilestones(sessions).filter((m) => m.family === 'club');
     expect(clubs.map((m) => [m.id, m.sessionId])).toEqual([
+      ['club_bb_bench_press_50', 's1'],
       ['club_bb_bench_press_60', 's1'],
+      ['club_bb_bench_press_80', 's3'],
       ['club_bb_bench_press_100', 's3'],
     ]);
   });
@@ -146,6 +156,56 @@ describe('club family', () => {
   it('non-club lifts never club, and a 0-rep set never counts', () => {
     const s = session(0, [log('leg_press', 220, 8), log('bb_deadlift', 140, 0)]);
     expect(earnedMilestones([s]).filter((m) => m.family === 'club')).toEqual([]);
+  });
+});
+
+/**
+ * THE PERSONAL LADDER (founder 2026-07-13) — "adapt the loads that open a milestone to what we know
+ * about them from onboarding". The rungs are multiples of the load Hush itself started the athlete
+ * at, snapped to round plates; the LIFTS that carry clubs lean lower-body for women.
+ */
+describe('club ladders are cut from the onboarding answers', () => {
+  const woman: MilestoneProfile = { sex: 'female', weightKg: 60, experience: 'beginner', age: 30 };
+  const man: MilestoneProfile = { sex: 'male', weightKg: 82, experience: 'intermediate', age: 30 };
+
+  it("a woman's clubs are four-fifths lower body, and a man's include the hip thrust", () => {
+    expect(Object.keys(clubLadders(woman)).sort()).toEqual(
+      ['bb_back_squat', 'bb_bench_press', 'bb_deadlift', 'bb_rdl', 'hip_thrust'].sort(),
+    );
+    expect(Object.keys(clubLadders(man))).toContain('hip_thrust');
+    expect(Object.keys(clubLadders(man))).toContain('bb_overhead_press'); // …and keeps his classics
+  });
+
+  it('every rung is a round, sayable load, strictly rising, above where she started', () => {
+    for (const rungs of Object.values(clubLadders(woman))) {
+      expect(rungs.length).toBeGreaterThanOrEqual(3);
+      for (const r of rungs) expect(r % 5).toBe(0);
+      for (let i = 1; i < rungs.length; i += 1) expect(rungs[i]).toBeGreaterThan(rungs[i - 1]);
+    }
+  });
+
+  it('the beginner woman is given reachable marks where the old fixed table gave her none', () => {
+    // The old ladder opened at bench 60 / squat 60 for everyone. Hers now opens far below that —
+    // and her first squat club is a real step up from the ~22 kg Hush starts her at.
+    const l = clubLadders(woman);
+    expect(l.bb_bench_press[0]).toBeLessThanOrEqual(40);
+    expect(l.bb_back_squat[0]).toBeGreaterThan(22);
+    expect(l.bb_back_squat[0]).toBeLessThanOrEqual(40);
+  });
+
+  it('the same 100 kg squat is a mark for one athlete and further along the ladder for another', () => {
+    const s = [session(0, [log('bb_back_squat', 100, 3)])];
+    const hers = earnedMilestones(s, woman).filter((m) => m.family === 'club').length;
+    const his = earnedMilestones(s, man).filter((m) => m.family === 'club').length;
+    expect(hers).toBeGreaterThan(his); // she has crossed more of her ladder with the same bar
+  });
+
+  it('the ladder is anchored on the weight Hush MET her at — editing weight never takes a mark back', () => {
+    const s = [session(0, [log('bb_back_squat', 60, 5)])];
+    const earned = earnedMilestones(s, woman).map((m) => m.id);
+    // She gains 8 kg of bodyweight. The anchor is startWeightKg, so the rungs do not move.
+    const heavier: MilestoneProfile = { ...woman, weightKg: 68, startWeightKg: 60 };
+    expect(earnedMilestones(s, heavier).map((m) => m.id)).toEqual(earned);
   });
 });
 

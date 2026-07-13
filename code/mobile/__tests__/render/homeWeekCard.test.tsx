@@ -7,22 +7,29 @@
  *
  *   · does the app say what it does?      → Hush's sentence is on the page, in the first person
  *   · is the programme still swallowed?   → the week is a card, and its workouts are on it
- *   · can anyone find the editor?         → a workout chip is a button straight into it
- *   · did cardio leave the main path?     → no card while training; a row in the chooser instead
  *   · is "done" green?                    → the trained workout wears the sage check, never ink
+ *
+ * …and the SECOND pass (2026-07-13), where three surfaces for one purpose became one:
+ *
+ *   · the chips ARE the chooser          → one tap queues a workout, a second tap opens its plan
+ *   · the sheet and This-week are gone   → nothing on Home opens a second list of the same week
+ *   · cardio has the secondary button    → the run is one tap from Home again
+ *   · the update states the COUNT first  → "3 changes this week", then the sentence, then the why
+ *   · the name is spoken                 → on a finished week, Hush addresses the athlete
  */
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { HomeView, type HomeViewProps } from '@/screens/home/HomeView';
 import { initI18n, tg } from '@/i18n';
+import { bidi } from '@/i18n/bidi';
 import { up, signal, ink } from '@/design/tokens';
 
 beforeAll(async () => {
   await initI18n();
 });
 
-/** The chooser sheet reads the safe-area insets, so the screen is mounted inside a real provider. */
+/** The screen reads the safe-area insets, so it is mounted inside a real provider. */
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 393, height: 852 },
   insets: { top: 59, left: 0, right: 0, bottom: 34 },
@@ -91,6 +98,7 @@ const WORKOUTS = [
 function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
   return {
     resting: false,
+    name: 'Ofek',
     dayName: 'Pull A',
     muscles: 'Back · Biceps',
     trainedThisWeek: 1,
@@ -99,12 +107,12 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     exerciseCount: 6,
     workouts: WORKOUTS,
     brief: [{ key: 'home.briefRaisedOne', params: { lift: 'Bench Press', load: '62.5', unit: 'kg' } }],
+    briefCount: 3,
     briefUnseen: true,
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
     onOpenWorkout: () => {},
-    onProgram: () => {},
     onHistory: () => {},
     onSettings: () => {},
     onProgress: () => {},
@@ -139,6 +147,17 @@ describe('the app says what it does', () => {
     );
   });
 
+  it('states HOW MANY lifts changed before it says anything else — or that none did', () => {
+    expect(texts(mount(<HomeView {...props({ briefCount: 3 })} />)).join(' ')).toContain(
+      tg('home.briefChanges', { count: 3 }),
+    );
+    const steady = texts(
+      mount(<HomeView {...props({ briefCount: 0, brief: [{ key: 'home.briefSteady' }] })} />),
+    ).join(' ');
+    expect(steady).toContain(tg('home.briefNoChanges'));
+    expect(steady).toContain(tg('home.briefOpen')); // …and the why is still one tap away
+  });
+
   it('says NOTHING rather than something invented when the engine record cannot be read', () => {
     const r = mount(<HomeView {...props({ brief: null })} />);
     expect(texts(r).join(' ')).not.toContain(tg('home.briefOpen'));
@@ -151,13 +170,43 @@ describe('the week is on the page, and it is a door', () => {
     for (const w of WORKOUTS) expect(said).toContain(w.name);
   });
 
-  it('a chip opens THAT workout — swap, pin and the form clip are one tap from Home', () => {
+  it('a chip QUEUES that workout — choosing never leaves Home (the sheet is gone)', () => {
+    const chosen: string[] = [];
+    const opened: string[] = [];
+    const r = mount(
+      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+    );
+    act(() => {
+      byLabel(r, 'Legs A')!.props.onPress(); // not the queued one → it becomes the queued one
+    });
+    expect(chosen).toEqual(['day_3']);
+    expect(opened).toEqual([]); // …and nothing was pushed on top of Home
+  });
+
+  it('a second tap on the QUEUED chip opens its plan — swap, pin and the form clip', () => {
     const opened: string[] = [];
     const r = mount(<HomeView {...props({ onOpenWorkout: (id) => void opened.push(id) })} />);
     act(() => {
-      byLabel(r, 'Legs A')!.props.onPress();
+      byLabel(r, 'Pull A')!.props.onPress(); // Pull A === dayName, i.e. already queued
     });
-    expect(opened).toEqual(['day_3']);
+    expect(opened).toEqual(['day_2']);
+  });
+
+  it('a finished workout is a record: its chip opens the plan, and never re-queues it', () => {
+    const chosen: string[] = [];
+    const opened: string[] = [];
+    const r = mount(
+      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+    );
+    act(() => {
+      byLabel(r, 'Push A')!.props.onPress(); // done: true
+    });
+    expect(chosen).toEqual([]);
+    expect(opened).toEqual(['day_1']);
+  });
+
+  it('the athlete is told what a tap does — the chips carry two acts now', () => {
+    expect(texts(mount(<HomeView {...props()} />)).join(' ')).toContain(tg('home.chipsHint'));
   });
 
   it('a trained workout is SAGE, and the queued one is OCHRE — the two marks never trade places', () => {
@@ -174,24 +223,35 @@ describe('the week is on the page, and it is a door', () => {
   });
 });
 
-describe('cardio left the main path', () => {
-  it('has no card of its own while there is a workout to do', () => {
-    const r = mount(<HomeView {...props()} />);
-    expect(byLabel(r, tg('cardio.title'))).toBeNull();
-  });
-
-  it('…but is right there in "choose another workout"', () => {
-    const r = mount(<HomeView {...props()} />);
+describe('cardio has Home\'s second button', () => {
+  it('a run is one tap from Home — the button the chooser sheet used to occupy', () => {
+    let ran = 0;
+    const r = mount(<HomeView {...props({ onCardio: () => void ran++ })} />);
     act(() => {
-      byLabel(r, tg('home.chooseAnother'))!.props.onPress();
+      byLabel(r, tg('home.cardioCta'))!.props.onPress();
     });
-    const said = texts(r).join(' ');
-    expect(said).toContain(tg('cardio.title'));
-    expect(said).toContain(tg('home.openTraining').toUpperCase()); // the sheet's second legend
+    expect(ran).toBe(1);
   });
 
-  it('and on a RECOVERY day it is the day\'s act again — its card is back', () => {
+  it('it never competes with the workout: the primary action is still Begin', () => {
+    const said = texts(mount(<HomeView {...props()} />)).join(' ');
+    expect(said).toContain(tg('home.begin', { name: bidi('Pull A') })); // the name rides a BiDi isolate
+  });
+
+  it('and on a RECOVERY day it is the day\'s act — its card is back', () => {
     const r = mount(<HomeView {...props({ resting: true, dayName: null })} />);
     expect(byLabel(r, tg('cardio.title'))).not.toBeNull();
+  });
+});
+
+describe('the name', () => {
+  it('is spoken when the week is closed — and the copy still reads without one', () => {
+    const named = texts(mount(<HomeView {...props({ resting: true, dayName: null })} />)).join(' ');
+    expect(named).toContain('Ofek');
+    const anonymous = texts(
+      mount(<HomeView {...props({ resting: true, dayName: null, name: undefined })} />),
+    ).join(' ');
+    expect(anonymous).toContain(tg('home.restSub'));
+    expect(anonymous).not.toContain('undefined');
   });
 });

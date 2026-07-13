@@ -118,6 +118,10 @@ export function Authentication({ navigation }: Props) {
           <Text style={styles.wordmark}>hush</Text>
           <View style={styles.dot} />
         </View>
+        {/* THE FRONT DOOR SAYS WHAT THIS IS (founder 2026-07-13). The claim first, in the
+            speaking voice, at a size that means it — then the one sentence that makes the claim
+            keepable. The old tagline explained the mechanism to somebody who had not yet asked. */}
+        <Text style={styles.promise}>{t('ob.signinPromise')}</Text>
         <Text style={styles.tagline}>{t('ob.signinTagline')}</Text>
       </View>
       <View style={styles.actions}>
@@ -232,7 +236,17 @@ const styles = StyleSheet.create({
   brandSpacing: { marginTop: 18 },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary, textAlign: 'left' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 }, // rtl-ok: inside LTR brand lockup
-  tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 16, maxWidth: 290 },
+  promise: {
+    fontFamily: font.sansSemibold,
+    fontSize: textScale.lg,
+    lineHeight: 28,
+    letterSpacing: trackingPx(textScale.lg, tracking.tight),
+    color: color.textPrimary,
+    textAlign: 'center',
+    marginTop: 20,
+    maxWidth: 300,
+  },
+  tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 10, maxWidth: 290 },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
 

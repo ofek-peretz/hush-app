@@ -1,17 +1,24 @@
 /**
- * Weekly Update — "Update B" (the final v4 direction), rebuilt to the Claude
- * Design screenshots. The Saturday digest is the WHOLE week's program shown at
- * its new loads, grouped by workout. Each lift Hush changed is highlighted
- * (sage up / clay down / ochre swap) with its set/rep deltas, and unfolds in
- * place to the Observation → Conclusion → Action "Why" (WhyTriple).
+ * Weekly Update — the Saturday letter. What Hush CHANGED, and why.
  *
- * v4 rules honoured: read-only (no accept/reject/undo); a load coming down is
- * "matched to demonstrated capability, sets kept" — never a setback, never red;
- * the steady week is one reassuring line, not an empty state; no forecasts,
- * confidence, or probabilities.
+ * ═══ THE SECOND PASS (founder 2026-07-13) ═══
  *
- * Data: getWeeklyPlan() joins the program structure with the engine's per-slot
- * state and the captured weekly change snapshot.
+ *  · "Show only the exercises that changed, and why they changed." It used to print the whole week
+ *    at its new loads, with the changed lifts highlighted inside it — so the news was buried in a
+ *    list of things that were not news. The screen now holds the CHANGES and nothing else; one line
+ *    at the end says the rest of the plan stands.
+ *  · The WHY was always there (each changed lift unfolds to Observation → Conclusion → Action) and
+ *    nothing said so — a bare chevron. Every changed row now carries the word "Why?".
+ *  · "If there is no change, do not leave the screen empty — that reads as no progress." A steady
+ *    week is the engine being right, so it says so and PROVES it: the lifts that have moved the
+ *    furthest since day one, in the athlete's own numbers. Trust me — here is the evidence.
+ *  · It opens with their name. This is a letter.
+ *
+ * v4 rules honoured: read-only (no accept/reject/undo); a load coming down is "matched to
+ * demonstrated capability, sets kept" — never a setback, never red; no forecasts or probabilities.
+ *
+ * Data: getWeeklyPlan() joins the program structure with the engine's per-slot state and the
+ * captured weekly change snapshot; the evidence comes from the logged history (domain/progressReport).
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
@@ -26,7 +33,10 @@ import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/engine/v4/v4Engine';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import type { Units } from '@/data/local/models';
+import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
+import { exerciseDisplayName } from '@/data/exercises';
+import { bidi } from '@/i18n/bidi';
+import type { Session, Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, up, down, signal, radius } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -41,6 +51,8 @@ const rangeStr = (r: [number, number]): string => `${r[0]}-${r[1]}`;
 export function WeeklyUpdate({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const name = app.profile?.name;
+  const units = app.profile?.units ?? 'kg';
   const [view, setView] = useState<WeeklyPlanView | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -103,6 +115,34 @@ export function WeeklyUpdate({ navigation }: Props) {
     navigation.goBack();
   }
 
+  /**
+   * THE EVIDENCE (founder 2026-07-13) — for the week where Hush changed nothing. An empty screen on
+   * the day the product is supposed to prove it is working reads as "nothing is happening", which is
+   * the opposite of the truth: a steady week means the plan is already right. So the screen fills
+   * with the athlete's own history — the lifts that have travelled furthest since Hush met them.
+   * Loaded only when there is nothing to report (the common case still costs no disk read).
+   */
+  const [evidence, setEvidence] = useState<QuarterlyProgressEntry[] | null>(null);
+  const steady = loaded && (view?.changedCount ?? 0) === 0;
+  useEffect(() => {
+    if (!steady) return;
+    let active = true;
+    void db
+      .loadHistory()
+      .then((h: Session[]) => {
+        if (!active) return;
+        const top = allTimePeakProgress(h, Date.now())
+          .filter((e) => e.deltaKg > 0)
+          .sort((a, b) => b.deltaKg - a.deltaKg)
+          .slice(0, 3);
+        setEvidence(top);
+      })
+      .catch(() => active && setEvidence([]));
+    return () => {
+      active = false;
+    };
+  }, [steady]);
+
   const changedCount = view?.changedCount ?? 0;
   const whenLabel = view
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
@@ -119,33 +159,76 @@ export function WeeklyUpdate({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Legend style={styles.eyebrow}>{t('weekly.eyebrow')}</Legend>
+        <Legend style={styles.eyebrow}>{steady ? t('weekly.evidenceLegend') : t('weekly.eyebrow')}</Legend>
+        {/* A letter opens with the name of the person it is written to (founder 2026-07-13). */}
+        {name ? <Text style={styles.vocative}>{t('common.vocative', { name: bidi(name) })}</Text> : null}
         <Text style={styles.title}>{view ? t('weekly.weekTitle', { n: view.weekIndex + 1 }) : t('weekly.title')}</Text>
         <Text style={styles.intro}>
-          {loaded && changedCount === 0 ? t('weekly.steady') : t('weekly.intro', { count: changedCount })}
+          {steady ? t('weekly.evidenceIntro') : t('weekly.intro', { count: changedCount })}
         </Text>
 
-        {view?.workouts.map((w) => (
-          <View key={w.dayId} style={styles.workout}>
-            <View style={styles.workoutHead}>
-              <Text style={styles.workoutName}>{w.name}</Text>
-              <Text style={styles.workoutGroups}>{w.groups.join(' · ').toUpperCase()}</Text>
+        {/* ── the week where something changed: ONLY what changed ── */}
+        {!steady
+          ? view?.workouts.map((w) => {
+              // A workout with nothing changed in it is not news, and does not appear.
+              const changed = w.lifts.filter((l) => l.change);
+              if (changed.length === 0) return null;
+              return (
+                <View key={w.dayId} style={styles.workout}>
+                  <View style={styles.workoutHead}>
+                    <Text style={styles.workoutName}>{w.name}</Text>
+                    <Text style={styles.workoutGroups}>{w.groups.join(' · ').toUpperCase()}</Text>
+                  </View>
+                  {changed.map((lift, i) => (
+                    <LiftRow
+                      key={`${w.dayId}:${i}`}
+                      lift={lift}
+                      open={openId === lift.change!.snapshot.slotId}
+                      onToggle={() => {
+                        const id = lift.change!.snapshot.slotId;
+                        setOpenId((cur) => (cur === id ? null : id));
+                        if (openId !== id)
+                          void track('weekly_update_why_opened', { pattern: lift.change!.explanation.pattern });
+                      }}
+                    />
+                  ))}
+                </View>
+              );
+            })
+          : null}
+
+        {/* The plan is bigger than the news. One line, so the athlete knows the rest is intact. */}
+        {!steady && changedCount > 0 ? <Text style={styles.unchanged}>{t('weekly.unchangedNote')}</Text> : null}
+
+        {/* ── the steady week: the proof (see the header) ── */}
+        {steady && evidence ? (
+          evidence.length > 0 ? (
+            <View style={styles.evidence}>
+              {evidence.map((e) => {
+                const reps = e.mode === 'reps';
+                const from = reps ? e.initialPeakKg : displayWeight(e.initialPeakKg, units) ?? 0;
+                const to = reps ? e.periodPeakKg : displayWeight(e.periodPeakKg, units) ?? 0;
+                return (
+                  <View key={e.exerciseId} style={styles.evidenceRow}>
+                    <Text style={styles.evidenceName} numberOfLines={1}>
+                      {bidi(exerciseDisplayName(e.exerciseId))}
+                    </Text>
+                    {/* The figures are MEASURED (mono, which has no Hebrew — so it may carry no
+                        words); the unit standing beside them is SPOKEN, and sits in its own Text. */}
+                    <View style={styles.evidenceMoveRow}>
+                      <Text style={styles.evidenceMove}>{`${from} → ${to}`}</Text>
+                      <Text style={styles.evidenceUnit}>{reps ? t('weekly.repsUnit') : unitLabel(units)}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+              <Text style={styles.evidenceClose}>{t('weekly.evidenceClose')}</Text>
             </View>
-            {w.lifts.map((lift, i) => (
-              <LiftRow
-                key={`${w.dayId}:${i}`}
-                lift={lift}
-                open={!!lift.change && openId === lift.change.snapshot.slotId}
-                onToggle={() => {
-                  if (!lift.change) return;
-                  const id = lift.change.snapshot.slotId;
-                  setOpenId((cur) => (cur === id ? null : id));
-                  if (openId !== id) void track('weekly_update_why_opened', { pattern: lift.change.explanation.pattern });
-                }}
-              />
-            ))}
-          </View>
-        ))}
+          ) : (
+            // Too early to have proof of anything — so we claim none.
+            <Text style={styles.evidenceClose}>{t('weekly.evidenceEmpty')}</Text>
+          )
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -250,6 +333,14 @@ function LiftRow({ lift, open, onToggle }: { lift: WeeklyPlanLift; open: boolean
         </View>
       ) : null}
 
+      {/* THE WORD "WHY" (founder 2026-07-13). The explanation was always one tap away and nothing
+          said so — a chevron is a shape, not a promise. Now the row states what pressing it gives. */}
+      {hasWhy ? (
+        <View style={styles.whyRow}>
+          <Text style={styles.whyLink}>{t('weekly.whyLink')}</Text>
+        </View>
+      ) : null}
+
       {open && expl ? (
         <View style={styles.whyWrap}>
           <WhyTriple
@@ -272,6 +363,7 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 20 },
   eyebrow: { marginTop: 12, marginBottom: 10 },
+  vocative: { fontFamily: font.sans, fontSize: textScale.lg, color: color.textSecondary, textAlign: 'left', marginBottom: 2 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: color.textPrimary, lineHeight: textScale['3xl'] * 1.02, textAlign: 'left' },
   intro: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, maxWidth: 340, textAlign: 'left' },
 
@@ -305,7 +397,30 @@ const styles = StyleSheet.create({
   swapBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 9, borderRadius: radius.full, backgroundColor: signal.wash },
   swapBadgeText: { fontFamily: font.sansSemibold, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText, textAlign: 'left' },
 
+  whyRow: { marginTop: 8 },
+  whyLink: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accentText, textAlign: 'left' },
   whyWrap: { marginTop: 14, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 18, backgroundColor: color.surface3, borderRadius: radius.lg },
+
+  // the rest of the plan stands — said once, at the end
+  unchanged: { marginTop: 20, fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, textAlign: 'left' },
+
+  // the steady week: the athlete's own history, as proof
+  evidence: { marginTop: 24 },
+  evidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+  },
+  evidenceName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  // A measurement, in the measuring voice — and it is a RISE, so it is sage.
+  evidenceMove: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: up[0], textAlign: 'left' },
+  evidenceMoveRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  evidenceUnit: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  evidenceClose: { marginTop: 22, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
 });

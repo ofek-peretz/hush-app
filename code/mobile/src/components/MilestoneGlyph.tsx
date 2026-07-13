@@ -40,6 +40,8 @@ export type MilestoneGlyphName =
   | 'bench'
   | 'overhead'
   | 'row'
+  | 'hipThrust'
+  | 'rdl'
   // engine
   | 'raise'
   | 'doubled';
@@ -223,6 +225,35 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M30 22l1 12" />
           <Path d="M22 20.4v6" />
           {plateBar(color, 28)}
+        </G>
+      );
+
+    case 'hipThrust':
+      // Shoulders on the bench, hips DRIVEN to the ceiling, the bar riding across them. The only
+      // club whose bar is carried by the hips — which is the whole reason the lift exists.
+      return (
+        <G {...s}>
+          <Line x1="6" y1="28" x2="17" y2="28" />
+          <Line x1="8" y1="28" x2="8" y2="41" />
+          <Circle cx="11.5" cy="24.5" r="2.4" />
+          <Path d="M14 26.5L26 22.5" />
+          <Path d="M26 22.5l7 6.5" />
+          <Path d="M33 29v12" />
+          {plateBar(color, 20)}
+          <Line x1="6" y1="41" x2="42" y2="41" />
+        </G>
+      );
+    case 'rdl':
+      // The hinge: legs nearly straight, back flat, the bar hanging at the knee and NEVER touching
+      // the floor — which is the one line that separates it from the deadlift above.
+      return (
+        <G {...s}>
+          <Circle cx="16" cy="14" r="2.6" />
+          <Path d="M18.6 15.5L28 19" />
+          <Path d="M28 19v20" />
+          <Line x1="21.5" y1="17" x2="21.5" y2="26" />
+          {plateBar(color, 27)}
+          <Line x1="10" y1="41" x2="38" y2="41" />
         </G>
       );
 

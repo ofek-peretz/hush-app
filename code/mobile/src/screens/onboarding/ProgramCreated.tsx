@@ -16,6 +16,13 @@
  *    20px glyph on a screen that just said "your program is built".
  *  • The CTA said "Go to my next workout". It is the athlete's FIRST workout; nothing is
  *    "next" yet.
+ *
+ * Founder 2026-07-13 — this screen is where the PROMISE is made:
+ *  • It speaks the athlete's name (their own line, above the statement). We ask for it at the door
+ *    and used to never say it once.
+ *  • And it states the deal in the first person: from here I manage this programme, and every
+ *    Saturday at 20:30 I show you what I changed and why (ob.readyBody). The Home week card no
+ *    longer has to make that promise in week one — it is made here, once, at the moment it is true.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Animated, Easing } from 'react-native';
@@ -24,6 +31,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -36,6 +44,7 @@ export function ProgramCreated({ route }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const { inputs } = route.params;
+  const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
   const [phase, setPhase] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -137,6 +146,10 @@ export function ProgramCreated({ route }: Props) {
               <Icon name="check" size={34} color={up[0]} strokeWidth={2.6} />
             </Animated.View>
             <Text style={styles.readyLegend}>{t('ob.readyLegend').toUpperCase()}</Text>
+            {/* THE NAME (founder 2026-07-13). We ask for it at the door and then never say it. This
+                is the moment it is for: the programme is not "a programme", it is theirs, and it is
+                addressed to them. Its own line, above the statement — never inside it. */}
+            {name ? <Text style={styles.readyName}>{t('common.vocative', { name: bidi(name) })}</Text> : null}
             <Text style={styles.readyTitle} accessibilityRole="header">{t('ob.readyTitle')}</Text>
             {/* "Hypertrophy focus" is GONE (founder 2026-07-12): the average athlete does not
                 know the word, and a program screen is a bad place to teach it. The frequency is
@@ -189,6 +202,15 @@ const styles = StyleSheet.create({
     marginBottom: 26,
   },
   readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: up[0], textAlign: 'left' },
+  // The name is spoken in the SPEAKING voice, a beat before the statement — not folded into it.
+  readyName: {
+    fontFamily: font.sans,
+    fontSize: textScale.lg,
+    lineHeight: 28,
+    color: color.textSecondary,
+    textAlign: 'center',
+    marginTop: 14,
+  },
   readyTitle: {
     fontFamily: font.sansSemibold,
     fontSize: textScale['3xl'],
@@ -196,7 +218,7 @@ const styles = StyleSheet.create({
     letterSpacing: trackingPx(textScale['3xl'], tracking.display),
     color: color.textPrimary,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 4,
   },
   readySub: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 12, maxWidth: 300 },
   readyBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 22, maxWidth: 330 },

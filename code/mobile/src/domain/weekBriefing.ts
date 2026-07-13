@@ -39,12 +39,14 @@ export interface BriefChange {
  *   1 · what happened to the LOADS (a raise, a match-down, a tuning, or nothing)
  *   2 · what happened to the EXERCISES (a swap), when one happened.
  *
- * `changes === null` means the engine has never run a weekly update for this athlete — week one,
- * where the honest sentence is a PROMISE rather than a report ("I built this from your numbers;
- * on Saturday I read what you lifted and update it").
+ * `changes === null` means the engine has never run a weekly update for this athlete — week one. The
+ * card then says NOTHING (founder 2026-07-13): the promise it used to make here ("I built this from
+ * your numbers; on Saturday I read what you lifted and update it") is now made on the screen where
+ * the programme is handed over (ob.readyBody), which is where a promise belongs. Repeating it on
+ * Home cost the card its top third to say something the athlete had just been told.
  */
 export function weekBriefing(changes: BriefChange[] | null, units: Units): Line[] {
-  if (changes == null) return [{ key: 'home.briefFirst' }];
+  if (changes == null) return [];
   if (changes.length === 0) return [{ key: 'home.briefSteady' }];
 
   const swaps = changes.filter((c) => c.swapped);

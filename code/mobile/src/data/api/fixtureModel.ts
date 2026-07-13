@@ -23,7 +23,6 @@
  */
 import type {
   Capability,
-  Experience,
   Goal,
   PortraitSnapshot,
   Profile,
@@ -35,6 +34,7 @@ import type {
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, patternFamily, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { swapScore } from '@/domain/swapPool';
+import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
@@ -345,48 +345,10 @@ function addWeeklyCore(days: ProgramDay[], daysPerWeek: number): void {
 }
 
 // ───────────────────────────── cold-start starting weights ─────────────────────────────
-const EXP_FACTOR: Record<Experience, number> = { beginner: 0.78, intermediate: 1.0, advanced: 1.22 };
-const UPPER: Capability[] = ['horizontal_push', 'horizontal_pull', 'vertical_push'];
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(Math.max(v, lo), hi);
-}
-
-/**
- * Age load multiplier — keeps the cold-start conservative across the lifespan. Untrained
- * teens are still developing; strength gently declines past ~40, so masters athletes
- * start lighter (and, in setsFor/repsFor, train with a touch less volume and joint-
- * friendlier reps). Unknown age → no penalty (the base load is already conservative).
- */
-function ageLoadFactor(age?: number): number {
-  if (age == null) return 1;
-  if (age < 18) return 0.9; // still developing — conservative
-  if (age < 40) return 1.0;
-  if (age < 50) return 0.97;
-  if (age < 60) return 0.92;
-  if (age < 70) return 0.86;
-  return 0.8; // 70+
-}
-
-/** Conservative personalized starting load (kg), or null for bodyweight movements. */
-function startingWeight(
-  ex: Exercise,
-  profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>,
-): number | null {
-  if (ex.bodyweight || ex.baseKg == null) return null;
-  const bw = profile.weightKg ?? 75;
-  const exp = EXP_FACTOR[profile.experience ?? 'beginner']; // unknown → conservative
-  const bwFactor = ex.bwScaled ? clamp(bw / 75, 0.7, 1.45) : 1;
-  const sexFactor =
-    profile.sex === 'female' ? (UPPER.includes(ex.capability) ? 0.62 : 0.72) : 1;
-  let kg = ex.baseKg * bwFactor * sexFactor * exp * ageLoadFactor(profile.age);
-  // Round to a loadable increment; barbell compounds never below an empty bar.
-  // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
-  const step = 1;
-  kg = Math.round(kg / step) * step;
-  if (ex.equipment === 'barbell' && ex.tier === 'compound') kg = Math.max(kg, 20);
-  return Math.max(kg, step);
-}
+// `startingWeight` now lives in domain/startingLoad — unchanged, but no longer private to the
+// model: the milestone ladders anchor on the very load Hush prescribed on day one, and there must
+// be exactly ONE opinion in this product about how strong an athlete probably is (founder
+// 2026-07-13). The engine's use of it is untouched.
 
 /**
  * Best demonstrated e1RM across the athlete's history for a given engine PATTERN, plus the baseKg

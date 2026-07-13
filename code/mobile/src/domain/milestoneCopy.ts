@@ -48,6 +48,8 @@ const CLUB_GLYPH: Record<string, MilestoneGlyphName> = {
   bb_bench_press: 'bench',
   bb_overhead_press: 'overhead',
   bb_row: 'row',
+  hip_thrust: 'hipThrust',
+  bb_rdl: 'rdl',
 };
 
 export function milestoneCopy(m: Milestone, t: Translate, units: Units): MilestoneCopy {

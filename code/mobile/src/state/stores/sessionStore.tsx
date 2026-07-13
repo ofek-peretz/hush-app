@@ -708,7 +708,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        */
       let milestone: MirrorMilestone | null = null;
       try {
-        const earned = newlyEarned(await db.loadHistory())[0] ?? null;
+        const earned = newlyEarned(await db.loadHistory(), app.profile)[0] ?? null;
         if (earned) {
           // English: the watch target has no i18n runtime (WatchCopy.swift is English by law).
           const tEn = i18n.getFixedT('en') as unknown as Translate;

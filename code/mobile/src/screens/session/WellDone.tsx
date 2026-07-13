@@ -116,7 +116,10 @@ export function WellDone({ navigation, route }: Props) {
 
   // Milestones crossed by THIS session (the latest in history), most personal
   // first. [0] is the single celebrated mark; the rest go quietly to the gallery.
-  const celebration = useMemo(() => (history ? newlyEarned(history)[0] ?? null : null), [history]);
+  const celebration = useMemo(
+    () => (history ? newlyEarned(history, app.profile)[0] ?? null : null),
+    [history, app.profile],
+  );
   const celebrated = useRef(false);
   const pendingExit = useRef<(() => void) | null>(null);
   /** An exit the athlete asked for before the history had been read (see `leave`). */
