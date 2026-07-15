@@ -20,6 +20,7 @@ import { demonstrated, epley, normalizeLoad, volumeLoad } from './reads';
 import { exerciseById, exerciseDisplayName, progressionRule } from '@/data/exercises';
 import { enginePattern, exerciseMeta } from './catalogAdapter';
 import { currentWeekOpen } from '@/domain/weekCadence';
+import { slotIdsByPosition, engineSlotIdAt } from '@/engine/slots';
 import type { Explanation } from './types';
 import { toEngineGoal, toTrainingAge, repScheme, type EngineProfile, type SlotState, type SlotResult, type GlobalState, type SetRecord, type Pattern } from './types';
 import { DEFAULTS, REP_RANGE_BY_GOAL } from './constants';
@@ -77,39 +78,9 @@ export function deriveSlots(program: Program): DerivedSlot[] {
   return out;
 }
 
-/**
- * Per day, the engine slotId aligned to each `day.slots` position (null where the slot is core /
- * unmapped — i.e. not engine-managed, so not lockable). Mirrors deriveSlots' indexing exactly, so
- * the app can key a slot's lock/state to the durable engine slotId from a (dayId, slotIndex). */
-export function slotIdsByPosition(program: Program): Map<string, (string | null)[]> {
-  const byDay = new Map<string, (string | null)[]>();
-  for (const day of program.days) {
-    const ids: (string | null)[] = [];
-    if (day.isRest) {
-      byDay.set(day.id, ids);
-      continue;
-    }
-    const perPattern = new Map<Pattern, number>();
-    for (const slot of day.slots) {
-      const pattern = slot.supplemental ? null : enginePattern(slot.exerciseId);
-      if (pattern == null) {
-        ids.push(null);
-        continue;
-      }
-      const idx = perPattern.get(pattern) ?? 0;
-      perPattern.set(pattern, idx + 1);
-      ids.push(slot.engineSlotId ?? `${day.key ?? day.id}:${pattern}#${idx}`);
-    }
-    byDay.set(day.id, ids);
-  }
-  return byDay;
-}
-
-/** The engine slotId for a displayed (dayId, slotIndex), or null when that slot is not engine-
- *  managed (core / unmapped) and therefore cannot be locked. */
-export function engineSlotIdAt(program: Program, dayId: string, slotIndex: number): string | null {
-  return slotIdsByPosition(program).get(dayId)?.[slotIndex] ?? null;
-}
+// The durable per-slot lock identity moved to `@/engine/slots` (engine-agnostic, pure structural).
+// Re-exported here so existing importers keep working; the Lock System reads it from either path.
+export { slotIdsByPosition, engineSlotIdAt };
 
 // ───────────────────────────── initial state (migration §9.2) ─────────────────────────────
 /** Best demonstrated e1RM for an exercise across history (weighted lifts only). */

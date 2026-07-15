@@ -25,7 +25,7 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
-import { engineSlotIdAt } from '@/engine/v4/v4Engine';
+import { engineSlotIdAt } from '@/engine/slots';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
