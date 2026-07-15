@@ -71,10 +71,10 @@ export type MainParamList = {
   WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   ProgramDetail: { dayId: string };
   WorkoutDetail: { sessionId: string };
-  // Quarterly peak-weight progress report — surfaced by the every-12-weeks notification.
-  QuarterlyReport: undefined;
-  // All-time progression (founder, 2026-06-21) — reached from Home / Recovery hub.
-  Progress: undefined;
+  // Progression report (founder, 2026-06-21). Default (Home / Recovery) = all-time + the milestones
+  // gallery; `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens
+  // (the former QuarterlyReport screen, merged in here 2026-07-15).
+  Progress: { window?: 'all' | 'quarter' } | undefined;
   // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
   WeeklyUpdate: undefined;
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,

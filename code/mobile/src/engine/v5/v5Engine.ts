@@ -24,6 +24,17 @@ import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN } from './consta
 
 export type SeedFor = (exerciseId: string) => number | null;
 
+/**
+ * The band T, resolved PER EXERCISE. Per-muscle T (register Part 9): each exercise reads the band of
+ * its primary muscle, so an athlete who likes higher-rep shoulder work sets Shoulders → 12-15 and her
+ * bench (Chest) is untouched. A single `Band` still works (every exercise resolves to it) — the shape
+ * a single-band athlete produces, and the back-compat form the pure-core tests pass. The engine
+ * already stores the band per exercise (`ExerciseState.band`); this only feeds it per exercise.
+ */
+export type BandSource = Band | ((exerciseId: string) => Band);
+const resolveBand = (src: BandSource, exerciseId: string): Band =>
+  typeof src === 'function' ? src(exerciseId) : src;
+
 // ───────────────────────────── meta + history reads ─────────────────────────────
 function metaWithGrid(exerciseId: string, history: Session[]): ExerciseMeta {
   const m = exerciseMeta(exerciseId);
@@ -83,19 +94,21 @@ const asStates = (s: EngineV5State) => s.exercises as Record<string, ExerciseSta
 
 /** Ensure per-exercise state exists for every engine-managed exercise. Idempotent; preserves state.
  *  A band change updates each exercise's band (T is hers; no conversion, S-43). */
-export async function ensureExercisesV5(exerciseIds: string[], band: Band, history: Session[], seedFor: SeedFor): Promise<EngineV5State> {
+export async function ensureExercisesV5(exerciseIds: string[], band: BandSource, history: Session[], seedFor: SeedFor): Promise<EngineV5State> {
   const state = await load();
   const ex = asStates(state);
   for (const id of exerciseIds) {
-    if (!ex[id]) ex[id] = initExercise(id, band, history, seedFor);
-    else if (ex[id].band.lo !== band.lo || ex[id].band.hi !== band.hi) {
-      // S-43 (change T): recompute the load from her history at the NEW Tlo — "the load at which she
-      // performed ≥ the new T." If she has no history at the new band, keep the current load and set
-      // 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+    const b = resolveBand(band, id); // per-muscle T resolves to this exercise's band
+    if (!ex[id]) ex[id] = initExercise(id, b, history, seedFor);
+    else if (ex[id].band.lo !== b.lo || ex[id].band.hi !== b.hi) {
+      // S-43 (change T — now per muscle): recompute the load from her history at the NEW Tlo — "the
+      // load at which she performed ≥ the new T." If she has no history at the new band, keep the
+      // current load and set 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+      // Only exercises whose muscle's band changed are touched — the rest keep their state.
       const meta = metaWithGrid(id, history);
-      const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, band, history);
+      const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, b, history);
       const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
-      ex[id] = { ...ex[id], band, load };
+      ex[id] = { ...ex[id], band: b, load };
     }
   }
   await save(state);
@@ -115,7 +128,7 @@ const CHANGELOG_KEEP = 200; // recent load changes retained for the mirror (~mon
  */
 export async function advanceV5(
   exerciseIds: string[],
-  band: Band,
+  band: BandSource,
   history: Session[],
   seedFor: SeedFor,
   nowMs: number = Date.now(),

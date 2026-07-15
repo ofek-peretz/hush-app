@@ -461,7 +461,7 @@ function setsFor(tier: Tier, goal: Goal, age?: number, volume: WeeklyVolume = 'm
   return Math.min(Math.max(sets, 3), MAX_SETS);
 }
 
-async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age' | 'memberSince' | 'repBand'>> {
+async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age' | 'memberSince' | 'repBand' | 'repBandByMuscle'>> {
   try {
     const p = await db.loadProfile();
     if (p) return p;
@@ -756,11 +756,19 @@ export const fixtureModel: ModelClient = {
     // on v4 (the safe, opt-in cohort swap; no migration — S-58). For a v5 profile the v4 advance
     // above is skipped (gated), and the Weekly Update reads from v5 too (domain/weeklyUpdate) — so a
     // v5 athlete's load, progression and narration all come from one engine.
-    const band = profile.repBand ? bandFor(profile.repBand) : null;
+    // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling
+    // back to her single declared band, then the '8-10' default. `isV5` (a declared band exists) is
+    // still the cohort gate; until she edits a muscle's band, every exercise resolves to the same
+    // `repBand` — identical to the single-band behaviour it replaces.
+    const isV5Band = !!profile.repBand;
+    const bandOf = (exId: string) => {
+      const m = exerciseById(exId)?.muscle;
+      return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
+    };
     let v5targets: Record<string, V5Target> = {};
-    if (band && program) {
+    if (isV5Band && program) {
       const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
-      await advanceV5(engineExerciseIds, band, history, seedFor, Date.now(), bucketOpenMs).catch((e) => void track('engine_error', { op: 'advanceV5', message: String(e) }));
+      await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs).catch((e) => void track('engine_error', { op: 'advanceV5', message: String(e) }));
       v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
         void track('engine_error', { op: 'currentV5Targets', message: String(e) });
         return {};
@@ -770,8 +778,8 @@ export const fixtureModel: ModelClient = {
       const v5t = v5targets[ex.id];
       const t = targets[ex.id];
       const weight = v5t ? v5t.weight : t ? t.weight : smartSeed(ex.id, profile, history);
-      const reps = v5t ? v5t.reps : band ? band.lo : t ? t.reps : repsFor(ex.tier, goal, profile.age);
-      const repBandHi = v5t ? v5t.bandHi : band ? band.hi : undefined;
+      const reps = v5t ? v5t.reps : isV5Band ? bandOf(ex.id).lo : t ? t.reps : repsFor(ex.tier, goal, profile.age);
+      const repBandHi = v5t ? v5t.bandHi : isV5Band ? bandOf(ex.id).hi : undefined;
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
       if (week >= 2 && weight != null) {

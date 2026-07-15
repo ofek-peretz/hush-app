@@ -41,7 +41,6 @@ import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { Cardio } from '@/screens/cardio/Cardio';
 import { CardioDetail } from '@/screens/cardio/CardioDetail';
-import { QuarterlyReport } from '@/screens/progress/QuarterlyReport';
 import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { Paywall } from '@/screens/subscription/Paywall';
@@ -123,7 +122,6 @@ function MainNavigator() {
           per phase; a live recording is never swipe-dismissable). */}
       <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
-      <MainStack.Screen name="QuarterlyReport" component={QuarterlyReport} />
       <MainStack.Screen name="Progress" component={Progress} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
@@ -138,7 +136,7 @@ function routeNotificationIntent(intent: NotificationIntent | null, enrolled: bo
   void track('notification_opened', { kind: intent.kind });
   // v4: the weekly notification opens the Weekly Update (what changed + Why).
   if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate'); // 1.20 (v4 Weekly Update + Why)
-  else if (intent.kind === 'quarterly_report') navigateMain('QuarterlyReport'); // 3-month progress
+  else if (intent.kind === 'quarterly_report') navigateMain('Progress', { window: 'quarter' }); // 12-week view (merged into Progress)
 }
 
 export function Root() {

@@ -10,9 +10,10 @@ import type { MainParamList } from './navigation';
 export const navigationRef = createNavigationContainerRef<MainParamList>();
 
 /** Navigate only when the container is mounted; otherwise ignore (no throw). */
-export function navigateMain<Name extends keyof MainParamList>(name: Name): void {
+export function navigateMain<Name extends keyof MainParamList>(name: Name, params?: MainParamList[Name]): void {
   if (navigationRef.isReady()) {
-    // All notification-routed targets (Program, WeeklyUpdate, QuarterlyReport) take no required params.
-    (navigationRef.navigate as (n: Name) => void)(name);
+    // Notification-routed targets take no REQUIRED params; the optional param lets the quarterly
+    // notification open Progress in its 12-week window (window: 'quarter').
+    (navigationRef.navigate as (n: Name, p?: MainParamList[Name]) => void)(name, params);
   }
 }

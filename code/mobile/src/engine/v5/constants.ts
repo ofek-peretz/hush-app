@@ -58,6 +58,14 @@ export const MIN_PAIRS_FOR_SLOPE = 4;
 export const N_PERCENTILE = 0.75;
 
 /**
+ * F-14 (Revision 7) — K, the learned-swap adoption threshold (register Part 9). The number of
+ * CONSECUTIVE same-target in-workout swaps before a standing replacement is adopted (S-69). An
+ * evidence gate (the F-12 / N family), not a load mover. Deliberately small: the engine reacts fast,
+ * and the original is offered first ever after (S-70), so a wrong adoption is cheap to undo.
+ */
+export const ADOPT_THRESHOLD = 2;
+
+/**
  * F-9 — the canonical muscle order: the final tie-break for a contested set (S-32 #3) and, reversed,
  * for the donor (S-37). It repeatedly allocates real volume, so it is a declared form constant.
  * Mirrors the v4 `PATTERNS` enum order (push → pull → legs), extended to every muscle group. Never

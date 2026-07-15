@@ -63,8 +63,15 @@ export interface Profile {
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
   volume?: WeeklyVolume; // weekly set-volume lever; absent => 'moderate' (parity-preserving)
-  /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. */
+  /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. Also the
+   *  v5-cohort marker (a set value opts the athlete onto the v5 engine) and the per-exercise fallback
+   *  when a muscle has no override in `repBandByMuscle`. */
   repBand?: RepBandChoice;
+  /** Engine v5 (Revision 7) — the rep band PER MUSCLE (register Part 9). Each exercise reads the band
+   *  of its primary muscle (`exercise.muscle`); a muscle absent here falls back to `repBand`, then the
+   *  '8-10' default. Set-once preference, edited in the body map — never asked in onboarding. Keyed by
+   *  MuscleGroup. */
+  repBandByMuscle?: Record<string, RepBandChoice>;
   /** Engine v5 — the body map: per-muscle stance. Absent on older profiles => every muscle 'normal'
    *  (the parity-preserving default). Keyed by MuscleGroup. */
   bodyMap?: Record<string, MuscleStance>;

@@ -5,7 +5,13 @@ five reviews had grown the ledger back toward the size v4 started at, the founde
 name: feature-creep. Rev 6 deleted **four things as creep or theory, not core** — the rest lever
 (S-26), HR-ends-rest (S-19), the approach-set gap trigger (S-60 #2), and the sanity ceiling (F-10) —
 taking the constant count **from 18 down to 14**. Nothing that decides a working load was touched.
-**Supersedes:** the v4 engine (`src/engine/v4/`) in whole. v4 is not tuned — it is replaced.
+**Revision 7 (2026-07-15) — see Part 9.** T becomes **per-muscle** (default 8–10, edited in the body
+map, not asked in onboarding); minutes and `experience` leave onboarding (60-minute ceiling default;
+the loops already learn her real workout); exercise selection is **learned from repeated in-workout
+swaps** (K=2), which **deletes the programme-edit screen, the pin button, and the declared swap** —
+the pin survives only as a fact earned by resisting rotation. One evidence-gate constant added (F-14,
+K=2); no load-touching constant added. **Supersedes:** the v4 engine (`src/engine/v4/`) in whole. v4
+is not tuned — it is replaced.
 
 This document is the contract, and it is built literally: every situation `S-n` becomes a test named
 for it, every law `L`/`B`/`F` becomes code. It is a specification, not an inspiration — Stage 0 was
@@ -859,3 +865,133 @@ This engine is inside the set, sees the number, and moves the iron in ninety sec
 
 That is not a contest of intelligence. It is a contest between whoever guesses beautifully, and
 whoever was actually there.
+
+---
+
+## Part 9 — Revision 7: learned selection, per-muscle T, and the death of the edit screen
+
+**Founder-ratified 2026-07-15.** The through-line: move more of the athlete's ownership onto **facts
+she produces** (her behaviour, her body map) and **delete the declarative surfaces** that asked her
+to configure by hand — the programme-edit screen, the pin button, and the reps + minutes questions in
+onboarding. **Every deletion is replaced by a fact the engine already has or learns**, and every new
+mechanism is tested by the very next occurrence (L2). Net: fewer screens, fewer questions, the same
+fact-only discipline — and no new number that decides a load.
+
+> **A code invariant verified before this revision was written (2026-07-15):** every exercise carries
+> exactly **one** muscle (`exercise.muscle` — the single field that volume, swap-scoping, and display
+> already key on). There is **no secondary-muscle concept anywhere in the engine.** So a muscle is an
+> independent track: turning `Chest` off removes only Chest-primary exercises and never touches
+> Shoulders; and adding a per-muscle rep band on that same field introduces **zero new coupling.**
+
+### A · Per-muscle T, and two onboarding questions deleted
+
+*Amends Part 1 (the T table), L6, S-6.*
+
+- **T is now per-muscle, not one band for the athlete.** Each exercise reads the band of its **primary
+  muscle** (`exercise.muscle`). Default **8–10** for every muscle. Resolution order:
+  *her edited per-muscle band → the 8–10 default.* Engine impact is **nil**: T was always a
+  per-set/per-exercise threshold (`recommendedReps`/`repBandHi`); only its **source** moves from one
+  profile field to the exercise's muscle. Loop 1, Loop 2, reps-per-rung, the rail, N, and graduation
+  (S-52 at her `Thi`) all recompute identically — and the document's existing care for a non-8–10
+  band (S-43, S-52) now simply applies per muscle.
+- **T is NOT asked in onboarding.** Every muscle starts at 8–10; she edits a muscle's band inside the
+  (editable) body map — a *set-once preference* ("I like my [muscle] work in [range]"), never a
+  per-workout question. **The onboarding rep-band question is deleted** (deliberation at the worst
+  moment).
+- **The time budget is NOT asked.** Default **60 minutes** — a CEILING (S-64), editable in Settings.
+  The existing loops already converge the real workout to her behaviour from facts: measured rest
+  fills the budget for a fast rester (S-17); unfinished sets trim it (S-33/34). "Wants more than 60"
+  is near-illusory — 60 minutes of prescribed work is a complete session. **No new mechanism, no
+  learning.**
+- **`experience` is deleted as an input.** The approach set (S-60) measures her; a self-report never
+  touches a load. Removed from onboarding, Settings, and the profile's decision path.
+- **Reps are NOT learned from behaviour — a learned rep-band was designed and REJECTED (2026-07-15).**
+  The signal "high reps at a flat load" is confounded with **S-28** (the coarse-machine rep-climb the
+  engine itself induces), it has **no natural re-test surface** (weak L2), and it would ADD per-set
+  friction to replace a single map setting. The manual per-muscle band is the whole answer.
+
+### B · Learned exercise selection — the edit screen, the pin, and the declared swap are deleted
+
+The athlete owns exercise selection through exactly two facts — the **body map** (which muscles) and
+the **in-workout swap** (which exercise) — plus what the engine **learns** from repeated swaps.
+Nothing is browsed or assembled by hand (soul: *"Not a template shop. Hush builds it."*).
+
+**Foundation (verified in code):** an in-workout swap happens **only before the first set** of an
+exercise (`SessionFlow.canSwap`), and the pool is **same-muscle synonyms only** — so a swap is a clean
+pre-exercise choice and can **never** change which muscle is trained. The body map's volume is
+inviolate.
+
+**S-68 · A single in-workout swap still declares nothing.** *(Preserves S-20.)* She swapped E for E' —
+station taken, a tweak, or taste; the engine does not ask why. The next assembly still offers E. It
+banks a **pending** `(E→E', count 1)`, tied to a **performed** set of E' (≥1 set), never to the tap —
+so an app-kill mid-swap banks nothing.
+
+**S-69 · A repeated swap becomes a standing replacement (K=2).** When E is offered again and she swaps
+`E→E'` and performs it a **second consecutive** time, the engine adopts E': `substitutes[E]=E'`, E
+**de-prioritised, never deleted**. It narrates the change. **The pending resets** if, at E's next
+occurrence, she performs E itself or swaps to a *different* target — only two consecutive same-target
+swaps commit. *(New constant **K=2**, F-14 — an evidence gate, F-12/N family; it moves no iron.)*
+
+**S-70 · The re-test: the original is always offered first.** *(The whole L2 guarantee.)* Once E' is
+standing, every Swap on E' offers **E first**. A swap-back to E, twice, re-adopts E. An accidental
+adoption (a station taken twice) is thus continuously and cheaply reversible — adoption is never a
+latch, only the current fact. Symmetric in both directions.
+
+**S-71 · The learned "leave it" — resisting the engine's own rotation.** The engine rotates a
+genuinely **stalled** lift (S-25.2: `attempts > N`, a last resort — weeks of real time, verified in
+`loop2.ts`). If she swaps back to the rotated-away lift, that is an athlete swap; done **twice**, the
+engine adopts it **and stops rotating it** — a learned pin, *earned by resisting rotation*, not
+declared on a button. Thereafter it behaves exactly as S-30's pinned-and-stalled lift: it still gets
+back-off/re-climb, but the engine never takes it away. This bounds the "rotate ↔ swap-back" loop to
+two cycles. The learned pin persists (through reassembly, and a muscle off→on, S-66) until she swaps
+it away herself, and it feeds **S-59** (pins vs. the time budget) unchanged.
+
+**S-72 · An engine rotation is never counted as an athlete swap.** The two signals stay strictly
+apart: only an athlete-initiated swap advances a pending (S-68/69) or a leave-it (S-71). An engine
+rotation always leaves the previous lift reachable via S-70.
+
+**S-73 · The programme-edit swap and the pin BUTTON are deleted.** *(Supersedes S-31; retires the pin
+control.)* There is no edit screen. The old permanent edit-screen swap (S-31) is gone — its job is
+done by the learned standing replacement (S-69) and by the body map (turning a muscle off). The pin
+button is gone — its concept survives as the learned leave-it (S-71), which inherits **every** role
+the pin had: never rotated (S-25.2), cut last under the budget (S-35/S-59). A **read-only plan
+PREVIEW** (the day's exercises + form clips) may live off the Home entry point — off the START path —
+and it edits nothing.
+
+**S-74 · A muscle's pool can no longer be "declared empty."** *(Amends S-62.)* Because she can no
+longer declaratively swap an exercise away forever, the pool never empties by refusal — she always
+performs *something* for the muscle. The S-62 question ("want this muscle off?") is therefore reached
+only through the body map (S-56), never through swaps. **The map is the only "off" lever.**
+
+**The honest costs (named, not hidden):**
+- **Discoverability moves to the stage.** The edit screen taught the swap verb; deleting it means the
+  swap affordance on the live stage must teach itself, or a novice who dislikes an exercise never
+  learns she can change it. A design task, not an engine one — but the real price of the deletion.
+- **No couch-planning.** An exercise can be changed only at the gym (in a workout). On-soul
+  (*"Hush builds it"*), but a deliberate loss of pre-planning.
+- Neither cost touches a load. The engine is unchanged except that it now **writes** `substitutes` /
+  the leave-it flag from behaviour and **reads** them at assembly — structures that already exist.
+
+### C · The ledger delta
+- **+ F-14: K = 2** — consecutive same-target in-workout swaps before a standing replacement (S-69) or
+  a learned leave-it (S-71) commits. An evidence gate (F-12/N family); it sets **no load**. Chosen
+  deliberately small: the engine reacts fast, and S-70's perpetual re-test makes a wrong adoption
+  cheap to undo, so "2" behaves like a responsive threshold, not a lock.
+- **No bootstrap added. No load-touching constant added.** The ledger's core claim (Part 6) holds: no
+  invented number decides a load and is left standing.
+- **Removed from the product** (these were declarative UI, never ledger constants): the programme-edit
+  swap (S-31), the pin button, the onboarding rep-band question, the onboarding minutes question, and
+  the `experience` input.
+
+### D · The test obligation (Part 7 discipline)
+Each new situation gets its test — `s69_two_swaps_adopt`, `s70_original_offered_first`,
+`s71_resisting_rotation_becomes_leave_it`, `s72_engine_rotation_is_not_a_swap`,
+`s74_pool_never_declared_empty` — plus `per_muscle_band_reads_primary_muscle`, and a **tripwire**
+asserting no exercise is credited to more than one muscle (guarding the no-secondary-coupling
+invariant verified above). **Green, or we are not done** — the same standard as every S-n.
+
+> **Inline reconciliation still owed (a careful follow-up pass, not this edit):** Part 1's T table,
+> L6, S-6, S-20, S-30, S-31, S-62, Part 5 (deletions), Part 6 (the F-count), and Part 7 (the
+> situation count + stage table) each carry a line this revision amends or supersedes. Part 9 is the
+> authority until those inline mentions are updated; nothing in Parts 0–8 that Part 9 touches should
+> be read as current where the two disagree.

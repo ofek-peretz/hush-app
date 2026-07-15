@@ -94,7 +94,7 @@ export interface Notifier {
   /** Remove the weekly note (sign-out, or an install that had the old 20:00 one). Idempotent. */
   cancelWeeklyProgramReady(): Promise<void>;
   /** Schedule the recurring quarterly progress report note (every ~3 months). A tap
-   *  opens the QuarterlyReport comparison screen. Idempotent. */
+   *  opens Progress in its 12-week window (`window: 'quarter'`). Idempotent. */
   scheduleQuarterlyReport(): Promise<void>;
   /** Cancel everything (e.g. on sign-out). */
   cancelAll(): Promise<void>;
@@ -224,7 +224,7 @@ export const notifierExpo: Notifier = {
       void track(NOTIFICATION_EVENTS.coalesced, { kind: 'quarterly_report' });
       await Notifications.scheduleNotificationAsync({
         identifier: QUARTERLY_ID,
-        // data carries the routing intent so a tap opens QuarterlyReport.
+        // data carries the routing intent so a tap opens Progress (12-week window).
         content: { title: tg('notifications.quarterlyReportTitle'), body: '', data: buildPayload('quarterly_report') },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

@@ -4,9 +4,9 @@
  * reached since, the gain (LoadDelta), and a quiet gauge with the initial peak as
  * a reference mark. A header sums the total strength added.
  *
- * Used by BOTH surfaces: the always-on **Progress** screen (all-time window) and
- * the periodic **QuarterlyReport** (12-week window). They differ only in `legend`
- * and which entries they pass.
+ * Used by the **Progress** screen in both its windows: all-time (Home / Recovery) and the last
+ * 12 weeks (the every-12-weeks notification, `window: 'quarter'`). They differ only in `legend`,
+ * `title`, which entries they pass, and whether the milestones gallery is shown.
  */
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
