@@ -141,26 +141,25 @@ export interface EngineV4State {
  */
 export interface EngineV5State {
   exercises: Record<string, unknown>; // exerciseId -> ExerciseState
-  lastAdvanceWeekOpen?: number;
-  weeksProcessed?: number;
-  /** The most recent week's per-exercise changes, for the Weekly Update + Home. `changes` is the
-   *  from→to snapshot captured at the roll; `seen` flips once the athlete views it. Structural to
-   *  avoid a layering cycle into engine/v5. */
-  lastUpdate?: {
-    weekIndex: number;
-    at: string;
-    seen?: boolean;
-    changes: {
-      exerciseId: string;
-      decision: string;
-      loadFrom: number | null;
-      loadTo: number | null;
-      setsFrom: number;
-      setsTo: number;
-      bandFrom: [number, number];
-      bandTo: [number, number];
-    }[];
-  };
+  /** The newest completed-session `startedAt` (ms) already folded. Decisions run PER WORKOUT at the
+   *  end of each occurrence (register L7 — no weekly boundary); this is the per-workout cursor. */
+  lastFoldedAt?: number;
+  /** A timestamped log of every load change the engine made, for the Saturday MIRROR (S-45 — the
+   *  review is a reflection of decisions already told per-workout, never a decision itself). The
+   *  mirror filters this to the week that just closed. Capped; structural to avoid a layering cycle. */
+  changeLog?: {
+    exerciseId: string;
+    decision: string;
+    loadFrom: number | null;
+    loadTo: number | null;
+    setsFrom: number;
+    setsTo: number;
+    bandFrom: [number, number];
+    bandTo: [number, number];
+    at: number; // the occurrence's session startedAt (ms)
+  }[];
+  /** The closed-week-end (ms) the athlete last marked seen — so a newly closed week reads unseen. */
+  seenWeekEnd?: number;
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */

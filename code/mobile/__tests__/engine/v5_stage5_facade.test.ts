@@ -42,34 +42,32 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     expect(t['bb_bench_press'].isApproach).toBe(true);
   });
 
-  it('S-22 · a full-clear week rolls the load UP at the Saturday boundary', async () => {
-    // Establish the anchor at ROLL1 with a week-1 session already logged.
-    let history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8)])];
+  it('S-22 · a full-clear workout advances the load PER WORKOUT (not at Saturday — L7)', async () => {
+    const history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // sets the anchor, no roll yet
-    let t = await currentV5Targets(history);
-    const before = t['bb_bench_press'].weight;
-
-    // A week later the roll folds week-1's full-clear → load up.
+    const before = (await currentV5Targets(history))['bb_bench_press'].weight;
+    // ONE advance folds the completed workout immediately — no waiting for a weekly boundary.
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
+    expect((await currentV5Targets(history))['bb_bench_press'].weight!).toBeGreaterThan(before!);
+    // A second advance with no new session folds nothing (idempotent on the cursor).
+    const after1 = (await currentV5Targets(history))['bb_bench_press'].weight;
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2);
-    t = await currentV5Targets(history);
-    expect(t['bb_bench_press'].weight!).toBeGreaterThan(before!);
+    expect((await currentV5Targets(history))['bb_bench_press'].weight).toBe(after1);
   });
 
-  it('a session in the NEXT week is not folded into the week that just closed (no double-count)', async () => {
-    // Week 1 (Jul 15): a full clear at 60. Next week (Jul 19): a MISS at 60. The Jul 20 roll folds
-    // ONLY week 1 → progress (up). If the boundary were wrong, the miss would fold in too → hold.
-    const wk1 = new Date('2026-07-15T10:00:00Z').toISOString();
-    const wk2 = new Date('2026-07-19T10:00:00Z').toISOString(); // after Sat Jul 18 20:30 → next week
+  it('S-29/S-5 · two workouts of a lift in one week EACH advance it (per-workout, builds on itself)', async () => {
+    // Monday: full clear at 60 → up. Thursday: full clear at 62.5 → up again. Per-workout gives ~65;
+    // a weekly bundle (the old, wrong cadence) would combine them and give only ~62.5.
+    const mon = new Date('2026-07-13T10:00:00Z').toISOString();
+    const thu = new Date('2026-07-16T10:00:00Z').toISOString();
     const history: Session[] = [
-      session(wk2, [set('bb_bench_press', 60, 5)]), // next week's miss (newest first)
-      session(wk1, [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8)]),
+      session(thu, [set('bb_bench_press', 62.5, 8), set('bb_bench_press', 62.5, 8), set('bb_bench_press', 62.5, 8)]), // newest first
+      session(mon, [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8)]),
     ];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // anchor Sat Jul 11 20:30
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // roll for week ending Sat Jul 18 20:30
-    const t = await currentV5Targets(history);
-    expect(t['bb_bench_press'].weight!).toBeGreaterThan(60); // only week 1's full clear counted
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // folds Mon then Thu, in order
+    const w = (await currentV5Targets(history))['bb_bench_press'].weight!;
+    expect(w).toBeGreaterThan(62.5); // Thursday built on Monday's gain
   });
 
   it('S-43 · changing T recomputes the load from her history at the new Tlo', async () => {
@@ -84,13 +82,11 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     expect(t['bb_bench_press'].reps).toBe(12); // Tlo now 12
   });
 
-  it('S-24 · a mixed week (one set short) holds the load', async () => {
+  it('S-24 · a mixed workout (one set short) holds the load', async () => {
     const history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 6)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
+    const before = (await currentV5Targets(history))['bb_bench_press'].weight;
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
-    const beforeT = await currentV5Targets(history);
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2);
-    const t = await currentV5Targets(history);
-    expect(t['bb_bench_press'].weight).toBe(beforeT['bb_bench_press'].weight); // held
+    expect((await currentV5Targets(history))['bb_bench_press'].weight).toBe(before); // held
   });
 });

@@ -41,11 +41,19 @@ function railRecord(history: SessionRecord[], band: Band): number | null {
   return best;
 }
 
-/** Clamp a proposed load to the rail (one rung above her settled best at Tlo). Inactive → unchanged. */
-function applyRail(load: number, history: SessionRecord[], band: Band, meta: ExerciseMeta): number {
+/**
+ * Clamp a proposed load to the rail: one rung above the heaviest load she completed at Tlo. The base
+ * is `max(settled record, this session's anchor)` — the anchor is the MEDIAN of met-Tlo loads, so a
+ * single mis-key can never lift it (L11's real purpose), yet a load she cleanly completed THIS
+ * session DOES count, so normal progression is one rung per clear (S-22) — not the half-speed the
+ * literal "settled only" reading would force (a register contradiction resolved in S-22's favour).
+ * Inactive (no settled record AND no anchor) → unchanged; the approach set guards a never-done lift.
+ */
+function applyRail(load: number, history: SessionRecord[], band: Band, meta: ExerciseMeta, anchor: number | null): number {
   const rec = railRecord(history, band);
-  if (rec == null) return load;
-  const ceil = nextRung(rec, meta.equipment, meta.observedLoads);
+  const base = rec == null ? anchor : anchor == null ? rec : Math.max(rec, anchor);
+  if (base == null) return load;
+  const ceil = nextRung(base, meta.equipment, meta.observedLoads);
   return load > ceil + EPS ? ceil : load;
 }
 
@@ -139,7 +147,7 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     const perRung = repsPerRung(inp.session, state.history, meta);
     const n = rungsForHeadroom(worstReps - band.lo, perRung);
     let load = snapDown(moveRungs(anchor, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
-    load = applyRail(load, state.history, band, meta); // L11
+    load = applyRail(load, state.history, band, meta, anchor); // L11 (base = max(settled, anchor))
     return { decision: 'progress', load, band, sets: state.sets };
   }
 

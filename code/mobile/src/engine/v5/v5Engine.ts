@@ -72,7 +72,7 @@ function initExercise(exerciseId: string, band: Band, history: Session[], seedFo
 }
 
 // ───────────────────────────── state io ─────────────────────────────
-const empty = (): EngineV5State => ({ exercises: {}, lastAdvanceWeekOpen: undefined, weeksProcessed: 0 });
+const empty = (): EngineV5State => ({ exercises: {}, lastFoldedAt: 0, changeLog: [] });
 async function load(): Promise<EngineV5State> {
   try { return (await db.loadEngineV5()) ?? empty(); } catch { return empty(); }
 }
@@ -102,11 +102,16 @@ export async function ensureExercisesV5(exerciseIds: string[], band: Band, histo
   return state;
 }
 
-// ───────────────────────────── advance (week rollover) ─────────────────────────────
+// ───────────────────────────── advance (PER WORKOUT) ─────────────────────────────
+const CHANGELOG_KEEP = 200; // recent load changes retained for the mirror (~months of training)
+
 /**
- * Fold the week's completed sessions into one decision per exercise at the Sat-20:30 roll. Sessions
- * since the last advance are grouped per exercise into ONE occurrence (S-29), run through
- * decideExercise, and persisted with a fresh history record. `nowMs`/`bucketOpenMs` injectable.
+ * Advance the engine PER WORKOUT — the register's cadence (L7: a decision is told at the end of the
+ * workout, never on a schedule; Loop 2 decides "the next occurrence, not next Saturday"). Every
+ * completed session newer than the fold cursor is one OCCURRENCE: for each exercise it contains, run
+ * decideExercise and apply IMMEDIATELY, so a lift trained twice in a week builds on itself (S-29,
+ * S-5). Saturday decides nothing — it is a mirror (S-45), fed by the timestamped change log.
+ * `nowMs`/`bucketOpenMs` kept for signature parity; the decision no longer waits on either.
  */
 export async function advanceV5(
   exerciseIds: string[],
@@ -116,64 +121,40 @@ export async function advanceV5(
   nowMs: number = Date.now(),
   bucketOpenMs?: number,
 ): Promise<void> {
+  void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
   const ex = asStates(state);
+  const managed = new Set(exerciseIds);
 
-  const weekOpen = currentWeekOpen(nowMs);
-  const rolled = state.lastAdvanceWeekOpen != null && weekOpen > state.lastAdvanceWeekOpen;
+  // Completed sessions not yet folded, OLDEST first — each is one occurrence, decided in order so
+  // state accumulates (Monday's gain is there for Thursday). `startedAt` strictly after the cursor.
+  const lastFolded = state.lastFoldedAt ?? 0;
+  const unfolded = history
+    .filter((s) => { const t = Date.parse(s.startedAt); return Number.isFinite(t) && t > lastFolded; })
+    .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  if (unfolded.length === 0) { await save(state); return; }
 
-  if (rolled) {
-    // The week that just CLOSED = sessions in [previous anchor, this week-open). The upper bound is
-    // essential: sessions on/after `weekOpen` belong to the CURRENT (in-progress) week and are folded
-    // at the NEXT roll — without it, any session after the boundary would be folded now AND again next
-    // roll (a double-count), and two calendar weeks could collapse into one decision.
-    const since = state.lastAdvanceWeekOpen!;
-    const week = history.filter((s) => {
-      const t = Date.parse(s.startedAt);
-      return t >= since && t < weekOpen;
-    });
-    const weekIndex = state.weeksProcessed ?? 0;
-    const changes: NonNullable<EngineV5State['lastUpdate']>['changes'] = [];
-    for (const id of exerciseIds) {
+  const log = state.changeLog ?? [];
+  for (const sess of unfolded) {
+    const at = Date.parse(sess.startedAt);
+    for (const id of Object.keys(ex)) {
+      if (!managed.has(id)) continue; // only exercises in the current programme advance
       const st = ex[id];
-      if (!st) continue;
       const meta = metaWithGrid(id, history);
-      const sets = setPerfs(id, week);
-      if (sets.length === 0) continue; // untrained this week → holds
+      const sets = setPerfs(id, [sess]); // THIS occurrence's working sets
+      if (sets.length === 0) continue; // this lift was not trained this workout → holds
       const out = decideExercise({ state: st, session: sets, meta });
-      // Capture the from→to for the Weekly Update — but ONLY when the load actually moved. A
-      // progress decision that the rail capped to no change (or, in the rare over-load edge, DOWN)
-      // must not narrate a phantom "+0 kg". The narration direction is chosen from the real delta
-      // (explainChange), not the decision label. hold/ambiguous/approach say nothing (R7/S-16).
-      const loadMoved =
-        (out.decision === 'progress' || out.decision === 'stall_backoff') &&
-        st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6;
-      if (loadMoved) {
-        changes.push({
-          exerciseId: id,
-          decision: out.decision,
-          loadFrom: st.load,
-          loadTo: out.load,
-          setsFrom: st.sets,
-          setsTo: out.sets,
-          bandFrom: [st.band.lo, st.band.hi],
-          bandTo: [out.band.lo, out.band.hi],
-        });
+      // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
+      // delta direction (explainChange), never the decision label. hold/ambiguous/approach say
+      // nothing (R7/S-16). Graduation/rotation are decided but not yet enacted (assembler).
+      if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
       }
-      const rec: SessionRecord = { load: st.load, sets };
-      ex[id] = {
-        ...st,
-        load: out.load,
-        band: out.band,
-        sets: out.sets,
-        history: [rec, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS),
-      };
+      ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
     }
-    state.weeksProcessed = weekIndex + 1;
-    state.lastUpdate = { weekIndex, at: new Date(nowMs).toISOString(), seen: false, changes };
   }
-
-  state.lastAdvanceWeekOpen = Math.max(weekOpen, bucketOpenMs ?? weekOpen);
+  state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
+  state.changeLog = log.slice(-CHANGELOG_KEEP);
   await save(state);
 }
 
@@ -237,7 +218,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /** A v5 change → the same {observation, conclusion, action, text} i18n lines the Weekly Update
  *  screen renders, reusing the existing `explain.*` copy (no new keys). Only the change decisions
  *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
-function explainChange(c: NonNullable<EngineV5State['lastUpdate']>['changes'][number]): Explanation {
+function explainChange(c: ChangeEntry): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
   // Choose the copy by the REAL direction of the load move, not the decision label — a stall back-off
   // and a rail-capped progress both come DOWN (reprice copy: "matched to demonstrated capability"),
@@ -264,29 +245,57 @@ function explainChange(c: NonNullable<EngineV5State['lastUpdate']>['changes'][nu
   };
 }
 
-/** The most recent week's update (or null). Mirrors v4 `getWeeklyUpdate`. */
-export async function getWeeklyUpdateV5(): Promise<WeeklyUpdate | null> {
-  const state = await load();
-  const u = state.lastUpdate;
-  if (!u) return null;
-  return { weekIndex: u.weekIndex, at: u.at, explanations: u.changes.map(explainChange), seen: !!u.seen };
+type ChangeEntry = NonNullable<EngineV5State['changeLog']>[number];
+
+/** The window of the week that ended at the most recent Saturday roll: [prev week-open, this week-open). */
+function closedWeek(nowMs: number): { start: number; end: number } {
+  const end = currentWeekOpen(nowMs);
+  const start = currentWeekOpen(end - 1);
+  return { start, end };
 }
 
-/** Mark the latest v5 Weekly Update as seen. */
-export async function markWeeklyUpdateSeenV5(): Promise<void> {
+/** The changes made during the week that just closed — the Saturday mirror's content (S-45). Since a
+ *  lift may move more than once in a week (per-workout), the NET change per exercise is used: its
+ *  earliest loadFrom → its latest loadTo, so the mirror reads "back went up" once, not thrice. */
+function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
+  const { start, end } = closedWeek(nowMs);
+  const inWeek = log.filter((c) => c.at >= start && c.at < end).sort((a, b) => a.at - b.at);
+  const netByEx = new Map<string, ChangeEntry>();
+  for (const c of inWeek) {
+    const prior = netByEx.get(c.exerciseId);
+    netByEx.set(c.exerciseId, prior ? { ...c, loadFrom: prior.loadFrom, setsFrom: prior.setsFrom, bandFrom: prior.bandFrom } : c);
+  }
+  // Drop net no-ops (a lift that went up then back down to where it started).
+  return [...netByEx.values()].filter((c) => c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6);
+}
+
+/** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
+export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<WeeklyUpdate | null> {
   const state = await load();
-  if (state.lastUpdate) { state.lastUpdate.seen = true; await save(state); }
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
+  if (changes.length === 0) return null;
+  const { end } = closedWeek(nowMs);
+  return { weekIndex: 0, at: new Date(end).toISOString(), explanations: changes.map(explainChange), seen: state.seenWeekEnd === end };
+}
+
+/** Mark the current closed-week mirror as seen (keyed to its week-end, so a new week reads unseen). */
+export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now()): Promise<void> {
+  const state = await load();
+  state.seenWeekEnd = closedWeek(nowMs).end;
+  await save(state);
 }
 
 /**
- * The full week — every workout's lifts at their NEW loads, with the per-change from→to snapshot +
- * Why. Same shape as v4 `getWeeklyPlan`, so the screens render unchanged. Read-only.
+ * The full week — every workout's lifts at their NEW loads, with the NET per-lift from→to for the
+ * week that just closed + Why. Same shape as v4 `getWeeklyPlan`, so the screens render unchanged.
+ * Read-only.
  */
-export async function getWeeklyPlanV5(program: Program): Promise<WeeklyPlanView | null> {
+export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now()): Promise<WeeklyPlanView | null> {
   const state = await load();
   const ex = asStates(state);
-  const u = state.lastUpdate;
-  const changeByEx = new Map((u?.changes ?? []).map((c) => [c.exerciseId, c]));
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
+  const changeByEx = new Map(changes.map((c) => [c.exerciseId, c]));
+  const { end } = closedWeek(nowMs);
 
   const workouts: WeeklyPlanWorkout[] = [];
   for (const day of program.days) {
@@ -316,5 +325,5 @@ export async function getWeeklyPlanV5(program: Program): Promise<WeeklyPlanView 
     workouts.push({ dayId: day.id, name: day.name, groups: day.muscleGroups, lifts });
   }
   const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0);
-  return { weekIndex: u?.weekIndex ?? 0, at: u?.at ?? new Date().toISOString(), changedCount, seen: !!u?.seen, workouts };
+  return { weekIndex: 0, at: new Date(end).toISOString(), changedCount, seen: state.seenWeekEnd === end, workouts };
 }

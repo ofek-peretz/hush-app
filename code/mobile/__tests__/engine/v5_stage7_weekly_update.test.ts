@@ -24,19 +24,20 @@ const ROLL2 = new Date('2026-07-20T10:00:00Z').getTime();
 describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
   beforeEach(async () => { await resetV5(); });
 
-  it('a full-clear week → a "load up" change surfaced with a Why, and marked unseen then seen', async () => {
+  it('a full-clear workout → a "load up" change in the closed-week mirror, unseen then seen', async () => {
     const history: Session[] = [session(WEEK1, [set(60, 8), set(60, 8), set(60, 8)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // anchor
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // roll → records the change
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // per-workout: folds WEEK1 now
 
-    const update = await getWeeklyUpdateV5();
+    // The mirror reads the week that closed at the most recent Saturday. ROLL2 (Jul 20) → the closed
+    // week [Jul 11 20:30, Jul 18 20:30) contains WEEK1's Jul 15 change.
+    const update = await getWeeklyUpdateV5(ROLL2);
     expect(update).not.toBeNull();
     expect(update!.seen).toBe(false);
     expect(update!.explanations.length).toBe(1);
     expect(update!.explanations[0].observation.key).toBe('explain.progressLoad.observation');
 
-    const view = await getWeeklyPlanV5(program);
+    const view = await getWeeklyPlanV5(program, ROLL2);
     expect(view!.changedCount).toBe(1);
     const lift = view!.workouts[0].lifts[0];
     expect(lift.change).not.toBeNull();
@@ -44,17 +45,15 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     expect(lift.change!.snapshot.loadTo!).toBeGreaterThan(60);
     expect(lift.change!.snapshot.swapped).toBe(false);
 
-    await markWeeklyUpdateSeenV5();
-    expect((await getWeeklyUpdateV5())!.seen).toBe(true);
+    await markWeeklyUpdateSeenV5(ROLL2);
+    expect((await getWeeklyUpdateV5(ROLL2))!.seen).toBe(true);
   });
 
-  it('a steady (all-hold) week surfaces no changes — the plan is already right', async () => {
-    // A mixed week that holds: not every set meets Tlo → hold, no change recorded.
+  it('a steady (all-hold) workout surfaces no changes — the plan is already right', async () => {
     const history: Session[] = [session(WEEK1, [set(60, 8), set(60, 6)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
-    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2);
-    const view = await getWeeklyPlanV5(program);
+    const view = await getWeeklyPlanV5(program, ROLL2);
     expect(view!.changedCount).toBe(0);
   });
 });
