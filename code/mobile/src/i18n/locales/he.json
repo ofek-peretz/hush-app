@@ -152,6 +152,8 @@
     "weight": "משקל",
     "weightWith": "משקל · {{unit}}",
     "daysLabel": "אימונים בשבוע",
+    "minutesLabel": "דקות לאימון",
+    "minutesUnit": "דק׳",
     "female": "נקבה",
     "male": "זכר",
     "trainLegend": "האימון שלך",

@@ -40,6 +40,8 @@ export function ProfileEdit({ navigation }: Props) {
   // Weight is edited in the athlete's display units, stored as kg.
   const [weight, setWeight] = useState(displayWeight(p?.weightKg ?? 82, units) ?? 82);
   const [days, setDays] = useState(p?.daysPerWeek ?? 4);
+  // Rev 7 — her time-budget ceiling (S-64), default 60. Changing it rebuilds the week (enforceTimeCap).
+  const [minutes, setMinutes] = useState(p?.workoutMinutes ?? 60);
   // The save is ACKNOWLEDGED on this screen before it closes (founder 2026-07-11: a toast on the
   // screen behind is not felt as feedback). The button itself confirms — "Saved ✓" — the athlete
   // sees it land, and only then does the screen step back (where the toast still greets them).
@@ -49,7 +51,8 @@ export function ProfileEdit({ navigation }: Props) {
   const dirty =
     height !== (p?.heightCm ?? 178) ||
     weight !== (displayWeight(p?.weightKg ?? 82, units) ?? 82) ||
-    days !== (p?.daysPerWeek ?? 4);
+    days !== (p?.daysPerWeek ?? 4) ||
+    minutes !== (p?.workoutMinutes ?? 60);
 
   async function onSave() {
     if (saving !== 'idle') return; // one save per tap — never double-submit a rebuild
@@ -57,7 +60,7 @@ export function ProfileEdit({ navigation }: Props) {
     const weightKg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     const daysChanged = days !== p?.daysPerWeek;
     try {
-      await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days });
+      await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days, workoutMinutes: minutes });
     } catch {
       setSaving('idle'); // nothing persisted — let the athlete try again rather than lie
       return;
@@ -102,6 +105,10 @@ export function ProfileEdit({ navigation }: Props) {
           <View style={styles.col}>
             <Legend>{t('ob.daysLabel')}</Legend>
             <WheelPicker value={days} onChange={setDays} min={2} max={6} label={t('ob.daysUnit')} style={styles.wheel} />
+          </View>
+          <View style={styles.col}>
+            <Legend>{t('ob.minutesLabel')}</Legend>
+            <WheelPicker value={minutes} onChange={setMinutes} step={5} min={20} max={120} label={t('ob.minutesUnit')} style={styles.wheel} />
           </View>
         </View>
       </ScrollView>

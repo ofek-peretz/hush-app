@@ -191,6 +191,9 @@ interface AppApi extends AppState {
     sex?: 'male' | 'female';
     experience?: Experience;
     daysPerWeek?: number;
+    /** Rev 7 — her time-budget ceiling (minutes). Changing it re-runs enforceTimeCap, so the week
+     *  rebuilds like a frequency change. */
+    workoutMinutes?: number;
   }) => Promise<void>;
   /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
   setVolume: (volume: WeeklyVolume) => Promise<void>;
@@ -521,6 +524,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // map itself comes from the body-map screen (all-normal when skipped → a full-body v5 plan).
           repBand: '8-10',
           bodyMap: inputs.bodyMap,
+          // Rev 7: the time budget is a 60-minute ceiling by default (S-64), editable in Settings.
+          workoutMinutes: 60,
         };
         // SELF-ENROLL (zero-friction): create the backend athlete from the onboarding
         // stats + adopt its token, so the REAL model drives the program from the first
@@ -698,6 +703,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async updateProfileInfo(fields) {
         if (!state.profile) return;
         const daysChanged = fields.daysPerWeek != null && fields.daysPerWeek !== state.profile.daysPerWeek;
+        const minutesChanged = fields.workoutMinutes != null && fields.workoutMinutes !== state.profile.workoutMinutes;
         // Merge only the provided fields; undefined leaves the existing value intact.
         const profile: Profile = {
           ...state.profile,
@@ -708,20 +714,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.sex ? { sex: fields.sex } : {}),
           ...(fields.experience ? { experience: fields.experience } : {}),
           ...(fields.daysPerWeek != null ? { daysPerWeek: fields.daysPerWeek } : {}),
+          ...(fields.workoutMinutes != null ? { workoutMinutes: fields.workoutMinutes } : {}),
         };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('profile_edited', {
           changed: Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null),
         });
-        // A changed weekly frequency reshapes the split — carry it to the model strategy
-        // and rebuild the week now (athlete-owned pins/order re-apply through
+        // A changed weekly frequency reshapes the split; a changed time budget re-runs the time cap
+        // (S-64) — either reshapes the week, so rebuild now (athlete-owned pins/order re-apply through
         // generateProgram). Best-effort; otherwise it applies at the next regeneration.
-        if (daysChanged) {
-          try {
-            await model.setWeeklyFrequency(profile.daysPerWeek);
-          } catch {
-            /* non-fatal — generateProgram below still uses the profile's frequency */
+        if (daysChanged || minutesChanged) {
+          if (daysChanged) {
+            try {
+              await model.setWeeklyFrequency(profile.daysPerWeek);
+            } catch {
+              /* non-fatal — generateProgram below still uses the profile's frequency */
+            }
           }
           try {
             const fresh = await model.generateProgram(profile);
@@ -731,7 +740,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
             await db.saveProgram(program);
             dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-            void track('program_generated', { reason: 'frequency', frequency: program.frequency });
+            void track('program_generated', { reason: daysChanged ? 'frequency' : 'minutes', frequency: program.frequency });
           } catch {
             /* offline — applies on the next weekly regeneration */
           }

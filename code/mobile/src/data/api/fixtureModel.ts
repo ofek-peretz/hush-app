@@ -267,13 +267,15 @@ export function estimateSessionMinutes(day: ProgramDay): number {
  *   3) only then trim the bonus set off compounds (4→3) from the LAST compound backward —
  *      never the first (the day's main lift keeps its full scheme), never below 3.
  */
-function enforceTimeCap(day: ProgramDay): void {
+// `budgetMin` is her declared time budget (S-64) — profile.workoutMinutes, defaulting to the
+// 60-minute ceiling. v4 profiles (no workoutMinutes) fall back to 60, exactly as before.
+function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): void {
   const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
-  for (let k = isoIdx.length - 1; k >= 0 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
+  for (let k = isoIdx.length - 1; k >= 0 && estimateSessionMinutes(day) > budgetMin; k--) {
     const slot = day.slots[isoIdx[k]];
     if (!slot.supplemental && slot.setCount > 3) slot.setCount = 3;
   }
-  for (let i = day.slots.length - 1; i >= 0 && estimateSessionMinutes(day) > MAX_SESSION_MIN; i--) {
+  for (let i = day.slots.length - 1; i >= 0 && estimateSessionMinutes(day) > budgetMin; i--) {
     if (day.slots.length <= 4) break;
     const ex = exerciseById(day.slots[i].exerciseId);
     if (ex && ex.tier === 'isolation' && !day.slots[i].supplemental && ex.muscle !== 'Calves' && ex.muscle !== 'Core') {
@@ -281,7 +283,7 @@ function enforceTimeCap(day: ProgramDay): void {
     }
   }
   const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
-  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > MAX_SESSION_MIN; k--) {
+  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > budgetMin; k--) {
     const slot = day.slots[compoundIdx[k]];
     if (slot.setCount > 3) slot.setCount = 3;
   }
@@ -697,7 +699,8 @@ export const fixtureModel: ModelClient = {
         d.muscleGroups = [...new Set(d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter((m): m is MuscleGroup => !!m))];
       }
     }
-    for (const d of days) enforceTimeCap(d); // prescribed work ≤ 60 min (warm-ups excluded)
+    const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
+    for (const d of days) enforceTimeCap(d, budgetMin); // prescribed work ≤ her minutes (warm-ups excluded)
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     const program = { id: 'program_v1', frequency: n, days: ordered };

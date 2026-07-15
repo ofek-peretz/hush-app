@@ -144,6 +144,8 @@
     "weight": "Weight",
     "weightWith": "Weight · {{unit}}",
     "daysLabel": "Sessions per week",
+    "minutesLabel": "Minutes per workout",
+    "minutesUnit": "min",
     "female": "Female",
     "male": "Male",
     "trainLegend": "Your training",
