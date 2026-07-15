@@ -37,6 +37,7 @@ import { swapScore } from '@/domain/swapPool';
 import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
+import { bandFor } from '@/engine/v5/repBand';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
 import { displayWeekNumber, trainingWeekNumber } from '@/domain/weekCadence';
@@ -459,7 +460,7 @@ function setsFor(tier: Tier, goal: Goal, age?: number, volume: WeeklyVolume = 'm
   return Math.min(Math.max(sets, 3), MAX_SETS);
 }
 
-async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age' | 'memberSince'>> {
+async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'goal' | 'age' | 'memberSince' | 'repBand'>> {
   try {
     const p = await db.loadProfile();
     if (p) return p;
@@ -745,10 +746,16 @@ export const fixtureModel: ModelClient = {
     const lastLogged = new Map<string, number>();
     for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
 
+    // Engine v5: when she has declared a rep band (T), it drives the target for EVERY exercise — reps
+    // = Tlo, and Thi rides along so Loop 1 knows her "too light" mark (S-6). Older profiles with no
+    // declared band keep the legacy per-goal reps and get no band stamp (the live loop falls back to
+    // a provisional window). Gated on repBand so default profiles are unchanged.
+    const band = profile.repBand ? bandFor(profile.repBand) : null;
     for (const ex of EXERCISES) {
       const t = targets[ex.id];
       const weight = t ? t.weight : smartSeed(ex.id, profile, history);
-      const reps = t ? t.reps : repsFor(ex.tier, goal, profile.age);
+      const reps = band ? band.lo : t ? t.reps : repsFor(ex.tier, goal, profile.age);
+      const repBandHi = band ? band.hi : undefined;
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
       if (week >= 2 && weight != null) {
@@ -759,7 +766,7 @@ export const fixtureModel: ModelClient = {
         }
       }
       for (let s = 0; s < MAX_SETS; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

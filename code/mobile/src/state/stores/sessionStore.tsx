@@ -31,6 +31,7 @@ import {
 import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
+import { applyLoop1 } from '@/engine/v5/liveSession';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -487,6 +488,23 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Temporal telemetry: when the current rest/pause began (ms epoch).
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
+  /**
+   * Engine v5 · Stage 0 (law L3): the rest that has JUST ENDED and is waiting to be stamped onto
+   * the next set as `SetLog.restBeforeS`. Written at `endRest` — the single rest-exit path, which
+   * the timer, SKIP, and the watch all pass through — and consumed by `completeSet`, the single
+   * set-log path, which the phone and the watch both pass through. So the fact is captured once,
+   * for both surfaces, with no per-surface wiring.
+   *
+   * Null means UNKNOWN, never zero: no rest preceded this set (the first of a session), or the
+   * rest was lost to an app kill.
+   */
+  const pendingRestSRef = useRef<number | null>(null);
+  /**
+   * Engine v5 · Stage 2 (Loop 1): corrections applied to the CURRENT exercise this session, capped
+   * at 2 (S-13). Reset when a new exercise begins. Keyed by exerciseId so a swap/rotation restarts
+   * the count cleanly.
+   */
+  const loop1Ref = useRef<{ exerciseId: string; count: number }>({ exerciseId: '', count: 0 });
   // Seconds added to the CURRENT rest via "+15 sec" (phone or watch). Reset when a new
   // rest begins / ends. Bumping `restNonce` re-runs the mirror effect so the longer
   // rest is republished to the watch + Live Activity.
@@ -588,6 +606,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           restExtraS: restExtraSecondsRef.current,
           pausedAtMs: pauseStartedAtRef.current,
           savedAt: new Date().toISOString(),
+          // A rest already banked but not yet stamped onto a set: an app kill between "Ready" and
+          // "Complete Set" would otherwise lose it and leave that set uncomparable (L3).
+          ...(pendingRestSRef.current != null ? { pendingRestS: pendingRestSRef.current } : {}),
         })
         .catch(() => {});
     }
@@ -844,6 +865,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // (or a stale orphan lingered): salvage its logged work first, then compose cleanly.
         await creditSalvage(await salvageOrphanSession());
         setRestResumeRemainingS(null);
+        // A rest banked by the PREVIOUS session must never be stamped onto this one's first set —
+        // the athlete's "rest" between two workouts is not a rest (L3). The first set of a session
+        // has no rest before it, and that is the honest answer.
+        restStartedAtRef.current = null;
+        pendingRestSRef.current = null;
+        loop1Ref.current = { exerciseId: '', count: 0 }; // Loop 1 correction budget resets per session
         const plan2 = buildPlan(day, targets);
         const session: Session = {
           id: `sess_${Date.now()}`,
@@ -909,6 +936,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           sessionRef.current = active;
           restStartedAtRef.current = r.restStartedAtMs;
           restExtraSecondsRef.current = r.restExtraS;
+          // A rest banked before the kill still belongs to the set the athlete is about to log (L3).
+          pendingRestSRef.current = snap.pendingRestS ?? null;
           pauseStartedAtRef.current = null;
           setRestResumeRemainingS(r.restRemainingS);
           dispatch({ type: 'START', plan: resumePlan, session: active, machine: r.machine });
@@ -963,7 +992,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           actualReps: override ? override.reps : current.target.recommendedReps,
           edited: override != null || !!current.edited,
           persistedAt: new Date().toISOString(),
+          // The rest that preceded THIS set (L3). Undefined on the session's first set — there
+          // was none — and after a kill that landed mid-transition; undefined means unknown, and
+          // the engine excludes such a set from every rest comparison rather than reading it as 0.
+          ...(pendingRestSRef.current != null ? { restBeforeS: pendingRestSRef.current } : {}),
         };
+        pendingRestSRef.current = null; // spent — one rest belongs to exactly one set
         const updated: Session = { ...session, sets: [...session.sets, setLog] };
         // Persist the actual at each Complete Set (§8.4).
         await db.saveActiveSession(updated);
@@ -995,6 +1029,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setRestResumeRemainingS(null); // a fresh transition — the resumed-rest anchor is spent
         dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
+        // Engine v5 · Loop 1 — correct the NEXT set's load from what she just LIFTED (the fact, not
+        // the prescription). One call here reaches both the phone and the watch, since the mirror
+        // re-projects from the plan. Bodyweight / last-set / spent-budget are no-ops inside applyLoop1.
+        if (loop1Ref.current.exerciseId !== current.exerciseId) loop1Ref.current = { exerciseId: current.exerciseId, count: 0 };
+        const l1 = applyLoop1(plan, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count);
+        if (l1.corrected) {
+          loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
+          dispatch({ type: 'SWAP_PLAN', plan: l1.plan as Step[] });
+          void track('loop1_correction', { sessionId: session.id, exerciseId: current.exerciseId, direction: l1.direction, from: setLog.actualWeight, to: l1.nextLoad });
+        }
+
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
         if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {
           restStartedAtRef.current = Date.now();
@@ -1011,11 +1056,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
 
       endRest() {
-        // Actual rest taken (a fatigue/recovery signal that was never captured before).
+        // The rest the athlete ACTUALLY took. This is the only place it is knowable, and it used
+        // to be handed to telemetry and thrown away — measured, then evaporated. It is now also
+        // banked for the next set (engine v5 · L3: the engine may only compare like with like).
         if (restStartedAtRef.current != null) {
           const restMs = Date.now() - restStartedAtRef.current;
           const variant = machine.phase === 'REST_INTER' ? 'inter' : 'transition';
           void track('rest_completed', { sessionId: sessionRef.current?.id, restMs, plannedS: restSeconds, variant, early: restMs < restSeconds * 1000 });
+          pendingRestSRef.current = Math.max(0, Math.round(restMs / 1000));
           restStartedAtRef.current = null;
         }
         restExtraSecondsRef.current = 0;

@@ -17,6 +17,14 @@ export type Units = 'kg' | 'lb';
 
 export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning';
 
+/** Engine v5 — the athlete's declared rep band (T). One onboarding question; default '8-10'.
+ *  It is a floor and a ceiling: Tlo is the target, Thi the "too light" mark. See the register S-6. */
+export type RepBandChoice = '6-8' | '8-10' | '10-12' | '12-15';
+
+/** Engine v5 — the athlete's stance on a muscle group on the body map. `off` never appears in the
+ *  programme; `emphasis` gets first claim on volume (budget of 2, F-4). Default: every muscle `normal`. */
+export type MuscleStance = 'off' | 'normal' | 'emphasis';
+
 /** Weekly training volume — the athlete's set-volume lever (default moderate). */
 export type WeeklyVolume = 'low' | 'moderate' | 'high';
 
@@ -55,6 +63,13 @@ export interface Profile {
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
   volume?: WeeklyVolume; // weekly set-volume lever; absent => 'moderate' (parity-preserving)
+  /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. */
+  repBand?: RepBandChoice;
+  /** Engine v5 — the body map: per-muscle stance. Absent on older profiles => every muscle 'normal'
+   *  (the parity-preserving default). Keyed by MuscleGroup. */
+  bodyMap?: Record<string, MuscleStance>;
+  /** Engine v5 — minutes she has for a workout (the time-budget ceiling, S-64). Absent => 60. */
+  workoutMinutes?: number;
   healthConnected: boolean;
   /** ISO date the account was created (Profile §4.28 "Member since"). App-layer. */
   memberSince?: string;
@@ -127,7 +142,10 @@ export interface SetTarget {
   /** Backend block id (HTTP model only) — needed to report sets against it. */
   blockId?: string;
   recommendedWeight: number | null; // null => bodyweight
-  recommendedReps: number;
+  recommendedReps: number; // engine v5: this is Tlo, the band floor / target
+  /** Engine v5 — Thi, the top of her declared band (the "too light" mark Loop 1 reads). Absent on
+   *  profiles with no declared T => the live loop falls back to a provisional window. */
+  repBandHi?: number;
   reasonType?: ReasonType; // present only on a changed set, ADVISORY only
   reasonDelta?: number; // for increase/decrease copy
 }
@@ -144,6 +162,21 @@ export interface SetLog {
   actualReps: number;
   edited: boolean; // true if athlete used Edit Result
   persistedAt: string; // ISO
+  /**
+   * Seconds of rest ACTUALLY taken immediately before this set (engine v5 · Stage 0 · law L3).
+   *
+   * The engine may only compare a set to a set taken under similar conditions. Without this
+   * number every rep comparison is corrupt: an athlete who shortens her rest and drops a rep
+   * looks identical to an athlete whose load is too heavy — and the engine would cut the load
+   * when the load was never the problem. It is also what makes the time budget real (the 60-min
+   * cap is otherwise computed from a per-set constant that ignores rest entirely).
+   *
+   * Absent when there was no rest to measure: the first set of a session, a resume across an app
+   * kill that landed between the rest ending and the set being logged, and every set logged
+   * before this field existed. Absent means UNKNOWN — such a set is usable for load history but
+   * is excluded from any rest comparison. It never means zero.
+   */
+  restBeforeS?: number;
 }
 
 export type SessionState = 'ACTIVE' | 'SAVED';

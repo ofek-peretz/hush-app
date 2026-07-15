@@ -39,6 +39,7 @@ const K = {
   health: 'hush.health.state',
   preferences: 'hush.preferences',
   engineV4: 'hush.engine.v4', // Hush v4 per-slot progression state (gated; see engine/v4)
+  engineV5: 'hush.engine.v5', // Hush v5 exercise-keyed progression state (see engine/v5)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
   schemaVersion: 'hush.schema.version',
@@ -100,6 +101,10 @@ export interface PersistedSessionResume {
   restExtraS: number;
   pausedAtMs: number | null;
   savedAt: string; // ISO
+  /** Rest (seconds) already completed and waiting to be stamped onto the next set (SetLog
+   *  .restBeforeS). Carried across an app kill so a crash between "Ready" and "Complete Set"
+   *  does not silently drop the rest fact. Optional: snapshots written before v5 Stage 0. */
+  pendingRestS?: number;
 }
 
 /** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
@@ -126,6 +131,18 @@ export interface EngineV4State {
    *  renders the whole week at its new loads). Structural to avoid a layering cycle into the engine.
    *  `seen` flips once the athlete views it. */
   lastUpdate?: { weekIndex: number; at: string; explanations: unknown[]; plan?: unknown[]; seen?: boolean };
+}
+
+/**
+ * Persisted Hush v5 engine state — exercise-keyed (not slot-keyed). `exercises` maps exerciseId →
+ * the v5 ExerciseState (load, band, sets, history); `lastAdvanceWeekOpen` is the Sat-20:30 the engine
+ * last folded a week for. Shape kept structural to avoid a layering cycle into engine/v5. There is NO
+ * migration from EngineV4State (register S-58): v4 state is dropped, history is the substrate.
+ */
+export interface EngineV5State {
+  exercises: Record<string, unknown>; // exerciseId -> ExerciseState
+  lastAdvanceWeekOpen?: number;
+  weeksProcessed?: number;
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
@@ -272,6 +289,8 @@ export const db = {
   // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
   loadEngineV4: () => getJSON<EngineV4State>(K.engineV4),
   saveEngineV4: (s: EngineV4State) => setJSON(K.engineV4, s),
+  loadEngineV5: () => getJSON<EngineV5State>(K.engineV5),
+  saveEngineV5: (s: EngineV5State) => setJSON(K.engineV5, s),
 
   // ---- Subscription entitlement (local mirror; StoreKit is the source of truth) ----
   loadEntitlement: () => getJSON<Entitlement>(K.entitlement),
