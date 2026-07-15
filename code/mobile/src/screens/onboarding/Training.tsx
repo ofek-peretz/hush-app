@@ -29,7 +29,7 @@ export function Training({ navigation, route }: Props) {
   function onContinue() {
     void track('experience_selected', { experience });
     void track('days_per_week_selected', { days });
-    navigation.navigate('ProgramCreated', {
+    navigation.navigate('BodyMap', {
       inputs: {
         // Hush is hypertrophy-first for everyone — goal is no longer asked in onboarding.
         goal: 'build_muscle',
@@ -48,11 +48,11 @@ export function Training({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 4, total: 4 }}
+      progress={{ index: 4, total: 5 }}
       legend={t('ob.trainLegend')}
       title={t('ob.trainTitle')}
       sub={t('ob.trainSub')}
-      footer={<Button variant="primary" size="lg" block label={t('ob.daysBuild')} onPress={onContinue} />}
+      footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
       <View style={styles.sections}>
         <View style={styles.section}>

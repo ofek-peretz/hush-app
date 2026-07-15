@@ -36,6 +36,10 @@ export type OnboardingParamList = {
   // Training (merged Experience + Days per week, 2026-07-10): experience drives the
   // starting weights, frequency shapes the split — one screen, whole in the viewport.
   Training: { profile: OnboardingProfileDraft };
+  // The BODY MAP (Revision 7) — off / normal / emphasis per muscle; the programme's shape follows
+  // from it (register Part 3), replacing the demographic split. Carries the assembled inputs from
+  // Training, writes bodyMap, then continues to the build.
+  BodyMap: { inputs: OnboardingInputs };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };

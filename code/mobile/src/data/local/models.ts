@@ -94,6 +94,9 @@ export interface OnboardingInputs {
   heightCm?: number;
   weightKg?: number;
   age?: number;
+  /** Engine v5 (Revision 7) — the body map set on the body-map onboarding screen. Its presence (via
+   *  completeOnboarding's repBand default) is what puts a new athlete on the v5 engine. */
+  bodyMap?: Record<string, MuscleStance>;
 }
 
 /** A frame-owned slot in a program day. */

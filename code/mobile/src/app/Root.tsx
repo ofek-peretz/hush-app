@@ -30,6 +30,7 @@ import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { Training } from '@/screens/onboarding/Training';
+import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
@@ -82,6 +83,8 @@ function OnboardingNavigator() {
         options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
       />
       <OnboardingStack.Screen name="Training" component={Training} />
+      {/* The body map (Rev 7) — a vertical list, so the default horizontal back-swipe is fine. */}
+      <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
       {/* The build/ready step is the ONE place with no way back: the program exists. */}
       <OnboardingStack.Screen
         name="ProgramCreated"

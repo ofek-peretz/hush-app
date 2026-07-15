@@ -514,6 +514,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           daysPerWeek: inputs.daysPerWeek,
           healthConnected: inputs.healthConnected,
           memberSince: new Date().toISOString(),
+          // Engine v5 (Revision 7): onboarding puts every NEW athlete on v5. `repBand` is the cohort
+          // switch — its presence routes generation, progression and the weekly mirror through v5.
+          // It is NOT asked (register Part 9 §A): the rep band defaults to 8-10, editable per-muscle in
+          // the body map later. Minutes default to a 60-minute ceiling, editable in Settings. The body
+          // map itself comes from the body-map screen (all-normal when skipped → a full-body v5 plan).
+          repBand: '8-10',
+          bodyMap: inputs.bodyMap,
         };
         // SELF-ENROLL (zero-friction): create the backend athlete from the onboarding
         // stats + adopt its token, so the REAL model drives the program from the first

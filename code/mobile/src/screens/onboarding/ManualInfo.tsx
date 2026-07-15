@@ -42,7 +42,7 @@ export function ManualInfo({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 4 }}
+      progress={{ index: 3, total: 5 }}
       legend={t('ob.bodyLegend')}
       title={t('ob.bodyTitle')}
       sub={t('ob.bodySub')}
