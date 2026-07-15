@@ -10,10 +10,13 @@
  * The pure core (loop2/loop1/grid/repsPerRung) is unchanged — this only marshals data in and out.
  */
 
-import type { Session } from '@/data/local/models';
+import type { Session, Program } from '@/data/local/models';
 import { db, type EngineV5State } from '@/data/local/db';
 import { exerciseMeta } from '@/engine/v4/catalogAdapter';
+import { exerciseDisplayName } from '@/data/exercises';
 import { currentWeekOpen } from '@/domain/weekCadence';
+import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange } from '@/engine/v4/v4Engine';
+import type { Explanation, ExplanationLine } from '@/engine/v4/types';
 import { decideExercise } from './loop2';
 import { snapDown } from './grid';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
@@ -114,6 +117,8 @@ export async function advanceV5(
     // Sessions since the last roll = this week. (History is newest-first.)
     const since = state.lastAdvanceWeekOpen!;
     const week = history.filter((s) => Date.parse(s.startedAt) >= since);
+    const weekIndex = state.weeksProcessed ?? 0;
+    const changes: NonNullable<EngineV5State['lastUpdate']>['changes'] = [];
     for (const id of exerciseIds) {
       const st = ex[id];
       if (!st) continue;
@@ -121,6 +126,20 @@ export async function advanceV5(
       const sets = setPerfs(id, week);
       if (sets.length === 0) continue; // untrained this week → holds
       const out = decideExercise({ state: st, session: sets, meta });
+      // Capture the from→to for the Weekly Update (only decisions that actually change the plan
+      // are surfaced; hold/ambiguous/approach say nothing — the register R7/S-16).
+      if (out.decision === 'progress' || out.decision === 'stall_backoff') {
+        changes.push({
+          exerciseId: id,
+          decision: out.decision,
+          loadFrom: st.load,
+          loadTo: out.load,
+          setsFrom: st.sets,
+          setsTo: out.sets,
+          bandFrom: [st.band.lo, st.band.hi],
+          bandTo: [out.band.lo, out.band.hi],
+        });
+      }
       const rec: SessionRecord = { load: st.load, sets };
       ex[id] = {
         ...st,
@@ -130,7 +149,8 @@ export async function advanceV5(
         history: [rec, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS),
       };
     }
-    state.weeksProcessed = (state.weeksProcessed ?? 0) + 1;
+    state.weeksProcessed = weekIndex + 1;
+    state.lastUpdate = { weekIndex, at: new Date(nowMs).toISOString(), seen: false, changes };
   }
 
   state.lastAdvanceWeekOpen = Math.max(weekOpen, bucketOpenMs ?? weekOpen);
@@ -171,4 +191,89 @@ export async function currentV5Targets(history: Session[]): Promise<Record<strin
 /** Reset all v5 engine state (account wipe / tests). */
 export async function resetV5(): Promise<void> {
   await save(empty());
+}
+
+// ───────────────────────────── Weekly Update (parity with v4's surfaces) ─────────────────────────────
+const L = (key: string, params?: ExplanationLine['params']): ExplanationLine => ({ key: `explain.${key}`, params });
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** A v5 change → the same {observation, conclusion, action, text} i18n lines the Weekly Update
+ *  screen renders, reusing the existing `explain.*` copy (no new keys). Only the change decisions
+ *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
+function explainChange(c: NonNullable<EngineV5State['lastUpdate']>['changes'][number]): Explanation {
+  const ex = exerciseDisplayName(c.exerciseId);
+  if (c.decision === 'stall_backoff') {
+    const load = c.loadTo != null ? round1(c.loadTo) : null;
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L('reprice.observation', { ex }),
+      conclusion: L('reprice.conclusion'),
+      action: load != null ? L('reprice.action', { load }) : L('reprice.actionBw'),
+      text: load != null ? L('reprice.text', { ex, load }) : L('reprice.textBw', { ex }),
+    };
+  }
+  // progress (load up)
+  const delta = c.loadFrom != null && c.loadTo != null ? round1(c.loadTo - c.loadFrom) : 0;
+  return {
+    slotId: c.exerciseId, pattern: '' as never,
+    observation: L('progressLoad.observation', { ex }),
+    conclusion: L('progressLoad.conclusion'),
+    action: L('progressLoad.action', { delta }),
+    text: L('progressLoad.text', { ex, delta }),
+  };
+}
+
+/** The most recent week's update (or null). Mirrors v4 `getWeeklyUpdate`. */
+export async function getWeeklyUpdateV5(): Promise<WeeklyUpdate | null> {
+  const state = await load();
+  const u = state.lastUpdate;
+  if (!u) return null;
+  return { weekIndex: u.weekIndex, at: u.at, explanations: u.changes.map(explainChange), seen: !!u.seen };
+}
+
+/** Mark the latest v5 Weekly Update as seen. */
+export async function markWeeklyUpdateSeenV5(): Promise<void> {
+  const state = await load();
+  if (state.lastUpdate) { state.lastUpdate.seen = true; await save(state); }
+}
+
+/**
+ * The full week — every workout's lifts at their NEW loads, with the per-change from→to snapshot +
+ * Why. Same shape as v4 `getWeeklyPlan`, so the screens render unchanged. Read-only.
+ */
+export async function getWeeklyPlanV5(program: Program): Promise<WeeklyPlanView | null> {
+  const state = await load();
+  const ex = asStates(state);
+  const u = state.lastUpdate;
+  const changeByEx = new Map((u?.changes ?? []).map((c) => [c.exerciseId, c]));
+
+  const workouts: WeeklyPlanWorkout[] = [];
+  for (const day of program.days) {
+    if (day.isRest) continue;
+    const lifts: WeeklyPlanLift[] = day.slots.map((slot) => {
+      const st = ex[slot.exerciseId];
+      const c = changeByEx.get(slot.exerciseId);
+      const change = c
+        ? {
+            snapshot: {
+              slotId: slot.exerciseId, exerciseId: slot.exerciseId,
+              loadFrom: c.loadFrom, loadTo: c.loadTo, setsFrom: c.setsFrom, setsTo: c.setsTo,
+              rangeFrom: c.bandFrom, rangeTo: c.bandTo, swapped: false,
+            } as WeekPlanChange,
+            explanation: explainChange(c),
+          }
+        : null;
+      return {
+        exerciseId: slot.exerciseId,
+        name: exerciseDisplayName(slot.exerciseId),
+        loadKg: st ? st.load : null,
+        sets: st ? st.sets : slot.setCount,
+        repRange: st ? [st.band.lo, st.band.hi] : null,
+        change,
+      };
+    });
+    workouts.push({ dayId: day.id, name: day.name, groups: day.muscleGroups, lifts });
+  }
+  const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0);
+  return { weekIndex: u?.weekIndex ?? 0, at: u?.at ?? new Date().toISOString(), changedCount, seen: !!u?.seen, workouts };
 }

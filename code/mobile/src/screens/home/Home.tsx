@@ -18,7 +18,7 @@ import { displayWeekNumber } from '@/domain/weekCadence';
 import { isTrainingGated } from '@/domain/entitlement';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import type { Line } from '@/domain/voice';
-import { getWeeklyPlan, getWeeklyUpdate } from '@/engine/v4/v4Engine';
+import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { muscleGroupsLabel } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';

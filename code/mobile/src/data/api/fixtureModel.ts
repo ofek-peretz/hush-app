@@ -726,7 +726,10 @@ export const fixtureModel: ModelClient = {
     // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
     // change (weekCadence.firstBucketOpen).
     const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
-    if (program)
+    // v4 advance runs ONLY for the legacy cohort. The v5 cohort (declared band) advances via advanceV5
+    // below, which owns both the prescription AND the Weekly Update — so v4's advance would be a
+    // redundant double-fold that nobody reads. Gate it on the absence of a declared band.
+    if (program && !profile.repBand)
       await maybeAdvance(program, eprofile, history, seedFor, new Set(prefs.lockedSlots), Date.now(), bucketOpenMs).catch((e) =>
         void track('engine_error', { op: 'maybeAdvance', message: String(e) }),
       );

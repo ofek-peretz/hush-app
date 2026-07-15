@@ -31,7 +31,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
-import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/engine/v4/v4Engine';
+import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/domain/weeklyUpdate';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
 import { exerciseDisplayName } from '@/data/exercises';

@@ -143,6 +143,24 @@ export interface EngineV5State {
   exercises: Record<string, unknown>; // exerciseId -> ExerciseState
   lastAdvanceWeekOpen?: number;
   weeksProcessed?: number;
+  /** The most recent week's per-exercise changes, for the Weekly Update + Home. `changes` is the
+   *  from→to snapshot captured at the roll; `seen` flips once the athlete views it. Structural to
+   *  avoid a layering cycle into engine/v5. */
+  lastUpdate?: {
+    weekIndex: number;
+    at: string;
+    seen?: boolean;
+    changes: {
+      exerciseId: string;
+      decision: string;
+      loadFrom: number | null;
+      loadTo: number | null;
+      setsFrom: number;
+      setsTo: number;
+      bandFrom: [number, number];
+      bandTo: [number, number];
+    }[];
+  };
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
