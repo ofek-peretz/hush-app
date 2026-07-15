@@ -39,6 +39,7 @@ import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import { advanceV5, currentV5Targets, type V5Target } from '@/engine/v5/v5Engine';
+import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
 import { displayWeekNumber, trainingWeekNumber } from '@/domain/weekCadence';
@@ -602,13 +603,27 @@ export const fixtureModel: ModelClient = {
     // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all
     // N are done). The split is the market-standard one for this athlete's sex + frequency.
     const n = Math.min(Math.max(profile.daysPerWeek, 1), 6);
-    const female = profile.sex === 'female';
-    const pool = female ? WOMEN : MEN;
-    const plan = (female ? WOMEN_SPLITS : MEN_SPLITS)[n] ?? (female ? WOMEN_SPLITS : MEN_SPLITS)[3];
     const goal = profile.goal ?? 'build_muscle';
     const volume = profile.volume ?? 'moderate';
     const prefs = await loadPreferencesSafe();
-    const days = plan.map((name, i) => dayFromBlueprint(i, name, pool[name] ?? [], goal, profile.age, volume));
+
+    // Engine v5 (Rev 7): the programme is GENERATED from the body map (register Part 3) — an `off`
+    // muscle never appears, emphasis earns more, and the region days fall out of where the volume is.
+    // Gated on the v5 cohort marker (a declared band). MEN_SPLITS/WOMEN_SPLITS survive only for the
+    // legacy cohort. Everything-off (S-3) is prevented by the body-map screen (validateMap); the split
+    // belt below is only a safety net so a workout always exists, never a path anyone reaches.
+    let days: ProgramDay[];
+    if (profile.repBand) {
+      let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.pinsByMuscle);
+      if (dayLists.length === 0)
+        dayLists = (MEN_SPLITS[n] ?? MEN_SPLITS[3]).map((name) => ({ name, region: 'upper' as const, exerciseIds: MEN[name] ?? [] }));
+      days = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, goal, profile.age, volume));
+    } else {
+      const female = profile.sex === 'female';
+      const pool = female ? WOMEN : MEN;
+      const plan = (female ? WOMEN_SPLITS : MEN_SPLITS)[n] ?? (female ? WOMEN_SPLITS : MEN_SPLITS)[3];
+      days = plan.map((name, i) => dayFromBlueprint(i, name, pool[name] ?? [], goal, profile.age, volume));
+    }
 
     // Unify same-exercise slots (founder 2026-07-09): when a lift appears in more than one workout
     // (e.g. women's hip thrust across two lower days), ALL its occurrences share ONE engine
