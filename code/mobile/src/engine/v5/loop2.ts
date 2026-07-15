@@ -23,6 +23,26 @@ const working = (sets: SetPerf[]): SetPerf[] => sets.filter((s) => !s.isApproach
 /** Did the set meet the target (reps ≥ Tlo, and it was really performed)? */
 const metTlo = (s: SetPerf, band: Band): boolean => s.reps >= band.lo && s.reps > 0;
 
+/**
+ * S-25.2 — has she hit the SAME wall twice? A repeated stall at the current prescribed load, with a
+ * back-off (a lower-load occurrence) MORE RECENT than the earlier stall, means back-off-and-re-climb
+ * (S-25.1) has persistently failed — the signal to ROTATE rather than back off yet again. A
+ * first stall at a wall (no earlier stall at this load, or no rebuild between) returns false, so the
+ * first response is always to back off and re-climb. History is newest-first; only the recency window
+ * counts (an old plateau is not "her today"). Bodyweight has no load axis → never a rotate signal.
+ */
+function isRepeatedStall(history: SessionRecord[], currentLoad: number | null, band: Band): boolean {
+  if (currentLoad == null) return false;
+  const stalledHere = (rec: SessionRecord): boolean =>
+    rec.load != null && Math.abs(rec.load - currentLoad) < EPS && rec.sets.length > 0 && !rec.sets.every((s) => metTlo(s, band));
+  let sawBackoff = false; // walking newest → oldest, a back-off is more recent than the earlier stall
+  for (const rec of history.slice(0, RECENCY_WINDOW_SESSIONS)) {
+    if (rec.load != null && rec.load < currentLoad - EPS) sawBackoff = true;
+    if (sawBackoff && stalledHere(rec)) return true;
+  }
+  return false;
+}
+
 // ── The rail (L11) ─────────────────────────────────────────────────────────
 /**
  * The heaviest load she has COMPLETED at ≥ Tlo reps in her settled history (the sessions before this
@@ -157,15 +177,19 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
 
   // S-25: a stall is failing this load MORE times than her own typical attempts-to-clear (strict).
   if (attempts > N) {
-    // S-25.1: back off to the heaviest full-clear load, else one rung down; re-climb.
+    // S-25.1: back off to the heaviest full-clear load, else one rung down; re-climb. The load backs
+    // off in BOTH the back-off and the rotate case (the rotated-from lift trains it until the roll).
     const backTo = heaviestFullClear(state.history, band);
-    if (inp.rotationAvailable && backTo == null) {
-      // Nothing to back off to and rotation offered → S-25.2 rotate.
-      return { decision: 'stall_rotate', load: anchor, band, sets: state.sets, wantsChange: 'rotate' };
-    }
     const load = backTo != null
       ? snapDown(backTo, meta.equipment, meta.observedLoads)
       : Math.max(loadFloor(meta.equipment, meta.observedLoads), prevRung(state.load, meta.equipment, meta.observedLoads));
+    // S-25.2: rotate ONLY on a REPEATED stall at the same wall (back-off-and-re-climb has failed) —
+    // never on a first stall. `wantsChange` signals the structural swap, enacted only if a same-muscle
+    // target exists (else the lift simply backs off, S-53). rotationAvailable stays a hook the caller
+    // may gate; the persistence test is the trigger.
+    if (inp.rotationAvailable && isRepeatedStall(state.history, state.load, band)) {
+      return { decision: 'stall_rotate', load, band, sets: state.sets, wantsChange: 'rotate' };
+    }
     return { decision: 'stall_backoff', load, band, sets: state.sets };
   }
 

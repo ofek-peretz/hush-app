@@ -887,12 +887,19 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > holds, S-53); `fixtureModel` writes it to `substitutes` (an ENGINE change, S-72 — straight to
 > substitutes, never through the learned counter), and `pickExercises` follows a substitute CHAIN
 > (bench → knee-push-up → push-up), same-muscle-guarded + cycle-guarded, so a graduated swap resolves.
-> Still open: **ROTATION (S-25.3) enactment is DEFERRED** — `advanceV5` keeps `rotationAvailable`
-> false, because S-25 backs off and re-climbs FIRST and rotates only after that persistently fails, a
-> trigger not yet modelled (enabling rotate on the first no-full-clear stall would skip the back-off
-> and contradict S-25's order); the target resolver + enactment are built and tested, waiting on that
-> trigger. **S-71/S-72** await rotation. **S-73** (deleting the edit screen + pin/swap buttons) is held
-> until the learning is device-validated, so the athlete never loses her only lever mid-flight.)*
+> **ROTATION (S-25.3) is now wired too (2026-07-16):** the trigger is a REPEATED stall at the same wall
+> — `isRepeatedStall` (loop2) detects a prior stall at the current prescribed load with a back-off
+> (a lower-load occurrence) more recent than it, i.e. back-off-and-re-climb has persistently failed. A
+> FIRST stall still backs off and re-climbs (S-25's order holds); a repeated one rotates to the
+> same-muscle lift gone longest without (`engineChanges.rotationTarget`), enacted like graduation. The
+> load backs off in both cases; when no rotation target exists the lift simply backs off (S-53).
+> Still open: **S-71/S-72** (a learned "leave it" earned by swapping back against a rotation twice —
+> not yet wired; today the athlete overrides a rotation by swapping back, which the learned counter
+> reads as a preference). **S-73** (deleting the edit screen + pin/swap buttons) is held until the
+> learning is device-validated, so the athlete never loses her only lever mid-flight. **Follow-up:**
+> the weekly mirror (S-45) narrates load moves from the change log, but NOT structural changes
+> (graduation / rotation / a learned swap write `substitutes`, not the change log) — narrating those
+> is a small S-45 follow-up.)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|

@@ -160,12 +160,11 @@ export async function advanceV5(
       const meta = metaWithGrid(id, history);
       const sets = setPerfs(id, [sess]); // THIS occurrence's working sets
       if (sets.length === 0) continue; // this lift was not trained this workout → holds
-      // rotationAvailable stays FALSE: S-25 backs off and re-climbs FIRST (one rung down when there is
-      // no full-clear load), and rotates only AFTER that persistently fails — a trigger not yet
-      // modelled, so ROTATION (S-25.3) is deferred. GRADUATION (S-52) does not depend on it, so it is
-      // surfaced and enacted here. Enabling rotate eagerly (on the first no-full-clear stall) would
-      // skip the back-off step and contradict S-25's order.
-      const out = decideExercise({ state: st, session: sets, meta });
+      // rotationAvailable = true: decideExercise now rotates ONLY on a REPEATED stall at the same wall
+      // (isRepeatedStall) — a first stall still backs off and re-climbs, so S-25's order holds. The
+      // integration resolves the rotation target (longest-without); if none exists, the lift just
+      // backs off (S-53). GRADUATION (S-52) is surfaced the same way, independent of this flag.
+      const out = decideExercise({ state: st, session: sets, meta, rotationAvailable: true });
       if (out.wantsChange) wantsChange[id] = out.wantsChange;
       else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
       // Record a change only when the load actually MOVED; the mirror copy is chosen by the real

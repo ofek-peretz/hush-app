@@ -117,8 +117,20 @@ describe('S-25 · a stall backs off, then rotates', () => {
     expect(r.decision).toBe('stall_backoff');
     expect(r.load).toBe(80);
   });
-  it('nothing to back off to + rotation available → rotate', () => {
+  it('a FIRST stall backs off even with rotation available (S-25 order — back off before rotate)', () => {
+    // No back-off in her history yet → re-climb first, never rotate on the first wall.
     const r = decideExercise({ state: state({ load: 80, history: [{ load: 80, sets: [S(80, 6), S(80, 6)] }] }), session: [S(80, 6), S(80, 5)], meta: bb(), rotationAvailable: true });
+    expect(r.decision).toBe('stall_backoff');
+    expect(r.wantsChange).toBeUndefined();
+  });
+  it('a REPEATED stall at the same wall (stall → back off → re-climb → stall again) rotates (S-25.2)', () => {
+    // Newest-first: the re-climb stall at 80, the back-off/clear at 75, the original stall at 80.
+    const hist: SessionRecord[] = [
+      { load: 80, sets: [S(80, 6), S(80, 6)] },
+      { load: 75, sets: [S(75, 8), S(75, 8)] },
+      { load: 80, sets: [S(80, 6), S(80, 6)] },
+    ];
+    const r = decideExercise({ state: state({ load: 80, history: hist }), session: [S(80, 6), S(80, 5)], meta: bb(), rotationAvailable: true });
     expect(r.decision).toBe('stall_rotate');
     expect(r.wantsChange).toBe('rotate');
   });
