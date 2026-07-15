@@ -38,6 +38,7 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { bandFor } from '@/engine/v5/repBand';
+import { advanceV5, currentV5Targets, type V5Target } from '@/engine/v5/v5Engine';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
 import { displayWeekNumber, trainingWeekNumber } from '@/domain/weekCadence';
@@ -746,16 +747,29 @@ export const fixtureModel: ModelClient = {
     const lastLogged = new Map<string, number>();
     for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
 
-    // Engine v5: when she has declared a rep band (T), it drives the target for EVERY exercise — reps
-    // = Tlo, and Thi rides along so Loop 1 knows her "too light" mark (S-6). Older profiles with no
-    // declared band keep the legacy per-goal reps and get no band stamp (the live loop falls back to
-    // a provisional window). Gated on repBand so default profiles are unchanged.
+    // Engine v5 (gated on a declared rep band T): when she has been through v5 onboarding, the v5
+    // engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It advances
+    // at the same weekly roll and its prescription REPLACES v4's for every exercise it manages;
+    // unmanaged / swap-only exercises still fall back to the seed. Older profiles with no declared
+    // band stay entirely on v4 (this is the safe, opt-in cohort swap; no migration — S-58). The v4
+    // advance above still runs so the Weekly Update narration keeps working until it, too, moves to
+    // v5 (the next step). v4 and v5 fold the same history with the same DP logic, so they agree.
     const band = profile.repBand ? bandFor(profile.repBand) : null;
+    let v5targets: Record<string, V5Target> = {};
+    if (band && program) {
+      const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
+      await advanceV5(engineExerciseIds, band, history, seedFor, Date.now(), bucketOpenMs).catch((e) => void track('engine_error', { op: 'advanceV5', message: String(e) }));
+      v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
+        void track('engine_error', { op: 'currentV5Targets', message: String(e) });
+        return {};
+      });
+    }
     for (const ex of EXERCISES) {
+      const v5t = v5targets[ex.id];
       const t = targets[ex.id];
-      const weight = t ? t.weight : smartSeed(ex.id, profile, history);
-      const reps = band ? band.lo : t ? t.reps : repsFor(ex.tier, goal, profile.age);
-      const repBandHi = band ? band.hi : undefined;
+      const weight = v5t ? v5t.weight : t ? t.weight : smartSeed(ex.id, profile, history);
+      const reps = v5t ? v5t.reps : band ? band.lo : t ? t.reps : repsFor(ex.tier, goal, profile.age);
+      const repBandHi = v5t ? v5t.bandHi : band ? band.hi : undefined;
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
       if (week >= 2 && weight != null) {
