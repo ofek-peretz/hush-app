@@ -34,7 +34,7 @@ function metaWithGrid(exerciseId: string, history: Session[]): ExerciseMeta {
 function observedLoads(exerciseId: string, sessions: Session[]): number[] {
   const seen = new Set<number>();
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId === exerciseId && log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
+    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
   }
   return [...seen];
 }
@@ -43,16 +43,17 @@ function observedLoads(exerciseId: string, sessions: Session[]): number[] {
 function bestDemonstratedLoad(exerciseId: string, band: Band, sessions: Session[]): number | null {
   let best: number | null = null;
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId === exerciseId && log.actualWeight != null && log.actualReps >= band.lo && (best == null || log.actualWeight > best)) best = log.actualWeight;
+    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualReps >= band.lo && (best == null || log.actualWeight > best)) best = log.actualWeight;
   }
   return best;
 }
 
-/** Working SetPerfs for an exercise from a set of sessions (approach/warm-up already absent upstream). */
+/** Working SetPerfs for an exercise from a set of sessions. Approach sets (S-60) are a measurement,
+ *  not work — excluded from the fold (they still carry their mark through for completeness). */
 function setPerfs(exerciseId: string, sessions: Session[]): SetPerf[] {
   const out: SetPerf[] = [];
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId !== exerciseId) continue;
+    if (log.exerciseId !== exerciseId || log.isApproach) continue;
     out.push({ load: log.actualWeight, reps: log.actualReps, restBeforeS: log.restBeforeS });
   }
   return out;

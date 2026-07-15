@@ -781,8 +781,10 @@ export const fixtureModel: ModelClient = {
           reasonDelta = Math.round((weight - prev) * 10) / 10;
         }
       }
+      // S-60: the FIRST set of a v5 lift with no recent fact is an approach measurement.
+      const approachFirst = v5t?.isApproach ? true : undefined;
       for (let s = 0; s < MAX_SETS; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

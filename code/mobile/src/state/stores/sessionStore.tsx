@@ -991,6 +991,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           actualWeight: override ? override.weight : current.target.recommendedWeight,
           actualReps: override ? override.reps : current.target.recommendedReps,
           edited: override != null || !!current.edited,
+          // S-60: carry the approach-set mark so the engine excludes this measurement from the fold.
+          ...(current.target.isApproach ? { isApproach: true } : {}),
           persistedAt: new Date().toISOString(),
           // The rest that preceded THIS set (L3). Undefined on the session's first set — there
           // was none — and after a kill that landed mid-transition; undefined means unknown, and

@@ -146,6 +146,9 @@ export interface SetTarget {
   /** Engine v5 — Thi, the top of her declared band (the "too light" mark Loop 1 reads). Absent on
    *  profiles with no declared T => the live loop falls back to a provisional window. */
   repBandHi?: number;
+  /** Engine v5 — the first set of a lift with no recent fact is an APPROACH set: a measurement, not
+   *  a working set (S-60). Marked on setIndex 0 only; excluded from every engine decision. */
+  isApproach?: boolean;
   reasonType?: ReasonType; // present only on a changed set, ADVISORY only
   reasonDelta?: number; // for increase/decrease copy
 }
@@ -161,6 +164,9 @@ export interface SetLog {
   actualWeight: number | null;
   actualReps: number;
   edited: boolean; // true if athlete used Edit Result
+  /** Engine v5 — this set was an APPROACH measurement (S-60), not a working set. Carried from the
+   *  target so the engine can exclude it from the weekly fold. */
+  isApproach?: boolean;
   persistedAt: string; // ISO
   /**
    * Seconds of rest ACTUALLY taken immediately before this set (engine v5 · Stage 0 · law L3).
