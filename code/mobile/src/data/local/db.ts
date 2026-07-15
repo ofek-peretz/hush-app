@@ -52,6 +52,10 @@ export interface OwnedPreferences {
   pinsByMuscle: Record<string, string>; // MuscleGroup -> chosen exerciseId
   backups: Record<string, string>; // primary exerciseId -> equipment-busy backup
   substitutes: Record<string, string>; // primary exerciseId -> preferred substitute
+  // Engine v5 (Rev 7) — the LEARNED-swap in-progress counter (S-68): anchor exerciseId -> the pending
+  // replacement being accumulated (not yet adopted). Adopting writes `substitutes` above and clears
+  // this. The pure decision logic is `engine/v5/learnedSwap`.
+  swapPending?: Record<string, { target: string; count: number }>;
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
   // Athlete-LOCKED slots (Lock System): engine slotIds the athlete pinned against engine-initiated

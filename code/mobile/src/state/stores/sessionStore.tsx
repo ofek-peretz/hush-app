@@ -10,6 +10,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, type Exercise } from '@/data/exercises';
 import { swapCandidates } from '@/domain/swapPool';
+import { foldSessionSwaps } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
@@ -715,6 +716,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         earlyFinish,
         trained,
       });
+
+      // Rev 7 (S-68…S-70): learn a standing exercise replacement from repeated in-workout swaps.
+      // v5 cohort only (a declared band). Best-effort — the learning never blocks a finished workout.
+      // Offered = the day's non-supplemental slots; performed = the distinct WORKING lifts she logged
+      // (approach sets excluded). Two consecutive same-target swaps adopt (writes prefs.substitutes,
+      // which the assembler honours); the original is offered first ever after (S-70).
+      if (app.profile?.repBand && programDay) {
+        try {
+          const offeredIds = programDay.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId);
+          const performedIds = [...new Set(saved.sets.filter((s) => !s.isApproach).map((s) => s.exerciseId))];
+          const prefs = await db.loadPreferences();
+          const next = foldSessionSwaps(
+            { substitutes: prefs.substitutes, pending: prefs.swapPending ?? {} },
+            offeredIds,
+            performedIds,
+          );
+          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending });
+        } catch {
+          /* best-effort — a learning failure never affects the saved workout */
+        }
+      }
 
       /**
        * THE MARK, ON THE WRIST (founder 2026-07-13). The phone celebrates a milestone as beat 4 of

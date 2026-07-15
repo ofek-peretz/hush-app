@@ -876,9 +876,13 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > (Rev 5) — leaving 64 of the S-1…S-67 numbering. **Rev 7 added S-68…S-74** — learned exercise
 > selection (Part 9 §B) — for 71. Tests carry the tripwires (S-54 warm-ups, S-67 assisted, and the
 > Rev 7 no-secondary-muscle-coupling tripwire) that fail the build if a new input reaches progression
-> through the back door. Rev 7's pure cores ship with their own tests — `per-muscle T`, the
-> `learnedSwap` reducer, and `programAssembly` — with the S-68…S-70 logic green; S-71/S-72 land with
-> the learned-swap WIRING, which is the one Rev 7 situation-set not yet connected.)*
+> through the back door. **S-68…S-70 are now WIRED (2026-07-16):** the assembler honours
+> `prefs.substitutes` (C1); `domain/swapLearning` extracts occurrences from a finished session
+> (conservative — a clean single swap per muscle only) and folds them into `prefs.substitutes` +
+> `swapPending`, in `finishSession`, v5 cohort only (C2/C3). Still open: **S-70's swap-menu ordering**
+> (offer the original first — a UX wiring), **S-71/S-72** (they need rotation to reach the programme,
+> task E), and **S-73** (deleting the edit screen + pin/swap buttons — held until the learning is
+> device-validated, so the athlete never loses her only lever mid-flight).)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|
