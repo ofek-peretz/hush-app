@@ -57,19 +57,25 @@ tells you every time it changes one.*
 
 ## Part 2 — Screen inventory
 
-**A · Onboarding** (first run) — 1 Welcome/Sign-in · 2 About you (sex, age, height, weight) · 3
-Experience · 4 Days per week · 5 **Time per workout (NEW)** · 6 **Reps you like — T (NEW)** · 7 **Body
-map (NEW)** · 8 Building your programme.
+**Full count: 27 screens across 6 flows.** Cross-checked against the built app so none is missed.
 
-**B · The core loop** — 9 Home · 10 Pre-workout (the black brief) · 11 Active set · 12 Rest · 13
+**A · Onboarding** (first run) — 1 Welcome/Sign-in · 2 Name · 3 About you (sex, age, height, weight) ·
+4 Experience & days per week · 5 **Time per workout (NEW)** · 6 **Reps you like — T (NEW)** · 7 **Body
+map (NEW)** · 8 Connect Health (optional) · 9 Building your programme.
+
+**B · The core loop** — 10 Home · 11 Pre-workout / ready (the brief) · 12 Active set · 13 Rest · 14
 Session complete.
 
-**C · The reflection** — 14 Weekly review (the Saturday mirror) · 15 Progress · 16 History.
+**C · The reflection** — 15 Weekly review (the Saturday mirror) · 16 Progress · 17 Progress report
+detail (a single capability / milestone) · 18 History · 19 Workout detail (one past session).
 
-**D · Ownership** — 17 Programme (view + swap + pin + video) · 18 Body map (living, editable) · 19
-Profile & settings.
+**D · Ownership** — 20 Programme (view + swap + pin + video) · 21 Body map (living, editable) · 22
+Profile edit · 23 Profile sheet (quick menu) · 24 Subscription / Paywall.
 
-**E · Aside** — 20 Cardio (open training, recorded not coached).
+**E · Aside** — 25 Cardio (open training) · 26 Cardio detail (one activity).
+
+**F · Internal** — 27 Engine debug (dev-only, not shipped to users — a v5 state inspector for
+on-device QA; no design needed, list it so it isn't mistaken for a user screen).
 
 Below, each screen: **Purpose · What the engine gives · What the athlete sees · What the athlete does
 · States & edges.**
@@ -89,7 +95,13 @@ decision per screen, no scroll. Two of these screens are NEW and load-bearing (T
   sign-in button.
 - **Edges.** Return user → straight to Home.
 
-#### 2 · About you
+#### 2 · Name
+- **Purpose.** Her first name — Hush speaks to her by it (the weekly review opens with it; the app
+  is personal). If sign-in already provided a name, this can be a confirm, not a re-entry.
+- **Sees.** One field, one line: *"What should I call you?"* One `Continue`.
+- **Edge.** Skippable → the app shows stats without a vocative; never blocks.
+
+#### 3 · About you
 - **Purpose.** Sex, age, height, bodyweight. These are **seeds only** — they pick starting weights and
   the first programme shape; the engine overwrites them with real data within weeks.
 - **Sees.** Four compact inputs (wheel pickers for numbers — mono). One screen, no scroll.
@@ -149,7 +161,14 @@ decision per screen, no scroll. Two of these screens are NEW and load-bearing (T
   - **No pain/injury framing.** If she can't train something, she turns it off. The reason is her
     business; the off is the only fact the engine needs.
 
-#### 8 · Building your programme
+#### 8 · Connect Health (optional)
+- **Purpose.** Offer to connect Apple Health — for cardio/HR display only. **Make the opt-out easy and
+  guilt-free;** it is not required and it never feeds the training engine.
+- **Sees.** One card explaining the benefit (route + heart-rate on your workouts), a `Connect` and a
+  plain `Not now`. Honest about what it's used for (display, never load).
+- **Edge.** Declined → everything works; no nagging later.
+
+#### 9 · Building your programme
 - **Purpose.** A brief, honest beat while the first programme assembles. Not a fake loading bar.
 - **Sees.** One line — *"Cutting your programme to what you told me…"* — then straight to Home.
 
@@ -270,11 +289,24 @@ workout**. The session screens must make that visible and calm.
   progress by reps where there's no load.
 - **Edges.** Confidence rises with real data per capability; never show a fabricated projection.
 
-#### 16 · History
+#### 17 · Progress report detail (one capability / milestone)
+- **Purpose.** Tapping a capability bar or a milestone opens its story — the quarterly / all-time
+  view of how far one thing has travelled.
+- **Sees.** A single capability's trajectory (real e1RM over time — display only), or a milestone's
+  earned-moment and what it took. Month chapters. No projection past today.
+- **Engine.** All from her real logged data; confidence shown only where there's enough of it.
+
+#### 18 · History
 - **Purpose.** Every completed session, stable and readable, newest first.
 - **Sees.** Sessions grouped by month; each shows the workout, its lifts, best sets, and any
   owner-voice note ("I eased the row after you were away."). Day names captured at start so they read
   stably even after regeneration.
+
+#### 19 · Workout detail (one past session)
+- **Purpose.** Tapping a session in History opens it in full.
+- **Sees.** The workout name + date, every lift with its logged sets (weight × reps, best set marked),
+  the rest actually taken, and Hush's owner-voice note for that session if there was one. Approach
+  sets are marked as measurements, not working sets.
 
 ---
 
@@ -316,16 +348,44 @@ workout**. The session screens must make that visible and calm.
   affects bodyweight-lift load and future seeds; **height** changes nothing. Age auto-advances yearly.
 - **Edges.** Every change is safe — the engine is built to survive edits without losing progression.
 
+#### 23 · Profile sheet (quick menu)
+- **Purpose.** A light sheet from the header — the fast path to identity, settings, sign-out — without
+  opening the full edit screen.
+- **Sees.** Her name + "member since," quick links (Profile edit, Body map, Subscription, Settings,
+  Sign out). A menu, not a page.
+
+#### 24 · Subscription / Paywall
+- **Purpose.** The one monetisation surface. Presents the plan(s) and unlocks the product.
+- **Sees.** What Hush is (the value in one honest line — *"A coach that runs your programme, on facts
+  alone"*), the plan(s) and price, restore-purchase, terms/privacy links. No dark patterns, no fake
+  countdowns — the calm instrument voice extends here too.
+- **Engine.** Gating is entitlement-based; the app degrades gracefully offline (cached entitlement).
+- **Edges.** Already subscribed → never shown. Lapsed → a clear, non-punitive state.
+
 ---
 
 ### E · ASIDE
 
-#### 20 · Cardio (open training)
+#### 25 · Cardio (open training)
 - **Purpose.** Walks/runs, indoor or outdoor, recorded and celebrated — **never coached, never an
   engine input.** Nothing about a run changes what's on the bar (that would be a fatigue theory,
   which Hush refuses).
-- **Sees.** A simple record surface (GPS route for outdoor, HR for watch users), history. Off the main
-  lifting path — a link from Home, not a competing button.
+- **Sees.** A simple record surface (GPS route for outdoor, HR for watch users), a list of activities.
+  Off the main lifting path — a link from Home, not a competing button.
+
+#### 26 · Cardio detail (one activity)
+- **Purpose.** Tapping a recorded run/walk opens it.
+- **Sees.** The route map (outdoor), distance / duration / pace, heart-rate trace if worn. Recorded
+  facts only — no coaching, no "you should have gone faster."
+
+---
+
+### F · INTERNAL
+
+#### 27 · Engine debug (dev-only, NOT shipped)
+- **Purpose.** An on-device inspector of the v5 exercise-keyed state (per-exercise load, band, sets,
+  history, the change log) for QA. **No design needed** — a plain list. Listed here only so it is not
+  mistaken for a user screen and so it is remembered when v4's debug screen is removed.
 
 ---
 
