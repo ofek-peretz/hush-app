@@ -41,7 +41,7 @@ it does not ship.
 | **L8** | **The engine obeys and states the cost.** It never argues, moralises, nags, or claims a reason it did not measure. |
 | **L9** | **A question never stands between the athlete and her workout.** When the engine needs an answer it cannot derive, it assembles the best workout it can, **runs it**, and leaves the question open until she answers. Training is never blocked on a prompt. |
 | **L10** | **The engine steps from a load it cannot be lied to about.** The anchor is the **median** of the sets that met `Tlo` — a single mis-keyed number cannot be the median of several. *(When only one set met `Tlo`, the median is that one set — there the rail (L11) is the guard on an established lift, and on a lift with no rail the athlete's own eyes are, S-49. The layers are named in S-22 and S-49.)* **How far** the load then moves is decided by **her own measured reps-per-rung**, never by a fixed step. There is no clipping constant anywhere, because there is nothing left to clip. |
-| **L11** | **The rail — the one hard stop.** The engine may **never** prescribe a load more than **one rung above the heaviest weight she completed at `Tlo` reps on that exercise, reading her SETTLED history — the sessions before the one being judged, inside the recency window (F-8).** Her own record is the ceiling. It rises the moment she raises it (a genuinely heavier completed set becomes the new record *next* session), and it can never be argued with. Because it never reads the current session to set itself, **a fat-fingered set cannot lift its own ceiling**; because it reads only recent history, **a heroic single from two years ago cannot pin her under a load she can no longer do** — after a real layoff the rail simply goes quiet and the approach set (S-60) takes over. *(This replaces v4's implied-e1RM rail, which capped a demand using a **formula**. The rail is now a **fact**.)* It is inactive on a lift she has never performed, or one with no completed set inside the window — where the approach set is the guard instead. |
+| **L11** | **The rail — the one hard stop.** The engine may **never** prescribe a load more than **one rung above the heaviest weight she completed at `Tlo` reps on that exercise.** The base is **`max(her settled record, THIS session's median anchor)`** — the settled record (sessions before the one being judged, inside the recency window F-8) **plus** the median of the loads she met `Tlo` at this session. *(Rev-7 correction, found when the per-workout cadence went live: a "settled history only" rail HALVED progression — she'd have to complete each load twice before advancing, contradicting S-22's one-rung-per-clear. Including the current session's **median** anchor fixes it while keeping the guarantee: the median absorbs a single mis-key, so a fat-finger still can't lift the rail, but a load she cleanly completed this session DOES count.)* Her own record is the ceiling; **a fat-fingered set cannot lift it** (the median, not the raw set, is the base), and **a heroic single from two years ago cannot pin her under a load she can no longer do** (F-8 — after a real layoff the rail goes quiet and the approach set S-60 takes over). *(Replaces v4's implied-e1RM rail, which capped a demand with a **formula**; the rail is now a **fact**.)* Inactive on a lift with no completed set inside the window — where the approach set guards instead. |
 
 ---
 
@@ -827,13 +827,19 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 
 | # | Stage | Owns | Status |
 |---|---|---|---|
-| **0** | **The fact substrate** — `restBeforeS` on every set, phone **and** watch | S-17, S-18, S-54, S-58 | ✅ **BUILT** — 818/818 green |
-| **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-60, S-61, S-67 | next |
-| **2** | **The set loop, live** — `SessionFlow` **and the watch** together | S-11…S-13, S-60 | |
-| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | |
-| **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | |
-| **5** | **The surfaces** — narration at the moment of decision; Saturday becomes the mirror | S-45 | |
-| **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | |
+| **0** | **The fact substrate** — `restBeforeS` on every set, phone **and** watch | S-17, S-18, S-54, S-58 | ✅ **BUILT + WIRED** |
+| **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-60, S-61, S-67 | ✅ **BUILT** |
+| **2** | **The set loop, live** — `sessionStore` **and the watch** together | S-11…S-13, S-60 | ✅ **WIRED** |
+| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ built · ⛔ NOT wired (needs assembler) |
+| **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | T ✅ wired · map/assembler ✅ built, ⛔ NOT wired (needs onboarding screen) |
+| **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) |
+| **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | ⛔ blocked (legacy cohort still exists until onboarding sets `repBand`) |
+
+*(Status 2026-07-15: gated on `profile.repBand` — the v5 cohort. Everything CONNECTED runs for that
+cohort through `fixtureModel.sessionTargets` + `sessionStore` + `domain/weeklyUpdate`. The ASSEMBLY
+half (stage 3–4 volume/map) is built + tested but not wired, blocked on the body-map onboarding
+screen; and no user is on the v5 cohort yet because onboarding does not set `repBand` — see the
+memory `engine-v5-open-tasks-2026-07-15`.)*
 
 **Integration is never deferred.** Stages 0 and 2 are phone+watch by definition. The engine is never
 allowed to be "done but unconnected" — **that is exactly how v4 ended up with four dead branches
