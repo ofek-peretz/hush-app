@@ -141,9 +141,14 @@ export async function advanceV5(
       const sets = setPerfs(id, week);
       if (sets.length === 0) continue; // untrained this week → holds
       const out = decideExercise({ state: st, session: sets, meta });
-      // Capture the from→to for the Weekly Update (only decisions that actually change the plan
-      // are surfaced; hold/ambiguous/approach say nothing — the register R7/S-16).
-      if (out.decision === 'progress' || out.decision === 'stall_backoff') {
+      // Capture the from→to for the Weekly Update — but ONLY when the load actually moved. A
+      // progress decision that the rail capped to no change (or, in the rare over-load edge, DOWN)
+      // must not narrate a phantom "+0 kg". The narration direction is chosen from the real delta
+      // (explainChange), not the decision label. hold/ambiguous/approach say nothing (R7/S-16).
+      const loadMoved =
+        (out.decision === 'progress' || out.decision === 'stall_backoff') &&
+        st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6;
+      if (loadMoved) {
         changes.push({
           exerciseId: id,
           decision: out.decision,
@@ -234,7 +239,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
 function explainChange(c: NonNullable<EngineV5State['lastUpdate']>['changes'][number]): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
-  if (c.decision === 'stall_backoff') {
+  // Choose the copy by the REAL direction of the load move, not the decision label — a stall back-off
+  // and a rail-capped progress both come DOWN (reprice copy: "matched to demonstrated capability"),
+  // and a plain progress goes UP (progressLoad copy). This keeps the narration honest at the edges.
+  const wentDown = c.loadFrom != null && c.loadTo != null && c.loadTo < c.loadFrom;
+  if (c.decision === 'stall_backoff' || wentDown) {
     const load = c.loadTo != null ? round1(c.loadTo) : null;
     return {
       slotId: c.exerciseId, pattern: '' as never,
