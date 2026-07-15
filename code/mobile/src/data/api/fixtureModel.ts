@@ -624,53 +624,50 @@ export const fixtureModel: ModelClient = {
       }
     }
 
-    // Engine decisions → the program (finding 2): BEFORE pins + ensureSlots, each engine-managed
-    // slot adopts the engine's CURRENT exercise (a stall swap or a bodyweight graduation). Doing it
-    // HERE — not after ensureSlots — is what stops ensureSlots from mistaking the engine's own swap
-    // for a manual replacement and RESETTING it: the program now already carries the engine's
-    // exercise, so they agree. Athlete pins run AFTER, so an explicit pin still overrides the engine.
-    // Only the exercise is overlaid; set count stays owned by the assembler (setsFor + the 60-min
-    // cap), which a volume/goal change must be free to re-derive. Fresh / un-swapped slots: no-op.
-    const engSlots = await currentSlots().catch((e): Record<string, V4SlotView> => {
-      void track('engine_error', { op: 'currentSlots', message: String(e) });
-      return {};
-    });
+    // The v4 engine-swap overlay + the periodic 3-week refresh are LEGACY ONLY. The v5 cohort
+    // (declared band) is v4-free in generation: v5 does no engine-initiated swap in the live path,
+    // and the 3-week CALENDAR rotation is deleted (register Part 5 — variety comes from a measured
+    // stall, not a schedule). So for a v5 profile, generation touches no v4 state at all.
+    const isV5 = !!profile.repBand;
     const swappedDays = new Set<string>();
-    for (const day of days) {
-      for (const slot of day.slots) {
-        const eng = slot.engineSlotId ? engSlots[slot.engineSlotId] : undefined;
-        if (eng && eng.exerciseId !== slot.exerciseId) {
-          slot.exerciseId = eng.exerciseId;
-          swappedDays.add(day.id);
+    if (!isV5) {
+      // Engine decisions → the program (finding 2): each engine-managed slot adopts the engine's
+      // CURRENT exercise (a stall swap or a bodyweight graduation), BEFORE pins + ensureSlots, so
+      // ensureSlots does not mistake the engine's own swap for a manual replacement.
+      const engSlots = await currentSlots().catch((e): Record<string, V4SlotView> => {
+        void track('engine_error', { op: 'currentSlots', message: String(e) });
+        return {};
+      });
+      for (const day of days) {
+        for (const slot of day.slots) {
+          const eng = slot.engineSlotId ? engSlots[slot.engineSlotId] : undefined;
+          if (eng && eng.exerciseId !== slot.exerciseId) {
+            slot.exerciseId = eng.exerciseId;
+            swappedDays.add(day.id);
+          }
         }
       }
-    }
 
-    // PERIODIC REFRESH: at a NEW 3-week cycle, rotate ONE non-pinned lift per workout (variety +
-    // plateau-breaking). Then APPLY the durable rotations on top of the blueprint — the final word on
-    // a rotated slot's exercise (an athlete pin, applied next, still wins; ensureSlots then calibrates
-    // the fresh lift from the smart seed, so proven strength carries). Runs every generation but only
-    // COMPUTES a new rotation once per cycle (stable within the 3 weeks).
-    const refreshWeek = trainingWeekNumber(profile.memberSince, Date.now());
-    const cycleIndex = Math.floor((refreshWeek - 1) / REFRESH_CYCLE_WEEKS);
-    if (prefs.lastRotationCycle < 0) {
-      // First program: the opening 3-week cycle IS the blueprint — establish the baseline without
-      // rotating; the first refresh lands at the next cycle boundary (~week 4).
-      prefs.lastRotationCycle = cycleIndex;
-      await db.savePreferences(prefs).catch(() => {});
-    } else if (cycleIndex > prefs.lastRotationCycle) {
-      const rotatedIds = new Set<string>();
-      for (const d of days) rotateOneInDay(d, engSlots, prefs, rotatedIds);
-      prefs.lastRotationCycle = cycleIndex;
-      await db.savePreferences(prefs).catch(() => {});
-    }
-    for (const day of days) {
-      for (const slot of day.slots) {
-        const rotated = slot.engineSlotId ? prefs.rotations[slot.engineSlotId] : undefined;
-        const ex = exerciseById(slot.exerciseId);
-        if (rotated && ex && !prefs.pinsByMuscle[ex.muscle] && rotated !== slot.exerciseId) {
-          slot.exerciseId = rotated;
-          swappedDays.add(day.id);
+      // PERIODIC REFRESH (legacy): at a NEW 3-week cycle, rotate ONE non-pinned lift per workout.
+      const refreshWeek = trainingWeekNumber(profile.memberSince, Date.now());
+      const cycleIndex = Math.floor((refreshWeek - 1) / REFRESH_CYCLE_WEEKS);
+      if (prefs.lastRotationCycle < 0) {
+        prefs.lastRotationCycle = cycleIndex;
+        await db.savePreferences(prefs).catch(() => {});
+      } else if (cycleIndex > prefs.lastRotationCycle) {
+        const rotatedIds = new Set<string>();
+        for (const d of days) rotateOneInDay(d, engSlots, prefs, rotatedIds);
+        prefs.lastRotationCycle = cycleIndex;
+        await db.savePreferences(prefs).catch(() => {});
+      }
+      for (const day of days) {
+        for (const slot of day.slots) {
+          const rotated = slot.engineSlotId ? prefs.rotations[slot.engineSlotId] : undefined;
+          const ex = exerciseById(slot.exerciseId);
+          if (rotated && ex && !prefs.pinsByMuscle[ex.muscle] && rotated !== slot.exerciseId) {
+            slot.exerciseId = rotated;
+            swappedDays.add(day.id);
+          }
         }
       }
     }
@@ -689,16 +686,18 @@ export const fixtureModel: ModelClient = {
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     const program = { id: 'program_v1', frequency: n, days: ordered };
-    // v4: ensure durable per-slot engine state exists for this program (idempotent; preserves state
-    // across regen). The locked set is the source of truth for slot.locked (Lock System).
     const lockedSet = new Set(prefs.lockedSlots);
-    const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
-    const history = await loadHistorySafe();
-    await ensureSlots(program, eprofile, history, (id) => smartSeed(id, profile, history), lockedSet).catch((e) =>
-      // Finding 8: a persisted-state failure must be OBSERVABLE, not silent — otherwise the slot
-      // state silently desyncs from the program and the next read cold-starts with no signal.
-      void track('engine_error', { op: 'ensureSlots', message: String(e) }),
-    );
+    // Legacy only: ensure durable v4 per-slot state exists for this program. The v5 cohort's
+    // exercise state is created lazily by advanceV5 in sessionTargets — generation stays v4-free.
+    if (!isV5) {
+      const eprofile = toEngineProfile({ ...profile, goal, daysPerWeek: n });
+      const history = await loadHistorySafe();
+      await ensureSlots(program, eprofile, history, (id) => smartSeed(id, profile, history), lockedSet).catch((e) =>
+        // Finding 8: a persisted-state failure must be OBSERVABLE, not silent — otherwise the slot
+        // state silently desyncs from the program and the next read cold-starts with no signal.
+        void track('engine_error', { op: 'ensureSlots', message: String(e) }),
+      );
+    }
     // Lock System: annotate each slot's lock by its durable engineSlotId (stable across the overlay +
     // re-cluster). Core / unmapped slots have no engineSlotId and stay unlocked.
     for (const day of program.days) {
