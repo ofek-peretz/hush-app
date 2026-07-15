@@ -19,7 +19,7 @@
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER } from './constants';
-import { exercisesForMuscle, isSwapOnly, type MuscleGroup } from '@/data/exercises';
+import { exercisesForMuscle, isSwapOnly, muscleOf, type MuscleGroup } from '@/data/exercises';
 
 /**
  * A muscle's starting weekly-set target (B-2) divided by this → its day-one exercise COUNT (min 1). At
@@ -44,13 +44,30 @@ export function exerciseCountFor(weeklySets: number): number {
  * compound-before-isolation, then catalogue order. Swap-only advanced movements (S-61 — hanging leg
  * raise, ab wheel) are never GENERATED: anyone may swap into them, but a day-one athlete is not
  * assigned a lift that needs strength she has not shown. Sliced to `count`.
+ *
+ * A standing `substitutes` map (a learned adoption, S-69, or a manual edit-swap) then replaces an
+ * anchor with its chosen lift — but ONLY when the substitute trains the SAME muscle, so a corrupt or
+ * cross-muscle entry can never move a lift into the wrong muscle's day. Duplicates are dropped (the
+ * muscle simply gets one fewer that occurrence; Loop 3 refines volume).
  */
-export function pickExercises(muscle: string, count: number, pinned?: string): string[] {
+export function pickExercises(
+  muscle: string,
+  count: number,
+  pinned?: string,
+  substitutes: Record<string, string> = {},
+): string[] {
   const pool = exercisesForMuscle(muscle as MuscleGroup).filter((e) => !isSwapOnly(e.id));
   const ordered = [...pool].sort((a, b) => (a.tier === 'compound' ? 0 : 1) - (b.tier === 'compound' ? 0 : 1));
   let ids = ordered.map((e) => e.id);
   if (pinned && ids.includes(pinned)) ids = [pinned, ...ids.filter((id) => id !== pinned)];
-  return ids.slice(0, Math.max(1, count));
+  const picked = ids.slice(0, Math.max(1, count));
+  const out: string[] = [];
+  for (const id of picked) {
+    const sub = substitutes[id];
+    const finalId = sub && sub !== id && muscleOf(sub) === muscleOf(id) ? sub : id;
+    if (!out.includes(finalId)) out.push(finalId);
+  }
+  return out;
 }
 
 /** Name a region's days A, B, C… in the order they fall across the week. */
@@ -73,6 +90,7 @@ export function assembleV5DayLists(
   map: BodyMap | undefined,
   days: number,
   pinsByMuscle: Record<string, string> = {},
+  substitutes: Record<string, string> = {},
 ): DayList[] {
   const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
@@ -92,7 +110,7 @@ export function assembleV5DayLists(
 
     // Every exercise this region trains, muscle by muscle (compound-led within a muscle).
     const picks: string[] = [];
-    for (const m of muscles) picks.push(...pickExercises(m, exerciseCountFor(targets[m]), pinsByMuscle[m]));
+    for (const m of muscles) picks.push(...pickExercises(m, exerciseCountFor(targets[m]), pinsByMuscle[m], substitutes));
 
     // Spread across the region's days: k % len puts one on each day first, then round-robins the rest —
     // so a day is a coherent session, and none is lopsided. Deterministic.

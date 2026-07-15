@@ -100,3 +100,22 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
     expect(assembleV5DayLists(map, 5)).toEqual(assembleV5DayLists(map, 5));
   });
 });
+
+describe('Rev 7 · C1 — a standing substitute reshapes the generated programme (S-69 / edit-swap)', () => {
+  const chestOf = (days: { exerciseIds: string[] }[]) => allExercises(days).filter((id) => muscleOf(id) === 'Chest');
+
+  it('replaces an anchor with its same-muscle substitute', () => {
+    const base = chestOf(assembleV5DayLists(undefined, 4));
+    expect(base).toContain('bb_bench_press'); // bench is a natural top chest pick
+    const sub = chestOf(assembleV5DayLists(undefined, 4, {}, { bb_bench_press: 'db_bench_press' }));
+    expect(sub).not.toContain('bb_bench_press'); // the anchor is gone
+    expect(sub).toContain('db_bench_press'); //      replaced by its substitute
+  });
+
+  it('IGNORES a cross-muscle substitute (guard — a squat never lands in the chest day)', () => {
+    // Quads OFF, so a Quads lift can only appear if the bad substitute leaked through.
+    const ids = allExercises(assembleV5DayLists({ Quads: 'off' }, 4, {}, { bb_bench_press: 'bb_back_squat' }));
+    expect(ids).not.toContain('bb_back_squat'); // rejected — wrong muscle
+    expect(ids).toContain('bb_bench_press'); //     the anchor stays
+  });
+});

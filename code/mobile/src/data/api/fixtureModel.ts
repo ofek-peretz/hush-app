@@ -616,7 +616,7 @@ export const fixtureModel: ModelClient = {
     // belt below is only a safety net so a workout always exists, never a path anyone reaches.
     let days: ProgramDay[];
     if (profile.repBand) {
-      let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.pinsByMuscle);
+      let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.pinsByMuscle, prefs.substitutes);
       if (dayLists.length === 0)
         dayLists = (MEN_SPLITS[n] ?? MEN_SPLITS[3]).map((name) => ({ name, region: 'upper' as const, exerciseIds: MEN[name] ?? [] }));
       days = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, goal, profile.age, volume));

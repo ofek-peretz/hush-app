@@ -221,6 +221,11 @@ get two lower-body days — because the volume has to go somewhere. She is never
 > **`DAY_ONE_EX_DIVISOR = 5`** (a normal muscle → 2 exercises, an emphasised one → 3, min 1). Loop 3
 > refines volume from there. A hole-guard means no workout is ever empty even on a very sparse map
 > (a repeat is legal, S-29).
+>
+> **Wiring (2026-07-16, C1):** the assembler now honours the standing-replacement map `prefs.substitutes`
+> (`offeredFor` — a learned adoption S-69, or a manual edit-swap) — but only a **same-muscle** substitute,
+> so a corrupt entry can never move a lift into the wrong muscle's day. This is what makes a swap
+> *persist across regeneration*; before it, a v5 edit-swap was silently lost on the next rebuild.
 
 ---
 
