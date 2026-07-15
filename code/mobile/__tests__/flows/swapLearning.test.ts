@@ -6,6 +6,7 @@
 import { extractOccurrences, foldSessionSwaps } from '@/domain/swapLearning';
 import { emptyLearning, offeredFor } from '@/engine/v5/learnedSwap';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
+import { swapCandidates } from '@/domain/swapPool';
 import { muscleOf } from '@/data/exercises';
 
 // Real catalogue ids so muscle grouping is real: bench-family = Chest, squat-family = Quads.
@@ -85,5 +86,19 @@ describe('Rev 7 · foldSessionSwaps — two sessions adopt, and it is reversible
       .filter((id) => muscleOf(id) === 'Chest');
     expect(chest).toContain(DBBENCH); // the learned choice reaches the programme
     expect(chest).not.toContain(BENCH);
+  });
+});
+
+describe('Rev 7 · S-70 — the swap menu offers the blueprint original first', () => {
+  it('swapping an adopted substitute leads with the original (the re-test)', () => {
+    const prefs = { substitutes: { [BENCH]: DBBENCH }, backups: {} };
+    // The plan now offers DBBENCH (bench was adopted away); the menu must lead with BENCH.
+    const candidates = swapCandidates(DBBENCH, { sessionExerciseIds: [DBBENCH], prefs });
+    expect(candidates[0]?.id).toBe(BENCH);
+  });
+
+  it('a normal (non-substitute) lift is unaffected — no spurious anchor', () => {
+    const candidates = swapCandidates(BENCH, { sessionExerciseIds: [BENCH], prefs: { substitutes: {}, backups: {} } });
+    expect(candidates.every((e) => e.id !== BENCH)).toBe(true); // itself never offered; order is by fidelity
   });
 });

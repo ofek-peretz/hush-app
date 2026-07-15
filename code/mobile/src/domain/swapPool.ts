@@ -123,9 +123,13 @@ function excludedSet(sessionExerciseIds: readonly string[]): Set<string> {
 /**
  * Every admissible substitute for `currentId`, CLOSEST FIRST.
  *
- * The athlete's own standing choices lead when they are admissible — a substitute they have
- * asked for beats anything we would compute — and the rest follow by fidelity. Ties break on
- * catalog order, so the result is fully deterministic and reproducible in a test.
+ * The athlete's own standing choices lead when they are admissible — the rest follow by fidelity.
+ * Ties break on catalog order, so the result is fully deterministic and reproducible in a test.
+ *
+ * Rev 7, S-70 (the learned-swap re-test): when the currently-offered lift is itself a standing
+ * SUBSTITUTE (a learned adoption, S-69, or a manual edit-swap), the blueprint ORIGINAL it replaced is
+ * offered FIRST — so a wrong adoption is always cheap to reverse (swap back to the original twice and
+ * it is restored). The original is recovered by reverse-lookup of `substitutes`.
  */
 export function swapCandidates(currentId: string, ctx: SwapContext): Exercise[] {
   const current = exerciseById(catalogIdFromEngine(currentId));
@@ -138,9 +142,12 @@ export function swapCandidates(currentId: string, ctx: SwapContext): Exercise[] 
     .map((e, i) => ({ e, score: swapScore(current, e), i }))
     .sort((a, b) => a.score - b.score || a.i - b.i);
 
-  // The athlete's standing substitute, then their standing backup — but only if they are still
-  // admissible (a preference never resurrects a lift they have already done today).
-  const pinnedIds = [ctx.prefs?.substitutes?.[current.id], ctx.prefs?.backups?.[current.id]].filter(
+  // The blueprint ORIGINAL this offered lift replaced (S-70), then the athlete's standing substitute,
+  // then their standing backup — each only if still admissible (a preference never resurrects a lift
+  // she has already done today).
+  const subs = ctx.prefs?.substitutes ?? {};
+  const anchorId = Object.keys(subs).find((k) => subs[k] === current.id); // the lift `current` replaced
+  const pinnedIds = [anchorId, subs[current.id], ctx.prefs?.backups?.[current.id]].filter(
     (id): id is string => !!id,
   );
   const pinned: Exercise[] = [];

@@ -879,10 +879,12 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > through the back door. **S-68…S-70 are now WIRED (2026-07-16):** the assembler honours
 > `prefs.substitutes` (C1); `domain/swapLearning` extracts occurrences from a finished session
 > (conservative — a clean single swap per muscle only) and folds them into `prefs.substitutes` +
-> `swapPending`, in `finishSession`, v5 cohort only (C2/C3). Still open: **S-70's swap-menu ordering**
-> (offer the original first — a UX wiring), **S-71/S-72** (they need rotation to reach the programme,
-> task E), and **S-73** (deleting the edit screen + pin/swap buttons — held until the learning is
-> device-validated, so the athlete never loses her only lever mid-flight).)*
+> `swapPending`, in `finishSession`, v5 cohort only (C2/C3). **S-70 is wired (C4):** the swap menu
+> (`swapCandidates`) offers the blueprint ORIGINAL first when the current lift is an adopted substitute
+> (reverse-lookup of `substitutes`), so a wrong adoption is always cheap to reverse. Still open:
+> **S-71/S-72** (they need rotation to reach the programme, task E), and **S-73** (deleting the edit
+> screen + pin/swap buttons — held until the learning is device-validated, so the athlete never loses
+> her only lever mid-flight).)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|
