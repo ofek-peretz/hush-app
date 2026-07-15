@@ -56,6 +56,34 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     expect(t['bb_bench_press'].weight!).toBeGreaterThan(before!);
   });
 
+  it('a session in the NEXT week is not folded into the week that just closed (no double-count)', async () => {
+    // Week 1 (Jul 15): a full clear at 60. Next week (Jul 19): a MISS at 60. The Jul 20 roll folds
+    // ONLY week 1 → progress (up). If the boundary were wrong, the miss would fold in too → hold.
+    const wk1 = new Date('2026-07-15T10:00:00Z').toISOString();
+    const wk2 = new Date('2026-07-19T10:00:00Z').toISOString(); // after Sat Jul 18 20:30 → next week
+    const history: Session[] = [
+      session(wk2, [set('bb_bench_press', 60, 5)]), // next week's miss (newest first)
+      session(wk1, [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8)]),
+    ];
+    await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // anchor Sat Jul 11 20:30
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // roll for week ending Sat Jul 18 20:30
+    const t = await currentV5Targets(history);
+    expect(t['bb_bench_press'].weight!).toBeGreaterThan(60); // only week 1's full clear counted
+  });
+
+  it('S-43 · changing T recomputes the load from her history at the new Tlo', async () => {
+    // She did 70×8 and 60×12. At band 8-10 (Tlo 8) → load 70 (heaviest at ≥8). At 12-15 (Tlo 12) →
+    // load 60 (the heaviest load she performed ≥12 reps at). No conversion formula — her own history.
+    const history: Session[] = [session('2026-07-10T10:00:00Z', [set('bb_bench_press', 70, 8), set('bb_bench_press', 60, 12)])];
+    await ensureExercisesV5(['bb_bench_press'], bandFor('8-10'), history, seed);
+    expect((await currentV5Targets(history))['bb_bench_press'].weight).toBe(70);
+    await ensureExercisesV5(['bb_bench_press'], bandFor('12-15'), history, seed);
+    const t = await currentV5Targets(history);
+    expect(t['bb_bench_press'].weight).toBe(60);
+    expect(t['bb_bench_press'].reps).toBe(12); // Tlo now 12
+  });
+
   it('S-24 · a mixed week (one set short) holds the load', async () => {
     const history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 8), set('bb_bench_press', 60, 6)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);

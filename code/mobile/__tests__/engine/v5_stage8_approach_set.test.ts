@@ -35,6 +35,18 @@ describe('Stage 8 · the approach set is excluded from the fold', () => {
     expect(t['bb_bench_press'].weight!).toBeGreaterThan(60);
   });
 
+  it('S-38 · after a long layoff (aged out of the recency window) the next set is an approach set', async () => {
+    const performedAt = new Date('2026-06-01T10:00:00Z');
+    const history: Session[] = [session(performedAt.toISOString(), [set(80, 8), set(80, 8)])];
+    await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
+    // 10 days later — within the window → NOT an approach set.
+    const soon = performedAt.getTime() + 10 * 86400000;
+    expect((await currentV5Targets(history, soon))['bb_bench_press'].isApproach).toBe(false);
+    // 40 days later — aged out (> 28-day F-8 window) → approach set re-measures her (S-38).
+    const later = performedAt.getTime() + 40 * 86400000;
+    expect((await currentV5Targets(history, later))['bb_bench_press'].isApproach).toBe(true);
+  });
+
   it('a week with ONLY an approach set banks no decision (nothing but a measurement happened)', async () => {
     const history: Session[] = [session(WEEK1, [set(40, 20, true)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);

@@ -751,11 +751,11 @@ export const fixtureModel: ModelClient = {
 
     // Engine v5 (gated on a declared rep band T): when she has been through v5 onboarding, the v5
     // engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It advances
-    // at the same weekly roll and its prescription REPLACES v4's for every exercise it manages;
-    // unmanaged / swap-only exercises still fall back to the seed. Older profiles with no declared
-    // band stay entirely on v4 (this is the safe, opt-in cohort swap; no migration — S-58). The v4
-    // advance above still runs so the Weekly Update narration keeps working until it, too, moves to
-    // v5 (the next step). v4 and v5 fold the same history with the same DP logic, so they agree.
+    // at the weekly roll and its prescription REPLACES v4's for every exercise it manages; unmanaged
+    // / swap-only exercises fall back to the seed. Older profiles with no declared band stay entirely
+    // on v4 (the safe, opt-in cohort swap; no migration — S-58). For a v5 profile the v4 advance
+    // above is skipped (gated), and the Weekly Update reads from v5 too (domain/weeklyUpdate) — so a
+    // v5 athlete's load, progression and narration all come from one engine.
     const band = profile.repBand ? bandFor(profile.repBand) : null;
     let v5targets: Record<string, V5Target> = {};
     if (band && program) {

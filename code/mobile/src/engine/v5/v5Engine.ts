@@ -20,7 +20,7 @@ import type { Explanation, ExplanationLine } from '@/engine/v4/types';
 import { decideExercise } from './loop2';
 import { snapDown } from './grid';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
-import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
+import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN } from './constants';
 
 export type SeedFor = (exerciseId: string) => number | null;
 
@@ -88,7 +88,15 @@ export async function ensureExercisesV5(exerciseIds: string[], band: Band, histo
   const ex = asStates(state);
   for (const id of exerciseIds) {
     if (!ex[id]) ex[id] = initExercise(id, band, history, seedFor);
-    else if (ex[id].band.lo !== band.lo || ex[id].band.hi !== band.hi) ex[id] = { ...ex[id], band }; // S-43
+    else if (ex[id].band.lo !== band.lo || ex[id].band.hi !== band.hi) {
+      // S-43 (change T): recompute the load from her history at the NEW Tlo — "the load at which she
+      // performed ≥ the new T." If she has no history at the new band, keep the current load and set
+      // 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+      const meta = metaWithGrid(id, history);
+      const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, band, history);
+      const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
+      ex[id] = { ...ex[id], band, load };
+    }
   }
   await save(state);
   return state;
@@ -115,9 +123,15 @@ export async function advanceV5(
   const rolled = state.lastAdvanceWeekOpen != null && weekOpen > state.lastAdvanceWeekOpen;
 
   if (rolled) {
-    // Sessions since the last roll = this week. (History is newest-first.)
+    // The week that just CLOSED = sessions in [previous anchor, this week-open). The upper bound is
+    // essential: sessions on/after `weekOpen` belong to the CURRENT (in-progress) week and are folded
+    // at the NEXT roll — without it, any session after the boundary would be folded now AND again next
+    // roll (a double-count), and two calendar weeks could collapse into one decision.
     const since = state.lastAdvanceWeekOpen!;
-    const week = history.filter((s) => Date.parse(s.startedAt) >= since);
+    const week = history.filter((s) => {
+      const t = Date.parse(s.startedAt);
+      return t >= since && t < weekOpen;
+    });
     const weekIndex = state.weeksProcessed ?? 0;
     const changes: NonNullable<EngineV5State['lastUpdate']>['changes'] = [];
     for (const id of exerciseIds) {
@@ -168,22 +182,39 @@ export interface V5Target {
   isApproach: boolean;
 }
 
-/** The current per-exercise prescription. An exercise with no history yet (loaded) is an approach set. */
-export async function currentV5Targets(history: Session[]): Promise<Record<string, V5Target>> {
+/** The newest ms-epoch at which a NON-approach working set of an exercise was performed, or null. */
+function lastPerformedMs(exerciseId: string, sessions: Session[]): number | null {
+  let newest: number | null = null;
+  for (const s of sessions) {
+    if (!s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null)) continue;
+    const t = Date.parse(s.startedAt);
+    if (Number.isFinite(t) && (newest == null || t > newest)) newest = t;
+  }
+  return newest;
+}
+
+/**
+ * The current per-exercise prescription. A loaded lift with no completed set inside the recency
+ * window (F-8, TIME) is an approach set (S-60): never performed (S-8) OR aged out by a long layoff
+ * (S-38). Time-based so a gap actually pushes her last set out of the window — a count window never
+ * could. `nowMs` injectable for tests.
+ */
+export async function currentV5Targets(history: Session[], nowMs: number = Date.now()): Promise<Record<string, V5Target>> {
   const state = await load();
   const ex = asStates(state);
   const out: Record<string, V5Target> = {};
+  const windowMs = RECENCY_WINDOW_DAYS * 86400000;
   for (const id of Object.keys(ex)) {
     const st = ex[id];
     const meta = exerciseMeta(id);
-    const hasRecent = !meta.bodyweight && st.history.length > 0;
-    const performedEver = history.some((s) => s.sets.some((l) => l.exerciseId === id && l.actualWeight != null));
+    const last = lastPerformedMs(id, history);
+    const withinWindow = last != null && nowMs - last <= windowMs;
     out[id] = {
       weight: st.load,
       reps: st.band.lo,
       bandHi: st.band.hi,
       sets: st.sets,
-      isApproach: !meta.bodyweight && !hasRecent && !performedEver,
+      isApproach: !meta.bodyweight && !withinWindow,
     };
   }
   return out;

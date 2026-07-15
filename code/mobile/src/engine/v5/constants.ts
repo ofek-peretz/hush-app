@@ -33,6 +33,15 @@ export const EMPHASIS_BUDGET = 2;
 export const RECENCY_WINDOW_SESSIONS = 12;
 
 /**
+ * F-8 (time form) — the recency window as DAYS. A completed set older than this is "aged out": the
+ * approach set (S-60) fires when a lift has no completed set within this window, which is what makes
+ * a long layoff (S-38) re-measure her rather than load her cold on a stale number. Time-based on
+ * purpose — a count-based window can never let a gap push a set out (register Rev 6). Applied at the
+ * FAÇADE (which has session timestamps); the pure core stays wall-clock-free (I-25).
+ */
+export const RECENCY_WINDOW_DAYS = 28;
+
+/**
  * F-11 — the rest-band width (seconds). Two sets are "like-for-like" for the reps-per-rung fit only
  * when their `restBeforeS` differ by no more than this (L3). A set whose rest is unknown, or which
  * sits outside the band relative to the set it would be compared with, is excluded from the fit.
