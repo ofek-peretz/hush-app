@@ -42,7 +42,7 @@ it does not ship.
 | **L3** | **Like for like.** A set is only comparable to a set taken under similar conditions. `restBeforeS` is therefore recorded on every set. Without it, every rep comparison is corrupt. |
 | **L4** | **A missing fact is asked for once — never guessed, and never asked twice.** The answer becomes a durable declared fact. |
 | **L5** | **Constants.** Forbidden when a constant stands in for a fact we could measure. Allowed *only* to define the shape of the product — and then declared out loud and counted (Part 6). |
-| **L6** | **Ownership.** The **engine** owns: load, volume, exercise selection, workout structure. The **athlete** owns: the rep target (**T**), rest, the body map, and two vetoes (edit-swap, pin). **A pin binds *which* exercise trains a muscle — never *whether* it is trained, and never how many minutes exist** (S-59). |
+| **L6** | **Ownership.** The **engine** owns: load, volume, exercise selection, workout structure. The **athlete** owns: the rep target (**T** — **per-muscle** since Rev 7, Part 9 §A), rest, the body map, and exercise selection. *(Rev 7: selection is expressed through the **in-workout swap**, LEARNED into a standing choice at K=2, S-69; the programme-edit swap and the pin **button** are deleted, S-73. The pin as a **fact** survives — earned by resisting rotation, S-71.)* **A pin binds *which* exercise trains a muscle — never *whether* it is trained, and never how many minutes exist** (S-59). |
 | **L7** | **No weekly boundary.** A decision is told at the moment it is born — the end of the set, or the end of the workout. Never on a schedule. |
 | **L8** | **The engine obeys and states the cost.** It never argues, moralises, nags, or claims a reason it did not measure. |
 | **L9** | **A question never stands between the athlete and her workout.** When the engine needs an answer it cannot derive, it assembles the best workout it can, **runs it**, and leaves the question open until she answers. Training is never blocked on a prompt. |
@@ -78,12 +78,13 @@ set. A tripwire test asserts no third kind exists.
 | Fact | Where |
 |---|---|
 | Sex, age, height, bodyweight | Onboarding / Profile |
-| Days per week · time budget per workout | Onboarding / Profile |
-| **T — the rep band** | Onboarding: *"How many reps do you like?"* → 6-8 / **8-10** / 10-12 / 12-15. **The band she picks IS the target** (see below). |
-| **The body map** — every muscle is `off` / `normal` / `emphasis` | Onboarding, permanently editable |
-| Pins · swapped-away exercises | Programme edit |
+| Days per week | Onboarding |
+| Time budget per workout | **Rev 7: NOT asked — defaults to a 60-min ceiling, edited in Settings** (Part 9 §A) |
+| **T — the rep band, PER MUSCLE** (Rev 7, Part 9 §A) | Default **8-10** for every muscle; **NOT asked in onboarding** — edited per-muscle in the body map. Each exercise reads its **primary muscle's** band. **The band she has IS the target** (see below). |
+| **The body map** — every muscle is `off` / `normal` / `emphasis` | Onboarding, permanently editable *(also holds the per-muscle T above)* |
+| Exercise selection — **learned** from repeated in-workout swaps (Rev 7, S-69); a stall-resisting swap-back earns a "leave it" (S-71) | In the workout *(the programme-edit screen is deleted, S-73)* |
 
-*(The **goal** question is deleted. There is one goal: hypertrophy.)*
+*(The **goal** question is deleted. There is one goal: hypertrophy. **Experience** is deleted too — Rev 7, Part 9 §A: the approach set measures her, so a self-report never touches a load.)*
 
 **What "T" means everywhere in this document — the band she chose is a floor and a ceiling, and
 nothing in between is invented (Revision 4).** She picks `Tlo–Thi` (e.g. 8–10):
@@ -103,6 +104,17 @@ register says "T" as shorthand, it means `Tlo` — the target — unless it says
 floor (`T ≥ 10`). It rested on *"small muscles, small weights"* — **an opinion, not a fact** — and
 the evidence says the rep band is a free parameter for hypertrophy anyway. **She owns T. There is no
 silent override, so there is nothing to disclose.**
+
+> **Rev 7 — T is PER MUSCLE (Part 9 §A).** Every mechanic above is unchanged; only the *source* of a
+> band moves. Each exercise reads the band of its **primary muscle** (`exercise.muscle` — the single
+> field volume, swap-scoping and display already key on, so no new coupling: turning Chest off never
+> touches Shoulders). Default **8-10** for every muscle; she may raise a single muscle to, say, 12-15
+> in the map (joint-friendly higher-rep work) and only that muscle's exercises change (S-43 per
+> muscle). It is **not asked in onboarding** — a set-once preference that lives in the body map.
+> **Rep band = PREFERENCE. A specific exercise that hurts is a *swap* (S-69); a whole muscle you can't
+> train is *off* (S-2) — not the rep band's job.** A learned rep-band from behaviour was designed and
+> **rejected** (the "high reps at a flat load" signal collides with the S-28 coarse-machine rep-climb,
+> and has no natural re-test surface).
 
 ### Optional (Apple Watch)
 Heart rate during the session is **recorded and displayed, and is NEVER an engine input** — exactly
@@ -200,6 +212,16 @@ Constraints, in strict priority:
 **Session structure is an output, not an input.** Mark Glutes + Quads on a 3-day programme and you
 get two lower-body days — because the volume has to go somewhere. She is never asked to pick a split.
 
+> **Rev 7 — assembly is WIRED, and the one number it owns.** `assembleV5DayLists` (built + tested)
+> turns the map into the week's day-lists (a region per day + its exercises); the existing generator
+> then builds each day, so ordering / station-clustering / the time cap are shared verbatim.
+> `generateProgram` runs this for the v5 cohort (a declared band); the split survives for legacy only.
+> The register fixes the CONSTRAINTS above; the day-one **density** — how a muscle's starting
+> weekly-set target becomes an exercise COUNT — is the integration layer's, declared as a bootstrap:
+> **`DAY_ONE_EX_DIVISOR = 5`** (a normal muscle → 2 exercises, an emphasised one → 3, min 1). Loop 3
+> refines volume from there. A hole-guard means no workout is ever empty even on a very sparse map
+> (a repeat is legal, S-29).
+
 ---
 
 ## Part 4 — THE SITUATION REGISTER
@@ -224,7 +246,9 @@ one exercise (S-63). **The budget is 2 marks** (F-4) — emphasis is zero-sum be
 his row has already gone up — progression is keyed to the *workout*, not the week. **No engine edge
 case exists**, because the engine has no weekly boundary to fall off.
 
-**S-6 · She picks T.** It applies to every exercise. No override, no floor, no disclosure needed.
+**S-6 · She has a rep band T.** *(Rev 7, Part 9 §A: T is now **per-muscle**, default 8-10, **not asked
+in onboarding** — edited in the body map. Each exercise reads its primary muscle's band.)* No override,
+no floor, no disclosure needed.
 
 **S-7 · A small time budget.** The ceiling drops; assembly re-runs. Exercises are removed — sets are
 never shaved below 3 (S-35).
@@ -310,6 +334,9 @@ is displayed, never an input — Part 1.)*
 **S-20 · The station is taken → in-workout swap.** A **backup, not a preference.** It declares
 nothing, blacklists nothing — and because progression is exercise-keyed, **the backup already knows
 her number.** Zero progression cost. *(In v4 this costs a full slot reset. That is the bug it fixes.)*
+**Rev 7 (S-68/S-69): a SINGLE in-workout swap still declares nothing — but the SAME swap repeated
+(twice consecutive, K=2) becomes a standing replacement, and the original is offered first ever after
+(S-70). One swap = a backup; two = a preference.**
 
 **S-21 · She skips an exercise mid-workout.** No consequence, no inference, no question. It produced
 no fact, so it holds. *(If an athlete ever wants to skip a lift because she dislikes it, we have
@@ -383,12 +410,15 @@ problem** — which is how you know it earns its place.
 **S-29 · The same exercise in two workouts in one week.** **One progression, fed by both sessions** —
 automatic under exercise-keying. The `canonicalEngineId` unification hack is deleted.
 
-**S-30 · A pin.** Never rotated, never engine-swapped. Pinned **and** stalled → the engine obeys and
-says so: it still offers the back-off and re-climb (S-25), but **it will not take the lift away.**
+**S-30 · A pin.** *(Rev 7: the pin BUTTON is deleted, S-73; the pin as a FACT survives — earned by
+resisting the engine's rotation twice, S-71.)* A pinned lift is never rotated, never engine-swapped.
+Pinned **and** stalled → the engine obeys and says so: it still offers the back-off and re-climb
+(S-25), but **it will not take the lift away.**
 
-**S-31 · She swaps an exercise in the PROGRAMME EDIT screen.** **A declared refusal.** The old lift
-leaves her pool **permanently** — no rotation, no assembly, nothing can bring it back.
-*(Distinct from S-20, the in-workout swap, which declares nothing.)*
+**S-31 · ~~She swaps an exercise in the PROGRAMME EDIT screen.~~ DELETED (Rev 7, S-73).** There is no
+programme-edit screen. Its job — a permanent, declared refusal — is now done by the **learned**
+standing replacement (S-69, from a repeated in-workout swap) and by the body map (turning a muscle
+off, S-2). *(The single in-workout swap, S-20, still declares nothing.)*
 
 ---
 
@@ -640,6 +670,10 @@ instrument**, and because it closes the one real safety hole in this document:
 
 **S-62 · Her pool for a muscle empties out** — she has permanently swapped away (S-31) every exercise
 we have for it.
+> **Rev 7 — amended by S-74:** with the declared edit-swap deleted (S-31), a pool no longer empties by
+> refusal; she always performs *something* for the muscle. So the "want this muscle off?" question is
+> reached only through the body map (S-56), never through swaps. The reasoning below still holds — the
+> map and the swap converge on the same fact — it is just the map that now carries it.
 **This is not a pool problem. It is her telling us something.** The engine asks the S-56 question:
 *"You've turned down every chest exercise I have. Do you want chest off?"*
 **The map and the swap converge on the same fact** — which is how you know the model is right.
@@ -690,7 +724,10 @@ v4 is not tuned. It is replaced.
 (`injury_flag`, `DELOAD_LOAD`, `DELOAD_SETS`) · the adherence gate (`ADHERENCE_MIN` — dead code
 today) · the stall lever ladder (`vol`/`load`/`range`, `RANGE_ALTERNATE`, `PATIENT_PROBE_EVERY`) ·
 the weekly rollover (`bucketOpenMs`, `firstBucketOpen`, `displayWeekNumber`, `lastAdvanceWeekOpen`) ·
-the **3-week calendar rotation** · `MEN_SPLITS` / `WOMEN_SPLITS` · the goal fork.
+the **3-week calendar rotation** · `MEN_SPLITS` / `WOMEN_SPLITS` (for the v5 cohort — the split
+survives for legacy only) · the goal fork · **(Rev 7) the programme-edit SCREEN + the pin/swap
+BUTTONS (S-73) · the declared edit-swap (S-31) · the `experience` input · the onboarding rep-band and
+minutes questions (defaults instead — Part 9 §A).**
 
 **Metrics:** `classifyTrend` · `progressMetric` · `TREND_BAND` · e1RM as a decision input (Epley
 survives for the Progress screen only) · the implied-e1RM rail (`RAIL_HEADROOM`).
@@ -722,6 +759,7 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 | **B-5** | **Reps-per-rung, before she has `F-12` like-for-like pairs.** Not a guessed slope — a correction moves **one cautious rung**, tested by the next set (so no invented slope moves iron on day one; a real rung does). | Her own measured load↔rep slope (Loop 1) |
 | **B-6** | **The starting equipment increment per class** (barbell/dumbbell/machine) — the smallest step assumed **before she has touched the equipment**, so day-one loads are loadable | The distinct loads she actually performs (`observedLoads`) — the real rungs replace the assumed step |
 | **B-7** | ~~median gap before a lift's 2nd performance~~ — **RETIRED (Rev 6)** with the gap trigger it served (F-6). The approach set now fires on one condition only: no set in the recency window (S-60). | — |
+| **B-8** | **The day-one exercise COUNT per muscle** (Rev 7) — `DAY_ONE_EX_DIVISOR = 5`: a muscle's starting weekly-set target ÷ 5 → its exercise count (a normal muscle → 2, an emphasised one → 3, min 1). The integration layer's number: the register fixes the assembly constraints (Part 3), but not the sets→exercises granularity. | Loop 3's earned / cut volume (S-32/34), within weeks |
 
 > **B-4 was hiding in plain sight.** It lives in the code **today** as `COMPOUND_SET_MIN` /
 > `ISOLATION_SET_MIN` — two numbers that decide how many exercises an athlete gets, that nobody ever
@@ -746,6 +784,10 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 | **F-13** | The **reps-per-rung estimator: Theil–Sen** (the median of all pairwise slopes) — **one named algorithm**, not "a robust fit," so identical inputs yield an identical slope (I-24). Likewise `N`'s percentile is the **nearest-rank** method — one rule, stable on the small samples where it matters. | it **fixes** the estimator, not a value |
 
 **Six bootstraps and eight form constants active (B-7, F-3, F-5, F-6, F-7, F-10 retired) — every one declared. Thirteen guess-constants are gone.**
+*(Rev 7 adds two, both declared and neither a load-mover: **F-14** = K = 2, the learned-swap adoption
+threshold — an evidence gate, F-12/N family; and **B-8** = `DAY_ONE_EX_DIVISOR` = 5, the day-one
+exercise-count-per-muscle bootstrap, overwritten by Loop 3's earned/cut volume within weeks. **Seven
+bootstraps, nine form constants now** — no invented number still decides a LOAD.)*
 
 > **Rev 6 was the audit that CUT.** The founder saw the ledger swelling back toward the size we
 > started at and asked the right question: is this facts, or feature-creep? Three whole features and
@@ -824,28 +866,32 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > **Every situation S-n gets a test named for it** — `s22_median_anchor.test.ts`,
 > `s15_fat_finger_cannot_move_more_than_one_rung.test.ts`,
 > `s60_approach_set_is_not_a_working_set.test.ts`.
-> **Coverage is a count: 64 situations, 64 tests, green — or we are not done.**
+> **Coverage is a count: 71 situations, 71 tests, green — or we are not done.**
 > *(S-23 absorbed into S-22 (Rev 3); S-19 and S-26 deleted as feature-creep (Rev 6); S-67 added
-> (Rev 5) — leaving 64 of the S-1…S-67 numbering. Rev 5 added **S-67** — the assisted-machine sign-flip tripwire — and retired
-> the F-7 constant by moving bodyweight graduation to her own `Thi` (S-52). Tests carry the two
-> tripwires (S-54 warm-ups, S-67 assisted) that fail the build if a new input reaches progression
-> through the back door.)*
+> (Rev 5) — leaving 64 of the S-1…S-67 numbering. **Rev 7 added S-68…S-74** — learned exercise
+> selection (Part 9 §B) — for 71. Tests carry the tripwires (S-54 warm-ups, S-67 assisted, and the
+> Rev 7 no-secondary-muscle-coupling tripwire) that fail the build if a new input reaches progression
+> through the back door. Rev 7's pure cores ship with their own tests — `per-muscle T`, the
+> `learnedSwap` reducer, and `programAssembly` — with the S-68…S-70 logic green; S-71/S-72 land with
+> the learned-swap WIRING, which is the one Rev 7 situation-set not yet connected.)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|
 | **0** | **The fact substrate** — `restBeforeS` on every set, phone **and** watch | S-17, S-18, S-54, S-58 | ✅ **BUILT + WIRED** |
 | **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-60, S-61, S-67 | ✅ **BUILT** |
 | **2** | **The set loop, live** — `sessionStore` **and the watch** together | S-11…S-13, S-60 | ✅ **WIRED** |
-| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ built · ⛔ NOT wired (needs assembler) |
-| **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | T ✅ wired · map/assembler ✅ built, ⛔ NOT wired (needs onboarding screen) |
+| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ built · ⛔ Loop 3 volume-over-time NOT wired into regeneration (the assembler now sets the day-one shape; growing/trimming per occurrence is a Rev 7 follow-up) |
+| **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | ✅ **WIRED (Rev 7)** — per-muscle T live; map-driven `generateProgram` live for the v5 cohort; the onboarding body-map screen sets `bodyMap`+`repBand` |
 | **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) |
-| **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | ⛔ blocked (legacy cohort still exists until onboarding sets `repBand`) |
+| **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | ⛔ blocked — **new users are v5 (Rev 7)**, but existing v4 users remain until the founder recreates the testers (S-58); also the learned-swap UI deletion (S-73) must land first |
 
-*(Status 2026-07-15: gated on `profile.repBand` — the v5 cohort. Everything CONNECTED runs for that
-cohort through `fixtureModel.sessionTargets` + `sessionStore` + `domain/weeklyUpdate`. The ASSEMBLY
-half (stage 3–4 volume/map) is built + tested but not wired, blocked on the body-map onboarding
-screen; and no user is on the v5 cohort yet because onboarding does not set `repBand` — see the
-memory `engine-v5-open-tasks-2026-07-15`.)*
+*(Status **2026-07-16 (Rev 7)**: gated on `profile.repBand` — and onboarding now SETS it, so **every
+new athlete is on v5**. Live for that cohort: map-driven `generateProgram`, per-muscle T,
+`sessionStore`, the weekly mirror. Existing users stay v4 (no migration, S-58). Still NOT wired: the
+learned-swap occurrence-recording + UI deletion (S-68…S-74 §B), Loop 3 volume-over-time into
+regeneration, graduation/rotation reaching the programme (S-52/S-25.3), and the small clean-ups
+(`experience` removal, `workoutMinutes` → the time cap). See the memory
+`engine-v5-open-tasks-2026-07-15`.)*
 
 **Integration is never deferred.** Stages 0 and 2 are phone+watch by definition. The engine is never
 allowed to be "done but unconnected" — **that is exactly how v4 ended up with four dead branches
@@ -990,8 +1036,8 @@ Each new situation gets its test — `s69_two_swaps_adopt`, `s70_original_offere
 asserting no exercise is credited to more than one muscle (guarding the no-secondary-coupling
 invariant verified above). **Green, or we are not done** — the same standard as every S-n.
 
-> **Inline reconciliation still owed (a careful follow-up pass, not this edit):** Part 1's T table,
-> L6, S-6, S-20, S-30, S-31, S-62, Part 5 (deletions), Part 6 (the F-count), and Part 7 (the
-> situation count + stage table) each carry a line this revision amends or supersedes. Part 9 is the
-> authority until those inline mentions are updated; nothing in Parts 0–8 that Part 9 touches should
-> be read as current where the two disagree.
+> **Inline reconciliation DONE (2026-07-16).** L6, Part 1's declared-facts table + the T section, S-6,
+> S-20, S-30, S-31, S-62, Part 3 (assembly wired + the density bootstrap), Part 5 (deletions), Part 6
+> (F-14 + B-8, the counts), and Part 7 (71 situations + the stage table + the status note) now all read
+> Rev 7-current. Part 9 remains the single deep source for §A (per-muscle T, the dropped questions) and
+> §B (learned selection); the inline mentions point back here.
