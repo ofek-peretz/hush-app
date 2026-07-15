@@ -118,4 +118,18 @@ describe('Rev 7 · C1 — a standing substitute reshapes the generated programme
     expect(ids).not.toContain('bb_back_squat'); // rejected — wrong muscle
     expect(ids).toContain('bb_bench_press'); //     the anchor stays
   });
+
+  it('follows a substitute CHAIN to the final standing lift (a swap that later graduated/rotated)', () => {
+    const subs = { bb_bench_press: 'db_bench_press', db_bench_press: 'incline_db_press' };
+    const chest = chestOf(assembleV5DayLists(undefined, 4, {}, subs));
+    expect(chest).toContain('incline_db_press'); // the end of the chain stands
+    expect(chest).not.toContain('bb_bench_press');
+    expect(chest).not.toContain('db_bench_press');
+  });
+
+  it('a cyclic substitute chain terminates (no infinite loop)', () => {
+    const subs = { bb_bench_press: 'db_bench_press', db_bench_press: 'bb_bench_press' };
+    const chest = chestOf(assembleV5DayLists(undefined, 4, {}, subs));
+    expect(chest).toContain('db_bench_press'); // bench → db_bench → (bench seen) stops
+  });
 });

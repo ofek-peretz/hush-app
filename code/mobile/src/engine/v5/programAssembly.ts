@@ -63,11 +63,30 @@ export function pickExercises(
   const picked = ids.slice(0, Math.max(1, count));
   const out: string[] = [];
   for (const id of picked) {
-    const sub = substitutes[id];
-    const finalId = sub && sub !== id && muscleOf(sub) === muscleOf(id) ? sub : id;
+    const finalId = resolveChain(id, substitutes);
     if (!out.includes(finalId)) out.push(finalId);
   }
   return out;
+}
+
+/**
+ * Follow a substitute chain to the lift that currently stands for an anchor: anchor → … → current.
+ * SAME-MUSCLE at every hop (a corrupt / cross-muscle entry stops the walk and never moves a lift into
+ * the wrong day), with a cycle guard. A single substitute is just a chain of length one. Chains arise
+ * when a learned swap later graduates or rotates — e.g. a swapped-in `knee_push_up` graduating to
+ * `push_up` (S-52) leaves `bench → knee_push_up → push_up`.
+ */
+function resolveChain(id: string, substitutes: Record<string, string>): string {
+  const muscle = muscleOf(id);
+  const seen = new Set<string>([id]);
+  let cur = id;
+  while (substitutes[cur]) {
+    const next = substitutes[cur];
+    if (seen.has(next) || muscleOf(next) !== muscle) break; // cycle, or cross-muscle → stop the walk
+    seen.add(next);
+    cur = next;
+  }
+  return cur;
 }
 
 /** Name a region's days A, B, C… in the order they fall across the week. */

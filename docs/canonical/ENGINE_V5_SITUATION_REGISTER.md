@@ -881,10 +881,18 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > (conservative — a clean single swap per muscle only) and folds them into `prefs.substitutes` +
 > `swapPending`, in `finishSession`, v5 cohort only (C2/C3). **S-70 is wired (C4):** the swap menu
 > (`swapCandidates`) offers the blueprint ORIGINAL first when the current lift is an adopted substitute
-> (reverse-lookup of `substitutes`), so a wrong adoption is always cheap to reverse. Still open:
-> **S-71/S-72** (they need rotation to reach the programme, task E), and **S-73** (deleting the edit
-> screen + pin/swap buttons — held until the learning is device-validated, so the athlete never loses
-> her only lever mid-flight).)*
+> (reverse-lookup of `substitutes`), so a wrong adoption is always cheap to reverse. **GRADUATION
+> (S-52) is wired (task E, 2026-07-16):** `advanceV5` surfaces a wanted change per lift; `domain/
+> engineChanges` resolves the target (graduate → the bodyweight `harder` pointer; the top of a ladder
+> holds, S-53); `fixtureModel` writes it to `substitutes` (an ENGINE change, S-72 — straight to
+> substitutes, never through the learned counter), and `pickExercises` follows a substitute CHAIN
+> (bench → knee-push-up → push-up), same-muscle-guarded + cycle-guarded, so a graduated swap resolves.
+> Still open: **ROTATION (S-25.3) enactment is DEFERRED** — `advanceV5` keeps `rotationAvailable`
+> false, because S-25 backs off and re-climbs FIRST and rotates only after that persistently fails, a
+> trigger not yet modelled (enabling rotate on the first no-full-clear stall would skip the back-off
+> and contradict S-25's order); the target resolver + enactment are built and tested, waiting on that
+> trigger. **S-71/S-72** await rotation. **S-73** (deleting the edit screen + pin/swap buttons) is held
+> until the learning is device-validated, so the athlete never loses her only lever mid-flight.)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|

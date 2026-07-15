@@ -133,7 +133,7 @@ export async function advanceV5(
   seedFor: SeedFor,
   nowMs: number = Date.now(),
   bucketOpenMs?: number,
-): Promise<void> {
+): Promise<Record<string, 'graduate' | 'rotate'>> {
   void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
   const ex = asStates(state);
@@ -145,9 +145,13 @@ export async function advanceV5(
   const unfolded = history
     .filter((s) => { const t = Date.parse(s.startedAt); return Number.isFinite(t) && t > lastFolded; })
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
-  if (unfolded.length === 0) { await save(state); return; }
+  if (unfolded.length === 0) { await save(state); return {}; }
 
   const log = state.changeLog ?? [];
+  // Engine-initiated exercise changes wanted from the LATEST fold per lift (S-52 graduate / S-25.2
+  // rotate). The integration layer resolves the target and enacts it (writes substitutes). A later
+  // progress/hold clears it — she is climbing again, so no change is wanted any more.
+  const wantsChange: Record<string, 'graduate' | 'rotate'> = {};
   for (const sess of unfolded) {
     const at = Date.parse(sess.startedAt);
     for (const id of Object.keys(ex)) {
@@ -156,10 +160,17 @@ export async function advanceV5(
       const meta = metaWithGrid(id, history);
       const sets = setPerfs(id, [sess]); // THIS occurrence's working sets
       if (sets.length === 0) continue; // this lift was not trained this workout → holds
+      // rotationAvailable stays FALSE: S-25 backs off and re-climbs FIRST (one rung down when there is
+      // no full-clear load), and rotates only AFTER that persistently fails — a trigger not yet
+      // modelled, so ROTATION (S-25.3) is deferred. GRADUATION (S-52) does not depend on it, so it is
+      // surfaced and enacted here. Enabling rotate eagerly (on the first no-full-clear stall) would
+      // skip the back-off step and contradict S-25's order.
       const out = decideExercise({ state: st, session: sets, meta });
+      if (out.wantsChange) wantsChange[id] = out.wantsChange;
+      else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
       // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
       // delta direction (explainChange), never the decision label. hold/ambiguous/approach say
-      // nothing (R7/S-16). Graduation/rotation are decided but not yet enacted (assembler).
+      // nothing (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
       if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
         log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
       }
@@ -169,6 +180,7 @@ export async function advanceV5(
   state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
   state.changeLog = log.slice(-CHANGELOG_KEEP);
   await save(state);
+  return wantsChange;
 }
 
 // ───────────────────────────── prescription read ─────────────────────────────
