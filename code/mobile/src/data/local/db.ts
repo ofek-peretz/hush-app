@@ -126,11 +126,14 @@ export interface EngineV5State {
     bandTo: [number, number];
     at: number; // the occurrence's session startedAt (ms)
     /** A STRUCTURAL change (S-45) — the exercise itself changed identity: a bodyweight graduation
-     *  (S-52), a stall rotation (S-25.3), or a learned in-workout swap adopted as standing (S-69).
-     *  `exerciseId` holds the FROM lift; the mirror narrates it with the graduate / swap copy. Absent
-     *  on the ordinary load-change entries. */
-    kind?: 'graduate' | 'swap';
+     *  (S-52), a stall rotation (S-25.3), or a learned in-workout swap adopted as standing (S-69); or a
+     *  VOLUME change (S-32/S-34/S-37 — Loop 3 grew or trimmed a muscle's weekly sets). `exerciseId`
+     *  holds the FROM lift (or the muscle name, for 'volume'); the mirror narrates each with its copy.
+     *  Absent on the ordinary load-change entries. */
+    kind?: 'graduate' | 'swap' | 'volume';
     toExercise?: string;
+    /** For kind 'volume' — the muscle whose weekly set target moved (setsFrom → setsTo). */
+    muscle?: string;
   }[];
   /** The closed-week-end (ms) the athlete last marked seen — so a newly closed week reads unseen. */
   seenWeekEnd?: number;

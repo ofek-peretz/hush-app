@@ -18,6 +18,7 @@ import { currentWeekOpen } from '@/domain/weekCadence';
 import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, Explanation, ExplanationLine } from '@/engine/weeklyView';
 import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
+import { repsPerRung } from './repsPerRung';
 import { snapDown } from './grid';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
@@ -231,6 +232,13 @@ export async function advanceV5(
         unfinishedStreak: streak,
       });
       volume[m] = res.sets;
+      // S-45: narrate a real volume MOVE so the Saturday mirror says what it did ("I added a set to your
+      // chest work"). Measured against what she was ACTUALLY prescribed (current), so the very first
+      // earned set — grown from the seed in the same fold — is narrated too; a pure seed (no move) says
+      // nothing. Muscle-keyed; the load fields stay null.
+      if (res.sets !== current) {
+        log.push({ exerciseId: m, decision: res.decision, loadFrom: null, loadTo: null, setsFrom: current, setsTo: res.sets, bandFrom: [0, 0], bandTo: [0, 0], at, kind: 'volume', muscle: m });
+      }
     }
   }
   state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
@@ -320,6 +328,19 @@ export async function getVolumeTargetsV5(): Promise<Record<string, number>> {
   return { ...(state.volumeByMuscle ?? {}) };
 }
 
+/**
+ * Her fitted reps-per-rung for a lift (F-13), from history — the number Loop 1 uses to size an
+ * in-session correction (how many rungs a rep miss is worth). null until she has enough like-for-like
+ * pairs (F-12) → Loop 1 falls back to one cautious rung (B-5). Bodyweight has no load axis → null.
+ * Computed at the façade because it needs her learned grid (observedLoads) + rest-filtered history.
+ */
+export function perRungForV5(exerciseId: string, history: Session[]): number | null {
+  const meta = metaWithGrid(exerciseId, history);
+  if (meta.bodyweight) return null;
+  const sets = setPerfs(exerciseId, history); // all her performed working sets (load, reps, rest)
+  return repsPerRung([], [{ load: null, sets }], meta);
+}
+
 /** Reset all v5 engine state (account wipe / tests). */
 export async function resetV5(): Promise<void> {
   await save(empty());
@@ -334,6 +355,19 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
 function explainChange(c: ChangeEntry): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
+  // A VOLUME change (S-45 / S-32 / S-34): Loop 3 grew or trimmed a muscle's weekly sets. Muscle-keyed,
+  // narrated by direction ("I added a set to your chest work" / "I trimmed a set").
+  if (c.kind === 'volume' && c.muscle) {
+    const muscle = c.muscle; // raw muscle name — consistent with the English lift names in this copy
+    const up = c.setsTo > c.setsFrom;
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L(up ? 'volumeUp.observation' : 'volumeDown.observation', { muscle }),
+      conclusion: L(up ? 'volumeUp.conclusion' : 'volumeDown.conclusion'),
+      action: L(up ? 'volumeUp.action' : 'volumeDown.action', { muscle }),
+      text: L(up ? 'volumeUp.text' : 'volumeDown.text', { muscle }),
+    };
+  }
   // A STRUCTURAL change (S-45): the lift changed identity. A graduation says "you outgrew X → Y"; a
   // rotation / adopted learned-swap says "that slot missed the mark → Y". Reuses the existing copy.
   if (c.kind && c.toExercise) {
@@ -403,8 +437,13 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
     const prior = netByEx.get(key);
     netByEx.set(key, prior ? { ...c, loadFrom: prior.loadFrom, setsFrom: prior.setsFrom, bandFrom: prior.bandFrom } : c);
   }
-  // Keep every structural change; drop net no-op LOAD moves (up then back down to where it started).
-  return [...netByEx.values()].filter((c) => c.kind != null || c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6);
+  // Drop net no-ops: a load move up-then-back to where it started, and a volume grow-then-trim that
+  // nets to the same set count. Graduation/rotation/swap (no set delta to net) always survive.
+  return [...netByEx.values()].filter((c) => {
+    if (c.kind === 'volume') return c.setsFrom !== c.setsTo;
+    if (c.kind != null) return true; // graduate / swap
+    return c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6;
+  });
 }
 
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */

@@ -30,7 +30,7 @@ export function metaFor(exerciseId: string): ExerciseMeta {
 export interface LiveStep {
   exerciseId: string;
   globalIndex: number;
-  target: { recommendedWeight: number | null; recommendedReps: number; repBandHi?: number };
+  target: { recommendedWeight: number | null; recommendedReps: number; repBandHi?: number; perRung?: number };
 }
 
 export interface Loop1Applied<T extends LiveStep> {
@@ -70,7 +70,8 @@ export function applyLoop1<T extends LiveStep>(
     correctionsSoFar,
     isLastSet: false,
     meta,
-    perRung: null, // Stage 3 feeds her fitted reps-per-rung; until then, one cautious rung (B-5)
+    // Her fitted reps-per-rung (F-13), stamped on the target by the prescription; null → B-5 one rung.
+    perRung: cur.target.perRung ?? null,
   });
   if (!r.corrected || r.nextLoad == null) return noop;
 

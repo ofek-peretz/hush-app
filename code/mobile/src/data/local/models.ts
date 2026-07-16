@@ -155,6 +155,10 @@ export interface SetTarget {
   /** Engine v5 — the first set of a lift with no recent fact is an APPROACH set: a measurement, not
    *  a working set (S-60). Marked on setIndex 0 only; excluded from every engine decision. */
   isApproach?: boolean;
+  /** Engine v5 — her fitted reps-per-rung for this lift (F-13), so Loop 1 sizes an in-session
+   *  correction to HER number, not one cautious rung (B-5). Absent until enough like-for-like pairs
+   *  exist, or for bodyweight → the live loop falls back to a single rung. */
+  perRung?: number;
   reasonType?: ReasonType; // present only on a changed set, ADVISORY only
   reasonDelta?: number; // for increase/decrease copy
 }

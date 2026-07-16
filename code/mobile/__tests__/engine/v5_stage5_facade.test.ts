@@ -2,7 +2,7 @@
  * Engine v5 · Stage 5 — the integration façade (v5Engine). Proves Loop 2 + the rail persist and
  * drive the prescription end-to-end over history, exercise-keyed, at the weekly roll.
  */
-import { ensureExercisesV5, advanceV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
+import { ensureExercisesV5, advanceV5, currentV5Targets, perRungForV5, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog } from '@/data/local/models';
 
@@ -21,6 +21,29 @@ const session = (startedAt: string, sets: SetLog[]): Session => ({
 const WEEK1 = new Date('2026-07-15T10:00:00Z').getTime(); // Wed, inside week 1's window
 const ROLL1 = new Date('2026-07-16T10:00:00Z').getTime(); // establishes the anchor (Sat Jul 11 20:30)
 const ROLL2 = new Date('2026-07-20T10:00:00Z').getTime(); // Mon after → rolls (Sat Jul 18 20:30)
+
+describe('Loop 1 · perRungForV5 — her fitted reps-per-rung from history (F-13)', () => {
+  it('null until enough like-for-like pairs (B-5 → one cautious rung)', () => {
+    const history = [session('2026-07-08T10:00:00Z', [set('bb_bench_press', 60, 9)])]; // one point → no slope
+    expect(perRungForV5('bb_bench_press', history)).toBeNull();
+  });
+
+  it('a real slope once she has spread of loads at like-for-like rest (heavier costs reps)', () => {
+    // Same rest (90s), reps fall as load rises → a positive reps-per-rung.
+    const history = [
+      session('2026-07-01T10:00:00Z', [set('bb_bench_press', 55, 12), set('bb_bench_press', 60, 10)]),
+      session('2026-07-03T10:00:00Z', [set('bb_bench_press', 65, 8), set('bb_bench_press', 70, 6)]),
+    ];
+    const pr = perRungForV5('bb_bench_press', history);
+    expect(pr).not.toBeNull();
+    expect(pr!).toBeGreaterThan(0);
+  });
+
+  it('bodyweight has no load axis → null (Loop 1 never corrects it)', () => {
+    const history = [session('2026-07-01T10:00:00Z', [set('pull_up', null, 10), set('pull_up', null, 8)])];
+    expect(perRungForV5('pull_up', history)).toBeNull();
+  });
+});
 
 describe('Stage 5 · the façade drives the prescription from exercise-keyed state', () => {
   beforeEach(async () => { await resetV5(); });

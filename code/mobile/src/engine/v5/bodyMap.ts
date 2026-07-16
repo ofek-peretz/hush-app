@@ -41,6 +41,11 @@ export function validateMap(map: BodyMap | undefined, allMuscles: readonly strin
  * TRAINED it (a logged set exists) — a change of state, not a statement of taste. A muscle turned
  * off during onboarding, or crowded out and never trained, has no history → do NOT ask (that would
  * be nagging, L8). The trigger is a fact: "does she have a logged set on this muscle?"
+ *
+ * DELIBERATELY NOT WIRED (founder decision, 2026-07-16): the ask-back is a body-map SCREEN interaction
+ * (a confirm when she toggles a trained muscle off), which lands with the founder's end redesign of
+ * that screen. The engine predicate is ready for it; leaving the prompt out until the screen exists is
+ * a conscious choice, not a hole — Hush simply honours an off toggle silently for now (never nags).
  */
 export function shouldAskBackOnOff(muscleHasLoggedSet: boolean): boolean {
   return muscleHasLoggedSet;

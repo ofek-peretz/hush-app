@@ -37,7 +37,7 @@ import { swapScore } from '@/domain/swapPool';
 import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
-import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, type V5Target } from '@/engine/v5/v5Engine';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN } from '@/engine/v5/constants';
@@ -558,7 +558,9 @@ export const fixtureModel: ModelClient = {
   async generateProgram(profile: Profile): Promise<Program> {
     // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all N are
     // done). The programme is ASSEMBLED from her body map (register Part 3), never a shelf split.
-    const n = Math.min(Math.max(profile.daysPerWeek, 1), 6);
+    // Frequency is 2..6 — one workout a week is not a programme, so it is not offered (onboarding wheel
+    // is min 2), and clamping to 2 keeps the region split coherent (a single day can't cover a body).
+    const n = Math.min(Math.max(profile.daysPerWeek, 2), 6);
     const goal = profile.goal ?? 'build_muscle';
     const volume = profile.volume ?? 'moderate';
     const prefs = await loadPreferencesSafe();
@@ -707,8 +709,11 @@ export const fixtureModel: ModelClient = {
       }
       // S-60: the FIRST set of a v5 lift with no recent fact is an approach measurement.
       const approachFirst = v5t?.isApproach ? true : undefined;
+      // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
+      // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
+      const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
       for (let s = 0; s < MAX_SETS; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, perRung, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

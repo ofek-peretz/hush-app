@@ -68,6 +68,20 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     expect(update!.explanations.filter((e) => e.observation.key === 'explain.swap.observation').length).toBe(1);
   });
 
+  it('S-45 · a Loop 3 VOLUME grow is narrated in the mirror ("added a set")', async () => {
+    // Two chest occurrences this week, each completed AND advancing → Loop 3 grows chest volume (3→4).
+    // The FIRST fold seeds (no change); the SECOND records the grow, which the mirror must name.
+    const history: Session[] = [
+      session(new Date('2026-07-15T09:00:00Z').toISOString(), [set(60, 8), set(60, 8), set(60, 8)]),
+      session(new Date('2026-07-15T17:00:00Z').toISOString(), [set(62.5, 8), set(62.5, 8), set(62.5, 8)]),
+    ];
+    const prescribed = (id: string) => (id === 'bb_bench_press' ? 3 : 0);
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1, undefined, prescribed, { Chest: 3 });
+    const update = await getWeeklyUpdateV5(ROLL2);
+    expect(update).not.toBeNull();
+    expect(update!.explanations.some((e) => e.observation.key === 'explain.volumeUp.observation')).toBe(true);
+  });
+
   it('a steady (all-hold) workout surfaces no changes — the plan is already right', async () => {
     const history: Session[] = [session(WEEK1, [set(60, 8), set(60, 6)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);

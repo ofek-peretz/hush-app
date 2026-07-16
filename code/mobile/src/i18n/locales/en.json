@@ -670,6 +670,18 @@
       "conclusion": "You outgrew it — the harder variation is the next step.",
       "action": "I moved you up to {{ex}}."
     },
+    "volumeUp": {
+      "text": "Your {{muscle}} work is progressing, so I added a set for more.",
+      "observation": "Your {{muscle}} work is progressing on full effort.",
+      "conclusion": "More volume gives it more to grow on.",
+      "action": "I added a set to your {{muscle}} work."
+    },
+    "volumeDown": {
+      "text": "Your {{muscle}} work kept coming up short, so I trimmed a set to keep it finishable.",
+      "observation": "Your {{muscle}} work kept coming up short.",
+      "conclusion": "Fewer sets keeps it finishable.",
+      "action": "I trimmed a set from your {{muscle}} work."
+    },
     "reprice": {
       "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",
       "textBw": "Last week {{ex}} came in under its prescription, so I matched it to your demonstrated capability and kept your sets unchanged.",
