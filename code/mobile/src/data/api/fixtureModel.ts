@@ -40,6 +40,8 @@ import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlot
 import { bandFor } from '@/engine/v5/repBand';
 import { advanceV5, currentV5Targets, getVolumeTargetsV5, type V5Target } from '@/engine/v5/v5Engine';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
+import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
+import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN } from '@/engine/v5/constants';
 import { engineChangeTarget } from '@/domain/engineChanges';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
@@ -290,6 +292,60 @@ function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): v
   for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > budgetMin; k--) {
     const slot = day.slots[compoundIdx[k]];
     if (slot.setCount > 3) slot.setCount = 3;
+  }
+}
+
+/**
+ * v5 · D4 — the emphasis-aware trim (register S-37 / the protected-lifts rule). When the LEARNED
+ * volume (Loop 3) makes a day exceed her minutes, the set to give up is chosen by chooseDonor: NEVER
+ * an emphasis muscle, never one at its floor, and among the rest the muscle with the MOST sets this
+ * day (the one that can best spare it) — the exact mirror of S-32's give-rule, so the two never
+ * disagree. A set is shaved from that muscle's LAST isolation slot (a compound is never sacrificed
+ * before an isolation, S-35); once its isolations are at the floor, its trailing isolation exercise
+ * is dropped — but never a muscle's ONLY exercise (S-35: an emphasis muscle keeps its one lift, and a
+ * `normal` muscle is never silently turned `off`). Whatever residual remains is left to the shared
+ * enforceTimeCap safety net. Legacy is untouched — this runs for the v5 cohort only.
+ */
+export function trimV5ToBudget(day: ProgramDay, bodyMap: Profile['bodyMap'], budgetMin: number): void {
+  const muscleOfSlot = (i: number) => exerciseById(day.slots[i].exerciseId)?.muscle;
+  const isEmphasis = (m: string | undefined) => !!m && bodyMap?.[m as MuscleGroup] === 'emphasis';
+  let guard = 0;
+  while (estimateSessionMinutes(day) > budgetMin && guard++ < 200) {
+    const setsByMuscle: Record<string, number> = {};
+    const exCountByMuscle: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (!m) continue;
+      setsByMuscle[m] = (setsByMuscle[m] ?? 0) + s.setCount;
+      exCountByMuscle[m] = (exCountByMuscle[m] ?? 0) + 1;
+    }
+    // A muscle can donate only through a droppable ISOLATION slot: trim a bonus set (>floor), or —
+    // when its isolations are all at the floor — drop a whole isolation exercise, but only if the
+    // muscle keeps at least one lift (never its only exercise).
+    const canDonate = (m: string): boolean =>
+      day.slots.some((s, i) => {
+        if (s.supplemental || muscleOfSlot(i) !== m) return false;
+        if (isCompound(s.exerciseId)) return false;
+        return s.setCount > V5_SETS_MIN || exCountByMuscle[m] > 1;
+      });
+    const candidates: VolumeCandidate[] = Object.keys(setsByMuscle)
+      .filter(canDonate)
+      .map((m) => ({ muscle: m, isEmphasis: isEmphasis(m), weeklySets: setsByMuscle[m], atFloor: setsByMuscle[m] <= V5_SETS_MIN }));
+    const donor = chooseDonor(candidates, CANONICAL_MUSCLE_ORDER);
+    if (!donor) break; // nothing may donate (all emphasis / floored) → the safety net finishes the job
+    const isoIdx = day.slots
+      .map((_s, i) => i)
+      .filter((i) => !day.slots[i].supplemental && muscleOfSlot(i) === donor.muscle && !isCompound(day.slots[i].exerciseId));
+    // Prefer shaving a bonus set from the donor's LAST isolation; else drop its trailing isolation.
+    const trimAt = [...isoIdx].reverse().find((i) => day.slots[i].setCount > V5_SETS_MIN);
+    if (trimAt != null) {
+      day.slots[trimAt].setCount -= 1;
+    } else if (exCountByMuscle[donor.muscle] > 1 && isoIdx.length > 0) {
+      day.slots.splice(isoIdx[isoIdx.length - 1], 1);
+    } else {
+      break; // the donor's only exercise — protected; the safety net takes over
+    }
   }
 }
 
@@ -711,6 +767,9 @@ export const fixtureModel: ModelClient = {
       }
     }
     const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
+    // v5 · D4: resolve an over-budget day by DONATING from the muscle that can best spare it (S-37,
+    // emphasis protected) BEFORE the positional safety net. Legacy days skip straight to enforceTimeCap.
+    if (isV5) for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin);
     for (const d of days) enforceTimeCap(d, budgetMin); // prescribed work ≤ her minutes (warm-ups excluded)
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
