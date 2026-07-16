@@ -175,10 +175,19 @@ export async function advanceV5(
   for (const sess of unfolded) {
     const at = Date.parse(sess.startedAt);
     const advancedThisOcc = new Set<string>(); // lifts that ROSE this occurrence (Loop 3 anyAdvanced)
-    // Working sets she LOGGED per managed exercise this occurrence — the completed-count Loop 3 reads.
+    // Sets she LOGGED per managed exercise this occurrence. `loggedByEx` is WORKING sets only (approach
+    // excluded, S-60) — it decides which lifts were really trained. `performedByEx` is ALL logged sets
+    // INCLUDING the approach set, because the approach set OCCUPIES a prescribed slot (it is set 0 of the
+    // N prescribed, not an extra) and she really performed it. The completion check must use this, or an
+    // approach occurrence — (N−1) working + 1 approach — reads as (N−1) < N "unfinished", which would
+    // both block S-32 growth and, on a layoff return (S-38), wrongly TRIM a muscle. The approach set is
+    // excluded from volume EARNING (it never advances), never a penalty against it (S-60).
     const loggedByEx: Record<string, number> = {};
+    const performedByEx: Record<string, number> = {};
     for (const log0 of sess.sets) {
-      if (log0.isApproach || !managed.has(log0.exerciseId)) continue;
+      if (!managed.has(log0.exerciseId)) continue;
+      performedByEx[log0.exerciseId] = (performedByEx[log0.exerciseId] ?? 0) + 1;
+      if (log0.isApproach) continue;
       loggedByEx[log0.exerciseId] = (loggedByEx[log0.exerciseId] ?? 0) + 1;
     }
     for (const id of Object.keys(ex)) {
@@ -220,7 +229,7 @@ export async function advanceV5(
       const prescribedTotal = ids.reduce((s, id) => s + Math.max(0, prescribedSets(id)), 0);
       if (prescribedTotal <= 0) continue; // nothing prescribed for this muscle → nothing to reason on
       const weekly = weeklyByMuscle[m] ?? prescribedTotal; // the muscle's WHOLE-WEEK prescription
-      const completedAll = !sess.earlyFinish && ids.every((id) => loggedByEx[id] >= prescribedSets(id));
+      const completedAll = !sess.earlyFinish && ids.every((id) => (performedByEx[id] ?? 0) >= prescribedSets(id));
       const anyAdvanced = ids.some((id) => advancedThisOcc.has(id));
       const streak = completedAll ? 0 : (streaks[m] ?? 0) + 1;
       streaks[m] = streak;

@@ -663,6 +663,15 @@ export const fixtureModel: ModelClient = {
         return {};
       });
     }
+    // Cover EVERY renderable set with a real target. A slot's setCount can exceed MAX_SETS once Loop 3
+    // has LEARNED a muscle's volume — distributeMuscleSets assigns up to SETS_MAX (5, F-1) to a single
+    // lift, so a grown compound can be a 5-set slot. buildPlan renders slot.setCount sets and falls back
+    // to a null-weight/reps-8 neutral target for any set with no match, so emitting a fixed 4 would leave
+    // that 5th set uncovered (her load and band silently dropped). Emit up to the real max setCount in the
+    // programme (never fewer than MAX_SETS) so the "sessionTargets always covers a slot" invariant holds.
+    const maxSetCount = program
+      ? Math.max(MAX_SETS, ...program.days.flatMap((d) => d.slots.map((s) => s.setCount)))
+      : MAX_SETS;
     for (const ex of EXERCISES) {
       const v5t = v5targets[ex.id];
       // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
@@ -686,7 +695,7 @@ export const fixtureModel: ModelClient = {
       // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
       // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
       const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
-      for (let s = 0; s < MAX_SETS; s++)
+      for (let s = 0; s < maxSetCount; s++)
         out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: s === 0 && approachFirst && approachWeight != null ? approachWeight : weight, recommendedReps: reps, repBandHi, perRung, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
