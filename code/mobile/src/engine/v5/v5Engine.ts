@@ -455,7 +455,10 @@ export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now
         exerciseId: slot.exerciseId,
         name: exerciseDisplayName(slot.exerciseId),
         loadKg: st ? st.load : null,
-        sets: st ? st.sets : slot.setCount,
+        // The set count is the PROGRAMME's (Loop 3 distributes volume into slot.setCount + the time
+        // cap trims it); ExerciseState.sets is vestigial (always the day-one 4), so it must not be the
+        // source here or the weekly plan would show 4 sets regardless of the real workout.
+        sets: slot.setCount,
         repRange: st ? [st.band.lo, st.band.hi] : null,
         change,
       };
