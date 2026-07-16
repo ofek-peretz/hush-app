@@ -556,8 +556,8 @@ export const fixtureModel: ModelClient = {
   },
 
   async generateProgram(profile: Profile): Promise<Program> {
-    // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all
-    // N are done). The split is the market-standard one for this athlete's sex + frequency.
+    // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all N are
+    // done). The programme is ASSEMBLED from her body map (register Part 3), never a shelf split.
     const n = Math.min(Math.max(profile.daysPerWeek, 1), 6);
     const goal = profile.goal ?? 'build_muscle';
     const volume = profile.volume ?? 'moderate';
@@ -613,7 +613,6 @@ export const fixtureModel: ModelClient = {
   async sessionTargets({ programDayId }): Promise<SetTarget[]> {
     void programDayId; // targets are keyed by exercise; the screen picks the day's slots
     const profile = await loadProfileSafe();
-    const goal = profile.goal ?? 'build_muscle';
     const history = await loadHistorySafe();
     const out: SetTarget[] = [];
 
