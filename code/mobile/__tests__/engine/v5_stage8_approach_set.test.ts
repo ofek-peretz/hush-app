@@ -47,6 +47,24 @@ describe('Stage 8 · the approach set is excluded from the fold', () => {
     expect((await currentV5Targets(history, later))['bb_bench_press'].isApproach).toBe(true);
   });
 
+  it('S-60 / B-1 · the approach set is prescribed LIGHT — a fraction of the working load, never cold on a stale number', async () => {
+    const performedAt = new Date('2026-06-01T10:00:00Z');
+    // She last benched 80 kg, then a long layoff aged it out of the window.
+    const history: Session[] = [session(performedAt.toISOString(), [set(80, 8), set(80, 8)])];
+    await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
+    const later = performedAt.getTime() + 40 * 86400000; // > 28-day F-8 window → approach
+    const t = (await currentV5Targets(history, later))['bb_bench_press'];
+    expect(t.isApproach).toBe(true);
+    expect(t.weight).toBe(80); // the working sets still stand at her real number (Loop 1 guards them)
+    // The APPROACH set is light: strictly below the working load, and strictly above zero (reachable).
+    expect(t.approachWeight).not.toBeNull();
+    expect(t.approachWeight!).toBeLessThan(t.weight!);
+    expect(t.approachWeight!).toBeGreaterThan(0);
+    // A non-approach lift carries no approachWeight.
+    const soon = performedAt.getTime() + 10 * 86400000;
+    expect((await currentV5Targets(history, soon))['bb_bench_press'].approachWeight).toBeNull();
+  });
+
   it('a week with ONLY an approach set banks no decision (nothing but a measurement happened)', async () => {
     const history: Session[] = [session(WEEK1, [set(40, 20, true)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);

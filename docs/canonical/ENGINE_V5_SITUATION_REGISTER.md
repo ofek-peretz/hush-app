@@ -13,6 +13,17 @@ the pin survives only as a fact earned by resisting rotation. One evidence-gate 
 K=2); no load-touching constant added. **Supersedes:** the v4 engine (`src/engine/v4/`) in whole. v4
 is not tuned — it is replaced.
 
+**Post-Rev-7 audit fixes (2026-07-16)** — a hermetic code↔register review closed six gaps where the
+build had drifted from this contract, each now WIRED + tested: (1) **the approach set is LIGHT** —
+`APPROACH_FRACTION` (a declared piece of B-1) prescribes set 1 at a fraction of the working load,
+snapped to a real loadable weight, and **Loop 1 no longer sizes a correction off it** (S-60); (2)
+**Core honours the body map** — off → no core, emphasis → a second core movement (S-2/S-4/S-50); (3)
+the dead **`chooseWinner`** (an unwired S-32 give-rule picker) is **deleted** — the give-rule is
+realized structurally by per-muscle independent earning, and only the wired **donor** (S-37) has a
+real contest point; (4) the façade's **reps-per-rung now respects the recency window** (F-8); (5)
+**goal is no longer read** in the v5 path (one goal: hypertrophy); (6) the dead **`MEN_SPLITS` /
+`WOMEN_SPLITS`** are deleted from `fixtureModel`. tsc + 781 tests + `expo export` green.
+
 This document is the contract, and it is built literally: every situation `S-n` becomes a test named
 for it, every law `L`/`B`/`F` becomes code. It is a specification, not an inspiration — Stage 0 was
 built from it word for word. If a situation is not here, the engine has no answer for it — and that
@@ -439,6 +450,14 @@ off, S-2). *(The single in-workout swap, S-20, still declares nothing.)*
       muscle). **Never a coin-toss, never wall-clock, never RNG** — determinism is I-24, and it is
       what makes the whole engine reproducible and testable.
 
+   > **Implementation (2026-07-16 audit).** This give-rule has **no single contest point** in the built
+   > engine: each muscle's volume grows on its OWN track, one set at a time, capped by its own weekly
+   > time budget (Loop 3) — there is never a moment where two muscles bid for one shared set, so the
+   > emphasis-first / fewest-first / canonical tie-break is expressed *structurally* (the emphasis bonus
+   > B-2 + independent earning), not by a picker. A `chooseWinner` function that WAS written for it sat
+   > **unwired** and was **deleted** as a dead branch (exactly the Part-7 risk). The **donor** side
+   > (S-37) DOES have a contest point — trimming an over-budget day — and IS wired (`chooseDonor`).
+
 **Where the set physically goes** — and this is derived, not chosen: an exercise holds at most 5 sets
 (F-1). When a muscle's earned sets exceed what its current exercises can hold, **the next set opens a
 new exercise** for that muscle (from her pool: minus swapped-away, plus pins). **Emphasis is what
@@ -552,9 +571,13 @@ fact-first discipline as everywhere else, not a special mechanism.
 ### H · The lifts with no load axis
 
 **S-50 · Core / abs.** Under `muscle = the engine's unit`, **Core is a muscle on the map like any
-other** — it earns and loses volume by the same rule, can be turned off, can carry an emphasis mark.
-Its "accessory finisher with no progression" status was an artefact of the pattern model, and dies
-with it. Weighted core progresses on load; unweighted on reps (S-51).
+other** — it can be turned off, can carry an emphasis mark. Weighted core progresses on load;
+unweighted on reps (S-51). *(Implementation, 2026-07-16 audit: Core's on/off and emphasis are honoured
+— `addWeeklyCore` reads the map, so **off → no core** (S-2) and **emphasis → a second core movement**
+(S-4). Per the founder's standing rule Core stays a **supplemental finisher** placed last, not a
+structural region day, so its volume is map-sized rather than run through Loop 3's region assembly —
+a deliberate, founder-ratified scoping of "earns and loses volume by the same rule," not the drift the
+audit found where the map was ignored entirely.)*
 
 **S-51 · A bodyweight lift.** No load axis → **reps carry the progression**, climbing through her
 band toward `Thi`. *(A loaded lift converts reps at `Thi` into a load step and resets; a bodyweight
@@ -657,6 +680,16 @@ The engine prescribes a light approach load, **reads it**, and finds her number 
 excluded from every decision: not a working set, no volume, no rep comparison (`isApproach`) — **but
 its minutes ARE counted in the time budget**, because they are minutes she really spends.
 
+> **WIRED (2026-07-16 audit).** The light load is `APPROACH_FRACTION` (a declared piece of B-1) of the
+> working/seed load, snapped to a real loadable weight on the equipment increment grid (going lighter
+> than her lightest *observed* rung is the whole point, so the sparse observed grid is bypassed for
+> this one down-step; null — the working load stands — when nothing lighter physically exists, e.g. an
+> empty bar). Only **set 1** uses it; the working sets stay at her real number, guarded by Loop 1. And
+> **Loop 1 does NOT correct off the approach set** — its light load would otherwise drag the working
+> sets down toward it; "excluded from every rep comparison" now includes the in-session correction.
+> Before the audit the approach set was prescribed at her FULL last-working load and merely labelled —
+> exactly the "she finds out under a loaded bar" this situation exists to prevent.
+
 > **The approach set is the one moment with no rail behind it — and we guard it with a FACT, not an
 > invented ceiling.** An earlier revision added a "physical sanity ceiling" (bodyweight × a
 > per-exercise `baseKg` table) to reject an impossible mis-key here. **It is deleted (Rev 6):** it was
@@ -729,8 +762,9 @@ v4 is not tuned. It is replaced.
 (`injury_flag`, `DELOAD_LOAD`, `DELOAD_SETS`) · the adherence gate (`ADHERENCE_MIN` — dead code
 today) · the stall lever ladder (`vol`/`load`/`range`, `RANGE_ALTERNATE`, `PATIENT_PROBE_EVERY`) ·
 the weekly rollover (`bucketOpenMs`, `firstBucketOpen`, `displayWeekNumber`, `lastAdvanceWeekOpen`) ·
-the **3-week calendar rotation** · `MEN_SPLITS` / `WOMEN_SPLITS` (for the v5 cohort — the split
-survives for legacy only) · the goal fork · **(Rev 7) the programme-edit SCREEN + the pin/swap
+the **3-week calendar rotation** · `MEN_SPLITS` / `WOMEN_SPLITS` (**fully deleted from `fixtureModel`
+2026-07-16** — v4/legacy is gone, so nothing reads them; the programme is only ever assembled from the
+body map) · the goal fork (**`goal` is no longer read in the v5 path — 2026-07-16**) · **(Rev 7) the programme-edit SCREEN + the pin/swap
 BUTTONS (S-73) · the declared edit-swap (S-31) · the `experience` input · the onboarding rep-band and
 minutes questions (defaults instead — Part 9 §A).**
 
@@ -757,7 +791,7 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 
 | | Bootstrap | Replaced by |
 |---|---|---|
-| **B-1** | The **approach** load on a never-performed lift. **The rule:** take her nearest evidence — the same-muscle lift she has performed, transferred by the catalogue's `baseKg` ratio; or, with no such lift, the catalogue cold-start from her sex + bodyweight — then take it at a deliberately light fraction so the approach set is *guaranteed* reachable. **This bootstrap contains three catalogue/starter numbers — the `baseKg` table, the sex+bodyweight cold-start, and the light fraction — and they are theory-laden by nature** (assumptions about relative strength). They are acceptable *only* because the approach set overwrites them in 90 seconds (S-60); **not one of them ever survives into a working load**, which is why they live inside a bootstrap and not as standing constants. | The approach set itself |
+| **B-1** | The **approach** load on a never-performed lift. **The rule:** take her nearest evidence — the same-muscle lift she has performed, transferred by the catalogue's `baseKg` ratio; or, with no such lift, the catalogue cold-start from her sex + bodyweight — then take it at a deliberately light fraction so the approach set is *guaranteed* reachable. **This bootstrap contains three catalogue/starter numbers — the `baseKg` table, the sex+bodyweight cold-start, and the light fraction — and they are theory-laden by nature** (assumptions about relative strength). They are acceptable *only* because the approach set overwrites them in 90 seconds (S-60); **not one of them ever survives into a working load**, which is why they live inside a bootstrap and not as standing constants. *(The light fraction is the named constant `APPROACH_FRACTION`, wired 2026-07-16 — S-60.)* | The approach set itself |
 | **B-2** | Starting sets per muscle | Earned / cut volume (S-32/34) |
 | **B-3** | Attempts-to-clear, before she has history on the lift | Her own statistic (S-25) |
 | **B-4** | **Work + rest seconds per set, on day one** — what assembly uses to know how many exercises fit in her hour | Her measured rest (built, Stage 0) and her set durations (timestamps) |
@@ -781,7 +815,7 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 | **F-5** | ~~HR rest margin + timer bounds~~ — **RETIRED (Rev 6)** with S-19. HR is display-only now; rest ends on the learned timer (S-17). | — |
 | **F-6** | ~~gap factor for the approach set~~ — **RETIRED (Rev 6).** The recency window (F-8) alone decides when an approach set fires (S-60). | — |
 | **F-7** | ~~bodyweight graduation rep ceiling~~ — **DELETED (Rev 5).** Graduation now triggers at **her own `Thi`** (S-52); the catalogue keeps only the ladder pointer, which is structure, not a number. The review found a fixed ceiling of 12 trapped an athlete who chose the 12-15 band. | — |
-| **F-8** | The **recency window** — how far back a measured statistic reads: reps-per-rung, `N`, the rest median (S-17), **and the rail (L11)**. Old history outside it is not "her number today." **The one thing it does NOT scope is a raw completed load used to seed a prescription (S-9)** — a weight she lifted is a fact whatever its age; the approach set (S-60), not F-8, guards a stale seed. | it **scopes** every measured statistic (never a raw seed) |
+| **F-8** | The **recency window** — how far back a measured statistic reads: reps-per-rung, `N`, the rest median (S-17), **and the rail (L11)**. Old history outside it is not "her number today." **The one thing it does NOT scope is a raw completed load used to seed a prescription (S-9)** — a weight she lifted is a fact whatever its age; the approach set (S-60), not F-8, guards a stale seed. *(2026-07-16 audit: the FAÇADE's reps-per-rung read now applies this window too — it previously flattened all-time history into one record and slipped the window; the pure core always honoured it.)* | it **scopes** every measured statistic (never a raw seed) |
 | **F-9** | The **canonical muscle order** — the final tie-break for a contested set (S-32 #3, reversed in S-37). It repeatedly allocates real volume, so by our own standard it is a form constant and is named here, not buried in an example. | it **breaks ties** in volume |
 | **F-10** | ~~physical sanity ceiling~~ — **DELETED (Rev 6).** It was a *predicted* human limit resting on the unaudited `baseKg` table — theory. The approach set is guarded by the athlete's own eyes and the next set instead (S-49, S-60). | — |
 | **F-11** | The **rest-band width** — how close two sets' `restBeforeS` must be to count as "same conditions" for the reps-per-rung fit (L3), so a set done after a very different rest is not fitted against one that wasn't. | no — it **filters** which sets compare |

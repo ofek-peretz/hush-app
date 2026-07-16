@@ -12,7 +12,7 @@ export { correctInSession, type Loop1Input, type Loop1Result } from './loop1';
 export { decideExercise, type Loop2Input } from './loop2';
 export { decideVolume, type VolumeInput, type VolumeResult, type VolumeDecision } from './loop3';
 export { learnedRestS, setsToMinutes, maxSetsInBudget, fitsBudget } from './timeBudget';
-export { chooseWinner, chooseDonor, type VolumeCandidate } from './volumeAllocation';
+export { chooseDonor, type VolumeCandidate } from './volumeAllocation';
 export { bandFor, DEFAULT_REP_BAND } from './repBand';
 export { stanceOf, trainableMuscles, emphasisMuscles, validateMap, shouldAskBackOnOff, type BodyMap } from './bodyMap';
 export { regionOf, weeklyTargets, regionVolume, assignRegionDays, hasEmphasis } from './assembler';

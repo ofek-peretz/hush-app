@@ -1074,8 +1074,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Engine v5 · Loop 1 — correct the NEXT set's load from what she just LIFTED (the fact, not
         // the prescription). One call here reaches both the phone and the watch, since the mirror
         // re-projects from the plan. Bodyweight / last-set / spent-budget are no-ops inside applyLoop1.
+        // S-60: the APPROACH set is a light measurement, excluded from every decision and rep comparison
+        // — so a correction never sizes off it (its light load would otherwise drag the working sets down
+        // toward the approach load). The working sets stay at her real number, corrected off each OTHER.
         if (loop1Ref.current.exerciseId !== current.exerciseId) loop1Ref.current = { exerciseId: current.exerciseId, count: 0 };
-        const l1 = applyLoop1(plan, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count);
+        const l1 = current.target.isApproach
+          ? ({ plan, corrected: false, direction: 'none', nextLoad: setLog.actualWeight } as ReturnType<typeof applyLoop1>)
+          : applyLoop1(plan, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count);
         if (l1.corrected) {
           loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
           dispatch({ type: 'SWAP_PLAN', plan: l1.plan as Step[] });

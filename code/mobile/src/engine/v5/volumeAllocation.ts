@@ -1,11 +1,16 @@
 /**
- * Hush Engine v5 — contested-set allocation (S-32 give-rule, S-37 donor-rule).
+ * Hush Engine v5 — the S-37 donor rule (which muscle gives a set up under a full ceiling).
  *
- * Two muscles earn a set and only one fits under the time ceiling: emphasis wins, else the muscle
- * with the fewest rolling-7-day sets, else a fixed canonical order (F-9). Taking a set to fund an
- * emphasis muscle (S-37) is the exact mirror: never from emphasis or a floored muscle, else from the
- * muscle with the MOST sets, else reverse canonical order. Every tie breaks on a fact then a fixed
- * order — never a coin-toss, wall-clock, or RNG (I-24/25).
+ * The S-32 GIVE-rule ("two muscles earn a set and only one fits") has no single contest point in this
+ * architecture: each muscle's volume grows on its OWN track, one set at a time, capped by its own
+ * weekly time budget (Loop 3, advanceV5) — there is never a moment where two muscles bid for one shared
+ * set, so its emphasis-first / fewest-first / canonical tie-break is expressed structurally by the
+ * emphasis bonus (B-2) and each muscle's independent earning, not by a picker function. The DONOR rule
+ * DOES have a contest point — trimming an over-budget day (trimV5ToBudget) — and it is wired here.
+ *
+ * Taking a set to make room (S-37) is the exact mirror of S-32's give-rule: never from an emphasis or a
+ * floored muscle, else from the muscle with the MOST sets, else reverse canonical order (F-9). Every tie
+ * breaks on a fact then a fixed order — never a coin-toss, wall-clock, or RNG (I-24/25).
  *
  * The canonical order (F-9) is the v4 pattern enum extended to every muscle group — declared, stable,
  * and never reordered.
@@ -24,19 +29,6 @@ export interface VolumeCandidate {
 function canonicalRank(muscle: string, canonicalOrder: readonly string[]): number {
   const i = canonicalOrder.indexOf(muscle);
   return i >= 0 ? i : canonicalOrder.length;
-}
-
-/**
- * S-32 — which muscle gets the one contested set. Emphasis first; then fewest weekly sets (bring up
- * the lagging one); then canonical order. Returns null only if there are no candidates.
- */
-export function chooseWinner(candidates: VolumeCandidate[], canonicalOrder: readonly string[]): VolumeCandidate | null {
-  if (candidates.length === 0) return null;
-  return [...candidates].sort((a, b) => {
-    if (a.isEmphasis !== b.isEmphasis) return a.isEmphasis ? -1 : 1; // emphasis wins
-    if (a.weeklySets !== b.weeklySets) return a.weeklySets - b.weeklySets; // fewest first
-    return canonicalRank(a.muscle, canonicalOrder) - canonicalRank(b.muscle, canonicalOrder);
-  })[0];
 }
 
 /**

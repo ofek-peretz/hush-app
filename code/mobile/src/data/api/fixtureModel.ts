@@ -2,28 +2,22 @@
  * Local fixture model — the runnable program engine for the app today (every signed-in
  * user runs on this until a backend session/token exchange exists; see selectModel).
  *
- * It builds best-practice, market-standard programs and personalized cold-start loads:
- *  - generateProgram: a recognized split chosen by (sex × daysPerWeek) — Full Body,
- *    Upper/Lower, or Push/Pull/Legs — built from the curated catalog. Every weekly plan
- *    covers ALL major muscle groups (core included; calves in the MEN's splits only —
- *    founder 2026-07-10); women's splits carry the lower-body / glute emphasis they
- *    typically train for.
- *  - sessionTargets: starting weights personalized by sex × bodyweight × experience × age
- *    (conservative — "weights start light, deliberate"); reps AND set counts by
- *    goal × exercise tier × age.
+ * It builds the athlete's programme and personalized cold-start loads:
+ *  - generateProgram: the programme is ASSEMBLED from her body map (engine v5, register Part 3) —
+ *    `assembleV5DayLists` turns the map (off / normal / emphasis per muscle) + days into the week's
+ *    day-lists, and the shared generator (dayFromBlueprint → orderForFlow / set counts / the time cap)
+ *    builds each day. The demographic split (MEN_SPLITS / WOMEN_SPLITS) is DELETED (register Part 5);
+ *    structure is an OUTPUT of volume, never a shelf chosen by sex × days.
+ *  - sessionTargets: the v5 engine (exercise-keyed, facts only) owns load, progression and the band;
+ *    a cold-start seed (sex × bodyweight × age, conservative — "weights start light") only opens a
+ *    never-performed lift, overwritten by the approach set in ~90 seconds (S-60).
  *
- * Category coverage (hermetic — every athlete gets a complete, quality program):
- *    sex ∈ {male, female} · age (load taper + masters-friendly volume/reps) ·
- *    bodyweight (load scaling) · experience {beginner|intermediate|advanced} (load) ·
- *    goal {get_stronger|build_muscle|general_fitness|toning} (reps + sets) ·
- *    daysPerWeek 1–6 (split).
- *
- * The progression MATH (week-over-week change) still belongs to the real model; the
- * ADVISORY_DECISION block keeps the post-calibration voice surfaces exercisable.
+ * One goal: hypertrophy (register Part 9 §A) — goal and experience are no longer engine inputs.
  */
 import type {
   Capability,
   Goal,
+  MuscleStance,
   PortraitSnapshot,
   Profile,
   Program,
@@ -56,79 +50,12 @@ import type { ActualSet, ModelClient } from './modelClient';
 // ALWAYS fully covered (a slot never falls through to the default-weight fallback).
 const MAX_SETS = 4;
 
-// ───────────────────────────── split library (market-standard) ─────────────────────────────
-// Each day = a recognized session built from the catalog. Days are ordered big→small
-// (compound first, isolation/finisher last). Every weekly plan covers all major groups,
-// with core worked across the week. Men's and women's pools differ: men keep calves on
-// lower/full-body sessions; women's days spend those slots on the lower-body / glute
-// emphasis (hip thrust, RDL, split squat, glute bridge, pull-through, abduction,
-// kickback) typical of how women train — calves are OUT of the women's splits
-// (founder 2026-07-10).
-
-// Only blueprints referenced by a split below are kept (dead, never-referenced blueprints
-// were removed 2026-06-23). Core is NOT listed here — it is supplemental work added once per
-// week by addWeeklyCore() (3 sets, last, upper-preferred), never a primary slot in the split.
-// Each day lists compounds first; dayFromBlueprint also enforces compound-before-isolation.
-const MEN: Record<string, string[]> = {
-  'Full Body A': ['bb_back_squat', 'bb_rdl', 'bb_bench_press', 'bb_row', 'bb_overhead_press'],
-  'Upper A': ['bb_bench_press', 'bb_row', 'bb_overhead_press', 'lat_pulldown', 'bb_curl', 'triceps_pushdown'],
-  // Upper B (P1, approved 2026-07-06): the 4-day athlete's ADDED day must complement the week,
-  // never replay it — the old 4th day (Upper A) repeated six Push A / Pull A lifts. Second chest
-  // angle, second row pattern, delts twice, arms on different implements; zero overlap with
-  // Push A / Pull A.
-  'Upper B': ['incline_bb_press', 'cable_row', 'db_shoulder_press', 'rear_delt_fly', 'hammer_curl', 'overhead_triceps_ext'],
-  'Lower A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
-  'Push A': ['bb_bench_press', 'bb_overhead_press', 'incline_db_press', 'lateral_raise', 'triceps_pushdown'],
-  // Conventional deadlift is the canonical hip-hinge — programmed on the pull day (standard PPL).
-  'Pull A': ['bb_deadlift', 'bb_row', 'lat_pulldown', 'face_pull', 'bb_curl'],
-  'Legs A': ['bb_back_squat', 'bb_rdl', 'leg_press', 'leg_curl', 'standing_calf_raise'],
-  'Push B': ['incline_bb_press', 'db_shoulder_press', 'chest_dip', 'cable_lateral_raise', 'overhead_triceps_ext'],
-  // P2 (approved 2026-07-06): the week already rows five ways with a third horizontal row here —
-  // preacher curl gives the 5-day athlete the second arms slot instead of a redundant row.
-  'Pull B': ['pull_up', 't_bar_row', 'preacher_curl', 'rear_delt_fly', 'hammer_curl'],
-  'Legs B': ['front_squat', 'hip_thrust', 'hack_squat', 'walking_lunge', 'seated_calf_raise'],
-};
-
-// Calves are OUT of the women's splits (founder 2026-07-10) — the slot goes to the
-// glute / lower-body emphasis women's programming is built around instead (kickback /
-// abduction / machine quad work). Calf work stays in the catalog + men's splits.
-const WOMEN: Record<string, string[]> = {
-  'Full Body A': ['bb_back_squat', 'hip_thrust', 'db_bench_press', 'lat_pulldown', 'leg_curl', 'cable_kickback'],
-  'Upper A': ['db_bench_press', 'lat_pulldown', 'db_shoulder_press', 'cable_row', 'lateral_raise'],
-  'Upper B': ['incline_db_press', 'cable_row', 'lateral_raise', 'face_pull', 'bb_curl'],
-  'Lower A': ['hip_thrust', 'bb_back_squat', 'bb_rdl', 'leg_curl', 'cable_pull_through', 'hip_abduction'],
-  'Lower B': ['bulgarian_split_squat', 'hip_thrust', 'leg_press', 'leg_curl', 'hip_abduction', 'cable_kickback'],
-  // Legs A (P3, approved 2026-07-06): the 4-day athlete's ADDED lower day was half of Lower A
-  // re-run (hip thrust ×3/week, squat + RDL duplicated). Same glute-focused identity, now
-  // genuinely distinct: bridge + DB hinge + machine quad work — the week's three lower days
-  // become barbell-hinge / unilateral+machine / bridge+machine-quad.
-  'Legs A': ['glute_bridge', 'db_rdl', 'hack_squat', 'cable_kickback', 'hip_abduction', 'leg_extension'],
-  'Legs B': ['bulgarian_split_squat', 'glute_bridge', 'walking_lunge', 'leg_extension', 'cable_pull_through', 'cable_kickback'],
-};
-
-// daysPerWeek → ordered day names. The frequency philosophy is founder-directed
-// (2026-06-21):
-//   MEN  — legs exactly ONCE per week (except a 6-day split), the rest of the week
-//          leaning into chest/back/shoulders/arms. So 2d→Upper/Lower, 3d+→PPL with a
-//          single Legs day plus extra upper sessions; only 6d adds a second Legs day.
-//   WOMEN — the mirror: lower-body / glute / posterior-chain emphasis at every
-//          frequency (lower sessions ≥ upper sessions), since that's what they train for.
-const MEN_SPLITS: Record<number, string[]> = {
-  1: ['Full Body A'],
-  2: ['Upper A', 'Lower A'],
-  3: ['Push A', 'Pull A', 'Legs A'],
-  4: ['Push A', 'Pull A', 'Legs A', 'Upper B'],
-  5: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B'],
-  6: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'],
-};
-const WOMEN_SPLITS: Record<number, string[]> = {
-  1: ['Full Body A'],
-  2: ['Lower A', 'Upper A'],
-  3: ['Lower A', 'Upper A', 'Lower B'],
-  4: ['Lower A', 'Upper A', 'Lower B', 'Upper B'],
-  5: ['Lower A', 'Upper A', 'Lower B', 'Upper B', 'Legs A'],
-  6: ['Lower A', 'Upper A', 'Lower B', 'Upper B', 'Legs A', 'Legs B'],
-};
+// ───────────────────────────── programme assembly ─────────────────────────────
+// The demographic split (MEN_SPLITS / WOMEN_SPLITS, and the MEN / WOMEN day pools they drew from) is
+// DELETED (register Part 5): the programme is assembled from her body map by assembleV5DayLists, not
+// chosen by sex × days from a shelf. Core is not a structural muscle here — it is supplemental work
+// added once per week by addWeeklyCore(), which honours the map's Core stance (off → none; emphasis →
+// a second core movement). Each day lists compounds first; dayFromBlueprint enforces the same.
 
 /**
  * Order a day's exercises for gym flow — the athlete works ONE piece of equipment to the end and
@@ -417,15 +344,26 @@ function applyWorkoutOrder(days: ProgramDay[], order: string[]): ProgramDay[] {
     .map((x) => x.d);
 }
 
-/** Append the week's single supplemental core slot to its host session (mutates in place). */
-function addWeeklyCore(days: ProgramDay[], daysPerWeek: number): void {
-  if (!days.length || !CORE_POOL.length) return;
-  const coreId = CORE_POOL[(Math.max(1, daysPerWeek) - 1) % CORE_POOL.length];
-  const ex = exerciseById(coreId);
-  if (!ex) return;
+/**
+ * Append the week's supplemental core work to its host session (mutates in place). Core is a muscle on
+ * the body map like any other (register S-50), so this HONOURS her Core stance:
+ *   • `off`      → no core at all (S-2 — an off muscle never appears; the map is the only "off" lever).
+ *   • `normal`   → one core movement (3 sets, last, upper-preferred).
+ *   • `emphasis` → a SECOND distinct core movement (S-4 — first claim on volume; the mark is not wasted).
+ * It stays SUPPLEMENTAL (a finisher, not a structural region day) per the founder's standing rule; the
+ * map decides whether and how much, Loop 3 is not run on it.
+ */
+function addWeeklyCore(days: ProgramDay[], daysPerWeek: number, coreStance: MuscleStance = 'normal'): void {
+  if (!days.length || !CORE_POOL.length || coreStance === 'off') return;
   const host = days[coreHostIndex(days)];
-  host.slots.push({ capability: ex.capability, exerciseId: ex.id, setCount: CORE_SETS, supplemental: true });
-  if (!host.muscleGroups.includes(ex.muscle)) host.muscleGroups.push(ex.muscle);
+  const count = coreStance === 'emphasis' ? Math.min(2, CORE_POOL.length) : 1;
+  const start = (Math.max(1, daysPerWeek) - 1) % CORE_POOL.length; // rotate the entry point by frequency
+  for (let k = 0; k < count; k++) {
+    const ex = exerciseById(CORE_POOL[(start + k) % CORE_POOL.length]);
+    if (!ex || host.slots.some((s) => s.exerciseId === ex.id)) continue; // skip a duplicate movement
+    host.slots.push({ capability: ex.capability, exerciseId: ex.id, setCount: CORE_SETS, supplemental: true });
+    if (!host.muscleGroups.includes(ex.muscle)) host.muscleGroups.push(ex.muscle);
+  }
 }
 
 // ───────────────────────────── cold-start starting weights ─────────────────────────────
@@ -575,7 +513,10 @@ export const fixtureModel: ModelClient = {
     // Frequency is 2..6 — one workout a week is not a programme, so it is not offered (onboarding wheel
     // is min 2), and clamping to 2 keeps the region split coherent (a single day can't cover a body).
     const n = Math.min(Math.max(profile.daysPerWeek, 2), 6);
-    const goal = profile.goal ?? 'build_muscle';
+    // One goal: hypertrophy (register Part 9 §A — the goal question is deleted; toning/strength are
+    // gone). The engine never reads a self-reported goal for a load or a set count; the day-one density
+    // is the hypertrophy scheme for everyone, then Loop 3 earns/cuts from facts.
+    const goal: Goal = 'build_muscle';
     const volume = profile.volume ?? 'moderate';
     const prefs = await loadPreferencesSafe();
 
@@ -615,7 +556,9 @@ export const fixtureModel: ModelClient = {
     // (register Part 5 — variety comes from a measured stall, not a schedule). Per-exercise state is
     // created lazily by advanceV5 in sessionTargets.
     for (const d of days) applyPins(d, prefs.pinsByMuscle); // a pinned lift leads its muscle (S-30/S-71)
-    addWeeklyCore(days, n); // one supplemental core block, last, upper-preferred
+    // Core rides as supplemental work, but its SIZE follows the body map (S-50/S-2/S-4): off → none,
+    // emphasis → a second movement. Never a shelf default that ignores what she declared.
+    addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal');
     const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
     // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
     // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
@@ -735,13 +678,16 @@ export const fixtureModel: ModelClient = {
           reasonDelta = Math.round((weight - prev) * 10) / 10;
         }
       }
-      // S-60: the FIRST set of a v5 lift with no recent fact is an approach measurement.
+      // S-60: the FIRST set of a v5 lift with no recent fact is an approach measurement, and it is
+      // LIGHT (B-1 · v5t.approachWeight) — a fraction of the working load so she is never loaded cold on
+      // a stale number. Only set 0 uses it; sets 1..n stay at `weight`, guarded by Loop 1.
       const approachFirst = v5t?.isApproach ? true : undefined;
+      const approachWeight = v5t?.approachWeight ?? null;
       // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
       // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
       const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
       for (let s = 0; s < MAX_SETS; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandHi, perRung, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: s === 0 && approachFirst && approachWeight != null ? approachWeight : weight, recommendedReps: reps, repBandHi, perRung, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

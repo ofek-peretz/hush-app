@@ -42,11 +42,27 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     expect(musclesIn(p).has('Chest' as never)).toBe(true); // S-63: emphasis guaranteed ≥1 exercise
   });
 
-  it('a legacy profile (no declared band) still gets the split, unchanged', async () => {
+  it('a profile with no declared body map → an all-normal assembled programme (no demographic shelf)', async () => {
     const p = await fixtureModel.generateProgram(profile({ sex: 'male' }));
     expect(p.days.length).toBe(4);
-    // The split trains legs (Push/Pull/Legs/Upper) — the demographic path is untouched.
+    // Map-driven with an all-normal default — every day still has work; the split is deleted (Part 5).
     for (const d of p.days) expect(d.slots.length).toBeGreaterThan(0);
+  });
+
+  it('S-2 · Core turned OFF ⇒ no core work is added (the map is the only "off" lever, S-50/S-74)', async () => {
+    const coreSlots = (p: { days: { slots: { exerciseId: string }[] }[] }) =>
+      p.days.flatMap((d) => d.slots).filter((s) => muscleOf(s.exerciseId) === 'Core').length;
+    const off = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: { Core: 'off' } }));
+    expect(coreSlots(off)).toBe(0); // Core off never appears — not even as a supplemental finisher
+    const normal = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: {} }));
+    expect(coreSlots(normal)).toBe(1); // normal Core → one supplemental core movement
+  });
+
+  it('S-4 · Core EMPHASISED ⇒ a second core movement (the mark is not silently wasted, S-50)', async () => {
+    const coreIds = (p: { days: { slots: { exerciseId: string }[] }[] }) =>
+      new Set(p.days.flatMap((d) => d.slots).filter((s) => muscleOf(s.exerciseId) === 'Core').map((s) => s.exerciseId));
+    const emph = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: { Core: 'emphasis' } }));
+    expect(coreIds(emph).size).toBe(2); // emphasis earns Core a second distinct movement
   });
 
   it('D · Loop 3 learned volume reshapes the programme — a grown muscle earns MORE exercises', async () => {

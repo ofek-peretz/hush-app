@@ -4,7 +4,7 @@
  */
 import { decideVolume } from '@/engine/v5/loop3';
 import { learnedRestS, setsToMinutes, maxSetsInBudget, fitsBudget } from '@/engine/v5/timeBudget';
-import { chooseWinner, chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
+import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 
 const vol = (over: Partial<Parameters<typeof decideVolume>[0]> = {}) =>
@@ -57,16 +57,20 @@ describe('S-64 · the time budget is measured from her REST, and is a ceiling no
   });
 });
 
-describe('S-32 tie-break · emphasis, then fewest weekly sets, then canonical order (F-9) — never a coin-toss', () => {
+describe('S-37 donor · never emphasis / floored, then MOST weekly sets, then reverse canonical order', () => {
   const c = (muscle: string, over: Partial<VolumeCandidate> = {}): VolumeCandidate => ({ muscle, isEmphasis: false, weeklySets: 10, atFloor: false, ...over });
-  it('emphasis wins outright', () => {
-    expect(chooseWinner([c('Chest'), c('Back', { isEmphasis: true })], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Back');
+  it('never donates from an emphasis muscle', () => {
+    // Only Chest is eligible (Back is emphasis) → Chest donates even though it is not the most-sets.
+    expect(chooseDonor([c('Chest', { weeklySets: 8 }), c('Back', { isEmphasis: true, weeklySets: 12 })], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Chest');
   });
-  it('else the muscle with the fewest weekly sets', () => {
-    expect(chooseWinner([c('Chest', { weeklySets: 12 }), c('Back', { weeklySets: 8 })], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Back');
+  it('donates from the muscle with the MOST weekly sets (best able to spare it)', () => {
+    expect(chooseDonor([c('Chest', { weeklySets: 12 }), c('Back', { weeklySets: 8 })], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Chest');
   });
-  it('else canonical order breaks the tie deterministically', () => {
-    expect(chooseWinner([c('Back'), c('Chest')], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Chest'); // Chest precedes Back
+  it('reverse canonical order breaks the tie deterministically', () => {
+    expect(chooseDonor([c('Back'), c('Chest')], CANONICAL_MUSCLE_ORDER)!.muscle).toBe('Back'); // Back trails Chest → donates first
+  });
+  it('returns null when every muscle is emphasis or at its floor', () => {
+    expect(chooseDonor([c('Chest', { isEmphasis: true }), c('Back', { atFloor: true })], CANONICAL_MUSCLE_ORDER)).toBeNull();
   });
 });
 

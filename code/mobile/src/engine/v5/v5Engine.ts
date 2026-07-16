@@ -2,8 +2,10 @@
  * Hush Engine v5 — the live integration façade (mirrors v4Engine.ts, but EXERCISE-keyed).
  *
  * Bridges the app's Session history + Profile to the pure v5 core and persists per-exercise state
- * (db.engineV5). Cadence: `advanceV5` folds the week's completed sets into ONE decision per exercise
- * (S-29 — one progression fed by both sessions) at the Sat-20:30 calendar roll. The prescription the
+ * (db.engineV5). Cadence: `advanceV5` folds each completed session into ONE decision per exercise the
+ * moment it lands — PER WORKOUT, never on a schedule (L7: a decision is told at the end of the
+ * workout; Loop 2 decides "the next occurrence, not next Saturday"). A lift trained twice in a week
+ * builds on itself (S-29). Saturday decides nothing — it is only a mirror (S-45). The prescription the
  * athlete sees comes from the durable ExerciseState. History is the substrate; there is no migration
  * from v4 (S-58).
  *
@@ -22,7 +24,7 @@ import { repsPerRung } from './repsPerRung';
 import { snapDown } from './grid';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
-import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN } from './constants';
+import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN, APPROACH_FRACTION } from './constants';
 
 export type SeedFor = (exerciseId: string) => number | null;
 
@@ -255,6 +257,10 @@ export interface V5Target {
   sets: number;
   /** True when this exercise has no recent completed set → the first set is an approach measurement (S-60). */
   isApproach: boolean;
+  /** The LIGHT load for the approach set only (B-1 · APPROACH_FRACTION of the working load, snapped to
+   *  the grid, floored at the lightest real weight). Null unless isApproach. The working sets stay at
+   *  `weight`; only set 1 is measured light, so she is never loaded cold on a stale number (S-60). */
+  approachWeight: number | null;
 }
 
 /** The newest ms-epoch at which a NON-approach working set of an exercise was performed, or null. */
@@ -281,15 +287,25 @@ export async function currentV5Targets(history: Session[], nowMs: number = Date.
   const windowMs = RECENCY_WINDOW_DAYS * 86400000;
   for (const id of Object.keys(ex)) {
     const st = ex[id];
-    const meta = exerciseMeta(id);
+    const meta = metaWithGrid(id, history); // needs her learned grid to snap the light approach load
     const last = lastPerformedMs(id, history);
     const withinWindow = last != null && nowMs - last <= windowMs;
+    const isApproach = !meta.bodyweight && !withinWindow;
+    // B-1: the approach set is a LIGHT measurement — a fraction of the working/seed load, snapped to a
+    // real LOADABLE weight (the equipment increment grid, NOT her sparse observed rungs: going lighter
+    // than her lightest performed load is exactly the point, so the observed grid would floor it at her
+    // own weight and defeat it). Only the FIRST set uses it; the working sets stay at `weight`, guarded
+    // by Loop 1. Null when non-approach, or when no lighter loadable weight exists (already at the bar/
+    // first pin) → the working load stands, since you cannot go lighter than what physically exists.
+    const light = st.load != null ? snapDown(st.load * APPROACH_FRACTION, meta.equipment) : 0;
+    const approachWeight = isApproach && st.load != null && light > 0 && light < st.load ? light : null;
     out[id] = {
       weight: st.load,
       reps: st.band.lo,
       bandHi: st.band.hi,
       sets: st.sets,
-      isApproach: !meta.bodyweight && !withinWindow,
+      isApproach,
+      approachWeight,
     };
   }
   return out;
@@ -337,7 +353,14 @@ export async function getVolumeTargetsV5(): Promise<Record<string, number>> {
 export function perRungForV5(exerciseId: string, history: Session[]): number | null {
   const meta = metaWithGrid(exerciseId, history);
   if (meta.bodyweight) return null;
-  const sets = setPerfs(exerciseId, history); // all her performed working sets (load, reps, rest)
+  // F-8: a measured statistic reads only the recency window — the most recent sessions of THIS lift,
+  // not all-time. (The pure core windows on `state.history`; the façade must window the raw history it
+  // flattens, or an old form/gym years ago would still weigh on today's slope.)
+  const recent = history
+    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+    .slice(0, RECENCY_WINDOW_SESSIONS);
+  const sets = setPerfs(exerciseId, recent); // her recent performed working sets (load, reps, rest)
   return repsPerRung([], [{ load: null, sets }], meta);
 }
 
