@@ -25,7 +25,6 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
-import { engineSlotIdAt } from '@/engine/slots';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
@@ -199,11 +198,6 @@ interface AppApi extends AppState {
   setVolume: (volume: WeeklyVolume) => Promise<void>;
   /** Persist the Apple Health connection (Settings). The switch's only writer. */
   setHealthConnected: (connected: boolean) => Promise<void>;
-  /** Deliberate replacement: persist the chosen exercise as the slot's preference (R18). */
-  replaceSlotExercise: (dayId: string, slotIndex: number, exerciseId: string) => Promise<void>;
-  /** Lock System: toggle the athlete lock on a slot. A locked slot is never auto-swapped by the
-   *  engine; manual replacement stays allowed and the lock stays attached to the slot. */
-  toggleSlotLock: (dayId: string, slotIndex: number) => Promise<void>;
   /** Athlete-owned exercise order within a workout (Athlete > Model). Durable + preserved across
    *  weekly regenerations. */
   reorderExercise: (dayId: string, fromIndex: number, toIndex: number) => Promise<void>;
@@ -784,60 +778,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
-      async replaceSlotExercise(dayId, slotIndex, exerciseId) {
-        if (!state.program) return;
-        // The slot's exercise IS the persisted preference (R18, §7.2). The
-        // capability class is unchanged (Replacement only ever offers in-class).
-        const day = state.program.days.find((d) => d.id === dayId);
-        // Guard (founder 2026-07-09): never create a duplicate — refuse a swap to a lift the
-        // workout already contains. The UI already hides these; this is the defense in depth.
-        if (day && day.slots.some((s, i) => i !== slotIndex && s.exerciseId === exerciseId)) return;
-        const slot = day?.slots[slotIndex];
-        const fromExercise = slot?.exerciseId;
-        const capability = slot?.capability;
-        const days = state.program.days.map((d) =>
-          d.id !== dayId
-            ? d
-            : { ...d, slots: d.slots.map((sl, i) => (i === slotIndex ? { ...sl, exerciseId } : sl)) },
-        );
-        const program: Program = { ...state.program, days };
-        const recents = await db.addRecent(exerciseId);
-        await db.saveProgram(program);
-        dispatch({ type: 'PROGRAM_UPDATED', program, recents });
-        // Program Ownership Contract: the choice is athlete-OWNED — persist it to the durable,
-        // append-only server preference log so it survives refetch/reinstall/device-change/
-        // regeneration and the model honors it with priority. Best-effort (local edit already
-        // applied); a transient failure is telemetered, never blocks the UI.
-        if (capability && fromExercise && fromExercise !== exerciseId) {
-          model
-            .setExercisePreference({ capability, fromExercise, toExercise: exerciseId, reason: 'preference' })
-            .catch((e) => void track('preference_sync_failed', { capability, kind: e instanceof HttpError ? e.kind : 'unknown' }));
-        }
-      },
-
-      async toggleSlotLock(dayId, slotIndex) {
-        if (!state.program) return;
-        const slotId = engineSlotIdAt(state.program, dayId, slotIndex);
-        if (!slotId) return; // core / unmapped slot — the engine never swaps it, so it is not lockable
-        const day = state.program.days.find((d) => d.id === dayId);
-        const slot = day?.slots[slotIndex];
-        if (!slot) return;
-        const locked = !slot.locked;
-        // In-place update (mirrors replaceSlotExercise): flip the display flag + persist, so a
-        // mid-week toggle never regenerates the week (which would clobber completed/edits).
-        const days = state.program.days.map((d) =>
-          d.id !== dayId ? d : { ...d, slots: d.slots.map((sl, i) => (i === slotIndex ? { ...sl, locked } : sl)) },
-        );
-        const program: Program = { ...state.program, days };
-        await db.saveProgram(program);
-        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-        void track('exercise_lock_toggled', { locked });
-        // Persist the durable, slot-keyed lock so it survives regen/replacement and the engine
-        // reconciles its swap gate. Best-effort (local edit already applied).
-        model
-          .setSlotLock({ slotId, locked })
-          .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'lock' }));
-      },
+      // The programme-edit swap (replaceSlotExercise → setExercisePreference, S-31) and the pin/lock
+      // toggle (toggleSlotLock, S-30) are DELETED (Rev 7, S-73). Exercise selection is now owned through
+      // the IN-WORKOUT swap (learned into a standing choice, S-69) and the body map (S-56); a stalled
+      // lift she resists twice becomes a learned leave-it (S-71). ProgramDetail is a read-only preview.
 
       async reorderExercise(dayId, fromIndex, toIndex) {
         if (!state.program) return;
