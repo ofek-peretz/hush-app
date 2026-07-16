@@ -33,6 +33,7 @@ import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageRe
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1 } from '@/engine/v5/liveSession';
+import { recordStructuralChangeV5 } from '@/engine/v5/v5Engine';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -733,6 +734,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             performedIds,
           );
           await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending });
+          // S-45: a newly ADOPTED learned swap (S-69) is a Hush decision — let the Saturday mirror name
+          // it. The adoption is the key whose standing substitute just changed.
+          for (const k of Object.keys(next.substitutes))
+            if (next.substitutes[k] !== prefs.substitutes[k])
+              await recordStructuralChangeV5(k, next.substitutes[k], 'swap').catch(() => {});
         } catch {
           /* best-effort — a learning failure never affects the saved workout */
         }

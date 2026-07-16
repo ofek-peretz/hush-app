@@ -280,6 +280,32 @@ export async function currentV5Targets(history: Session[], nowMs: number = Date.
   return out;
 }
 
+/**
+ * Record a STRUCTURAL change for the Saturday mirror (S-45): the exercise itself changed identity — a
+ * bodyweight graduation (S-52), a stall rotation (S-25.3), or a learned in-workout swap adopted as
+ * standing (S-69). These write `prefs.substitutes`, not the load changeLog, so without this the mirror
+ * (which reflects the week's decisions) would never mention them. Idempotent per (from, to, week): a
+ * regeneration that re-enacts the same standing substitute the same week does not log it twice.
+ */
+export async function recordStructuralChangeV5(
+  fromExercise: string,
+  toExercise: string,
+  kind: 'graduate' | 'swap',
+  atMs: number = Date.now(),
+): Promise<void> {
+  if (!fromExercise || !toExercise || fromExercise === toExercise) return;
+  const state = await load();
+  const log = state.changeLog ?? [];
+  // Idempotent within a week: a regeneration re-enacting the same standing substitute must not log it
+  // again. The mirror groups by calendar week, so a 7-day guard keeps one entry per adoption per week.
+  const WEEK_MS = 7 * 86400000;
+  const dup = log.some((c) => c.kind === kind && c.exerciseId === fromExercise && c.toExercise === toExercise && Math.abs(c.at - atMs) < WEEK_MS);
+  if (dup) return;
+  log.push({ exerciseId: fromExercise, decision: kind, loadFrom: null, loadTo: null, setsFrom: 0, setsTo: 0, bandFrom: [0, 0], bandTo: [0, 0], at: atMs, kind, toExercise });
+  state.changeLog = log.slice(-CHANGELOG_KEEP);
+  await save(state);
+}
+
 /** The learned per-muscle per-occurrence set target (Loop 3). Regeneration distributes each across
  *  that muscle's exercises (distributeMuscleSets). A muscle absent here is still on its day-one shape. */
 export async function getVolumeTargetsV5(): Promise<Record<string, number>> {
@@ -301,6 +327,27 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
 function explainChange(c: ChangeEntry): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
+  // A STRUCTURAL change (S-45): the lift changed identity. A graduation says "you outgrew X → Y"; a
+  // rotation / adopted learned-swap says "that slot missed the mark → Y". Reuses the existing copy.
+  if (c.kind && c.toExercise) {
+    const to = exerciseDisplayName(c.toExercise);
+    if (c.kind === 'graduate') {
+      return {
+        slotId: c.exerciseId, pattern: '' as never,
+        observation: L('graduate.observation', { from: ex }),
+        conclusion: L('graduate.conclusion'),
+        action: L('graduate.action', { ex: to }),
+        text: L('graduate.text', { from: ex, ex: to }),
+      };
+    }
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L('swap.observation'),
+      conclusion: L('swap.conclusion'),
+      action: L('swap.action', { ex: to }),
+      text: L('swap.text', { ex: to }),
+    };
+  }
   // Choose the copy by the REAL direction of the load move, not the decision label — a stall back-off
   // and a rail-capped progress both come DOWN (reprice copy: "matched to demonstrated capability"),
   // and a plain progress goes UP (progressLoad copy). This keeps the narration honest at the edges.
@@ -343,11 +390,14 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
   const inWeek = log.filter((c) => c.at >= start && c.at < end).sort((a, b) => a.at - b.at);
   const netByEx = new Map<string, ChangeEntry>();
   for (const c of inWeek) {
-    const prior = netByEx.get(c.exerciseId);
-    netByEx.set(c.exerciseId, prior ? { ...c, loadFrom: prior.loadFrom, setsFrom: prior.setsFrom, bandFrom: prior.bandFrom } : c);
+    // Structural changes (S-45) are keyed apart from load changes so a graduation and a load move on
+    // the same lift in one week both survive — they are two different things Hush did.
+    const key = `${c.exerciseId}|${c.kind ?? 'load'}`;
+    const prior = netByEx.get(key);
+    netByEx.set(key, prior ? { ...c, loadFrom: prior.loadFrom, setsFrom: prior.setsFrom, bandFrom: prior.bandFrom } : c);
   }
-  // Drop net no-ops (a lift that went up then back down to where it started).
-  return [...netByEx.values()].filter((c) => c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6);
+  // Keep every structural change; drop net no-op LOAD moves (up then back down to where it started).
+  return [...netByEx.values()].filter((c) => c.kind != null || c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6);
 }
 
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */

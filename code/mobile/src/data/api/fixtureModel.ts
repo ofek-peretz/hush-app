@@ -38,7 +38,7 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { bandFor } from '@/engine/v5/repBand';
-import { advanceV5, currentV5Targets, getVolumeTargetsV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, type V5Target } from '@/engine/v5/v5Engine';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN } from '@/engine/v5/constants';
@@ -873,12 +873,20 @@ export const fixtureModel: ModelClient = {
       // rotation never reads as a preference. Enacted at the next regeneration (the weekly roll).
       const changeIds = Object.keys(changes);
       if (changeIds.length) {
+        const enacted: { from: string; to: string; kind: 'graduate' | 'swap' }[] = [];
         await editPreferences((p) => {
           for (const id of changeIds) {
             const target = engineChangeTarget(id, changes[id], history);
-            if (target && target !== id) p.substitutes[id] = target;
+            if (target && target !== id) {
+              p.substitutes[id] = target;
+              enacted.push({ from: id, to: target, kind: changes[id] === 'graduate' ? 'graduate' : 'swap' });
+            }
           }
         }).catch((e) => void track('engine_error', { op: 'enactEngineChange', message: String(e) }));
+        // S-45: let the Saturday mirror name what Hush did (graduate/rotate write substitutes, not the
+        // load changeLog). Idempotent per week — a re-enacted standing change is not logged twice.
+        for (const e of enacted)
+          await recordStructuralChangeV5(e.from, e.to, e.kind).catch((err) => void track('engine_error', { op: 'recordStructuralChangeV5', message: String(err) }));
       }
       v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
         void track('engine_error', { op: 'currentV5Targets', message: String(e) });
