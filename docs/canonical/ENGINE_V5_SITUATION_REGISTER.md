@@ -906,17 +906,18 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 | **0** | **The fact substrate** — `restBeforeS` on every set, phone **and** watch | S-17, S-18, S-54, S-58 | ✅ **BUILT + WIRED** |
 | **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-60, S-61, S-67 | ✅ **BUILT** |
 | **2** | **The set loop, live** — `sessionStore` **and the watch** together | S-11…S-13, S-60 | ✅ **WIRED** |
-| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ built · ⛔ Loop 3 volume-over-time NOT wired into regeneration (the assembler now sets the day-one shape; growing/trimming per occurrence is a Rev 7 follow-up) |
+| **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ **WIRED (Rev 7 D, 2026-07-16)** — advanceV5 runs Loop 3 per muscle per occurrence (grow/hold/trim), the learned per-occurrence target persists (`EngineV5.volumeByMuscle`) and regeneration distributes it across the muscle's exercises (`distributeMuscleSets`, 3..5 each, new exercise on overflow); an over-budget day donates by S-37 (`chooseDonor`, emphasis protected). Seeded from her real time-trimmed prescription, so day-one is byte-identical |
 | **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | ✅ **WIRED (Rev 7)** — per-muscle T live; map-driven `generateProgram` live for the v5 cohort; the onboarding body-map screen sets `bodyMap`+`repBand` |
-| **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) |
+| **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) — incl. **structural** changes (graduate/rotate/learned-swap) named in the mirror (Rev 7 S-45, 2026-07-16) |
 | **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | ⛔ blocked — **new users are v5 (Rev 7)**, but existing v4 users remain until the founder recreates the testers (S-58); also the learned-swap UI deletion (S-73) must land first |
 
 *(Status **2026-07-16 (Rev 7)**: gated on `profile.repBand` — and onboarding now SETS it, so **every
 new athlete is on v5**. Live for that cohort: map-driven `generateProgram`, per-muscle T,
-`sessionStore`, the weekly mirror. Existing users stay v4 (no migration, S-58). Still NOT wired: the
-learned-swap occurrence-recording + UI deletion (S-68…S-74 §B), Loop 3 volume-over-time into
-regeneration, graduation/rotation reaching the programme (S-52/S-25.3), and the small clean-ups
-(`experience` removal, `workoutMinutes` → the time cap). See the memory
+`sessionStore`, the weekly mirror, **Loop 3 volume-over-time (D)**, graduation/rotation reaching the
+programme (S-52/S-25.3), and the learned exercise selection (C, S-68…S-70). Existing users stay v4 (no
+migration, S-58). Still NOT wired: the learned-swap UI DELETION (S-73, deliberately held until the
+learning is device-validated), the "leave-it" pin earned against rotation (S-71/S-72, a refinement),
+and the v4 deletion (blocked on the founder recreating the testers, S-58). See the memory
 `engine-v5-open-tasks-2026-07-15`.)*
 
 **Integration is never deferred.** Stages 0 and 2 are phone+watch by definition. The engine is never
