@@ -893,9 +893,13 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > FIRST stall still backs off and re-climbs (S-25's order holds); a repeated one rotates to the
 > same-muscle lift gone longest without (`engineChanges.rotationTarget`), enacted like graduation. The
 > load backs off in both cases; when no rotation target exists the lift simply backs off (S-53).
-> Still open: **S-71/S-72** (a learned "leave it" earned by swapping back against a rotation twice —
-> not yet wired; today the athlete overrides a rotation by swapping back, which the learned counter
-> reads as a preference). **S-73** (deleting the edit screen + pin/swap buttons) is held until the
+> **S-71/S-72 NOW WIRED (2026-07-16, commit `2135839`).** An engine rotation is marked in a new pref
+> `engineRotated` (anchor → rotated-to); if she swaps BACK to the rotated-away lift twice, the
+> swap-learning fold clears the substitute and `swapLearning.learnedLeaveIts` commits a learned pin —
+> the engine stops rotating it (`engineChanges.resolveEngineEnactments` drops a rotate/graduate on a
+> pinned lift, S-30/S-71). S-72 holds by construction: the engine writes `substitutes` directly and
+> never advances the athlete-swap counter, so only her own swap-backs earn a leave-it. (Graduation is
+> deliberately NOT resistible — S-71 is scoped to rotation.) **S-73** (deleting the edit screen + pin/swap buttons) is held until the
 > learning is device-validated, so the athlete never loses her only lever mid-flight. **Follow-up:**
 > the weekly mirror (S-45) narrates load moves from the change log, but NOT structural changes
 > (graduation / rotation / a learned swap write `substitutes`, not the change log) — narrating those
