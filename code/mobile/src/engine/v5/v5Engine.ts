@@ -24,7 +24,7 @@ import { repsPerRung } from './repsPerRung';
 import { snapDown } from './grid';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
-import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN, APPROACH_FRACTION } from './constants';
+import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
 
 export type SeedFor = (exerciseId: string) => number | null;
 
@@ -45,8 +45,10 @@ function metaWithGrid(exerciseId: string, history: Session[]): ExerciseMeta {
   return { equipment: m.equipment, bodyweight: m.bodyweight, observedLoads: observedLoads(exerciseId, history) };
 }
 
-/** The distinct real loads she has performed on an exercise (the learned grid, F-2). De-duped to 0.5. */
-function observedLoads(exerciseId: string, sessions: Session[]): number[] {
+/** The distinct real loads she has performed on an exercise (the learned grid, F-2). De-duped to 0.5.
+ *  Exported so the LIVE loop can snap a mid-session correction to a weight that physically exists at her
+ *  gym (a 2 kg dumbbell jump, a 5 kg stack), the same grid the between-session prescription already uses. */
+export function observedLoads(exerciseId: string, sessions: Session[]): number[] {
   const seen = new Set<number>();
   for (const s of sessions) for (const log of s.sets) {
     if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
@@ -264,58 +266,23 @@ export interface V5Target {
   reps: number; // Tlo
   bandHi: number; // Thi
   sets: number;
-  /** True when this exercise has no recent completed set → the first set is an approach measurement (S-60). */
-  isApproach: boolean;
-  /** The LIGHT load for the approach set only (B-1 · APPROACH_FRACTION of the working load, snapped to
-   *  the grid, floored at the lightest real weight). Null unless isApproach. The working sets stay at
-   *  `weight`; only set 1 is measured light, so she is never loaded cold on a stale number (S-60). */
-  approachWeight: number | null;
-}
-
-/** The newest ms-epoch at which a NON-approach working set of an exercise was performed, or null. */
-function lastPerformedMs(exerciseId: string, sessions: Session[]): number | null {
-  let newest: number | null = null;
-  for (const s of sessions) {
-    if (!s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null)) continue;
-    const t = Date.parse(s.startedAt);
-    if (Number.isFinite(t) && (newest == null || t > newest)) newest = t;
-  }
-  return newest;
 }
 
 /**
- * The current per-exercise prescription. A loaded lift with no completed set inside the recency
- * window (F-8, TIME) is an approach set (S-60): never performed (S-8) OR aged out by a long layoff
- * (S-38). Time-based so a gap actually pushes her last set out of the window — a count window never
- * could. `nowMs` injectable for tests.
+ * The current per-exercise prescription: the working load, at her band, from the very first set.
+ *
+ * There is NO approach / warm-up / measurement set (founder ruling, 2026-07-16 — Build #33 QA). It was
+ * removed entirely: every set, including set 1, is the real working weight, and Loop 1 responds to what
+ * she performs from the first set onward (as v4 did). `nowMs` kept for signature parity.
  */
 export async function currentV5Targets(history: Session[], nowMs: number = Date.now()): Promise<Record<string, V5Target>> {
+  void history; void nowMs; // no time-window decision remains (the approach set was the only reader)
   const state = await load();
   const ex = asStates(state);
   const out: Record<string, V5Target> = {};
-  const windowMs = RECENCY_WINDOW_DAYS * 86400000;
   for (const id of Object.keys(ex)) {
     const st = ex[id];
-    const meta = metaWithGrid(id, history); // needs her learned grid to snap the light approach load
-    const last = lastPerformedMs(id, history);
-    const withinWindow = last != null && nowMs - last <= windowMs;
-    const isApproach = !meta.bodyweight && !withinWindow;
-    // B-1: the approach set is a LIGHT measurement — a fraction of the working/seed load, snapped to a
-    // real LOADABLE weight (the equipment increment grid, NOT her sparse observed rungs: going lighter
-    // than her lightest performed load is exactly the point, so the observed grid would floor it at her
-    // own weight and defeat it). Only the FIRST set uses it; the working sets stay at `weight`, guarded
-    // by Loop 1. Null when non-approach, or when no lighter loadable weight exists (already at the bar/
-    // first pin) → the working load stands, since you cannot go lighter than what physically exists.
-    const light = st.load != null ? snapDown(st.load * APPROACH_FRACTION, meta.equipment) : 0;
-    const approachWeight = isApproach && st.load != null && light > 0 && light < st.load ? light : null;
-    out[id] = {
-      weight: st.load,
-      reps: st.band.lo,
-      bandHi: st.band.hi,
-      sets: st.sets,
-      isApproach,
-      approachWeight,
-    };
+    out[id] = { weight: st.load, reps: st.band.lo, bandHi: st.band.hi, sets: st.sets };
   }
   return out;
 }

@@ -32,8 +32,8 @@ import {
 import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
-import { applyLoop1 } from '@/engine/v5/liveSession';
-import { recordStructuralChangeV5 } from '@/engine/v5/v5Engine';
+import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
+import { recordStructuralChangeV5, observedLoads } from '@/engine/v5/v5Engine';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -507,6 +507,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
    * the count cleanly.
    */
   const loop1Ref = useRef<{ exerciseId: string; count: number }>({ exerciseId: '', count: 0 });
+  /**
+   * The athlete's completed-session history, loaded ONCE when a session starts — so a live Loop 1
+   * correction can snap to her learned real grid (`observedLoads`), landing on a weight that physically
+   * exists at her gym (a 2 kg dumbbell jump, a 5 kg stack) rather than the equipment default increment.
+   * Combined with THIS session's own logged sets at correction time. Empty until loaded (→ default grid).
+   */
+  const historyRef = useRef<Session[]>([]);
   // Seconds added to the CURRENT rest via "+15 sec" (phone or watch). Reset when a new
   // rest begins / ends. Bumping `restNonce` re-runs the mirror effect so the longer
   // rest is republished to the watch + Live Activity.
@@ -911,6 +918,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         restStartedAtRef.current = null;
         pendingRestSRef.current = null;
         loop1Ref.current = { exerciseId: '', count: 0 }; // Loop 1 correction budget resets per session
+        historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
         const plan2 = buildPlan(day, targets);
         const session: Session = {
           id: `sess_${Date.now()}`,
@@ -974,6 +982,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             return false;
           }
           sessionRef.current = active;
+          historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
           restStartedAtRef.current = r.restStartedAtMs;
           restExtraSecondsRef.current = r.restExtraS;
           // A rest banked before the kill still belongs to the set the athlete is about to log (L3).
@@ -1071,21 +1080,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setRestResumeRemainingS(null); // a fresh transition — the resumed-rest anchor is spent
         dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
-        // Engine v5 · Loop 1 — correct the NEXT set's load from what she just LIFTED (the fact, not
-        // the prescription). One call here reaches both the phone and the watch, since the mirror
-        // re-projects from the plan. Bodyweight / last-set / spent-budget are no-ops inside applyLoop1.
-        // S-60: the APPROACH set is a light measurement, excluded from every decision and rep comparison
-        // — so a correction never sizes off it (its light load would otherwise drag the working sets down
-        // toward the approach load). The working sets stay at her real number, corrected off each OTHER.
+        // Engine v5 · the remaining sets follow what she just LIFTED (the fact, not the prescription).
+        // One path here reaches both the phone and the watch, since the mirror re-projects from the plan.
+        //   1) CARRY the performed weight onto the rest of the exercise — an equipment-reality edit (up
+        //      or down) sticks instead of reverting to the prescription each set (founder, 2026-07-16).
+        //   2) LOOP 1 then corrects ON TOP from her reps: the band it reads is her IMMUTABLE Tlo
+        //      (target.repBandLo), never the reps she edited into recommendedReps, or every set would sit
+        //      "in band" and the load could never move. Bodyweight / last-set / spent-budget are no-ops.
+        // Every set is a working set (no approach set — founder ruling 2026-07-16), so this acts from set 1.
         if (loop1Ref.current.exerciseId !== current.exerciseId) loop1Ref.current = { exerciseId: current.exerciseId, count: 0 };
-        const l1 = current.target.isApproach
-          ? ({ plan, corrected: false, direction: 'none', nextLoad: setLog.actualWeight } as ReturnType<typeof applyLoop1>)
-          : applyLoop1(plan, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count);
+        // Her learned real grid for this lift = the loads she has performed on it, across her history AND
+        // this session so far (including the set just logged), so a correction snaps to a weight that
+        // exists at her gym rather than the equipment default increment.
+        const grid = observedLoads(current.exerciseId, [updated, ...historyRef.current]);
+        const carried = carryWeightForward(plan, current.globalIndex, setLog.actualWeight);
+        const l1 = applyLoop1(carried, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count, grid);
         if (l1.corrected) {
           loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
-          dispatch({ type: 'SWAP_PLAN', plan: l1.plan as Step[] });
           void track('loop1_correction', { sessionId: session.id, exerciseId: current.exerciseId, direction: l1.direction, from: setLog.actualWeight, to: l1.nextLoad });
         }
+        // Dispatch once for either effect (carry and/or correction). Identical-to-prescription set → no-op.
+        if (l1.plan !== plan) dispatch({ type: 'SWAP_PLAN', plan: l1.plan as Step[] });
 
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
         if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {

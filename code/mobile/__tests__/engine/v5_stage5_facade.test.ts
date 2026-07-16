@@ -55,14 +55,12 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     expect(t['bb_bench_press'].weight).toBe(70); // her demonstrated load, not the 60 seed
     expect(t['bb_bench_press'].reps).toBe(8); // Tlo
     expect(t['bb_bench_press'].bandHi).toBe(10); // Thi
-    expect(t['bb_bench_press'].isApproach).toBe(false);
   });
 
-  it('S-8 · never performed (loaded) → the prescription is an approach set', async () => {
+  it('S-8 · never performed (loaded) → the prescription is the working seed from set 1 (no approach set)', async () => {
     await ensureExercisesV5(['bb_bench_press'], BAND, [], seed);
     const t = await currentV5Targets([]);
-    expect(t['bb_bench_press'].weight).toBe(60); // the seed
-    expect(t['bb_bench_press'].isApproach).toBe(true);
+    expect(t['bb_bench_press'].weight).toBe(60); // the seed, shown as the working load from the first set
   });
 
   it('S-22 · a full-clear workout advances the load PER WORKOUT (not at Saturday — L7)', async () => {

@@ -21,16 +21,18 @@ export function bandFromTarget(recommendedReps: number, repBandHi?: number): Ban
   return { lo: recommendedReps, hi: repBandHi != null && repBandHi >= recommendedReps ? repBandHi : recommendedReps + 4 };
 }
 
-/** Engine meta the live loop needs (equipment + bodyweight). ObservedLoads arrive in Stage 3/4. */
-export function metaFor(exerciseId: string): ExerciseMeta {
+/** Engine meta the live loop needs (equipment + bodyweight). `observedLoads` — her learned real grid
+ *  for this lift — lets a mid-session correction snap to a weight that physically exists at her gym
+ *  (the same grid the between-session prescription uses); absent → the equipment default increment. */
+export function metaFor(exerciseId: string, observedLoads?: number[]): ExerciseMeta {
   const m = exerciseMeta(exerciseId);
-  return { equipment: m.equipment, bodyweight: m.bodyweight };
+  return { equipment: m.equipment, bodyweight: m.bodyweight, observedLoads };
 }
 
 export interface LiveStep {
   exerciseId: string;
   globalIndex: number;
-  target: { recommendedWeight: number | null; recommendedReps: number; repBandHi?: number; perRung?: number };
+  target: { recommendedWeight: number | null; recommendedReps: number; repBandLo?: number; repBandHi?: number; perRung?: number };
 }
 
 export interface Loop1Applied<T extends LiveStep> {
@@ -38,6 +40,30 @@ export interface Loop1Applied<T extends LiveStep> {
   corrected: boolean;
   direction: 'up' | 'down' | 'none';
   nextLoad: number | null;
+}
+
+/**
+ * Carry a PERFORMED weight onto the remaining sets of the SAME exercise (weight only). The load the
+ * athlete actually lifts is the baseline for the rest of the exercise — if she edits the prescribed
+ * weight (up or down: the machine's real pin, a heavier dumbbell she reached for), that choice STICKS
+ * for the remaining sets instead of reverting to the prescription every set. Reps/band/perRung are
+ * untouched (each set still targets Tlo). Loop 1's rep-based correction then applies ON TOP of this
+ * baseline. No-op for bodyweight (weight null), the last set, or when nothing actually changes — so a
+ * set completed at exactly the prescription is a true no-op (same plan reference). Pure.
+ */
+export function carryWeightForward<T extends LiveStep>(plan: T[], completedGlobalIndex: number, weight: number | null): T[] {
+  if (weight == null) return plan;
+  const cur = plan.find((s) => s.globalIndex === completedGlobalIndex);
+  if (!cur) return plan;
+  let changed = false;
+  const out = plan.map((s) => {
+    if (s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId && s.target.recommendedWeight !== weight) {
+      changed = true;
+      return { ...s, target: { ...s.target, recommendedWeight: weight } } as T;
+    }
+    return s;
+  });
+  return changed ? out : plan;
 }
 
 /**
@@ -53,6 +79,9 @@ export function applyLoop1<T extends LiveStep>(
   performedLoad: number | null,
   performedReps: number,
   correctionsSoFar: number,
+  /** Her learned real grid for this lift (the loads she has actually performed), so a correction lands
+   *  on a weight that exists at her gym. Absent → the equipment default increment (B-6). */
+  observedLoads?: number[],
 ): Loop1Applied<T> {
   const cur = plan.find((s) => s.globalIndex === completedGlobalIndex);
   const noop: Loop1Applied<T> = { plan, corrected: false, direction: 'none', nextLoad: performedLoad };
@@ -61,8 +90,11 @@ export function applyLoop1<T extends LiveStep>(
   const next = plan.find((s) => s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId);
   if (!next) return noop; // last set of this exercise — nothing ahead to correct (S-13)
 
-  const meta = metaFor(cur.exerciseId);
-  const band = bandFromTarget(cur.target.recommendedReps, cur.target.repBandHi);
+  const meta = metaFor(cur.exerciseId, observedLoads);
+  // Tlo comes from the IMMUTABLE band floor, never `recommendedReps`: the edit wheel overwrites the
+  // latter with her performed reps, which would make every set sit "in band" and freeze the load
+  // (founder QA, Build #33). Fall back to recommendedReps only for legacy targets that carry no band.
+  const band = bandFromTarget(cur.target.repBandLo ?? cur.target.recommendedReps, cur.target.repBandHi);
   const r = correctInSession({
     currentLoad: performedLoad,
     band,

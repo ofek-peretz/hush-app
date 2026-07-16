@@ -142,12 +142,3 @@ export const ATTEMPTS_TO_CLEAR_SEED = 1;
  */
 export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
 
-/**
- * B-1 (the light fraction) — the approach set's load as a fraction of the seed/last-working load. The
- * one condition an approach set fires is "no completed set inside the recency window" (S-60), which is
- * EXACTLY when the rail (L11) is inactive — so the guard on the first set is that it is deliberately
- * LIGHT and reachable ("she does not find out under a loaded bar"), read once, then the working sets
- * follow at her real number guarded by Loop 1. Theory-laden by nature (a fraction), acceptable only
- * because the approach set overwrites it in ~90 seconds and it never survives into a working load.
- */
-export const APPROACH_FRACTION = 0.5;

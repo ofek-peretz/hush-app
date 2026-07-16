@@ -149,6 +149,12 @@ export interface SetTarget {
   blockId?: string;
   recommendedWeight: number | null; // null => bodyweight
   recommendedReps: number; // engine v5: this is Tlo, the band floor / target
+  /** Engine v5 — Tlo, the band FLOOR, held immutably for Loop 1. `recommendedReps` starts equal to it,
+   *  but the athlete's edit wheel (editCurrentSet) overwrites `recommendedReps` with her PERFORMED reps
+   *  — so the live loop must read the band from here, or her reps would always sit "in band" and the
+   *  load could never move (founder QA, Build #33). Absent on legacy/neutral targets => fall back to
+   *  `recommendedReps`. */
+  repBandLo?: number;
   /** Engine v5 — Thi, the top of her declared band (the "too light" mark Loop 1 reads). Absent on
    *  profiles with no declared T => the live loop falls back to a provisional window. */
   repBandHi?: number;

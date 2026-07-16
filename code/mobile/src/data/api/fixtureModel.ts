@@ -407,7 +407,7 @@ const HYPERTROPHY_REP_TARGET = 8; // goal is hypertrophy for everyone (founder 2
  * Bodyweight lifts have no external load. The result still enters CALIBRATING, which fine-tunes it.
  * Injected into the engine as `seedFor`; discarded at calibration exit (C-8, §4.4).
  */
-function smartSeed(
+export function smartSeed(
   id: string,
   profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>,
   history: Session[],
@@ -687,16 +687,13 @@ export const fixtureModel: ModelClient = {
           reasonDelta = Math.round((weight - prev) * 10) / 10;
         }
       }
-      // S-60: the FIRST set of a v5 lift with no recent fact is an approach measurement, and it is
-      // LIGHT (B-1 · v5t.approachWeight) — a fraction of the working load so she is never loaded cold on
-      // a stale number. Only set 0 uses it; sets 1..n stay at `weight`, guarded by Loop 1.
-      const approachFirst = v5t?.isApproach ? true : undefined;
-      const approachWeight = v5t?.approachWeight ?? null;
+      // No approach / warm-up set (founder ruling, 2026-07-16): every set is the working weight from
+      // set 1, and Loop 1 responds to her performance from the first set (as v4 did).
       // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
       // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
       const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
       for (let s = 0; s < maxSetCount; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: s === 0 && approachFirst && approachWeight != null ? approachWeight : weight, recommendedReps: reps, repBandHi, perRung, isApproach: s === 0 ? approachFirst : undefined, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

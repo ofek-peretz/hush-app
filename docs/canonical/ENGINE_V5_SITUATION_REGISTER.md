@@ -13,6 +13,51 @@ the pin survives only as a fact earned by resisting rotation. One evidence-gate 
 K=2); no load-touching constant added. **Supersedes:** the v4 engine (`src/engine/v4/`) in whole. v4
 is not tuned — it is replaced.
 
+**★ REVISION 8 (2026-07-16, founder ruling from Build #33 manual QA) — THE APPROACH SET IS REMOVED
+ENTIRELY.** S-60 in whole (and its dependents — the "light load" B-1 fraction `APPROACH_FRACTION`, the
+`isApproach` *prescription*, the F-8/S-38 layoff re-measurement) is **gone from the engine.** Every set,
+including set 1, is now the real working load from the first set, and Loop 1 responds to what she
+performs from the very first set — the v4 behaviour the founder valued. Rationale (founder): "I don't do
+warm-up sets. It's nonsense that hurts UX and scares the customer from the first moment — a lift showing
+15 kg then jumping to 34 kg looks broken. In v4 it just showed the starting weight for the muscle group
+and the engine responded from set 1." **What this means for the rest of this document:** wherever S-60 /
+the approach set is invoked below (S-1, S-8, S-38, S-41, L2, L11, B-1, F-8), read it as *"the working
+load stands from set 1; Loop 1 is the in-session safety."* The **cross-exercise seed transfer** described
+in B-1/S-9 (a new lift inherits her proven same-pattern strength via the `baseKg` ratio, never a
+cold-start) **STAYS** — that was never the approach set, and it is verified live (`v5_cross_exercise_transfer`).
+Two guards are also KEPT: (a) the `SetLog.isApproach` **fold-exclusion** filters, because Build #33
+shipped the approach set live and testers' on-device histories already contain `isApproach` sets that
+must stay out of the fold; (b) the rail (L11) as the standing in-session/between-session ceiling.
+
+**★ THE BAND-FLOOR BUG, fixed the same day (Build #33 QA — the real defect behind "the load never
+moves").** Loop 1 read its rep band from `target.recommendedReps`, but the phone's edit wheel
+(`editCurrentSet`) overwrites `recommendedReps` with the athlete's *performed* reps — so the band
+tracked her input and every set sat "in band," freezing the load no matter what she entered. Fixed with
+an **immutable `SetTarget.repBandLo`** (the true Tlo, mirrors `repBandHi`, untouched by edits); Loop 1
+now reads the band from it. Test `v5_loop1_edited_reps`. This was independent of the approach set — it
+would have frozen the load even without one.
+
+**★ EDITED WEIGHT NOW CARRIES FORWARD (Build #33 QA, founder ruling).** A weight the athlete actually
+lifts is the baseline for the REST of the exercise — if she edits the prescribed load up or down (the
+machine's real pin, a heavier dumbbell she reached for), that choice STICKS for the remaining sets
+instead of reverting to the prescription every set (before, she had to re-edit each set). `sessionStore.
+completeSet` runs, in order: (1) `carryWeightForward(plan, idx, performedWeight)` — weight only; reps,
+band, perRung untouched (each set still targets Tlo); a set completed at exactly the prescription is a
+true no-op; (2) `applyLoop1` ON TOP, so an out-of-band rep count corrects FROM the load she actually
+lifted, not the old prescription. Both up and down. Tests `v5_carry_weight_forward`. **Credibility is
+immediate** — from set 2 of the first exercise on the first workout, the app shows her real working load
+and never asks her to re-enter it.
+
+**★ LIVE LOOP 1 NOW SNAPS TO HER LEARNED GRID (Build #33 QA, same batch).** A mid-session correction used
+to step by the equipment DEFAULT increment (`metaFor` carried no grid) — so a dumbbell raise could ask
+for "17 kg" that her gym doesn't stock (it jumps 16 → 18). Now `sessionStore.completeSet` computes
+`observedLoads(exerciseId, [thisSession, ...history])` — her real performed rungs across history AND this
+session so far — and passes it to `applyLoop1` (new optional arg) → `metaFor` → the grid math. So a
+correction lands on a weight that PHYSICALLY EXISTS at her gym, the same grid the between-session
+prescription already uses. Above her top observed rung it steps by the increment (a real new-PR raise,
+S-9). `historyRef` is loaded once at session start (and on resume). Legacy approach sets are excluded
+from the grid (`!isApproach`). Test `v5_loop1_learned_grid` (16 → 18 with grid, 16 → 17 without).
+
 **Post-Rev-7 audit fixes (2026-07-16)** — a hermetic code↔register review closed six gaps where the
 build had drifted from this contract, each now WIRED + tested: (1) **the approach set is LIGHT** —
 `APPROACH_FRACTION` (a declared piece of B-1) prescribes set 1 at a fraction of the working load,
@@ -679,7 +724,15 @@ more time?"*
 **And by L9, it does not wait for her either** — it assembles deterministically (pins cut last, in
 assembly order), **runs tonight's workout**, and leaves the question open.
 
-**S-60 · The approach set.**
+**S-60 · The approach set. — ⛔ REMOVED ENTIRELY (Revision 8, 2026-07-16, founder ruling). See the
+Revision 8 note at the top of this document.** The engine no longer prescribes any approach / warm-up /
+measurement set, in any condition. Every set is the working load from set 1; Loop 1 is the sole
+in-session safety. The description below is retained for history only — it does NOT describe the shipped
+engine. (The `SetLog.isApproach` fold-exclusion filters survive to keep legacy Build-#33 logged approach
+sets out of the fold; nothing writes the mark any more.)**
+
+*(Historical description follows — superseded by Revision 8.)*
+
 The first set of a lift is a **measurement, not a working set**, in exactly **one condition: there is
 no completed set inside the recency window (F-8) to load her against.** That single rule covers both
 cases that matter — **a lift never performed** (S-8), and **a lift whose history has aged out of the

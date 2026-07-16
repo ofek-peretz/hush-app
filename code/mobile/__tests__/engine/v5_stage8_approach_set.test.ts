@@ -1,8 +1,11 @@
 /**
- * Engine v5 · Stage 8 — the approach set (S-60) end-to-end through the façade. A set marked
- * isApproach is a MEASUREMENT, not work: it is excluded from the weekly fold (the decision, the
- * anchor, the observed grid, the rail). The pure core already filters it; this proves the
- * persistence plumbing (SetLog.isApproach → setPerfs) carries the mark.
+ * Engine v5 · Stage 8 — legacy approach-set EXCLUSION from the fold.
+ *
+ * The approach / warm-up set was REMOVED as a prescription (founder ruling, 2026-07-16 — Build #33 QA):
+ * no set is ever prescribed as an approach set again. But Build #33 shipped with it live, so testers'
+ * on-device histories already contain sets marked `SetLog.isApproach`. Those must STAY excluded from
+ * the fold (the decision, the anchor, the observed grid, the rail), or a 15 kg light set would pollute
+ * her progression. This proves that legacy exclusion still holds.
  */
 import { ensureExercisesV5, advanceV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
@@ -35,37 +38,19 @@ describe('Stage 8 · the approach set is excluded from the fold', () => {
     expect(t['bb_bench_press'].weight!).toBeGreaterThan(60);
   });
 
-  it('S-38 · after a long layoff (aged out of the recency window) the next set is an approach set', async () => {
+  it('no approach set is ever prescribed — even after a long layoff the working load shows from set 1', async () => {
     const performedAt = new Date('2026-06-01T10:00:00Z');
     const history: Session[] = [session(performedAt.toISOString(), [set(80, 8), set(80, 8)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
-    // 10 days later — within the window → NOT an approach set.
-    const soon = performedAt.getTime() + 10 * 86400000;
-    expect((await currentV5Targets(history, soon))['bb_bench_press'].isApproach).toBe(false);
-    // 40 days later — aged out (> 28-day F-8 window) → approach set re-measures her (S-38).
-    const later = performedAt.getTime() + 40 * 86400000;
-    expect((await currentV5Targets(history, later))['bb_bench_press'].isApproach).toBe(true);
+    const t = (await currentV5Targets(history))['bb_bench_press'];
+    // The working load stands, from the very first set — no light measurement, no jump (founder ruling).
+    expect(t.weight).toBe(80);
+    // The field is gone entirely.
+    expect((t as Record<string, unknown>).isApproach).toBeUndefined();
+    expect((t as Record<string, unknown>).approachWeight).toBeUndefined();
   });
 
-  it('S-60 / B-1 · the approach set is prescribed LIGHT — a fraction of the working load, never cold on a stale number', async () => {
-    const performedAt = new Date('2026-06-01T10:00:00Z');
-    // She last benched 80 kg, then a long layoff aged it out of the window.
-    const history: Session[] = [session(performedAt.toISOString(), [set(80, 8), set(80, 8)])];
-    await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
-    const later = performedAt.getTime() + 40 * 86400000; // > 28-day F-8 window → approach
-    const t = (await currentV5Targets(history, later))['bb_bench_press'];
-    expect(t.isApproach).toBe(true);
-    expect(t.weight).toBe(80); // the working sets still stand at her real number (Loop 1 guards them)
-    // The APPROACH set is light: strictly below the working load, and strictly above zero (reachable).
-    expect(t.approachWeight).not.toBeNull();
-    expect(t.approachWeight!).toBeLessThan(t.weight!);
-    expect(t.approachWeight!).toBeGreaterThan(0);
-    // A non-approach lift carries no approachWeight.
-    const soon = performedAt.getTime() + 10 * 86400000;
-    expect((await currentV5Targets(history, soon))['bb_bench_press'].approachWeight).toBeNull();
-  });
-
-  it('a week with ONLY an approach set banks no decision (nothing but a measurement happened)', async () => {
+  it('a legacy week with ONLY an approach set banks no decision (nothing but a measurement happened)', async () => {
     const history: Session[] = [session(WEEK1, [set(40, 20, true)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
