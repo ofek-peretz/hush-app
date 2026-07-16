@@ -49,7 +49,11 @@ export interface ExerciseState {
   /** Current prescribed load; null = bodyweight. */
   load: number | null;
   band: Band;
-  /** Prescribed working-set count for this lift (Loop 3 owns changes; clamped to F-1). */
+  /** VESTIGIAL — kept for the ExerciseState shape but not the source of truth for the prescription.
+   *  Volume is owned per-MUSCLE by Loop 3 (`EngineV5.volumeByMuscle`) and distributed onto the
+   *  programme's slot.setCount; this per-EXERCISE field stays at its init value. Reads that need the
+   *  real set count use the programme slot, never this. (A full removal would ripple through Loop2Result
+   *  + the changeLog; it earns nothing, so it is documented rather than torn out.) */
   sets: number;
   /** Newest-first; kept to the recency window (F-8) plus a little slack for the rail. */
   history: SessionRecord[];
