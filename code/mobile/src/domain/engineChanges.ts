@@ -9,7 +9,7 @@
  * These are ENGINE changes, not athlete swaps (S-72): the integration writes them straight to
  * `substitutes`, bypassing the learned-swap occurrence counter — so a rotation never reads as a swap.
  */
-import { exerciseById, exercisesForMuscle, isSwapOnly, progressionRule } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, progressionRule } from '@/data/exercises';
 import type { Session } from '@/data/local/models';
 
 /** S-52 — the next harder catalogue variation for a bodyweight lift (knee push-up → push-up → dip).
@@ -45,4 +45,37 @@ export function engineChangeTarget(
   history: Session[],
 ): string | undefined {
   return kind === 'graduate' ? graduationTarget(exerciseId) : rotationTarget(exerciseId, history);
+}
+
+/** One concrete engine enactment: replace `from` with `to`; `rotated` marks a rotation (S-71/S-72). */
+export interface EngineEnactment {
+  from: string;
+  to: string;
+  kind: 'graduate' | 'swap';
+  rotated: boolean;
+}
+
+/**
+ * Resolve the engine's wanted changes (S-52 graduate / S-25.3 rotate) into concrete substitutions.
+ *
+ * **S-30 / S-71 — a leave-it (a learned pin) is never rotated or graduated away.** A lift she earned by
+ * resisting the engine's rotation twice keeps its load progression (back-off/re-climb) but is never
+ * taken from her, so a wanted change on a pinned lift is dropped here. **S-71/S-72** — a rotation is
+ * flagged (`rotated`) so the integration can mark `engineRotated`, keeping the engine's own move out of
+ * the athlete-swap counter. Pure and deterministic; the integration only writes what this returns.
+ */
+export function resolveEngineEnactments(
+  changes: Record<string, 'graduate' | 'rotate'>,
+  pinnedByMuscle: Record<string, string>,
+  history: Session[],
+): EngineEnactment[] {
+  const out: EngineEnactment[] = [];
+  for (const id of Object.keys(changes)) {
+    const muscle = muscleOf(id);
+    if (muscle && pinnedByMuscle[muscle] === id) continue; // S-30/S-71: a leave-it is never taken away
+    const target = engineChangeTarget(id, changes[id], history);
+    if (target && target !== id)
+      out.push({ from: id, to: target, kind: changes[id] === 'graduate' ? 'graduate' : 'swap', rotated: changes[id] === 'rotate' });
+  }
+  return out;
 }

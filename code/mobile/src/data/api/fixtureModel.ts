@@ -42,7 +42,7 @@ import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChange
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN } from '@/engine/v5/constants';
-import { engineChangeTarget } from '@/domain/engineChanges';
+import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
 import { epley, normalizeLoad } from '@/engine/v4/reads';
 import { displayWeekNumber, trainingWeekNumber } from '@/domain/weekCadence';
@@ -879,16 +879,17 @@ export const fixtureModel: ModelClient = {
       // and write it to `substitutes` (which the assembler honours, C1). These are ENGINE changes, not
       // athlete swaps (S-72) — written straight to substitutes, never through the learned counter, so a
       // rotation never reads as a preference. Enacted at the next regeneration (the weekly roll).
-      const changeIds = Object.keys(changes);
-      if (changeIds.length) {
-        const enacted: { from: string; to: string; kind: 'graduate' | 'swap' }[] = [];
+      // Resolve the wanted changes to concrete substitutions, honouring leave-it pins (S-30/S-71: a
+      // pinned lift is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
+      // enacts what the resolver returns.
+      const enacted = resolveEngineEnactments(changes, prefs.pinsByMuscle, history);
+      if (enacted.length) {
         await editPreferences((p) => {
-          for (const id of changeIds) {
-            const target = engineChangeTarget(id, changes[id], history);
-            if (target && target !== id) {
-              p.substitutes[id] = target;
-              enacted.push({ from: id, to: target, kind: changes[id] === 'graduate' ? 'graduate' : 'swap' });
-            }
+          for (const e of enacted) {
+            p.substitutes[e.from] = e.to;
+            // S-71: mark an engine ROTATION so a later swap-back to it is read as RESISTANCE, not a fresh
+            // preference (S-72 keeps the two apart). A graduation is not a rotation → not marked.
+            if (e.rotated) (p.engineRotated ??= {})[e.from] = e.to;
           }
         }).catch((e) => void track('engine_error', { op: 'enactEngineChange', message: String(e) }));
         // S-45: let the Saturday mirror name what Hush did (graduate/rotate write substitutes, not the

@@ -59,3 +59,22 @@ export function extractOccurrences(offeredIds: string[], performedIds: string[])
 export function foldSessionSwaps(state: SwapLearning, offeredIds: string[], performedIds: string[]): SwapLearning {
   return foldOccurrences(extractOccurrences(offeredIds, performedIds), state);
 }
+
+/**
+ * S-71 — the learned "leave it." The engine rotates a genuinely stalled lift away (S-25.3, recorded in
+ * `engineRotated`: anchor → the lift it rotated to). If she swaps BACK to the anchor twice, the fold
+ * above clears that anchor's substitute — that resistance earns a learned pin (the engine stops
+ * rotating it, S-71). Given the substitutes BEFORE and AFTER a fold, return the anchors whose resisted
+ * rotation was just cleared, each to become a pin.
+ *
+ * S-72 — an engine rotation is never counted as an athlete swap: it writes `substitutes` DIRECTLY, so
+ * it never advances the fold's counter; only her own swap-backs can clear a substitute here. This
+ * function therefore fires solely on athlete resistance, never on the engine's own move.
+ */
+export function learnedLeaveIts(
+  prevSubstitutes: Record<string, string>,
+  nextSubstitutes: Record<string, string>,
+  engineRotated: Record<string, string>,
+): string[] {
+  return Object.keys(engineRotated).filter((anchor) => !!prevSubstitutes[anchor] && !nextSubstitutes[anchor]);
+}

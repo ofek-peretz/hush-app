@@ -3,8 +3,8 @@
  * Conservative: a clean single swap per muscle learns; ambiguity is skipped; two consecutive swaps
  * to the same target adopt; swapping back to the original twice clears it.
  */
-import { extractOccurrences, foldSessionSwaps } from '@/domain/swapLearning';
-import { emptyLearning, offeredFor } from '@/engine/v5/learnedSwap';
+import { extractOccurrences, foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
+import { emptyLearning, offeredFor, type SwapLearning } from '@/engine/v5/learnedSwap';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
 import { muscleOf } from '@/data/exercises';
@@ -86,6 +86,42 @@ describe('Rev 7 · foldSessionSwaps — two sessions adopt, and it is reversible
       .filter((id) => muscleOf(id) === 'Chest');
     expect(chest).toContain(DBBENCH); // the learned choice reaches the programme
     expect(chest).not.toContain(BENCH);
+  });
+});
+
+describe('Rev 7 · S-71/S-72 — resisting an engine rotation earns a learned leave-it', () => {
+  it('S-71 · swapping BACK to a rotated-away lift twice earns a leave-it (a pin)', () => {
+    // The engine rotated a stalled BENCH → DBBENCH (S-25.3): substitutes[BENCH]=DBBENCH, and the
+    // rotation is marked in engineRotated so a swap-back is read as resistance.
+    const engineRotated = { [BENCH]: DBBENCH };
+    let st: SwapLearning = { substitutes: { [BENCH]: DBBENCH }, pending: {} };
+
+    // Swap-back #1: the plan offers DBBENCH; she performs BENCH (the lift the engine took away).
+    let prev = st.substitutes;
+    st = foldSessionSwaps(st, [DBBENCH], [BENCH]);
+    expect(learnedLeaveIts(prev, st.substitutes, engineRotated)).toEqual([]); // one swap-back declares nothing
+
+    // Swap-back #2 (consecutive): the fold CLEARS the substitute — BENCH returns — and that resistance
+    // earns the leave-it. Thereafter fixtureModel skips any engine rotation of BENCH.
+    prev = st.substitutes;
+    st = foldSessionSwaps(st, [DBBENCH], [BENCH]);
+    expect(offeredFor(st, BENCH)).toBe(BENCH);
+    expect(learnedLeaveIts(prev, st.substitutes, engineRotated)).toEqual([BENCH]);
+  });
+
+  it('S-72 · accepting the rotation (performing the rotated-to lift) never moves the counter', () => {
+    const engineRotated = { [BENCH]: DBBENCH };
+    const st0: SwapLearning = { substitutes: { [BENCH]: DBBENCH }, pending: {} };
+    const st1 = foldSessionSwaps(st0, [DBBENCH], [DBBENCH]); // offered == performed → no swap
+    expect(st1.substitutes).toEqual({ [BENCH]: DBBENCH }); // the rotation stands, untouched
+    expect(st1.pending).toEqual({}); // the athlete-swap counter never moved
+    expect(learnedLeaveIts(st0.substitutes, st1.substitutes, engineRotated)).toEqual([]); // no resistance
+  });
+
+  it('S-72 · clearing a LEARNED substitute (not an engine rotation) is NOT a leave-it', () => {
+    // She adopted DBBENCH herself, then swapped back twice (S-70) — the original simply returns. With
+    // no engine rotation in play, no pin is earned: only resisting the ENGINE becomes a leave-it.
+    expect(learnedLeaveIts({ [BENCH]: DBBENCH }, {}, {})).toEqual([]);
   });
 });
 

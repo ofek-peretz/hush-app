@@ -8,9 +8,9 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, catalogIdFromEngine, type Exercise } from '@/data/exercises';
+import { exerciseById, catalogIdFromEngine, muscleOf, type Exercise } from '@/data/exercises';
 import { swapCandidates } from '@/domain/swapPool';
-import { foldSessionSwaps } from '@/domain/swapLearning';
+import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
@@ -728,16 +728,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const offeredIds = programDay.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId);
           const performedIds = [...new Set(saved.sets.filter((s) => !s.isApproach).map((s) => s.exerciseId))];
           const prefs = await db.loadPreferences();
+          const prev = prefs.substitutes;
           const next = foldSessionSwaps(
-            { substitutes: prefs.substitutes, pending: prefs.swapPending ?? {} },
+            { substitutes: prev, pending: prefs.swapPending ?? {} },
             offeredIds,
             performedIds,
           );
-          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending });
+          // S-71: the learned "leave it." The engine rotated a stalled lift away (marked in
+          // engineRotated). If she swaps BACK to that lift twice, the fold CLEARS its substitute here —
+          // that resistance earns a learned pin: the engine stops rotating it (fixtureModel skips a pin).
+          // Only her OWN swap-backs reach this; an engine rotation never advances the counter (S-72).
+          const engineRotated = { ...(prefs.engineRotated ?? {}) };
+          const pinsByMuscle = { ...prefs.pinsByMuscle };
+          for (const anchor of learnedLeaveIts(prev, next.substitutes, engineRotated)) {
+            const m = muscleOf(anchor);
+            if (m) pinsByMuscle[m] = anchor; // learned leave-it — inherits every pin role (S-30/S-59)
+            delete engineRotated[anchor];
+          }
+          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, pinsByMuscle, engineRotated });
           // S-45: a newly ADOPTED learned swap (S-69) is a Hush decision — let the Saturday mirror name
           // it. The adoption is the key whose standing substitute just changed.
           for (const k of Object.keys(next.substitutes))
-            if (next.substitutes[k] !== prefs.substitutes[k])
+            if (next.substitutes[k] !== prev[k])
               await recordStructuralChangeV5(k, next.substitutes[k], 'swap').catch(() => {});
         } catch {
           /* best-effort — a learning failure never affects the saved workout */

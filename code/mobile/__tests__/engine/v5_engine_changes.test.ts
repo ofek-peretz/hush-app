@@ -3,7 +3,7 @@
  * advanceV5 surfaces the wanted change; engineChanges resolves the target; the integration writes it to
  * substitutes (tested end-to-end via the assembler in v5_program_assembly's chain test).
  */
-import { graduationTarget, rotationTarget } from '@/domain/engineChanges';
+import { graduationTarget, rotationTarget, resolveEngineEnactments } from '@/domain/engineChanges';
 import { ensureExercisesV5, advanceV5, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import { muscleOf } from '@/data/exercises';
@@ -56,5 +56,35 @@ describe('Rev 7 · E — advanceV5 surfaces the wanted change', () => {
     await ensureExercisesV5(['knee_push_up'], BAND, history, bwSeed);
     const changes = await advanceV5(['knee_push_up'], BAND, history, bwSeed, new Date('2026-07-16T10:00:00Z').getTime());
     expect(changes['knee_push_up']).toBeUndefined();
+  });
+});
+
+describe('Rev 7 · S-30/S-71/S-72 — resolveEngineEnactments honours a leave-it pin', () => {
+  const history = [session('2026-07-10T10:00:00Z', [set('bb_bench_press', 8)])];
+
+  it('a wanted rotation is enacted, and FLAGGED as a rotation (so it can be marked, S-71/S-72)', () => {
+    const out = resolveEngineEnactments({ bb_bench_press: 'rotate' }, {}, history);
+    expect(out.length).toBe(1);
+    expect(out[0].from).toBe('bb_bench_press');
+    expect(muscleOf(out[0].to)).toBe('Chest');
+    expect(out[0].rotated).toBe(true); // a rotation → will be recorded in engineRotated
+  });
+
+  it('S-30/S-71 · a leave-it PIN is never rotated or graduated away — the change is dropped', () => {
+    // Chest is pinned to bench (a learned leave-it). Even though the engine wants to rotate it, nothing
+    // is enacted: the lift stays, keeping its load progression but never taken from her.
+    expect(resolveEngineEnactments({ bb_bench_press: 'rotate' }, { Chest: 'bb_bench_press' }, history)).toEqual([]);
+    expect(resolveEngineEnactments({ knee_push_up: 'graduate' }, { Chest: 'knee_push_up' }, history)).toEqual([]);
+  });
+
+  it('a pin on a DIFFERENT lift of the same muscle does not shield an unpinned one', () => {
+    const out = resolveEngineEnactments({ bb_bench_press: 'rotate' }, { Chest: 'incline_bb_press' }, history);
+    expect(out.length).toBe(1); // bench is not the pinned lift → it still rotates
+  });
+
+  it('a graduation is enacted but NOT flagged as a rotation (only rotations are resisted, S-71)', () => {
+    const out = resolveEngineEnactments({ knee_push_up: 'graduate' }, {}, history);
+    expect(out[0].kind).toBe('graduate');
+    expect(out[0].rotated).toBe(false);
   });
 });

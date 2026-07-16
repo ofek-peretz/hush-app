@@ -56,6 +56,12 @@ export interface OwnedPreferences {
   // replacement being accumulated (not yet adopted). Adopting writes `substitutes` above and clears
   // this. The pure decision logic is `engine/v5/learnedSwap`.
   swapPending?: Record<string, { target: string; count: number }>;
+  // Engine v5 (Rev 7, S-71/S-72) — anchor exerciseId the ENGINE rotated away (a stalled lift, S-25.3)
+  // → the lift it rotated TO. Marks a rotation as the engine's, so an athlete swap-BACK to the anchor
+  // is recognised as RESISTANCE (not a fresh preference — S-72 keeps the two signals apart). When a
+  // resisted rotation's substitute is cleared by two swap-backs, the anchor becomes a learned "leave
+  // it" (a pin, S-71) and is removed from here.
+  engineRotated?: Record<string, string>;
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
   // Athlete-LOCKED slots (Lock System): engine slotIds the athlete pinned against engine-initiated
