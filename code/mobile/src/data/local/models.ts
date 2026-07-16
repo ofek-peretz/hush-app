@@ -108,10 +108,6 @@ export interface Slot {
   // progression target. One per week, 3 sets, placed last, preferring upper sessions.
   // Rendered like any slot; it just never drives capability load/progression.
   supplemental?: boolean;
-  // Lock System: the athlete locked this slot's exercise against engine-initiated swaps.
-  // Present (true/false) only on engine-managed, lockable slots; undefined on core /
-  // unmapped slots (which the engine never swaps anyway, so they cannot be locked).
-  locked?: boolean;
   // STABLE engine-slot identity (founder 2026-07-09), stamped at generation from the CANONICAL
   // blueprint pattern-occurrence order — NOT the display order. This decouples a slot's durable
   // identity from equipment clustering + engine swaps, so an engine swap/graduation never shifts

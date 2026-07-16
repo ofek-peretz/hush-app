@@ -45,7 +45,6 @@ import { CardioDetail } from '@/screens/cardio/CardioDetail';
 import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { Paywall } from '@/screens/subscription/Paywall';
-import { V4Debug } from '@/screens/dev/V4Debug';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -128,7 +127,6 @@ function MainNavigator() {
       <MainStack.Screen name="Progress" component={Progress} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
-      {__DEV__ && <MainStack.Screen name="V4Debug" component={V4Debug} />}
     </MainStack.Navigator>
   );
 }

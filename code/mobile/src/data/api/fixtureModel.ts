@@ -730,32 +730,9 @@ export const fixtureModel: ModelClient = {
     return { timestamp: new Date().toISOString(), ...computePortrait(history, profile) };
   },
 
-  async setExercisePreference({ toExercise }: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }) {
-    // Pin the athlete's choice by MUSCLE (swaps are muscle-scoped), so a weekly regeneration
-    // honors it. The slot's capability is preserved automatically (muscle ⊂ capability).
-    const muscle = exerciseById(toExercise)?.muscle;
-    if (!muscle) return;
-    await editPreferences((p) => {
-      p.pinsByMuscle[muscle] = toExercise;
-    });
-  },
-  async restoreExercisePreference({ capability }: { capability: Capability }) {
-    await editPreferences((p) => {
-      for (const muscle of Object.keys(p.pinsByMuscle)) {
-        if (exercisesForMuscle(muscle as MuscleGroup)[0]?.capability === capability) delete p.pinsByMuscle[muscle];
-      }
-    });
-  },
-  async setSlotLock({ slotId, locked }: { slotId: string; locked: boolean }) {
-    // Lock System: the lock belongs to the durable engine slotId, so it survives weekly
-    // regeneration and manual replacement. ensureSlots reconciles the engine state from this set.
-    await editPreferences((p) => {
-      const set = new Set(p.lockedSlots);
-      if (locked) set.add(slotId);
-      else set.delete(slotId);
-      p.lockedSlots = [...set];
-    });
-  },
+  // The programme-edit swap (setExercisePreference / restoreExercisePreference, S-31) and the slot
+  // lock (setSlotLock, S-30) are DELETED (Rev 7, S-73). Selection is learned from the in-workout swap
+  // (S-69), the body map (S-56), and the learned leave-it against a rotation (S-71).
   async setSubstitute({ primaryExercise, substituteExercise, remove }: { primaryExercise: string; substituteExercise?: string; remove?: boolean }) {
     await editPreferences((p) => {
       if (remove || !substituteExercise) delete p.substitutes[primaryExercise];

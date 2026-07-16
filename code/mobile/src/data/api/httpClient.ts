@@ -331,26 +331,6 @@ export class HttpModelClient implements ModelClient {
   }
 
   // ---- Program Ownership Contract: durable, server-backed athlete-owned structure ----
-  async setExercisePreference({ capability, fromExercise, toExercise, reason }: { capability: Capability; fromExercise: string; toExercise: string; reason?: string }): Promise<void> {
-    await this.request('POST', '/preferences/exercise', {
-      client_event_id: newEventId(), capability, action: 'replace',
-      from_exercise: fromExercise, to_exercise: toExercise,
-      reason: reason ?? 'preference', source: 'program_detail',
-    });
-  }
-
-  async restoreExercisePreference({ capability }: { capability: Capability }): Promise<void> {
-    await this.request('POST', '/preferences/exercise', {
-      client_event_id: newEventId(), capability, action: 'restore', source: 'program_detail',
-    });
-  }
-
-  async setSlotLock({ slotId, locked }: { slotId: string; locked: boolean }): Promise<void> {
-    await this.request('POST', '/preferences/lock', {
-      client_event_id: newEventId(), slot_id: slotId, locked, source: 'program_detail',
-    });
-  }
-
   async setSubstitute({ primaryExercise, substituteExercise, remove }: { primaryExercise: string; substituteExercise?: string; remove?: boolean }): Promise<void> {
     await this.request('POST', '/preferences/substitute', {
       client_event_id: newEventId(), primary_exercise: primaryExercise,

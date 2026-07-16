@@ -38,7 +38,6 @@ const K = {
   firsts: 'hush.telemetry.firsts',
   health: 'hush.health.state',
   preferences: 'hush.preferences',
-  engineV4: 'hush.engine.v4', // Hush v4 per-slot progression state (gated; see engine/v4)
   engineV5: 'hush.engine.v5', // Hush v5 exercise-keyed progression state (see engine/v5)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
@@ -64,19 +63,8 @@ export interface OwnedPreferences {
   engineRotated?: Record<string, string>;
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
-  // Athlete-LOCKED slots (Lock System): engine slotIds the athlete pinned against engine-initiated
-  // swaps. The lock belongs to the SLOT (durable across regen + manual replacement), never the
-  // exercise — so it is keyed by the engine's stable slotId (deriveSlots), not an exercise id.
-  lockedSlots: string[];
-  // PERIODIC REFRESH (founder 2026-07-09): every 3-week cycle, ONE non-PINNed lift per workout is
-  // rotated to a fresh same-muscle variation (variety + plateau-breaking). `rotations` is the
-  // system-chosen exercise per engine slotId (overrides the blueprint, is overridden by an athlete
-  // pin). `rotationUsed` is the ordered list of lifts a slot has already cycled through — so the
-  // rotation walks the WHOLE pool with NO ping-pong (repeats only after the pool is exhausted).
-  // `lastRotationCycle` is the 3-week cycle index last rotated (so it fires once per cycle).
-  rotations: Record<string, string>;
-  rotationUsed: Record<string, string[]>;
-  lastRotationCycle: number;
+  // (The v4 Lock System `lockedSlots` and the 3-week periodic-refresh `rotations`/`rotationUsed`/
+  //  `lastRotationCycle` were removed with the v4 burial — S-58. v5 has no calendar rotation.)
 }
 
 export const EMPTY_PREFERENCES: OwnedPreferences = {
@@ -85,10 +73,6 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
   substitutes: {},
   workoutOrder: [],
   exerciseOrderByWorkout: {},
-  lockedSlots: [],
-  rotations: {},
-  rotationUsed: {},
-  lastRotationCycle: -1,
 };
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
@@ -101,8 +85,7 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
 export const SCHEMA_VERSION = 7;
 
 /** Persisted mid-workout resume snapshot (S3). Shape mirrors state/sessionRecovery's
- *  ResumeSnapshot — kept structural here to avoid a persistence→store layering cycle
- *  (same pattern as EngineV4State). */
+ *  ResumeSnapshot — kept structural here to avoid a persistence→store layering cycle. */
 export interface PersistedSessionResume {
   schema: 1;
   plan: unknown[]; // Step[]
@@ -117,37 +100,12 @@ export interface PersistedSessionResume {
   pendingRestS?: number;
 }
 
-/** Persisted Hush v4 engine state (gated). `slots` keyed by durable slotId; `global` carries
- *  days_since_last_session; `lastAdvanceAt` is the completed-session count at the last weekly
- *  advance (the week-rollover trigger). Shape mirrors engine/v4 types (kept structural to avoid a
- *  layering cycle into the engine from the persistence module). */
-export interface EngineV4State {
-  slots: Record<string, unknown>; // slotId -> SlotState
-  global: unknown; // GlobalState
-  lastAdvanceAt: number; // completed-session COUNT already folded into the engine (the slice marker)
-  /** The Sat-20:30 week-open the engine last advanced for (founder 2026-07-09, finding 7). The engine
-   *  now progresses ONCE per training week at the calendar roll — not per N sessions — so the plan is
-   *  stable all week and updates on the whole week's work. null until the first program is built. */
-  lastAdvanceWeekOpen?: number;
-  /** How many weekly advances have run — the durable "week N" index for records + the Weekly Update
-   *  (lastAdvanceAt is no longer a clean multiple of frequency once weeks are calendar-sized). */
-  weeksProcessed?: number;
-  goal?: string; // last engine goal seen — a change applies the C4-1 goal-change transition
-  /** Id of the last pre-gap session an extended-absence ease (I-6) was applied for — the ease
-   *  fires ONCE per gap; reopening the app during the same gap never re-eases. */
-  absenceKey?: string;
-  /** The most recent week's explanations (for the Weekly Update + Why surfaces) + when produced.
-   *  `plan` is the per-changed-slot from→to snapshot captured at advance time (Weekly Update B
-   *  renders the whole week at its new loads). Structural to avoid a layering cycle into the engine.
-   *  `seen` flips once the athlete views it. */
-  lastUpdate?: { weekIndex: number; at: string; explanations: unknown[]; plan?: unknown[]; seen?: boolean };
-}
-
 /**
  * Persisted Hush v5 engine state — exercise-keyed (not slot-keyed). `exercises` maps exerciseId →
  * the v5 ExerciseState (load, band, sets, history); `lastAdvanceWeekOpen` is the Sat-20:30 the engine
  * last folded a week for. Shape kept structural to avoid a layering cycle into engine/v5. There is NO
- * migration from EngineV4State (register S-58): v4 state is dropped, history is the substrate.
+ * migration from the old v4 engine (register S-58): the TestFlight cohort is recreated clean, and
+ * history is the substrate.
  */
 export interface EngineV5State {
   exercises: Record<string, unknown>; // exerciseId -> ExerciseState
@@ -331,8 +289,6 @@ export const db = {
   },
 
   // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
-  loadEngineV4: () => getJSON<EngineV4State>(K.engineV4),
-  saveEngineV4: (s: EngineV4State) => setJSON(K.engineV4, s),
   loadEngineV5: () => getJSON<EngineV5State>(K.engineV5),
   saveEngineV5: (s: EngineV5State) => setJSON(K.engineV5, s),
 

@@ -84,6 +84,4 @@ export type MainParamList = {
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
   Paywall: { source: 'gate' | 'profile' } | undefined;
-  // Internal debug/QA (DEV only) — per-slot v4 engine state dump.
-  V4Debug: undefined;
 };

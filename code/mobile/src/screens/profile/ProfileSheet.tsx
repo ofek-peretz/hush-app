@@ -248,12 +248,6 @@ export function ProfileSheet({ navigation }: Props) {
             "Experience" row opened the same screen and experience is now derived, not edited. */}
         <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} last />
 
-        {__DEV__ ? (
-          <>
-            <Legend style={styles.sectionLegend}>Developer</Legend>
-            <Row label="v4 engine state" sub="Per-slot debug / QA" onPress={() => navigation.navigate('V4Debug')} last />
-          </>
-        ) : null}
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
             full bordered button — the heaviest control on the screen — which made logging out
