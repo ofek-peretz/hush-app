@@ -11,7 +11,7 @@
  * truth the loops read. So the grid never has to know which gym she is in.
  */
 
-import type { Equipment } from '@/engine/v4/constants';
+import type { Equipment } from '@/engine/catalog';
 import { STARTING_INCREMENT } from './constants';
 
 const EPS = 1e-9;

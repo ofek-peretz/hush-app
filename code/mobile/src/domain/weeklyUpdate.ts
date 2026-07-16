@@ -12,12 +12,11 @@ import {
   getWeeklyUpdate as getWeeklyUpdateV4,
   getWeeklyPlan as getWeeklyPlanV4,
   markWeeklyUpdateSeen as markWeeklyUpdateSeenV4,
-  type WeeklyUpdate,
-  type WeeklyPlanView,
 } from '@/engine/v4/v4Engine';
+import type { WeeklyUpdate, WeeklyPlanView } from '@/engine/weeklyView';
 import { getWeeklyUpdateV5, getWeeklyPlanV5, markWeeklyUpdateSeenV5 } from '@/engine/v5/v5Engine';
 
-export type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanLift } from '@/engine/v4/v4Engine';
+export type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanLift } from '@/engine/weeklyView';
 
 /** Is this athlete on the v5 engine? (She declared a rep band during v5 onboarding.) */
 async function onV5(): Promise<boolean> {

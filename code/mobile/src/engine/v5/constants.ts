@@ -13,7 +13,7 @@
  * B-7) are gone — the features they served were cut in Rev 6.
  */
 
-import type { Equipment } from '@/engine/v4/constants';
+import type { Equipment } from '@/engine/catalog';
 
 // ── Form constants (F-*) ──────────────────────────────────────────────────
 

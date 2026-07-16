@@ -12,11 +12,10 @@
 
 import type { Session, Program } from '@/data/local/models';
 import { db, type EngineV5State } from '@/data/local/db';
-import { exerciseMeta } from '@/engine/v4/catalogAdapter';
+import { exerciseMeta } from '@/engine/catalog';
 import { exerciseDisplayName } from '@/data/exercises';
 import { currentWeekOpen } from '@/domain/weekCadence';
-import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange } from '@/engine/v4/v4Engine';
-import type { Explanation, ExplanationLine } from '@/engine/v4/types';
+import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, Explanation, ExplanationLine } from '@/engine/weeklyView';
 import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
 import { snapDown } from './grid';

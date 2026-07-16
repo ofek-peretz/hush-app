@@ -7,8 +7,7 @@
  * replacement (the lock belongs to the SLOT, not the exercise inside it).
  */
 import type { Program } from '@/data/local/models';
-import type { Pattern } from '@/engine/v4/constants';
-import { enginePattern } from '@/engine/v4/catalogAdapter';
+import { enginePattern, type Pattern } from '@/engine/catalog';
 
 /**
  * Per day, the durable slotId aligned to each `day.slots` position (null where the slot is core /

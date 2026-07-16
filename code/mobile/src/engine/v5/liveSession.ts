@@ -7,7 +7,7 @@
  * (sessionStore.completeSet), so a correction reaches both surfaces from a single call.
  */
 
-import { exerciseMeta } from '@/engine/v4/catalogAdapter';
+import { exerciseMeta } from '@/engine/catalog';
 import { correctInSession } from './loop1';
 import type { Band, ExerciseMeta } from './types';
 
