@@ -40,6 +40,7 @@ import { bandFor } from '@/engine/v5/repBand';
 import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, type V5Target } from '@/engine/v5/v5Engine';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
+import { learnedRestS } from '@/engine/v5/timeBudget';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
@@ -227,21 +228,33 @@ function coreHostIndex(days: ProgramDay[]): number {
 
 // ── Session duration cap (founder rule 2026-06-23: the prescribed work must fit ≤ 1 hour) ──
 // Prescribed WORK SETS only — warm-ups, walks and setup are the athlete's, never counted.
-// Per-set minutes ≈ rest + execution; compounds rest longer than isolation.
+// Per-set minutes ≈ rest + execution; compounds rest longer than isolation. These are the DAY-ONE
+// bootstrap, used until she has rest data — then her MEASURED rest replaces the rest portion (S-64).
 const COMPOUND_SET_MIN = 3;
 const ISOLATION_SET_MIN = 2;
 const MAX_SESSION_MIN = 60;
+// SET_EXEC_SECONDS — the ACTIVE portion of a working set (execution, not rest). A set's real cost is
+// this + HER measured rest (S-17); tuned so exec + a typical rest ≈ the bootstrap above, keeping the
+// transition smooth (rest ~135s compound / ~90s isolation reproduces 3 / 2 minutes).
+const SET_EXEC_SECONDS = { compound: 45, isolation: 30 } as const;
 
 function isCompound(exerciseId: string): boolean {
   return exerciseById(exerciseId)?.tier === 'compound';
 }
 
-/** Estimated prescribed-work minutes for a day (work sets only). */
-export function estimateSessionMinutes(day: ProgramDay): number {
-  return day.slots.reduce(
-    (m, s) => m + s.setCount * (isCompound(s.exerciseId) ? COMPOUND_SET_MIN : ISOLATION_SET_MIN),
-    0,
-  );
+/** Per-set MINUTES for a slot: exec + her measured rest (S-64) once she has it, else the day-one
+ *  bootstrap (rest is not yet a fact). `restSecFor` returns her median rest for a lift, or null. */
+function perSetMinutes(exerciseId: string, restSecFor?: (id: string) => number | null): number {
+  const compound = isCompound(exerciseId);
+  const rest = restSecFor?.(exerciseId) ?? null;
+  if (rest == null) return compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN; // bootstrap (no rest data)
+  return (SET_EXEC_SECONDS[compound ? 'compound' : 'isolation'] + rest) / 60;
+}
+
+/** Estimated prescribed-work minutes for a day (work sets only). With `restSecFor`, a set costs exec +
+ *  her measured rest — the S-64 budget from FACTS, not v4's rest-blind fixed estimate. */
+export function estimateSessionMinutes(day: ProgramDay, restSecFor?: (id: string) => number | null): number {
+  return day.slots.reduce((m, s) => m + s.setCount * perSetMinutes(s.exerciseId, restSecFor), 0);
 }
 
 /**
@@ -259,13 +272,14 @@ export function estimateSessionMinutes(day: ProgramDay): number {
  */
 // `budgetMin` is her declared time budget (S-64) — profile.workoutMinutes, defaulting to the
 // 60-minute ceiling.
-function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): void {
+function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN, restSecFor?: (id: string) => number | null): void {
+  const over = () => estimateSessionMinutes(day, restSecFor) > budgetMin;
   const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
-  for (let k = isoIdx.length - 1; k >= 0 && estimateSessionMinutes(day) > budgetMin; k--) {
+  for (let k = isoIdx.length - 1; k >= 0 && over(); k--) {
     const slot = day.slots[isoIdx[k]];
     if (!slot.supplemental && slot.setCount > 3) slot.setCount = 3;
   }
-  for (let i = day.slots.length - 1; i >= 0 && estimateSessionMinutes(day) > budgetMin; i--) {
+  for (let i = day.slots.length - 1; i >= 0 && over(); i--) {
     if (day.slots.length <= 4) break;
     const ex = exerciseById(day.slots[i].exerciseId);
     if (ex && ex.tier === 'isolation' && !day.slots[i].supplemental && ex.muscle !== 'Calves' && ex.muscle !== 'Core') {
@@ -273,13 +287,13 @@ function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): v
     }
   }
   const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
-  for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > budgetMin; k--) {
+  for (let k = compoundIdx.length - 1; k >= 1 && over(); k--) {
     const slot = day.slots[compoundIdx[k]];
     if (slot.setCount > 3) slot.setCount = 3;
   }
   // Step 4 — the last resort. Recompute the per-muscle exercise count each pass and drop the trailing
   // compound whose muscle keeps another lift; stop when nothing qualifies (S-3, cannot fit honestly).
-  for (let guard = 0; guard < day.slots.length && estimateSessionMinutes(day) > budgetMin; guard++) {
+  for (let guard = 0; guard < day.slots.length && over(); guard++) {
     const countByMuscle: Record<string, number> = {};
     for (const s of day.slots) {
       if (s.supplemental) continue;
@@ -311,11 +325,11 @@ function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): v
  * `normal` muscle is never silently turned `off`). Whatever residual remains is left to the shared
  * enforceTimeCap safety net. Legacy is untouched — this runs for the v5 cohort only.
  */
-export function trimV5ToBudget(day: ProgramDay, bodyMap: Profile['bodyMap'], budgetMin: number): void {
+export function trimV5ToBudget(day: ProgramDay, bodyMap: Profile['bodyMap'], budgetMin: number, restSecFor?: (id: string) => number | null): void {
   const muscleOfSlot = (i: number) => exerciseById(day.slots[i].exerciseId)?.muscle;
   const isEmphasis = (m: string | undefined) => !!m && bodyMap?.[m as MuscleGroup] === 'emphasis';
   let guard = 0;
-  while (estimateSessionMinutes(day) > budgetMin && guard++ < 200) {
+  while (estimateSessionMinutes(day, restSecFor) > budgetMin && guard++ < 200) {
     const setsByMuscle: Record<string, number> = {};
     const exCountByMuscle: Record<string, number> = {};
     for (const s of day.slots) {
@@ -603,10 +617,24 @@ export const fixtureModel: ModelClient = {
     for (const d of days) applyPins(d, prefs.pinsByMuscle); // a pinned lift leads its muscle (S-30/S-71)
     addWeeklyCore(days, n); // one supplemental core block, last, upper-preferred
     const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
+    // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
+    // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
+    const history = await loadHistorySafe();
+    const restCache = new Map<string, number | null>();
+    const restSecFor = (id: string): number | null => {
+      let r = restCache.get(id);
+      if (r === undefined) {
+        const rests: (number | null | undefined)[] = [];
+        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach) rests.push(l.restBeforeS);
+        r = learnedRestS(rests);
+        restCache.set(id, r);
+      }
+      return r;
+    };
     // D4: resolve an over-budget day by DONATING from the muscle that can best spare it (S-37, emphasis
     // protected) BEFORE the positional safety net.
-    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin);
-    for (const d of days) enforceTimeCap(d, budgetMin); // prescribed work ≤ her minutes (warm-ups excluded)
+    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor);
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor); // prescribed work ≤ her minutes
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
     return { id: 'program_v1', frequency: n, days: ordered };
