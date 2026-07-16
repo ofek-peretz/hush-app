@@ -18,7 +18,7 @@
  */
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import type { BodyMap } from './bodyMap';
-import { CANONICAL_MUSCLE_ORDER } from './constants';
+import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
 import { exercisesForMuscle, isSwapOnly, muscleOf, type MuscleGroup } from '@/data/exercises';
 
 /**
@@ -32,11 +32,44 @@ export interface DayList {
   name: string;
   region: 'upper' | 'lower';
   exerciseIds: string[];
+  /** Per-exercise set count when Loop 3 has LEARNED this muscle's volume (distributeMuscleSets). Absent
+   *  entries fall back to the day-one `setsFor`, so a muscle still on its day-one shape is untouched. */
+  setCounts: Record<string, number>;
 }
 
 /** How many exercises a muscle gets on day one, from its starting weekly-set target (min 1, S-63). */
 export function exerciseCountFor(weeklySets: number): number {
   return Math.max(1, Math.round(weeklySets / DAY_ONE_EX_DIVISOR));
+}
+
+/**
+ * Distribute a muscle's LEARNED per-occurrence set target (Loop 3, S-32/S-34) across its exercises —
+ * the physical answer to "where the earned set goes" (register Part 4 §E). Each exercise holds
+ * SETS_MIN…SETS_MAX sets (F-1, [3,5]); when the target exceeds what the current exercises can hold, the
+ * next set OPENS A NEW EXERCISE (S-32), and when cutting would shave an exercise below the floor, one is
+ * DROPPED rather than starved (S-35 — "3×4 beats 2×5"). Returns the per-exercise set counts in
+ * assembly order, LARGEST FIRST, so the compound (which leads assembly) keeps the fullest scheme
+ * (S-35 — a compound is never sacrificed before an isolation). Pure, deterministic.
+ *
+ * At the day-one seed (target = Σ of her exercises' `setsFor`) this reproduces the existing shape: a
+ * Chest of bench(4)+fly(3) → target 7 → [4, 3], the compound leading. There is NO new constant — only
+ * F-1's [3,5] and the "~4 sets/exercise" lean that `setsFor` itself already expresses.
+ */
+export function distributeMuscleSets(target: number): number[] {
+  const t = Math.max(SETS_MIN, Math.round(target)); // never below one exercise at the floor (S-35)
+  const minCount = Math.ceil(t / SETS_MAX); // each ≤ 5
+  const maxCount = Math.max(1, Math.floor(t / SETS_MIN)); // each ≥ 3
+  // Aim for ~4 working sets per exercise (the setsFor lean), clamped so every bucket lands in [3,5].
+  const count = Math.max(1, Math.min(Math.max(Math.round(t / 4), minCount), maxCount));
+  const base = Math.floor(t / count);
+  let remainder = t - base * count; // spread the leftover onto the FIRST buckets → largest first
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const extra = remainder > 0 ? 1 : 0;
+    if (remainder > 0) remainder--;
+    out.push(Math.min(SETS_MAX, Math.max(SETS_MIN, base + extra)));
+  }
+  return out;
 }
 
 /**
@@ -110,6 +143,7 @@ export function assembleV5DayLists(
   days: number,
   pinsByMuscle: Record<string, string> = {},
   substitutes: Record<string, string> = {},
+  volumeByMuscle: Record<string, number> = {},
 ): DayList[] {
   const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
@@ -119,6 +153,7 @@ export function assembleV5DayLists(
   const regionDays = assignRegionDays(targets, days); // ['upper'|'lower'] × days; ≥1 day per region w/ volume
   const names = nameDays(regionDays);
   const dayExercises: string[][] = Array.from({ length: days }, () => []);
+  const setCounts: Record<string, number> = {}; // exerciseId → learned per-occurrence sets (Loop 3)
 
   for (const region of ['upper', 'lower'] as const) {
     const regionIdxs = regionDays.map((r, i) => (r === region ? i : -1)).filter((i) => i >= 0);
@@ -127,9 +162,20 @@ export function assembleV5DayLists(
       .filter((m) => regionOf(m) === region)
       .sort((a, b) => CANONICAL_MUSCLE_ORDER.indexOf(a) - CANONICAL_MUSCLE_ORDER.indexOf(b)); // F-9 determinism
 
-    // Every exercise this region trains, muscle by muscle (compound-led within a muscle).
+    // Every exercise this region trains, muscle by muscle (compound-led within a muscle). When Loop 3
+    // has LEARNED this muscle's volume, its exercise COUNT follows the learned target (a grown muscle
+    // opens a new exercise, a trimmed one drops back), and each exercise's set count is the learned
+    // distribution (largest first → the compound keeps the fullest scheme). Otherwise the day-one
+    // density (exerciseCountFor) and setsFor stand — byte-identical to before Loop 3 has any data.
     const picks: string[] = [];
-    for (const m of muscles) picks.push(...pickExercises(m, exerciseCountFor(targets[m]), pinsByMuscle[m], substitutes));
+    for (const m of muscles) {
+      const learned = volumeByMuscle[m];
+      const dist = learned != null ? distributeMuscleSets(learned) : null;
+      const count = dist ? dist.length : exerciseCountFor(targets[m]);
+      const picked = pickExercises(m, count, pinsByMuscle[m], substitutes);
+      if (dist) picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
+      picks.push(...picked);
+    }
 
     // Spread across the region's days: k % len puts one on each day first, then round-robins the rest —
     // so a day is a coherent session, and none is lopsided. Deterministic.
@@ -148,5 +194,5 @@ export function assembleV5DayLists(
     if (donor && donor.length) dayExercises[i].push(donor[0]);
   }
 
-  return dayExercises.map((exerciseIds, i) => ({ name: names[i], region: regionDays[i], exerciseIds }));
+  return dayExercises.map((exerciseIds, i) => ({ name: names[i], region: regionDays[i], exerciseIds, setCounts }));
 }

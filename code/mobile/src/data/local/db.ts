@@ -164,6 +164,17 @@ export interface EngineV5State {
   }[];
   /** The closed-week-end (ms) the athlete last marked seen — so a newly closed week reads unseen. */
   seenWeekEnd?: number;
+  /**
+   * Loop 3 (the Muscle loop) — the LEARNED per-occurrence set target per muscle (register Part 4 §E,
+   * S-32/S-34). Seeded from her real day-one prescription the first time a muscle is folded, then it
+   * grows (+1 when she completed everything AND a lift advanced) or is trimmed (−1 after two unfinished
+   * occurrences). Regeneration distributes this across the muscle's exercises (distributeMuscleSets),
+   * so an earned set actually reaches the bar; absent → the muscle is still on its day-one shape.
+   */
+  volumeByMuscle?: Record<string, number>;
+  /** Per-muscle count of CONSECUTIVE unfinished occurrences (S-34 — a second one in a row cuts a set).
+   *  Reset to 0 the moment she completes the muscle's sets again. */
+  unfinishedByMuscle?: Record<string, number>;
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */

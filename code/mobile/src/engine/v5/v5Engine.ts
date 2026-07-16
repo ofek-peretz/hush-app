@@ -18,7 +18,9 @@ import { currentWeekOpen } from '@/domain/weekCadence';
 import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange } from '@/engine/v4/v4Engine';
 import type { Explanation, ExplanationLine } from '@/engine/v4/types';
 import { decideExercise } from './loop2';
+import { decideVolume } from './loop3';
 import { snapDown } from './grid';
+import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
 import { RECENCY_WINDOW_SESSIONS, RECENCY_WINDOW_DAYS, SETS_MIN } from './constants';
 
@@ -133,6 +135,13 @@ export async function advanceV5(
   seedFor: SeedFor,
   nowMs: number = Date.now(),
   bucketOpenMs?: number,
+  /**
+   * The current programme's prescribed set count for an exercise (0 = not in the programme). Loop 3
+   * (the Muscle loop) needs it to know whether she COMPLETED a muscle's sets this occurrence, and to
+   * seed / cap a muscle's learned volume against what actually fit her time (the trimmed prescription).
+   * Absent (tests / legacy) → Loop 3 no-ops, so an occurrence advances load exactly as before.
+   */
+  prescribedSets: (exerciseId: string) => number = () => 0,
 ): Promise<Record<string, 'graduate' | 'rotate'>> {
   void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
@@ -152,8 +161,17 @@ export async function advanceV5(
   // rotate). The integration layer resolves the target and enacts it (writes substitutes). A later
   // progress/hold clears it — she is climbing again, so no change is wanted any more.
   const wantsChange: Record<string, 'graduate' | 'rotate'> = {};
+  const volume = (state.volumeByMuscle ??= {}); // Loop 3 — the learned per-muscle set target
+  const streaks = (state.unfinishedByMuscle ??= {}); // S-34 — consecutive-unfinished per muscle
   for (const sess of unfolded) {
     const at = Date.parse(sess.startedAt);
+    const advancedThisOcc = new Set<string>(); // lifts that ROSE this occurrence (Loop 3 anyAdvanced)
+    // Working sets she LOGGED per managed exercise this occurrence — the completed-count Loop 3 reads.
+    const loggedByEx: Record<string, number> = {};
+    for (const log0 of sess.sets) {
+      if (log0.isApproach || !managed.has(log0.exerciseId)) continue;
+      loggedByEx[log0.exerciseId] = (loggedByEx[log0.exerciseId] ?? 0) + 1;
+    }
     for (const id of Object.keys(ex)) {
       if (!managed.has(id)) continue; // only exercises in the current programme advance
       const st = ex[id];
@@ -167,6 +185,7 @@ export async function advanceV5(
       const out = decideExercise({ state: st, session: sets, meta, rotationAvailable: true });
       if (out.wantsChange) wantsChange[id] = out.wantsChange;
       else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
+      if (out.decision === 'progress') advancedThisOcc.add(id); // a lift of this muscle rose (S-32)
       // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
       // delta direction (explainChange), never the decision label. hold/ambiguous/approach say
       // nothing (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
@@ -174,6 +193,37 @@ export async function advanceV5(
         log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
       }
       ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
+    }
+
+    // ── Loop 3 · the Muscle loop (register Part 4 §E) — one volume decision per muscle per occurrence.
+    // Group the exercises she trained this occurrence by muscle, then decide +1 / hold / −1 sets from
+    // FACTS ONLY: did she complete every prescribed set for the muscle (and not end the session early),
+    // and did any of its lifts advance? Growth is capped at what actually fit her time — one set beyond
+    // the prescription she just finished (the prescription is already time-trimmed, S-64), so a muscle
+    // can never spiral past her minutes. The learned target seeds from that same real prescription, so
+    // an athlete on the day-one shape stays on it until she earns more.
+    const trainedByMuscle: Record<string, string[]> = {};
+    for (const id of Object.keys(loggedByEx)) {
+      const m = muscleOf(id);
+      if (m) (trainedByMuscle[m] ??= []).push(id);
+    }
+    for (const [m, ids] of Object.entries(trainedByMuscle)) {
+      const prescribedTotal = ids.reduce((s, id) => s + Math.max(0, prescribedSets(id)), 0);
+      if (prescribedTotal <= 0) continue; // nothing prescribed for this muscle → nothing to reason on
+      const completedAll = !sess.earlyFinish && ids.every((id) => loggedByEx[id] >= prescribedSets(id));
+      const anyAdvanced = ids.some((id) => advancedThisOcc.has(id));
+      const streak = completedAll ? 0 : (streaks[m] ?? 0) + 1;
+      streaks[m] = streak;
+      const current = volume[m] ?? prescribedTotal; // seed from her real (time-trimmed) prescription
+      const res = decideVolume({
+        sets: current,
+        minSets: SETS_MIN, // one exercise at the floor; a further cut drops an exercise (S-35, assembly)
+        maxSets: prescribedTotal + 1, // earn at most one set beyond what already fit her minutes (S-64)
+        completedAll,
+        anyAdvanced,
+        unfinishedStreak: streak,
+      });
+      volume[m] = res.sets;
     }
   }
   state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
@@ -228,6 +278,13 @@ export async function currentV5Targets(history: Session[], nowMs: number = Date.
     };
   }
   return out;
+}
+
+/** The learned per-muscle per-occurrence set target (Loop 3). Regeneration distributes each across
+ *  that muscle's exercises (distributeMuscleSets). A muscle absent here is still on its day-one shape. */
+export async function getVolumeTargetsV5(): Promise<Record<string, number>> {
+  const state = await load();
+  return { ...(state.volumeByMuscle ?? {}) };
 }
 
 /** Reset all v5 engine state (account wipe / tests). */

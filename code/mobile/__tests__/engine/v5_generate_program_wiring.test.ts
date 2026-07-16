@@ -49,6 +49,22 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     for (const d of p.days) expect(d.slots.length).toBeGreaterThan(0);
   });
 
+  it('D · Loop 3 learned volume reshapes the programme — a grown muscle earns MORE exercises', async () => {
+    const chestOnly = profile({ repBand: '8-10', bodyMap: { Chest: 'normal' } as never });
+    const distinctChest = (p: { days: { slots: { exerciseId: string }[] }[] }) =>
+      new Set(p.days.flatMap((d) => d.slots.map((s) => s.exerciseId)).filter((id) => muscleOf(id) === 'Chest')).size;
+
+    const dayOne = await fixtureModel.generateProgram(chestOnly);
+    const chest0 = distinctChest(dayOne);
+
+    // Loop 3 has LEARNED a much larger Chest volume over weeks → persist it, then regenerate.
+    await db.saveEngineV5({ exercises: {}, volumeByMuscle: { Chest: 14 } });
+    const grown = await fixtureModel.generateProgram(chestOnly);
+    const chest1 = distinctChest(grown);
+
+    expect(chest1).toBeGreaterThan(chest0); // the earned sets opened new Chest exercises (S-32)
+  });
+
   it('everything off never crashes — the belt keeps a workout existing (unreachable via validateMap)', async () => {
     const allOff = Object.fromEntries(
       ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Core', 'Quads', 'Hamstrings', 'Glutes', 'Calves'].map((m) => [m, 'off' as const]),

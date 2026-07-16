@@ -5,9 +5,54 @@
  * appears (S-2), everything off yields no workout (S-3), emphasis earns more (S-4/S-63), and the
  * region days fall out of where the volume is (mark lower → more lower days). No workout is ever empty.
  */
-import { assembleV5DayLists, exerciseCountFor, pickExercises, DAY_ONE_EX_DIVISOR } from '@/engine/v5/programAssembly';
+import { assembleV5DayLists, exerciseCountFor, distributeMuscleSets, pickExercises, DAY_ONE_EX_DIVISOR } from '@/engine/v5/programAssembly';
 import { muscleOf, exercisesForMuscle, isSwapOnly } from '@/data/exercises';
+import { SETS_MIN, SETS_MAX } from '@/engine/v5/constants';
 import type { BodyMap } from '@/engine/v5/bodyMap';
+
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+describe('Rev 7 · D · distributeMuscleSets — the learned per-occurrence volume becomes exercise set counts', () => {
+  it('every bucket stays within the [3,5] band (F-1), always at least one exercise', () => {
+    for (let t = 0; t <= 30; t++) {
+      const dist = distributeMuscleSets(t);
+      expect(dist.length).toBeGreaterThanOrEqual(1);
+      for (const s of dist) {
+        expect(s).toBeGreaterThanOrEqual(SETS_MIN);
+        expect(s).toBeLessThanOrEqual(SETS_MAX);
+      }
+    }
+  });
+
+  it('reproduces the day-one shape from the seed target (Σ setsFor): 7 → [4,3] compound-led', () => {
+    expect(distributeMuscleSets(7)).toEqual([4, 3]); // bench(4) + fly(3)
+    expect(distributeMuscleSets(6)).toEqual([3, 3]);
+    expect(distributeMuscleSets(8)).toEqual([4, 4]);
+    expect(distributeMuscleSets(4)).toEqual([4]);
+    expect(distributeMuscleSets(3)).toEqual([3]);
+  });
+
+  it('the earned set OPENS A NEW EXERCISE once the current ones are full (S-32)', () => {
+    // 10 sets cannot sit on 2 exercises without exceeding 5 apiece → a 3rd opens (3×4 ≥ 2×5, S-35).
+    expect(distributeMuscleSets(10).length).toBe(3);
+    expect(distributeMuscleSets(11).length).toBe(3); // [5,3,3]→remainder spread → [4,4,3]
+    expect(distributeMuscleSets(16).length).toBe(4); // emphasis grown → 4 exercises
+  });
+
+  it('the largest bucket leads (the compound keeps the fullest scheme, S-35)', () => {
+    const d = distributeMuscleSets(13); // [5,4,4]
+    for (let i = 1; i < d.length; i++) expect(d[i - 1]).toBeGreaterThanOrEqual(d[i]);
+  });
+
+  it('the buckets always sum back to the (floored) target — no set invented or lost', () => {
+    for (let t = SETS_MIN; t <= 25; t++) expect(sum(distributeMuscleSets(t))).toBe(t);
+  });
+
+  it('a sub-floor target never drops below one exercise at the floor (S-35)', () => {
+    expect(distributeMuscleSets(2)).toEqual([SETS_MIN]);
+    expect(distributeMuscleSets(0)).toEqual([SETS_MIN]);
+  });
+});
 
 const allExercises = (days: { exerciseIds: string[] }[]) => days.flatMap((d) => d.exerciseIds);
 const musclesTrained = (days: { exerciseIds: string[] }[]) => new Set(allExercises(days).map((id) => muscleOf(id)));

@@ -38,7 +38,7 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { toEngineProfile, ensureSlots, maybeAdvance, currentTargets, currentSlots, type V4SlotView } from '@/engine/v4/v4Engine';
 import { bandFor } from '@/engine/v5/repBand';
-import { advanceV5, currentV5Targets, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, type V5Target } from '@/engine/v5/v5Engine';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { engineChangeTarget } from '@/domain/engineChanges';
 import { enginePattern } from '@/engine/v4/catalogAdapter';
@@ -186,6 +186,9 @@ function dayFromBlueprint(
   goal: Goal,
   age?: number,
   volume: WeeklyVolume = 'moderate',
+  /** v5 Loop 3: the LEARNED per-exercise set count (distributeMuscleSets). Absent → the day-one
+   *  `setsFor`, so a muscle still on its day-one shape (and the whole legacy cohort) is untouched. */
+  setCounts?: Record<string, number>,
 ): ProgramDay {
   const dayKey = String(index);
   // STABLE engine-slot id per blueprint exercise: pattern occurrence in the CANONICAL blueprint
@@ -212,7 +215,7 @@ function dayFromBlueprint(
     return {
       capability: ex.capability,
       exerciseId: ex.id,
-      setCount: setsFor(ex.tier, goal, age, volume),
+      setCount: setCounts?.[ex.id] ?? setsFor(ex.tier, goal, age, volume),
       ...(engineSlotId ? { engineSlotId } : {}),
     };
   });
@@ -617,10 +620,17 @@ export const fixtureModel: ModelClient = {
     // belt below is only a safety net so a workout always exists, never a path anyone reaches.
     let days: ProgramDay[];
     if (profile.repBand) {
-      let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.pinsByMuscle, prefs.substitutes);
+      // Loop 3 (D): the LEARNED per-muscle volume reshapes the programme at every regeneration — a
+      // muscle that earned sets grows an exercise / fuller schemes, a trimmed one shrinks. Empty until
+      // she has trained (getVolumeTargetsV5), so the day-one shape is untouched for a fresh athlete.
+      const learnedVolume = await getVolumeTargetsV5().catch((e): Record<string, number> => {
+        void track('engine_error', { op: 'getVolumeTargetsV5', message: String(e) });
+        return {};
+      });
+      let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.pinsByMuscle, prefs.substitutes, learnedVolume);
       if (dayLists.length === 0)
-        dayLists = (MEN_SPLITS[n] ?? MEN_SPLITS[3]).map((name) => ({ name, region: 'upper' as const, exerciseIds: MEN[name] ?? [] }));
-      days = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, goal, profile.age, volume));
+        dayLists = (MEN_SPLITS[n] ?? MEN_SPLITS[3]).map((name) => ({ name, region: 'upper' as const, exerciseIds: MEN[name] ?? [], setCounts: {} }));
+      days = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, goal, profile.age, volume, dl.setCounts));
     } else {
       const female = profile.sex === 'female';
       const pool = female ? WOMEN : MEN;
@@ -787,7 +797,12 @@ export const fixtureModel: ModelClient = {
     let v5targets: Record<string, V5Target> = {};
     if (isV5Band && program) {
       const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
-      const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs).catch(
+      // Loop 3 (D) reads the (time-trimmed) prescribed sets per exercise to know whether she COMPLETED
+      // a muscle this occurrence and to cap its learned volume at what actually fit — from the FINAL
+      // programme (post enforceTimeCap), so a muscle can never spiral past her minutes.
+      const prescribedByEx: Record<string, number> = {};
+      for (const d of program.days) for (const s of d.slots) if (!s.supplemental) prescribedByEx[s.exerciseId] = s.setCount;
+      const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0).catch(
         (e): Record<string, 'graduate' | 'rotate'> => {
           void track('engine_error', { op: 'advanceV5', message: String(e) });
           return {};
