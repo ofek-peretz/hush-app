@@ -475,6 +475,20 @@ Loop 2 is already on it.
 
 **S-34 · Unfinished twice in a row.** → **−1 set.**
 
+> **Implementation scope — completion is judged over the lifts she TRAINED, not the day's blueprint
+> (founder-ratified, 2026-07-16, third audit).** The fold (`advanceV5`) is exercise-keyed and
+> **day-agnostic by design** (L7 deleted slot/day coupling): it infers "which lifts trained this
+> muscle" from the sets she actually logged, never from a per-day slot list — a historical session's
+> `programDayId` may reference a regenerated (stale) programme, and a muscle trained on two days would
+> be falsely marked "unfinished" every single day if judged against its whole-week exercise set. The
+> **honest consequence:** a lift she skips *entirely* on a multi-exercise day is invisible to the
+> completion check, so another lift on that day completing + advancing can still grow the muscle. This
+> is **not a hole to close** — reintroducing "day membership" to fix it would re-couple the engine to
+> the calendar L7 removed, and risks the worse multi-day false-negative. It is **bounded and
+> self-correcting**: the time budget (S-64, `trimV5ToBudget` / `enforceTimeCap`) caps any over-growth
+> at her minutes, and a disliked lift is a *swap* (S-69), not a chronic skip. Closed as a deliberate
+> trade-off of the fact-only, exercise-keyed fold.
+
 **S-35 · Cutting hits the floor (3 sets).** → **Never shave below 3. Drop an exercise instead.**
 3 sets × 4 exercises beats 2 sets × 5.
 
