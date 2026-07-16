@@ -251,10 +251,14 @@ export function estimateSessionMinutes(day: ProgramDay): number {
  *   2) then drop a trailing NON-core isolation slot, never going below 4 slots and never
  *      dropping calves/core (coverage guarantees hold);
  *   3) only then trim the bonus set off compounds (4→3) from the LAST compound backward —
- *      never the first (the day's main lift keeps its full scheme), never below 3.
+ *      never the first (the day's main lift keeps its full scheme), never below 3;
+ *   4) LAST RESORT (S-35): still over budget with only compounds to give → drop the trailing
+ *      compound whose muscle keeps ANOTHER exercise — never a muscle's ONLY lift, so a normal /
+ *      emphasis muscle is never silently stopped. If none qualifies, the day genuinely cannot fit
+ *      her minutes (S-3) and is left as-is rather than starving a muscle.
  */
 // `budgetMin` is her declared time budget (S-64) — profile.workoutMinutes, defaulting to the
-// 60-minute ceiling. v4 profiles (no workoutMinutes) fall back to 60, exactly as before.
+// 60-minute ceiling.
 function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): void {
   const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
   for (let k = isoIdx.length - 1; k >= 0 && estimateSessionMinutes(day) > budgetMin; k--) {
@@ -272,6 +276,27 @@ function enforceTimeCap(day: ProgramDay, budgetMin: number = MAX_SESSION_MIN): v
   for (let k = compoundIdx.length - 1; k >= 1 && estimateSessionMinutes(day) > budgetMin; k--) {
     const slot = day.slots[compoundIdx[k]];
     if (slot.setCount > 3) slot.setCount = 3;
+  }
+  // Step 4 — the last resort. Recompute the per-muscle exercise count each pass and drop the trailing
+  // compound whose muscle keeps another lift; stop when nothing qualifies (S-3, cannot fit honestly).
+  for (let guard = 0; guard < day.slots.length && estimateSessionMinutes(day) > budgetMin; guard++) {
+    const countByMuscle: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (m) countByMuscle[m] = (countByMuscle[m] ?? 0) + 1;
+    }
+    let dropped = false;
+    for (let i = day.slots.length - 1; i >= 0; i--) {
+      const s = day.slots[i];
+      if (s.supplemental || !isCompound(s.exerciseId)) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (!m || countByMuscle[m] <= 1) continue; // never a muscle's ONLY exercise (S-35)
+      day.slots.splice(i, 1);
+      dropped = true;
+      break;
+    }
+    if (!dropped) break; // only single-exercise muscles remain → the day cannot fit (S-3)
   }
 }
 
