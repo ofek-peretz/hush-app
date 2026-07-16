@@ -74,6 +74,17 @@ describe('D · Loop 3 — the learned per-muscle set target moves on facts', () 
     expect(vol[CHEST]).toBe(3); // held — she left the session early, so the muscle is not "completed"
   });
 
+  it('D · a MULTI-DAY muscle seeds its WEEKLY volume, never one occurrence (no silent halving)', async () => {
+    // Chest is trained twice this week (bench on one upper day, incline on another) → weekly 6 sets.
+    // This session trained only bench. Seeding from ONE occurrence (bench=3) would store 3 and HALVE
+    // the muscle at the next regeneration; seeding from the WEEKLY figure (6) stores 6 → grows to 7.
+    const history = [session(T(0), [set(60, 8), set(60, 8), set(60, 8)])]; // bench: 3 done, all met Tlo → advances
+    const prescribed = (id: string) => (id === 'bb_bench_press' ? 3 : id === 'incline_bb_press' ? 3 : 0);
+    await advanceV5(['bb_bench_press', 'incline_bb_press'], BAND, history, seed, Date.now(), undefined, prescribed, { [CHEST]: 6 });
+    const vol = await getVolumeTargetsV5();
+    expect(vol[CHEST]).toBe(7); // seeded from WEEKLY 6, earned one → 7 (NOT the per-occurrence 3 → 4)
+  });
+
   it('no prescription source → Loop 3 no-ops (back-compat: load still advances, volume untouched)', async () => {
     const history = [session(T(0), [set(60, 8), set(60, 8), set(60, 8)])];
     await advanceV5(['bb_bench_press'], BAND, history, seed); // no prescribedSets

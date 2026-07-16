@@ -52,6 +52,20 @@ describe('Rev 7 · D · distributeMuscleSets — the learned per-occurrence volu
     expect(distributeMuscleSets(2)).toEqual([SETS_MIN]);
     expect(distributeMuscleSets(0)).toEqual([SETS_MIN]);
   });
+
+  it('respects a small pool: never more exercises than exist, and realized volume is MONOTONIC', () => {
+    // A 2-exercise muscle (triceps, calves): the count is capped at 2, so the target piles onto the
+    // existing lifts up to [3,5] rather than inventing a phantom third that would steal their sets.
+    let prev = 0;
+    for (let t = 6; t <= 20; t++) {
+      const d = distributeMuscleSets(t, 2);
+      expect(d.length).toBeLessThanOrEqual(2);
+      const realized = sum(d);
+      expect(realized).toBeGreaterThanOrEqual(prev); // growing the target never REDUCES realized (the bug)
+      expect(realized).toBeLessThanOrEqual(2 * SETS_MAX); // physically full at 2×5
+      prev = realized;
+    }
+  });
 });
 
 const allExercises = (days: { exerciseIds: string[] }[]) => days.flatMap((d) => d.exerciseIds);

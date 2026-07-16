@@ -54,20 +54,28 @@ export function exerciseCountFor(weeklySets: number): number {
  * At the day-one seed (target = Σ of her exercises' `setsFor`) this reproduces the existing shape: a
  * Chest of bench(4)+fly(3) → target 7 → [4, 3], the compound leading. There is NO new constant — only
  * F-1's [3,5] and the "~4 sets/exercise" lean that `setsFor` itself already expresses.
+ *
+ * `maxExercises` caps the exercise COUNT at what her pool actually holds: a small-pool muscle (triceps,
+ * calves) cannot open a third exercise it does not have, so the earned sets pile onto the existing ones
+ * up to the [3,5] ceiling instead — which keeps realized volume MONOTONIC as the target grows (without
+ * the cap, proposing a phantom third exercise would silently steal sets from the real two). Once every
+ * available exercise is at 5, the target is physically full and further growth simply does not fit.
  */
-export function distributeMuscleSets(target: number): number[] {
+export function distributeMuscleSets(target: number, maxExercises = Infinity): number[] {
   const t = Math.max(SETS_MIN, Math.round(target)); // never below one exercise at the floor (S-35)
   const minCount = Math.ceil(t / SETS_MAX); // each ≤ 5
   const maxCount = Math.max(1, Math.floor(t / SETS_MIN)); // each ≥ 3
-  // Aim for ~4 working sets per exercise (the setsFor lean), clamped so every bucket lands in [3,5].
-  const count = Math.max(1, Math.min(Math.max(Math.round(t / 4), minCount), maxCount));
+  // Aim for ~4 working sets per exercise (the setsFor lean), clamped so every bucket lands in [3,5],
+  // then capped at the exercises she actually has (a phantom exercise would steal the real ones' sets).
+  let count = Math.max(1, Math.min(Math.max(Math.round(t / 4), minCount), maxCount));
+  count = Math.min(count, Math.max(1, Math.floor(maxExercises)));
   const base = Math.floor(t / count);
   let remainder = t - base * count; // spread the leftover onto the FIRST buckets → largest first
   const out: number[] = [];
   for (let i = 0; i < count; i++) {
     const extra = remainder > 0 ? 1 : 0;
     if (remainder > 0) remainder--;
-    out.push(Math.min(SETS_MAX, Math.max(SETS_MIN, base + extra)));
+    out.push(Math.min(SETS_MAX, Math.max(SETS_MIN, base + extra))); // excess beyond 5×count cannot fit
   }
   return out;
 }
@@ -170,11 +178,17 @@ export function assembleV5DayLists(
     const picks: string[] = [];
     for (const m of muscles) {
       const learned = volumeByMuscle[m];
-      const dist = learned != null ? distributeMuscleSets(learned) : null;
-      const count = dist ? dist.length : exerciseCountFor(targets[m]);
-      const picked = pickExercises(m, count, pinsByMuscle[m], substitutes);
-      if (dist) picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
-      picks.push(...picked);
+      if (learned != null) {
+        // Cap the exercise count at her actual pool so the target lands on real lifts, not a phantom
+        // one (which would steal sets and make realized volume non-monotonic as the target grows).
+        const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, pinsByMuscle[m], substitutes).length;
+        const dist = distributeMuscleSets(learned, poolSize);
+        const picked = pickExercises(m, dist.length, pinsByMuscle[m], substitutes);
+        picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
+        picks.push(...picked);
+      } else {
+        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), pinsByMuscle[m], substitutes));
+      }
     }
 
     // Spread across the region's days: k % len puts one on each day first, then round-robins the rest —

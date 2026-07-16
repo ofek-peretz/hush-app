@@ -856,12 +856,20 @@ export const fixtureModel: ModelClient = {
     let v5targets: Record<string, V5Target> = {};
     if (isV5Band && program) {
       const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
-      // Loop 3 (D) reads the (time-trimmed) prescribed sets per exercise to know whether she COMPLETED
-      // a muscle this occurrence and to cap its learned volume at what actually fit — from the FINAL
-      // programme (post enforceTimeCap), so a muscle can never spiral past her minutes.
+      // Loop 3 (D) reads the (time-trimmed) prescribed sets to know whether she COMPLETED a muscle this
+      // occurrence (per exercise) and to seed/cap its learned volume at what actually fit — from the
+      // FINAL programme (post enforceTimeCap). The volume is a WEEKLY figure, so a muscle's whole-week
+      // total (summed across EVERY day it appears — chest often sits on two upper days) seeds and caps
+      // it; a per-occurrence figure would silently halve a multi-day muscle at the next regeneration.
       const prescribedByEx: Record<string, number> = {};
-      for (const d of program.days) for (const s of d.slots) if (!s.supplemental) prescribedByEx[s.exerciseId] = s.setCount;
-      const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0).catch(
+      const weeklyByMuscle: Record<string, number> = {};
+      for (const d of program.days) for (const s of d.slots) {
+        if (s.supplemental) continue;
+        prescribedByEx[s.exerciseId] = s.setCount;
+        const m = exerciseById(s.exerciseId)?.muscle;
+        if (m) weeklyByMuscle[m] = (weeklyByMuscle[m] ?? 0) + s.setCount;
+      }
+      const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle).catch(
         (e): Record<string, 'graduate' | 'rotate'> => {
           void track('engine_error', { op: 'advanceV5', message: String(e) });
           return {};

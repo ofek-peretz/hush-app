@@ -137,11 +137,18 @@ export async function advanceV5(
   bucketOpenMs?: number,
   /**
    * The current programme's prescribed set count for an exercise (0 = not in the programme). Loop 3
-   * (the Muscle loop) needs it to know whether she COMPLETED a muscle's sets this occurrence, and to
-   * seed / cap a muscle's learned volume against what actually fit her time (the trimmed prescription).
+   * (the Muscle loop) needs it to know whether she COMPLETED a muscle's sets this occurrence.
    * Absent (tests / legacy) → Loop 3 no-ops, so an occurrence advances load exactly as before.
    */
   prescribedSets: (exerciseId: string) => number = () => 0,
+  /**
+   * The muscle's WHOLE-WEEK prescribed set total — Σ setCount over ALL its slots across every day (a
+   * muscle is often trained on more than one day, e.g. chest on two upper days). The learned volume is
+   * a WEEKLY figure, so it must seed and cap against the week, never a single occurrence — else a
+   * multi-day muscle would be silently halved at the next regeneration. Falls back to this occurrence's
+   * prescription only when unknown (a single-day muscle, or tests that omit it).
+   */
+  weeklyByMuscle: Record<string, number> = {},
 ): Promise<Record<string, 'graduate' | 'rotate'>> {
   void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
@@ -198,10 +205,10 @@ export async function advanceV5(
     // ── Loop 3 · the Muscle loop (register Part 4 §E) — one volume decision per muscle per occurrence.
     // Group the exercises she trained this occurrence by muscle, then decide +1 / hold / −1 sets from
     // FACTS ONLY: did she complete every prescribed set for the muscle (and not end the session early),
-    // and did any of its lifts advance? Growth is capped at what actually fit her time — one set beyond
-    // the prescription she just finished (the prescription is already time-trimmed, S-64), so a muscle
-    // can never spiral past her minutes. The learned target seeds from that same real prescription, so
-    // an athlete on the day-one shape stays on it until she earns more.
+    // and did any of its lifts advance? The learned target is a WEEKLY total (a muscle is often trained
+    // on more than one day), seeded from her whole-week prescription and capped at one set beyond it —
+    // already time-trimmed (S-64) — so it can never spiral past her minutes, and a multi-day muscle is
+    // never halved. An athlete on the day-one shape stays on it until she earns more.
     const trainedByMuscle: Record<string, string[]> = {};
     for (const id of Object.keys(loggedByEx)) {
       const m = muscleOf(id);
@@ -210,15 +217,16 @@ export async function advanceV5(
     for (const [m, ids] of Object.entries(trainedByMuscle)) {
       const prescribedTotal = ids.reduce((s, id) => s + Math.max(0, prescribedSets(id)), 0);
       if (prescribedTotal <= 0) continue; // nothing prescribed for this muscle → nothing to reason on
+      const weekly = weeklyByMuscle[m] ?? prescribedTotal; // the muscle's WHOLE-WEEK prescription
       const completedAll = !sess.earlyFinish && ids.every((id) => loggedByEx[id] >= prescribedSets(id));
       const anyAdvanced = ids.some((id) => advancedThisOcc.has(id));
       const streak = completedAll ? 0 : (streaks[m] ?? 0) + 1;
       streaks[m] = streak;
-      const current = volume[m] ?? prescribedTotal; // seed from her real (time-trimmed) prescription
+      const current = volume[m] ?? weekly; // seed from her real (time-trimmed) WEEKLY prescription
       const res = decideVolume({
         sets: current,
         minSets: SETS_MIN, // one exercise at the floor; a further cut drops an exercise (S-35, assembly)
-        maxSets: prescribedTotal + 1, // earn at most one set beyond what already fit her minutes (S-64)
+        maxSets: weekly + 1, // earn at most one weekly set beyond what already fit her minutes (S-64)
         completedAll,
         anyAdvanced,
         unfinishedStreak: streak,
