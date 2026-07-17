@@ -1084,7 +1084,27 @@ function Rest({
 
   return (
     <>
-      <StageBar center={isTransition ? t('workout.nextExercise') : t('workout.rest')} onExit={onExit} />
+      {/* THE STRIP SAYS WHERE YOU ARE, NOT WHAT SCREEN THIS IS (2026-07-17).
+          It used to read "REST" — the same word the ring says, 200pt below it, under the clock.
+          One fact, one element: the ring already IS a rest timer, and its label earns its place by
+          turning into "Ready" at zero. The strip's copy was pure chrome, and it cost the rest
+          screen the one thing it never told you — how far through the workout you are. It now
+          carries the ordinal, exactly as the live set does, so the two screens stop disagreeing
+          about what the top of the stage is for.
+          (A TRANSITION rest keeps its legend: there the strip is not repeating the ring — the ring
+          says the clock, the legend says a new lift is coming, which is news.) */}
+      <StageBar
+        center={isTransition ? t('workout.nextExercise') : undefined}
+        ordinal={
+          isTransition || !session.exerciseProgress
+            ? undefined
+            : t('workout.exerciseCount', {
+                n: session.exerciseProgress.index + 1,
+                N: session.exerciseProgress.total,
+              })
+        }
+        onExit={onExit}
+      />
       <View style={styles.stageBody}>
         <RestRing
           remaining={remaining}

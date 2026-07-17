@@ -127,11 +127,13 @@ export function Authentication({ navigation }: Props) {
           <Text style={styles.wordmark}>hush</Text>
           <View style={styles.dot} />
         </View>
-        {/* THE FRONT DOOR SAYS WHAT THIS IS (founder 2026-07-13). The claim first, in the
-            speaking voice, at a size that means it — then the one sentence that makes the claim
-            keepable. The old tagline explained the mechanism to somebody who had not yet asked. */}
-        <Text style={styles.promise}>{t('ob.signinPromise')}</Text>
-        <Text style={styles.tagline}>{t('ob.signinTagline')}</Text>
+        {/* ONE CLAIM, NOT TWO (2026-07-17).
+            This was a boast — "The best training experience in the world." — above the deal that
+            earns it. Two sentences saying one thing, and the weaker one was on top: a superlative
+            Hush cannot measure (R7), on the one screen the brief says "sells nothing". The deal is
+            better in every way — first person, provable, and it IS the promise. So it takes the
+            size the boast was wearing, and the boast is gone. */}
+        <Text style={styles.promise}>{t('ob.signinTagline')}</Text>
       </View>
       <View style={styles.actions}>
         {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
@@ -255,7 +257,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     maxWidth: 300,
   },
-  tagline: { fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginTop: 10, maxWidth: 290 },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
 

@@ -29,14 +29,24 @@
  *
  * "There are three screens for the same purpose." There were: the chips, the 'choose another
  * workout' sheet, and the whole This-week screen — three lists of the same four workouts. Two are
- * gone. The CHIPS are now the chooser:
+ * gone. The CHIPS are the chooser:
  *
- *   · tap a chip            → that workout is the one queued; the Begin button renames itself to it.
- *   · tap the queued chip   → its plan opens (swap · pin · reorder · the form clip).
+ *   · tap a chip            → that workout is the one queued.
+ *   · tap a DONE chip       → the record it became (it cannot be queued again, founder 2026-07-11).
  *
- * So choosing never leaves Home, and the editor is one further tap from the thing you just chose.
- * The week's state — what is done, what is left, how many of how many — was always on this card;
- * it never needed a screen of its own.
+ * So choosing never leaves Home. The week's state — what is done, what is left, how many of how
+ * many — was always on this card; it never needed a screen of its own.
+ *
+ * ═══ ONE CONTROL, ONE ACT (2026-07-17) ═══
+ *
+ * The queued chip used to open its plan on a SECOND tap, and this file admitted the cost in
+ * writing: "the chips carry two acts now, and an athlete cannot be expected to guess the second" —
+ * so it paid for the overloaded control with a line of instructions under it ("Tap to queue a
+ * workout · tap it again to open it"). A hint is a symptom; the control was wrong.
+ *
+ * The plan's door is now the META LINE, which already says "6 exercises" and so is the obvious
+ * thing to press to see those six. The chips do one thing each, and the instruction line is gone.
+ * (What opens is a READ-ONLY preview — swap/pin/reorder were deleted with the edit screen, S-73.)
  *
  * That frees Home's secondary button, and cardio takes it (founder): a run is a real option, and it
  * was buried inside the sheet we just deleted. On a RECOVERY day it is the day's ACT, so there it
@@ -100,7 +110,8 @@ export interface HomeViewProps {
   /** This week's update has not been opened yet — the card wears the ochre mark. */
   briefUnseen: boolean;
   onWeeklyUpdate: () => void;
-  /** Open ONE workout's plan (swap · pin · reorder · form clip) — the second tap on the queued chip. */
+  /** Open ONE workout's read-only plan preview (the exercises + their form clips). Reached from the
+   *  meta line ("6 exercises ›"), and from a DONE chip, which is a record. */
   onOpenWorkout: (id: string) => void;
   onHistory: () => void;
   onSettings: () => void;
@@ -241,15 +252,34 @@ export function HomeView(props: HomeViewProps) {
                 </View>
               ) : null}
 
-              {/* one quiet meta line — what's ahead + the product promise, together */}
-              <View style={styles.metaRow}>
-                <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
-                <Text style={styles.metaMono}>
-                  {props.exerciseCount
-                    ? `${t('home.exerciseCount', { n: props.exerciseCount })} · ${t('home.loadsSet')}`
-                    : t('home.loadsSet')}
-                </Text>
-              </View>
+              {/* THE DOOR TO THE PLAN IS THE LINE THAT NAMES IT (2026-07-17).
+                  This was a dead label, and because it was dead the CHIPS below had to carry two
+                  acts — queue on the first tap, open on a second — which no athlete can guess. The
+                  code said so itself: "an athlete cannot be expected to guess the second", and then
+                  paid for the overloaded control with a line of instructions under it.
+                  A hint is a symptom. The control was wrong: this line already says "6 exercises",
+                  so it is the obvious thing to press to SEE those six. The chevron says it is a
+                  door; the chips go back to one act each; the instruction line is deleted. */}
+              {props.exerciseCount && props.dayId ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.exerciseCount', { n: props.exerciseCount })}
+                  hitSlop={8}
+                  onPress={() => props.onOpenWorkout(props.dayId!)}
+                  style={({ pressed }) => [styles.metaRow, pressed && styles.weekPressed]}
+                >
+                  <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
+                  <Text style={styles.metaMono}>
+                    {`${t('home.exerciseCount', { n: props.exerciseCount })} · ${t('home.loadsSet')}`}
+                  </Text>
+                  <Icon name="chevronRight" size={14} color={color.textTertiary} strokeWidth={2} />
+                </Pressable>
+              ) : (
+                <View style={styles.metaRow}>
+                  <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
+                  <Text style={styles.metaMono}>{t('home.loadsSet')}</Text>
+                </View>
+              )}
 
               {/* DONE IS SAGE, EVERYWHERE (founder 2026-07-13: "anything to do with something
                   that was completed should be our green"). This meter measures workouts TRAINED;
@@ -357,18 +387,22 @@ export function HomeView(props: HomeViewProps) {
                 <Text style={styles.weekTitle}>{t('home.hubThisWeek')}</Text>
               </View>
 
-              {/* THE CHIPS ARE THE CHOOSER (see the header): one tap queues the workout, a second
-                  tap on the queued one opens its plan. A finished workout is a record — it cannot be
-                  queued again (founder 2026-07-11) — so its tap goes straight to the plan it was. */}
+              {/* THE CHIPS ARE THE CHOOSER, AND THAT IS ALL THEY ARE (2026-07-17).
+                  A chip queues its workout. One act, one control — the second act (open the plan)
+                  moved to the meta line above, which names it. A finished workout cannot be queued
+                  again (founder 2026-07-11), so its tap opens the record it became: that is not a
+                  hidden second act, it is the only thing a record can do. */}
               {props.workouts.length ? (
                 <View style={styles.chips} accessibilityLabel={t('home.weekChips')}>
                   {props.workouts.map((w) => {
                     const isDone = !!w.done;
                     const current = !isDone && (props.dayId != null ? w.id === props.dayId : w.name === props.dayName);
-                    // An interrupted workout owns the CTA ("Continue …"), so queueing another one
-                    // would light a chip the Begin button does not agree with. While a session is
-                    // waiting to be resumed, a chip is a door to the plan and nothing else.
-                    const opens = isDone || current || !!props.resumable;
+                    // A finished workout opens the record it became. An interrupted session owns the
+                    // CTA ("Continue …"), so queueing another workout would light a chip the button
+                    // does not agree with — while one is waiting to be resumed, a chip opens instead
+                    // of queueing. The QUEUED chip no longer opens on a second tap: that was the
+                    // guessing game, and the meta line above is the door now.
+                    const opens = isDone || !!props.resumable;
                     return (
                       <Pressable
                         key={w.id}
@@ -406,14 +440,6 @@ export function HomeView(props: HomeViewProps) {
                     );
                   })}
                 </View>
-              ) : null}
-
-              {/* The chips carry two acts now, and an athlete cannot be expected to guess the
-                  second. One quiet line, in the smallest voice on the page, says what a tap does —
-                  and only while there is actually something to queue (never on a finished week,
-                  where every chip is a record and the line would be a lie). */}
-              {props.workouts.filter((w) => !w.done).length > 1 && !props.resumable ? (
-                <Text style={styles.chipsHint}>{t('home.chipsHint')}</Text>
               ) : null}
 
               {/* Hush's sentence — what it DID to this plan. The one line that makes this a
@@ -610,7 +636,6 @@ const styles = StyleSheet.create({
   chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
   chipTextDone: { color: color.textPrimary },
   currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: color.textPrimary },
-  chipsHint: { marginTop: 8, fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'left' },
 
   brief: { marginTop: 14, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 12, paddingBottom: 10 },
   // The FACT, before the sentence: how many lifts changed this week (or that none did).

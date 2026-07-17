@@ -84,11 +84,24 @@ describe('the buttons speak to the person who is pressing them', () => {
     expect(tg('home.continueWorkout', { name: 'Push A' })).toContain('המשיכי');
   });
 
-  it("Body data speaks WITH the athlete, not AT them — in both persons ('איתך', never 'אותך')", () => {
+  /**
+   * The law is WITH, not AT — Hush never makes the athlete its object ('אותך').
+   *
+   * It used to also require the exact phrase 'להתחיל איתך', which pinned ONE SENTENCE rather than
+   * the law. That sentence ("With these I know where to start you — the loads that athletes built
+   * like you actually lift") was cut on 2026-07-17 under the founder's ruling that a caption which
+   * explains a control nobody asked about is a caption nobody reads: three wheels labelled Age /
+   * Height / Weight do not need two lines of preamble. The replacement states the fact and stops.
+   *
+   * The ban survives, in every locale key that addresses her — a positive phrase-match would only
+   * ever pin the current wording again.
+   */
+  it("Hush never makes the athlete its object — 'אותך' appears nowhere", () => {
     for (const g of ['male', 'female'] as const) {
       setGender(g);
-      expect(tg('ob.bodySub')).toContain('להתחיל איתך');
-      expect(tg('ob.bodySub')).not.toContain('אותך');
+      for (const k of ['ob.bodySub', 'ob.sexWhy', 'ob.trainSub', 'ob.healthSub', 'ob.mapSub']) {
+        expect({ key: k, copy: tg(k) }).toEqual({ key: k, copy: expect.not.stringContaining('אותך') });
+      }
     }
   });
 });

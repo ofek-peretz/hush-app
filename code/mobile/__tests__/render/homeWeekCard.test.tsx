@@ -183,12 +183,34 @@ describe('the week is on the page, and it is a door', () => {
     expect(opened).toEqual([]); // …and nothing was pushed on top of Home
   });
 
-  it('a second tap on the QUEUED chip opens its plan — swap, pin and the form clip', () => {
+  /**
+   * ONE CONTROL, ONE ACT (2026-07-17). This used to assert the opposite — "a second tap on the
+   * QUEUED chip opens its plan — swap, pin and the form clip" — and it was stale twice over: swap
+   * and pin were deleted with the edit screen (S-73), and the hidden second tap was a guessing game
+   * the view itself admitted to ("an athlete cannot be expected to guess the second"), paid for
+   * with a line of instructions underneath.
+   *
+   * The plan's door is the meta line now (it says "6 exercises", so it is the obvious thing to
+   * press to see them). A chip queues. That is the whole of it.
+   */
+  it('the QUEUED chip does not hide a second act — it just queues', () => {
+    const chosen: string[] = [];
     const opened: string[] = [];
-    const r = mount(<HomeView {...props({ onOpenWorkout: (id) => void opened.push(id) })} />);
+    const r = mount(
+      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+    );
     act(() => {
       byLabel(r, 'Pull A')!.props.onPress(); // Pull A === dayName, i.e. already queued
     });
+    expect(opened).toEqual([]);
+  });
+
+  it('the meta line is the door to the plan — the line that names the exercises opens them', () => {
+    const opened: string[] = [];
+    const r = mount(
+      <HomeView {...props({ exerciseCount: 6, dayId: 'day_2', onOpenWorkout: (id) => void opened.push(id) })} />,
+    );
+    act(() => byLabel(r, tg('home.exerciseCount', { n: 6 }))!.props.onPress());
     expect(opened).toEqual(['day_2']);
   });
 
@@ -205,8 +227,18 @@ describe('the week is on the page, and it is a door', () => {
     expect(opened).toEqual(['day_1']);
   });
 
-  it('the athlete is told what a tap does — the chips carry two acts now', () => {
-    expect(texts(mount(<HomeView {...props()} />)).join(' ')).toContain(tg('home.chipsHint'));
+  /**
+   * DELETED, WITH ITS SUBJECT (2026-07-17). This asserted that Home printed "Tap to queue a workout
+   * · tap it again to open it" — a label teaching a gesture, which is the clearest instance of the
+   * founder's law: "the moment you start explaining everything, you are not letting the button
+   * explain itself." The hint is gone because the thing it was apologising for is gone.
+   *
+   * What replaces it is the assertion that the screen still teaches — through the CONTROL, not a
+   * caption: a chip that queues, and a line that says "6 exercises" and opens them (above).
+   */
+  it('no line on Home explains what a tap does — the controls do that themselves', () => {
+    const all = texts(mount(<HomeView {...props()} />)).join(' ');
+    expect(all).not.toMatch(/tap it again|לחיצה נוספת/i);
   });
 
   it('a chip knows itself by ID, never by name — two workouts may be called the same thing', () => {
@@ -233,8 +265,9 @@ describe('the week is on the page, and it is a door', () => {
     act(() => chips[1].props.onPress()); // the one that is NOT queued
     expect(chosen).toEqual(['day_2']);
     expect(opened).toEqual([]);
-    act(() => chips[0].props.onPress()); // the queued one
-    expect(opened).toEqual(['day_1']);
+    // The law is the SELECTED state: matching on the name would light both twins as queued. It is
+    // read from the id, so exactly one is.
+    expect(chips.filter((c) => c.props.accessibilityState?.selected)).toHaveLength(1);
   });
 
   it('an interrupted workout owns the CTA — a chip cannot queue behind its back', () => {
