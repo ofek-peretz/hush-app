@@ -18,6 +18,8 @@ import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
@@ -35,9 +37,14 @@ import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement'
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
-import type { MainParamList } from '@/app/navigation';
+import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<MainParamList, 'ProfileSheet'>;
+// A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
+// composite of the tab it lives in and the stack above it.
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<HomeTabsParamList, 'Settings'>,
+  NativeStackScreenProps<MainParamList>
+>;
 type Overlay = 'none' | 'delete' | 'signout';
 
 export function ProfileSheet({ navigation }: Props) {
@@ -175,17 +182,10 @@ export function ProfileSheet({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* No back chevron — Settings is a tab now, not a modal; you leave by tapping another tab.
+          The title sits at the page edge, matching History and Progress. */}
       <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={10}
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
-        >
-          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
-        </Pressable>
         <Text style={styles.headerTitle} accessibilityRole="header">{t('profile.settings')}</Text>
       </View>
 

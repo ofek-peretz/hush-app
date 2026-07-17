@@ -785,5 +785,11 @@
     "barReady": "Bar ready",
     "use": "Use",
     "dumbbells": "{{weight}} {{unit}} dumbbells"
+  },
+  "nav": {
+    "home": "Home",
+    "progress": "Progress",
+    "history": "History",
+    "settings": "Settings"
   }
 }

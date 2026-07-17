@@ -7,6 +7,8 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { ProgressReportView } from '@/screens/progress/ProgressReportView';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -15,9 +17,14 @@ import { allTimePeakProgress, quarterlyPeakProgress, type QuarterlyProgressEntry
 import { trainingWeekNumber } from '@/domain/weekCadence';
 import { earnedMilestones, nextUp } from '@/domain/milestones';
 import type { Session } from '@/data/local/models';
-import type { MainParamList } from '@/app/navigation';
+import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<MainParamList, 'Progress'>;
+// A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
+// composite of the tab it lives in and the stack above it.
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<HomeTabsParamList, 'Progress'>,
+  NativeStackScreenProps<MainParamList>
+>;
 
 export function Progress({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -59,7 +66,6 @@ export function Progress({ navigation, route }: Props) {
       entries={entries}
       loaded={sessions != null}
       units={units}
-      onBack={() => navigation.goBack()}
       milestones={milestones}
     />
   );

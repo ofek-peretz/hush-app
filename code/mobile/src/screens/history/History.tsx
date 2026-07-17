@@ -24,6 +24,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { Icon } from '@/components/Icon';
 import { Legend, ListRow } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
@@ -34,9 +36,14 @@ import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
 import { fmtMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
-import type { MainParamList } from '@/app/navigation';
+import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<MainParamList, 'History'>;
+// A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
+// composite of the tab it lives in and the stack above it.
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<HomeTabsParamList, 'History'>,
+  NativeStackScreenProps<MainParamList>
+>;
 
 /** Wall-clock seconds from the session's start to its last logged set. */
 function sessionDurationSec(s: Session): number {
@@ -106,16 +113,9 @@ export function History({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      {/* No back chevron — History is a tab now; you leave by tapping another tab. The title sits
+          at the page edge (like the reference), not indented behind a chevron that is not there. */}
       <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={10}
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
-        >
-          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
-        </Pressable>
         <View style={styles.headTitles}>
           <Legend>{t('history.legend')}</Legend>
           <Text style={styles.title} accessibilityRole="header">{t('history.title')}</Text>

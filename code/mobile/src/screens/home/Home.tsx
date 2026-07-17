@@ -10,6 +10,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { HomeView } from '@/screens/home/HomeView';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
@@ -28,9 +30,14 @@ import type { Line } from '@/domain/voice';
 import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
-import type { MainParamList } from '@/app/navigation';
+import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<MainParamList, 'Home'>;
+// Home is a TAB now, but it pushes onto the parent stack (SessionFlow, Cardio, WeeklyUpdate…), so
+// its navigation is the composite of both — the tab it lives in and the stack above it.
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<HomeTabsParamList, 'Home'>,
+  NativeStackScreenProps<MainParamList>
+>;
 
 export function Home({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -437,9 +444,6 @@ export function Home({ navigation, route }: Props) {
       }}
       briefUnseen={briefUnseen}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
-      onHistory={() => navigation.navigate('History')}
-      onSettings={() => navigation.navigate('ProfileSheet')}
-      onProgress={() => navigation.navigate('Progress')}
       onCardio={() => navigation.navigate('Cardio')}
       />
       {/* The form clip — the one job the plan screen did that the list on Home does not. It was a

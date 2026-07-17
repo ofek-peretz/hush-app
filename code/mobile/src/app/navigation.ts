@@ -10,6 +10,7 @@
  *   → Training → Program Created → Home.
  * Invite-token enrollment is removed.
  */
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CardioActivity, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
 /** Profile fields gathered in onboarding — from HealthKit (granted) or Manual Info. */
@@ -51,26 +52,32 @@ export type OnboardingParamList = {
  * already living on those screens (the sheets, the horizontal wheels, the full-width back
  * swipe), and the current hierarchy is predictable and does not break. Simple, clear, tapped.
  */
-export type MainParamList = {
-  // Home is the single root. History · Progress · Settings (ProfileSheet) are pushed onto this
-  // stack with a back affordance.
-  //
-  // The "This week" screen went first (founder 2026-07-13): the week card on Home holds the week.
-  // The workout's PLAN screen (ProgramDetail) followed it on 2026-07-17 — Home now lists today's
-  // lifts WITH their loads, which is the thing that screen existed to show, minus the one number it
-  // left out. Its form clip lives on the lift's row. Three screens for one purpose became one.
-  // `focusDayId` went with it: it carried "Begin" back from inside that plan, and nothing else ever
-  // set it.
+/**
+ * The four peer surfaces under the bottom tab bar (founder 2026-07-17). One tap from each other;
+ * everything deeper is pushed ABOVE them on `MainParamList`, where the bar is absent.
+ */
+export type HomeTabsParamList = {
   Home: undefined;
+  // Progression report (founder, 2026-06-21). Default = all-time + the milestones gallery;
+  // `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens (the former
+  // QuarterlyReport screen, merged in here 2026-07-15).
+  Progress: { window?: 'all' | 'quarter' } | undefined;
   History: undefined;
+  // Settings (ProfileSheet) is a tab now, not a modal — a peer surface you return to, not a
+  // one-off sheet. Its back button is gone with the modal presentation (a tab has nowhere to go
+  // back TO); it exits by tapping another tab.
+  Settings: undefined;
+};
+
+export type MainParamList = {
+  // The tab host is the stack's root. Everything below is pushed on top of the tabs.
+  HomeTabs: NavigatorScreenParams<HomeTabsParamList> | undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
   // strength engine. The recorded activity lands in the unified History timeline.
   Cardio: undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
-  // Pushed / modal surfaces.
-  ProfileSheet: undefined;
-  // Edit body data + experience after onboarding (opened from Settings).
+  // Edit body data after onboarding (opened from Settings).
   ProfileEdit: undefined;
   /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
   BodyMapEdit: undefined;
@@ -79,10 +86,6 @@ export type MainParamList = {
   // Done renders the calm "Workout not started" state instead of a completion.
   WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   WorkoutDetail: { sessionId: string };
-  // Progression report (founder, 2026-06-21). Default (Home / Recovery) = all-time + the milestones
-  // gallery; `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens
-  // (the former QuarterlyReport screen, merged in here 2026-07-15).
-  Progress: { window?: 'all' | 'quarter' } | undefined;
   // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
   WeeklyUpdate: undefined;
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,

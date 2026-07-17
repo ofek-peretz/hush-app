@@ -1,16 +1,19 @@
 /**
  * HomeView — the center of gravity.
  *
- * Hub-and-spoke, no tab bar. A scrolling hub that answers two questions on open — what did Hush
- * decide, and what am I doing today — and offers the one act:
+ * The Home TAB — one of four under the bottom bar (Home · Progress · History · Settings). It
+ * answers two questions on open — what did Hush decide, and what am I doing today — and offers the
+ * one act:
  *
- *   brand (hush·) + settings
+ *   brand (hush·)                  — the wordmark alone; the settings gear moved to the tab bar
  *   I DECIDED           · Hush's own sentences about what it changed; the why one tap away; and an
  *                         UNDO when the change it is announcing was a rotation (S-71, out loud)
  *   NEXT WORKOUT ~45min · its lifts, each with the LOAD Hush set + its form clip
  *   Begin {name}        · Cardio
  *   Week N · n/m        · the cycle's workouts as chips (the chooser)
- *   History / Progress
+ *
+ * The old History / Progress hub rows and the settings gear are gone — they are tabs now, always
+ * one tap away in the bar, so repeating them on the page was chrome the bar already carries.
  *
  * The legend says NEXT WORKOUT, never "Today": **the engine has no days** (register L7). The week is
  * a display container of N workouts trained in any order, and nothing schedules one for today — so
@@ -84,7 +87,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon } from '@/components/Icon';
 import { HushMark } from '@/components/HushMark';
-import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButton } from '@/components/ds';
+import { Legend, Display, BodyL, Body, Button, ProgressMeter } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import type { Line } from '@/domain/voice';
@@ -188,9 +191,6 @@ export interface HomeViewProps {
   undoable?: { anchor: string; name: string } | null;
   onUndoSwap?: () => void;
   onWeeklyUpdate: () => void;
-  onHistory: () => void;
-  onSettings: () => void;
-  onProgress?: () => void;
   onCardio: () => void; // Open training (run / walk) — recorded, not coached
 }
 
@@ -271,10 +271,8 @@ export function HomeView(props: HomeViewProps) {
             <Text style={styles.wordmark}>hush</Text>
             <View style={styles.dot} />
           </View>
-          <IconButton accessibilityLabel={t('menu.title')} onPress={props.onSettings}>
-            <Icon name="sliders" size={20} color={color.textPrimary} strokeWidth={2} />
-          </IconButton>
         </View>
+        {/* The settings gear is gone — Settings is a tab now. The brand row is just the wordmark. */}
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* ═══ I DECIDED — THE ENGINE, FIRST (founder 2026-07-17) ═══
@@ -625,24 +623,9 @@ export function HomeView(props: HomeViewProps) {
               ) : null}
 
             </View>
-
-            <ListRow
-              title={t('home.hubHistory')}
-              subtitle={t('home.hubHistorySub')}
-              chevron
-              onPress={props.onHistory}
-              leading={<Icon name="history" size={20} color={color.textSecondary} strokeWidth={2} />}
-            />
-            {props.onProgress ? (
-              <ListRow
-                title={t('home.hubProgress')}
-                subtitle={t('home.hubProgressSub')}
-                chevron
-                last
-                onPress={props.onProgress}
-                leading={<Icon name="trendingUp" size={20} color={color.textSecondary} strokeWidth={2} />}
-              />
-            ) : null}
+            {/* The History / Progress hub rows are gone — they are tabs now, always one tap away in
+                the bar below. Home ends on the week's chips; the page no longer carries a list of
+                the same destinations the tab bar already holds. */}
           </View>
         </ScrollView>
       </SafeAreaView>

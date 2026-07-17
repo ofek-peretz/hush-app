@@ -29,7 +29,7 @@ interface Props {
   entries: QuarterlyProgressEntry[];
   loaded: boolean; // false while history is still loading (suppresses the empty state)
   units: Units;
-  onBack: () => void;
+  onBack?: () => void;
   /** The milestones gallery (Progress screen only — the quarterly report stays a pure
    *  peak-weight comparison): earned emblems + each family's single next silhouette. */
   milestones?: { earned: EarnedMilestone[]; next: NextMilestone[] } | null;
@@ -48,17 +48,22 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* header — back chevron + legend + title */}
+      {/* Header. NO back chevron when this is a tab root (Progress) — a tab has nowhere to go back
+          to; you leave by tapping another tab. `onBack` is passed only if some future caller pushes
+          this on a stack. The title sits at the page edge like the reference, not indented behind a
+          chevron that is not there. */}
       <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={10}
-          onPress={onBack}
-          style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
-        >
-          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
-        </Pressable>
+        {onBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            hitSlop={10}
+            onPress={onBack}
+            style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
+          >
+            <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
+          </Pressable>
+        ) : null}
         <View style={styles.headTitles}>
           <Legend>{legend}</Legend>
           <Text style={styles.title} accessibilityRole="header">{title}</Text>

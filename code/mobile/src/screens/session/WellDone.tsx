@@ -269,13 +269,15 @@ export function WellDone({ navigation, route }: Props) {
     setRead(lifts.length);
     setPhase('result');
   }
+  // The stack root is the TAB host now, not 'Home'. Reset to it, and for the record view land the
+  // host on its History tab (nested initial route) so "View record" opens the timeline directly.
   function goHome() {
     app.clearPortraitFlag();
-    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+    navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
   }
   function goRecord() {
     app.clearPortraitFlag();
-    navigation.reset({ index: 1, routes: [{ name: 'Home' }, { name: 'History' }] });
+    navigation.reset({ index: 0, routes: [{ name: 'HomeTabs', state: { routes: [{ name: 'History' }] } } as never] });
   }
   /**
    * Any exit from the result passes through the milestone beat exactly once.

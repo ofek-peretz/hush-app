@@ -608,7 +608,18 @@ function CardioComplete(props: {
 
         <View style={styles.completeFooter}>
           <Button variant="onstage" size="lg" block label={t('cardio.done')} onPress={() => navigation.goBack()} />
-          <Button variant="onstageGhost" block label={t('cardio.viewInHistory')} onPress={() => navigation.replace('History')} />
+          {/* History is a TAB now, not a sibling on this stack. Reset to the tab host on its
+              History tab: the run just recorded lands in the timeline, and this cardio stage does
+              not linger underneath it (a "back" from History would otherwise return to a finished
+              run). */}
+          <Button
+            variant="onstageGhost"
+            block
+            label={t('cardio.viewInHistory')}
+            onPress={() =>
+              navigation.reset({ index: 0, routes: [{ name: 'HomeTabs', state: { routes: [{ name: 'History' }] } } as never] })
+            }
+          />
         </View>
       </SafeAreaView>
     </View>

@@ -3,17 +3,26 @@
  * a profile exists (completeOnboarding atomically creates profile+program+mode).
  *
  * Idioms (spec §1, §7.1): full-layer Slide Left/Right; sheets present as modals;
- * Pause/Finish are modal-frozen (handled inside SessionFlow). No tab bar.
+ * Pause/Finish are modal-frozen (handled inside SessionFlow).
+ *
+ * NAVIGATION SHAPE (founder 2026-07-17). The four peer surfaces — Home · Progress · History ·
+ * Settings — live under a BOTTOM TAB navigator (`HomeTabs`), one tap from each other. Everything
+ * deeper (a live workout, a run, a record, a modal) is pushed ABOVE the tabs on the Main stack, so
+ * the bar is simply absent from those trees — a stage has no navigation. This replaced the old
+ * hub-and-spoke, where the three long-view surfaces were reached from Home and were two taps apart
+ * from one another.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { HushTabBar } from './HushTabBar';
 import { useApp } from '@/state/stores/appStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
 import { onReloadRequested } from './reload';
-import { navigationRef, navigateMain } from './navigationRef';
+import { navigationRef, navigateMain, navigateTab } from './navigationRef';
 import {
   addNotificationDeliveryListener,
   addNotificationResponseListener,
@@ -23,7 +32,7 @@ import {
 } from '@/platform/notifications';
 import { color } from '@/design/tokens';
 import { track } from '@/platform/telemetry';
-import type { MainParamList, OnboardingParamList } from './navigation';
+import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
@@ -48,6 +57,22 @@ import { Paywall } from '@/screens/subscription/Paywall';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
+const Tabs = createBottomTabNavigator<HomeTabsParamList>();
+
+/** The four peer surfaces, under the bottom bar. Everything else is pushed above them. */
+function HomeTabs() {
+  return (
+    <Tabs.Navigator
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.bgBase } }}
+      tabBar={(props) => <HushTabBar {...props} />}
+    >
+      <Tabs.Screen name="Home" component={Home} />
+      <Tabs.Screen name="Progress" component={Progress} />
+      <Tabs.Screen name="History" component={History} />
+      <Tabs.Screen name="Settings" component={ProfileSheet} />
+    </Tabs.Navigator>
+  );
+}
 
 const navTheme = {
   ...DarkTheme,
@@ -109,22 +134,21 @@ function MainNavigator() {
         fullScreenGestureEnabled: true,
       }}
     >
-      <MainStack.Screen name="Home" component={Home} />
-      <MainStack.Screen name="ProfileSheet" component={ProfileSheet} options={{ presentation: 'modal', animation: sheet }} />
+      {/* The four peer surfaces live under the tab bar; the stack pushes everything deeper ON TOP
+          of them, so a workout / run / record / modal has no tab bar in its tree. */}
+      <MainStack.Screen name="HomeTabs" component={HomeTabs} />
       <MainStack.Screen name="ProfileEdit" component={ProfileEdit} options={{ presentation: 'modal', animation: sheet }} />
       <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} options={{ presentation: 'modal', animation: sheet }} />
       {/* Session Flow: only pre-completion exit is Pause -> Finish, so no back gesture. */}
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
-      <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       {/* Open training (run / walk) — full-screen focus; fades in like the session flow.
           Swipe-back is enabled on the select step only (the screen flips gestureEnabled
           per phase; a live recording is never swipe-dismissable). */}
       <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
-      <MainStack.Screen name="Progress" component={Progress} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
     </MainStack.Navigator>
@@ -137,7 +161,7 @@ function routeNotificationIntent(intent: NotificationIntent | null, enrolled: bo
   void track('notification_opened', { kind: intent.kind });
   // v4: the weekly notification opens the Weekly Update (what changed + Why).
   if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate'); // 1.20 (v4 Weekly Update + Why)
-  else if (intent.kind === 'quarterly_report') navigateMain('Progress', { window: 'quarter' }); // 12-week view (merged into Progress)
+  else if (intent.kind === 'quarterly_report') navigateTab('Progress', { window: 'quarter' }); // 12-week view (merged into Progress) — Progress is a tab
 }
 
 export function Root() {
