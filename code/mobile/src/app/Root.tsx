@@ -38,7 +38,6 @@ import { ProfileEdit } from '@/screens/profile/ProfileEdit';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
-import { ProgramDetail } from '@/screens/program/ProgramDetail';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { Cardio } from '@/screens/cardio/Cardio';
@@ -118,7 +117,6 @@ function MainNavigator() {
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
-      <MainStack.Screen name="ProgramDetail" component={ProgramDetail} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       {/* Open training (run / walk) — full-screen focus; fades in like the session flow.

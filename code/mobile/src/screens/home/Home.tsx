@@ -11,6 +11,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { HomeView } from '@/screens/home/HomeView';
+import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { useCopy } from '@/i18n/useCopy';
+import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
@@ -22,57 +25,99 @@ import { isTrainingGated } from '@/domain/entitlement';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import type { Line } from '@/domain/voice';
 import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
-import { muscleGroupsLabel } from '@/data/exercises';
+import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Home'>;
 
 export function Home({ navigation, route }: Props) {
+  const { t } = useCopy();
   const app = useApp();
   const session = useSession();
   const program = app.program;
   // WEEKLY model: Home offers the next UNFINISHED workout in the week (any order, no calendar).
-  // "Set as next" passes `focusDayId` — honor it while that workout is still unfinished
-  // (survives the program refetch on focus, which would otherwise revert the choice).
-  const focusDayId = route.params?.focusDayId;
-  const focusDay =
-    focusDayId && program
-      ? program.days.find((d) => d.id === focusDayId && !d.isRest && !d.completed) ?? null
-      : null;
-  // "Choose workout" (top-right) swaps the workout shown on Home immediately. Local,
-  // session-scoped, takes priority over the default next workout (matches the prototype).
-  const [chosenId, setChosenId] = useState<string | null>(null);
-  // A FINISHED workout can never be queued again (founder 2026-07-11) — the chooser marks it
-  // done and never selects it, so `!d.completed` gates the chosen day exactly as it gates focus.
-  const chosenDay =
-    chosenId && program
-      ? program.days.find((d) => d.id === chosenId && !d.isRest && !d.completed) ?? null
-      : null;
-  const day = chosenDay ?? focusDay ?? (program ? nextWorkout(program) : null);
-
-  /**
-   * THE LAST INTENT WINS. Both doors set the queued workout: a CHIP on Home (chosenId) and Begin
-   * inside a workout's plan (which returns here with `focusDayId`). `chosenDay` is read first, so a
-   * chip tapped earlier in the session would outrank a Begin pressed just now — the athlete would
-   * open Legs, press Begin, land on Home, and be offered Pull. Arriving with a NEW focus clears the
-   * older chip choice; a chip tapped afterwards sets it again and wins, as it should.
+  /*
+   * A CHIP SHOWS A PLAN — including a finished one (founder 2026-07-17: "tapping each chip shows
+   * the workout plan"). So SELECTED and QUEUED are no longer the same thing, and they cannot be:
+   * a finished workout can be read, but never started again (founder 2026-07-11). `!d.completed`
+   * used to gate this, which meant a done chip silently fell back to the next workout and showed
+   * the WRONG plan. The gate moved to where it belongs — the act, not the view: a done day still
+   * renders its lifts, and the button becomes the quiet "trained this week" note instead of Begin.
    */
-  useEffect(() => {
-    if (focusDayId) setChosenId(null);
-  }, [focusDayId]);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const chosenDay =
+    chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
+  const nextUp = program ? nextWorkout(program) : null;
+  const day = chosenDay ?? nextUp;
+
+  /*
+   * There is only ONE door to the selection now — the chips. "THE LAST INTENT WINS" used to
+   * arbitrate between two: a chip here, and Begin pressed inside the workout's plan screen, which
+   * returned with `focusDayId`. That screen is gone (its list, with the loads it never showed, is
+   * on this page), so the arbitration went with it. One door needs no referee.
+   */
   // Every non-rest workout in the week, with its muscle groups, for the chooser.
   const workouts = (program?.days ?? [])
     .filter((d) => !d.isRest)
     .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups), done: !!d.completed }));
   const isFocused = useIsFocused();
 
+  /*
+   * TODAY'S LIFTS, WITH THEIR LOADS — read here so Home can show the athlete what is waiting.
+   *
+   * The same ask the deleted plan screen made (`sessionTargets` for the day), and it is a READ, not
+   * a computation: the loads were decided at the end of her last workout (L7). Re-read whenever the
+   * selected day changes — a chip tap must repaint the list under it, which is the whole reason the
+   * chip needs no caption explaining what it does.
+   */
+  const [planTargets, setPlanTargets] = useState<SetTarget[] | null>(null);
+  const [formFor, setFormFor] = useState<string | null>(null);
+  const dayIdForPlan = day?.id ?? null;
+  useEffect(() => {
+    if (!dayIdForPlan) {
+      setPlanTargets(null);
+      return;
+    }
+    let alive = true;
+    setPlanTargets(null); // never show the previous workout's loads under a new name
+    app.model
+      .sessionTargets({ programDayId: dayIdForPlan, completedSessions: app.modeState.completedSessions })
+      .then((ts) => {
+        if (alive) setPlanTargets(ts);
+      })
+      .catch(() => {
+        if (alive) setPlanTargets([]); // an unreadable plan is an empty section, never a hang
+      });
+    return () => {
+      alive = false;
+    };
+  }, [app.model, app.modeState.completedSessions, dayIdForPlan]);
+
+  const plan = React.useMemo(() => {
+    if (!day || planTargets == null) return null;
+    return day.slots.map((slot) => {
+      const first = planTargets.find((x) => x.exerciseId === slot.exerciseId && x.setIndex === 0);
+      return {
+        exerciseId: slot.exerciseId,
+        name: exerciseDisplayName(slot.exerciseId),
+        load: first?.recommendedWeight ?? null,
+        sets: slot.setCount,
+        reps: first?.recommendedReps ?? 8,
+      };
+    });
+  }, [day, planTargets]);
+
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
   // bucket only regenerates at the Saturday-20:30 calendar roll (appStore.refreshProgram), so a week
   // finished early holds Recovery until the new week opens — the "no starting early" gate is now
   // structural (no fresh bucket exists before the roll), so no separate lock is needed here.
-  const resting = !!program && program.days.length > 0 && !day;
+  //
+  // It reads `nextUp`, not `day`: `day` can now be a FINISHED workout the athlete tapped to re-read,
+  // and looking back at Monday's session is not a reason to stop saying the week is complete —
+  // choosing one simply shows it, and Recovery returns the moment the selection is cleared.
+  const resting = !!program && program.days.length > 0 && !nextUp && !chosenDay;
 
   // Training-week counter ("Week N") — a mid-week signup's extended first bucket
   // stays "Week 1" until it actually rolls (domain/weekCadence.displayWeekNumber).
@@ -332,6 +377,7 @@ export function Home({ navigation, route }: Props) {
   const trainedThisWeek = program ? program.days.filter((d) => d.completed && !d.isRest).length : 0;
 
   return (
+    <>
     <HomeView
       resting={resting}
       name={app.profile?.name}
@@ -341,7 +387,11 @@ export function Home({ navigation, route }: Props) {
       trainedThisWeek={trainedThisWeek}
       startError={startError}
       weekNumber={weekNumber}
-      exerciseCount={day?.slots.length}
+      plan={plan}
+      planMinutes={day ? Math.max(5, Math.round(estimateSessionMinutes(day) / 5) * 5) : 0}
+      dayDone={!!day?.completed}
+      units={app.profile?.units ?? 'kg'}
+      onForm={setFormFor}
       resumable={resumable}
       onResume={onResume}
       onStart={onStart}
@@ -351,11 +401,24 @@ export function Home({ navigation, route }: Props) {
       briefCount={briefCount}
       briefUnseen={briefUnseen}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
-      onOpenWorkout={(id) => navigation.navigate('ProgramDetail', { dayId: id })}
       onHistory={() => navigation.navigate('History')}
       onSettings={() => navigation.navigate('ProfileSheet')}
       onProgress={() => navigation.navigate('Progress')}
       onCardio={() => navigation.navigate('Cardio')}
-    />
+      />
+      {/* The form clip — the one job the plan screen did that the list on Home does not. It was a
+          whole screen away (Home → chip → chip again → a row's ▶); it is now a tap on the lift. */}
+      {formFor ? (
+        <ExerciseDemo
+          title={exerciseDisplayName(formFor)}
+          exerciseId={formFor}
+          cues={exerciseCues(formFor)}
+          focusLabel={t('workout.focusOn')}
+          formGuideLabel={t('workout.form')}
+          doneLabel={t('common.close')}
+          onDone={() => setFormFor(null)}
+        />
+      ) : null}
+    </>
   );
 }

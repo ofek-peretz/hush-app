@@ -52,13 +52,16 @@ export type OnboardingParamList = {
  * swipe), and the current hierarchy is predictable and does not break. Simple, clear, tapped.
  */
 export type MainParamList = {
-  // Home is the single root. History · Progress · Settings (ProfileSheet) and a single
-  // workout's plan (ProgramDetail) are pushed onto this stack with a back affordance.
-  // The "This week" screen is GONE (founder 2026-07-13): the week card on Home holds the
-  // week — what is done, what is left, and the door into each workout.
-  // `focusDayId` = the workout chosen via "Set as next"; Home offers it (if still
-  // unfinished) instead of the default next workout (§4.19 / §5.8).
-  Home: { focusDayId?: string } | undefined;
+  // Home is the single root. History · Progress · Settings (ProfileSheet) are pushed onto this
+  // stack with a back affordance.
+  //
+  // The "This week" screen went first (founder 2026-07-13): the week card on Home holds the week.
+  // The workout's PLAN screen (ProgramDetail) followed it on 2026-07-17 — Home now lists today's
+  // lifts WITH their loads, which is the thing that screen existed to show, minus the one number it
+  // left out. Its form clip lives on the lift's row. Three screens for one purpose became one.
+  // `focusDayId` went with it: it carried "Begin" back from inside that plan, and nothing else ever
+  // set it.
+  Home: undefined;
   History: undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
   // strength engine. The recorded activity lands in the unified History timeline.
@@ -75,7 +78,6 @@ export type MainParamList = {
   // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
   // Done renders the calm "Workout not started" state instead of a completion.
   WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
-  ProgramDetail: { dayId: string };
   WorkoutDetail: { sessionId: string };
   // Progression report (founder, 2026-06-21). Default (Home / Recovery) = all-time + the milestones
   // gallery; `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens

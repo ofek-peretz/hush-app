@@ -104,7 +104,10 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     trainedThisWeek: 1,
     startError: false,
     weekNumber: 3,
-    exerciseCount: 6,
+    plan: null,
+    planMinutes: 45,
+    units: 'kg',
+    onForm: () => {},
     workouts: WORKOUTS,
     brief: [{ key: 'home.briefRaisedOne', params: { lift: 'Bench Press', load: '62.5', unit: 'kg' } }],
     briefCount: 3,
@@ -112,7 +115,6 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
-    onOpenWorkout: () => {},
     onHistory: () => {},
     onSettings: () => {},
     onProgress: () => {},
@@ -205,26 +207,63 @@ describe('the week is on the page, and it is a door', () => {
     expect(opened).toEqual([]);
   });
 
-  it('the meta line is the door to the plan — the line that names the exercises opens them', () => {
-    const opened: string[] = [];
+  /**
+   * THE PLAN IS ON THE PAGE (founder 2026-07-17: "the athlete should know, already from Home, what
+   * is waiting for him in today's workout"). There is no door to it any more, and no screen behind
+   * one: the lifts and the loads Hush set are simply here. `ProgramDetail` — which listed the same
+   * lifts and left the LOAD out, the one number the engine decided — is deleted.
+   */
+  it("today's lifts are on Home, with the loads the engine set", () => {
     const r = mount(
-      <HomeView {...props({ exerciseCount: 6, dayId: 'day_2', onOpenWorkout: (id) => void opened.push(id) })} />,
+      <HomeView
+        {...props({
+          plan: [
+            { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, reps: 8 },
+            { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, reps: 10 },
+          ],
+        })}
+      />,
     );
-    act(() => byLabel(r, tg('home.exerciseCount', { n: 6 }))!.props.onPress());
-    expect(opened).toEqual(['day_2']);
+    const said = texts(r).join(' ');
+    expect(said).toContain('Bench Press');
+    expect(said).toContain('80 kg · 3 × 8');
+    // A bodyweight lift states the reps and invents no weight.
+    expect(said).toContain('3 × 10');
+    expect(said).not.toMatch(/null|undefined|NaN/);
   });
 
-  it('a finished workout is a record: its chip opens the plan, and never re-queues it', () => {
-    const chosen: string[] = [];
-    const opened: string[] = [];
+  it('a lift row opens its form clip — the last job the deleted plan screen was doing', () => {
+    const formed: string[] = [];
     const r = mount(
-      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+      <HomeView
+        {...props({
+          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, reps: 8 }],
+          onForm: (id: string) => void formed.push(id),
+        })}
+      />,
     );
+    act(() => byLabel(r, 'Bench Press · 80 kg · 3 × 8')!.props.onPress());
+    expect(formed).toEqual(['bb_bench_press']);
+  });
+
+  /**
+   * A finished workout is a RECORD, not an offer (founder 2026-07-11) — and a record can be read.
+   * Its chip selects like any other and its lifts appear; the gate moved off the VIEW and onto the
+   * ACT, where it belongs. It used to be gated here, which meant a done chip fell through to the
+   * next workout and quietly showed the WRONG plan under the right name.
+   */
+  it('a finished workout is a record: its chip shows its plan, and the button will not start it', () => {
+    const chosen: string[] = [];
+    const r = mount(<HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id) })} />);
     act(() => {
       byLabel(r, 'Push A')!.props.onPress(); // done: true
     });
-    expect(chosen).toEqual([]);
-    expect(opened).toEqual(['day_1']);
+    expect(chosen).toEqual(['day_1']); // it selects — the container decides what that shows
+
+    // …and when the container hands back a done day, the act is gone, not merely disabled.
+    const done = texts(mount(<HomeView {...props({ dayDone: true })} />)).join(' ');
+    expect(done).toContain(tg('program.doneThisWeek'));
+    expect(done).not.toContain(tg('home.begin', { name: bidi('Pull A') }));
   });
 
   /**
@@ -270,26 +309,22 @@ describe('the week is on the page, and it is a door', () => {
     expect(chips.filter((c) => c.props.accessibilityState?.selected)).toHaveLength(1);
   });
 
-  it('an interrupted workout owns the CTA — a chip cannot queue behind its back', () => {
-    // The button says "Continue Pull A". Queueing Legs would light a chip that the CTA disagrees
-    // with, so while a session is waiting to be resumed a chip is a door to the plan and nothing else.
+  /**
+   * Unchanged law, and it matters MORE now: a chip repaints the plan list under the button. While a
+   * session is waiting to be resumed the button says "Continue Pull A", so a chip that swapped the
+   * list beneath it would be showing Legs A's lifts under a button that starts Pull A. There is one
+   * act on the screen until she finishes or abandons it, and the chips say so rather than pretending
+   * otherwise — they stand down, and announce that to VoiceOver too.
+   */
+  it('an interrupted workout owns the CTA — the chips stand down behind it', () => {
     const chosen: string[] = [];
-    const opened: string[] = [];
     const r = mount(
-      <HomeView
-        {...props({
-          resumable: { workoutName: 'Pull A' },
-          onChooseWorkout: (id) => void chosen.push(id),
-          onOpenWorkout: (id) => void opened.push(id),
-        })}
-      />,
+      <HomeView {...props({ resumable: { workoutName: 'Pull A' }, onChooseWorkout: (id) => void chosen.push(id) })} />,
     );
-    act(() => {
-      byLabel(r, 'Legs A')!.props.onPress();
-    });
+    const legs = byLabel(r, 'Legs A')!;
+    expect(legs.props.accessibilityState?.disabled).toBe(true);
+    act(() => legs.props.onPress?.());
     expect(chosen).toEqual([]);
-    expect(opened).toEqual(['day_3']);
-    expect(texts(r).join(' ')).not.toContain(tg('home.chipsHint')); // …and it does not claim otherwise
   });
 
   it('a trained workout is SAGE, and the queued one LIFTS — the two marks never trade places', () => {
@@ -342,10 +377,17 @@ describe('cardio is Home\'s second door — and it never rivals the first', () =
  * that way: they FAIL if a name or a count comes back for a second helping.
  */
 describe('the screen does not stutter', () => {
-  it('the primary act is "Begin" — it never repeats the name set 60pt tall above it', () => {
+  /**
+   * The law is the COUNT — exactly two mentions — and the test below it is the one that guards it.
+   * This one guarded which two, and that changed on 2026-07-17: the 60pt Display is gone, because
+   * the plan it used to sit above now lists the lifts and their loads, and a name shouted over its
+   * own content is the screen distrusting itself. The second mention moved onto the ACT, which is
+   * where a name is worth most — a bare "Begin" under six named lifts would be the button declining
+   * to say what it is about to start.
+   */
+  it('the primary act names the workout — the second of exactly two mentions', () => {
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
-    expect(said).toContain(tg('home.beginPlain'));
-    expect(said).not.toContain(tg('home.begin', { name: bidi('Pull A') }));
+    expect(said).toContain(tg('home.begin', { name: bidi('Pull A') }));
   });
 
   it('the queued workout is named exactly TWICE: the hero (what you are doing) + its chip (where it sits)', () => {
@@ -353,9 +395,10 @@ describe('the screen does not stutter', () => {
     expect(named).toHaveLength(2);
   });
 
-  it('the week\'s count is stated ONCE — the meter has it, so the card head gave it up', () => {
-    // The chips already SHOW the count (a check on what is done, an empty chip on what is left);
-    // the meter already says it in figures. A third rendering was the card's "1 / 3".
+  it("the week's count is stated ONCE — and the chips SHOW it, which is why the meter went", () => {
+    // Unchanged law, moved home. The chips always drew this: four chips with one checked IS 1 / 4,
+    // and the meter's bar was a second picture of it directly above them. The bar is gone; the
+    // figures returned to the card head, which is now the only place they are stated.
     const counted = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('/ 3'));
     expect(counted).toHaveLength(1);
   });

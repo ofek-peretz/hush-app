@@ -1,15 +1,33 @@
 /**
- * HomeView — the center of gravity, rebuilt 1:1 to the Claude Design "Design
- * System" Home (ui_kits/app/Home.jsx).
+ * HomeView — the center of gravity.
  *
- * Hub-and-spoke, no tab bar. A scrolling hub that answers one question on open —
- * what do I do next? — and offers the one affordance to begin:
- *   brand (hush·) + settings · Legend(NEXT WORKOUT) · workout name · muscle
- *   groups · one quiet meta line (exercises · loads set) · week ProgressMeter ·
- *   Begin {name} · Cardio · THE WEEK CARD (the chooser) · hub rows (History / Progress).
- * Rest state centers "Recovery." with the completed-week meter, one quiet fact —
- * when the next week opens — and Open training, which on a recovery day IS the
- * day's act.
+ * Hub-and-spoke, no tab bar. A scrolling hub that answers two questions on open — what did Hush
+ * decide, and what am I doing today — and offers the one act:
+ *
+ *   brand (hush·) + settings
+ *   I DECIDED        · Hush's own sentences about what it changed, and the why one tap away
+ *   TODAY            · today's lifts, each with the LOAD Hush set + its form clip
+ *   Begin {name}     · Cardio
+ *   Week N · n/m     · the cycle's workouts as chips (the chooser)
+ *   History / Progress
+ *
+ * Rest state centers "Recovery." with the completed-week meter, one quiet fact — when the next week
+ * opens — and Open training, which on a recovery day IS the day's act.
+ *
+ * ═══ THE PLAN IS THE HERO (founder 2026-07-17) ═══
+ *
+ * "Home should show, at the top, in a few very short sentences, which changes the engine decided…
+ * and tapping each chip shows the workout plan. That way the athlete knows, already from Home, what
+ * is waiting for him in today's workout — and so we present the engine already on the home screen."
+ *
+ * Both halves were wrong before. The engine's sentences were the LAST thing on the page, under the
+ * chips, inside a card at the bottom. And the plan was not on the page at all: it lived a screen
+ * away (ProgramDetail), which listed the lifts and left out the LOAD — the one number Hush decides.
+ * Home showed a 60pt name, six muscle pills, and "6 exercises · Loads set": three ways of saying
+ * what the list itself says better, and none of them the engine.
+ *
+ * So the decision came to the top, the lifts came onto the page with their loads, and the three
+ * labels describing them went. ProgramDetail is deleted — its form clip is a tap on the lift's row.
  *
  * ═══ THE WEEK CARD (founder 2026-07-13) — three findings, one object ═══
  *
@@ -44,9 +62,10 @@
  * so it paid for the overloaded control with a line of instructions under it ("Tap to queue a
  * workout · tap it again to open it"). A hint is a symptom; the control was wrong.
  *
- * The plan's door is now the META LINE, which already says "6 exercises" and so is the obvious
- * thing to press to see those six. The chips do one thing each, and the instruction line is gone.
- * (What opens is a READ-ONLY preview — swap/pin/reorder were deleted with the edit screen, S-73.)
+ * A chip now does exactly one thing: it selects its workout, and the list of lifts repaints under
+ * it. That IS the chip explaining itself — no caption, and none present. A DONE chip selects too
+ * (a record can be read); only the button changes, because a finished workout cannot be started
+ * again. The gate belongs on the act, never on the view.
  *
  * That frees Home's secondary button, and cardio takes it (founder): a run is a real option, and it
  * was buried inside the sheet we just deleted. On a RECOVERY day it is the day's ACT, so there it
@@ -64,6 +83,7 @@ import { Legend, Display, BodyL, Body, Button, ProgressMeter, ListRow, IconButto
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import type { Line } from '@/domain/voice';
+import { displayWeight, unitLabel } from '@/domain/schedule';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, font, textScale, signal, radius, up } from '@/design/tokens';
@@ -80,6 +100,24 @@ export interface HomeWorkoutOption {
   done?: boolean;
 }
 
+/**
+ * One lift of the selected workout, as Home prints it (founder 2026-07-17: "the athlete should
+ * know, already from Home, what is waiting for him in today's workout").
+ *
+ * The LOAD is the point. `ProgramDetail` listed the day's lifts with their sets and reps and left
+ * the weight out — which is the one number Hush decided, so the preview showed everything except
+ * the product. Here the line reads "Bench Press · 80 kg · 3 × 8", and every one of those figures is
+ * the engine's, sitting on the first screen the athlete opens.
+ */
+export interface HomePlanLift {
+  exerciseId: string;
+  name: string;
+  /** kg; null = bodyweight (the row then says the reps carry the work, not a weight). */
+  load: number | null;
+  sets: number;
+  reps: number;
+}
+
 export interface HomeViewProps {
   resting: boolean;
   /** The athlete's first name, when they gave one — spoken only where Hush is speaking TO them. */
@@ -93,7 +131,19 @@ export interface HomeViewProps {
   trainedThisWeek: number;
   startError: boolean;
   weekNumber: number; // training-week counter ("Week N"), from memberSince
-  exerciseCount?: number; // next workout's exercise count (meta line)
+  /** The SELECTED workout's lifts, with the loads Hush set. Null while they are being read — the
+   *  section holds its shape rather than flashing an empty list. */
+  plan: HomePlanLift[] | null;
+  /** Honest work-time estimate for the selected workout (minutes), from the same estimator the
+   *  time cap runs on. 0 = unknown. */
+  planMinutes?: number;
+  /** Open one lift's form clip — the last job the deleted plan screen was doing. */
+  onForm: (exerciseId: string) => void;
+  /** The selected workout is already trained this week: it can be READ, never started again
+   *  (founder 2026-07-11). The act is what the gate belongs on — the plan still shows. */
+  dayDone?: boolean;
+  /** The athlete's units, for the loads on the plan rows. */
+  units: 'kg' | 'lb';
   /** An interrupted (app-killed) workout that can be picked up exactly where it was (S3).
    *  When present, the primary CTA becomes "Continue {workout}" — one path, no fork. */
   resumable?: { workoutName: string } | null;
@@ -110,13 +160,21 @@ export interface HomeViewProps {
   /** This week's update has not been opened yet — the card wears the ochre mark. */
   briefUnseen: boolean;
   onWeeklyUpdate: () => void;
-  /** Open ONE workout's read-only plan preview (the exercises + their form clips). Reached from the
-   *  meta line ("6 exercises ›"), and from a DONE chip, which is a record. */
-  onOpenWorkout: (id: string) => void;
   onHistory: () => void;
   onSettings: () => void;
   onProgress?: () => void;
   onCardio: () => void; // Open training (run / walk) — recorded, not coached
+}
+
+/**
+ * The right-hand column of a plan row: "80 kg · 3 × 8", or "3 × 12" on a bodyweight lift, where
+ * there is no weight to state and the reps are the work (the stage holds the same rule).
+ */
+function planFigure(lift: HomePlanLift, units: 'kg' | 'lb', t: (k: string, o?: Record<string, unknown>) => string): string {
+  const scheme = `${lift.sets} × ${lift.reps}`;
+  if (lift.load == null) return scheme;
+  const w = displayWeight(lift.load, units);
+  return `${w == null ? '' : +w.toFixed(2)} ${unitLabel(units)} · ${scheme}`;
 }
 
 export function HomeView(props: HomeViewProps) {
@@ -125,7 +183,6 @@ export function HomeView(props: HomeViewProps) {
 
   const total = props.workouts.length || 0;
   const done = Math.min(props.trainedThisWeek, total);
-  const groups = props.muscles ? props.muscles.split(' · ').filter(Boolean) : [];
 
   /* ---- the Recovery moment (founder 2026-07-12) ----------------------------------
    * Finishing a week is the biggest thing an athlete does here and the app said nothing.
@@ -189,6 +246,46 @@ export function HomeView(props: HomeViewProps) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* ═══ I DECIDED — THE ENGINE, FIRST (founder 2026-07-17) ═══
+              "Home should show, at the top, in a few very short sentences, which changes the engine
+              decided." It always said them — at the BOTTOM, inside the week card, under the chips.
+              The one thing that makes this a managed programme rather than a nicely-drawn workout
+              screen was the last thing on the page.
+              It opens with the COUNT (founder 2026-07-13): how many lifts changed, or that none
+              did — the fact first, the sentence under it, the WHY one tap away. */}
+          {/* Hush's sentence — what it DID to this plan. The one line that makes this a
+              managed programme rather than a nicely-drawn workout screen. It opens with the
+              COUNT (founder 2026-07-13): how many lifts changed, or that none did — the fact
+              first, the sentence under it, and the WHY one tap away. */}
+          {props.brief?.length ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('home.briefOpen')}
+              onPress={props.onWeeklyUpdate}
+              style={({ pressed }) => [styles.brief, pressed && styles.weekPressed]}
+            >
+              {props.briefCount != null ? (
+                <View style={styles.briefCountRow}>
+                  <Text style={styles.briefCount}>
+                    {props.briefCount > 0
+                      ? t('home.briefChanges', { count: props.briefCount })
+                      : t('home.briefNoChanges')}
+                  </Text>
+                  {props.briefUnseen ? (
+                    <View style={styles.briefNew}>
+                      <View style={styles.briefNewDot} />
+                      <Text style={styles.briefNewText}>{t('home.briefNew').toUpperCase()}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              <Text style={styles.briefText}>{props.brief.map((l) => t(l.key, l.params ?? {})).join(' ')}</Text>
+              <View style={styles.briefLinkRow}>
+                <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
+                <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
+              </View>
+            </Pressable>
+          ) : null}
           {/* Founder 2026-07-10: the greeting line above NEXT WORKOUT said nothing the
               legend + workout name don't — cut. The workout is the star. */}
           <View style={styles.legendTop}>
@@ -239,61 +336,56 @@ export function HomeView(props: HomeViewProps) {
             </View>
           ) : (
             <View style={styles.block}>
-              <Display>{props.dayName ?? ''}</Display>
-              {/* The muscle groups are METADATA, not a sentence — pills, so the eye takes
-                  them in one pass instead of parsing a run of interpuncts (founder 2026-07-12). */}
-              {groups.length ? (
-                <View style={styles.groups}>
-                  {groups.map((g, i) => (
-                    <View key={`${g}-${i}`} style={styles.pill}>
-                      <Text style={styles.pillText}>{g}</Text>
-                    </View>
+              {/* ═══ THE PLAN IS THE HERO (founder 2026-07-17) ═══
+                  "The athlete should know, already from Home, what is waiting for him in today's
+                  workout." Once the lifts and their loads are on the page, three things that used
+                  to live here are answering questions the list answers better:
+                    · the 60pt name — the selected chip says which workout, the CTA says it again
+                      when you start it. Two mentions, which is the floor the founder set; a third,
+                      set in Display, was the screen shouting a label over its own content.
+                    · the muscle pills — "chest · shoulders · triceps" is a summary of a summary.
+                      "Bench Press / Overhead Press / Triceps Pushdown" is the same fact, specific.
+                    · "6 exercises · Loads set" — you can count six rows, and every one of them
+                      shows its load. The line was describing the list that is now underneath it.
+                  All three are gone. What is left is what the athlete came to find out. */}
+
+              {/* TODAY'S LIFTS — the answer to the only question Home exists to answer.
+                  The legend does NOT repeat the name (the chip above it is lit, the button below
+                  says it): it carries the one fact neither of them does — how long this will take,
+                  from the same estimator the engine's time cap runs on. */}
+              <View style={styles.planHead}>
+                <Legend>{t('home.todayLegend')}</Legend>
+                {props.planMinutes ? (
+                  <Text style={styles.planMin}>{t('home.planMinutes', { min: props.planMinutes })}</Text>
+                ) : null}
+              </View>
+
+              {props.plan?.length ? (
+                <View style={styles.plan}>
+                  {props.plan.map((lift, i) => (
+                    <Pressable
+                      key={`${lift.exerciseId}_${i}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${lift.name} · ${planFigure(lift, props.units, t)}`}
+                      accessibilityHint={t('workout.form')}
+                      onPress={() => props.onForm(lift.exerciseId)}
+                      style={({ pressed }) => [
+                        styles.planRow,
+                        i === (props.plan?.length ?? 0) - 1 && styles.planRowLast,
+                        pressed && styles.weekPressed,
+                      ]}
+                    >
+                      <Text style={styles.planName} numberOfLines={1}>{bidi(lift.name)}</Text>
+                      {/* The figures are MONO and right-aligned into a column, so six lifts read as
+                          a table the eye can scan down — not six sentences it has to parse. */}
+                      <Text style={styles.planFigure} numberOfLines={1}>{planFigure(lift, props.units, t)}</Text>
+                    </Pressable>
                   ))}
                 </View>
-              ) : null}
-
-              {/* THE DOOR TO THE PLAN IS THE LINE THAT NAMES IT (2026-07-17).
-                  This was a dead label, and because it was dead the CHIPS below had to carry two
-                  acts — queue on the first tap, open on a second — which no athlete can guess. The
-                  code said so itself: "an athlete cannot be expected to guess the second", and then
-                  paid for the overloaded control with a line of instructions under it.
-                  A hint is a symptom. The control was wrong: this line already says "6 exercises",
-                  so it is the obvious thing to press to SEE those six. The chevron says it is a
-                  door; the chips go back to one act each; the instruction line is deleted. */}
-              {props.exerciseCount && props.dayId ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.exerciseCount', { n: props.exerciseCount })}
-                  hitSlop={8}
-                  onPress={() => props.onOpenWorkout(props.dayId!)}
-                  style={({ pressed }) => [styles.metaRow, pressed && styles.weekPressed]}
-                >
-                  <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
-                  <Text style={styles.metaMono}>
-                    {`${t('home.exerciseCount', { n: props.exerciseCount })} · ${t('home.loadsSet')}`}
-                  </Text>
-                  <Icon name="chevronRight" size={14} color={color.textTertiary} strokeWidth={2} />
-                </Pressable>
               ) : (
-                <View style={styles.metaRow}>
-                  <Icon name="checkCircle" size={15} color={color.up} strokeWidth={2} />
-                  <Text style={styles.metaMono}>{t('home.loadsSet')}</Text>
-                </View>
+                /* Never an empty flash: the section holds its height while the loads are read. */
+                <View style={styles.planLoading} />
               )}
-
-              {/* DONE IS SAGE, EVERYWHERE (founder 2026-07-13: "anything to do with something
-                  that was completed should be our green"). This meter measures workouts TRAINED;
-                  it was ochre, which is the instrument's "you are here" mark, not its "this is
-                  finished" mark. The two must never be the same colour. */}
-              <View style={styles.meterWrap}>
-                <ProgressMeter
-                  label={t('home.weekLabel', { n: props.weekNumber })}
-                  valueLabel={`${done} / ${total}`}
-                  value={done}
-                  max={total || 1}
-                  tone="up"
-                />
-              </View>
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
@@ -307,20 +399,27 @@ export function HomeView(props: HomeViewProps) {
                     onPress={props.onResume}
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
+                ) : props.dayDone ? (
+                  /* A FINISHED workout is a record, not an offer (founder 2026-07-11). Its plan is
+                     right there to read; the button is not, because there is nothing to press. */
+                  <View style={styles.doneRow}>
+                    <Icon name="check" size={16} color={color.up} strokeWidth={2.4} />
+                    <Text style={styles.doneText}>{t('program.doneThisWeek')}</Text>
+                  </View>
                 ) : props.dayName ? (
-                  /* THE BUTTON DOES NOT REPEAT THE NAME (founder 2026-07-14). The screen said
-                     "Upper B" three times — the Display, the button, the chip. The workout's name
-                     is set 60pt tall directly above this button; there is nothing else it could
-                     begin. Two mentions is the floor and the right one: the Display says what you
-                     are about to do, the ochre chip says where that sits in the week. Three is a
-                     stutter, and a stutter is what a screen does when it doesn't trust itself.
-                     (`Continue {name}` keeps its name — it names an INTERRUPTED session, which is
-                     not necessarily the workout on the hero, so there the name carries fact.) */
+                  /* THE BUTTON NAMES WHAT IT STARTS — and it is allowed to, now.
+                     The founder's law is TWO mentions, never three (2026-07-14: "the screen said
+                     Upper B three times — the Display, the button, the chip"). The Display was one
+                     of the two, so the button went plain. The Display is gone now, and the count is
+                     unchanged: the lit chip says which workout, this button says it as it starts
+                     it. Two — and the second one is on the act, which is where a name is worth
+                     most. A bare "Begin" under a list of six lifts would be the screen declining to
+                     say what it is about to do. */
                   <Button
                     variant="primary"
                     size="lg"
                     block
-                    label={t('home.beginPlain')}
+                    label={t('home.begin', { name: bidi(props.dayName) })}
                     onPress={props.onStart}
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
@@ -378,13 +477,16 @@ export function HomeView(props: HomeViewProps) {
             <Legend style={styles.hubLegend}>{t('home.programLegend')}</Legend>
             <View style={styles.weekCard}>
               {/* The head is a STATEMENT, not a door: the screen it used to open (This week) is
-                  gone — everything it held is on this card (founder 2026-07-13). */}
-              {/* The count that used to sit here ("1 / 4") is GONE (founder 2026-07-14): the week
-                  meter above already states it, and the chips below already SHOW it — a check on
-                  what is done, an empty chip on what is left. Three renderings of one fact on one
-                  screen. The card keeps the two that earn their place. */}
+                  gone — everything it held is on this card (founder 2026-07-13).
+                  THE COUNT IS BACK, and it is back for the reason it left. It was cut on
+                  2026-07-14 as the THIRD rendering of one fact — the chips showed it, the week
+                  METER stated it in figures, and this head said it again. The meter is gone now
+                  (the chips were always its bar: four chips, one checked, IS 1 / 4 — the bar drew
+                  the same picture underneath them), so the head is no longer a third voice. It is
+                  the only one that states the count, and the week it belongs to. */}
               <View style={styles.weekHead}>
-                <Text style={styles.weekTitle}>{t('home.hubThisWeek')}</Text>
+                <Text style={styles.weekTitle}>{t('home.weekLabel', { n: props.weekNumber })}</Text>
+                <Text style={styles.weekCount}>{`${done} / ${total}`}</Text>
               </View>
 
               {/* THE CHIPS ARE THE CHOOSER, AND THAT IS ALL THEY ARE (2026-07-17).
@@ -396,26 +498,30 @@ export function HomeView(props: HomeViewProps) {
                 <View style={styles.chips} accessibilityLabel={t('home.weekChips')}>
                   {props.workouts.map((w) => {
                     const isDone = !!w.done;
-                    const current = !isDone && (props.dayId != null ? w.id === props.dayId : w.name === props.dayName);
-                    // A finished workout opens the record it became. An interrupted session owns the
-                    // CTA ("Continue …"), so queueing another workout would light a chip the button
-                    // does not agree with — while one is waiting to be resumed, a chip opens instead
-                    // of queueing. The QUEUED chip no longer opens on a second tap: that was the
-                    // guessing game, and the meta line above is the door now.
-                    const opens = isDone || !!props.resumable;
+                    const current = props.dayId != null ? w.id === props.dayId : w.name === props.dayName;
+                    /* ONE ACT: a chip SHOWS its workout. The list below repaints, which is how the
+                       chip explains itself — no caption required, and none present.
+                       A DONE chip shows its plan too (it is a record you can read); only the button
+                       changes, because a finished workout cannot be started again.
+                       An INTERRUPTED session is the exception: it owns the whole screen ("Continue
+                       Pull A"), so a chip that repainted the list under that button would be
+                       offering a workout the button disagrees with. There is exactly one act until
+                       she finishes or abandons it, so the chips stand down and say so. */
+                    const inert = !!props.resumable;
                     return (
                       <Pressable
                         key={w.id}
                         accessibilityRole="button"
                         accessibilityLabel={w.name}
-                        accessibilityHint={opens ? t('home.chipOpenHint') : t('home.chipChooseHint')}
-                        accessibilityState={{ selected: current }}
+                        accessibilityState={{ selected: current, disabled: inert }}
+                        disabled={inert}
                         onPress={() => {
-                          if (opens) {
-                            props.onOpenWorkout(w.id);
-                            return;
-                          }
-                          haptics.tick(); // the queue changed under the finger — it should be felt
+                          // `disabled` already stops the finger; this stops everything else. The
+                          // rule — a chip never queues behind the CTA's back — is worth holding
+                          // here rather than trusting a prop two layers down to be the only thing
+                          // between an interrupted session and a plan that contradicts it.
+                          if (inert) return;
+                          haptics.tick(); // the list changed under the finger — it should be felt
                           props.onChooseWorkout(w.id);
                         }}
                         style={({ pressed }) => [
@@ -442,39 +548,6 @@ export function HomeView(props: HomeViewProps) {
                 </View>
               ) : null}
 
-              {/* Hush's sentence — what it DID to this plan. The one line that makes this a
-                  managed programme rather than a nicely-drawn workout screen. It opens with the
-                  COUNT (founder 2026-07-13): how many lifts changed, or that none did — the fact
-                  first, the sentence under it, and the WHY one tap away. */}
-              {props.brief?.length ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.briefOpen')}
-                  onPress={props.onWeeklyUpdate}
-                  style={({ pressed }) => [styles.brief, pressed && styles.weekPressed]}
-                >
-                  {props.briefCount != null ? (
-                    <View style={styles.briefCountRow}>
-                      <Text style={styles.briefCount}>
-                        {props.briefCount > 0
-                          ? t('home.briefChanges', { count: props.briefCount })
-                          : t('home.briefNoChanges')}
-                      </Text>
-                      {props.briefUnseen ? (
-                        <View style={styles.briefNew}>
-                          <View style={styles.briefNewDot} />
-                          <Text style={styles.briefNewText}>{t('home.briefNew').toUpperCase()}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  <Text style={styles.briefText}>{props.brief.map((l) => t(l.key, l.params ?? {})).join(' ')}</Text>
-                  <View style={styles.briefLinkRow}>
-                    <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
-                    <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
-                  </View>
-                </Pressable>
-              ) : null}
             </View>
 
             <ListRow
@@ -551,25 +624,37 @@ const styles = StyleSheet.create({
   // paper they were shapeless smudges, and under gym light they were gone (founder 2026-07-14).
   // A hairline gives them an EDGE without giving them weight: they become objects the eye can
   // count, while staying quieter than everything they sit under.
-  groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 6 },
-  pill: {
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.fillSubtle,
+  /* ── Today's lifts ──────────────────────────────────────────────────────────
+     A TABLE, not a list of sentences: the name on the start edge, the figures in a mono column on
+     the end edge. Six lifts have to be scannable in one pass — the eye runs down the loads, which
+     is the column that carries the engine's decisions. */
+  planHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 2 },
+  // SANS, not mono: this reads "~45 min" in English but "~45 דק׳" in Hebrew, and JetBrains Mono
+  // has no Hebrew glyphs — the law caught it (`monoCarriesNoWords`). A slot that ever holds a
+  // translated WORD is a sans slot, however many figures it also carries.
+  planMin: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'left' },
+  plan: { marginTop: 2 },
+  planRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 52,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
   },
-  pillText: {
-    fontFamily: font.sansMedium,
-    fontSize: textScale.xs,
-    letterSpacing: 0.2,
-    color: color.textSecondary,
-    textAlign: 'left',
-  },
+  planRowLast: { borderBottomWidth: 0 },
+  planName: { flex: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
+  planFigure: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textSecondary, textAlign: 'right' },
+  /* The section holds its height while the loads are read — a list that pops in under a name the
+     athlete is already reading is worse than one that arrives a beat later. */
+  planLoading: { height: 168 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
+  doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
+
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  metaMono: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   // a sentence, in the speaking voice (never the measuring one)
   restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
 
@@ -615,6 +700,7 @@ const styles = StyleSheet.create({
   weekPressed: { opacity: 0.62 },
   weekHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   weekTitle: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  weekCount: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted, textAlign: 'right' },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chip: {
