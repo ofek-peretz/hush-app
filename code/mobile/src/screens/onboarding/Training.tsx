@@ -42,6 +42,7 @@ export function Training({ navigation, route }: Props) {
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
       progress={{ index: 4, total: 5 }}
+      centerContent
       legend={t('ob.trainLegend')}
       title={t('ob.trainTitle')}
       sub={t('ob.trainSub')}

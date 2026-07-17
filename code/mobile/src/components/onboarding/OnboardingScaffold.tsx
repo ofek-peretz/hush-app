@@ -48,10 +48,17 @@ interface Props {
    * is, as ever, the way back that always works.
    */
   onSwipeBack?: () => void;
+  /**
+   * Centre the children vertically in the space between the head and the footer, instead of
+   * top-aligning them. For a short, self-contained control set (the wheels on Body data, the one
+   * wheel on the schedule step) top-alignment leaves a large dead band above the pinned Continue —
+   * the balance reads as unfinished. Off by default so no existing step shifts; opt in per screen.
+   */
+  centerContent?: boolean;
   children?: React.ReactNode;
 }
 
-export function OnboardingScaffold({ onBack, progress, legend, title, sub, keyboard, footer, onSwipeBack, children }: Props) {
+export function OnboardingScaffold({ onBack, progress, legend, title, sub, keyboard, footer, onSwipeBack, centerContent, children }: Props) {
   const { t } = useCopy();
 
   // The drag travels in the reading direction's "back": rightwards in LTR, leftwards in RTL —
@@ -83,7 +90,7 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
         <Text style={styles.title} accessibilityRole="header">{title}</Text>
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
-      {children}
+      {centerContent ? <View style={styles.centerWrap}>{children}</View> : children}
     </ScrollView>
   );
 
@@ -138,6 +145,8 @@ const styles = StyleSheet.create({
   // viewport when it is SHORTER than it, which is what makes the page read as static.
   body: { flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
   head: { marginBottom: 22 },
+  // Centre a short control set in the space between the head and the footer (centerContent).
+  centerWrap: { flex: 1, justifyContent: "center", paddingBottom: 24 },
   legend: { marginBottom: 8 },
   title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary, textAlign: 'left' },
   sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
