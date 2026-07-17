@@ -18,6 +18,7 @@
  * load is worth marking.
  */
 import type { Profile, Experience, Capability } from '@/data/local/models';
+import { BAR_KG } from '@/engine/loadMath';
 import type { Exercise } from '@/data/exercises';
 
 /** The four fields the cold start actually reads. */
@@ -54,10 +55,15 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   const bwFactor = ex.bwScaled ? clamp(bw / 75, 0.7, 1.45) : 1;
   const sexFactor = profile.sex === 'female' ? (UPPER.includes(ex.capability) ? 0.62 : 0.72) : 1;
   let kg = ex.baseKg * bwFactor * sexFactor * exp * ageLoadFactor(profile.age);
-  // Round to a loadable increment; barbell compounds never below an empty bar.
+  // Round to a loadable increment.
   // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
   const step = 1;
   kg = Math.round(kg / step) * step;
-  if (ex.equipment === 'barbell' && ex.tier === 'compound') kg = Math.max(kg, 20);
+  // NO BARBELL LIFT IS LIGHTER THAN THE BAR. This clause used to read `&& ex.tier === 'compound'`,
+  // which asked the wrong question: the bar weighs 20 kg whatever the lift is doing. The two
+  // barbell ISOLATION lifts in the catalogue — `bb_curl` and `skullcrusher`, both baseKg 20 — fell
+  // through it, so EVERY beginner was handed a 16 kg barbell curl (a beginner woman, 10 kg). The
+  // tier was never the point; the equipment is.
+  if (ex.equipment === 'barbell') kg = Math.max(kg, BAR_KG);
   return Math.max(kg, step);
 }

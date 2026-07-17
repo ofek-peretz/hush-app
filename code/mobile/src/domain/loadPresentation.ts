@@ -15,11 +15,15 @@
  */
 import { loadStyleOf, type LoadStyle } from '@/data/exercises';
 import type { Units } from '@/data/local/models';
+import { BAR_KG } from '@/engine/loadMath';
 
 /** Bar weight + plate denominations per unit (standard commercial gym). */
 const GEAR: Record<Units, { bar: number; plates: number[] }> = {
   // Athletes think in 20s on a kg bar (100 kg → 20 + 20 / side), so the big plate is 20, not 25.
-  kg: { bar: 20, plates: [20, 15, 10, 5, 2.5, 1.25] },
+  // The kg bar is the ENGINE's `BAR_KG` — the same number the engine floors a barbell load at. Two
+  // copies of the bar's weight is two chances to disagree about what is loadable, and this file is
+  // the one that does the athlete's plate maths against it.
+  kg: { bar: BAR_KG, plates: [20, 15, 10, 5, 2.5, 1.25] },
   lb: { bar: 45, plates: [45, 35, 25, 10, 5, 2.5] },
 };
 

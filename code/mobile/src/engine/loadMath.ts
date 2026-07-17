@@ -20,6 +20,25 @@ export const LOAD_INCREMENT: Record<Equipment, number> = {
   bodyweight: 0,
 };
 
+/**
+ * THE EMPTY BAR (kg) — the floor under every barbell load, because it is a fact of the room.
+ *
+ * A barbell lift cannot be lighter than the bar. Nothing enforced this except one clause in
+ * `startingLoad`, scoped to `tier === 'compound'` — so the two barbell ISOLATION lifts in the
+ * catalogue fell straight through it: `bb_curl` and `skullcrusher`, both `baseKg: 20`. Every
+ * beginner was prescribed them at 20 × 0.78 = **16 kg**, and a beginner woman at 20 × 0.62 × 0.78 =
+ * **10 kg**. You cannot put 10 kg on a 20 kg bar. The screen dutifully printed "Barbell Curl ·
+ * 10 kg" and, because the per-side maths resolved to zero, offered no way to build it.
+ *
+ * The floor belongs HERE, at the choke point every prescribed load passes through, not in the seed
+ * alone: a Loop 1 down-correction ("too heavy — ease it") walked under the bar by the same route,
+ * from 20 kg to 17.5.
+ *
+ * It is a constant of the physical world, and `loadPresentation` does the athlete's plate maths
+ * against the same number — so it is exported and shared rather than written down twice.
+ */
+export const BAR_KG = 20;
+
 /** How close an ideal load must be to a performed rung to snap onto it (else the static increment). */
 const GRID_SNAP_TOLERANCE_KG = 2.5;
 
@@ -30,6 +49,11 @@ const GRID_SNAP_TOLERANCE_KG = 2.5;
  * the static increment. The grid refines among performed loads; it never caps progression.
  */
 export function normalizeLoad(load: number, equipment: Equipment, grid?: number[]): number {
+  // The bar is the floor, and it comes FIRST — before the grid and before the increment, because
+  // neither of them knows what a barbell weighs. Her performed grid cannot contain a sub-bar rung
+  // (she never lifted one), and the increment walk would happily step 20 → 17.5 → 15 on the way
+  // down. See BAR_KG: a lift lighter than the bar is not a light lift, it is an impossible one.
+  if (equipment === 'barbell' && load < BAR_KG) return BAR_KG;
   if (grid && grid.length > 0) {
     const rungs = Array.from(new Set(grid.filter((x) => x > 0))).sort((a, b) => a - b);
     const max = rungs[rungs.length - 1];

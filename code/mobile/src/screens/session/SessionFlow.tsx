@@ -484,9 +484,17 @@ function StageBar({ center, ordinal, onExit }: { center?: string; ordinal?: stri
   );
 }
 
-function SetDots({ total, index, done }: { total: number; index: number; done: number }) {
+/**
+ * Which set you are on, and how many are left — as a mark, not a sentence.
+ *
+ * `label` is what a sighted athlete reads off the dots in one glance ("Set 1 of 4"), spoken for one
+ * who cannot see them. It used to be printed underneath as well, which said the same fact twice:
+ * the dots ARE the count. Now the dots carry it in both senses — the group is one accessibility
+ * element, so VoiceOver says the sentence and never the four anonymous views it is drawn from.
+ */
+function SetDots({ total, index, done, label }: { total: number; index: number; done: number; label: string }) {
   return (
-    <View style={styles.dots}>
+    <View style={styles.dots} accessible accessibilityLabel={label}>
       {Array.from({ length: total }).map((_, i) => (
         <View
           key={i}
@@ -591,8 +599,25 @@ function execGlyph(style: LoadSetup['style']): IconName {
  */
 function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: boolean; units: 'kg' | 'lb' }) {
   const { t } = useCopy();
+  const { figure } = execParts(setup, t, units);
+  /*
+   * A VERB WITH NO OBJECT IS NOT AN INSTRUCTION (2026-07-17).
+   *
+   * This chip earns its place by doing the athlete's arithmetic — "LOAD · 20 + 20 /side" is the
+   * one thing on the stage the hero cannot say. But a plate-loaded lift whose per-side figure does
+   * not resolve (the target is lighter than the bar, an odd implement) fell through to a bare
+   * "Load", parked next to a 15 kg hero: an imperative with no object. It told the athlete to load
+   * the thing she is standing in front of, having already read what to load it to.
+   *
+   * So when the arithmetic is absent, the chip is absent — in BOTH states, because a bare "Loaded"
+   * confirms nothing the bar in front of her does not. `selectorized` / `fixed_barbell` keep their
+   * solo verb: "Set the pin" and "Take the bar" name WHICH control to touch, which is a fact, not
+   * an echo.
+   */
+  const platesOnly = setup.style === 'barbell' || setup.style === 'plate_loaded';
+  if (platesOnly && !figure) return null;
   if (toLoad) {
-    const { verb, figure } = execParts(setup, t, units);
+    const { verb } = execParts(setup, t, units);
     return (
       <View style={styles.instrChip}>
         <Icon name={execGlyph(setup.style)} size={18} color={stage.ink1} strokeWidth={2} />
@@ -754,8 +779,16 @@ function ActiveSet({
                   <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
                 </View>
               )}
+              {/* The dashed rule is the mark, and it is enough. There were THREE signals for one
+                  act here — this rule, a "TAP TO EDIT" caption under it, and the pencil in the
+                  footer — because two founder rulings landed on top of each other: "make it obvious
+                  the number opens the edit" (07-12, which added the rule AND the caption) and
+                  "bring the pencil back" (07-13). The caption is the one that has to go: the rule
+                  is the universal "this value is editable" mark, and the pencil is the named
+                  teacher for anyone who misses it. A word telling you to tap the giant number you
+                  are already looking at is the app not trusting its own control. VoiceOver still
+                  hears it — as the accessibilityHint above, which is where a hint belongs. */}
               <View style={styles.heroEditRule} />
-              <Text style={styles.heroEditHint}>{t('workout.tapToEdit').toUpperCase()}</Text>
             </Pressable>
 
             {/* 2 · INSTRUCTION — what the athlete physically does now (part of the prescription). */}
@@ -817,9 +850,12 @@ function ActiveSet({
           </View>
         )}
 
+        {/* THE DOTS ARE THE COUNT (2026-07-17). "Set 1 of 4" was printed under them — the same
+            fact, read twice, one of the thirteen things this screen asked the eye to do. The dots
+            say it faster than the words can be read, and they say something the words cannot: how
+            much is left. The sentence lives on inside them now, for VoiceOver. */}
         <View style={styles.dotsWrap}>
-          <SetDots total={setM} index={setN - 1} done={setN - 1} />
-          <Text style={styles.setLabel}>{t('workout.setOfM', { n: setN, m: setM })}</Text>
+          <SetDots total={setM} index={setN - 1} done={setN - 1} label={t('workout.setOfM', { n: setN, m: setM })} />
         </View>
       </View>
 
