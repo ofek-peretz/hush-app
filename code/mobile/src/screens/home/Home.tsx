@@ -15,6 +15,7 @@ import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
@@ -98,12 +99,17 @@ export function Home({ navigation, route }: Props) {
     if (!day || planTargets == null) return null;
     return day.slots.map((slot) => {
       const first = planTargets.find((x) => x.exerciseId === slot.exerciseId && x.setIndex === 0);
+      // HER BAND, from the engine's own immutable pair. `recommendedReps` is Tlo — the FLOOR — and
+      // an athlete's edit overwrites it mid-session, so it is the wrong field to read a prescription
+      // from twice over. `repBandLo`/`repBandHi` are held for exactly this (models.ts).
+      const lo = first?.repBandLo ?? first?.recommendedReps ?? 8;
+      const hi = first?.repBandHi ?? lo;
       return {
         exerciseId: slot.exerciseId,
         name: exerciseDisplayName(slot.exerciseId),
         load: first?.recommendedWeight ?? null,
         sets: slot.setCount,
-        reps: first?.recommendedReps ?? 8,
+        band: [lo, hi] as [number, number],
       };
     });
   }, [day, planTargets]);
@@ -196,6 +202,8 @@ export function Home({ navigation, route }: Props) {
   // one, where there is no update to count (founder 2026-07-13).
   const [briefCount, setBriefCount] = useState<number | null>(null);
   const [briefUnseen, setBriefUnseen] = useState(false);
+  /** The engine rotation she can take back — see `undoEngineSwap`. Null unless one is live. */
+  const [undoable, setUndoable] = useState<{ anchor: string; name: string } | null>(null);
   useEffect(() => {
     if (!isFocused || !program) return;
     let cancelled = false;
@@ -205,8 +213,19 @@ export function Home({ navigation, route }: Props) {
         // this athlete" — it is null until the first roll folds a week in. The PLAN view alone
         // cannot answer it: a week with no update and a week where nothing changed both read as
         // zero changes, and those are two completely different sentences.
-        const [update, view] = await Promise.all([getWeeklyUpdate(), getWeeklyPlan(program)]);
+        const [update, view, prefs] = await Promise.all([getWeeklyUpdate(), getWeeklyPlan(program), db.loadPreferences()]);
         if (cancelled) return;
+        /*
+         * WHICH SWAP CAN SHE TAKE BACK? Only a live engine ROTATION (S-71's scope — a graduation is
+         * not resistible, and her own learned swap is not ours to undo).
+         *
+         * `engineRotated` maps anchor → the lift it rotated to, so the lift now IN the plan is the
+         * value and the one to give back is the KEY. Same reverse-lookup the in-workout swap menu
+         * does to offer the original first (S-70) — one fact, read the same way in both places.
+         */
+        const rotated = prefs.engineRotated ?? {};
+        const undoAnchorFor = (currentExerciseId: string): string | null =>
+          Object.keys(rotated).find((anchor) => rotated[anchor] === currentExerciseId) ?? null;
         const changes: BriefChange[] | null =
           update && view
             ? view.workouts.flatMap((w) =>
@@ -222,6 +241,17 @@ export function Home({ navigation, route }: Props) {
             : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
         setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
         setBriefCount(changes ? changes.length : null);
+        // The undo, if the engine rotated a lift away this week. At most one is offered: the
+        // sentence names one swap ("I swapped one lift — X"), so the button beside it can only
+        // honestly belong to that one.
+        const swappedLift = (view?.workouts ?? [])
+          .flatMap((w) => w.lifts)
+          .find((l) => l.change?.snapshot.swapped && undoAnchorFor(l.exerciseId));
+        setUndoable(
+          swappedLift
+            ? { anchor: undoAnchorFor(swappedLift.exerciseId)!, name: exerciseDisplayName(undoAnchorFor(swappedLift.exerciseId)!) }
+            : null,
+        );
         setBriefUnseen(!!update && !update.seen);
       } catch {
         // The engine record could not be read. Say NOTHING rather than something generic — an
@@ -399,6 +429,12 @@ export function Home({ navigation, route }: Props) {
       onChooseWorkout={setChosenId}
       brief={brief}
       briefCount={briefCount}
+      undoable={undoable}
+      onUndoSwap={async () => {
+        if (!undoable) return;
+        setUndoable(null); // the offer is spent the moment it is taken — never twice
+        await app.undoEngineSwap(undoable.anchor);
+      }}
       briefUnseen={briefUnseen}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       onHistory={() => navigation.navigate('History')}

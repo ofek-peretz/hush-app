@@ -25,6 +25,8 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
+import { undoEngineRotation } from '@/domain/swapLearning';
+import { muscleOf } from '@/data/exercises';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
@@ -169,6 +171,9 @@ interface AppApi extends AppState {
   /** Re-resolve today's session (session-at-a-time). Called on Home focus so a
    *  completed session gives way to the next composed one. */
   refreshProgram: () => Promise<void>;
+  /** Undo an engine ROTATION and pin the lift back (S-71, asked out loud). No-op for anything that
+   *  is not a live rotation — a graduation is not resistible, and her own swap is not ours to undo. */
+  undoEngineSwap: (anchorExerciseId: string) => Promise<void>;
   /** Reconcile calibration/mode to the backend's completed-session count (source of truth). */
   syncCalibration: () => Promise<void>;
   /** Drain offline-completed sessions to the backend (reconcile on reconnect, §6.4). */
@@ -791,9 +796,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
 
       // The programme-edit swap (replaceSlotExercise → setExercisePreference, S-31) and the pin/lock
-      // toggle (toggleSlotLock, S-30) are DELETED (Rev 7, S-73). Exercise selection is now owned through
-      // the IN-WORKOUT swap (learned into a standing choice, S-69) and the body map (S-56); a stalled
-      // lift she resists twice becomes a learned leave-it (S-71). ProgramDetail is a read-only preview.
+      // toggle (toggleSlotLock, S-30) are DELETED (Rev 7, S-73). Exercise selection is owned through
+      // the IN-WORKOUT swap (learned into a standing choice, S-69), the body map (S-56), and — since
+      // 2026-07-17 — the UNDO below, which is S-71's outcome asked for out loud instead of inferred.
+
+      /**
+       * "No — give me that lift back." The one explicit lever over an engine ROTATION.
+       *
+       * Founder 2026-07-17: show the engine's exercise change on Home and let her undo it. This is
+       * the same state S-71 reaches after two silent swap-backs (`learnedLeaveIts`), reached in one
+       * tap: the substitute is cleared, the rotation mark with it, and the anchor becomes a learned
+       * pin the engine will not rotate again (S-30/S-59 roles included).
+       *
+       * The pure rule lives in `domain/swapLearning.undoEngineRotation` — including the guard that
+       * only a LIVE engine rotation can be undone, so a graduation (not resistible, S-52/S-71) and
+       * her own learned swap are both out of reach, and a double tap cannot invent a pin.
+       *
+       * Rebuilding the week travels the exact road a body-map or frequency change does, `healWeek
+       * Completion` included: the fresh days come back `completed: false`, and a mid-week undo must
+       * not resurrect a workout she already trained.
+       */
+      async undoEngineSwap(anchorExerciseId) {
+        if (!state.profile) return;
+        const prefs = await db.loadPreferences();
+        const next = undoEngineRotation(prefs, anchorExerciseId, (id) => muscleOf(id) ?? null);
+        if (next === prefs) return; // not a live rotation — nothing to undo, nothing to write
+        await db.savePreferences(next);
+        void track('engine_rotation_undone', { exerciseId: anchorExerciseId });
+        try {
+          const fresh = await model.generateProgram(state.profile);
+          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
+          await db.saveProgram(program);
+          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        } catch {
+          /* offline — the preference is saved; it applies at the next regeneration */
+        }
+      },
 
       async reorderExercise(dayId, fromIndex, toIndex) {
         if (!state.program) return;

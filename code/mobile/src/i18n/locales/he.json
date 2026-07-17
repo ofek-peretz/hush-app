@@ -64,7 +64,9 @@
     "briefNoChanges": "אין שינויים השבוע",
     "restSubNamed": "{{name}}, כל האימונים של השבוע הושלמו. ההתאוששות היא חלק מהתוכנית — אין מה לעשות היום.",
     "todayLegend": "היום",
-    "planMinutes": "~{{min}} דק׳"
+    "planMinutes": "~{{min}} דק׳",
+    "undoSwap": "ביטול · {{lift}}",
+    "undoSwapA11y": "ביטול ההחלפה והשארת {{lift}}"
   },
   "cardio": {
     "legend": "אימון חופשי",

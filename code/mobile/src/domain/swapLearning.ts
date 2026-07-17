@@ -78,3 +78,47 @@ export function learnedLeaveIts(
 ): string[] {
   return Object.keys(engineRotated).filter((anchor) => !!prevSubstitutes[anchor] && !nextSubstitutes[anchor]);
 }
+
+/**
+ * THE UNDO — S-71's outcome, earned with one tap instead of two silent swap-backs.
+ *
+ * Founder, 2026-07-17: "when the engine changes an exercise, show it in the engine's review and
+ * offer an undo of that change — that even saves us the K=2 case for the swaps."
+ *
+ * He is right about the mechanism, and it is worth being precise about why. S-71 already lets an
+ * athlete overrule a rotation: swap back to the lift twice and the engine reads the resistance and
+ * pins it. But K=2 is an INFERENCE — Hush watching behaviour and deducing an intention — and this
+ * product's first law is that it acts on facts, never on theory (R7). A button is the fact. She
+ * says "no", once, in words, and Hush obeys.
+ *
+ * So the two now agree, and both stay. **The swap is NOT removed** (founder, same message: "don't
+ * remove the swap option yet — an athlete might not notice" the undo). One is the explicit door,
+ * the other the implicit one; they write the identical state, so an athlete who never finds the
+ * button still gets her way by doing what she would have done anyway.
+ *
+ * ── SCOPE: ROTATIONS ONLY ────────────────────────────────────────────────────────────────────
+ * `engineRotated` is the whole guard. A GRADUATION is deliberately not resistible (register S-71,
+ * S-52): outgrowing a knee push-up is a fact she demonstrated, not a preference to overrule, and
+ * the ladder's top holds by itself (S-53). A learned swap of her OWN (S-69) is not here either —
+ * undoing her own choice on her behalf would be the app arguing with her.
+ *
+ * Returns the prefs unchanged when `anchor` is not a live engine rotation, so a double tap, a stale
+ * screen, or a re-render cannot invent a pin.
+ */
+export function undoEngineRotation<
+  P extends {
+    substitutes: Record<string, string>;
+    engineRotated?: Record<string, string>;
+    pinsByMuscle: Record<string, string>;
+  },
+>(prefs: P, anchor: string, muscleOfExercise: (id: string) => string | null): P {
+  const engineRotated = { ...(prefs.engineRotated ?? {}) };
+  if (!engineRotated[anchor] || !prefs.substitutes[anchor]) return prefs;
+  const substitutes = { ...prefs.substitutes };
+  const pinsByMuscle = { ...prefs.pinsByMuscle };
+  delete substitutes[anchor]; // the rotation is undone — the assembler goes back to her lift
+  delete engineRotated[anchor]; // …and it is no longer a rotation anyone can resist twice
+  const m = muscleOfExercise(anchor);
+  if (m) pinsByMuscle[m] = anchor; // the pin she just earned — identical to the S-71 fold's write
+  return { ...prefs, substitutes, engineRotated, pinsByMuscle };
+}

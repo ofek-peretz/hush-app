@@ -115,7 +115,21 @@ export interface HomePlanLift {
   /** kg; null = bodyweight (the row then says the reps carry the work, not a weight). */
   load: number | null;
   sets: number;
-  reps: number;
+  /**
+   * HER BAND — `[Tlo, Thi]`, not a single number (founder 2026-07-17: "our engine shows the range
+   * for the reps; T defaults to 8-10, so we need to match that here too").
+   *
+   * The prescription IS the band (register S-6): land in it, and clearing the top earns weight —
+   * "they never have to grind to the top of a range" (the brief). Printing `recommendedReps` alone
+   * printed **Tlo, the FLOOR** (models.ts says so in as many words) dressed as the whole target: it
+   * hid the ceiling, and with it the fact that she owns this range at all. One of the engine's
+   * headline strengths, invisible on the screen that introduces the workout.
+   *
+   * The STAGE deliberately does NOT show a range: there the number is the value that gets LOGGED if
+   * she taps Complete Set without editing (`sessionStore` → `actualReps: recommendedReps`). A range
+   * on a loggable value would promise a choice and silently record the floor.
+   */
+  band: [number, number];
 }
 
 export interface HomeViewProps {
@@ -159,6 +173,15 @@ export interface HomeViewProps {
   briefCount: number | null;
   /** This week's update has not been opened yet — the card wears the ochre mark. */
   briefUnseen: boolean;
+  /**
+   * The engine ROTATION she can take back, named by the lift it took away. Null unless one is live.
+   *
+   * Founder 2026-07-17: "when the engine changes an exercise, show it in the engine's review and
+   * offer an undo." It sits with the SENTENCE that announced the swap, because that is the claim it
+   * answers — an undo anywhere else would be a control looking for its subject.
+   */
+  undoable?: { anchor: string; name: string } | null;
+  onUndoSwap?: () => void;
   onWeeklyUpdate: () => void;
   onHistory: () => void;
   onSettings: () => void;
@@ -170,8 +193,11 @@ export interface HomeViewProps {
  * The right-hand column of a plan row: "80 kg · 3 × 8", or "3 × 12" on a bodyweight lift, where
  * there is no weight to state and the reps are the work (the stage holds the same rule).
  */
-function planFigure(lift: HomePlanLift, units: 'kg' | 'lb', t: (k: string, o?: Record<string, unknown>) => string): string {
-  const scheme = `${lift.sets} × ${lift.reps}`;
+function planFigure(lift: HomePlanLift, units: 'kg' | 'lb'): string {
+  const [lo, hi] = lift.band;
+  // An EN DASH, and no spaces around it: "8–10" is one figure — a range — and a hyphen with air
+  // reads as two numbers with something between them.
+  const scheme = `${lift.sets} × ${hi > lo ? `${lo}–${hi}` : lo}`;
   if (lift.load == null) return scheme;
   const w = displayWeight(lift.load, units);
   return `${w == null ? '' : +w.toFixed(2)} ${unitLabel(units)} · ${scheme}`;
@@ -258,12 +284,18 @@ export function HomeView(props: HomeViewProps) {
               COUNT (founder 2026-07-13): how many lifts changed, or that none did — the fact
               first, the sentence under it, and the WHY one tap away. */}
           {props.brief?.length ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('home.briefOpen')}
-              onPress={props.onWeeklyUpdate}
-              style={({ pressed }) => [styles.brief, pressed && styles.weekPressed]}
-            >
+            /* A CARD, and NOT one big button any more. It was a single Pressable labelled "What
+               changed, and why", which merged everything inside it into one accessibility element —
+               fine while there was one act, impossible now: an Undo nested in it would fight the
+               parent's tap and never reach VoiceOver at all. Two acts, two real targets.
+
+               COLOUR: none, deliberately, and that is the answer to "how do you mark a change vs no
+               change". The distinction is the SENTENCE — "3 changes this week" or "No changes this
+               week" — because a steady week is a DECISION (S-24), not a lesser state, and tinting
+               one green and the other grey would be Hush editorialising about its own verdicts.
+               Under READOUT the emphasis is already spent correctly: this block is raised off the
+               ground and sits at the top of the page. That IS the mark. */
+            <View style={styles.brief}>
               {props.briefCount != null ? (
                 <View style={styles.briefCountRow}>
                   <Text style={styles.briefCount}>
@@ -280,11 +312,38 @@ export function HomeView(props: HomeViewProps) {
                 </View>
               ) : null}
               <Text style={styles.briefText}>{props.brief.map((l) => t(l.key, l.params ?? {})).join(' ')}</Text>
-              <View style={styles.briefLinkRow}>
-                <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
-                <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
+              <View style={styles.briefActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.briefOpen')}
+                  hitSlop={8}
+                  onPress={props.onWeeklyUpdate}
+                  style={({ pressed }) => [styles.briefLinkRow, pressed && styles.weekPressed]}
+                >
+                  <Text style={styles.briefLink}>{t('home.briefOpen')}</Text>
+                  <Icon name="chevronRight" size={14} color={color.accentText} strokeWidth={2} />
+                </Pressable>
+
+                {/* THE UNDO — quiet on purpose. It reverses a decision, so it must be findable and
+                    must not compete with it: an outline, never a fill. The engine's sentence is the
+                    news; this is the athlete's right of reply. It names the lift it gives back, so
+                    the button says what will happen rather than merely that something will. */}
+                {props.undoable && props.onUndoSwap ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('home.undoSwapA11y', { lift: props.undoable.name })}
+                    hitSlop={8}
+                    onPress={props.onUndoSwap}
+                    style={({ pressed }) => [styles.undoBtn, pressed && styles.undoBtnPressed]}
+                  >
+                    <Icon name="repeat" size={13} color={color.textPrimary} strokeWidth={2} />
+                    <Text style={styles.undoText} numberOfLines={1}>
+                      {t('home.undoSwap', { lift: bidi(props.undoable.name) })}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
-            </Pressable>
+            </View>
           ) : null}
           {/* Founder 2026-07-10: the greeting line above NEXT WORKOUT said nothing the
               legend + workout name don't — cut. The workout is the star. */}
@@ -366,7 +425,7 @@ export function HomeView(props: HomeViewProps) {
                     <Pressable
                       key={`${lift.exerciseId}_${i}`}
                       accessibilityRole="button"
-                      accessibilityLabel={`${lift.name} · ${planFigure(lift, props.units, t)}`}
+                      accessibilityLabel={`${lift.name} · ${planFigure(lift, props.units)}`}
                       accessibilityHint={t('workout.form')}
                       onPress={() => props.onForm(lift.exerciseId)}
                       style={({ pressed }) => [
@@ -378,7 +437,7 @@ export function HomeView(props: HomeViewProps) {
                       <Text style={styles.planName} numberOfLines={1}>{bidi(lift.name)}</Text>
                       {/* The figures are MONO and right-aligned into a column, so six lifts read as
                           a table the eye can scan down — not six sentences it has to parse. */}
-                      <Text style={styles.planFigure} numberOfLines={1}>{planFigure(lift, props.units, t)}</Text>
+                      <Text style={styles.planFigure} numberOfLines={1}>{planFigure(lift, props.units)}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -723,14 +782,40 @@ const styles = StyleSheet.create({
   chipTextDone: { color: color.textPrimary },
   currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: color.textPrimary },
 
-  brief: { marginTop: 14, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 12, paddingBottom: 10 },
+  /* THE DECISION, RAISED. It is the first thing on the page and the reason the product exists, so
+     it sits ON the ground rather than in it — READOUT's own grammar, spent on the news. */
+  brief: {
+    marginTop: 4,
+    marginBottom: 18,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+  },
+  briefActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 },
+  /* An OUTLINE, never a fill: it reverses the sentence above it and must not out-shout it. */
+  undoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 36,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: color.borderControl,
+    backgroundColor: color.lift,
+  },
+  undoBtnPressed: { backgroundColor: color.fillSubtle },
+  undoText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
   // The FACT, before the sentence: how many lifts changed this week (or that none did).
   briefCountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   briefCount: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
   // Hush SPEAKING — the sans voice, never the measuring one, and at reading size: this is the
   // sentence the whole product is judged by.
   briefText: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
-  briefLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  briefLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36 },
   briefLink: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accentText, textAlign: 'left' },
   briefNew: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: color.fillSubtle },
   briefNewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.textPrimary },

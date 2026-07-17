@@ -218,17 +218,17 @@ describe('the week is on the page, and it is a door', () => {
       <HomeView
         {...props({
           plan: [
-            { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, reps: 8 },
-            { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, reps: 10 },
+            { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] },
+            { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, band: [10, 12] as [number, number] },
           ],
         })}
       />,
     );
     const said = texts(r).join(' ');
     expect(said).toContain('Bench Press');
-    expect(said).toContain('80 kg · 3 × 8');
+    expect(said).toContain('80 kg · 3 × 8–10'); // the BAND, not Tlo dressed as the target
     // A bodyweight lift states the reps and invents no weight.
-    expect(said).toContain('3 × 10');
+    expect(said).toContain('3 × 10–12');
     expect(said).not.toMatch(/null|undefined|NaN/);
   });
 
@@ -237,12 +237,12 @@ describe('the week is on the page, and it is a door', () => {
     const r = mount(
       <HomeView
         {...props({
-          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, reps: 8 }],
+          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
           onForm: (id: string) => void formed.push(id),
         })}
       />,
     );
-    act(() => byLabel(r, 'Bench Press · 80 kg · 3 × 8')!.props.onPress());
+    act(() => byLabel(r, 'Bench Press · 80 kg · 3 × 8–10')!.props.onPress());
     expect(formed).toEqual(['bb_bench_press']);
   });
 

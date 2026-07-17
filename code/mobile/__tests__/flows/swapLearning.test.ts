@@ -3,7 +3,7 @@
  * Conservative: a clean single swap per muscle learns; ambiguity is skipped; two consecutive swaps
  * to the same target adopt; swapping back to the original twice clears it.
  */
-import { extractOccurrences, foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
+import { extractOccurrences, foldSessionSwaps, learnedLeaveIts, undoEngineRotation } from '@/domain/swapLearning';
 import { emptyLearning, offeredFor, type SwapLearning } from '@/engine/v5/learnedSwap';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
@@ -136,5 +136,61 @@ describe('Rev 7 · S-70 — the swap menu offers the blueprint original first', 
   it('a normal (non-substitute) lift is unaffected — no spurious anchor', () => {
     const candidates = swapCandidates(BENCH, { sessionExerciseIds: [BENCH], prefs: { substitutes: {}, backups: {} } });
     expect(candidates.every((e) => e.id !== BENCH)).toBe(true); // itself never offered; order is by fidelity
+  });
+});
+
+/**
+ * THE UNDO — S-71's outcome, asked for out loud (founder 2026-07-17).
+ *
+ * "When the engine changes an exercise, show it in the engine's review and offer an undo of that
+ * change — that even saves us the K=2 case for the swaps." It does not REPLACE the K=2 path
+ * (founder, same message: "don't remove the swap option yet — an athlete might not notice"), and
+ * these tests hold both: the button and the two swap-backs must write the identical state, or the
+ * app would have two ideas about what "no" means.
+ */
+describe('undoEngineRotation — the explicit "leave it"', () => {
+  const prefs = () => ({
+    substitutes: { bb_bench_press: 'db_bench_press' },
+    engineRotated: { bb_bench_press: 'db_bench_press' },
+    pinsByMuscle: {} as Record<string, string>,
+  });
+  const muscle = (id: string) => (id === 'bb_bench_press' ? 'Chest' : null);
+
+  it('gives the lift back AND pins it — the engine stops rotating it', () => {
+    const next = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
+    expect(next.substitutes.bb_bench_press).toBeUndefined(); // the assembler goes back to her lift
+    expect(next.engineRotated!.bb_bench_press).toBeUndefined(); // …and it is no longer a rotation
+    expect(next.pinsByMuscle.Chest).toBe('bb_bench_press'); // the pin she just earned (S-30/S-59)
+  });
+
+  it('writes exactly what two silent swap-backs write — one "no", one outcome', () => {
+    // The K=2 path: the fold clears the substitute, and `learnedLeaveIts` reads that as resistance.
+    const before = prefs();
+    const afterFold = { ...before.substitutes };
+    delete afterFold.bb_bench_press;
+    expect(learnedLeaveIts(before.substitutes, afterFold, before.engineRotated)).toEqual(['bb_bench_press']);
+    // …and the button reaches the same place, in one tap.
+    const viaButton = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
+    expect(viaButton.pinsByMuscle.Chest).toBe('bb_bench_press');
+    expect(viaButton.substitutes.bb_bench_press).toBeUndefined();
+  });
+
+  it('a GRADUATION cannot be undone — it is a fact she demonstrated, not a preference', () => {
+    // Graduation writes `substitutes` but never `engineRotated` (S-52/S-71: deliberately not
+    // resistible). Without that mark there is nothing here to take back.
+    const graduated = { substitutes: { knee_push_up: 'push_up' }, engineRotated: {}, pinsByMuscle: {} };
+    expect(undoEngineRotation(graduated, 'knee_push_up', () => 'Chest')).toBe(graduated); // identity: untouched
+  });
+
+  it('her OWN learned swap is not ours to undo', () => {
+    // S-69 adopts a substitute from HER repeated choice. It is not marked `engineRotated`, so the
+    // button never appears over it — the app does not argue with the athlete on her behalf.
+    const hers = { substitutes: { leg_press: 'hack_squat' }, engineRotated: {}, pinsByMuscle: {} };
+    expect(undoEngineRotation(hers, 'leg_press', () => 'Quads')).toBe(hers);
+  });
+
+  it('a second tap invents nothing — the offer is spent', () => {
+    const once = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
+    expect(undoEngineRotation(once, 'bb_bench_press', muscle)).toBe(once); // identity: no-op
   });
 });
