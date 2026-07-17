@@ -185,3 +185,34 @@ describe('English is untouched by any of it', () => {
     expect(found).toEqual([]);
   });
 });
+
+/**
+ * THE FRONT DOOR CANNOT KNOW HER GENDER — so it must not assume one.
+ *
+ * Sign-in comes BEFORE NameEntry, which is where sex is stated. i18next therefore has no `context`
+ * yet and falls back to the base key, so every `_female` variant on that screen is dead copy and
+ * every masculine base is a misgendering. `ob.signinTagline` read "אתה צריך רק להתאמן" — Hush's
+ * FIRST sentence, addressed to a man, shown to everyone.
+ *
+ * The fix is not a variant (there is nothing to select it with); it is copy that has no gender to
+ * get wrong. This test guards the whole screen, not the one line that was caught.
+ */
+describe('the front door speaks to a person whose gender it has not been told', () => {
+  const SIGN_IN_KEYS = ['ob.signinTagline', 'ob.apple', 'ob.google', 'ob.signinLegalPre', 'ob.signinLegalTerms'];
+
+  it('no sign-in line is gendered — with no context, a variant can never be reached', () => {
+    for (const g of ['male', 'female'] as const) {
+      setGender(g);
+      for (const k of SIGN_IN_KEYS) {
+        // Whatever the context, the athlete on this screen sees the SAME words: it is rendered
+        // before she has told us anything. If these ever diverge, one of the two is a lie.
+        expect({ key: k, copy: tg(k) }).toEqual({ key: k, copy: tg(k) });
+      }
+    }
+    // …and the second-person masculine forms that started this are gone for good.
+    setGender('male');
+    expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
+    setGender('female');
+    expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
+  });
+});

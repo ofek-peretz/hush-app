@@ -5,11 +5,16 @@
  * decide, and what am I doing today — and offers the one act:
  *
  *   brand (hush·) + settings
- *   I DECIDED        · Hush's own sentences about what it changed, and the why one tap away
- *   TODAY            · today's lifts, each with the LOAD Hush set + its form clip
- *   Begin {name}     · Cardio
- *   Week N · n/m     · the cycle's workouts as chips (the chooser)
+ *   I DECIDED           · Hush's own sentences about what it changed; the why one tap away; and an
+ *                         UNDO when the change it is announcing was a rotation (S-71, out loud)
+ *   NEXT WORKOUT ~45min · its lifts, each with the LOAD Hush set + its form clip
+ *   Begin {name}        · Cardio
+ *   Week N · n/m        · the cycle's workouts as chips (the chooser)
  *   History / Progress
+ *
+ * The legend says NEXT WORKOUT, never "Today": **the engine has no days** (register L7). The week is
+ * a display container of N workouts trained in any order, and nothing schedules one for today — so
+ * "Today · Push A" is a claim the engine never made, and a lie the moment she trains it tomorrow.
  *
  * Rest state centers "Recovery." with the completed-week meter, one quiet fact — when the next week
  * opens — and Open training, which on a recovery day IS the day's act.
@@ -326,8 +331,15 @@ export function HomeView(props: HomeViewProps) {
 
                 {/* THE UNDO — quiet on purpose. It reverses a decision, so it must be findable and
                     must not compete with it: an outline, never a fill. The engine's sentence is the
-                    news; this is the athlete's right of reply. It names the lift it gives back, so
-                    the button says what will happen rather than merely that something will. */}
+                    news; this is the athlete's right of reply.
+
+                    NO ICON. The only candidates were `repeat`/`swap` — the glyph of the very act
+                    being reversed, which would read as "swap it again" — and `history`, which is
+                    the nav row's icon two sections down. There is no honest undo glyph here, and a
+                    misleading one is worse than none: the label already says exactly what happens.
+
+                    It says KEEP, not "undo": "undo" names the mechanism, "Keep Leg Press" names the
+                    outcome, and the outcome is the thing she wants. */}
                 {props.undoable && props.onUndoSwap ? (
                   <Pressable
                     accessibilityRole="button"
@@ -336,7 +348,6 @@ export function HomeView(props: HomeViewProps) {
                     onPress={props.onUndoSwap}
                     style={({ pressed }) => [styles.undoBtn, pressed && styles.undoBtnPressed]}
                   >
-                    <Icon name="repeat" size={13} color={color.textPrimary} strokeWidth={2} />
                     <Text style={styles.undoText} numberOfLines={1}>
                       {t('home.undoSwap', { lift: bidi(props.undoable.name) })}
                     </Text>
@@ -347,8 +358,21 @@ export function HomeView(props: HomeViewProps) {
           ) : null}
           {/* Founder 2026-07-10: the greeting line above NEXT WORKOUT said nothing the
               legend + workout name don't — cut. The workout is the star. */}
+          {/* ONE legend over the lifts, and it says NEXT WORKOUT — not "today".
+              I briefly had both: this one, and a "TODAY" over the plan list four lines below it.
+              Two legends, back to back, for one section — the same stutter this screen has been
+              losing all day.
+              Keeping this one is not just about which came first. **The engine has no days.** There
+              is no calendar in v5 (register L7): the week is a display container of N workouts she
+              trains in any order, and nothing schedules this one for today. "TODAY · PUSH A" is the
+              shape a scheduled app uses, and the moment she trains it tomorrow it is a lie the
+              engine never told. "Next workout" is exactly as true on Thursday as on Monday.
+              The minutes ride here — the one fact the list below cannot show. */}
           <View style={styles.legendTop}>
             <Legend>{props.resting ? t('home.recovery') : t('home.nextWorkout')}</Legend>
+            {!props.resting && props.planMinutes ? (
+              <Text style={styles.planMin}>{t('home.planMinutes', { min: props.planMinutes })}</Text>
+            ) : null}
           </View>
 
           {props.resting ? (
@@ -412,13 +436,6 @@ export function HomeView(props: HomeViewProps) {
                   The legend does NOT repeat the name (the chip above it is lit, the button below
                   says it): it carries the one fact neither of them does — how long this will take,
                   from the same estimator the engine's time cap runs on. */}
-              <View style={styles.planHead}>
-                <Legend>{t('home.todayLegend')}</Legend>
-                {props.planMinutes ? (
-                  <Text style={styles.planMin}>{t('home.planMinutes', { min: props.planMinutes })}</Text>
-                ) : null}
-              </View>
-
               {props.plan?.length ? (
                 <View style={styles.plan}>
                   {props.plan.map((lift, i) => (
@@ -650,7 +667,7 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.textMuted, marginLeft: 2, marginBottom: 5 }, // rtl-ok: inside LTR brand lockup
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
-  legendTop: { paddingTop: 24 },
+  legendTop: { paddingTop: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   block: { paddingTop: 14 },
   restCopy: { marginTop: 14, maxWidth: 320 },
 
@@ -687,7 +704,6 @@ const styles = StyleSheet.create({
      A TABLE, not a list of sentences: the name on the start edge, the figures in a mono column on
      the end edge. Six lifts have to be scannable in one pass — the eye runs down the loads, which
      is the column that carries the engine's decisions. */
-  planHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 2 },
   // SANS, not mono: this reads "~45 min" in English but "~45 דק׳" in Hebrew, and JetBrains Mono
   // has no Hebrew glyphs — the law caught it (`monoCarriesNoWords`). A slot that ever holds a
   // translated WORD is a sans slot, however many figures it also carries.
