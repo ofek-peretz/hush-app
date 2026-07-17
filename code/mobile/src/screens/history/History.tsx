@@ -12,12 +12,14 @@
  * Founder 2026-07-10 (design pass): the timeline reads in month chapters — a quiet
  * legend when the month changes; a wall of rows isn't a record.
  *
- * Founder 2026-07-12: a strength row carries NO trailing figure. It used to print the
- * session's top-set load, which read as an unexplained "17 kg" beside a whole workout —
- * top set? average? heaviest? A number the athlete has to guess at costs more trust than
- * it earns. The lifetime total in the header keeps the tonnage story; the chevron says the
- * rest is inside. Durations everywhere read in MINUTES ("63 min"), never as a clock —
- * "1:03" next to a date reads as one in the morning (see domain/duration).
+ * Founder 2026-07-17 (from the reference): a strength session is a CARD you can read — its lifts,
+ * each with the top set it took ("Barbell Bench Press · 80 kg"). This does not reopen the
+ * 2026-07-12 "no trailing figure" ruling; it honours it. That banned ONE bare number on a whole
+ * session ("17 kg" — top set? average?), which the athlete could not interpret. A LABELLED per-lift
+ * line answers exactly what it shows. The set-by-set detail still lives one tap in (WorkoutDetail).
+ *
+ * Durations everywhere read in MINUTES ("63 min"), never as a clock — "1:03" next to a date reads
+ * as one in the morning (see domain/duration).
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -29,13 +31,15 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import { Icon } from '@/components/Icon';
 import { Legend, ListRow } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
+import { exerciseDisplayName } from '@/data/exercises';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
 import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
 import { fmtMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
-import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, radius } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
 // A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
@@ -55,6 +59,35 @@ function sessionDurationSec(s: Session): number {
 
 function sessionVolumeKg(s: Session): number {
   return s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
+}
+
+/**
+ * The lifts a session trained, each with the top set it took — the record read at a glance
+ * (founder 2026-07-17, from the reference: History lists "Bench Press · 80 kg" per lift).
+ *
+ * This does NOT reopen the "no trailing figure" ruling (2026-07-12). That banned ONE bare number on
+ * a whole session — "17 kg", top set? average? — which the athlete could not interpret. A LABELLED
+ * per-lift line is the opposite: "Bench Press · 80 kg" answers exactly what it shows. The set-by-set
+ * detail still lives in WorkoutDetail; this is the spine of it, on the card.
+ *
+ * The top set is the heaviest work (weight × reps), ties to the longer set — the same comparator the
+ * closing read-back uses (sessionMirror.summaryLifts), so History and Well Done never name different
+ * sets for the same lift.
+ */
+function sessionLifts(s: Session): Array<{ exerciseId: string; load: number | null; reps: number }> {
+  const order: string[] = [];
+  const best = new Map<string, { load: number | null; reps: number }>();
+  const vol = (w: number | null, r: number) => (w ?? 0) * r;
+  for (const set of s.sets) {
+    const cur = best.get(set.exerciseId);
+    if (!cur) order.push(set.exerciseId);
+    const better =
+      !cur ||
+      vol(set.actualWeight, set.actualReps) > vol(cur.load, cur.reps) ||
+      (vol(set.actualWeight, set.actualReps) === vol(cur.load, cur.reps) && set.actualReps > cur.reps);
+    if (better) best.set(set.exerciseId, { load: set.actualWeight, reps: set.actualReps });
+  }
+  return order.map((id) => ({ exerciseId: id, ...best.get(id)! }));
 }
 
 function dateLabelOf(iso: string): string {
@@ -174,22 +207,37 @@ export function History({ navigation }: Props) {
                   trailing={<Text style={styles.vol}>{item.distanceKm.toFixed(2)} {t('cardio.km')}</Text>}
                 />
               ) : (
-                <ListRow
-                  title={dayName(item)}
-                  subtitle={`${dateLabelOf(item.startedAt)} · ${fmtMinutes(sessionDurationSec(item), t('common.minShort'))}`}
-                  chevron
-                  last={last}
+                /* A READABLE RECORD, not a row that hides one (founder 2026-07-17, from the
+                   reference). The header dates it and names it; the lines under it are the lifts
+                   with the top set each took — "Barbell Bench Press · 80 kg". You read what you did
+                   without tapping in; the set-by-set detail is still one tap away (WorkoutDetail). */
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${dayName(item)} · ${dateLabelOf(item.startedAt)}`}
                   onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.id })}
-                  leading={
-                    <View style={styles.iconBox}>
-                      <Icon name="dumbbell" size={16} color={color.textSecondary} strokeWidth={2} />
+                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                >
+                  <View style={styles.cardHead}>
+                    <Text style={styles.cardDate}>{dateLabelOf(item.startedAt)}</Text>
+                    <View style={styles.namePill}>
+                      <Text style={styles.namePillText} numberOfLines={1}>{bidi(dayName(item))}</Text>
                     </View>
-                  }
-                  // No trailing figure (founder 2026-07-12). A bare "17 kg" beside a whole
-                  // workout answered no question anyone was asking — top set? average? — and
-                  // a number the athlete cannot interpret costs more trust than it buys. The
-                  // chevron says the only true thing: the record is inside.
-                />
+                    {/* SANS, not mono: the duration ends in a translated word — "63 min" but
+                        "63 דק׳" in Hebrew, and JetBrains Mono has no Hebrew glyphs. */}
+                    <Text style={styles.cardMin} allowFontScaling>{fmtMinutes(sessionDurationSec(item), t('common.minShort'))}</Text>
+                  </View>
+                  {sessionLifts(item).map((lift) => {
+                    // The load string is BUILT here, then rendered as a plain value — so the mono
+                    // Text holds no `t(` call (the load is figures + a Latin unit: kg / lb / BW).
+                    const loadLabel = lift.load == null ? t('workout.bw') : `${displayWeight(lift.load, units)} ${unitLabel(units)}`;
+                    return (
+                      <View key={lift.exerciseId} style={styles.liftLine}>
+                        <Text style={styles.liftName} numberOfLines={1}>{bidi(exerciseDisplayName(lift.exerciseId))}</Text>
+                        <Text style={styles.liftLoad}>{loadLabel}</Text>
+                      </View>
+                    );
+                  })}
+                </Pressable>
               );
             return (
               <View key={item.id}>
@@ -246,4 +294,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   vol: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+
+  /* A session, read at a glance — a raised card, its lifts and loads listed. */
+  card: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.surface,
+  },
+  cardPressed: { backgroundColor: color.fillSubtle },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  cardDate: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  namePill: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
+  namePillText: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
+  cardMin: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: "right" },
+  liftLine: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingVertical: 3 },
+  liftName: { flex: 1, minWidth: 0, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
+  liftLoad: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'right' },
 });

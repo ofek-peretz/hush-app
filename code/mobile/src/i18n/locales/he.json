@@ -263,7 +263,8 @@
     "correctedDown": "עשית {{reps}}. הטווח שלך מתחיל ב־{{edge}}, אז הורדתי משקל.",
     "reasonUp": "עברת את הטווח שלך",
     "reasonDown": "הותאם לסטים הנקיים שלך",
-    "reasonHold": "בתוך הטווח שלך"
+    "reasonHold": "בתוך הטווח שלך",
+    "bw": "BW"
   },
   "finishSheet": {
     "legend": "סיום אימון",

@@ -247,7 +247,8 @@
     "correctedDown": "You did {{reps}}. Your range starts at {{edge}}, so I took weight off.",
     "reasonUp": "You cleared your range",
     "reasonDown": "Matched to your clean sets",
-    "reasonHold": "In your range"
+    "reasonHold": "In your range",
+    "bw": "BW"
   },
   "finishSheet": {
     "legend": "End workout",
