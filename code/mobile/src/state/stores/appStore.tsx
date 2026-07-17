@@ -3,7 +3,7 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Experience, OnboardingInputs, PortraitSnapshot, Profile, Program, Session, Units, WeeklyVolume } from '@/data/local/models';
+import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units, WeeklyVolume } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
@@ -193,6 +193,13 @@ interface AppApi extends AppState {
     /** Rev 7 — her time-budget ceiling (minutes). Changing it re-runs enforceTimeCap, so the week
      *  rebuilds like a frequency change. */
     workoutMinutes?: number;
+    /** Engine v5 — the body map (register Part 3). The programme's whole SHAPE follows from it, so a
+     *  change rebuilds the week exactly like a frequency change. Replaces the whole map, never merges:
+     *  a muscle she took back to normal must LEAVE the map, and a merge could not express that. */
+    bodyMap?: Record<string, MuscleStance>;
+    /** Engine v5 — the per-muscle rep band (register Part 9). Whole-object, same reason. Loads and
+     *  progression re-read it live (S-43 recomputes from her history at the new T), so no rebuild. */
+    repBandByMuscle?: Record<string, RepBandChoice>;
   }) => Promise<void>;
   /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
   setVolume: (volume: WeeklyVolume) => Promise<void>;
@@ -698,6 +705,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!state.profile) return;
         const daysChanged = fields.daysPerWeek != null && fields.daysPerWeek !== state.profile.daysPerWeek;
         const minutesChanged = fields.workoutMinutes != null && fields.workoutMinutes !== state.profile.workoutMinutes;
+        // The map decides which muscles exist and how much of the week each one owns — a change is a
+        // reshape, so it rebuilds on the same road as frequency and the time cap.
+        const mapChanged = fields.bodyMap != null && JSON.stringify(fields.bodyMap) !== JSON.stringify(state.profile.bodyMap ?? {});
         // Merge only the provided fields; undefined leaves the existing value intact.
         const profile: Profile = {
           ...state.profile,
@@ -709,6 +719,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.experience ? { experience: fields.experience } : {}),
           ...(fields.daysPerWeek != null ? { daysPerWeek: fields.daysPerWeek } : {}),
           ...(fields.workoutMinutes != null ? { workoutMinutes: fields.workoutMinutes } : {}),
+          ...(fields.bodyMap != null ? { bodyMap: fields.bodyMap } : {}),
+          ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
         };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
@@ -718,7 +730,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // A changed weekly frequency reshapes the split; a changed time budget re-runs the time cap
         // (S-64) — either reshapes the week, so rebuild now (athlete-owned pins/order re-apply through
         // generateProgram). Best-effort; otherwise it applies at the next regeneration.
-        if (daysChanged || minutesChanged) {
+        if (daysChanged || minutesChanged || mapChanged) {
           if (daysChanged) {
             try {
               await model.setWeeklyFrequency(profile.daysPerWeek);
@@ -734,7 +746,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
             await db.saveProgram(program);
             dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-            void track('program_generated', { reason: daysChanged ? 'frequency' : 'minutes', frequency: program.frequency });
+            void track('program_generated', { reason: daysChanged ? 'frequency' : mapChanged ? 'body_map' : 'minutes', frequency: program.frequency });
           } catch {
             /* offline — applies on the next weekly regeneration */
           }

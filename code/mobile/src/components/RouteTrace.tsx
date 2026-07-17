@@ -25,7 +25,7 @@ import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import type { CardioPoint } from '@/data/local/models';
-import { stage, signal, up, radius } from '@/design/tokens';
+import { stage, up, radius } from '@/design/tokens';
 
 interface Props {
   route: CardioPoint[];
@@ -119,10 +119,12 @@ export function RouteTrace({ route, width, height, style }: Props) {
         {/* the plotter's paper — a faint grid corner, so the trace has something to sit on */}
         <Rect x={0} y={0} width={width} height={height} fill={stage[1]} rx={radius.lg} />
         {/* the run */}
-        <Path d={d} stroke={signal[0]} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {/* The route is data, and this surface is always the stage (it paints its own).
+            Data gets the strongest ink its world has — it was the ochre until 2026-07-17. */}
+        <Path d={d} stroke={stage.ink0} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         {/* start: an open ring. finish: a filled mark. */}
         <Circle cx={sx} cy={sy} r={4.5} stroke={stage.ink0} strokeWidth={1.75} fill={stage[1]} />
-        <Circle cx={ex} cy={ey} r={4.5} fill={up[0]} />
+        <Circle cx={ex} cy={ey} r={4.5} fill={up.stage} />
       </Svg>
     </View>
   );

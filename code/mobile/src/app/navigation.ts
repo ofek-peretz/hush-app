@@ -69,6 +69,8 @@ export type MainParamList = {
   ProfileSheet: undefined;
   // Edit body data + experience after onboarding (opened from Settings).
   ProfileEdit: undefined;
+  /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
+  BodyMapEdit: undefined;
   SessionFlow: undefined;
   // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
   // Done renders the calm "Workout not started" state instead of a completion.

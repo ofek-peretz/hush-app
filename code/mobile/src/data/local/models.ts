@@ -210,6 +210,16 @@ export interface SessionSummary {
   progressed: number; // distinct lifts whose load increased this session
   durationMs: number; // start → finish
   earlyFinish: boolean;
+  /**
+   * This occurrence's `startedAt` in ms — the key every engine decision it earned is stamped with
+   * (`changeLog[].at`). Complete asks the engine what the workout bought using this.
+   *
+   * It travels on the SUMMARY rather than being re-read from history on the far side, so the ask is
+   * independent of a storage read that can fail. Reading it back from history meant a failed
+   * `loadHistory` left the screen claiming "setting your next loads" forever — a spinner that could
+   * never resolve, promising work nobody was doing.
+   */
+  startedAtMs: number;
   /** The session FINISHED the workout for the week (>= half the prescribed sets — see
    *  domain/completion). False = a partial session: real work, saved and folded by the
    *  engine, but the workout stays on this week's list. */

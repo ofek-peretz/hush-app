@@ -300,7 +300,8 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     backgroundColor: color.surface,
   },
-  planSelected: { borderColor: signal[0], backgroundColor: signal.wash },
+  // The chosen plan lifts. Nothing on this screen is coloured — least of all the upsell.
+  planSelected: { borderColor: color.textPrimary, backgroundColor: color.lift },
   planRadio: { width: 24, alignItems: 'center' },
   radioOuter: {
     width: 22,
@@ -311,8 +312,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOuterOn: { borderColor: signal[0] },
-  radioInner: { width: 10, height: 10, borderRadius: radius.full, backgroundColor: signal[0] },
+  radioOuterOn: { borderColor: color.textPrimary },
+  radioInner: { width: 10, height: 10, borderRadius: radius.full, backgroundColor: color.textPrimary },
   planText: { flex: 1, minWidth: 0, gap: 2 },
   planTopRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md, textAlign: 'left' },
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
   // that cannot be read in a gym window's sunlight. This is also the pattern the fallback badge
   // three lines up already uses (`Badge tone="signal"`), so the two states of one tag finally
   // speak with one voice.
-  saveTag: { backgroundColor: signal.wash, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
+  saveTag: { backgroundColor: color.fillSubtle, borderRadius: radius.sm, paddingHorizontal: space[2], paddingVertical: 3 },
   saveTagText: {
     color: color.accentText,
     fontFamily: font.sansSemibold,

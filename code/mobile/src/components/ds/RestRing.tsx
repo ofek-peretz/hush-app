@@ -15,7 +15,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
-import { color, font, textScale, signal, stage as stageC } from '@/design/tokens';
+import { color, font, textScale, stage as stageC } from '@/design/tokens';
 import { Legend } from './Legend';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -27,8 +27,8 @@ interface Props {
   stroke?: number;
   label?: string;
   onStage?: boolean;
-  /** Final-seconds state (the 7 s Approach window): the readout turns signal ochre so the
-   *  closing countdown reads at a glance — the visual twin of the haptic beats. */
+  /** Final-seconds state (the 7 s Approach window): the readout lifts to the strongest value its
+   *  world has, so the closing countdown reads at a glance — the visual twin of the haptic beats. */
   closing?: boolean;
 }
 
@@ -79,7 +79,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={signal[0]}
+          stroke={onStage ? stageC.ink0 : color.textPrimary}
           strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
@@ -88,7 +88,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
         />
       </Svg>
       <View style={styles.readout}>
-        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && styles.timeClosing]}>{fmt(remaining)}</Text>
+        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
         {label ? <Legend tone={onStage ? 'onStage' : 'muted'}>{label}</Legend> : null}
       </View>
     </View>
@@ -106,6 +106,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     textAlign: 'left',
   },
-  // Final-seconds (Approach window) — the readout inks in signal ochre, both themes.
-  timeClosing: { color: signal[0] },
+  // Final seconds (the Approach window). Urgency used to be the ochre; under READOUT the closing
+  // moment is simply the most present thing on its surface, so it lifts. The countdown itself is
+  // carried by haptics — this only has to catch the eye.
+  // The ring only ever renders on the stage (SessionFlow passes `onStage` unconditionally), so
+  // `timeClosingStage` is the live one. The paper variant is kept correct rather than deleted, and
+  // it has to go the OTHER way: on paper the base readout is already `textPrimary`, so there is
+  // nothing above it to lift to — closing recedes instead.
+  timeClosing: { color: color.textSecondary },
+  timeClosingStage: { color: stageC.lift },
 });

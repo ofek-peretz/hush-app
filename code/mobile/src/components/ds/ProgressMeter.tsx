@@ -22,7 +22,7 @@ interface Props {
   style?: ViewStyle | ViewStyle[];
 }
 
-const FILL: Record<Tone, string> = { ink: ink[0], signal: signal[0], up: up[0], muted: ink[3] };
+const FILL: Record<Tone, string> = { ink: ink[0], signal: ink[0], up: up[0], muted: ink[3] };
 
 export function ProgressMeter({ value = 0, max = 100, label, valueLabel, tone = 'ink', size = 'md', mark, style }: Props) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));

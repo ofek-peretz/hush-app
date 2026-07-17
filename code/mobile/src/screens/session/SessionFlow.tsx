@@ -594,7 +594,7 @@ function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: b
     const { verb, figure } = execParts(setup, t, units);
     return (
       <View style={styles.instrChip}>
-        <Icon name={execGlyph(setup.style)} size={18} color={signal[0]} strokeWidth={2} />
+        <Icon name={execGlyph(setup.style)} size={18} color={stage.ink1} strokeWidth={2} />
         {figure ? (
           <View style={styles.instrCol}>
             <Text style={styles.instrVerb}>{verb.toUpperCase()}</Text>
@@ -608,7 +608,7 @@ function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: b
   }
   return (
     <View style={styles.instrDone}>
-      <Icon name="check" size={15} color={up[0]} strokeWidth={2.4} />
+      <Icon name="check" size={15} color={up.stage} strokeWidth={2.4} />
       <Text style={styles.instrDoneText}>{execConfirmation(setup, t)}</Text>
     </View>
   );
@@ -842,7 +842,7 @@ function Logged({ units, confirm }: { units: 'kg' | 'lb'; confirm: Confirm }) {
   return (
     <View style={styles.loggedRoot}>
       <View style={styles.loggedHead}>
-        <Icon name="check" size={20} color={up[0]} strokeWidth={2.4} />
+        <Icon name="check" size={20} color={up.stage} strokeWidth={2.4} />
         <Text style={styles.loggedLegend}>{t('workout.setLogged', { n: confirm.n, m: confirm.m }).toUpperCase()}</Text>
       </View>
       <View style={styles.loggedValue}>
@@ -880,6 +880,11 @@ function Rest({
   const { t } = useCopy();
   const session = useSession();
   const isTransition = session.displayPhase === 'REST_TRANSITION';
+  // The signature moment, if Loop 1 just made one. Guarded against the NEXT lift below: a
+  // correction belongs to the exercise it was measured on, and a transition rest is already
+  // looking at a different one.
+  const correction = session.correction;
+  const nextExerciseId = session.nextExerciseId;
   const nextName = session.nextExercise?.name ?? exerciseDisplayName(session.nextExerciseId);
   const nextGroup = session.nextExercise?.muscle ?? '';
   const nextTarget = session.nextTarget;
@@ -1108,6 +1113,41 @@ function Rest({
                 </View>
               ) : null}
             </View>
+            {/* ═══ THE SIGNATURE MOMENT (2026-07-17) ═══
+                The set she just finished moved the next one, and this is Hush saying so — the
+                brief's "single most distinctive moment in the product", which it also notes is
+                easy to miss. It was easy to miss because it was INVISIBLE: Loop 1 corrected the
+                load, reported it to telemetry, and swapped the plan underneath her. She arrived at
+                a different number with no account of why.
+
+                It lives INSIDE the up-next card, not beside it, because they are the same fact:
+                the card IS the next set and the correction IS about the next set. One fact, one
+                element.
+
+                And it is the one thing licensed past the up-next law's "the lift's name and which
+                set. Nothing else." That law bans a REMINDER — a load the athlete saw thirty
+                seconds ago and will see again in thirty more. A correction is not a reminder, it
+                is news, and it is rare (S-13 caps it at 2 per exercise). The law already carves
+                out exactly this: the transition rest shows a load because there "a number is an
+                instruction rather than a reminder." A corrected load is an instruction. */}
+            {correction && correction.exerciseId === nextExerciseId ? (
+              <View style={styles.corr}>
+                <View style={styles.corrRow}>
+                  <Text style={styles.corrFrom}>{displayWeight(correction.from, units)}</Text>
+                  <Text style={styles.corrArrow}>→</Text>
+                  <Text style={styles.corrTo}>{displayWeight(correction.to, units)}</Text>
+                  <Text style={styles.corrUnit}>{unitLabel(units)}</Text>
+                </View>
+                {/* Only what Hush measured: the reps she just did, and the edge they crossed. */}
+                <Text style={styles.corrWhy}>
+                  {t(correction.direction === 'up' ? 'workout.correctedUp' : 'workout.correctedDown', {
+                    reps: correction.reps,
+                    edge: correction.direction === 'up' ? correction.band[1] : correction.band[0],
+                  })}
+                </Text>
+              </View>
+            ) : null}
+
             {/* How to BUILD that load — the plates per side, the pin, the pair of dumbbells. */}
             {isTransition && nextSetup ? (
               <View style={styles.upSetup}>
@@ -1196,7 +1236,7 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   const unit = unitLabel(units);
   const tone: 'up' | 'down' | 'hold' =
     target.reasonType === 'increase' ? 'up' : target.reasonType === 'decrease' ? 'down' : 'hold';
-  const toneColor = tone === 'up' ? up[0] : tone === 'down' ? down[0] : color.hold;
+  const toneColor = tone === 'up' ? up.stage : tone === 'down' ? down.stage : stage.ink1;
   const toneWash = tone === 'up' ? up.wash : tone === 'down' ? down.wash : color.fillSubtle;
   const verdict = tone === 'up' ? t('whyLoad.verdictUp') : tone === 'down' ? t('whyLoad.verdictDown') : t('whyLoad.verdictHold');
   const from = tone === 'up' ? to - deltaMag : tone === 'down' ? to + deltaMag : null;
@@ -1281,7 +1321,7 @@ const styles = StyleSheet.create({
   // sitting directly under the load — the athlete's "what do I do now?".
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
   instrCol: { alignItems: 'flex-start' },
-  instrVerb: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: signal[0], marginBottom: 2, textAlign: 'left' },
+  instrVerb: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink1, marginBottom: 2, textAlign: 'left' },
   instrFigure: { fontFamily: font.sansSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: stage.ink0, textAlign: 'left' },
   instrVerbSolo: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: stage.ink0, textAlign: 'left' },
   instrDone: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -1294,7 +1334,8 @@ const styles = StyleSheet.create({
   repsTimes: { fontFamily: font.mono, fontSize: textScale.md, color: stage.ink2, textAlign: 'left' },
   repsNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
   addFifteen: { alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: radius.md },
-  ignition: { backgroundColor: signal[0] },
+  // The 7s ignition before the first set. Loud is lift, not hue.
+  ignition: { backgroundColor: stage.lift },
   // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
   // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
   hero: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, letterSpacing: trackingPx(textScale.data, tracking.display), color: stage.ink0, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, textAlign: 'left' },
@@ -1321,8 +1362,8 @@ const styles = StyleSheet.create({
   dotsWrap: { marginTop: 24, alignItems: 'center' },
   dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
   dot: { height: 7, borderRadius: 4 },
-  dotDone: { backgroundColor: up[0] },
-  dotActive: { backgroundColor: signal[0] },
+  dotDone: { backgroundColor: up.stage },
+  dotActive: { backgroundColor: stage.ink0 },
   dotRest: { backgroundColor: stage[2] },
   setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
 
@@ -1357,6 +1398,34 @@ const styles = StyleSheet.create({
   upWeightWord: { fontFamily: font.sansSemibold, fontSize: textScale.md },
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   upDelta: { marginTop: 4 },
+  /* ── The signature moment. The one place a load may appear during a between-sets rest. ──
+     The old load is struck through and RECEDES; the new one is the brightest thing on the stage.
+     That is READOUT's whole law doing the work it exists for — emphasis is distance from the
+     ground, so what matters lifts and what is finished falls away. No arrow of colour, no green
+     "up" chip: the number itself carries the news. */
+  corr: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: stage[2], gap: 6 },
+  corrRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8 },
+  corrFrom: {
+    fontFamily: font.mono,
+    fontVariant: ['tabular-nums'],
+    fontSize: textScale.lg,
+    color: stage.ink2,
+    textDecorationLine: 'line-through',
+    textAlign: 'left',
+  },
+  corrArrow: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
+  corrTo: {
+    fontFamily: font.monoSemibold,
+    fontVariant: ['tabular-nums'],
+    fontSize: textScale['2xl'],
+    color: stage.lift, // the brightest value the stage has — this is the news
+    letterSpacing: -0.5,
+    textAlign: 'left',
+  },
+  corrUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink1, textAlign: 'left' },
+  /* The reason, in Hush's voice, under the number it earned — never apart from it. */
+  corrWhy: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink1, lineHeight: 19, textAlign: 'center' },
+
   upSetup: { marginTop: 12, alignItems: 'center' },
   upActions: { flexDirection: 'row', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: stage[2] },
 

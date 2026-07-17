@@ -35,6 +35,7 @@ import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { ProfileEdit } from '@/screens/profile/ProfileEdit';
+import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { ProgramDetail } from '@/screens/program/ProgramDetail';
@@ -112,6 +113,7 @@ function MainNavigator() {
       <MainStack.Screen name="Home" component={Home} />
       <MainStack.Screen name="ProfileSheet" component={ProfileSheet} options={{ presentation: 'modal', animation: sheet }} />
       <MainStack.Screen name="ProfileEdit" component={ProfileEdit} options={{ presentation: 'modal', animation: sheet }} />
+      <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} options={{ presentation: 'modal', animation: sheet }} />
       {/* Session Flow: only pre-completion exit is Pause -> Finish, so no back gesture. */}
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />

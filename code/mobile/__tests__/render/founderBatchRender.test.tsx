@@ -18,7 +18,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { color, stage, signal } from '@/design/tokens';
+import { color, stage, signal, ink, paper, up, down } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
@@ -192,30 +192,85 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe('the one ochre: the founder’s brown, with cream on it', () => {
-  it('renders cream ink on THE ochre — not charcoal, and not on some second, darker brown', () => {
+/**
+ * READOUT (founder-ratified 2026-07-17). These three tests replace the three that
+ * encoded the 2026-07-13 ochre ruling. They are not a relaxation of that ruling —
+ * they are its retirement, and the direction of the third assertion is the whole
+ * story: it used to assert the primary label FAILED AA on purpose, so that nobody
+ * would "fix" the founder's brown by accident. There is no brown to fix now.
+ */
+describe('READOUT: no accent hue — emphasis is distance from the ground', () => {
+  it('the primary action is the darkest thing on the page, not a colour', () => {
     const r = mount(<Button variant="primary" size="lg" block label="Begin Push A" onPress={() => {}} />);
     const json = JSON.stringify(r.toJSON());
-    expect(json).toContain(signal[0]); // the familiar brown — the accent, unsplit
-    expect(json).toContain(color.onAccent); // cream
-    expect(json).not.toContain(color.textPrimary); // never charcoal-on-ochre again
+    expect(json).toContain(signal.fill); // graphite
+    expect(json).toContain(color.onAccent); // cream on it
+    expect(json).not.toContain(signal[0]); // the mark never fills a control
     expect(texts(r)).toContain('Begin Push A');
   });
 
-  it('there is exactly ONE ochre — the fill and the mark are the same colour', () => {
-    // The token split (`signal.fill` ≠ `signal[0]`) is what produced the "dark brown" the founder
-    // rejected. The name survives as a semantic seam; the VALUE may not diverge again.
-    expect(signal.fill).toBe(signal[0]);
+  it('the ochre is the MARK and nothing else — the fill and the mark have parted', () => {
+    // The inverse of the old law. `signal.fill` used to be forbidden from diverging from
+    // `signal[0]`, because a second, darker brown was what the founder rejected on sight.
+    // Under READOUT they are different KINDS: `signal[0]` is a seal (HushMark only),
+    // `signal.fill` is a control's ground. The seal is the only ochre the product owns.
+    expect(signal.fill).not.toBe(signal[0]);
+    expect(signal.fill).toBe(ink[0]);
+    expect(signal[0]).toBe('#c8873a');
+    // Retired slots must not quietly resurrect a coloured surface or coloured text.
+    expect(signal.wash).toBe(paper[1]);
+    expect(signal.ink).toBe(ink[0]);
+    expect(up.wash).toBe(paper[1]);
+    expect(down.wash).toBe(paper[1]);
   });
 
-  it('the cost is knowingly taken, and it is bounded to that one label', () => {
-    // Stated, not hidden: the primary label is under AA and the founder has ruled twice that it
-    // ships. What must not happen is the exception leaking into anything an athlete READS.
-    expect(contrast(signal.fill, color.onAccent)).toBeLessThan(4.5);
-    expect(contrast(color.bg, color.textPrimary)).toBeGreaterThanOrEqual(4.5); // ink on paper
-    expect(contrast(color.bg, color.textMuted)).toBeGreaterThanOrEqual(4.5); // captions on paper
-    expect(contrast(stage[0], stage.ink0)).toBeGreaterThanOrEqual(4.5); // the live stage
-    expect(contrast(stage[0], stage.ink1)).toBeGreaterThanOrEqual(4.5); // its secondary line
+  it('nothing coloured carries text, so nothing can fail contrast', () => {
+    // This assertion used to read `.toBeLessThan(4.5)`. That is the entire redesign.
+    expect(contrast(signal.fill, color.onAccent)).toBeGreaterThanOrEqual(4.5);
+
+    // Every tier licensed to carry text, on every ground it is allowed to sit on.
+    for (const t of [color.textPrimary, color.textSecondary, color.textMuted, color.textTertiary]) {
+      expect(contrast(color.bg, t)).toBeGreaterThanOrEqual(4.5); // on the ground
+      expect(contrast(color.surface, t)).toBeGreaterThanOrEqual(4.5); // on a raised card
+      expect(contrast(color.lift, t)).toBeGreaterThanOrEqual(4.5); // on the active thing
+      expect(contrast(color.fillSubtle, t)).toBeGreaterThanOrEqual(4.5); // in a well
+    }
+
+    // The stage. `ink2` is included deliberately: the old test stopped at `ink1`, which is
+    // why #767471 shipped at 4.04:1 and nobody saw it.
+    for (const t of [stage.ink0, stage.ink1, stage.ink2]) {
+      expect(contrast(stage[0], t)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(stage[1], t)).toBeGreaterThanOrEqual(4.5); // and on a raised stage card
+    }
+
+    // Semantics survive the accent's death — so they answer to the same bar, in both worlds.
+    expect(contrast(color.bg, up[0])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(color.bg, down[0])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(stage[0], up.stage)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(stage[0], down.stage)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the ladder climbs: a raised card is lighter than the page it sits on', () => {
+    // The pre-2026-07-17 file had `paper[1]` DARKER than `paper[0]` — "raised" meant a tint,
+    // not an elevation, which is why a card needed a hairline to be seen at all.
+    expect(luminance(paper.lift)).toBeGreaterThan(luminance(paper[1]));
+    expect(luminance(paper[1])).toBeGreaterThan(luminance(paper[0]));
+    expect(luminance(paper[0])).toBeGreaterThan(luminance(paper[2]));
+    expect(luminance(paper[2])).toBeGreaterThan(luminance(paper[3]));
+    // The ground is paper, not white. 78.6% — a Braun housing, not a lamp.
+    expect(luminance(paper[0])).toBeLessThan(0.85);
+  });
+
+  it('nothing in the system is a neutral grey', () => {
+    // "No accent hue" is not "no hue at all" — that conflation is what made the first pass
+    // read as silver. Warmth is R−B; every ground and every ink carries some.
+    const warmth = (hex: string) => parseInt(hex.slice(1, 3), 16) - parseInt(hex.slice(5, 7), 16);
+    for (const p of [paper[0], paper[1], paper[2], paper[3]]) expect(warmth(p)).toBeGreaterThanOrEqual(4);
+    for (const i of [ink[0], ink[1], ink[2]]) expect(warmth(i)).toBeGreaterThanOrEqual(4);
+    expect(warmth(stage[0])).toBeGreaterThan(0); // warm graphite, never true #000
+    // Both ramps converge on the same warm middle from opposite ends.
+    expect(warmth(paper[2])).toBeGreaterThan(warmth(paper[1])); // paper warms as it darkens
+    expect(warmth(ink[2])).toBeGreaterThan(warmth(ink[0])); // ink warms as it lightens
   });
 });
 

@@ -288,3 +288,44 @@ describe('mirror wire serialization', () => {
     expect(mirrorFromWire({ schema: MIRROR_SCHEMA_VERSION })).toBeNull();
   });
 });
+
+/**
+ * THE SIGNATURE MOMENT, on the wrist (2026-07-17).
+ *
+ * The brief calls Loop 1's real-time load correction "the single most distinctive moment in the
+ * product", and requires that "the same change appears on the watch". Before this, nothing appeared
+ * on either surface: the store ran `applyLoop1`, sent the result to TELEMETRY, and swapped the plan
+ * underneath the athlete. She arrived at a different number with no account of why.
+ *
+ * It rides the ONE canonical projection (§8.5) precisely so the phone and the wrist cannot disagree
+ * about it — a second path would be a second truth.
+ */
+describe('the signature moment reaches the wrist', () => {
+  const CORR = { from: 60, to: 62.5, direction: 'up' as const, reps: 12 };
+
+  it('carries the correction through the rest that follows the set that earned it', () => {
+    const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }), correction: CORR });
+    expect(m.correction).toEqual(CORR);
+  });
+
+  it('says nothing on the ACTIVE set — the load in front of her IS the corrected one', () => {
+    // Announcing it there would narrate the present, not the change. The moment belongs to the rest
+    // between the set that earned it and the set that spends it.
+    const m = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 1 }), correction: CORR });
+    expect(m.correction).toBeNull();
+  });
+
+  it('is null on a rest that earned nothing — a held load is not news', () => {
+    const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }) });
+    expect(m.correction).toBeNull();
+  });
+
+  it('survives the wire — an old watch drops the line, never the frame', () => {
+    // The field is optional on purpose: the watch app installs asynchronously from the phone app, so
+    // this phone will spend a while talking to the previous watch binary (see MirrorSummaryLift.done
+    // for the last time that bit us). A version-skewed wrist must still show the right next load.
+    const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }), correction: CORR });
+    const back = mirrorFromWire(mirrorToWire(m));
+    expect(back?.correction).toEqual(CORR);
+  });
+});

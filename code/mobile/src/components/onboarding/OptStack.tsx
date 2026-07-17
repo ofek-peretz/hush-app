@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { color, font, textScale, tracking, trackingPx, radius, signal, shadow } from '@/design/tokens';
+import { color, font, textScale, tracking, trackingPx, radius, shadow } from '@/design/tokens';
 
 export interface OptStackOption {
   value: string;
@@ -67,13 +67,13 @@ const styles = StyleSheet.create({
   },
   // Equal border widths on both states — selecting must never shift the row's
   // content by the border delta (the selected look comes from the color, not width).
-  optOn: { borderWidth: 1.5, borderColor: signal[0], backgroundColor: color.surface, ...(shadow.md as object) },
+  optOn: { borderWidth: 1.5, borderColor: color.textPrimary, backgroundColor: color.lift, ...(shadow.md as object) },
   optOff: { borderWidth: 1.5, borderColor: color.borderControl, backgroundColor: 'transparent' },
   text: { flex: 1, minWidth: 0 },
   label: { fontFamily: font.sansMedium, fontSize: textScale.base, letterSpacing: trackingPx(textScale.base, tracking.tight), color: color.textPrimary, textAlign: 'left' },
   labelOn: { fontFamily: font.sansSemibold, textAlign: 'left' },
   desc: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 3, lineHeight: 18, textAlign: 'left' },
   radio: { width: 18, height: 18, borderRadius: 9, backgroundColor: color.bg },
-  radioOn: { borderWidth: 5.5, borderColor: signal[0] },
+  radioOn: { borderWidth: 5.5, borderColor: color.textPrimary },
   radioOff: { borderWidth: 1.5, borderColor: color.borderControl },
 });

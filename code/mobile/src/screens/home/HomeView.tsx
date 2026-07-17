@@ -278,28 +278,40 @@ export function HomeView(props: HomeViewProps) {
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : props.dayName ? (
+                  /* THE BUTTON DOES NOT REPEAT THE NAME (founder 2026-07-14). The screen said
+                     "Upper B" three times — the Display, the button, the chip. The workout's name
+                     is set 60pt tall directly above this button; there is nothing else it could
+                     begin. Two mentions is the floor and the right one: the Display says what you
+                     are about to do, the ochre chip says where that sits in the week. Three is a
+                     stutter, and a stutter is what a screen does when it doesn't trust itself.
+                     (`Continue {name}` keeps its name — it names an INTERRUPTED session, which is
+                     not necessarily the workout on the hero, so there the name carries fact.) */
                   <Button
                     variant="primary"
                     size="lg"
                     block
-                    label={t('home.begin', { name: bidi(props.dayName) })}
+                    label={t('home.beginPlain')}
                     onPress={props.onStart}
                     leading={<Icon name="play" size={18} color={color.onAccent} />}
                   />
                 ) : null}
-                {/* The second door on Home is now the RUN (founder 2026-07-13). Choosing another
-                    workout is the chips' job — it needs no button — and cardio, which had been
-                    pushed into a sheet nobody opened, gets the affordance that frees up. */}
+                {/* The second door on Home is the RUN (founder 2026-07-13) — but it was a
+                    full-width bordered button, the same SHAPE and weight as the primary act, so the
+                    page offered two equal doors and made the athlete choose between them. It is a
+                    secondary path; it now looks like one (founder 2026-07-14). A link, centred,
+                    under the act. */}
                 {!props.resumable ? (
-                  <Button
-                    variant="secondary"
-                    block
-                    label={t('home.cardioCta')}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cardio.title')}
+                    hitSlop={10}
                     onPress={props.onCardio}
-                    leading={<Icon name="runner" size={16} color={color.textSecondary} strokeWidth={2} />}
-                    trailing={<Icon name="chevronRight" size={16} color={color.textSecondary} strokeWidth={2} />}
-                    style={styles.secondaryCta}
-                  />
+                    style={({ pressed }) => [styles.cardioLink, pressed && styles.weekPressed]}
+                  >
+                    <Icon name="runner" size={15} color={color.textMuted} strokeWidth={2} />
+                    <Text style={styles.cardioLinkText}>{t('home.cardioCta')}</Text>
+                    <Icon name="chevronRight" size={14} color={color.textMuted} strokeWidth={2} />
+                  </Pressable>
                 ) : null}
               </View>
             </View>
@@ -337,14 +349,12 @@ export function HomeView(props: HomeViewProps) {
             <View style={styles.weekCard}>
               {/* The head is a STATEMENT, not a door: the screen it used to open (This week) is
                   gone — everything it held is on this card (founder 2026-07-13). */}
+              {/* The count that used to sit here ("1 / 4") is GONE (founder 2026-07-14): the week
+                  meter above already states it, and the chips below already SHOW it — a check on
+                  what is done, an empty chip on what is left. Three renderings of one fact on one
+                  screen. The card keeps the two that earn their place. */}
               <View style={styles.weekHead}>
                 <Text style={styles.weekTitle}>{t('home.hubThisWeek')}</Text>
-                {/* The week's state as a measurement, in the measuring voice — and the trained
-                    half of it in sage, because that is what "done" is coloured in this product. */}
-                <Text style={styles.weekCount}>
-                  <Text style={styles.weekCountDone}>{done}</Text>
-                  {` / ${total}`}
-                </Text>
               </View>
 
               {/* THE CHIPS ARE THE CHOOSER (see the header): one tap queues the workout, a second
@@ -479,7 +489,7 @@ const styles = StyleSheet.create({
   // locale rather than mirroring to "·Hush".
   brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, direction: 'ltr' },
   wordmark: { fontFamily: font.sansSemibold, fontSize: 21, letterSpacing: -0.6, color: color.textPrimary, textAlign: 'left' },
-  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: signal[0], marginLeft: 2, marginBottom: 5 }, // rtl-ok: inside LTR brand lockup
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.textMuted, marginLeft: 2, marginBottom: 5 }, // rtl-ok: inside LTR brand lockup
 
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 32 },
   legendTop: { paddingTop: 24 },
@@ -511,12 +521,17 @@ const styles = StyleSheet.create({
   cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
-  // metadata pills — scanned, not read
+  // Metadata pills — scanned, not read. They had a fill one step off the page and no edge, so on
+  // paper they were shapeless smudges, and under gym light they were gone (founder 2026-07-14).
+  // A hairline gives them an EDGE without giving them weight: they become objects the eye can
+  // count, while staying quieter than everything they sit under.
   groups: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 6 },
   pill: {
     paddingVertical: 5,
     paddingHorizontal: 11,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: color.border,
     backgroundColor: color.fillSubtle,
   },
   pillText: {
@@ -548,8 +563,10 @@ const styles = StyleSheet.create({
 
   meterWrap: { marginTop: 28 },
   error: { marginTop: 16 },
-  cta: { marginTop: 24, gap: 10 },
-  secondaryCta: { justifyContent: 'space-between' },
+  cta: { marginTop: 24, gap: 14 },
+  // the run — a link under the act, not a rival to it
+  cardioLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 6 },
+  cardioLinkText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
 
   hub: { marginTop: 34 },
   hubLegend: { marginBottom: 4 },
@@ -572,8 +589,6 @@ const styles = StyleSheet.create({
   weekPressed: { opacity: 0.62 },
   weekHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   weekTitle: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
-  weekCount: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
-  weekCountDone: { fontFamily: font.monoSemibold, color: up[0] },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chip: {
@@ -590,10 +605,11 @@ const styles = StyleSheet.create({
   },
   // Done = sage, and sage only. Queued = the ochre index. Never both, never swapped.
   chipDone: { backgroundColor: color.upWash, borderColor: color.up },
-  chipCurrent: { borderColor: signal[0], backgroundColor: signal.wash },
+  // "You are here." A selection lifts — it does not tint. (Was an ochre rule on an ochre wash.)
+  chipCurrent: { borderColor: color.textPrimary, backgroundColor: color.lift },
   chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
   chipTextDone: { color: color.textPrimary },
-  currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: signal[0] },
+  currentDotSm: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: color.textPrimary },
   chipsHint: { marginTop: 8, fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'left' },
 
   brief: { marginTop: 14, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 12, paddingBottom: 10 },
@@ -605,7 +621,7 @@ const styles = StyleSheet.create({
   briefText: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
   briefLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   briefLink: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accentText, textAlign: 'left' },
-  briefNew: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: signal.wash },
-  briefNewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: signal[0] },
+  briefNew: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: color.fillSubtle },
+  briefNewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.textPrimary },
   briefNewText: { fontFamily: font.sansSemibold, fontSize: 10, letterSpacing: 0.6, color: color.accentText, textAlign: 'left' },
 });

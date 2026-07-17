@@ -25,7 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { color, space, font, textScale, tracking, trackingPx, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx } from '@/design/tokens';
 
 /** A back-drag must travel this far (and be more horizontal than vertical) before it counts. */
 const SWIPE_BACK_DX = 56;
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: space.gutter - 4, paddingTop: 4, minHeight: 44 },
   progress: { flexDirection: 'row', gap: 5, flex: 1, paddingHorizontal: 4 },
   seg: { flex: 1, height: 3, borderRadius: 2 },
-  segOn: { backgroundColor: signal[0] },
+  segOn: { backgroundColor: color.textPrimary },
   segOff: { backgroundColor: color.fillSubtleStrong },
 
   // flexGrow (not flex) — the content keeps its natural height and only takes the full

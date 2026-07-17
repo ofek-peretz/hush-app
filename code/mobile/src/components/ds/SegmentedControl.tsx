@@ -1,21 +1,37 @@
 /**
- * SegmentedControl — 1:1 from the design `components/forms/SegmentedControl.jsx`.
- * The primary choice control (units, language, goal, experience, days/week). A
- * single decisive selection.
+ * SegmentedControl — the primary choice control (units, language, days/week).
+ * A single decisive selection.
  *
- * THE CHOICE IS OCHRE (founder 2026-07-13). The selected segment used to be marked with a white
- * card on a grey track — the theory being that a settled choice is a fact, not an action, and
- * facts are ink. On a device that theory failed its first test: the language switch on the front
- * door was invisible ("it hides from the eye"), and on the gender step nothing said which of the
- * two the athlete had actually picked. A selection the athlete cannot FIND is not a control.
- * So the selected segment now carries the one accent, filled, with cream on it — the same
- * `signal.fill` that the primary button carries, and the only ochre licensed to carry text
- * (ruling 2026-07-13). Every bar of this kind, everywhere in the app, marks its choice the
- * same way.
+ * ════ THE CHOICE LIFTS ════ (2026-07-17, and this reverses a ruling — read on)
+ *
+ * The selected segment is `color.lift` — white — on a `fillSubtle` well. A settled
+ * choice is a fact, and facts are not coloured; the chosen one is simply the thing
+ * closest to the athlete.
+ *
+ * **This is the second time this has been tried.** The first (pre-2026-07-13) put a
+ * white card on a grey track and it FAILED on a device: the language switch on the
+ * front door "hid from the eye", and the founder replaced it with the ochre fill.
+ * That rejection was right, and the diagnosis was wrong. The card did not hide
+ * because white-on-grey cannot work — it hid because THE PAGE WAS ALREADY WHITE:
+ *
+ *     old   card #ffffff vs page #fbfaf8  =   4.3 points of luminance
+ *     new   lift #ffffff vs ground #e8e5e0 = 21.4 points   ← 5×
+ *
+ * Nothing can lift off a surface that is already at 95.7%. The ochre was a bandage
+ * on an upside-down ladder (see `paper` in tokens.ts), treating the symptom of a
+ * bug the founder himself found on 2026-07-17. With the ground at 78.6% the
+ * original cure works, five times harder than it could before.
+ *
+ * The track needs no border: it is a well, and a well is already separated by tone.
+ * That is the same law the stage has always used.
+ *
+ * ⚠️ THIS ONE WANTS THE FOUNDER'S EYE ON A DEVICE. It is the only element being
+ * restored after a device rejection. Look at the language switch on the sign-in
+ * first. If it hides again, the reasoning above is wrong and the fill comes back.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
-import { color, radius, control, space, font, textScale, shadow, signal, paper } from '@/design/tokens';
+import { color, radius, control, space, font, textScale, shadow } from '@/design/tokens';
 
 type Option = string | { value: string; label: string; icon?: React.ReactNode };
 
@@ -65,9 +81,8 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
+    // A well. Separated from the ground by tone — no border. See the header.
     backgroundColor: color.fillSubtle,
-    borderWidth: 1,
-    borderColor: color.border,
     borderRadius: radius.md,
     padding: 3,
     gap: 2,
@@ -85,7 +100,9 @@ const styles = StyleSheet.create({
   icon: { alignItems: 'center', justifyContent: 'center' },
   itemBlock: { flex: 1 },
   itemStack: { flex: 0, alignItems: 'flex-start', justifyContent: 'center', width: '100%' },
-  itemActive: { backgroundColor: signal.fill, ...(shadow.md as object) },
+  // 21.4 points above the ground, 29.6 above its own track. It cannot hide.
+  itemActive: { backgroundColor: color.lift, ...(shadow.md as object) },
   label: { fontFamily: font.sansMedium, color: color.textSecondary, textAlign: 'left' },
-  labelActive: { fontFamily: font.sansSemibold, color: paper[0], textAlign: 'left' },
+  // Ink on white: 17.5:1. The old cream-on-ochre was 2.6:1.
+  labelActive: { fontFamily: font.sansSemibold, color: color.textPrimary, textAlign: 'left' },
 });

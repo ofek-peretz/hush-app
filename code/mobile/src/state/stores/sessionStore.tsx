@@ -298,6 +298,42 @@ export interface SessionView {
   endResult: CompleteResult | null;
   /** Acknowledge `endResult` after navigating to Well Done (prevents a re-navigation). */
   clearEndResult: () => void;
+
+  /**
+   * THE SIGNATURE MOMENT — Loop 1 just moved the next set's load, and this is Hush saying so.
+   *
+   * The brief calls the real-time correction "the single most distinctive moment in the product"
+   * and notes it is easy to miss. It was easy to miss because **nothing told anyone**: the store
+   * ran `applyLoop1`, sent `l1.corrected` / `l1.direction` to TELEMETRY, and silently swapped the
+   * plan. The set just logged really did change the next one — the athlete simply arrived at a
+   * different number with no account of why. A coach standing next to you says it out loud.
+   *
+   * Set the moment a set is logged and a correction lands; consumed by the stage's rest beat and
+   * mirrored to the wrist. Cleared when the athlete moves on — it belongs to one rest, not the
+   * session (`clearCorrection`).
+   */
+  correction: LiveCorrection | null;
+  /** Acknowledge `correction` once it has been shown (it belongs to one rest, not the session). */
+  clearCorrection: () => void;
+}
+
+/**
+ * A load correction Loop 1 just made, with everything a surface needs to SAY it.
+ *
+ * `from` and `to` are the loads, not a delta: the athlete is watching a number she was about to
+ * lift change into a different number, and both halves of that are the story. `reps` is the fact
+ * that earned it — Hush never states a reason it did not measure (R7), and the reps she just did
+ * are the entire reason.
+ */
+export interface LiveCorrection {
+  exerciseId: string;
+  direction: 'up' | 'down';
+  from: number;
+  to: number;
+  /** The reps she just did — the measured fact that moved the load. */
+  reps: number;
+  /** Her band's edge that the set crossed: above `hi` → too light, below `lo` → too heavy. */
+  band: [number, number];
 }
 
 const Ctx = createContext<SessionView | null>(null);
@@ -529,6 +565,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // the watch — a watch-driven finish previously left SessionFlow on an empty (black) stage. The
   // SessionFlow screen consumes this and clears it.
   const [endResult, setEndResult] = useState<CompleteResult | null>(null);
+  // The signature moment — see `LiveCorrection`. Belongs to one rest, not the session.
+  const [correction, setCorrection] = useState<LiveCorrection | null>(null);
   // One-shot remaining seconds of a rest resumed after an app kill (S3): the Rest UI anchors
   // its countdown on this instead of the full base length. Cleared at the next transition.
   const [restResumeRemainingS, setRestResumeRemainingS] = useState<number | null>(null);
@@ -595,6 +633,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       loggedSets: loggedSets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
       progressedLifts: progressedLiftCount(plan, loggedSets),
       toLoad: isToLoad(plan, machine.setIndex, loggedSets),
+      // THE SIGNATURE MOMENT — through the ONE projection, so the wrist and the phone cannot
+      // disagree about it (§8.5: no duplicate state).
+      correction: correction ? { from: correction.from, to: correction.to, direction: correction.direction, reps: correction.reps } : null,
     });
 
     // One projection → both surfaces. The watch receives the full mirror (incl. the
@@ -846,6 +887,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         sets: saved.sets.length,
         progressed,
         durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
+        // The key every decision this occurrence earned is stamped with (changeLog[].at).
+        startedAtMs: Date.parse(saved.startedAt),
         earlyFinish,
         // False => the workout stays on this week's list (PARTIAL); Well Done says so.
         trained,
@@ -905,7 +948,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         watchSelectRef.current = handlers ? (id) => handlers.onSelect(id) : () => {};
       },
       endResult,
+      correction,
       clearEndResult: () => setEndResult(null),
+      clearCorrection: () => setCorrection(null),
 
       async start(day, targets) {
         // The athlete chose a FRESH workout while an interrupted one was still resumable
@@ -1095,6 +1140,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const grid = observedLoads(current.exerciseId, [updated, ...historyRef.current]);
         const carried = carryWeightForward(plan, current.globalIndex, setLog.actualWeight);
         const l1 = applyLoop1(carried, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count, grid);
+        // THE SIGNATURE MOMENT — set (or cleared) on EVERY logged set, so it always belongs to the
+        // set just finished. Until 2026-07-17 the only thing that happened here was the `track`
+        // call below: the correction went to analytics and the plan changed underneath her. The set
+        // she just did moved the next one — the most distinctive thing this product does — and she
+        // had no way to know it had happened, or why.
+        //
+        // The `else` is not tidiness: without it, a correction on set 2 would still be on screen
+        // during the rest after set 3, claiming news about a set that decided nothing.
+        if (l1.corrected && setLog.actualWeight != null && l1.nextLoad != null && (l1.direction === 'up' || l1.direction === 'down')) {
+          setCorrection({
+            exerciseId: current.exerciseId,
+            direction: l1.direction,
+            from: setLog.actualWeight,
+            to: l1.nextLoad,
+            reps: setLog.actualReps,
+            band: [current.target.repBandLo ?? 8, current.target.repBandHi ?? 10],
+          });
+        } else {
+          setCorrection(null);
+        }
         if (l1.corrected) {
           loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
           void track('loop1_correction', { sessionId: session.id, exerciseId: current.exerciseId, direction: l1.direction, from: setLog.actualWeight, to: l1.nextLoad });
@@ -1221,7 +1286,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     // restNonce: `restExtraSeconds` is read from a ref, so a "+15 sec" (from either surface)
     // must re-memo the view or the phone's Rest screen would never see the rest grow.
-  }, [state, app, endResult, restResumeRemainingS, restNonce, watchLoggedSet]);
+  }, [state, app, endResult, correction, restResumeRemainingS, restNonce, watchLoggedSet]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.

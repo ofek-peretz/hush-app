@@ -31,7 +31,8 @@ import { swapScore } from '@/domain/swapPool';
 import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
-import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, type V5Target } from '@/engine/v5/v5Engine';
+import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { learnedRestS } from '@/engine/v5/timeBudget';
@@ -490,6 +491,79 @@ async function editPreferences(edit: (p: OwnedPreferences) => void): Promise<voi
   }
 }
 
+/**
+ * Run the engine's fold — every completed-but-unfolded occurrence gets decided, in order.
+ *
+ * Extracted from `sessionTargets` on 2026-07-17. It used to live only there, which meant the fold
+ * was LAZY: the decisions a workout earned were not computed until the athlete opened the NEXT
+ * workout. The engine's contract has never been lazy — v5 decides at the end of every occurrence
+ * (register L7) and every changeLog entry is stamped with the occurrence that produced it — but
+ * nothing ASKED it to until the next session started. That gap is why the Complete screen could
+ * only ever point at Saturday: at the moment it rendered, the decision genuinely did not exist yet.
+ *
+ * Now `sessionEarned` calls this at the whistle, so the app and the engine move in one breath.
+ *
+ * Idempotent and cursor-driven (`lastFoldedAt`): calling it twice folds nothing the second time,
+ * so the extra call at completion costs one no-op pass on the next session start.
+ */
+async function foldEngine(
+  program: Program,
+  profile: Awaited<ReturnType<typeof loadProfileSafe>>,
+  history: Session[],
+  prefs: OwnedPreferences,
+  bucketOpenMs: number | undefined,
+): Promise<void> {
+  // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
+  // to her single declared band, then the '8-10' default.
+  const bandOf = (exId: string) => {
+    const m = exerciseById(exId)?.muscle;
+    return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
+  };
+  const seedFor = (id: string) => smartSeed(id, profile, history);
+  const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
+  // Loop 3 (D) reads the (time-trimmed) prescribed sets to know whether she COMPLETED a muscle this
+  // occurrence (per exercise) and to seed/cap its learned volume at what actually fit — from the
+  // FINAL programme (post enforceTimeCap). The volume is a WEEKLY figure, so a muscle's whole-week
+  // total (summed across EVERY day it appears — chest often sits on two upper days) seeds and caps
+  // it; a per-occurrence figure would silently halve a multi-day muscle at the next regeneration.
+  const prescribedByEx: Record<string, number> = {};
+  const weeklyByMuscle: Record<string, number> = {};
+  for (const d of program.days) for (const s of d.slots) {
+    if (s.supplemental) continue;
+    prescribedByEx[s.exerciseId] = s.setCount;
+    const m = exerciseById(s.exerciseId)?.muscle;
+    if (m) weeklyByMuscle[m] = (weeklyByMuscle[m] ?? 0) + s.setCount;
+  }
+  const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle).catch(
+    (e): Record<string, 'graduate' | 'rotate'> => {
+      void track('engine_error', { op: 'advanceV5', message: String(e) });
+      return {};
+    },
+  );
+  // Enact engine-initiated exercise changes (S-52 graduate / S-25.2 rotate): resolve each target
+  // and write it to `substitutes` (which the assembler honours, C1). These are ENGINE changes, not
+  // athlete swaps (S-72) — written straight to substitutes, never through the learned counter, so a
+  // rotation never reads as a preference. Enacted at the next regeneration (the weekly roll).
+  // Resolve the wanted changes to concrete substitutions, honouring leave-it pins (S-30/S-71: a
+  // pinned lift is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
+  // enacts what the resolver returns.
+  const enacted = resolveEngineEnactments(changes, prefs.pinsByMuscle, history);
+  if (enacted.length) {
+    await editPreferences((p) => {
+      for (const e of enacted) {
+        p.substitutes[e.from] = e.to;
+        // S-71: mark an engine ROTATION so a later swap-back to it is read as RESISTANCE, not a fresh
+        // preference (S-72 keeps the two apart). A graduation is not a rotation → not marked.
+        if (e.rotated) (p.engineRotated ??= {})[e.from] = e.to;
+      }
+    }).catch((e) => void track('engine_error', { op: 'enactEngineChange', message: String(e) }));
+    // S-45: let the Saturday mirror name what Hush did (graduate/rotate write substitutes, not the
+    // load changeLog). Idempotent per week — a re-enacted standing change is not logged twice.
+    for (const e of enacted)
+      await recordStructuralChangeV5(e.from, e.to, e.kind).catch((err) => void track('engine_error', { op: 'recordStructuralChangeV5', message: String(err) }));
+  }
+}
+
 export const fixtureModel: ModelClient = {
   async getProfile() {
     return {};
@@ -583,6 +657,30 @@ export const fixtureModel: ModelClient = {
     return { id: 'program_v1', frequency: n, days: ordered };
   },
 
+  /**
+   * WHAT THIS WORKOUT EARNED — folded at the whistle, then read back.
+   *
+   * The brief's promise is "at the end of a workout, next time's weights are already decided — and
+   * it says so, THEN." Before this, they were decided lazily at the next session start, so Complete
+   * had nothing true to show and pointed at Saturday instead. Folding here makes the promise real.
+   *
+   * `[]` is a real and common answer — a workout where every lift held (S-24) changed nothing, and
+   * the screen must say so rather than invent a change (R7 / S-16).
+   */
+  async sessionEarned({ startedAtMs }): Promise<Explanation[]> {
+    const program = await db.loadProgram();
+    if (!program) return [];
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    const prefs = await loadPreferencesSafe();
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
+    await foldEngine(program, profile, history, prefs, bucketOpenMs);
+    return getSessionEarnedV5(startedAtMs).catch((e): Explanation[] => {
+      void track('engine_error', { op: 'sessionEarned', message: String(e) });
+      return [];
+    });
+  },
+
   async sessionTargets({ programDayId }): Promise<SetTarget[]> {
     void programDayId; // targets are keyed by exercise; the screen picks the day's slots
     const profile = await loadProfileSafe();
@@ -616,48 +714,7 @@ export const fixtureModel: ModelClient = {
     };
     let v5targets: Record<string, V5Target> = {};
     if (program) {
-      const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
-      // Loop 3 (D) reads the (time-trimmed) prescribed sets to know whether she COMPLETED a muscle this
-      // occurrence (per exercise) and to seed/cap its learned volume at what actually fit — from the
-      // FINAL programme (post enforceTimeCap). The volume is a WEEKLY figure, so a muscle's whole-week
-      // total (summed across EVERY day it appears — chest often sits on two upper days) seeds and caps
-      // it; a per-occurrence figure would silently halve a multi-day muscle at the next regeneration.
-      const prescribedByEx: Record<string, number> = {};
-      const weeklyByMuscle: Record<string, number> = {};
-      for (const d of program.days) for (const s of d.slots) {
-        if (s.supplemental) continue;
-        prescribedByEx[s.exerciseId] = s.setCount;
-        const m = exerciseById(s.exerciseId)?.muscle;
-        if (m) weeklyByMuscle[m] = (weeklyByMuscle[m] ?? 0) + s.setCount;
-      }
-      const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle).catch(
-        (e): Record<string, 'graduate' | 'rotate'> => {
-          void track('engine_error', { op: 'advanceV5', message: String(e) });
-          return {};
-        },
-      );
-      // Enact engine-initiated exercise changes (S-52 graduate / S-25.2 rotate): resolve each target
-      // and write it to `substitutes` (which the assembler honours, C1). These are ENGINE changes, not
-      // athlete swaps (S-72) — written straight to substitutes, never through the learned counter, so a
-      // rotation never reads as a preference. Enacted at the next regeneration (the weekly roll).
-      // Resolve the wanted changes to concrete substitutions, honouring leave-it pins (S-30/S-71: a
-      // pinned lift is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
-      // enacts what the resolver returns.
-      const enacted = resolveEngineEnactments(changes, prefs.pinsByMuscle, history);
-      if (enacted.length) {
-        await editPreferences((p) => {
-          for (const e of enacted) {
-            p.substitutes[e.from] = e.to;
-            // S-71: mark an engine ROTATION so a later swap-back to it is read as RESISTANCE, not a fresh
-            // preference (S-72 keeps the two apart). A graduation is not a rotation → not marked.
-            if (e.rotated) (p.engineRotated ??= {})[e.from] = e.to;
-          }
-        }).catch((e) => void track('engine_error', { op: 'enactEngineChange', message: String(e) }));
-        // S-45: let the Saturday mirror name what Hush did (graduate/rotate write substitutes, not the
-        // load changeLog). Idempotent per week — a re-enacted standing change is not logged twice.
-        for (const e of enacted)
-          await recordStructuralChangeV5(e.from, e.to, e.kind).catch((err) => void track('engine_error', { op: 'recordStructuralChangeV5', message: String(err) }));
-      }
+      await foldEngine(program, profile, history, prefs, bucketOpenMs);
       v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
         void track('engine_error', { op: 'currentV5Targets', message: String(e) });
         return {};

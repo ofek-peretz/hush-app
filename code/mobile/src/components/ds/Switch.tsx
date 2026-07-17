@@ -8,7 +8,7 @@
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
-import { color, paper, signal, motion } from '@/design/tokens';
+import { color, paper, motion, ink } from '@/design/tokens';
 
 const W = 46;
 const H = 28;
@@ -52,7 +52,7 @@ export function Switch({ checked, onChange, accessibilityLabel, disabled }: Prop
 const styles = StyleSheet.create({
   track: { width: W, height: H, borderRadius: H / 2, padding: PAD, justifyContent: 'center' },
   trackOff: { backgroundColor: color.fillSubtleStrong, borderWidth: 1, borderColor: color.borderControl },
-  trackOn: { backgroundColor: signal[0], borderWidth: 1, borderColor: signal[0] },
+  trackOn: { backgroundColor: ink[0], borderWidth: 1, borderColor: ink[0] },
   disabled: { opacity: 0.4 },
   knob: {
     width: KNOB,

@@ -3,11 +3,27 @@
  * (ui_kits/app/Complete.jsx). A three-beat closing on the inverted stage:
  *   1) SESSION SAVED · "{workout} complete."
  *   2) Hush READS the session — each lift checks in (the work becomes evidence)
- *   3) LOGGED · "That's the work." — top set, duration + estimated calories, and
- *      a calm pointer to Saturday's update (founder 2026-07-10: sets/volume and
- *      the body paragraph removed — the athlete just finished; facts only). A
- *      single workout never builds next week's program; that ritual is the
- *      weekly update. No confetti, no daily-streak pressure.
+ *   3) LOGGED · "That's the work." — then WHAT THIS WORKOUT EARNED, then the record
+ *      (top set, duration, estimated calories). No confetti, no daily-streak pressure.
+ *
+ *      ════ REBUILT 2026-07-17 — this beat used to lie ════
+ *      It closed with a calendar icon and "What you lifted this week sets next week's
+ *      loads", and its own header said "a single workout never builds next week's
+ *      program; that ritual is the weekly update." That was v4's rule. **v5 reverses
+ *      it**: the decision is made the moment the workout ENDS (register L7 — there is
+ *      no weekly boundary), and the brief calls this screen "the important one" for
+ *      exactly that reason.
+ *
+ *      The screen was not being lazy — the DECISION did not exist yet when it rendered.
+ *      The engine's fold was only triggered by `sessionTargets`, i.e. when the athlete
+ *      opened the NEXT workout, so at the whistle there was genuinely nothing true to
+ *      show and Saturday was the only honest thing left to point at. So the fold moved
+ *      to the whistle (`ModelClient.sessionEarned` → `foldEngine` → `getSessionEarnedV5`)
+ *      and this beat now says what the session bought, in Hush's own first person, with
+ *      the reason attached to the number.
+ *
+ *      Saturday keeps its job — it MIRRORS a week of decisions already told, and decides
+ *      nothing (S-45). It just no longer borrows this moment.
  *   4) MILESTONE — only when this session crossed one (domain/milestones): the
  *      one licensed loud moment. A beat of black, a heavy stamp haptic, and the
  *      engraved emblem lands. At most ONE per workout (rarity law) — when
@@ -27,6 +43,8 @@ import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { fixtureModel } from '@/data/api/fixtureModel';
+import type { Explanation } from '@/engine/weeklyView';
 import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
@@ -98,6 +116,16 @@ export function WellDone({ navigation, route }: Props) {
   const [read, setRead] = useState(0);
   const session = history?.[0] ?? null;
 
+  /**
+   * WHAT THIS WORKOUT EARNED — the whole reason this screen was rebuilt (2026-07-17).
+   *
+   * `null` = the engine has not answered yet (the fold runs here, at the whistle); `[]` = it
+   * answered "nothing changed", which is a real verdict (every lift held, S-24) and is SAID, not
+   * hidden. The two must stay distinguishable or the screen would claim a steady workout while
+   * still waiting.
+   */
+  const [earned, setEarned] = useState<Explanation[] | null>(null);
+
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
 
   useEffect(() => {
@@ -113,6 +141,35 @@ export function WellDone({ navigation, route }: Props) {
       active = false;
     };
   }, [notStarted]);
+
+  /**
+   * Ask the engine what the workout earned, the moment it ends.
+   *
+   * This is the fold — v5 decides at the end of every occurrence (register L7), and until now
+   * nothing asked it to until the NEXT workout opened, which is why this screen used to point at
+   * Saturday: the decision genuinely did not exist yet when it rendered. Keyed to the session's own
+   * `startedAt`, which is the stamp every changeLog entry carries.
+   *
+   * A failure resolves to `[]` rather than hanging: the athlete has finished training and is owed a
+   * close, and "nothing changed" is the honest thing to say when we cannot prove otherwise (R7).
+   */
+  useEffect(() => {
+    if (notStarted) return;
+    // The occurrence's own key, handed over on the summary — NOT re-read from history. Reading it
+    // back meant a failed `loadHistory` left this beat sitting on "setting your next loads"
+    // forever: a spinner that could never resolve, promising work nobody was doing.
+    const at = summary?.startedAtMs;
+    // No stamp = no question. Answer "nothing changed" rather than wait on one never asked.
+    if (at == null || !Number.isFinite(at)) return void setEarned([]);
+    let active = true;
+    fixtureModel
+      .sessionEarned?.({ startedAtMs: at })
+      .then((e) => active && setEarned(e))
+      .catch(() => active && setEarned([]));
+    return () => {
+      active = false;
+    };
+  }, [notStarted, summary?.startedAtMs]);
 
   // Milestones crossed by THIS session (the latest in history), most personal
   // first. [0] is the single celebrated mark; the rest go quietly to the gallery.
@@ -336,7 +393,7 @@ export function WellDone({ navigation, route }: Props) {
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           <Pressable style={styles.savedBody} onPress={skip} accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')}>
             <View style={styles.savedRow}>
-              <Icon name="check" size={18} color={up[0]} strokeWidth={2.4} />
+              <Icon name="check" size={18} color={up.stage} strokeWidth={2.4} />
               <Text style={styles.savedLegend}>{t('complete.saved')}</Text>
             </View>
             <Text style={styles.savedTitle} accessibilityRole="header">
@@ -395,7 +452,7 @@ export function WellDone({ navigation, route }: Props) {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.savedRow}>
-            <Icon name="checkCheck" size={16} color={up[0]} strokeWidth={2} />
+            <Icon name="checkCheck" size={16} color={up.stage} strokeWidth={2} />
             <Text style={styles.savedLegend}>{t('complete.logged')}</Text>
           </View>
           {/* The big line stands alone (founder 2026-07-12). "I'll account for the shortened
@@ -404,6 +461,36 @@ export function WellDone({ navigation, route }: Props) {
               only moment it could have changed their mind. Repeating it under the finish line
               turns a closing beat into an explanation. */}
           <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
+
+          {/* ════ WHAT THIS WORKOUT EARNED ════
+              This block replaces a calendar icon and the sentence "What you lifted this week sets
+              next week's loads." That sentence was v4's rule and v5 reverses it: the decision is
+              made when the workout ENDS. The screen deferred to Saturday because, until the fold
+              moved to the whistle, the decision genuinely did not exist yet when it rendered.
+
+              It sits directly under the closing line and ABOVE the record below, because the number
+              Hush just set is the point of the beat and the top set is only evidence.
+
+              Three states, all real: still folding · nothing moved · here is what moved. The middle
+              one is not an empty state — a workout where every lift held (S-24) earned exactly that
+              answer, and R7 says say it rather than invent a change. */}
+          <View style={styles.earned}>
+            <Text style={styles.earnedLegend}>{t('complete.earnedLegend').toUpperCase()}</Text>
+            {earned == null ? (
+              <Text style={styles.earnedSteady}>{t('complete.earnedReading')}</Text>
+            ) : earned.length === 0 ? (
+              <Text style={styles.earnedSteady}>{t('complete.earnedSteady')}</Text>
+            ) : (
+              earned.map((e, i) => (
+                <View key={`${e.slotId}-${i}`} style={styles.earnedRow}>
+                  <View style={styles.earnedTick} />
+                  {/* The engine's own sentence, in Hush's first person — the number and the reason
+                      arrive together, which is the product's whole claim. */}
+                  <Text style={styles.earnedText}>{t(e.text.key, e.text.params)}</Text>
+                </View>
+              ))
+            )}
+          </View>
 
           {topSet ? (
             <View style={styles.topCard}>
@@ -436,10 +523,6 @@ export function WellDone({ navigation, route }: Props) {
             ) : null}
           </View>
 
-          <View style={styles.saturday}>
-            <Icon name="calendar" size={16} color={stage.ink1} strokeWidth={2} />
-            <Text style={styles.saturdayText}>{t('complete.saturday')}</Text>
-          </View>
         </ScrollView>
 
         <View style={styles.footer}>
@@ -479,7 +562,7 @@ const styles = StyleSheet.create({
   readRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
   readRowBorder: { borderBottomWidth: 1, borderBottomColor: stage[2] },
   readCheck: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: stage[2] },
-  readCheckDone: { backgroundColor: up[0], borderColor: up[0] },
+  readCheckDone: { backgroundColor: up.stage, borderColor: up.stage },
   readName: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, textAlign: 'left' },
   readBest: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   readBestWord: { fontFamily: font.sans },
@@ -505,12 +588,29 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 20, borderTopWidth: 1, borderTopColor: stage[2] },
   stat: { flex: 1 },
 
-  saturday: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: stage[2] },
-  saturdayText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink1, lineHeight: 20, textAlign: 'left' },
+  /* ── What this workout earned. The beat's centre of gravity. ──
+     Raised on the stage (`stage[1]`) rather than ruled off with a border: separation is carried by
+     TONE here, which is the law the light world finally inherited on 2026-07-17. */
+  earned: { marginTop: 22, padding: 16, borderRadius: radius.lg, backgroundColor: stage[1], gap: 12 },
+  earnedLegend: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale['2xs'],
+    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
+    color: stage.ink2,
+    textAlign: 'left',
+  },
+  /* Waiting, and "nothing moved", wear the same quiet voice — both are Hush being honest rather
+     than filling space. */
+  earnedSteady: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink1, lineHeight: 20, textAlign: 'left' },
+  earnedRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  /* The tick is a mark, not a bullet: a short sage rule that says THIS is a thing Hush did. Sage is
+     meaning (a load moved), not decoration — the one kind of colour that survived READOUT. */
+  earnedTick: { width: 2, alignSelf: 'stretch', minHeight: 18, borderRadius: 1, backgroundColor: up.stage },
+  earnedText: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, lineHeight: 21, textAlign: 'left' },
 
   // beat 4 — the milestone stamp
   milestoneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  milestoneLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
+  milestoneLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
   milestoneEmblem: { marginTop: 36, marginBottom: 36 },
   milestoneTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: Math.round(textScale['2xl'] * 1.08), color: stage.ink0, textAlign: 'center' },
   milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', marginTop: 10, maxWidth: 300 },

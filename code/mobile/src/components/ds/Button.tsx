@@ -55,6 +55,13 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      // A disabled button that does not SAY it is disabled is the same bug as a silent refusal:
+      // VoiceOver announces an ordinary button, the athlete activates it, and nothing happens with
+      // no account of why. `disabled` alone only stops the touch — this is what tells her.
+      // (Found 2026-07-17 by the body-map screen's own test, which asked whether Continue announced
+      // itself as blocked when the map was unbuildable. It didn't. This is every disabled button in
+      // the app.)
+      accessibilityState={{ disabled: !!disabled }}
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
@@ -88,7 +95,9 @@ export function Button({
 }
 
 const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: string }> = {
-  // Charcoal on ochre — 7.0:1 (AAA). Paper on ochre measured 2.4:1 and failed AA.
+  // Graphite, with cream on it — 15.7:1. The primary action is the darkest thing on the page:
+  // under READOUT the strongest affordance is the one furthest from the ground, and on paper that
+  // is ink. (This was the ochre until 2026-07-17; the label was 2.6:1 and shipped anyway.)
   primary: { container: { backgroundColor: signal.fill }, pressed: { backgroundColor: signal.fillPressed }, fg: color.onAccent },
   secondary: {
     container: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.borderControl },

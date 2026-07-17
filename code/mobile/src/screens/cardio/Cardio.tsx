@@ -313,7 +313,7 @@ export function Cardio({ navigation }: Props) {
                     key={i}
                     style={[
                       styles.dot,
-                      { width: current ? 22 : 7, backgroundColor: done ? up[0] : current ? signal[0] : stageC[2] },
+                      { width: current ? 22 : 7, backgroundColor: done ? up.stage : current ? stageC.ink0 : stageC[2] },
                     ]}
                   />
                 );
@@ -531,7 +531,7 @@ function CardioComplete(props: {
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.completeScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.recordedRow}>
-            <Icon name="checkCheck" size={16} color={up[0]} strokeWidth={2} />
+            <Icon name="checkCheck" size={16} color={up.stage} strokeWidth={2} />
             <Text style={styles.recordedText}>{t('cardio.recorded').toUpperCase()}</Text>
           </View>
           <Text style={styles.loggedTitle}>{gait === 'run' ? t('cardio.runLogged') : t('cardio.walkLogged')}</Text>
@@ -576,10 +576,10 @@ function CardioComplete(props: {
                     <View key={s.km} style={styles.splitRow}>
                       <Text style={styles.splitKm}>{s.km}</Text>
                       <View style={styles.splitTrack}>
-                        <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? signal[0] : stageC[2] }]} />
+                        <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? up.stage : stageC[2] }]} />
                         {s.gait === 'walk' ? <Text style={styles.splitWalkTag}>{t('cardio.walkTag')}</Text> : null}
                       </View>
-                      <Text style={[styles.splitPace, isFast && { color: signal[0], fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
+                      <Text style={[styles.splitPace, isFast && { color: up.stage, fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
                     </View>
                   );
                 })}
@@ -655,7 +655,8 @@ const styles = StyleSheet.create({
   startingLegend: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.legend), color: stageC.ink1, marginBottom: 28, textAlign: 'left' },
   countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0, textAlign: 'left' },
   // The word at the end of the count — sans (it is a word), ochre (it is the moment).
-  countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: signal[0] },
+  // The count-in's GO. It was the ochre; on the stage the loudest thing is the whitest.
+  countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: stageC.lift },
 
   // active hero
   activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
   dot: { height: 7, borderRadius: 4 },
   timeBarWrap: { width: '100%', maxWidth: 280, marginTop: 26 },
   timeBarTrack: { height: 4, borderRadius: 2, backgroundColor: stageC[2], overflow: 'hidden' },
-  timeBarFill: { height: '100%', backgroundColor: signal[0], borderRadius: 2 },
+  timeBarFill: { height: '100%', backgroundColor: stageC.ink0, borderRadius: 2 },
   timeBarLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   // A LIVE clock: tabular figures or the whole label shivers every time a 1 becomes an 8.
   timeBarLabel: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },

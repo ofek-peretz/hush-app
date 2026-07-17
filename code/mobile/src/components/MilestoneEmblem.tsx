@@ -21,7 +21,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneGlyph';
-import { signal, stage, ink, font } from '@/design/tokens';
+import { stage, ink, font } from '@/design/tokens';
 
 export interface MilestoneEmblemProps {
   size: number;
@@ -37,7 +37,9 @@ export interface MilestoneEmblemProps {
 const TICKS = 48;
 
 export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, caption, glyph, pulse = false }: MilestoneEmblemProps) {
-  const engrave = tone === 'foil' ? (onStage ? signal[0] : signal.ink) : onStage ? stage.ink2 : ink[3];
+  // 'foil' is the app's one licensed loud beat. Under READOUT loud is not a colour — it is the
+  // furthest thing from the ground: white on the stage, full ink on paper.
+  const engrave = tone === 'foil' ? (onStage ? stage.lift : ink[0]) : onStage ? stage.ink2 : ink[3];
   const text = tone === 'foil' ? (onStage ? stage.ink0 : ink[0]) : onStage ? stage.ink2 : ink[3];
 
   // Geometry in a 100-unit frame.
@@ -86,7 +88,7 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
             styles.halo,
             {
               borderRadius: size / 2,
-              backgroundColor: signal[0],
+              backgroundColor: onStage ? stage.lift : ink[0],
               opacity: halo.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.16] }),
               transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.12] }) }],
             },

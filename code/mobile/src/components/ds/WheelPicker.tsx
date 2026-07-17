@@ -10,8 +10,9 @@
  *   • Ticks. Every detent carries an engraved tick beneath its numeral: a LONG tick for a whole
  *     unit, a SHORT one for a fraction (16.5 kg). The eye judges distance off the ticks in a
  *     fraction of a second, without reading a single digit.
- *   • The anchor. The centre is not "the number that happens to be middle" — it is an ochre index
- *     line that overshoots the scale top and bottom, saying unambiguously: THIS is the value.
+ *   • The anchor. The centre is not "the number that happens to be middle" — it is an index line
+ *     in the strongest ink its world has, overshooting the scale top and bottom, saying
+ *     unambiguously: THIS is the value. (It was ochre until 2026-07-17; see `anchorLine`.)
  *   • Fisheye. The centred numeral is the largest and fully inked; its neighbours shrink and fade
  *     (60% → 20%) toward the edges. Focus is atomic; the rest of the axis becomes background
  *     texture instead of competing noise.
@@ -52,7 +53,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { color, radius, font, textScale, stage, signal } from '@/design/tokens';
+import { color, radius, font, textScale, stage } from '@/design/tokens';
 import { selection as selectionHaptic } from '@/platform/haptics';
 
 interface Props {
@@ -92,7 +93,7 @@ export const ITEM_PAD_B = 6; // air under the ticks
 export const ITEM_H = NUM_SLOT_H + TICK_H + ITEM_PAD_B;
 const OVERSHOOT = 4; // how far the anchor runs past the tick band, top and bottom
 
-/** The ochre index line's height and its offset from the control's bottom edge, derived from
+/** The index line's height and its offset from the control's bottom edge, derived from
  *  the scale above. Pure + exported so the "the anchor crosses the ticks" invariant is tested,
  *  not assumed. */
 export function anchorGeometry(controlH: number): { height: number; bottom: number } {
@@ -293,7 +294,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const numRest = onStage ? stage.ink0 : color.textPrimary;
   const anchorGeo = anchorGeometry(h);
   /** What the scale is standing on RIGHT NOW — the edge fades have to dissolve into it. */
-  const surfaceNow = onStage ? stage[1] : live ? color.accentWash : color.surface;
+  const surfaceNow = onStage ? stage[1] : live ? color.lift : color.surface;
 
   return (
     <View
@@ -397,7 +398,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             "this is the value". Its geometry is derived from the scale (anchorGeometry), so it
             can never drift off the ticks it indexes. */}
         <View pointerEvents="none" style={styles.anchor}>
-          <View style={[styles.anchorLine, { height: anchorGeo.height, marginBottom: anchorGeo.bottom }]} />
+          <View style={[styles.anchorLine, onStage && styles.anchorLineStage, { height: anchorGeo.height, marginBottom: anchorGeo.bottom }]} />
         </View>
       </View>
       {unit ? (
@@ -492,20 +493,30 @@ const styles = StyleSheet.create({
   fadeStart: { start: 0 },
   fadeEnd: { end: 0 },
 
-  // the ochre index line (height + offset come from anchorGeometry)
+  // The index line (height + offset come from anchorGeometry).
+  //
+  // This was the ochre, and it was the last honest argument for keeping one: an index
+  // mark on a measuring rule is exactly what a Leica's red line IS. It loses anyway,
+  // for a reason that outranks the analogy — the founder has said the wordmark itself
+  // may not survive (2026-07-17), so nothing load-bearing may depend on the brand's
+  // colour. The line is the most load-bearing mark in the product: it is what says
+  // *this is your number*. It gets the strongest ink its world has, in both worlds.
   anchor: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center' },
-  anchorLine: { width: 2, borderRadius: 1, backgroundColor: signal[0] },
+  anchorLine: { width: 2, borderRadius: 1, backgroundColor: color.textPrimary },
+  anchorLineStage: { backgroundColor: stage.ink0 },
 
   // The unit sits in its own bordered cell, separate from the scrolling digits.
   unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
-  // Under the finger: the ochre closes the loop between the index line and the rule itself.
-  wrapLive: { borderColor: signal[0], backgroundColor: color.accentWash },
-  wrapLiveStage: { borderColor: signal[0] },
+  // UNDER THE FINGER, THE RULE LIFTS. The instrument lighting up used to be an ochre
+  // tint; now it is the law itself — the thing being touched moves toward the light,
+  // away from the ground. Same gesture on the stage, same direction.
+  wrapLive: { borderColor: color.textPrimary, backgroundColor: color.lift },
+  wrapLiveStage: { borderColor: stage.ink0, backgroundColor: stage[1] },
 
-  // Inverted "stage" treatment — graphite surface + ink, ochre anchor (unchanged).
+  // Inverted "stage" treatment — graphite surface + ink.
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
-  unitBoxLive: { backgroundColor: color.accentWash, borderStartColor: signal[0] },
+  unitBoxLive: { backgroundColor: color.lift, borderStartColor: color.border },
   unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
   unitStage: { color: stage.ink2 },
 });

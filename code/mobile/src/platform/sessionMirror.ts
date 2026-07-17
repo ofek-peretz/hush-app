@@ -228,6 +228,20 @@ export interface SessionMirror {
    *  pin is set) and for bodyweight (nothing to load). Drives the bright imperative vs the quiet
    *  "loaded" confirmation on the Active Set. */
   toLoad?: boolean;
+  /**
+   * THE SIGNATURE MOMENT, on the wrist (2026-07-17).
+   *
+   * Loop 1 just moved the next set's load because of the set she finished. The brief calls this the
+   * product's most distinctive moment and requires it to appear on BOTH surfaces — "the same change
+   * appears on the watch" — which matters most here: mid-workout the wrist is often the only thing
+   * she looks at, and a load changing on it with no account of why is the app doing something TO
+   * her rather than WITH her.
+   *
+   * `from`/`to` are kg (the mirror's unit; the wrist formats). Null on every frame that did not
+   * just earn a correction. Optional/back-compatible: a version-skewed watch simply omits the line
+   * and still shows the correct next load.
+   */
+  correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
 }
 
 export interface MirrorInputs {
@@ -263,6 +277,8 @@ export interface MirrorInputs {
   milestone?: MirrorMilestone | null;
   /** Whether the CURRENT set still needs the equipment set (TO-LOAD) — see SessionMirror.toLoad. */
   toLoad?: boolean;
+  /** The correction Loop 1 just made, if any — see SessionMirror.correction. */
+  correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
@@ -419,6 +435,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       loadSetup: null,
       nextLoadSetup: null,
       toLoad: false,
+      correction: null,
     };
   }
 
@@ -515,6 +532,9 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     nextLoadSetup: isTransition && next ? next.loadSetup ?? null : null,
     // TO-LOAD only matters on the live set; the caller computes it from the logged sets.
     toLoad: phase === 'active_set' ? inp.toLoad ?? false : false,
+    // Only during REST. On the active set she is lifting and the load in front of her IS the
+    // corrected one — announcing it there would narrate the present, not the change.
+    correction: phase === 'active_set' ? null : inp.correction ?? null,
   };
 }
 

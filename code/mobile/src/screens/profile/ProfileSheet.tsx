@@ -10,7 +10,11 @@
  * Every action is the real one: units/language switch instantly, Health opens the
  * system permission flow, Sign Out / Delete run behind a native confirm.
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+// The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
+// the programme can never disagree about what she chose.
+import { emphasisMuscles, trainableMuscles } from '@/engine/v5/bodyMap';
+import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -136,6 +140,25 @@ export function ProfileSheet({ navigation }: Props) {
   ].filter(Boolean);
   const bodyData = bodyBits.length ? bodyBits.join(' · ') : null;
 
+  /**
+   * What the map currently SAYS, on its row — never a static caption.
+   *
+   * An untouched map is the honest common case and reads as "everything on"; anything else is
+   * summarised by the two decisions the map actually holds: what she leads with, and what she left
+   * out. `emphasisMuscles` / `trainableMuscles` are the engine's own reads, so this row and the
+   * programme can never disagree about her map.
+   */
+  const mapSummary = useMemo(() => {
+    const map = p?.bodyMap ?? {};
+    const lead = emphasisMuscles(map, CANONICAL_MUSCLE_ORDER);
+    const off = CANONICAL_MUSCLE_ORDER.length - trainableMuscles(map, CANONICAL_MUSCLE_ORDER).length;
+    const bits = [
+      lead.length ? t('profile.mapLeading', { muscles: lead.map((m) => t(`muscle.${m}`)).join(' · ') }) : null,
+      off ? t('profile.mapOff', { n: off }) : null,
+    ].filter(Boolean);
+    return bits.length ? bits.join(' · ') : t('profile.mapAllOn');
+  }, [p?.bodyMap, t]);
+
   // Membership (Subscription + Apple Payments): active → plan name, tapping opens
   // the system manage-subscriptions screen; inactive → free-trial status, tapping
   // opens the paywall.
@@ -246,7 +269,13 @@ export function ProfileSheet({ navigation }: Props) {
         <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
         {/* ONE edit entry (founder 2026-07-10): body data + training frequency. The old second
             "Experience" row opened the same screen and experience is now derived, not edited. */}
-        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} last />
+        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
+        {/* The body map (brief, Family 4) — its own row, not folded into the one above, because it is
+            not body DATA. Height and weight describe her; the map is the decision that shapes the
+            whole programme (register Part 3), and it is the only place the per-muscle rep band is
+            ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
+            same screen twice — this opens something else entirely. */}
+        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} last />
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
@@ -388,7 +417,7 @@ const styles = StyleSheet.create({
   memberSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 3, textAlign: 'left' },
   memberSessions: { fontFamily: font.monoSemibold, color: color.accentText, textAlign: 'left' },
   memberTrack: { height: 4, borderRadius: 2, backgroundColor: color.fillSubtle, marginTop: 10, overflow: 'hidden' },
-  memberFill: { height: '100%', backgroundColor: signal[0], borderRadius: 2 },
+  memberFill: { height: '100%', backgroundColor: color.textPrimary, borderRadius: 2 },
   memberChevron: { alignSelf: 'center' },
   memberChevronTop: { alignSelf: 'flex-start', marginTop: 4 },
   trialNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2, textAlign: 'left' },

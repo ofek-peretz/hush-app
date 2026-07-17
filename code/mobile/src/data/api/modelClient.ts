@@ -7,6 +7,7 @@
  * client code above it does not care which implementation answers.
  */
 import type { Capability, PortraitSnapshot, Profile, Program, SetTarget } from '@/data/local/models';
+import type { Explanation } from '@/engine/weeklyView';
 
 /** What the athlete actually did — the only model input (spec §8.7). */
 export interface ActualSet {
@@ -84,6 +85,21 @@ export interface ModelClient {
     sets: ActualSet[];
     earlyFinish: boolean;
   }): Promise<void>;
+
+  /**
+   * What the workout that started at `startedAtMs` EARNED — the loads the engine set for next time,
+   * each with the reason that earned it.
+   *
+   * v5 decides at the end of every occurrence (register L7); this folds the engine at the whistle
+   * and reads back the decisions stamped with that occurrence. `[]` means the workout changed
+   * nothing, which is a real answer (every lift held, S-24) and must be said, not papered over.
+   *
+   * OPTIONAL on the seam by design: the on-device model owns the engine, and the HTTP client is the
+   * decommissioned backend path (see launch-readiness, 2026-06-24). A required member would force a
+   * stub into `httpClient`, which is under a standing do-not-touch rule. A caller without it simply
+   * has nothing to show.
+   */
+  sessionEarned?(args: { startedAtMs: number }): Promise<Explanation[]>;
 
   /**
    * Per-capability relative scores + confidence + still-learning flags for the

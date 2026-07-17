@@ -23,7 +23,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { HomeView, type HomeViewProps } from '@/screens/home/HomeView';
 import { initI18n, tg } from '@/i18n';
 import { bidi } from '@/i18n/bidi';
-import { up, signal, ink } from '@/design/tokens';
+import { up, signal, ink, color } from '@/design/tokens';
 
 beforeAll(async () => {
   await initI18n();
@@ -259,38 +259,79 @@ describe('the week is on the page, and it is a door', () => {
     expect(texts(r).join(' ')).not.toContain(tg('home.chipsHint')); // …and it does not claim otherwise
   });
 
-  it('a trained workout is SAGE, and the queued one is OCHRE — the two marks never trade places', () => {
+  it('a trained workout is SAGE, and the queued one LIFTS — the two marks never trade places', () => {
+    // The law is unchanged; only its mechanism is. Done vs. queued used to be sage vs. ochre.
+    // Under READOUT (2026-07-17) there is no ochre, so "you are here" is said the way the whole
+    // product now says it: the chip lifts off the ground toward white. What must never happen —
+    // and what this test is actually for — is the two states becoming confusable.
     const r = mount(<HomeView {...props()} />);
-    // Done: the sage check + the sage wash behind it. (Its LABEL is ink, as all legible copy is —
-    // it is the MARK that carries the verdict, and the mark is green.)
+
+    // Done: the sage mark. (Its LABEL is ink, as all legible copy is — it is the MARK that
+    // carries the verdict.)
     const doneChip = colors(byLabel(r, 'Push A')!);
     expect(doneChip).toContain(up[0]);
-    expect(doneChip).not.toContain(signal[0]); // never the "you are here" mark
-    // Queued: the ochre index dot, and no check anywhere near it (a check means DONE, and nothing else).
+    expect(doneChip).not.toContain(signal[0]); // the brand's seal is not a UI state
+
+    // Queued: it lifts, and carries no check — a check means DONE and nothing else.
     const queuedChip = colors(byLabel(r, 'Pull A')!);
-    expect(queuedChip).toContain(signal[0]);
+    expect(queuedChip).toContain(color.lift);
     expect(queuedChip).not.toContain(up[0]);
+    expect(queuedChip).not.toContain(signal[0]);
+
+    // And the two are still told apart by their marks, not by their labels.
+    expect(doneChip).not.toContain(color.lift);
   });
 });
 
-describe('cardio has Home\'s second button', () => {
-  it('a run is one tap from Home — the button the chooser sheet used to occupy', () => {
+describe('cardio is Home\'s second door — and it never rivals the first', () => {
+  it('a run is one tap from Home — the path the chooser sheet used to occupy', () => {
     let ran = 0;
     const r = mount(<HomeView {...props({ onCardio: () => void ran++ })} />);
     act(() => {
-      byLabel(r, tg('home.cardioCta'))!.props.onPress();
+      byLabel(r, tg('cardio.title'))!.props.onPress();
     });
     expect(ran).toBe(1);
-  });
-
-  it('it never competes with the workout: the primary action is still Begin', () => {
-    const said = texts(mount(<HomeView {...props()} />)).join(' ');
-    expect(said).toContain(tg('home.begin', { name: bidi('Pull A') })); // the name rides a BiDi isolate
   });
 
   it('and on a RECOVERY day it is the day\'s act — its card is back', () => {
     const r = mount(<HomeView {...props({ resting: true, dayName: null })} />);
     expect(byLabel(r, tg('cardio.title'))).not.toBeNull();
+  });
+});
+
+/**
+ * THE SCREEN DOES NOT STUTTER (founder 2026-07-14).
+ *
+ * Home said "Upper B" three times — the hero, the button, the chip — and stated the week's count
+ * twice. A screen that repeats itself is a screen that does not trust its own hierarchy, and the
+ * repetition is exactly what made the light surfaces read as "another nice app" next to the stage.
+ * Each fact is now carried by the one element that earns it, and these are the tests that keep it
+ * that way: they FAIL if a name or a count comes back for a second helping.
+ */
+describe('the screen does not stutter', () => {
+  it('the primary act is "Begin" — it never repeats the name set 60pt tall above it', () => {
+    const said = texts(mount(<HomeView {...props()} />)).join(' ');
+    expect(said).toContain(tg('home.beginPlain'));
+    expect(said).not.toContain(tg('home.begin', { name: bidi('Pull A') }));
+  });
+
+  it('the queued workout is named exactly TWICE: the hero (what you are doing) + its chip (where it sits)', () => {
+    const named = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('Pull A'));
+    expect(named).toHaveLength(2);
+  });
+
+  it('the week\'s count is stated ONCE — the meter has it, so the card head gave it up', () => {
+    // The chips already SHOW the count (a check on what is done, an empty chip on what is left);
+    // the meter already says it in figures. A third rendering was the card's "1 / 3".
+    const counted = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('/ 3'));
+    expect(counted).toHaveLength(1);
+  });
+
+  it('an INTERRUPTED session keeps its name — there it is a fact, not an echo', () => {
+    // "Continue …" names a workout the hero is not necessarily showing, so the name carries
+    // information rather than repeating it. The rule is about echoes, not about names.
+    const said = texts(mount(<HomeView {...props({ resumable: { workoutName: 'Legs A' } })} />)).join(' ');
+    expect(said).toContain(tg('home.continueWorkout', { name: bidi('Legs A') }));
   });
 });
 

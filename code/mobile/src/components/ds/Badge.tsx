@@ -20,9 +20,10 @@ interface Props {
 const BG: Record<Tone, string> = {
   neutral: color.fillSubtle,
   outline: 'transparent',
-  signal: signal.wash,
-  up: up.wash,
-  down: down.wash,
+  // No tinted grounds. A badge is a chip in a well; what it MEANS is carried by its ink.
+  signal: color.fillSubtle,
+  up: color.fillSubtle,
+  down: color.fillSubtle,
   solid: ink[0],
 };
 const FG: Record<Tone, string> = {

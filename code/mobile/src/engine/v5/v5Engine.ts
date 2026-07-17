@@ -445,6 +445,27 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
   });
 }
 
+/**
+ * WHAT ONE WORKOUT EARNED — the per-occurrence twin of `closedWeekChanges`, and the thing that
+ * lets the Complete screen stop lying.
+ *
+ * v5 decides at the END OF EVERY OCCURRENCE (register L7 — there is no weekly boundary). Every
+ * entry in the changeLog is already stamped with `at` = that occurrence's `startedAt`, so the
+ * decisions one workout produced are simply the entries carrying its timestamp. Nothing here is
+ * computed: the fold made these calls, this only reads them back.
+ *
+ * No netting, unlike the weekly mirror: a week may move one lift three times and must say so once,
+ * but a single occurrence decides a lift exactly once. Order is the order the fold reached them,
+ * which is the order the athlete trained them.
+ *
+ * Returns [] when the workout changed nothing — which is a real and common answer (hold, S-24), and
+ * the screen must say so rather than invent a change (R7 / S-16).
+ */
+export async function getSessionEarnedV5(sessionStartedAtMs: number): Promise<Explanation[]> {
+  const state = await load();
+  return (state.changeLog ?? []).filter((c) => c.at === sessionStartedAtMs).map(explainChange);
+}
+
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
 export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<WeeklyUpdate | null> {
   const state = await load();

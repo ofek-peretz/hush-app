@@ -15,7 +15,7 @@ import { fmtPace } from '@/platform/cardio/cardioTracker';
 import { durationMinutes } from '@/domain/duration';
 import { RouteTrace, MIN_ROUTE_POINTS } from '@/components/RouteTrace';
 import { textEnd } from '@/i18n/bidi';
-import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, up } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'CardioDetail'>;
@@ -95,10 +95,10 @@ export function CardioDetail({ navigation, route }: Props) {
                   <View key={s.km} style={styles.splitRow}>
                     <Text style={styles.splitKm}>{s.km}</Text>
                     <View style={styles.splitTrack}>
-                      <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? signal[0] : color.fillSubtleStrong }]} />
+                      <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? up[0] : color.fillSubtleStrong }]} />
                       {s.gait === 'walk' ? <Text style={styles.splitWalkTag}>{t('cardio.walkTag')}</Text> : null}
                     </View>
-                    <Text style={[styles.splitPace, isFast && { color: color.accentText, fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
+                    <Text style={[styles.splitPace, isFast && { color: up[0], fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
                   </View>
                 );
               })}

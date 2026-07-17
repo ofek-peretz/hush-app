@@ -51,6 +51,21 @@ export function ProgramCreated({ route }: Props) {
   const reduced = useReducedMotion();
 
   // Cosmetic, sequenced reveal (the real build runs on the CTA → completeOnboarding).
+  /**
+   * The build's pacing is PRESENTATIONAL — a clock, not a measurement. Assembly finishes in
+   * milliseconds; these marks give the athlete a beat to watch her answers become a programme.
+   *
+   * That is only honest while every step names work the engine REALLY does, in the order it really
+   * does it. It did not, until 2026-07-17: step 2 said "Designing your split" — there IS no split
+   * (`MEN_SPLITS`/`WOMEN_SPLITS` are fully deleted; "structure is an OUTPUT of volume, never a
+   * shelf") — and step 3 said "Distributing weekly volume", which is the step that comes FIRST.
+   * The real order is `programAssembly.ts:156`: `weeklyTargets(map)` → `assignRegionDays(targets,
+   * days)` → exercises → seeds. The copy now follows it.
+   *
+   * **Never attach a step to a fact.** A line here cannot claim a number, a count or an outcome —
+   * nothing on this screen is observing the engine, so a figure would be a claim Hush did not
+   * measure (R7). Names of real work, and nothing else.
+   */
   useEffect(() => {
     const marks = [700, 1400, 2100, 2800];
     const timers = marks.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
@@ -115,7 +130,7 @@ export function ProgramCreated({ route }: Props) {
                       {done ? (
                         <Icon name="check" size={18} color={up[0]} strokeWidth={2.4} />
                       ) : running ? (
-                        <ActivityIndicator size="small" color={signal[0]} />
+                        <ActivityIndicator size="small" color={color.textMuted} />
                       ) : (
                         <View style={styles.dot} />
                       )}
