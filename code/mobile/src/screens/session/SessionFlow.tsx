@@ -640,6 +640,13 @@ function ExecInstruction({ setup, toLoad, units }: { setup: LoadSetup; toLoad: b
   );
 }
 
+/** The stage's short inline reason for a load change — the measured clause, stated beside the
+ *  delta, so the reason arrives WITH the number instead of behind a "why" tap. The fuller note is
+ *  still one tap away (the row opens the sheet); this is the headline of it. */
+function reasonKey(r: 'increase' | 'decrease' | 'hold'): string {
+  return r === 'increase' ? 'workout.reasonUp' : r === 'decrease' ? 'workout.reasonDown' : 'workout.reasonHold';
+}
+
 /* ----------------------------------------------------------------- Active Set */
 function ActiveSet({
   units,
@@ -804,27 +811,34 @@ function ActiveSet({
               </View>
             ) : null}
 
-            {/* 4 · WHY / Δ — optional reasoning, demoted below the instruction so it never competes
-                  with it. The delta is shown when the load changed; the row taps through to "why". */}
-            {!isBodyweight ? (
+            {/* 4 · THE REASON, STATED — not a link to it (2026-07-17).
+                  "The number and the reason arrive together" (the brief). This row used to be the
+                  delta pill + "Why this load ›" — a generic label that made the athlete TAP to
+                  learn why the number in front of her had changed. So the most distinctive thing
+                  the product does (it explains its own decisions) was one tap away from the decision
+                  it explains. Now the row STATES it: the delta, then the measured clause that earned
+                  it ("cleared your range" / "matched your clean sets" / "in your range"). The full
+                  note is still a tap away for anyone who wants it — the delta pill is the door — but
+                  the reason itself no longer hides behind one.
+                  A held load with nothing changed says nothing: a load that stood still is not news
+                  every set (the up-next law's spirit, on the stage). */}
+            {!isBodyweight && reason ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={t('whyLoad.legend')}
+                accessibilityLabel={`${t(reasonKey(reason))} · ${t('whyLoad.legend')}`}
+                accessibilityHint={t('whyLoad.trigger')}
                 onPress={onWhy}
                 style={({ pressed }) => [styles.whyDeltaRow, pressed && styles.loadBtnPressed]}
               >
-                {reason ? (
-                  <LoadDelta
-                    direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
-                    value={deltaMag}
-                    unit={unitLabel(units)}
-                    holdLabel={t('whyLoad.verdictHold')}
-                    size="sm"
-                    pill
-                  />
-                ) : null}
-                <Text style={styles.whyText}>{t('whyLoad.trigger')}</Text>
-                <Icon name="chevronRight" size={13} color={stage.ink2} strokeWidth={2} />
+                <LoadDelta
+                  direction={reason === 'increase' ? 'up' : reason === 'decrease' ? 'down' : 'hold'}
+                  value={deltaMag}
+                  unit={unitLabel(units)}
+                  holdLabel={t('whyLoad.verdictHold')}
+                  size="sm"
+                  pill
+                />
+                <Text style={styles.whyText}>{t(reasonKey(reason))}</Text>
               </Pressable>
             ) : null}
           </>

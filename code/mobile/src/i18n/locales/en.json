@@ -244,7 +244,10 @@
     "actualWeightWith": "Actual weight · {{unit}}",
     "pauseAction": "Pause workout",
     "correctedUp": "You did {{reps}}. Your range tops out at {{edge}}, so I added weight.",
-    "correctedDown": "You did {{reps}}. Your range starts at {{edge}}, so I took weight off."
+    "correctedDown": "You did {{reps}}. Your range starts at {{edge}}, so I took weight off.",
+    "reasonUp": "You cleared your range",
+    "reasonDown": "Matched to your clean sets",
+    "reasonHold": "In your range"
   },
   "finishSheet": {
     "legend": "End workout",
@@ -282,13 +285,13 @@
     "verdictDown": "Matched",
     "verdictHold": "Held",
     "trigger": "Why this load",
-    "learning": "From next week I match the loads and the reps to you precisely.",
-    "lineUp": "Your last sessions cleared the top of the range here, so I moved the load up {{delta}} {{unit}}.",
-    "lineDown": "Your recent sets came in under range, so I matched the load to what you're lifting clean — and kept every set.",
-    "lineHold": "Right on target — strong, but I held the load until the signal is clean.",
-    "note": "I never move a load on a single session. I read the pattern, then act — your job is just to lift.",
+    "learning": "I set this from your body. Your first sets replace it.",
+    "lineUp": "You cleared the top of your range last time, so I added {{delta}} {{unit}}.",
+    "lineDown": "You came in under your range last time, so I matched the load to what you lifted clean — and kept every set.",
+    "lineHold": "You landed in your range. Clear the top of it and the load goes up.",
+    "note": "Every load here came from a set you actually lifted.",
     "got": "Got it",
-    "learningTitle": "A week of getting to know each other."
+    "learningTitle": "I don't know you yet."
   },
   "rest": {
     "ready": "Ready"

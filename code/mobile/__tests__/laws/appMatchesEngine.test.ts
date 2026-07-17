@@ -126,6 +126,39 @@ describe('the v4 world is gone from the copy, in both locales', () => {
   });
 
   /**
+   * THE SCREEN THAT EXPLAINS THE ENGINE MAY NOT EXPLAIN A DIFFERENT ENGINE.
+   *
+   * "Why this load" is the one surface whose entire job is the engine's reasoning, and on
+   * 2026-07-17 every sentence in it was v4's, in both locales:
+   *
+   *   · `note`     — "I never move a load on a single session. I read the pattern, then act."
+   *                  The exact OPPOSITE of v5. Loop 1 moves the next set's load from the set she
+   *                  just finished, mid-workout, and L7 decides at the end of EVERY workout.
+   *   · `lineUp`   — "Your last SESSIONS cleared the top of the range" — the engine reads the last
+   *                  OCCURRENCE, not a multi-session pattern.
+   *   · `learning` — "From NEXT WEEK I match the loads…" — there is no next week.
+   *   · `learningTitle` — "A WEEK of getting to know each other" — the first SET measures her.
+   *
+   * This is the worst class of the lot: an athlete who taps "why" is asking the product to explain
+   * itself, and it described a machine that was deleted.
+   */
+  it('the "why this load" sheet describes THIS engine — it decides per set and per workout', () => {
+    for (const loc of [en, he] as Tree[]) {
+      const flat = flatten(loc);
+      const why = (k: string) => (flat.find(([x]) => x === `whyLoad.${k}`) ?? ['', ''])[1];
+
+      // The engine acts on ONE session — that is L7's whole point. Any claim that it waits for a
+      // pattern, or refuses to act on a single session, is v4 talking.
+      for (const k of ['note', 'lineUp', 'lineDown', 'lineHold', 'learning', 'learningTitle']) {
+        expect({ key: `whyLoad.${k}`, copy: why(k) }).toEqual({
+          key: `whyLoad.${k}`,
+          copy: expect.not.stringMatching(/never move a load|read the pattern|next week|השבוע הבא|הדפוס|אימון אחד/i),
+        });
+      }
+    }
+  });
+
+  /**
    * A STEP MAY NOT BE NAMED AFTER A CONTROL IT NO LONGER HAS.
    *
    * The schedule step asks ONE thing: sessions per week. Experience was cut with v5 (the first set
