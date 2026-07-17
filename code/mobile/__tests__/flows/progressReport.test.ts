@@ -105,3 +105,25 @@ describe('quarterlyPeakProgress', () => {
   });
 });
 
+
+/**
+ * THE TRAJECTORY (`series`) — the running-max staircase a Sparkline draws (founder 2026-07-17).
+ *
+ * It is the running MAX, not the raw per-bucket peak, because the report's premise is that a peak
+ * never falls: the line only holds or rises, so it never draws a dip it does not mean. This is the
+ * data a UI trusts to render "Progress" as a shape, so its shape is pinned here.
+ */
+describe('the peak trajectory (series)', () => {
+  it('is the running max in bucket order, oldest → newest — a late dip never lowers it', () => {
+    const bench = sessionsFor('bench', [
+      [0, 60], [1, 61], [2, 62], [3, 63], [4, 64], [5, 65], [6, 66], [7, 67], [8, 68], [11, 50],
+    ]);
+    const [entry] = quarterlyPeakProgress(bench, NOW);
+    // Ten buckets; the week-11 value (50) holds the running max at 68, never drops it.
+    expect(entry.series).toEqual([60, 61, 62, 63, 64, 65, 66, 67, 68, 68]);
+    // The line's ends match the report's own anchor numbers — the sparkline cannot disagree with
+    // the initial/best labels printed beneath it.
+    expect(entry.series[0]).toBe(entry.initialPeakKg);
+    expect(entry.series[entry.series.length - 1]).toBe(entry.periodPeakKg);
+  });
+})

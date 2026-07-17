@@ -46,6 +46,15 @@ export interface QuarterlyProgressEntry {
   weeksTrained: number; // distinct buckets the exercise was performed in
   /** 'load' (default) = kg peaks; 'reps' = bodyweight movement tracked by best reps. */
   mode?: ProgressMode;
+  /**
+   * The trajectory — the athlete's best in each bucket she trained, oldest → newest, as a RUNNING
+   * MAX (the PR staircase). A sparkline reads this: "Progress" is a shape over time, and a row of
+   * numbers is not that shape. It is the running max, not the raw per-bucket peak, precisely because
+   * the report's whole premise is that a peak never falls (a bad Tuesday must not erase a year) — so
+   * the line only ever holds or rises, and never has to draw a dip it does not mean. One point when
+   * she has trained the lift once; the view then draws a dot, not a line.
+   */
+  series: number[];
 }
 
 /** exerciseId → (bucketIndex → peak value that bucket), collected separately for
@@ -100,6 +109,13 @@ function entriesFromPeaks(peaks: PeakMaps, minBuckets: number): QuarterlyProgres
       const initial = buckets.get(earliest)!;
       const current = buckets.get(latest)!;
       const peak = Math.max(...buckets.values());
+      // The trajectory: her best in each bucket she trained, oldest → newest, as a running max.
+      const sortedBuckets = [...buckets.keys()].sort((a, b) => a - b);
+      let running = -Infinity;
+      const series = sortedBuckets.map((b) => {
+        running = Math.max(running, buckets.get(b)!);
+        return running;
+      });
       out.push({
         exerciseId,
         initialPeakKg: initial,
@@ -107,6 +123,7 @@ function entriesFromPeaks(peaks: PeakMaps, minBuckets: number): QuarterlyProgres
         deltaKg: Math.round((peak - initial) * 10) / 10,
         currentKg: current,
         weeksTrained: buckets.size,
+        series,
         ...(mode === 'reps' ? { mode } : {}),
       });
     }

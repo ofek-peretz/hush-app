@@ -1,18 +1,17 @@
 /**
  * ProgressReportView — shared presentational report, 1:1 from the design
  * `ui_kits/app/Progress.jsx`. For each lift: the initial peak vs the best peak
- * reached since, the gain (LoadDelta), and a quiet gauge with the initial peak as
- * a reference mark. A header sums the total strength added.
+ * reached since, the gain (LoadDelta), and a SPARKLINE of the peak trajectory (founder 2026-07-17). A header sums the total strength added.
  *
  * Used by the **Progress** screen in both its windows: all-time (Home / Recovery) and the last
  * 12 weeks (the every-12-weeks notification, `window: 'quarter'`). They differ only in `legend`,
  * `title`, which entries they pass, and whether the milestones gallery is shown.
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
-import { Legend, Badge, ProgressMeter, LoadDelta } from '@/components/ds';
+import { Legend, Badge, LoadDelta, Sparkline } from '@/components/ds';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -22,6 +21,9 @@ import type { EarnedMilestone, NextMilestone } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import type { Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
+
+// The sparkline fills the row: the page's content width (screen minus the two gutters).
+const SPARK_W = Math.round(Dimensions.get('window').width - space.gutter * 2);
 
 interface Props {
   title: string;
@@ -118,7 +120,6 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                 const current = conv(e.currentKg);
                 const deltaDisp = conv(e.deltaKg);
                 const unit = isReps ? t('report.repsUnit') : unitLabel(units);
-                const ceiling = Math.round(best * 1.08) || best + 1;
                 // BACKED OFF (founder 2026-07-12): the athlete is currently working below
                 // their all-time best — a layoff, an injury, a deload. The peak still stands
                 // (it happened), so the meter still fills to it; the current load is drawn as
@@ -140,7 +141,14 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                         {e.deltaKg > 0 ? <LoadDelta value={deltaDisp} unit={unit} size="sm" /> : null}
                       </View>
                     </View>
-                    <ProgressMeter value={best} max={ceiling} mark={initial} tone="up" />
+                    {/* THE TRAJECTORY — the shape of the progress, not just its endpoints
+                        (founder 2026-07-17, from the reference: Progress is a chart). It replaces
+                        the single-bar gauge, whose job (where she started → where she is) the line
+                        does better by showing the path between them. The numbers live in the foot
+                        below, which is the sparkline's axis-in-words. */}
+                    <View style={styles.spark}>
+                      <Sparkline data={e.series} width={SPARK_W} height={40} />
+                    </View>
                     <View style={styles.liftFoot}>
                       <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit })}</Text>
                       <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit })}</Text>
@@ -250,6 +258,7 @@ const styles = StyleSheet.create({
   liftRight: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   liftBest: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   liftBestUnit: { fontFamily: font.mono, fontSize: textScale['2xs'], color: color.textMuted, textAlign: 'left' },
+  spark: { marginTop: 12, alignItems: 'flex-start' },
   liftFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
   footText: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary, textAlign: 'left' },
   footNow: { color: color.up },

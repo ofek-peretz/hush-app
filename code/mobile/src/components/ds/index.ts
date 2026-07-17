@@ -19,3 +19,4 @@ export { SegmentedControl } from './SegmentedControl';
 export { Switch } from './Switch';
 export { TextField } from './TextField';
 export { Display, TitleL, Title, BodyL, Body, Caption } from './Type';
+export { Sparkline } from './Sparkline';
