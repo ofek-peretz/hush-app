@@ -1000,11 +1000,19 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > the engine stops rotating it (`engineChanges.resolveEngineEnactments` drops a rotate/graduate on a
 > pinned lift, S-30/S-71). S-72 holds by construction: the engine writes `substitutes` directly and
 > never advances the athlete-swap counter, so only her own swap-backs earn a leave-it. (Graduation is
-> deliberately NOT resistible — S-71 is scoped to rotation.) **S-73** (deleting the edit screen + pin/swap buttons) is held until the
-> learning is device-validated, so the athlete never loses her only lever mid-flight. **Follow-up:**
-> the weekly mirror (S-45) narrates load moves from the change log, but NOT structural changes
-> (graduation / rotation / a learned swap write `substitutes`, not the change log) — narrating those
-> is a small S-45 follow-up.)*
+> deliberately NOT resistible — S-71 is scoped to rotation.) **S-73 IS ENACTED (2026-07-16, stage 6):**
+> the programme-edit swap + pin buttons are deleted and `ProgramDetail` is now a read-only plan
+> preview. *(This paragraph used to say S-73 was HELD until the learning was device-validated. The
+> burial shipped it anyway, and the code is the authority: `appStore`/`fixtureModel` carry no
+> `toggleSlotLock`/`setSlotLock`, and `ProgramDetail.tsx` edits nothing. Corrected 2026-07-17.)*
+> **The structural-narration follow-up is CLOSED (2026-07-16), not open.** This paragraph used to
+> end by noting that the weekly mirror (S-45) narrated load moves from the change log but NOT
+> structural changes (graduation / rotation / a learned swap write `substitutes`, not the change
+> log). It does now: `fixtureModel` calls `recordStructuralChangeV5` for every enacted change
+> (idempotent per week), and `engineChanges` maps a ROTATION onto the `swap` copy — which is why
+> there is no `explain.rotate` key and does not need to be one. Proven by
+> `v5_stage7_weekly_update.test.ts` ("a graduation and a learned/rotation swap are NAMED in the
+> mirror"). Line 1016's ✅ was right; this note was the stale half. Corrected 2026-07-17.)*
 
 | # | Stage | Owns | Status |
 |---|---|---|---|
@@ -1016,14 +1024,31 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 | **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) — incl. **structural** changes (graduate/rotate/learned-swap) named in the mirror (Rev 7 S-45, 2026-07-16) |
 | **6** | **The burial** — drop `db.engineV4`, delete `src/engine/v4/` | S-58 | ✅ **DONE (2026-07-16).** `src/engine/v4/` deleted in full; the legacy `!isV5` branches, the Lock System, the programme-edit swap + pin button (S-73), the 3-week periodic refresh, and the `engineV4` store are all gone. Shared infra re-homed first (`engine/catalog` / `weeklyView` / `loadMath`). No migration — the TestFlight cohort is recreated clean. tsc + 771 tests green + `expo export` clean |
 
-*(Status **2026-07-16 (Rev 7)**: gated on `profile.repBand` — and onboarding now SETS it, so **every
-new athlete is on v5**. Live for that cohort: map-driven `generateProgram`, per-muscle T,
-`sessionStore`, the weekly mirror, **Loop 3 volume-over-time (D)**, graduation/rotation reaching the
-programme (S-52/S-25.3), and the learned exercise selection (C, S-68…S-70). Existing users stay v4 (no
-migration, S-58). Still NOT wired: the learned-swap UI DELETION (S-73, deliberately held until the
-learning is device-validated), the "leave-it" pin earned against rotation (S-71/S-72, a refinement),
-and the v4 deletion (blocked on the founder recreating the testers, S-58). See the memory
-`engine-v5-open-tasks-2026-07-15`.)*
+*(Status **2026-07-17**: **there is no cohort any more — v5 is the only engine.** Live for everyone:
+map-driven `generateProgram`, per-muscle T, `sessionStore`, the weekly mirror, **Loop 3
+volume-over-time (D)**, graduation/rotation reaching the programme (S-52/S-25.3), and the learned
+exercise selection (C, S-68…S-70). **S-73 (the learned-swap UI deletion) IS wired** — it shipped with
+the burial (stage 6); `ProgramDetail` is a read-only preview and the pin/swap buttons are gone.
+
+**Corrected 2026-07-17 — this paragraph described a world that no longer exists.** It said the engine
+was "gated on `profile.repBand`" and that "existing users stay v4 (no migration)", and listed "the v4
+deletion" as still-not-wired. All three were made false by the burial the table above records: there
+is no `isV5` gate left in the source, no `src/engine/v4/`, and no `engineV4` store — so nobody can
+"stay v4", because there is no v4 to stay on. A **legacy profile does not break and does not need a
+migration**: it degrades by construction — `bandFor(undefined)` → the default 8–10 band ("the
+fallback for older profiles"), and `stanceOf(undefined, m)` → `normal`, so an athlete with no body
+map is simply trained full-body at normal stance until she opens the map — but **no real athlete is
+even in that state.**
+
+**S-58 IS CLOSED, AND IT IS NOT A LOOSE END (founder, 2026-07-17):** *"v4 is deleted. I told the old
+users it was deleted and that they start everything fresh on the new engine."* The testers were
+recreated clean and the athletes were **told**, so the "legacy profile" path above is a safety net
+with nobody standing on it — not a migration debt, not a cohort, not a risk to design around.
+**Nobody reading this file should spend another minute on v4.** The legacy fallbacks stay only
+because they are free and honest, never because someone is depending on them.
+
+**Nothing in Rev 7 is outstanding; the only item left is a nice-to-have V5Debug dev screen.**
+See the memory `engine-v5-open-tasks-2026-07-15`.)*
 
 **Integration is never deferred.** Stages 0 and 2 are phone+watch by definition. The engine is never
 allowed to be "done but unconnected" — **that is exactly how v4 ended up with four dead branches

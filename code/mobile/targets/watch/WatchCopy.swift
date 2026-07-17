@@ -53,6 +53,16 @@ enum WatchCopy {
   // Compact form for the side-by-side rest action row (fits the 41 mm case without scrolling).
   static let addShort = "+15s"
 
+  // THE SIGNATURE MOMENT (2026-07-17) — Loop 1 moved the next set's load, and this is Hush saying
+  // so, on the wrist. The phone's sentence (en.json `workout.correctedUp/Down`) also names the band
+  // edge the set crossed: "You did 12. Your range tops out at 10, so I added weight." The wrist
+  // says the shorter half, because the wire does not carry the band and because the clause that
+  // EARNS the change is the reps — the phone owns the fuller account. Both halves are measured
+  // fact; neither invents a reason (R7).
+  static func corrected(_ reps: Int, up: Bool) -> String {
+    "You did \(reps), so I \(up ? "added weight" : "took weight off")."
+  }
+
   // Set Confirmation
   static let recorded = "Recorded."
   static func setLogged(_ n: Int, _ m: Int) -> String { "Set \(n) of \(m) logged" }

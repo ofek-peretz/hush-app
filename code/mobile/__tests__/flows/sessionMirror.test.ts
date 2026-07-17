@@ -320,6 +320,20 @@ describe('the signature moment reaches the wrist', () => {
     expect(m.correction).toBeNull();
   });
 
+  it('says nothing on a TRANSITION rest — the correction belongs to the lift that earned it', () => {
+    // The athlete is already looking at the next LIFT here, and a correction is about the next SET
+    // of the lift she just finished. Announcing it over a different exercise's name would be Hush
+    // claiming a change it did not make to the thing on screen.
+    //
+    // Loop 1 makes the last set of an exercise a no-op (liveSession.ts — there is no next set to
+    // correct), so the store should never hand us one on a transition frame anyway. This pins the
+    // invariant in the projection rather than leaving both surfaces relying on a rule two modules
+    // away: SessionFlow guards it as `correction.exerciseId === nextExerciseId`, and the wrist has
+    // no exerciseId on the wire to guard with at all.
+    const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), correction: CORR });
+    expect(m.correction).toBeNull();
+  });
+
   it('survives the wire — an old watch drops the line, never the frame', () => {
     // The field is optional on purpose: the watch app installs asynchronously from the phone app, so
     // this phone will spend a while talking to the previous watch binary (see MirrorSummaryLift.done

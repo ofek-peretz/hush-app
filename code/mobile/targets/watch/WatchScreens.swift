@@ -39,6 +39,10 @@ enum Palette {
   static let ink0 = Color(red: 0.957, green: 0.953, blue: 0.941) // primary text
   static let ink1 = Color(red: 0.702, green: 0.694, blue: 0.678) // secondary
   static let ink2 = Color(red: 0.463, green: 0.455, blue: 0.443) // muted
+  /// The active thing on the stage — the mirror of the phone's `stage.lift`. The v5 READOUT law:
+  /// emphasis is DISTANCE FROM THE GROUND, never a hue. Pure white is the brightest value the
+  /// stage has, and it is reserved for the news (today: the corrected load).
+  static let lift = Color.white
   static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent — lines, rings, dots
   /// The ochre a letter sits on — and it is THE ochre (founder 2026-07-13, final): the deeper
   /// #9c6522 cut reached a device and was rejected ("bring back the familiar brown — this dark
@@ -273,6 +277,58 @@ struct LoadDelta: View {
   private func label(_ dir: Int) -> String {
     if dir == 0 { return "hold" }
     return (dir > 0 ? "+" : "−") + fmtW(abs(deltaKg)) + " kg"
+  }
+}
+
+/// THE SIGNATURE MOMENT, on the wrist (2026-07-17).
+///
+/// The set she just finished moved the next one. The brief calls this "the single most distinctive
+/// moment in the product" and requires that "the same change appears on the watch" — and the wrist
+/// is where it matters most, because mid-workout it is often the only thing she looks at. Until now
+/// the phone published the correction and the watch silently dropped it: the wrist's next set just
+/// showed a different number, with no account of why. That is the app doing something TO her.
+///
+/// It is the one thing licensed past THE UP-NEXT LAW ("the lift and the set number, NOTHING ELSE").
+/// That law bans a REMINDER — a load she saw thirty seconds ago and will see again in thirty more.
+/// A correction is not a reminder, it is news, and it is rare (S-13 caps it at 2 per exercise).
+///
+/// Form follows the phone's beat exactly (SessionFlow `corr`): the old load struck through and
+/// muted, the arrow, the new load in the brightest value the stage has — never sage/clay. Emphasis
+/// is distance from the ground, not hue (the v5 READOUT law), and the ▲/▼ wash belongs to
+/// `LoadDelta`, which answers a different question ("how does this set compare?").
+private struct CorrectionNote: View {
+  let c: WireCorrection
+  var body: some View {
+    let up = c.direction == "up"
+    VStack(spacing: 2) {
+      // FIXED sizes, no `Fit.s` — the rest screens size everything for the smallest case and let
+      // only the RING grow with the canvas (see `Fit`: "body text and legends stay fixed"). This
+      // block is a legend, and on a 49 mm Ultra it should buy the athlete more air, not more type.
+      HStack(alignment: .firstTextBaseline, spacing: 5) {
+        Text(fmtW(c.from))
+          .font(.system(size: 12, design: .monospaced)).monospacedDigit()
+          .strikethrough(true, color: Palette.ink2)
+          .foregroundStyle(Palette.ink2)
+        Text("→").font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text(fmtW(c.to))
+          .font(.system(size: 17, weight: .semibold, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(Palette.lift)
+        Text(WatchCopy.kg).font(.system(size: 9, design: .monospaced)).foregroundStyle(Palette.ink2)
+      }
+      // The reason, under the number it earned — never apart from it (phone parity).
+      Text(WatchCopy.corrected(c.reps, up: up))
+        .font(.system(size: 10))
+        .foregroundStyle(Palette.ink1)
+        .multilineTextAlignment(.center)
+    }
+    // A 40 mm case must never clip the news: the block scales down as one before it wraps badly.
+    // (`lineLimit` + `minimumScaleFactor` and nothing else — this file's proven idiom. Adding
+    // `fixedSize(vertical:)` on top fights the scale factor: the text claims its ideal height and
+    // overflows instead of shrinking, which on the 40 mm case is the clip we are avoiding.)
+    .lineLimit(2).minimumScaleFactor(0.7)
+    .padding(.horizontal, 8).padding(.vertical, 5)
+    .frame(maxWidth: .infinity)
+    .background(RoundedRectangle(cornerRadius: 8).fill(Palette.stage1))
   }
 }
 
@@ -1054,8 +1110,17 @@ struct InterRestScreen: View {
       // and on a wrist they must never look like one (founder 2026-07-13). The ring pays for the
       // gap out of its own diameter (84 → 76 + 6 of air), so the 40 mm height budget SHRINKS by
       // 2 pt rather than growing: nothing that fitted before can stop fitting now.
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 90, diameter: Fit.s(76))
-        .padding(.top, 6)
+      // When Loop 1 has news, the RING pays for it out of its own diameter (76 → 56) — the same
+      // trade this file already makes for the chrome gap. Two frames of a rest clock are worth
+      // less than the one sentence that explains why the next number moved; and the clock is not
+      // lost, only smaller. On every ordinary rest (the overwhelming majority — S-13 caps a
+      // correction at 2 per exercise) the ring is untouched at its full size.
+      RestRing(
+        endsAt: mirror.restEndsAt,
+        totalS: mirror.restTotalS ?? 90,
+        diameter: Fit.s(mirror.correction == nil ? 76 : 56)
+      )
+      .padding(.top, 6)
       Spacer(minLength: 3)
       // THE UP-NEXT LAW (founder 2026-07-12, phone and watch alike): between sets, the lift and
       // the set number. NOTHING ELSE. The load and the reps were on the stage thirty seconds ago
@@ -1072,6 +1137,13 @@ struct InterRestScreen: View {
         Text(mirror.nextSetLabel ?? mirror.setLabel)
           .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.7)
+      }
+      // THE SIGNATURE MOMENT — under the lift it belongs to, because they are the same fact: this
+      // is the lift, and the correction is about its next set. The phone puts it inside the up-next
+      // card for exactly that reason (one fact, one element). The mirror only ever carries a
+      // correction on an inter-set rest, so no lift-guard is needed here — the projection holds it.
+      if let c = mirror.correction {
+        CorrectionNote(c: c).padding(.top, 6)
       }
       Spacer(minLength: 3)
       RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)

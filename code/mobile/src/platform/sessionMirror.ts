@@ -532,9 +532,17 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     nextLoadSetup: isTransition && next ? next.loadSetup ?? null : null,
     // TO-LOAD only matters on the live set; the caller computes it from the logged sets.
     toLoad: phase === 'active_set' ? inp.toLoad ?? false : false,
-    // Only during REST. On the active set she is lifting and the load in front of her IS the
-    // corrected one — announcing it there would narrate the present, not the change.
-    correction: phase === 'active_set' ? null : inp.correction ?? null,
+    // ONLY on an inter-set rest. Two reasons, and both matter:
+    //  - On the ACTIVE SET she is lifting, and the load in front of her IS the corrected one —
+    //    announcing it there would narrate the present, not the change.
+    //  - On a TRANSITION rest the athlete is already looking at a different lift, and a correction
+    //    belongs to the exercise it was measured on (SessionFlow holds the same guard, as
+    //    `correction.exerciseId === nextExerciseId`). Loop 1 makes the last set of an exercise a
+    //    no-op (liveSession.ts — there is no next set to correct), so a live correction on a
+    //    transition frame should be impossible; this states that invariant instead of inheriting
+    //    it from a rule two modules away. The wrist must never say "I added weight" over the name
+    //    of a lift that earned nothing.
+    correction: phase === 'rest_inter' ? inp.correction ?? null : null,
   };
 }
 

@@ -370,7 +370,12 @@ final class LocalWorkoutEngine {
       nextSwapOptions: nil,
       loadSetup: nil,
       nextLoadSetup: nil,
-      toLoad: nil
+      toLoad: nil,
+      // No correction offline, and this is not a gap to fill later: Loop 1 lives on the phone, and
+      // there is no second engine on the wrist — that is the standing rule, not an omission. A
+      // standalone session executes the plan snapshot as prescribed; the phone re-decides the loads
+      // when it reconciles the record. Saying nothing here is the honest answer.
+      correction: nil
     )
   }
 

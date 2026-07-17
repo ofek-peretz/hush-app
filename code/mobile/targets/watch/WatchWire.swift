@@ -72,6 +72,25 @@ struct WireLoadSetup: Codable, Equatable {
   var fixedBar: Double?
 }
 
+/// THE SIGNATURE MOMENT, on the wire — mirror of sessionMirror.ts `SessionMirror.correction`.
+///
+/// Loop 1 moved the NEXT set's load because of the set she just finished. The brief calls this the
+/// product's single most distinctive moment and requires it on BOTH surfaces ("the same change
+/// appears on the watch") — which matters most here: mid-workout the wrist is often the only thing
+/// she looks at, and a load changing on it with no account of why is the app doing something TO her
+/// rather than WITH her.
+///
+/// `from`/`to` are kg (the mirror's unit; the wrist formats). Present ONLY on an inter-set rest
+/// frame that just earned a correction — the phone's projection holds that guard, so this struct
+/// never needs to ask which lift it belongs to.
+struct WireCorrection: Codable, Equatable {
+  var from: Double
+  var to: Double
+  var direction: String // "up" | "down"
+  /// The reps she just did — the measured fact that moved the load, and the whole reason.
+  var reps: Int
+}
+
 /// Read-only projection of the live session (subset rendered on the watch). The
 /// fields added for the stage design are optional so a version-skewed frame still
 /// decodes; the model/views coalesce them.
@@ -118,6 +137,10 @@ struct WireMirror: Codable, Equatable {
   var nextLoadSetup: WireLoadSetup?
   /// TO-LOAD (set the equipment) vs LOADED (already set) for the current set.
   var toLoad: Bool?
+  /// The correction Loop 1 just made — see WireCorrection. Optional like every post-v1 field: a
+  /// phone one build behind sends no key, and the rest frame simply lands without the line (the
+  /// next load it shows is still the correct, corrected one).
+  var correction: WireCorrection?
 }
 
 /// One pickable workout in the Start screen's "Choose workout" overlay.

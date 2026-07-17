@@ -125,6 +125,34 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
     }
   });
 
+  /**
+   * THE OTHER DIRECTION — and the hole that cost us the signature moment.
+   *
+   * The rule above is one-directional on purpose: the watch renders a SUBSET, so Swift declaring
+   * fewer fields is legal. But "legal" and "intended" are not the same thing, and nothing here
+   * could tell them apart. On 2026-07-17 the phone gained `correction` — Loop 1 moving the next
+   * set's load, which the brief calls the single most distinctive moment in the product and
+   * explicitly requires on BOTH surfaces. `WireMirror` never gained the field. The phone published
+   * it on every rest; the wrist's decoder didn't ask for it; every test on this machine passed. The
+   * load on her wrist just changed, with no account of why — exactly the silent drop this file was
+   * written to prevent, arriving through the one door it left open.
+   *
+   * So the omission has to be a DECISION. Every field the phone sends is either decoded by the
+   * watch or named below with the reason it isn't. Adding a mirror field now forces the question
+   * "does the wrist need this?" to be answered in writing, instead of by default, in silence.
+   */
+  it('every field the phone sends is either decoded by the watch or deliberately declined', () => {
+    // Fields the wrist knowingly does not render. EMPTY, and that is the honest state today: the
+    // watch decodes all 35. Adding one here is a real decision — write the reason, not just the name.
+    const DELIBERATELY_NOT_ON_THE_WRIST: Record<string, string> = {};
+
+    const decoded = new Set(swiftFields('WireMirror').map((f) => f.name));
+    const undecoded = [...everyKeyThePhoneSends()].filter(
+      (k) => !decoded.has(k) && !(k in DELIBERATELY_NOT_ON_THE_WRIST),
+    );
+    expect({ silentlyDroppedByTheWatch: undecoded }).toEqual({ silentlyDroppedByTheWatch: [] });
+  });
+
   it('the summary the wrist reads back is complete — including the lift-by-lift list', () => {
     const mirror = widestMirror();
     expect(mirror.summary).not.toBeNull();
@@ -171,6 +199,33 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
     // …and a workout that crossed nothing sends an explicit null, which Swift's `decodeIfPresent`
     // reads as "no mark" — never a half-decoded struct.
     expect(widestMirror().summary!.milestone).toBeNull();
+  });
+
+  /**
+   * THE SIGNATURE MOMENT, field by field — held to the same standard as the mark, and for the same
+   * reason: it is a nested struct that only appears on the rare frame that earned it, so a drifted
+   * key here is invisible until an athlete is mid-rest in a gym. `reps` is the load-bearing one —
+   * it is the entire measured reason ("You did 12, so I added weight"), and if the wrist decodes
+   * nothing there, Hush either says nothing or states a reason it cannot back.
+   */
+  it('the correction the wrist announces is the correction the phone made', () => {
+    const correction = { from: 60, to: 62.5, direction: 'up' as const, reps: 12 };
+    const m = frame({
+      machine: { phase: 'REST_INTER', setIndex: 1, paused: false },
+      restStartedAtMs: NOW - 30_000,
+      correction,
+    });
+    const sent = JSON.parse(JSON.stringify(m.correction)) as Record<string, unknown>;
+    for (const f of swiftFields('WireCorrection')) {
+      expect({ field: f.name, sent: Object.prototype.hasOwnProperty.call(sent, f.name) }).toEqual({
+        field: f.name,
+        sent: true,
+      });
+    }
+    expect(sent).toEqual(correction);
+    // A rest that earned nothing sends an explicit null — Swift's `decodeIfPresent` reads that as
+    // "no news", never a half-decoded struct announcing a change that never happened.
+    expect(restFrame().correction).toBeNull();
   });
 
   it('the load setup — the plates the wrist tells the athlete to hang — survives the crossing', () => {
