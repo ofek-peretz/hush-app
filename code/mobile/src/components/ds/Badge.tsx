@@ -32,7 +32,7 @@ const FG: Record<Tone, string> = {
   signal: color.accentText,
   up: up[0],
   down: down[0],
-  solid: paper[0],
+  solid: paper.lift, // white on the ink badge — the VALUE by name, never a ladder position
 };
 
 export function Badge({ tone = 'neutral', legend = false, children, style }: Props) {

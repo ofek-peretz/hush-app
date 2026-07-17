@@ -44,7 +44,9 @@ export function ListRow({
     lead = (
       <View style={[styles.idx, done && styles.idxDone]}>
         {done ? (
-          <Icon name="check" size={15} color={paper[0]} strokeWidth={2.4} />
+          // White on the sage disc. `paper[0]` dropped this to 5.00:1 when the ladder inverted;
+          // `paper.lift` is what it always meant, and restores the 6.02:1 it shipped with.
+          <Icon name="check" size={15} color={paper.lift} strokeWidth={2.4} />
         ) : (
           <Text style={styles.idxText}>{index}</Text>
         )}

@@ -29,9 +29,18 @@ import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, ink, paper, press } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, ink, press } from '@/design/tokens';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
+
+/**
+ * Apple's white — the mark and label on the dark Sign in with Apple button (Apple HIG).
+ *
+ * A LITERAL, deliberately, like Google's `#ffffff` below it: this is Apple's surface, not Hush's,
+ * so it must not move when Hush's paper ladder moves. It once read `paper[0]`, and when the READOUT
+ * redesign inverted that ladder (0: lightest → 0: the ground) Apple's mark silently went grey.
+ */
+const APPLE_WHITE = '#ffffff';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Authentication'>;
 
@@ -130,7 +139,7 @@ export function Authentication({ navigation }: Props) {
           label={t('ob.apple')}
           onPress={() => onSignIn('apple')}
           disabled={busy}
-          logo={<AppleLogo color={paper[0]} />}
+          logo={<AppleLogo color={APPLE_WHITE} />}
           style={styles.apple}
           pressedStyle={styles.applePressed}
           labelStyle={styles.appleLabel}
@@ -266,7 +275,20 @@ const styles = StyleSheet.create({
   providerLabel: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), textAlign: 'left' },
   apple: { backgroundColor: ink[0] },
   applePressed: { backgroundColor: '#000000' },
-  appleLabel: { color: paper[0] },
+  /*
+   * APPLE'S WHITE, NOT HUSH'S — a brand literal on purpose, exactly like Google's below.
+   *
+   * This read `paper[0]` until 2026-07-17, which was correct only by luck: `paper[0]` was then
+   * `#fbfaf8` (95.7% — white with a hint). The READOUT redesign INVERTED the ladder — `0` stopped
+   * meaning "the lightest value" and started meaning "the ground" (`#e8e5e0`, 78.6%) — and this
+   * screen was never part of that pass, so Apple's mark and label quietly turned warm grey on
+   * near-black, sitting directly above a pure-white Google button. On the app's front door.
+   *
+   * The lesson is the binding, not the hex: Apple's button is Apple's surface, and its white must
+   * never move when Hush's paper moves. A Hush token here is a promise this screen cannot keep —
+   * Sign in with Apple's dark variant requires a WHITE mark and label (Apple HIG), full stop.
+   */
+  appleLabel: { color: APPLE_WHITE },
   google: { backgroundColor: '#ffffff', borderColor: color.borderControl },
   googlePressed: { backgroundColor: color.fillSubtle },
   googleLabel: { color: ink[0] },

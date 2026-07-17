@@ -58,7 +58,12 @@ const styles = StyleSheet.create({
     width: KNOB,
     height: KNOB,
     borderRadius: KNOB / 2,
-    backgroundColor: paper[0],
+    // The knob is the thing that MOVES — the active element — so it is `lift`, the top of the
+    // ladder. It read `paper[0]`, which meant "white with a hint" (#fbfaf8) until the READOUT
+    // redesign made `0` the GROUND (#e8e5e0): the knob then sat at 1.23:1 against its own off-track
+    // (`fillSubtleStrong` = paper[3]), carried entirely by its shadow. `lift` is both the correct
+    // rung — emphasis is distance from the ground — and the legible one.
+    backgroundColor: paper.lift,
     shadowColor: 'rgb(26,21,18)',
     shadowOpacity: 0.18,
     shadowRadius: 2,

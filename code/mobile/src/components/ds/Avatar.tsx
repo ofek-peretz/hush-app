@@ -48,5 +48,7 @@ const styles = StyleSheet.create({
   },
   solid: { backgroundColor: ink[0], borderColor: ink[0] },
   text: { fontFamily: font.sansMedium, color: color.textSecondary, textTransform: 'uppercase', textAlign: 'left' },
-  textSolid: { color: paper[0] },
+  // White on the ink chip — `paper.lift`, by NAME. It read `paper[0]`, a ladder POSITION that used
+  // to hold "white with a hint" and now holds the ground; see Switch's knob for the same story.
+  textSolid: { color: paper.lift },
 });

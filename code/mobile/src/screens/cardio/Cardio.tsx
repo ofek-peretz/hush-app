@@ -431,8 +431,21 @@ function CardioSelect(props: {
             // The selected segment is filled ochre now (SegmentedControl, founder 2026-07-13), so
             // the chosen gait's glyph goes cream with its label — an ink glyph would be the one
             // dark mark left sitting on the brown.
-            { value: 'run', label: t('cardio.run'), icon: <Icon name="runner" size={16} color={props.gait === 'run' ? paper[0] : color.textSecondary} strokeWidth={2} /> },
-            { value: 'walk', label: t('cardio.walk'), icon: <Icon name="wind" size={16} color={props.gait === 'walk' ? paper[0] : color.textSecondary} strokeWidth={2} /> },
+            /*
+             * The icon follows the LABEL's rule (SegmentedControl `labelActive`/`label`), because
+             * it sits on the same segment and is the same kind of mark.
+             *
+             * It read `paper[0]` when selected, which was right only while the active segment was an
+             * OCHRE fill — a near-white mark on brown. The READOUT redesign made the active segment
+             * `color.lift` (WHITE) and inverted the ladder under `paper[0]` (#fbfaf8 → #e8e5e0), so
+             * the selected icon became warm grey on white: ~1.17:1, i.e. GONE. The label survived
+             * only because it asks for `color.textPrimary` by name instead of a ladder position.
+             *
+             * The component could not fix this itself — the icon is injected by the caller, so it
+             * sat outside the redesign that changed the surface underneath it.
+             */
+            { value: 'run', label: t('cardio.run'), icon: <Icon name="runner" size={16} color={props.gait === 'run' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
+            { value: 'walk', label: t('cardio.walk'), icon: <Icon name="wind" size={16} color={props.gait === 'walk' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
           ]}
         />
 
