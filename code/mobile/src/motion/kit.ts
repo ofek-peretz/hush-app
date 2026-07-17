@@ -18,12 +18,30 @@ export function plateGhost(bar: Vec2, r = PLATE_R): Primitive[] {
   ];
 }
 
-/** The canonical range statement: a dashed vertical path with a tick at each endpoint. */
+/**
+ * The canonical range statement: a dashed path with a tick at each endpoint.
+ *
+ * ── Why this is ink and not ochre (founder, 2026-07-17: "the ochre in the videos — take it off")
+ * The range statement was the clip's one coloured mark, budgeted at ~2 % of the frame (MOTION_FORM
+ * _STANDARD §3.1). The READOUT law retired the accent hue from the product: the ochre survives as
+ * the HushMark seal and nothing else. It applies here too — a clip is the product speaking.
+ *
+ * The ochre was here because every ink value was already spoken for: near limbs `ink0`, trunk
+ * `ink1`, far limbs `ink4` (the duotone), equipment `ink3`, the bar `ink0`. With the ladder full,
+ * hue was the only axis left — the same bandage the SegmentedControl's ochre fill turned out to be.
+ *
+ * What states it instead is what states a dimension in any technical drawing: the SAME pencil, a
+ * different LINE TYPE. Nothing else in the frame is dashed, so the dash alone reads "annotation,
+ * not limb" — at a 19 % duty cycle it cannot compete with a solid limb even in the same ink. And
+ * `ink0` is the bar's own ink, which is the point: §3.1 requires the bar dot to "visibly touch each
+ * tick every rep", and a dot landing on a mark of its own kind reads as contact, not coincidence.
+ * One instrument, one pencil.
+ */
 export function barPathTicks(x: number, y0: number, y1: number, tick = 4.5): Primitive[] {
   return [
-    { kind: 'dash', a: { x, y: y0 }, b: { x, y: y1 }, w: 2, color: 'signal', dash: [1.5, 6.5], opacity: 0.9 },
-    { kind: 'line', a: { x: x - tick, y: y0 }, b: { x: x + tick, y: y0 }, w: 2, color: 'signal', cap: 'round' },
-    { kind: 'line', a: { x: x - tick, y: y1 }, b: { x: x + tick, y: y1 }, w: 2, color: 'signal', cap: 'round' },
+    { kind: 'dash', a: { x, y: y0 }, b: { x, y: y1 }, w: 2, color: 'ink0', dash: [1.5, 6.5], opacity: 0.9 },
+    { kind: 'line', a: { x: x - tick, y: y0 }, b: { x: x + tick, y: y0 }, w: 2, color: 'ink0', cap: 'round' },
+    { kind: 'line', a: { x: x - tick, y: y1 }, b: { x: x + tick, y: y1 }, w: 2, color: 'ink0', cap: 'round' },
   ];
 }
 
@@ -37,10 +55,10 @@ export function linePathTicks(a: Vec2, b: Vec2, tick = 4.5): Primitive[] {
     a: { x: p.x - n.x * tick, y: p.y - n.y * tick },
     b: { x: p.x + n.x * tick, y: p.y + n.y * tick },
     w: 2,
-    color: 'signal',
+    color: 'ink0',
     cap: 'round',
   });
-  return [{ kind: 'dash', a, b, w: 2, color: 'signal', dash: [1.5, 6.5], opacity: 0.9 }, t(a), t(b)];
+  return [{ kind: 'dash', a, b, w: 2, color: 'ink0', dash: [1.5, 6.5], opacity: 0.9 }, t(a), t(b)];
 }
 
 /** A soft grounding shadow under the support — mass meets the floor. */

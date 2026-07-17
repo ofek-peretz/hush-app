@@ -32,7 +32,11 @@ export type ColorToken =
   | 'ink0' | 'ink1' | 'ink2' | 'ink3' | 'ink4'
   | 'paper0' | 'paper1' | 'paper2' | 'paper3'
   | 'line0' | 'line1' | 'line2'
-  | 'signal' | 'signalInk' | 'up';
+  // NO OCHRE. `signal`/`signalInk` were removed 2026-07-17 (founder: "the ochre in the videos —
+  // take it off"), and they are gone from the TYPE rather than merely unused, so a future clip
+  // cannot reach for them: the accent hue is now a compile error here, not a convention. The range
+  // statement they used to draw is ink + a dash — see `kit.barPathTicks` for the full reasoning.
+  | 'up';
 
 /** One cubic-bezier segment of a `path` primitive. */
 export interface CubicSeg {

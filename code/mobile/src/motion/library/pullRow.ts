@@ -237,9 +237,9 @@ function seatedRow(p: SeatedRowParams): Rig {
     const attach: Vec2 = p.grip === 'v' ? { x: hand.x + 6, y: hand.y } : hand;
     const back: Primitive[] = [
       ...p.station(attach, startX - hand.x), // 1:1 cable — the plate rises as far as the handle travels
-      { kind: 'dash', a: { x: startX, y: p.handleY }, b: { x: p.endX, y: p.handleY }, w: 2, color: 'signal', dash: [1.5, 6.5], opacity: 0.9 },
-      { kind: 'line', a: { x: startX, y: p.handleY - 4.5 }, b: { x: startX, y: p.handleY + 4.5 }, w: 2, color: 'signal', cap: 'round' },
-      { kind: 'line', a: { x: p.endX, y: p.handleY - 4.5 }, b: { x: p.endX, y: p.handleY + 4.5 }, w: 2, color: 'signal', cap: 'round' },
+      { kind: 'dash', a: { x: startX, y: p.handleY }, b: { x: p.endX, y: p.handleY }, w: 2, color: 'ink0', dash: [1.5, 6.5], opacity: 0.9 },
+      { kind: 'line', a: { x: startX, y: p.handleY - 4.5 }, b: { x: startX, y: p.handleY + 4.5 }, w: 2, color: 'ink0', cap: 'round' },
+      { kind: 'line', a: { x: p.endX, y: p.handleY - 4.5 }, b: { x: p.endX, y: p.handleY + 4.5 }, w: 2, color: 'ink0', cap: 'round' },
     ];
     const front: Primitive[] =
       p.grip === 'v'

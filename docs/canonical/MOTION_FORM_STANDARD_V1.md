@@ -139,12 +139,26 @@ genuinely useful for body-position comprehension, and its capsule weight keeps i
 Hush rather than embedded media. Its one weakness for the new goal: thicker limbs make exact
 endpoints slightly softer to read.
 
-**Amendment — range ticks:** the ochre dashed bar path gains two short perpendicular ticks at
+**Amendment — range ticks:** the dashed bar path gains two short perpendicular ticks at
 the canonical endpoints. The bar dot visibly touches each tick every rep; the 400 ms endpoint
 hold happens exactly on the tick. Range of motion stops being something the athlete infers and
 becomes something the drawing *states* — pure instrument language, borrowed from the Technical
-direction's vocabulary, still within the ~2 % ochre budget. No joint nodes, no other Technical
-elements migrate.
+direction's vocabulary. No joint nodes, no other Technical elements migrate.
+
+> **Amendment 8 (founder, 2026-07-17) — THE OCHRE IS OFF THE CLIPS. The "~2 % ochre budget" this
+> paragraph used to grant is REVOKED; the budget is now zero.** The READOUT law retired the accent
+> hue from the product (the ochre survives as the HushMark seal alone), and a clip is the product
+> speaking. `signal`/`signalInk` are deleted from `motion/types.ts` as well as the palette, so an
+> accent hue in a clip is a compile error rather than a matter of taste.
+>
+> **What states the range instead:** the same ink as the bar (`ink0`), and the dash. The ochre was
+> only ever here because every ink value was already spoken for — near limbs `ink0`, trunk `ink1`,
+> far limbs `ink4`, equipment `ink3` — so with the ladder full, hue was the one axis left. That is
+> the same bandage the app's SegmentedControl ochre turned out to be. A technical drawing states a
+> dimension in the SAME pencil and distinguishes it by LINE TYPE; nothing else in the frame is
+> dashed, and at a 19 % duty cycle the dash cannot compete with a solid limb. Drawing the ticks in
+> the bar's own ink is what makes "the dot visibly touches each tick" read as contact rather than
+> coincidence: one instrument, one pencil.
 
 Emphasis mechanism at contact: **the hold is the emphasis.** No flashes, no pulses — motion
 confirms, never performs.
