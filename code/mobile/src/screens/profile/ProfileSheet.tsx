@@ -1,14 +1,13 @@
 /**
- * Settings / Profile (§4.28) — rebuilt 1:1 to the Claude Design "Design System"
- * Settings (ui_kits/app/Settings.jsx). Identity (avatar + name) with Membership
- * directly beneath it (who you are + your plan, one zone — the Apple Settings
- * idiom), then grouped rows: Preferences (Units, Language — SegmentedControls),
- * Health (Apple Health — Switch), Account (Body data, Experience). Sign out
- * (secondary) + Delete account (danger) at the bottom; the version line reads
- * the REAL app version + build from the binary (never a hand-maintained string).
+ * Settings — a TAB now (founder 2026-07-17), not a modal. Identity (avatar + name) with Membership
+ * directly beneath it (who you are + your plan, one zone — the Apple Settings idiom), then grouped
+ * rows: Preferences (Units, Language), Health (Apple Health), Account (Body data, Body map). Sign
+ * out + Delete account at the bottom; the version reads the REAL version from the binary, under the
+ * product's own thesis — "Built on facts."
  *
- * Every action is the real one: units/language switch instantly, Health opens the
- * system permission flow, Sign Out / Delete run behind a native confirm.
+ * There is NO Experience row (v5 deleted the concept — the first set measures her). Every action is
+ * the real one: units/language switch instantly, Health opens the system permission flow, Sign Out /
+ * Delete run behind a native confirm.
  */
 import React, { useState, useMemo } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
@@ -300,7 +299,12 @@ export function ProfileSheet({ navigation }: Props) {
             <Text style={[styles.exitLabel, styles.exitDanger]}>{t('profile.deleteAccount')}</Text>
           </Pressable>
         </View>
+        {/* The version, and the thesis. "Built on facts" is not a slogan here — it is the literal
+            claim the whole product stakes (R7: it never states a reason it did not measure), so the
+            settings floor is exactly where it belongs, quietly. The version stays mono (Latin); the
+            tagline is its own sans line, because in Hebrew it is Hebrew and mono has no glyphs. */}
         <Text style={styles.version}>{versionLabel()}</Text>
+        <Text style={styles.tagline}>{t('profile.tagline')}</Text>
       </ScrollView>
 
       {overlay === 'signout' ? (
@@ -429,6 +433,7 @@ const styles = StyleSheet.create({
   exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
   exitDanger: { color: down[0] },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
+  tagline: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 4, letterSpacing: 0.2 },
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },
   confirmActions: { gap: 10 },
 });

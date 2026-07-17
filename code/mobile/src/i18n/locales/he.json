@@ -584,7 +584,8 @@
     "bodyMap": "מפת גוף",
     "mapAllOn": "הכל דלוק",
     "mapLeading": "מוביל עם {{muscles}}",
-    "mapOff": "{{n}} כבויים"
+    "mapOff": "{{n}} כבויים",
+    "tagline": "בנוי על עובדות."
   },
   "settings": {
     "units": "יחידות",

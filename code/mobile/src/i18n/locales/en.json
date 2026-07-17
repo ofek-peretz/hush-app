@@ -561,7 +561,8 @@
     "bodyMap": "Body map",
     "mapAllOn": "Everything on",
     "mapLeading": "Leading with {{muscles}}",
-    "mapOff": "{{n}} off"
+    "mapOff": "{{n}} off",
+    "tagline": "Built on facts."
   },
   "settings": {
     "units": "Units",
