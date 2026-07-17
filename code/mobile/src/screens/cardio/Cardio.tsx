@@ -656,7 +656,9 @@ const styles = StyleSheet.create({
   countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0, textAlign: 'left' },
   // The word at the end of the count — sans (it is a word), ochre (it is the moment).
   // The count-in's GO. It was the ochre; on the stage the loudest thing is the whitest.
-  countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: stageC.lift },
+  // A MODIFIER composed onto `countNum` (which declares the logical start); it dresses the final
+  // "GO" of the count-in. It never renders alone.
+  countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: stageC.lift }, // rtl-ok
 
   // active hero
   activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },

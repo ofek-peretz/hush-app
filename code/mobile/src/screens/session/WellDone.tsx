@@ -565,7 +565,9 @@ const styles = StyleSheet.create({
   readCheckDone: { backgroundColor: up.stage, borderColor: up.stage },
   readName: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, textAlign: 'left' },
   readBest: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
-  readBestWord: { fontFamily: font.sans },
+  // A MODIFIER composed onto `readBest` (which declares the logical start); it swaps the face when
+  // the best set is bodyweight, i.e. a word rather than a number. Never renders alone.
+  readBestWord: { fontFamily: font.sans }, // rtl-ok
   // The hint itself is a target too — the whole body Pressable skips, but the label
   // must honor its own promise (44pt).
   tapSkipHit: { minHeight: 44, justifyContent: 'center', paddingBottom: 10 },
@@ -581,7 +583,9 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   topName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), color: stage.ink0, textAlign: 'left' },
   topValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
-  topValueWord: { fontFamily: font.sansSemibold, fontSize: textScale.md },
+  // A MODIFIER composed onto `topValue` (which declares the logical start); same rule as
+  // `readBestWord`: it only swaps the face when the value is a word. Never renders alone.
+  topValueWord: { fontFamily: font.sansSemibold, fontSize: textScale.md }, // rtl-ok
   topUnit: { fontFamily: font.mono, fontSize: 12, color: stage.ink2, textAlign: 'left' },
   topTimes: { color: stage.ink2 },
 

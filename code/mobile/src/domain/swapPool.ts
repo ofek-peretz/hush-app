@@ -29,6 +29,31 @@ import {
   type Exercise,
 } from '@/data/exercises';
 
+/**
+ * WHEN the swap verb is offered: before the first set of a lift, and never after.
+ *
+ * The module header tells the story of four pools disagreeing about WHAT a legal swap is. This is
+ * the same law one axis over — WHEN — and it drifted the same way, for the same reason: two
+ * surfaces each hard-coded their own answer. The wrist gated on `exerciseSetIndex === 0` (the first
+ * set of any lift); the phone's stage gated on `exNo === 1 && setN === 1` (the first set of the
+ * FIRST lift only). So an athlete standing at lift 4 saw the swap glyph on her watch and nothing on
+ * her phone, in the same instant, for the same lift.
+ *
+ * The phone's narrower rule was survivable only while the programme-edit screen existed — a lift you
+ * wanted rid of could be handled by planning. **S-73 deleted that screen**, and the brief names the
+ * consequence: the in-workout swap is now the athlete's main exercise-selection lever, and the stage
+ * is the ONLY place the verb is taught.
+ *
+ * Why set 0 and not later: a swap belongs BEFORE the work. Once a set is logged against a lift, the
+ * athlete has trained it — replacing it mid-lift would strand those sets on an exercise that is no
+ * longer in the session.
+ *
+ * Both surfaces ask THIS function. Not "both surfaces happen to agree" — one rule, one place.
+ */
+export function isSwapMoment(setIndexInExercise: number): boolean {
+  return setIndexInExercise === 0;
+}
+
 /** The athlete's standing preferences for a lift, if they have set any. */
 export interface SwapPrefs {
   /** "Whenever you give me X, give me Y instead." */

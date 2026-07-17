@@ -9,7 +9,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, muscleOf, type Exercise } from '@/data/exercises';
-import { swapCandidates } from '@/domain/swapPool';
+import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import { liveActivity } from '@/platform/liveActivity';
@@ -397,8 +397,11 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
   const sessionExerciseIds = [...new Set(plan.map((st) => st.exerciseId))];
   return plan.map((st) => {
     const ex = exerciseById(st.exerciseId);
+    // WHEN the verb is offered is a law, not a local opinion — `isSwapMoment` owns it, and the
+    // phone's stage asks the same function. This used to be a bare `=== 0` here and a different
+    // hard-coded rule on the stage, which is exactly how the two surfaces came to disagree.
     const swapOptions =
-      ex && st.exerciseSetIndex === 0
+      ex && isSwapMoment(st.exerciseSetIndex)
         ? swapCandidates(ex.id, { sessionExerciseIds })
             .slice(0, 2)
             .map((e) => ({ id: e.id, name: e.name }))

@@ -62,7 +62,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pill: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 4 },
   text: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], textAlign: 'left' },
-  word: { fontFamily: font.sansMedium },
+  // A MODIFIER, never a style on its own: composed onto `text` (which declares the logical start)
+  // to swap the face when the value is a word. Alignment comes from the base.
+  word: { fontFamily: font.sansMedium }, // rtl-ok
   tri: { width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   hold: { width: 7, height: 2, borderRadius: 1 },
 });

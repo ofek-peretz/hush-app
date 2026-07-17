@@ -16,7 +16,10 @@ import {
   swapScore,
   bestSwap,
   defaultBackup,
+  isSwapMoment,
 } from '@/domain/swapPool';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { EXERCISES, exerciseById, exercisesForMuscle, patternFamily, type Exercise } from '@/data/exercises';
 
 /** The offered list, by name, for a slot with nothing else in the session. */
@@ -160,5 +163,58 @@ describe('the score encodes the law, in order', () => {
   it('an identical movement on identical equipment scores near zero', () => {
     expect(swapScore(ex('leg_curl'), ex('seated_leg_curl'))).toBeLessThan(10);
     expect(swapScore(ex('bb_bench_press'), ex('db_bench_press'))).toBe(0);
+  });
+});
+
+/**
+ * WHEN the verb is offered — the same law one axis over, and it drifted the same way.
+ *
+ * The pool above fixed four surfaces disagreeing about WHAT a legal swap is. Nobody noticed the two
+ * live surfaces also disagreed about WHEN to offer one: the wrist gated on the first set of ANY
+ * lift, the phone's stage on the first set of the FIRST lift only. Same instant, same lift, two
+ * answers — the glyph on her watch, nothing on her phone.
+ *
+ * The phone's rule was survivable only while the programme-edit screen existed. S-73 deleted it, so
+ * the stage is now the only place the verb is taught (the brief says so in as many words), and
+ * teaching it once per session and then hiding it is not teaching it.
+ */
+describe('when the swap verb is offered (isSwapMoment)', () => {
+  it('is offered before the first set of a lift, and never after one is logged', () => {
+    // A swap belongs BEFORE the work: once a set is logged against the lift she has trained it, and
+    // replacing it would strand those sets on an exercise no longer in the session.
+    expect(isSwapMoment(0)).toBe(true);
+    expect(isSwapMoment(1)).toBe(false);
+    expect(isSwapMoment(3)).toBe(false);
+  });
+
+  it('does not care WHICH lift it is — the 4th lift is as swappable as the 1st', () => {
+    // The regression itself: the rule is about the set index within the lift, never the lift's
+    // ordinal in the session. There is no session-position argument to pass, by design.
+    expect(isSwapMoment.length).toBe(1);
+  });
+
+  it('BOTH surfaces ask this function — not two rules that happen to agree', () => {
+    // The bug was two hard-coded gates. A gate is cheap to re-hard-code, and the next one would be
+    // just as invisible: it fails no typecheck and no render test — it is simply a button that is
+    // not there, on the surface the athlete is not currently looking at.
+    const read = (p: string) => readFileSync(join(__dirname, '../../src', p), 'utf8');
+    const stage = read('screens/session/SessionFlow.tsx');
+    const mirror = read('state/stores/sessionStore.tsx');
+
+    // Match CODE, not prose: both files explain the old rule in a comment, and an assertion that
+    // cannot tell an explanation from an instruction would fail on its own documentation. (It did.)
+    const code = (src: string) =>
+      src
+        .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+        .replace(/^\s*\/\/.*$/gm, '') // whole-line comments
+        .replace(/\/\/.*$/gm, ''); // trailing comments
+
+    expect(code(stage)).toMatch(/canSwap\s*=\s*isSwapMoment\(/);
+    expect(code(mirror)).toMatch(/isSwapMoment\(/);
+    // …and neither may resurrect its own answer. Scoped to the SWAP: `exerciseSetIndex === 0` also
+    // spells the Equipment-Occupied law ("applies at the START of an exercise"), which is a
+    // different rule that merely shares this shape — a blanket ban would forbid it too.
+    expect(code(stage)).not.toMatch(/canSwap\s*=\s*exNo/);
+    expect(code(mirror)).not.toMatch(/swapOptions[\s\S]{0,120}?exerciseSetIndex === 0/);
   });
 });

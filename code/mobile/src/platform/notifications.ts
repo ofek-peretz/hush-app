@@ -36,7 +36,7 @@ export type NotificationKind = 'weekly_program_ready' | 'quarterly_report';
 
 export type NotificationIntent =
   | { kind: 'weekly_program_ready' } // -> Program / Weekly Update
-  | { kind: 'quarterly_report' }; // -> QuarterlyReport
+  | { kind: 'quarterly_report' }; // -> Progress, windowed to 12 weeks (Root.tsx)
 
 /**
  * Notification payload schema (the `content.data` dictionary). Versioned so a

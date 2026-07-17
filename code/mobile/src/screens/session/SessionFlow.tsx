@@ -28,6 +28,7 @@ import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { inWorkoutLadder } from '@/domain/replacement';
+import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
@@ -671,7 +672,29 @@ function ActiveSet({
   };
   const setReps = (v: number) => session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
 
-  const canSwap = exNo === 1 && setN === 1; // first set of the first exercise
+  /*
+   * THE SWAP IS OFFERED BEFORE THE FIRST SET OF **EVERY** LIFT — not just the session's first.
+   *
+   * This used to read `exNo === 1 && setN === 1`, which was survivable only while the programme-edit
+   * screen existed: a lift you wanted rid of on day 4 could be dealt with by planning. **S-73 deleted
+   * that screen**, and the brief states the consequence — "the in-workout swap is now the athlete's
+   * main exercise-selection lever… the stage is the ONLY place the swap verb is taught, so it must be
+   * discoverable here." The old rule taught it once, on the first lift of the session, and then hid
+   * it for the rest of the workout.
+   *
+   * It also made the two surfaces disagree about the same instant: the wrist offers a swap on the
+   * first set of ANY lift (`buildMirrorSteps` gates on `exerciseSetIndex === 0`), so an athlete
+   * standing at lift 4 saw the glyph on her watch and nothing on her phone. `startQuickSwap` was
+   * never the thing restricted — it is fully general, and its own comment says both surfaces call it
+   * "so the two surfaces can never disagree about what a legal swap is." They agreed on what; they
+   * disagreed on when.
+   *
+   * The rule now lives in ONE place (`isSwapMoment`, beside the pool that decides what a legal swap
+   * is) and both surfaces ask it — not "both happen to agree". The transition rest keeps its own
+   * swap (the better moment — she has not walked to the station yet); this is the door for the
+   * athlete who is already standing there.
+   */
+  const canSwap = isSwapMoment(setN - 1); // setN is 1-based; the law speaks in 0-based set indices
 
   return (
     <>
@@ -1395,7 +1418,9 @@ const styles = StyleSheet.create({
   upWeight: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
   // Same slot, the other voice: the word "bodyweight" where a figure would be (and a size down —
   // a word needs the room a two-digit number does not).
-  upWeightWord: { fontFamily: font.sansSemibold, fontSize: textScale.md },
+  // A MODIFIER composed onto `upWeight` (which declares the logical start); it only swaps the face
+  // + size when the load is a word ("Bodyweight"). It never renders alone.
+  upWeightWord: { fontFamily: font.sansSemibold, fontSize: textScale.md }, // rtl-ok
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   upDelta: { marginTop: 4 },
   /* ── The signature moment. The one place a load may appear during a between-sets rest. ──
