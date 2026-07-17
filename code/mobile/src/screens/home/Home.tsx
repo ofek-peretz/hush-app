@@ -1,8 +1,11 @@
 /**
  * Home — container. Wires app/session state + navigation to the pure HomeView.
  * Home answers one question (§4.7/§4.8): what do I do today? It re-resolves the
- * next workout on focus and drains offline work. No auto-interrupts — the Portrait
- * appears (unlocked) only when its tab is opened (spec IA §3).
+ * next workout on focus and drains offline work. No auto-interrupts.
+ *
+ * (This header used to end "the Portrait appears (unlocked) only when its tab is opened". There is
+ * no Portrait — it was removed long before v5 — and there are no tabs. Corrected 2026-07-17; the
+ * only trace left is the vestigial `unlockedPortrait` flag on the session store's end result.)
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';

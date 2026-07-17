@@ -1,14 +1,21 @@
 /**
- * Edit profile (§4.28; founder 2026-07-10) — the edit surface is exactly HEIGHT,
- * WEIGHT and SESSIONS PER WEEK. Nothing else:
- *  - Sex is fixed at onboarding (it never changes, so it is never re-asked).
+ * Edit profile (§4.28) — the edit surface is HEIGHT, WEIGHT, SESSIONS PER WEEK and the
+ * WORKOUT-LENGTH CEILING (default 60). Nothing else:
+ *  - Sex is fixed at onboarding (it never changes, so it is never re-asked). It seeds the first
+ *    load and nothing more — it is not what she trains (that is the body map).
  *  - Age is asked once and the app advances it yearly by itself (domain/profileAge) —
  *    programs always see the current age without the athlete maintaining it.
- *  - Experience is derived from the athlete's real progression, not self-reported twice.
+ *  - **Experience does not exist.** v5 deleted it outright (register Part 9 §A): the first working
+ *    set measures her, so a self-report never touches a load. (This header used to say experience
+ *    was "derived from the athlete's real progression" — that was the v4 world, and it also listed
+ *    the minutes ceiling out of existence with a "nothing else" that predated it. Both corrected
+ *    2026-07-17.)
+ *  - The per-muscle REP BAND is not here either: it is per-muscle, so it lives in the body-map
+ *    editor, reached from Settings.
  *
- * Corrections must never reset progression: height/weight inform the next weekly
- * regeneration + cold starts; a changed weekly frequency rebuilds the week immediately
- * (the split must match).
+ * Corrections must never reset progression, and they cannot: v5 keys progression to the EXERCISE
+ * (register L2), never to a slot or a day. Height/weight inform cold starts; a changed frequency
+ * or length rebuilds the week immediately, and the loads it rebuilds with are the ones she earned.
  *
  * A save is ACKNOWLEDGED before the screen closes (founder 2026-07-11): the button itself
  * turns into "Saved ✓" with a confirm haptic and holds for a beat, so the athlete SEES the

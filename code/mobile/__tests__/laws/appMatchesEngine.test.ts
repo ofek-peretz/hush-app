@@ -124,4 +124,79 @@ describe('the v4 world is gone from the copy, in both locales', () => {
     const offenders = ALL.flatMap(([k, v]) => dead.filter(([re]) => re.test(v)).map(([, why]) => `${k} — ${why}`));
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * A STEP MAY NOT BE NAMED AFTER A CONTROL IT NO LONGER HAS.
+   *
+   * The schedule step asks ONE thing: sessions per week. Experience was cut with v5 (the first set
+   * measures her, so a self-report never touches a load) and the wheel went with it — but on
+   * 2026-07-17 the screen was still TITLED `ob.trainTitle` = "Experience and frequency", over a sub
+   * that was entirely about experience ("Experience only sets the starting point…"), in both
+   * locales. A screen introducing a control that is not on it.
+   *
+   * Scoped to this step's own keys rather than a global ban on the word: "the best training
+   * EXPERIENCE in the world" is a different sense of the word, and a law that cannot tell the two
+   * apart would either miss this or force a rewrite of the front door's hero line.
+   */
+  it('the schedule step does not name a control it no longer has', () => {
+    for (const loc of [en, he] as Tree[]) {
+      const flat = flatten(loc);
+      for (const key of ['ob.trainTitle', 'ob.trainSub']) {
+        const v = (flat.find(([k]) => k === key) ?? ['', ''])[1];
+        expect({ key, copy: v, mentionsExperience: /experience|ניסיון/i.test(v) }).toEqual({
+          key,
+          copy: v,
+          mentionsExperience: false,
+        });
+      }
+    }
+  });
+
+  /**
+   * SEX DOES NOT SHAPE THE PROGRAMME. It seeds ONE number and is then overwritten.
+   *
+   * This is the deepest v4 rule of them all — the gendered split — and the body map exists to kill
+   * it. The brief is blunt about the screen that asks: "Say plainly what sex is for now: a physical
+   * seed for the first starting weight… **not** what they train."
+   *
+   * `ob.sexWhy` was still shipping "starting loads and **weekly volume**" in BOTH locales on
+   * 2026-07-17. Weekly volume comes from `weeklyTargets(map)` and `STARTING_WEEKLY_SETS` — the body
+   * map's stance — and nothing in `src/engine/v5` reads sex at all. Sex reaches exactly one line of
+   * code: a `sexFactor` on the first prescribed load (`domain/startingLoad`), which the athlete's
+   * own first session then replaces.
+   *
+   * So the line was telling every new athlete, on the step where she states her sex, that it would
+   * shape how much she trains. That is v4's central claim, surviving as a caption.
+   */
+  it('no line claims sex shapes VOLUME — the body map does, and sex only seeds a first load', () => {
+    const volumeFromSex = ALL.filter(
+      ([, v]) =>
+        /\bsex\b|\bמין\b|\bgender\b|\bמגדר\b/i.test(v) &&
+        /\bvolume\b|\bנפח\b|how (much|many)|what you train|מה (אתה |את )?מאמנ?/i.test(v),
+    ).map(([k, v]) => `${k} — "${v}"`);
+    expect({ sexShapingTheProgramme: volumeFromSex }).toEqual({ sexShapingTheProgramme: [] });
+
+    // …and the caption that carries the truth must actually carry it: sex seeds a first load, and
+    // the first session overwrites it. A screen that just says "physiological calculations" is
+    // hiding the thing the brief asks it to say plainly.
+    for (const loc of [en, he] as Tree[]) {
+      const why = (flatten(loc).find(([k]) => k === 'ob.sexWhy') ?? ['', ''])[1];
+      expect(why).not.toMatch(/volume|נפח/i);
+    }
+  });
+
+  /**
+   * HEART RATE IS SHOWN, NEVER USED TO DECIDE — and the screen that asks for it must say so.
+   *
+   * The brief makes this an ENGINE LAW, not a nicety: "it must state the truth: heart rate and
+   * cardio are shown, never used to decide anything." The Health step asked for the permission and
+   * said only what it would READ. The Hebrew went further and sold ("to give you the best
+   * experience") — a claim Hush cannot measure, on a screen the brief says sells nothing.
+   */
+  it('the Health step says the data is shown and never decides anything', () => {
+    for (const loc of [en, he] as Tree[]) {
+      const sub = (flatten(loc).find(([k]) => k === 'ob.healthSub') ?? ['', ''])[1];
+      expect(sub).toMatch(/never decide|never change|לא קובעים|לא משנים/i);
+    }
+  });
 });
