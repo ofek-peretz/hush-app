@@ -87,6 +87,20 @@ describe('L10 · the anchor is the MEDIAN of met-Tlo sets — a fat finger canno
   });
 });
 
+describe('S-15 · she loads far LESS than prescribed — the median absorbs the light mis-key too', () => {
+  it('a 4-for-40 on the last set cannot drag the anchor down', () => {
+    // Sets at 40, 40, and a mis-keyed 4 — all met Tlo, so this is a PROGRESS decision, and the
+    // anchor is the median of {40, 40, 4} = 40. The 4 never becomes a load she is prescribed.
+    const r = decideExercise({
+      state: state({ load: 40 }),
+      session: [S(40, 8), S(40, 8), S(4, 12)],
+      meta: bb(),
+    });
+    expect(r.decision).toBe('progress');
+    expect(r.load!).toBeGreaterThanOrEqual(40); // stepped up FROM 40, never from 4
+  });
+});
+
 describe('L11 · the rail caps progress at one rung above her settled best at Tlo', () => {
   it('S-49 · cannot prescribe far above her demonstrated record even after a strong session', () => {
     // settled best at Tlo = 80. rail = next rung above 80 = 82.5. A big measured headroom cannot pass it.
@@ -110,8 +124,10 @@ describe('S-16 · an ambiguous session (no usable working set) holds the load', 
 });
 
 describe('S-25 · a stall backs off, then rotates', () => {
-  it('after N failed occurrences at a load, back off to the heaviest full-clear', () => {
-    // N=1 (novice, no cleared runs → seed 1). Fails this session at 82.5; history holds a full clear at 80.
+  it('B-3 · after N failed occurrences at a load, back off to the heaviest full-clear', () => {
+    // N = ATTEMPTS_TO_CLEAR_SEED = 1 (B-3, novice, no cleared runs → seed 1), so the back-off lands on
+    // the SECOND consecutive failed occurrence — a first miss holds (S-24). Fails this session at 82.5;
+    // history holds a full clear at 80.
     const hist: SessionRecord[] = [{ load: 82.5, sets: [S(82.5, 8), S(82.5, 6)] }, { load: 80, sets: [S(80, 8), S(80, 8)] }];
     const r = decideExercise({ state: state({ load: 82.5, history: hist }), session: [S(82.5, 8), S(82.5, 6)], meta: bb() });
     expect(r.decision).toBe('stall_backoff');
@@ -133,6 +149,31 @@ describe('S-25 · a stall backs off, then rotates', () => {
     const r = decideExercise({ state: state({ load: 80, history: hist }), session: [S(80, 6), S(80, 5)], meta: bb(), rotationAvailable: true });
     expect(r.decision).toBe('stall_rotate');
     expect(r.wantsChange).toBe('rotate');
+  });
+});
+
+/**
+ * **S-39 · her numbers come down across the board.** There is no deload construct (`injury_flag`,
+ * `DELOAD_LOAD`, `DELOAD_SETS` — all deleted): a deload is a *prediction* device, and **a measured
+ * descent IS the deload**. So the only thing to prove is that the SAME rules run in both directions —
+ * the descent needs no special machinery, and the climb back needs no permission.
+ */
+describe('S-39 · the engine follows her down, and back up — no deload construct', () => {
+  it('a descent is just the ordinary stall back-off, and the re-climb is just the ordinary progress', () => {
+    const down = decideExercise({
+      state: state({ load: 80, history: [{ load: 80, sets: [S(80, 6), S(80, 6)] }] }),
+      session: [S(80, 6), S(80, 5)], meta: bb(),
+    });
+    expect(down.decision).toBe('stall_backoff');
+    expect(down.load!).toBeLessThan(80); // it goes where her numbers went — no deload constant involved
+
+    const lower = down.load!;
+    const back = decideExercise({
+      state: state({ load: lower, history: [{ load: lower, sets: [S(lower, 8), S(lower, 8)] }] }),
+      session: [S(lower, 8), S(lower, 8), S(lower, 8)], meta: bb(),
+    });
+    expect(back.decision).toBe('progress');
+    expect(back.load!).toBeGreaterThan(lower); // …and back up the moment she clears again
   });
 });
 

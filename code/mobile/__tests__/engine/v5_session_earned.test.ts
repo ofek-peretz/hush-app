@@ -19,7 +19,7 @@
  *   · a workout that changed nothing returns [] — a REAL verdict (S-24 hold), never an empty state
  *   · one workout's decisions never leak into another's (the whole point of the stamp)
  */
-import { ensureExercisesV5, advanceV5, getSessionEarnedV5, resetV5 } from '@/engine/v5/v5Engine';
+import { ensureExercisesV5, advanceV5, getSessionEarnedV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog } from '@/data/local/models';
 
@@ -41,6 +41,25 @@ async function earnedFor(history: Session[], startedAt: string) {
   await advanceV5([EX], () => BAND, history, seed, Date.parse('2026-07-20T10:00:00Z'));
   return getSessionEarnedV5(Date.parse(startedAt));
 }
+
+describe('S-21 · a lift she skipped produced no fact — it holds, silently, with no inference', () => {
+  beforeEach(async () => { await resetV5(); });
+
+  it('an untrained managed lift keeps its exact prescription and earns no sentence', async () => {
+    // Both lifts are in the programme; the workout trained only the row. The bench produced no fact,
+    // so its state may not move (no consequence, no question) and the mirror says nothing about it.
+    const both = [EX, 'bb_bench_press'];
+    const at = '2026-07-16T10:00:00Z';
+    const history = [session(at, [set(EX, 40, 10), set(EX, 40, 10)])];
+    await ensureExercisesV5(both, BAND, [], seed);
+    const before = (await currentV5Targets([]))['bb_bench_press'];
+    await advanceV5(both, () => BAND, history, seed, Date.parse('2026-07-20T10:00:00Z'));
+    const after = (await currentV5Targets(history))['bb_bench_press'];
+    expect(after).toEqual(before); // load, band, sets — untouched
+    const earned = await getSessionEarnedV5(Date.parse(at));
+    expect(earned.every((e) => e.slotId !== 'bb_bench_press')).toBe(true);
+  });
+});
 
 describe('a workout that earned a load change says so — at the whistle, not on Saturday', () => {
   beforeEach(async () => { await resetV5(); });

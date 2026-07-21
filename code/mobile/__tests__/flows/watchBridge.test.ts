@@ -162,7 +162,7 @@ describe('WatchSession intent handling (phone authority)', () => {
     expect(h.events.some((e) => e.type === WATCH_EVENTS.actionIgnored && e.data?.reason === 'duplicate')).toBe(true);
   });
 
-  it('ignores a phase-mismatched intent (the phone is the authority)', () => {
+  it('S-48 · ignores a phase-mismatched intent — watch and phone disagree, the phone is the authority', () => {
     const h = harness();
     h.session.publish(activeMirror({ phase: 'rest_inter' }));
     h.emitIntent(intent()); // complete_set during rest

@@ -37,7 +37,7 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
    * not a silently deleted triceps. (Before the S-35 guard was wired into `enforceTimeCap`, this day
    * DID come in under 45 — by dropping the athlete's only biceps or triceps lift.)
    */
-  it('a shorter declared budget is honoured — until honouring it would cost a muscle (S-35 > S-64)', async () => {
+  it('S-7 · a shorter declared budget is honoured — until honouring it would cost a muscle (S-35 > S-64)', async () => {
     const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: 45 });
     for (const d of prog.days) {
       if (estimateSessionMinutes(d) <= 45) continue;
@@ -88,11 +88,14 @@ describe('v5 · the budget is computed from HER MEASURED REST (S-64), not a fixe
   });
 
   it('end-to-end: a fast-rest history lets more total sets fit than a slow-rest history', async () => {
-    const set = (exerciseId: string, rest: number) => ({ exerciseId, setIndex: 0, recommendedWeight: 60, recommendedReps: 8, actualWeight: 60, actualReps: 8, edited: false, persistedAt: '', restBeforeS: rest });
+    // Four sets per lift, `setIndex` 0..3 — the rest BEFORE set 0 is the walk to the next station
+    // (the TRANSITION), only 1..3 are inter-set rests, and the budget prices the two separately
+    // (`domain/restPrescription`). A single-set-per-lift history would carry no inter-set rest at all.
+    const set = (exerciseId: string, setIndex: number, rest: number) => ({ exerciseId, setIndex, recommendedWeight: 60, recommendedReps: 8, actualWeight: 60, actualReps: 8, edited: false, persistedAt: '', restBeforeS: rest });
     const seed = async (rest: number) => {
       await db.clearAll();
       const ids = ['bb_bench_press', 'bb_overhead_press', 'bb_row', 'bb_back_squat', 'bb_deadlift', 'hip_thrust'];
-      const sess: Session = { id: 's1', programDayId: 'd', startedAt: '2026-07-10T10:00:00Z', state: 'SAVED', earlyFinish: false, sets: ids.map((id) => set(id, rest)) };
+      const sess: Session = { id: 's1', programDayId: 'd', startedAt: '2026-07-10T10:00:00Z', state: 'SAVED', earlyFinish: false, sets: ids.flatMap((id) => [0, 1, 2, 3].map((i) => set(id, i, rest))) };
       await db.appendCompletedSession(sess);
       const p = await fixtureModel.generateProgram({ ...base, daysPerWeek: 4 });
       return p.days.reduce((n, d) => n + d.slots.reduce((k, s) => k + s.setCount, 0), 0);

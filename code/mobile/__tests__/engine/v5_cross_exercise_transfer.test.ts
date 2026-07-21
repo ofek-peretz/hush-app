@@ -4,6 +4,10 @@
  * This is the v4 behaviour the founder valued; it lives in `smartSeed` and is injected into the v5
  * engine as `seedFor` (initExercise → seedFor when a lift has no own history), so a program regen OR an
  * in-session swap onto a same-pattern lift both land here.
+ *
+ * This is also **S-10** ("the engine rotates in a new exercise — a rotation is nearly free, which is
+ * what makes it safe to trust"): the rotation is cheap precisely BECAUSE the arriving lift inherits
+ * her proven strength here instead of cold-starting.
  */
 import { smartSeed } from '@/data/api/fixtureModel';
 import { startingWeight } from '@/domain/startingLoad';

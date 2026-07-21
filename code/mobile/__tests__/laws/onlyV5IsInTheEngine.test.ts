@@ -107,7 +107,7 @@ describe('the programme is not shaped by any v4 declaration', () => {
     expect(shape(q)).toEqual(shape(p));
   });
 
-  it('every set count sits inside F-1 [3, 5] — the register names ONE ceiling', async () => {
+  it('S-27 · every set count sits inside F-1 [3, 5] — the register names ONE ceiling', async () => {
     for (const days of [2, 3, 4, 5, 6]) {
       await db.clearAll();
       const p = await fixtureModel.generateProgram({ ...base, daysPerWeek: days });
@@ -167,6 +167,21 @@ describe('the source itself carries no v4 decision input', () => {
     expect(src('engine/v5/constants.ts')).toMatch(/export const BAR_KG = 20;/);
     // …and `engine/v5/grid` no longer reaches back into loadMath for it (no import cycle).
     expect(src('engine/v5/grid.ts')).not.toMatch(/from '@\/engine\/loadMath'/);
+  });
+
+  it('S-46 · cardio and heart rate never reach the engine — a tripwire, like S-54/S-67', () => {
+    // "Recorded. Celebrated. Never an engine input." Nothing about Tuesday's 5k can factually say
+    // what to put on the bar on Wednesday — any such link is a fatigue theory, and it is banned
+    // (Part 1's banned inputs). The day someone wires cardio or HR into a decision, this fails.
+    const engineFiles = [
+      'engine/v5/loop1.ts', 'engine/v5/loop2.ts', 'engine/v5/loop3.ts', 'engine/v5/v5Engine.ts',
+      'engine/v5/liveSession.ts', 'engine/v5/programAssembly.ts', 'engine/v5/repsPerRung.ts',
+      'engine/loadMath.ts', 'data/api/fixtureModel.ts',
+    ];
+    for (const f of engineFiles) {
+      const c = code(f);
+      expect({ file: f, clean: !/cardio|heartRate|healthKit|\bhr\b/i.test(c) }).toEqual({ file: f, clean: true });
+    }
   });
 
   it('B-4 is replaced by BOTH facts it names — her rest AND her set durations', () => {

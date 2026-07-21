@@ -12,6 +12,49 @@ import type { BodyMap } from '@/engine/v5/bodyMap';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
+describe('S-44 / S-66 · a muscle switched off and back on RESUMES — and its leave-it resumes with it', () => {
+  const allIds = (days: ReturnType<typeof assembleV5DayLists>) => days.flatMap((d) => d.exerciseIds);
+
+  it('off → its lifts vanish; back on → they return (state is exercise-keyed, nothing was reset)', () => {
+    const off = allIds(assembleV5DayLists({ Chest: 'off' }, 4));
+    expect(off.some((id) => muscleOf(id) === 'Chest')).toBe(false); // S-2: off never appears
+    const backOn = allIds(assembleV5DayLists({}, 4)); // absence = normal (S-44: the entry LEAVES)
+    expect(backOn.some((id) => muscleOf(id) === 'Chest')).toBe(true);
+  });
+
+  it('S-66 · the leave-it survives the off→on round trip — nothing revoked it', () => {
+    // `chest_dip` generates on its own (it is not swap-only) but sits well past the day-one density,
+    // so its presence AND its position are both the leave-it's doing, not the default order's.
+    const leaveIts = { Chest: 'chest_dip' };
+    const off = allIds(assembleV5DayLists({ Chest: 'off' }, 4, leaveIts));
+    expect(off).not.toContain('chest_dip'); // off wins while off (L6 — WHICH, not WHETHER)
+    const backOn = allIds(assembleV5DayLists({}, 4, leaveIts));
+    expect(backOn).toContain('chest_dip');
+    expect(backOn.filter((id) => muscleOf(id) === 'Chest')[0]).toBe('chest_dip'); // …and it LEADS again
+  });
+});
+
+/**
+ * **S-62 · her pool for a muscle empties out** — amended by S-74. With the declared edit-swap deleted
+ * (S-31), nothing an athlete does REMOVES a lift from a muscle's pool: an in-workout swap declares
+ * nothing (S-20) and a learned one only REPLACES (S-69). So the emptying can no longer happen, and
+ * "want this muscle off?" is reached only through the body map (S-56). This is the standing proof.
+ */
+describe('S-62 / S-74 · a muscle\'s pool cannot empty — every substitute replaces, none removes', () => {
+  const MUSCLES = ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'];
+
+  it('every muscle always yields at least one lift — even with every one of its lifts substituted away', () => {
+    for (const m of MUSCLES) {
+      const pool = pickExercises(m, Number.MAX_SAFE_INTEGER);
+      expect(pool.length).toBeGreaterThan(0);
+      // Substitute every lift in the pool onto the next one — the worst a chain of learned swaps can do.
+      const substitutes: Record<string, string> = {};
+      pool.forEach((id, i) => { if (i + 1 < pool.length) substitutes[id] = pool[i + 1]; });
+      expect(pickExercises(m, 2, undefined, substitutes).length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('Rev 7 · D · distributeMuscleSets — the learned per-occurrence volume becomes exercise set counts', () => {
   it('every bucket stays within the [3,5] band (F-1), always at least one exercise', () => {
     for (let t = 0; t <= 30; t++) {
@@ -71,8 +114,8 @@ describe('Rev 7 · D · distributeMuscleSets — the learned per-occurrence volu
 const allExercises = (days: { exerciseIds: string[] }[]) => days.flatMap((d) => d.exerciseIds);
 const musclesTrained = (days: { exerciseIds: string[] }[]) => new Set(allExercises(days).map((id) => muscleOf(id)));
 
-describe('Rev 7 · exerciseCountFor — day-one density from the weekly target', () => {
-  it('normal (10) → 2, emphasis (16) → 3, and never below 1', () => {
+describe('Rev 7 · B-8 · exerciseCountFor — day-one density from the weekly target', () => {
+  it('B-8 = 5: normal (10) → 2, emphasis (16) → 3, and never below 1', () => {
     expect(DAY_ONE_EX_DIVISOR).toBe(5);
     expect(exerciseCountFor(10)).toBe(2);
     expect(exerciseCountFor(16)).toBe(3);

@@ -34,7 +34,7 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
 import { recordStructuralChangeV5, observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
-import { learnedRestS } from '@/engine/v5/timeBudget';
+import { refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -43,65 +43,11 @@ function worthQueuing(e: unknown): boolean {
   return !(e instanceof HttpError) || e.transient;
 }
 
-// Hush-owned rest lengths (not user-adjustable, §10.8). Rest matches the work: a compound
-// set needs real recovery, an isolation set doesn't — the flat 90 s was short for a squat
-// and long for a lateral raise (S2, approved 2026-07-05; the session time model already
-// priced compounds at 3 min/set). Exported so the standalone watch plan snapshot ships the
-// SAME rests the phone would run.
-export const REST_COMPOUND_S = 150; // between sets of a compound lift
-export const REST_ISOLATION_S = 75; // between sets of an isolation lift
-export const REST_TRANSITION_S = 120; // between exercises
-/** Plan-level fallback for a stale installed watch app (pre-per-step-rest builds). */
-export const REST_INTER_S = 90;
-
-/**
- * S-17 — HER MEDIAN REST BECOMES THE PRESCRIPTION.
- *
- * "She hammers SKIP on the rest. Recorded. **Her median rest becomes the prescription.** The timer
- * stops being something she fights." Half of that shipped: `restBeforeS` was recorded (Stage 0) and
- * her median fed the TIME BUDGET (S-64, fixtureModel.restSecFor) — so a fast rester was credited
- * with more work inside her hour, while the timer on screen still counted down the same 150 s she
- * had skipped every single set. The engine measured her and then argued with her.
- *
- * This registry is the missing half: the median of the rests she has actually taken on a lift (the
- * same `learnedRestS` estimator the budget uses, L3 — unknown rests excluded, never read as zero).
- * It lives at module scope on purpose, because `restInterSecondsFor` is the ONE answer to "how long
- * is the rest" for the phone, the watch mirror and the standalone watch plan alike — the swap-pool
- * lesson: one rule, one place, or the surfaces drift.
- *
- * Nothing is clamped. The bounds constant (F-5) was retired in Rev 6 with HR-ends-rest; a 40-second
- * rester gets a 40-second timer, and the budget already credits her for it (S-64).
- */
-const learnedRestByExercise = new Map<string, number>();
-
-/** Recompute her learned rests from completed-session history (S-17). Idempotent; cheap. */
-export function refreshLearnedRests(history: Session[]): void {
-  const byExercise = new Map<string, (number | null | undefined)[]>();
-  for (const s of history) for (const l of s.sets) {
-    if (l.isApproach) continue; // a measurement is not work, and its rest is not her rest (S-60)
-    const arr = byExercise.get(l.exerciseId);
-    if (arr) arr.push(l.restBeforeS);
-    else byExercise.set(l.exerciseId, [l.restBeforeS]);
-  }
-  learnedRestByExercise.clear();
-  for (const [id, samples] of byExercise) {
-    const median = learnedRestS(samples);
-    if (median != null) learnedRestByExercise.set(id, Math.round(median));
-  }
-}
-
-/**
- * The between-sets rest for an exercise: HER measured median on that lift (S-17) once she has any,
- * else the tier bootstrap (B-4 in spirit — a day-one number, replaced by her own the moment one
- * exists). Unknown exercise → compound, the safe long side.
- */
-export function restInterSecondsFor(exerciseId: string | null | undefined): number {
-  if (exerciseId) {
-    const learned = learnedRestByExercise.get(exerciseId);
-    if (learned != null) return learned;
-  }
-  return (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
-}
+// S-17 — HER MEDIAN REST BECOMES THE PRESCRIPTION, for BOTH kinds of rest. The whole rest doctrine
+// (day-one tier bootstraps + the learned per-lift INTER median + the learned pooled TRANSITION
+// median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
+// importer (Home, the watch plan, tests) keeps its single import point.
+export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
 
 export interface Step {
@@ -668,7 +614,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       machine,
       // Per-tier: the mirror's REST_INTER duration belongs to the CURRENT exercise.
       restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
-      restTransitionS: REST_TRANSITION_S,
+      restTransitionS: restTransitionSeconds(), // S-17 — her learned transition, one registry
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
       nowMs: Date.now(),
@@ -747,7 +693,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       : 'SET_PRESENTED';
     // A rest resumed after an app kill anchors on its true remaining time, not the base length.
     const restSeconds =
-      restResumeRemainingS ?? (displayPhase === 'REST_INTER' ? restInterSecondsFor(current?.exerciseId) : REST_TRANSITION_S);
+      restResumeRemainingS ?? (displayPhase === 'REST_INTER' ? restInterSecondsFor(current?.exerciseId) : restTransitionSeconds());
 
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
       const session = sessionRef.current;
@@ -895,7 +841,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         total: plan.length,
         machine: { ...machine, phase: 'SESSION_SAVED' },
         restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
-        restTransitionS: REST_TRANSITION_S,
+        restTransitionS: restTransitionSeconds(),
         restStartedAtMs: null,
         nowMs: Date.now(),
         workoutName: saved.programDayName ?? '',
@@ -1076,7 +1022,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             },
             active,
             Date.now(),
-            (kind, exerciseId) => (kind === 'inter' ? restInterSecondsFor(exerciseId) : REST_TRANSITION_S),
+            (kind, exerciseId) => (kind === 'inter' ? restInterSecondsFor(exerciseId) : restTransitionSeconds()),
           );
           if (!r) {
             // Unusable (stale / fully completed) → salvage so the next Begin composes cleanly.
@@ -1174,7 +1120,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
         if (setLog.edited) void trackFirst('first_override');
 
-        const restSecondsForThis = current.lastSetOfExercise ? REST_TRANSITION_S : restInterSecondsFor(current.exerciseId);
+        const restSecondsForThis = current.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(current.exerciseId);
         const m = sessionReducer(
           { ...machine, isLastSetOfSession: current.lastSetOfSession },
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },

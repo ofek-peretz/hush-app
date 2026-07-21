@@ -34,6 +34,7 @@ import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
+import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
@@ -206,13 +207,26 @@ function perSetMinutes(
 }
 
 /** Estimated prescribed-work minutes for a day (work sets only) — her measured set duration + her
- *  measured rest (S-64 from FACTS, not v4's rest-blind fixed estimate). */
+ *  measured rest (S-64 from FACTS, not v4's rest-blind fixed estimate).
+ *
+ *  `transitionSec` — the between-exercises rest (her pooled median, else the declared 120 s). The
+ *  FIRST set of every lift follows the TRANSITION, not the inter-set rest, so each slot's cost is
+ *  adjusted by (transition − inter) once. Only applied when the lift HAS a measured inter rest —
+ *  the day-one bootstrap (COMPOUND/ISOLATION_SET_MIN) already bundles the whole walk. Omitted →
+ *  the old pricing, unchanged (every existing caller and test). This keeps the budget pricing the
+ *  SAME seconds the timers actually run (S-17/S-64 — one answer, both surfaces). */
 export function estimateSessionMinutes(
   day: ProgramDay,
   restSecFor?: (id: string) => number | null,
   execSecFor?: (id: string) => number | null,
+  transitionSec?: number | null,
 ): number {
-  return day.slots.reduce((m, s) => m + s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor), 0);
+  return day.slots.reduce((m, s) => {
+    let mins = s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor);
+    const rest = restSecFor?.(s.exerciseId) ?? null;
+    if (rest != null && transitionSec != null) mins += (transitionSec - rest) / 60;
+    return m + mins;
+  }, 0);
 }
 
 /**
@@ -239,8 +253,10 @@ function enforceTimeCap(
   /** Her learned LEAVE-ITS (S-71). A leave-it binds WHICH exercise, never whether it appears (L6) —
    *  so the budget still cuts, but a leave-it is cut LAST (S-59 / Part 3 #5). */
   protectedIds: ReadonlySet<string> = new Set(),
+  /** The between-exercises rest (her pooled median, S-17) — prices each lift's first set honestly. */
+  transitionSec?: number | null,
 ): void {
-  const over = () => estimateSessionMinutes(day, restSecFor, execSecFor) > budgetMin;
+  const over = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin;
   /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
    *  pass, because dropping a slot is what changes the answer. */
   const exCountByMuscle = (): Record<string, number> => {
@@ -328,11 +344,13 @@ export function trimV5ToBudget(
   /** S-59 — a leave-it is cut LAST. Trimming a SET off it is fine (a leave-it binds WHICH exercise,
    *  not how many sets, L6); DROPPING it is what it forbids while anything else can give. */
   protectedIds: ReadonlySet<string> = new Set(),
+  /** The between-exercises rest (her pooled median, S-17) — prices each lift's first set honestly. */
+  transitionSec?: number | null,
 ): void {
   const muscleOfSlot = (i: number) => exerciseById(day.slots[i].exerciseId)?.muscle;
   const isEmphasis = (m: string | undefined) => !!m && bodyMap?.[m as MuscleGroup] === 'emphasis';
   let guard = 0;
-  while (estimateSessionMinutes(day, restSecFor, execSecFor) > budgetMin && guard++ < 200) {
+  while (estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin && guard++ < 200) {
     const setsByMuscle: Record<string, number> = {};
     const exCountByMuscle: Record<string, number> = {};
     for (const s of day.slots) {
@@ -727,7 +745,9 @@ export const fixtureModel: ModelClient = {
       let r = restCache.get(id);
       if (r === undefined) {
         const rests: (number | null | undefined)[] = [];
-        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach) rests.push(l.restBeforeS);
+        // INTER samples only (setIndex > 0): a first-set rest is the TRANSITION — priced separately
+        // below, and it must not drag this lift's between-sets median up (S-17, one clean fact each).
+        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach && l.setIndex > 0) rests.push(l.restBeforeS);
         r = learnedRestS(rests);
         restCache.set(id, r);
       }
@@ -754,8 +774,11 @@ export const fixtureModel: ModelClient = {
     // protected) BEFORE the positional safety net.
     // S-59 / Part 3 #5 — her learned leave-its (S-71) are cut LAST by both trims.
     const leaveIts = new Set(Object.values(prefs.leaveItsByMuscle));
-    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts);
-    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts); // work ≤ her minutes
+    // The between-exercises rest: her pooled transition median, else the declared 120 s — the SAME
+    // seconds the transition timer actually runs (S-17), so the budget prices the workout she has.
+    const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
+    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS); // work ≤ her minutes
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
@@ -774,7 +797,7 @@ export const fixtureModel: ModelClient = {
     for (const d of days) {
       // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
       // report can never disagree with the enforcement about whether a day fits.
-      const mins = estimateSessionMinutes(d, restSecFor, execSecFor);
+      const mins = estimateSessionMinutes(d, restSecFor, execSecFor, transitionS);
       if (mins > budgetMin + 1e-9)
         void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
     }

@@ -18,7 +18,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
+import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
@@ -188,7 +188,7 @@ export function Home({ navigation, route }: Props) {
           targetsByDay,
           nowMs: Date.now(),
           restInterS: REST_INTER_S,
-          restTransitionS: REST_TRANSITION_S,
+          restTransitionS: restTransitionSeconds(), // S-17 — her learned transition rides to the wrist too
           restInterSFor: restInterSecondsFor,
         }),
       );

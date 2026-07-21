@@ -1,5 +1,6 @@
 /**
- * The body-map EDITOR (brief, Family 4) — the same map, editable forever.
+ * The body-map EDITOR (brief, Family 4) — **S-57**: the map after onboarding is permanent and
+ * editable, and it is where she turns a muscle back on (S-44) or off (S-56).
  *
  * Two things only this screen can be wrong about, and neither is visible to a typecheck:
  *

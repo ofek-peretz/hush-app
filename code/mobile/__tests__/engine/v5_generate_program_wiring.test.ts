@@ -84,6 +84,17 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     expect(chest1).toBeGreaterThan(chest0); // the earned sets opened new Chest exercises (S-32)
   });
 
+  it('S-71 · a leave-it on a SWAP-ONLY lift still reaches the programme (the assembler pool is not the last word)', async () => {
+    // Reachable: she learns a swap to `machine_chest_press` (S-69), the engine later tries to rotate
+    // THAT lift away, she swaps back twice → the leave-it anchor is a swap-only id. The assembler's
+    // pool excludes swap-only lifts by design (they never generate on their own), so the leave-it
+    // cannot LEAD there — `applyLeaveIts` is the door that carries it in, and this pins that door.
+    const prefs = await db.loadPreferences();
+    await db.savePreferences({ ...prefs, leaveItsByMuscle: { Chest: 'machine_chest_press' } });
+    const p = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: { Chest: 'normal' } as never }));
+    expect(p.days.flatMap((d) => d.slots.map((s) => s.exerciseId))).toContain('machine_chest_press');
+  });
+
   it('everything off never crashes — the belt keeps a workout existing (unreachable via validateMap)', async () => {
     const allOff = Object.fromEntries(
       ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Core', 'Quads', 'Hamstrings', 'Glutes', 'Calves'].map((m) => [m, 'off' as const]),

@@ -57,7 +57,7 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     expect(t['bb_bench_press'].bandHi).toBe(10); // Thi
   });
 
-  it('S-8 · never performed (loaded) → the prescription is the working seed from set 1 (no approach set)', async () => {
+  it('S-1 / S-8 · never performed (loaded) → the prescription is the working seed from set 1 (no approach set)', async () => {
     await ensureExercisesV5(['bb_bench_press'], BAND, [], seed);
     const t = await currentV5Targets([]);
     expect(t['bb_bench_press'].weight).toBe(60); // the seed, shown as the working load from the first set

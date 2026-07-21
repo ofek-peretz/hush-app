@@ -173,6 +173,51 @@ tested (931 green + tsc + both lints + `expo export`), nothing in the design cha
    15 kg approach set as "her previous weight" — excluded. Also struck: `milestones`' profile type
    still carried `experience`/`age` (unused v4 leftovers in a load-adjacent surface).
 
+**★ REVISION 13 (2026-07-21) — THE REST DOCTRINE COMPLETED, AND THE DOCUMENT MADE ANSWERABLE TO THE
+TEST SUITE.** Founder instruction: go over the WHOLE register and verify that every live situation is
+backed by a test, and fix the small remaining nuance in the rest times. 970 tests + tsc + both lints +
+`expo export` green.
+
+1. **S-17 / S-64 · THERE ARE TWO KINDS OF REST, AND THE ENGINE WAS LEARNING ONE NUMBER FOR BOTH.**
+   The rest before **set 1** of a lift is not a rest at all — it is the walk to the next station, the
+   setup, the plate change. The rest before **sets 2..N** is recovery. The log already carries the
+   fact that separates them (`setIndex`), and nothing was reading it: every `restBeforeS` went into
+   one per-exercise median. Two consequences, both small and both real: a lift's between-sets median
+   was **dragged upward by its own first-set samples** — so the engine measured her and then handed
+   back a timer longer than the one she actually takes, which is precisely the argument S-17 exists
+   to end — and the between-exercises rest was **never learned at all**, sitting on the fixed 120 s
+   bootstrap forever. **Now:** `domain/restPrescription` is the ONE home for the whole doctrine —
+   the three bootstraps (B-4 family), the per-lift INTER median (`setIndex > 0` only), and a POOLED
+   TRANSITION median (`setIndex === 0`, pooled across lifts, because the walk between stations is a
+   fact about her gym and her pace, not about the lift she is walking to). `sessionStore` re-exports
+   it, so every existing surface reads the same answer, and the learned transition now ships to the
+   **standalone watch plan** as well. L3 holds throughout: an unknown rest is ABSENT, never zero.
+   **And the budget now prices the same seconds the timers run:** `estimateSessionMinutes` charges a
+   day's between-exercise gaps at her transition rest instead of silently pricing them as another
+   inter-set rest — the S-64 ceiling and the S-17 clock finally agree about what a workout costs.
+2. **THE TRACEABILITY AUDIT — every live situation, law, fact and constant in this document is now
+   named by a test.** The check is mechanical, not a feeling: the register is parsed for its live
+   `S-`/`L-`/`F-`/`B-` entries and each must appear in `__tests__`. **Six were genuinely uncovered
+   and got tests** — S-15 (the median absorbs a mis-key), S-21 (an untrained managed lift earns
+   nothing and says nothing), S-44/S-66 (off→on resumes, and the leave-it resumes with it), S-46 (a
+   tripwire: no cardio or HR source may appear in an engine file), S-56/S-65 (the Saturday letter's
+   ask-back card, at the screen — that a question never blocks Done), S-45 (a volume move renders as
+   a muscle row with its why), and **F-8 / F-11 / F-12 / F-13** (reps-per-rung had no direct test at
+   all: the rest band, the evidence gate, the recency window, and Theil–Sen's resistance to one wild
+   set). Eight more were covered under another name and now carry their S-number so the next sweep
+   finds them: S-1, S-7, S-10, S-27, S-39, S-48, S-57, S-62.
+3. **L5 · THE LEDGER WAS SHORT ONE ROW, AND ITS OWN COUNT SAID SO.** L5 requires a constant to be
+   "declared out loud and **counted**." **F-14** (K = 2) lived only in a parenthetical under the
+   table — never a row — while the summary line above that parenthetical still read "six bootstraps
+   and eight form constants" and the parenthetical below it read "seven and nine." Both fixed: F-14
+   has its row, the count is right. **And L5 is no longer kept by hand:**
+   `__tests__/laws/everyConstantIsDeclared.test.ts` reads these tables and the engine's source as
+   data and holds them to each other on four points — every exported number carries its tag, every
+   tag is a row that exists, every live row has a home in the code, and **every retired row is GONE
+   from the code**. That last one has a body count: Rev 11 found two retired numbers still sitting in
+   the source (`RECENCY_WINDOW_DAYS`, `STARTING_SET_SECONDS`). It was verified to fail on a
+   deliberately resurrected one before being trusted.
+
 **★ REVISION 12 (2026-07-21) — THE WEAK POINTS, RESOLVED AGAINST OUTSIDE EVIDENCE.** Each open
 weakness from the Rev-11 critique was decided against published data and population statistics
 (founder mandate: research first, then the best decision; day-one calibration from group data
@@ -770,6 +815,15 @@ S-20, so the slot produced work and no volume signal fires.)*
 **S-17 · She hammers SKIP on the rest.** Recorded. **Her median rest becomes the prescription.**
 The timer stops being something she fights — and the time budget now **credits** her for it: a
 60-second rester earns more work inside her hour.
+> **Rev 13 — two kinds of rest, split by a fact the log already carries.** The rest before **set 1**
+> of a lift is the walk to the next station, the setup, the plate change; the rest before **sets
+> 2..N** is recovery. They are different lengths, so learning one median for both handed her a timer
+> she never takes. `setIndex` already knows which is which: the **INTER** median is learned **per
+> lift** from `setIndex > 0` samples only, and the **TRANSITION** median is learned **pooled across
+> lifts** from `setIndex === 0` — the walk is a fact about her gym and her pace, not about the lift
+> she is walking to. One home for the whole doctrine (`domain/restPrescription`), one answer for the
+> phone, the watch mirror and the standalone plan, and **the time budget (S-64) prices the same
+> seconds these timers run.**
 
 **S-18 · She rests much longer than usual.** Recorded. Part of the set's context (L3). No judgement.
 
@@ -1298,12 +1352,16 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 | **F-11** | The **rest-band width** — how close two sets' `restBeforeS` must be to count as "same conditions" for the reps-per-rung fit (L3), so a set done after a very different rest is not fitted against one that wasn't. | no — it **filters** which sets compare |
 | **F-12** | The **minimum like-for-like pairs** before B-5 (the cautious single rung) gives way to her fitted reps-per-rung slope. | no — it **gates** bootstrap→data |
 | **F-13** | The **reps-per-rung estimator: Theil–Sen** (the median of all pairwise slopes) — **one named algorithm**, not "a robust fit," so identical inputs yield an identical slope (I-24). Likewise `N`'s percentile is the **nearest-rank** method — one rule, stable on the small samples where it matters. | it **fixes** the estimator, not a value |
+| **F-14** | **K = 2 — the learned-swap adoption threshold** (Rev 7, `ADOPT_THRESHOLD`): the number of CONSECUTIVE same-target in-workout swaps before a standing replacement is adopted (S-69), and the same K at which a twice-resisted engine rotation becomes a learned leave-it (S-71). An evidence gate (the F-12 / N family), deliberately small — the original is offered first ever after (S-70), so a wrong adoption is cheap to undo. | no — it **gates** when a swap becomes standing |
 
-**Six bootstraps and eight form constants active (B-7, F-3, F-5, F-6, F-7, F-10 retired) — every one declared. Thirteen guess-constants are gone.**
-*(Rev 7 adds two, both declared and neither a load-mover: **F-14** = K = 2, the learned-swap adoption
-threshold — an evidence gate, F-12/N family; and **B-8** = `DAY_ONE_EX_DIVISOR` = 5, the day-one
-exercise-count-per-muscle bootstrap, overwritten by Loop 3's earned/cut volume within weeks. **Seven
-bootstraps, nine form constants now** — no invented number still decides a LOAD.)*
+**Seven bootstraps and nine form constants active (B-7, F-3, F-5, F-6, F-7, F-10 retired) — every one declared. Thirteen guess-constants are gone.**
+*(Rev 7 added the last two, both declared and neither a load-mover: **F-14** = K = 2 above, and
+**B-8** = `DAY_ONE_EX_DIVISOR` = 5, the day-one exercise-count-per-muscle bootstrap, overwritten by
+Loop 3's earned/cut volume within weeks. **No invented number still decides a LOAD.** Until the
+Rev-12 traceability audit F-14 lived only in this paragraph, never as a row — and the count above it
+still read "six and eight". L5 is no longer kept by hand: `__tests__/laws/everyConstantIsDeclared.test.ts`
+reads these two tables and the engine's source as data and holds them to each other — every number
+exported carries its tag, every live row has a home, and every retired row is gone from the code.)*
 
 > **Rev 6 was the audit that CUT.** The founder saw the ledger swelling back toward the size we
 > started at and asked the right question: is this facts, or feature-creep? Three whole features and
