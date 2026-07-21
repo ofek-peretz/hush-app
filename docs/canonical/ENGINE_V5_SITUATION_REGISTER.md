@@ -248,6 +248,15 @@ both lints + `expo export` green.
    muscle rows (`WeeklyPlanView.volume`), are rendered by the letter with their why, are COUNTED in
    `changedCount`, and reach Home's briefing as the "tuned" count. Tests: stage 7 (structural →
    plan view, swapped; volume → counted + carried).
+8. **Part 3 #3 · THE STATION LAW, VERIFIED ON REQUEST — held in principle, hardened at two seams,
+   and PINNED (it had no test).** The founder asked (2026-07-21) whether a day really exhausts a
+   piece of equipment before moving on. The class-grouping held; two seams did not: (a) the leg
+   press and its calf raise — the one catalogue pair sharing a physical machine — could be split by
+   the block's compounds-first order (leg press → leg extension → back to the leg press); a
+   `station` field on that pair now pulls them back to back; (b) `applyLeaveIts` runs after the
+   ordering and can plant a different-equipment lift mid-block — the day is now re-flowed after it.
+   `flows/stationFlow.test.ts` pins the law at all three layers; the implementation note lives
+   under Part 3 #3.
 
 **★ REVISION 8 (2026-07-16, founder ruling from Build #33 manual QA) — THE APPROACH SET IS REMOVED
 ENTIRELY.** S-60 in whole (and its dependents — the "light load" B-1 fraction `APPROACH_FRACTION`, the
@@ -617,6 +626,15 @@ Constraints, in strict priority:
    **It is a CEILING, never a TARGET** (S-64).
 3. **The station.** Enter once, leave it finished. Minimising station changes is an **assembly
    objective**, not a post-hoc reorder.
+   > **How it is built (verified + hardened, Rev 12 §8).** `orderForFlow` groups a day by equipment
+   > CLASS — every barbell lift contiguous, every machine lift contiguous — so each physical machine
+   > is visited exactly once (each lift appears once). Free weights are clustered too: costless, and
+   > a barbell IS a claimed station (a rack, a bench); the dumbbell rack being always available just
+   > makes its clustering free. Two lifts that genuinely share ONE machine (catalog `station` — the
+   > leg press and its calf raise) are pulled back to back, or compounds-first would send her leg
+   > press → leg extension → BACK to the leg press. And an edit made AFTER assembly (a leave-it can
+   > sit on different equipment than the slot it replaces) re-runs the flow ordering, so the law
+   > survives substitution. Pinned by `flows/stationFlow.test.ts` at all three layers.
 4. **Compound before isolation** — within a station.
 5. **Deterministic exercise choice** from her pool: minus swapped-away (S-69), plus her learned
    leave-its (S-71). **A leave-it is cut LAST** (S-59).

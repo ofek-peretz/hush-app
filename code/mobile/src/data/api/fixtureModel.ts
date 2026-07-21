@@ -68,7 +68,7 @@ const MAX_SETS = V5_SETS_MAX;
  * first — and isolation-only stations trail. The only price vs the old rule is that a station's
  * isolation can precede another station's compound; grouping equipment is worth it.
  */
-function orderForFlow(list: Exercise[]): Exercise[] {
+export function orderForFlow(list: Exercise[]): Exercise[] {
   const tierRank = (e: Exercise) => (e.tier === 'compound' ? 0 : 1);
   const idx = new Map<Exercise, number>(list.map((e, i) => [e, i]));
   // group by equipment (one station, fully, before moving on)
@@ -80,6 +80,22 @@ function orderForFlow(list: Exercise[]): Exercise[] {
   }
   // within a station: compounds first, then original order
   for (const g of stations.values()) g.sort((a, b) => tierRank(a) - tierRank(b) || idx.get(a)! - idx.get(b)!);
+  // Two lifts on the SAME PHYSICAL station (catalog `station` — the leg press and its calf raise)
+  // are pulled back to back, so she finishes the machine before anything else in the class block.
+  // Without this, the block's compounds-first order could send her leg press → leg extension →
+  // BACK to the leg press for calves — exactly the "left and returned" the law forbids. The class
+  // grouping alone cannot see it: each id appears once, so every OTHER machine is naturally visited
+  // once; only lifts that genuinely share equipment need the pull. Deterministic (first-seen leads).
+  for (const [k, g] of stations) {
+    if (!g.some((e) => e.station)) continue;
+    const clustered: Exercise[] = [];
+    for (const e of g) {
+      if (clustered.includes(e)) continue;
+      clustered.push(e);
+      if (e.station) for (const f of g) if (!clustered.includes(f) && f.station === e.station) clustered.push(f);
+    }
+    stations.set(k, clustered);
+  }
   // order stations: the one with the earliest compound leads (main lift first); iso-only stations trail
   return [...stations.values()]
     .map((g) => {
@@ -88,6 +104,23 @@ function orderForFlow(list: Exercise[]): Exercise[] {
     })
     .sort((a, b) => a.key - b.key || a.first - b.first)
     .flatMap((x) => x.g);
+}
+
+/**
+ * Re-run the gym-flow ordering on a day whose slots were EDITED AFTER assembly. `applyLeaveIts`
+ * can replace a slot's exercise with one on DIFFERENT equipment (a leave-it is same-muscle, not
+ * same-machine) — planting, say, a barbell lift in the middle of the machine block, which breaks
+ * the one law this ordering exists for ("enter a station once, leave it finished"). Slots keep
+ * their identity (setCount, supplemental) — only their order moves; ids are unique within a day.
+ */
+export function reflowDayForStations(day: ProgramDay): void {
+  const nonSupp = day.slots.filter((s) => !s.supplemental);
+  const supp = day.slots.filter((s) => s.supplemental); // core trails, always
+  const bySlotEx = new Map(nonSupp.map((s) => [s.exerciseId, s]));
+  const ordered = orderForFlow(nonSupp.map((s) => exerciseById(s.exerciseId)).filter((e): e is Exercise => !!e));
+  const reordered = ordered.map((e) => bySlotEx.get(e.id)).filter((s): s is Slot => !!s);
+  // A slot whose id resolves to no catalog entry (impossible today) keeps its place at the front.
+  if (reordered.length === nonSupp.length) day.slots = [...reordered, ...supp];
 }
 
 function dayFromBlueprint(
@@ -679,6 +712,9 @@ export const fixtureModel: ModelClient = {
     // (register Part 5 — variety comes from a measured stall, not a schedule). Per-exercise state is
     // created lazily by advanceV5 in sessionTargets.
     for (const d of days) applyLeaveIts(d, prefs.leaveItsByMuscle); // a leave-it leads its muscle (S-30/S-71)
+    // A leave-it may sit on different EQUIPMENT than the slot it replaced — re-run the station
+    // ordering so the block law survives the substitution (Part 3 #3; runs before core is appended).
+    for (const d of days) reflowDayForStations(d);
     // Core rides as supplemental work, but its SIZE follows the body map (S-50/S-2/S-4): off → none,
     // emphasis → a second movement. Never a shelf default that ignores what she declared.
     addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal');

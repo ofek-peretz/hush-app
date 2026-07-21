@@ -177,6 +177,12 @@ export interface Exercise {
    *  equipment-busy backup. Every catalog exercise must be reachable by generation OR be
    *  flagged swapOnly (enforced by the catalogSync test), so nothing is ever orphaned. */
   swapOnly?: boolean;
+  /** The PHYSICAL station this lift shares with another lift (register Part 3 #3 — "enter once,
+   *  leave it finished"). Two lifts carrying the same value are done back to back, so the athlete
+   *  never leaves a machine and returns to it. Set ONLY where two catalogue lifts genuinely share
+   *  one piece of equipment (the leg press and its calf raise); absent = the lift is its own
+   *  station, and the equipment-class grouping already keeps the walk sane. */
+  station?: string;
 }
 
 export const EXERCISES: Exercise[] = [
@@ -230,7 +236,7 @@ export const EXERCISES: Exercise[] = [
   // ───────────────────────── knee_dominant · Quads ─────────────────────────
   { id: 'bb_back_squat', name: 'Barbell Back Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Big breath, brace.', 'Sit between the hips.', 'Drive up evenly.'], synonyms: ['squat'] },
   { id: 'front_squat', name: 'Front Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 35, bwScaled: true, cues: ['Elbows high.', 'Stay upright.', 'Drive through mid-foot.'] },
-  { id: 'leg_press', name: 'Leg Press', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 80, bwScaled: true, cues: ['Feet mid-platform.', 'Knees track your toes.', "Don't lock out hard."] },
+  { id: 'leg_press', name: 'Leg Press', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 80, bwScaled: true, station: 'leg_press', cues: ['Feet mid-platform.', 'Knees track your toes.', "Don't lock out hard."] },
   { id: 'hack_squat', name: 'Hack Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'guided', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Back flat on the pad.', 'Sit down and back.', 'Drive through the heels.'] },
   { id: 'goblet_squat', name: 'Goblet Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'dumbbell', tier: 'compound', baseKg: 16, cues: ['Hold it at your chest.', 'Sit straight down.', 'Drive up.'] },
   { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Back foot elevated.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['split squat'] },
@@ -240,7 +246,7 @@ export const EXERCISES: Exercise[] = [
   // ───────────────────────── knee_dominant · Calves ─────────────────────────
   { id: 'standing_calf_raise', name: 'Standing Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 40, bwScaled: true, cues: ['Rise onto the balls of your feet.', 'Pause at the top.', 'Lower for a full stretch.'] },
   { id: 'seated_calf_raise', name: 'Seated Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_bent', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Knees under the pad.', 'Drive through the toes.', 'Stretch at the bottom.'] },
-  { id: 'leg_press_calf_raise', name: 'Leg Press Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'isolation', baseKg: 60, bwScaled: true, cues: ['Toes on the platform edge.', 'Press through the balls of your feet.', 'Control the stretch.'] },
+  { id: 'leg_press_calf_raise', name: 'Leg Press Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'isolation', baseKg: 60, bwScaled: true, station: 'leg_press', cues: ['Toes on the platform edge.', 'Press through the balls of your feet.', 'Control the stretch.'] },
 
   // ───────────────────────── hip_dominant · Hamstrings ─────────────────────────
   { id: 'bb_deadlift', name: 'Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Bar over mid-foot.', 'Flat back, brace.', 'Push the floor away.'], synonyms: ['conventional deadlift'] },
