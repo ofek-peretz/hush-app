@@ -32,6 +32,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/domain/weeklyUpdate';
+import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -143,6 +144,55 @@ export function WeeklyUpdate({ navigation }: Props) {
     };
   }, [steady]);
 
+  /**
+   * S-56 — THE ONE QUESTION THE MIRROR MAY ASK. "A muscle is switched off after she has trained it.
+   * Once — and once only — Hush comes back: 'Legs have been off a while. Want them back?' One tap;
+   * if she says no, it is never raised again (L4)… asked once, at the Saturday mirror, and never
+   * counted in days." The candidate is a FACT (off on the map + a logged set exists + never asked);
+   * either answer marks it asked forever. The map editor itself obeys an OFF in silence (L8).
+   */
+  const [askBack, setAskBack] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [history, prefs] = await Promise.all([db.loadHistory(), db.loadPreferences()]);
+        if (!active) return;
+        setAskBack(
+          askBackMuscle(app.profile?.bodyMap, trainedMuscles(history), new Set(prefs.askedBackMuscles ?? [])),
+        );
+      } catch {
+        /* no storage, no question — silence is the safe failure (L8) */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Answering — either way — retires the question for this muscle forever (L4). */
+  async function answerAskBack(bringBack: boolean) {
+    const m = askBack;
+    if (!m) return;
+    setAskBack(null);
+    void track('askback_answered', { muscle: m, bringBack });
+    try {
+      const prefs = await db.loadPreferences();
+      const asked = new Set(prefs.askedBackMuscles ?? []);
+      asked.add(m);
+      await db.savePreferences({ ...prefs, askedBackMuscles: [...asked] });
+    } catch {
+      /* worst case the question is seen again next Saturday — never blocks the answer itself */
+    }
+    if (bringBack) {
+      // Back to `normal`; the muscle RESUMES with all its exercises' history (S-44 — v5 keys
+      // progression to the exercise, so nothing was ever reset). The store rebuilds the week.
+      const map = { ...(app.profile?.bodyMap ?? {}), [m]: 'normal' as const };
+      await app.updateProfileInfo({ bodyMap: map }).catch(() => {});
+    }
+  }
+
   const changedCount = view?.changedCount ?? 0;
   const whenLabel = view
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
@@ -166,6 +216,18 @@ export function WeeklyUpdate({ navigation }: Props) {
         <Text style={styles.intro}>
           {steady ? t('weekly.evidenceIntro') : t('weekly.intro', { count: changedCount })}
         </Text>
+
+        {/* ── S-56 · the one question the mirror may ask (asked once per muscle, ever) ── */}
+        {askBack ? (
+          <View style={styles.askBack}>
+            <Text style={styles.askBackTitle}>{t('weekly.askBackTitle', { muscle: t(`muscle.${askBack}`) })}</Text>
+            <Text style={styles.askBackBody}>{t('weekly.askBackBody')}</Text>
+            <View style={styles.askBackActions}>
+              <Button variant="secondary" size="md" label={t('weekly.askBackNo')} onPress={() => void answerAskBack(false)} />
+              <Button variant="primary" size="md" label={t('weekly.askBackYes')} onPress={() => void answerAskBack(true)} />
+            </View>
+          </View>
+        ) : null}
 
         {/* ── the week where something changed: ONLY what changed ── */}
         {!steady
@@ -405,6 +467,13 @@ const styles = StyleSheet.create({
 
   // the rest of the plan stands — said once, at the end
   unchanged: { marginTop: 20, fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, textAlign: 'left' },
+
+  // S-56 — the one question the mirror may ask. A quiet card, not a modal: the letter is hers to
+  // read, and the question waits inside it rather than standing in front of it (L9).
+  askBack: { marginTop: 20, padding: 16, backgroundColor: color.surface3, borderRadius: radius.lg, gap: 8 },
+  askBackTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  askBackBody: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
+  askBackActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space[2], marginTop: 6 },
 
   // the steady week: the athlete's own history, as proof
   evidence: { marginTop: 24 },

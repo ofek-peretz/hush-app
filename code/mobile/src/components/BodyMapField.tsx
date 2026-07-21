@@ -47,11 +47,6 @@ interface Props {
   onBandChange?: (muscle: string, band: RepBandChoice) => void;
   openMuscle?: string | null;
   onOpenMuscle?: (muscle: string | null) => void;
-  /**
-   * EDITOR ONLY — asked BEFORE a muscle goes off, so S-56's "want it back?" can intercept a muscle
-   * she has actually trained. Return false to refuse the toggle. Absent = the toggle just happens.
-   */
-  onBeforeOff?: (muscle: string) => boolean;
 }
 
 export function BodyMapField({
@@ -62,7 +57,6 @@ export function BodyMapField({
   onBandChange,
   openMuscle,
   onOpenMuscle,
-  onBeforeOff,
 }: Props) {
   const { t } = useCopy();
   const editable = bands != null && onBandChange != null;
@@ -77,9 +71,8 @@ export function BodyMapField({
       onRefused(true);
       return;
     }
-    // S-56 — a muscle she has TRAINED is a change of state, not a statement of taste, so the editor
-    // gets to ask before it goes dark. A muscle with no history is honoured silently (never nag, L8).
-    if (s === 'off' && stanceOf(m) !== 'off' && onBeforeOff && !onBeforeOff(m)) return;
+    // S-56 — an OFF is obeyed in silence (L8). The one "want it back?" question is asked later, at
+    // the Saturday mirror, for a muscle she has actually trained (WeeklyUpdate · askBackMuscle).
     haptics.tick();
     onRefused(false);
     const next = { ...value };

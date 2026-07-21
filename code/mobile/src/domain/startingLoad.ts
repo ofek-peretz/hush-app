@@ -47,6 +47,23 @@ export type LoadProfile = Pick<Profile, 'sex' | 'weightKg'>;
 
 const UPPER: Capability[] = ['horizontal_push', 'horizontal_pull', 'vertical_push'];
 
+/**
+ * The female strength factors — CALIBRATED AGAINST POPULATION DATA (2026-07-21, founder-approved).
+ *
+ * They were 0.62 (upper) / 0.72 (lower). Both published research and the largest community lift
+ * dataset put the real same-bodyweight female:male ratio meaningfully lower:
+ *   · research meta-findings: women ≈ 52% of male upper-body strength, ≈ 66% lower-body;
+ *   · StrengthLevel (~25M logged lifts), same bodyweight, same percentile: bench ≈ 0.51,
+ *     squat ≈ 0.65, deadlift ≈ 0.66.
+ * At 0.62/0.72 a woman's day-one loads sat 15–20% ABOVE the percentile her male counterpart got —
+ * and the cost is asymmetric: a too-heavy first set is the scare moment (she fails set 1 of her
+ * first workout), while a slightly-light one becomes Loop 1's visible "you did 14, I added weight"
+ * — the product's best moment. So the factors now match the data: **0.52 upper / 0.66 lower.**
+ * (Same-percentile parity with men; the barbell floor S-55 still applies underneath.)
+ */
+export const FEMALE_UPPER_FACTOR = 0.52;
+export const FEMALE_LOWER_FACTOR = 0.66;
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi);
 }
@@ -56,7 +73,7 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   if (ex.bodyweight || ex.baseKg == null) return null;
   const bw = profile.weightKg ?? 75;
   const bwFactor = ex.bwScaled ? clamp(bw / 75, 0.7, 1.45) : 1;
-  const sexFactor = profile.sex === 'female' ? (UPPER.includes(ex.capability) ? 0.62 : 0.72) : 1;
+  const sexFactor = profile.sex === 'female' ? (UPPER.includes(ex.capability) ? FEMALE_UPPER_FACTOR : FEMALE_LOWER_FACTOR) : 1;
   let kg = ex.baseKg * bwFactor * sexFactor; // B-1: sex + bodyweight, and nothing else
   // Round to a loadable increment.
   // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).

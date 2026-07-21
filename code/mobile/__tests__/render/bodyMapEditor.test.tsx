@@ -3,12 +3,9 @@
  *
  * Two things only this screen can be wrong about, and neither is visible to a typecheck:
  *
- *  · **S-56, the ask-back.** `shouldAskBackOnOff` sat in the engine — correct, tested, and unused —
- *    under a note: "DELIBERATELY NOT WIRED (founder decision, 2026-07-16): the ask-back is a
- *    body-map SCREEN interaction… which lands with the founder's end redesign of that screen. The
- *    engine predicate is ready for it." This is that screen. The trigger is a FACT ("does she have
- *    a logged set on this muscle?"), never a guess — a muscle she has never trained is honoured in
- *    silence, because asking would be the nagging L8 bans.
+ *  · **S-56 — an OFF is obeyed in SILENCE.** The register's rule verbatim: the one "want it back?"
+ *    question is asked later, once, at the Saturday mirror (WeeklyUpdate) — never as a confirm in
+ *    front of the toggle. The editor must not argue with a choice she is making right now (L8).
  *  · **The map that gets saved is the map she drew** — whole-object, so a muscle taken back to
  *    normal really LEAVES. A merge could not express that, and the engine reads absence as normal.
  */
@@ -112,55 +109,25 @@ beforeEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('S-56 · turning off a muscle she has TRAINED is asked about, once', () => {
-  it('asks — and holds the toggle until she answers', async () => {
+describe('S-56 · an OFF is obeyed in silence — the one question lives at the Saturday mirror', () => {
+  it('turning off a TRAINED muscle just happens — no sheet, no confirm, no argument (L8)', async () => {
     const r = await open([session('bb_bench_press')]); // Chest has a logged set
 
     tap(r, 'Chest', 'Off');
-    const said = texts(r).join(' ');
-    expect(said).toContain(tg('ob.mapAskBackTitle', { muscle: tg('muscle.Chest') }));
-    // …and it does not argue with her. It states what it keeps, and offers both doors.
-    expect(said).toContain(tg('ob.mapAskBackKeep'));
-    expect(said).toContain(tg('ob.mapAskBackOff'));
-  });
-
-  it('answering "keep training it" leaves the map exactly as it was', async () => {
-    const r = await open([session('bb_bench_press')]);
-    tap(r, 'Chest', 'Off');
-    act(() => byLabel(r, tg('ob.mapAskBackKeep'))!.props.onPress());
-
-    // Nothing to save — the toggle never happened.
-    const save = byLabel(r, tg('profileEdit.save'))!;
-    expect(save.props.accessibilityState?.disabled).toBe(true);
-  });
-
-  it('answering "turn it off" honours her — and the map carries it', async () => {
-    const r = await open([session('bb_bench_press')]);
-    tap(r, 'Chest', 'Off');
-    act(() => byLabel(r, tg('ob.mapAskBackOff'))!.props.onPress());
+    // The register: "Once — and once only — Hush comes back… at the Saturday mirror." The editor
+    // itself never asks; a confirm here would argue with a choice she is making right now.
+    expect(texts(r).join(' ')).not.toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Chest') }));
     await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
-
     expect(saved).toHaveLength(1);
     expect((saved[0].bodyMap as Record<string, string>).Chest).toBe('off');
   });
 
-  it('a muscle she has NEVER trained goes off in silence — asking would be nagging', async () => {
-    // The trigger is a fact, not a policy: no logged set → no history to lose → nothing to ask about.
+  it('a muscle she has never trained goes off in the same silence', async () => {
     const r = await open([session('bb_bench_press')]); // …only Chest is trained
 
     tap(r, 'Calves', 'Off');
-    expect(texts(r).join(' ')).not.toContain(tg('ob.mapAskBackTitle', { muscle: tg('muscle.Calves') }));
     await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
     expect((saved[0].bodyMap as Record<string, string>).Calves).toBe('off');
-  });
-
-  it('never asks on the way BACK on — resuming a muscle costs her nothing', async () => {
-    const r = await open([session('bb_bench_press')]);
-    tap(r, 'Chest', 'Off');
-    act(() => byLabel(r, tg('ob.mapAskBackOff'))!.props.onPress());
-    tap(r, 'Chest', 'Normal'); // …she changes her mind
-
-    expect(texts(r).join(' ')).not.toContain(tg('ob.mapAskBackTitle', { muscle: tg('muscle.Chest') }));
   });
 });
 

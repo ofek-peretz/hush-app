@@ -6,8 +6,8 @@
 import { computePortrait } from '@/data/progression';
 import type { Capability, Profile, Session } from '@/data/local/models';
 
-const profile: Pick<Profile, 'sex' | 'weightKg' | 'experience'> = {
-  sex: 'male', weightKg: 80, experience: 'intermediate',
+const profile: Pick<Profile, 'sex' | 'weightKg'> = {
+  sex: 'male', weightKg: 80,
 };
 
 function benchSessions(weight: number, n: number): Session[] {
@@ -23,14 +23,22 @@ function benchSessions(weight: number, n: number): Session[] {
   }));
 }
 
-describe('cold start — an experience prior, everything still learning', () => {
+describe('cold start — a neutral prior, everything still learning', () => {
   it('no history → low confidence and the still-learning flag everywhere', () => {
     const p = computePortrait([], profile);
     for (const cap of Object.keys(p.perCapability) as Capability[]) {
       expect(p.stillLearning[cap]).toBe(true);
       expect(p.confidence[cap]).toBeLessThan(30);
-      expect(p.perCapability[cap]).toBeGreaterThan(0); // an experience-based prior, not zero
+      expect(p.perCapability[cap]).toBeGreaterThan(0); // a neutral prior, not zero
     }
+  });
+
+  it('a self-reported experience cannot move the prior — the last v4 self-report is out', () => {
+    // Extra fields are ignored by construction: the signature no longer admits `experience`, so two
+    // athletes who once called themselves different things get the identical still-learning bar.
+    const a = computePortrait([], { sex: 'male', weightKg: 80 });
+    const b = computePortrait([], { sex: 'male', weightKg: 80, experience: 'advanced' } as never);
+    expect(b.perCapability).toEqual(a.perCapability);
   });
 });
 

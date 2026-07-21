@@ -4,7 +4,7 @@
  */
 import { bandFor, DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { bandFromTarget } from '@/engine/v5/liveSession';
-import { stanceOf, trainableMuscles, emphasisMuscles, validateMap, shouldAskBackOnOff, type BodyMap } from '@/engine/v5/bodyMap';
+import { stanceOf, trainableMuscles, emphasisMuscles, validateMap, shouldAskBackOnOff, askBackMuscle, type BodyMap } from '@/engine/v5/bodyMap';
 import { weeklyTargets, regionVolume, assignRegionDays, regionOf } from '@/engine/v5/assembler';
 
 const ALL = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] as const;
@@ -56,6 +56,32 @@ describe('S-56 · ask-back fires only for a muscle she actually TRAINED (a chang
   it('has a logged set → ask; no history → do not (nagging)', () => {
     expect(shouldAskBackOnOff(true)).toBe(true);
     expect(shouldAskBackOnOff(false)).toBe(false);
+  });
+
+  it('the mirror asks about an OFF + TRAINED + never-asked muscle — and nothing else', () => {
+    const map: BodyMap = { Chest: 'off', Calves: 'off', Back: 'normal' };
+    const trained = new Set(['Chest', 'Back']); // Calves never earned a logged set
+    // Chest is off, trained, never asked → it is the question. Calves is off but untrained → taste,
+    // honoured in silence. Back is on → nothing to ask.
+    expect(askBackMuscle(map, trained, new Set())).toBe('Chest');
+  });
+
+  it('a question is asked once, ever — either answer retires it (L4)', () => {
+    const map: BodyMap = { Chest: 'off' };
+    const trained = new Set(['Chest']);
+    expect(askBackMuscle(map, trained, new Set(['Chest']))).toBeNull();
+  });
+
+  it('one question at a time, deterministically by the canonical order (F-9)', () => {
+    const map: BodyMap = { Quads: 'off', Chest: 'off' };
+    const trained = new Set(['Quads', 'Chest']);
+    expect(askBackMuscle(map, trained, new Set())).toBe('Chest'); // Chest precedes Quads in F-9
+    expect(askBackMuscle(map, trained, new Set(['Chest']))).toBe('Quads'); // …then the next, later
+  });
+
+  it('an empty map / nothing off → no question', () => {
+    expect(askBackMuscle(undefined, new Set(['Chest']), new Set())).toBeNull();
+    expect(askBackMuscle({}, new Set(['Chest']), new Set())).toBeNull();
   });
 });
 

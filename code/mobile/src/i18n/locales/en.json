@@ -24,7 +24,11 @@
     "evidenceClose": "I read every set you lift and tune the program to what you showed me. This week it needed nothing.",
     "evidenceEmpty": "I changed nothing this week. Once you have a few sessions logged I set your next weights at the end of each workout, and show you the whole week here every Saturday.",
     "whyLink": "Why?",
-    "unchangedNote": "Every other lift stands as it was."
+    "unchangedNote": "Every other lift stands as it was.",
+    "askBackTitle": "{{muscle}} has been off a while. Want it back?",
+    "askBackBody": "Everything it earned is kept. One tap and I pick it up exactly where you left it.",
+    "askBackYes": "Bring it back",
+    "askBackNo": "Leave it off"
   },
   "home": {
     "restTitle": "Recovery.",
@@ -181,11 +185,7 @@
     "regionLower": "Lower",
     "mapEditSub": "Everything's on unless you turn it off. Pick up to two for me to lead with — and tap a muscle to set the reps you like on it.",
     "mapBandLegend": "Reps",
-    "mapBandOpen": "{{muscle}} — set the rep range",
-    "mapAskBackTitle": "Turn off {{muscle}}?",
-    "mapAskBackBody": "You've trained it, so I'll keep everything it earned. Turn it back on whenever you want and I'll pick it up where you left it.",
-    "mapAskBackKeep": "Keep training it",
-    "mapAskBackOff": "Turn it off"
+    "mapBandOpen": "{{muscle}} — set the rep range"
   },
   "menu": {
     "title": "Menu",
@@ -704,10 +704,10 @@
       "action": "I trimmed a set from your {{muscle}} work."
     },
     "rungOutOfReach": {
-      "text": "{{ex}} cleared every set, but the next weight your gym has is too big a step from here — so I held the weight and we add reps until it is within reach.",
+      "text": "{{ex}} cleared every set, but the next weight your gym has is too big a step from here — so I held the weight and we add reps until it is within reach. If the machine offers a smaller jump, load it and I'll learn the step.",
       "observation": "{{ex}} cleared every set.",
       "conclusion": "The next weight on this machine is too big a step from here.",
-      "action": "I held the weight. We add reps until the next one is within reach."
+      "action": "I held the weight. We add reps until the next one is within reach — and if the machine offers a smaller jump, load it and I'll learn the step."
     },
     "reprice": {
       "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",

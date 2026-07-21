@@ -65,6 +65,10 @@ export interface OwnedPreferences {
   // resisted rotation's substitute is cleared by two swap-backs, the anchor becomes a learned
   // "leave it" (S-71) and is removed from here.
   engineRotated?: Record<string, string>;
+  // S-56 — muscles the one-time ask-back has already been ANSWERED for (either way). The question
+  // ("been off a while — want it back?") is asked once per muscle, at the Saturday mirror, and never
+  // again (L4). Additive/optional: absent means never asked.
+  askedBackMuscles?: string[];
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
   // (The v4 Lock System `lockedSlots` and the 3-week periodic-refresh `rotations`/`rotationUsed`/

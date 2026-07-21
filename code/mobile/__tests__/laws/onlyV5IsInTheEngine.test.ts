@@ -70,6 +70,19 @@ describe('B-1 · the cold start reads her sex and her bodyweight, and nothing el
     const heavy = startingWeight(ex, { sex: 'male', weightKg: 110 })!;
     expect(heavy).toBeGreaterThanOrEqual(light);
   });
+
+  it('the female factors are the POPULATION data, not an opinion — ≈52% upper / ≈66% lower', () => {
+    // Calibrated 2026-07-21 (founder-approved): research meta-findings put women at ≈52% of male
+    // upper-body strength and ≈66% lower-body; the ~25M-lift StrengthLevel dataset gives the same
+    // same-bodyweight ratios (bench ≈0.51, squat ≈0.65, deadlift ≈0.66). The old 0.62/0.72 handed a
+    // woman day-one loads 15–20% above her percentile — on the first set she ever does in the app.
+    const pushdown = exerciseById('triceps_pushdown')!; // upper, cable — no bar floor, no bw scaling
+    const legext = exerciseById('leg_extension')!; // lower, machine — same
+    const f = { sex: 'female' as const, weightKg: 75 };
+    const m = { sex: 'male' as const, weightKg: 75 };
+    expect(startingWeight(pushdown, f)! / startingWeight(pushdown, m)!).toBeCloseTo(0.5, 1);
+    expect(startingWeight(legext, f)! / startingWeight(legext, m)!).toBeCloseTo(0.66, 1);
+  });
 });
 
 describe('the programme is not shaped by any v4 declaration', () => {
