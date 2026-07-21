@@ -33,7 +33,7 @@ import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChange
 import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
-import { learnedRestS } from '@/engine/v5/timeBudget';
+import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
@@ -142,8 +142,10 @@ function coreHostIndex(days: ProgramDay[]): number {
 const COMPOUND_SET_MIN = 3;
 const ISOLATION_SET_MIN = 2;
 const MAX_SESSION_MIN = 60;
-// SET_EXEC_SECONDS — the ACTIVE portion of a working set (execution, not rest). A set's real cost is
-// this + HER measured rest (S-17); tuned so exec + a typical rest ≈ the bootstrap above, keeping the
+// B-4, the WORK half — the active seconds of a set before she has performed any. B-4 names BOTH
+// facts that replace this bootstrap: "her measured rest (built, Stage 0) AND HER SET DURATIONS
+// (timestamps)". Both are wired now (`learnedRestS` / `learnedExecS`); this is only what stands in
+// until each exists. Tuned so exec + a typical rest ≈ COMPOUND/ISOLATION_SET_MIN above, keeping the
 // transition smooth (rest ~135s compound / ~90s isolation reproduces 3 / 2 minutes).
 const SET_EXEC_SECONDS = { compound: 45, isolation: 30 } as const;
 
@@ -151,19 +153,33 @@ function isCompound(exerciseId: string): boolean {
   return exerciseById(exerciseId)?.tier === 'compound';
 }
 
-/** Per-set MINUTES for a slot: exec + her measured rest (S-64) once she has it, else the day-one
- *  bootstrap (rest is not yet a fact). `restSecFor` returns her median rest for a lift, or null. */
-function perSetMinutes(exerciseId: string, restSecFor?: (id: string) => number | null): number {
+/**
+ * Per-set MINUTES for a slot — **both halves of the cost, each measured when she has it** (B-4/S-64):
+ * her set DURATION (`execSecFor`, from set timestamps) plus her REST (`restSecFor`, the median of her
+ * recorded `restBeforeS`, S-17). Either one absent falls back to the day-one bootstrap for that half,
+ * so a lift she has never performed still prices honestly and a lift she has prices from facts.
+ */
+function perSetMinutes(
+  exerciseId: string,
+  restSecFor?: (id: string) => number | null,
+  execSecFor?: (id: string) => number | null,
+): number {
   const compound = isCompound(exerciseId);
   const rest = restSecFor?.(exerciseId) ?? null;
-  if (rest == null) return compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN; // bootstrap (no rest data)
-  return (SET_EXEC_SECONDS[compound ? 'compound' : 'isolation'] + rest) / 60;
+  const exec = execSecFor?.(exerciseId) ?? null;
+  // No rest fact at all → the whole-set bootstrap (it already bundles work + rest).
+  if (rest == null) return compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN;
+  return ((exec ?? SET_EXEC_SECONDS[compound ? 'compound' : 'isolation']) + rest) / 60;
 }
 
-/** Estimated prescribed-work minutes for a day (work sets only). With `restSecFor`, a set costs exec +
- *  her measured rest — the S-64 budget from FACTS, not v4's rest-blind fixed estimate. */
-export function estimateSessionMinutes(day: ProgramDay, restSecFor?: (id: string) => number | null): number {
-  return day.slots.reduce((m, s) => m + s.setCount * perSetMinutes(s.exerciseId, restSecFor), 0);
+/** Estimated prescribed-work minutes for a day (work sets only) — her measured set duration + her
+ *  measured rest (S-64 from FACTS, not v4's rest-blind fixed estimate). */
+export function estimateSessionMinutes(
+  day: ProgramDay,
+  restSecFor?: (id: string) => number | null,
+  execSecFor?: (id: string) => number | null,
+): number {
+  return day.slots.reduce((m, s) => m + s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor), 0);
 }
 
 /**
@@ -185,11 +201,13 @@ function enforceTimeCap(
   day: ProgramDay,
   budgetMin: number = MAX_SESSION_MIN,
   restSecFor?: (id: string) => number | null,
+  /** B-4 — her measured set duration (timestamps), the work half of the per-set cost. */
+  execSecFor?: (id: string) => number | null,
   /** Her learned LEAVE-ITS (S-71). A leave-it binds WHICH exercise, never whether it appears (L6) —
    *  so the budget still cuts, but a leave-it is cut LAST (S-59 / Part 3 #5). */
   protectedIds: ReadonlySet<string> = new Set(),
 ): void {
-  const over = () => estimateSessionMinutes(day, restSecFor) > budgetMin;
+  const over = () => estimateSessionMinutes(day, restSecFor, execSecFor) > budgetMin;
   /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
    *  pass, because dropping a slot is what changes the answer. */
   const exCountByMuscle = (): Record<string, number> => {
@@ -272,6 +290,8 @@ export function trimV5ToBudget(
   bodyMap: Profile['bodyMap'],
   budgetMin: number,
   restSecFor?: (id: string) => number | null,
+  /** B-4 — her measured set duration (timestamps), the work half of the per-set cost. */
+  execSecFor?: (id: string) => number | null,
   /** S-59 — a leave-it is cut LAST. Trimming a SET off it is fine (a leave-it binds WHICH exercise,
    *  not how many sets, L6); DROPPING it is what it forbids while anything else can give. */
   protectedIds: ReadonlySet<string> = new Set(),
@@ -279,7 +299,7 @@ export function trimV5ToBudget(
   const muscleOfSlot = (i: number) => exerciseById(day.slots[i].exerciseId)?.muscle;
   const isEmphasis = (m: string | undefined) => !!m && bodyMap?.[m as MuscleGroup] === 'emphasis';
   let guard = 0;
-  while (estimateSessionMinutes(day, restSecFor) > budgetMin && guard++ < 200) {
+  while (estimateSessionMinutes(day, restSecFor, execSecFor) > budgetMin && guard++ < 200) {
     const setsByMuscle: Record<string, number> = {};
     const exCountByMuscle: Record<string, number> = {};
     for (const s of day.slots) {
@@ -670,16 +690,44 @@ export const fixtureModel: ModelClient = {
       }
       return r;
     };
+    // B-4's other half: her measured SET DURATION, from the timestamps already on every logged set.
+    // Only consecutive same-exercise sets inside one session can yield it (see learnedExecS).
+    const execCache = new Map<string, number | null>();
+    const execSecFor = (id: string): number | null => {
+      let e = execCache.get(id);
+      if (e === undefined) {
+        const samples: ExecSample[] = [];
+        for (const s of history) for (const l of s.sets) {
+          if (l.exerciseId !== id || l.isApproach) continue;
+          samples.push({ exerciseId: l.exerciseId, sessionId: s.id, atMs: Date.parse(l.persistedAt), restBeforeS: l.restBeforeS });
+        }
+        samples.sort((a, b) => a.atMs - b.atMs);
+        e = learnedExecS(samples);
+        execCache.set(id, e);
+      }
+      return e;
+    };
     // D4: resolve an over-budget day by DONATING from the muscle that can best spare it (S-37, emphasis
     // protected) BEFORE the positional safety net.
     // S-59 / Part 3 #5 — her learned leave-its (S-71) are cut LAST by both trims.
     const leaveIts = new Set(Object.values(prefs.leaveItsByMuscle));
-    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, leaveIts);
-    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, leaveIts); // prescribed work ≤ her minutes
+    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts);
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts); // work ≤ her minutes
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
-    // its last lift (S-35's two protected drops). It must not pass in silence, so it is reported.
+    // its last lift (S-35's two protected drops).
+    //
+    // TODO(screens · S-3) — THE ENGINE HALF IS DONE; THE SENTENCE IS NOT. The register says the
+    // engine "says so", and today it only says so to telemetry. She should be told, in words, that
+    // this workout does not fit the minutes she declared and what her options are (more minutes, or
+    // a muscle off). Held deliberately for the founder's redesign of the programme surfaces —
+    // 2026-07-21. The engine emits everything the copy needs: the day, its real minutes, her budget.
+    //
+    // TODO(screens · S-59) — the other half of the same family. "Her leave-its do not fit inside her
+    // declared minutes": the ASSEMBLY rule is built (a leave-it is cut last, here and in
+    // trimV5ToBudget), and Rev 10 deleted the old prompt because a declarative pin no longer exists.
+    // If the redesign wants to surface anything here, it is the same S-3 sentence, not a question.
     for (const d of days) {
       const mins = estimateSessionMinutes(d, restSecFor);
       if (mins > budgetMin + 1e-9)

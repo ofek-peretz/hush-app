@@ -17,6 +17,7 @@ import { railCeilingFor } from '@/engine/v5/v5Engine';
 import { prevRung, snapDown, moveRungs, loadFloor } from '@/engine/v5/grid';
 import { BAR_KG } from '@/engine/loadMath';
 import { refreshLearnedRests, restInterSecondsFor, REST_COMPOUND_S } from '@/state/stores/sessionStore';
+import { learnedExecS } from '@/engine/v5/timeBudget';
 import type { Session } from '@/data/local/models';
 
 const barbell: ExerciseMeta = { equipment: 'barbell', bodyweight: false };
@@ -181,6 +182,39 @@ describe('S-55 · a prescription never falls below the lightest weight that phys
   it('a bodyweight lift has no load axis and no floor to trip over (S-51)', () => {
     expect(loadFloor('bodyweight')).toBe(0);
     expect(prevRung(0, 'bodyweight')).toBe(0);
+  });
+});
+
+// ── B-4 · her SET DURATIONS replace the day-one work bootstrap ───────────────────────────────────
+describe('B-4 · the per-set cost is replaced by BOTH facts it names, not just the rest', () => {
+  const at = (iso: string, restBeforeS?: number, exerciseId = 'bb_bench_press', sessionId = 's1') =>
+    ({ exerciseId, sessionId, atMs: Date.parse(iso), restBeforeS });
+
+  it('exec = the gap between two sets, minus the rest that separated them', () => {
+    // 10:00:00 → 10:02:30 is 150 s; 120 s of it was rest, so the set itself took 30 s.
+    expect(learnedExecS([at('2026-07-01T10:00:00Z'), at('2026-07-01T10:02:30Z', 120)])).toBe(30);
+  });
+
+  it('an unknown rest is never read as zero — it would turn her whole rest into "work" (L3)', () => {
+    expect(learnedExecS([at('2026-07-01T10:00:00Z'), at('2026-07-01T10:02:30Z')])).toBeNull();
+  });
+
+  it('a pair across two exercises, or across two sessions, is not a set duration', () => {
+    expect(learnedExecS([at('2026-07-01T10:00:00Z'), at('2026-07-01T10:02:30Z', 120, 'bb_row')])).toBeNull();
+    expect(learnedExecS([at('2026-07-01T10:00:00Z'), at('2026-07-01T10:02:30Z', 120, 'bb_bench_press', 's2')])).toBeNull();
+  });
+
+  it('she put the phone down mid-exercise — that gap is dropped, not clamped', () => {
+    expect(learnedExecS([at('2026-07-01T10:00:00Z'), at('2026-07-01T12:00:00Z', 120)])).toBeNull();
+  });
+
+  it('the median of her real pairs is her number', () => {
+    expect(learnedExecS([
+      at('2026-07-01T10:00:00Z'),
+      at('2026-07-01T10:02:20Z', 120), // 20 s
+      at('2026-07-01T10:04:50Z', 120), // 30 s
+      at('2026-07-01T10:07:30Z', 120), // 40 s
+    ])).toBe(30);
   });
 });
 

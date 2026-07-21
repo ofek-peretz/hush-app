@@ -19,6 +19,17 @@
  * and it quietly undoes the program the engine spent a week building.
  *
  * That is the whole idea. Everything below is bookkeeping in service of it.
+ *
+ * ── Where this sits relative to the ENGINE contract (2026-07-21) ──────────────────────────────
+ * The v5 register governs what the ENGINE decides. It says two things about a swap, and both are
+ * enforced below as GATES: a swap is offered only **before the first set** (`isSwapMoment`, Part 9
+ * §B), and the pool is **same-muscle synonyms only** — "a swap can NEVER change which muscle is
+ * trained. The body map's volume is inviolate" (`admissible`). Those are law.
+ *
+ * The SCORE is not. Which admissible synonym leads the list is a product judgement about fidelity,
+ * it sets no load, moves no volume, and appears nowhere in the register — so its weights are not
+ * ledger constants (Part 6) and must never be read as engine law. They order a menu; the athlete
+ * chooses, and whatever she performs is the fact the loops read (F-2/S-14).
  */
 import {
   exerciseById,

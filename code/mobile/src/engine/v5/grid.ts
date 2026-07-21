@@ -12,8 +12,7 @@
  */
 
 import type { Equipment } from '@/engine/catalog';
-import { BAR_KG } from '@/engine/loadMath';
-import { STARTING_INCREMENT } from './constants';
+import { STARTING_INCREMENT, BAR_KG } from './constants';
 
 const EPS = 1e-9;
 
@@ -21,6 +20,29 @@ const EPS = 1e-9;
 function rungsOf(observedLoads?: number[]): number[] {
   if (!observedLoads || observedLoads.length === 0) return [];
   return Array.from(new Set(observedLoads.filter((x) => x > 0))).sort((a, b) => a - b);
+}
+
+/**
+ * F-2 — THE LEARNED GRID SPEAKS ONLY WITHIN THE RANGE SHE HAS PERFORMED.
+ *
+ * Her observed loads are the rungs we KNOW exist, not every rung that exists. Outside that range the
+ * grid has nothing to say and the equipment increment (B-6) is the honest answer — the rule
+ * `engine/loadMath.normalizeLoad` already documents ("above the max observed, or below min, or
+ * no-grid → the static increment; the grid never caps progression") and the founder ratified for the
+ * equipment layer.
+ *
+ * `snapDown` was missing the LOWER half of that rule, and it was not cosmetic. Its own header
+ * promises "snapping is always DOWN — normalization can only ever lower an implied load, never
+ * raise it (the safety invariant)", but with the ideal below her lowest rung the loop's initialiser
+ * (`let down = rungs[0]`) returned that rung — a snap UP. On a lift she had only ever performed at
+ * ONE weight — which is EVERY lift on its second session — Loop 1's drop computed 37.5, snapped
+ * back to 40, and reported `corrected: false`. **The load could not ease.** That is the exact
+ * shape of the Build #33 complaint ("no matter how many reps I write it stays at 34"), still alive
+ * through a different door, on a path the band-floor fix never touched.
+ */
+function inRange(load: number, observedLoads?: number[]): boolean {
+  const rungs = rungsOf(observedLoads);
+  return rungs.length > 0 && load >= rungs[0] - EPS && load <= rungs[rungs.length - 1] + EPS;
 }
 
 /**
@@ -45,29 +67,6 @@ function rungsOf(observedLoads?: number[]): number[] {
  * What is actually known to be loadable is the smaller of: her lightest performed rung, and the
  * equipment's own increment (B-6). Nothing else is claimed.
  */
-/**
- * F-2 — THE LEARNED GRID SPEAKS ONLY WITHIN THE RANGE SHE HAS PERFORMED.
- *
- * Her observed loads are the rungs we KNOW exist, not every rung that exists. Outside that range the
- * grid has nothing to say and the equipment increment (B-6) is the honest answer — the rule
- * `engine/loadMath.normalizeLoad` already documents ("above the max observed, or below min, or
- * no-grid → the static increment; the grid never caps progression") and the founder ratified for the
- * equipment layer.
- *
- * `snapDown` was missing the LOWER half of that rule, and it was not cosmetic. Its own header
- * promises "snapping is always DOWN — normalization can only ever lower an implied load, never
- * raise it (the safety invariant)", but with the ideal below her lowest rung the loop's initialiser
- * (`let down = rungs[0]`) returned that rung — a snap UP. On a lift she had only ever performed at
- * ONE weight — which is EVERY lift on its second session — Loop 1's drop computed 37.5, snapped
- * back to 40, and reported `corrected: false`. **The load could not ease.** That is the exact
- * shape of the Build #33 complaint ("no matter how many reps I write it stays at 34"), still alive
- * through a different door, on a path the band-floor fix never touched.
- */
-function inRange(load: number, observedLoads?: number[]): boolean {
-  const rungs = rungsOf(observedLoads);
-  return rungs.length > 0 && load >= rungs[0] - EPS && load <= rungs[rungs.length - 1] + EPS;
-}
-
 export function loadFloor(equipment: Equipment, observedLoads?: number[]): number {
   if (equipment === 'barbell') return BAR_KG; // a fact of the room, not a statistic
   const inc = STARTING_INCREMENT[equipment] || 0;

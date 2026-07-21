@@ -103,6 +103,31 @@ tracked, exercise-keying makes unnecessary.
 > a requirement). That is L2 honoured, not evaded — but it is a working set doing the measuring now,
 > and this is the paragraph that admits it.
 
+**AND THE LAST THREE, from a final pass over what the ledger DECLARES vs what the code holds:**
+
+- **B-4 was half-wired.** It names two facts that replace the day-one per-set cost — *"her measured
+  rest (built, Stage 0) **and her set durations (timestamps)**."* The rest half shipped; the work
+  half did not, so a fixed `SET_EXEC_SECONDS` was standing in for a fact every logged set has carried
+  all along. `learnedExecS` now reads it — `(persistedAt[i] − persistedAt[i−1]) − restBeforeS[i]`,
+  same-exercise same-session pairs only, and only when the rest is KNOWN (an unknown rest would
+  silently become "work", L3). The time budget (S-64) now prices **both** halves from her.
+- **F-2 and B-6 each lived in the code TWICE.** `engine/loadMath` carried its own `LOAD_INCREMENT`
+  (a second B-6) and its own grid snap with a `GRID_SNAP_TOLERANCE_KG` rule `engine/v5/grid` did not
+  share (a second F-2) — the cold-start seed and the live loops free to disagree about what is
+  loadable on the same lift. `normalizeLoad` now **delegates** to `grid.snapDown`; B-6 has one
+  declaration. `BAR_KG` moved into the v5 ledger beside it (it was in `loadMath`, which the grid
+  imported while `loadMath` imported the grid back — a cycle, and two chances to hold a different bar).
+- **The swap pool is now scoped in writing.** Its GATES are register law (before the first set;
+  same-muscle synonyms only — "a swap can never change which muscle is trained"). Its SCORE is not:
+  it sets no load, moves no volume, appears nowhere here, and its weights are **not** ledger
+  constants. Said out loud in the module so the two are never confused.
+
+**Left as TODO(screens), deliberately, for the founder's redesign:** **S-3's sentence** (a day that
+genuinely cannot fit her minutes is reported to telemetry but not yet said to her, in words) and
+**S-59's surface** (its assembly rule — a leave-it is cut last — is built; Rev 10 deleted its old
+prompt because a declarative pin no longer exists). Both are marked in `fixtureModel` at the exact
+line that produces the fact the copy needs.
+
 **THE DOCUMENT IS NOW SELF-CONSISTENT.** No situation prescribes a deleted mechanism; no law cites a
 guard that does not exist; "pin" appears only as a historical word; and every load-touching bootstrap
 names the thing that actually corrects it.

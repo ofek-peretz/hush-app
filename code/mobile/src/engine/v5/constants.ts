@@ -129,6 +129,18 @@ export const STARTING_INCREMENT: Record<Equipment, number> = {
 };
 
 /**
+ * S-55 / F-2 — **THE EMPTY BAR.** The floor under every barbell load, because it is a fact of the
+ * room, not a statistic: "a prescription may never fall to or below zero, or below the lightest
+ * weight that physically exists (the empty bar, the smallest dumbbell, the first pin)."
+ *
+ * It lives HERE, beside B-6, because it is the same kind of thing — what the equipment physically
+ * offers — and because it must have exactly ONE home. It previously sat in `engine/loadMath`, which
+ * `engine/v5/grid` then imported while `loadMath` imported the grid back: a cycle, and worse, an
+ * invitation for the two to hold different numbers. `loadMath` re-exports it for its consumers.
+ */
+export const BAR_KG = 20;
+
+/**
  * B-3 — attempts-to-clear before she has a history on the lift. The most conservative value: assume
  * she clears each load first try, so a single missed occurrence does not read as a stall. Replaced
  * by her own statistic (S-25) as soon as she has cleared a load or two.

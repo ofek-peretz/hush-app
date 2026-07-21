@@ -23,6 +23,50 @@ export function learnedRestS(restSamples: (number | null | undefined)[]): number
   return median(known);
 }
 
+/**
+ * B-4's OTHER half — her measured **set duration** (the working seconds, not the rest).
+ *
+ * B-4 declares the day-one per-set cost and names both things that replace it: *"Her measured rest
+ * (built, Stage 0) **and her set durations (timestamps)**."* The rest half shipped; the work half
+ * did not, so a fixed `SET_EXEC_SECONDS` was still standing in for a fact the app has been recording
+ * all along. A set that takes her 20 seconds and one that takes her 70 are not the same set, and the
+ * time budget (S-64) was pricing both at the same number.
+ *
+ * The fact is already on disk: two consecutive sets of the SAME exercise in the SAME session carry
+ * `persistedAt` timestamps, and the second carries the `restBeforeS` that separated them. What is
+ * left is the work.
+ *
+ *     exec = (persistedAt[i] − persistedAt[i−1]) − restBeforeS[i]
+ *
+ * Only same-exercise, same-session, consecutive pairs count, and only when the rest is KNOWN (L3 —
+ * an unknown rest would silently become "work"). Implausible values are dropped rather than
+ * clamped: a negative means the two facts disagree, and a gap longer than the pair's own rest plus
+ * an hour means she put the phone down mid-exercise — neither is a set duration. Returns null until
+ * she has one real pair, and the caller then uses the B-4 bootstrap.
+ */
+export interface ExecSample {
+  exerciseId: string;
+  sessionId: string;
+  atMs: number;
+  restBeforeS?: number;
+}
+
+export function learnedExecS(samples: ExecSample[]): number | null {
+  const execs: number[] = [];
+  for (let i = 1; i < samples.length; i++) {
+    const prev = samples[i - 1];
+    const cur = samples[i];
+    if (cur.sessionId !== prev.sessionId || cur.exerciseId !== prev.exerciseId) continue;
+    if (typeof cur.restBeforeS !== 'number') continue; // unknown rest is never read as zero (L3)
+    if (!Number.isFinite(cur.atMs) || !Number.isFinite(prev.atMs)) continue;
+    const exec = (cur.atMs - prev.atMs) / 1000 - cur.restBeforeS;
+    if (exec <= 0 || exec > 3600) continue; // the two facts disagree, or she walked away mid-lift
+    execs.push(exec);
+  }
+  if (execs.length === 0) return null;
+  return median(execs);
+}
+
 /** Minutes a block of `sets` takes: sets × (work + rest), in minutes. Rest is her measured rest. */
 export function setsToMinutes(sets: number, workSecPerSet: number, restSec: number): number {
   return (sets * (workSecPerSet + restSec)) / 60;
