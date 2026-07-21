@@ -7,7 +7,7 @@ import type { Program } from '@/data/local/models';
 import type { WeeklyUpdate, WeeklyPlanView } from '@/engine/weeklyView';
 import { getWeeklyUpdateV5, getWeeklyPlanV5, markWeeklyUpdateSeenV5 } from '@/engine/v5/v5Engine';
 
-export type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanLift } from '@/engine/weeklyView';
+export type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanLift, WeeklyVolumeMove } from '@/engine/weeklyView';
 
 export async function getWeeklyUpdate(): Promise<WeeklyUpdate | null> {
   return getWeeklyUpdateV5();

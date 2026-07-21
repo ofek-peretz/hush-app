@@ -60,10 +60,21 @@ export interface WeeklyPlanWorkout {
   lifts: WeeklyPlanLift[];
 }
 
+/** A Loop 3 volume move — muscle-keyed news that belongs to no single lift row (S-45). */
+export interface WeeklyVolumeMove {
+  muscle: string;
+  setsFrom: number;
+  setsTo: number;
+  explanation: Explanation;
+}
+
 export interface WeeklyPlanView {
   weekIndex: number;
   at: string; // ISO of the advance
+  /** Every piece of news the mirror carries: changed lift rows PLUS volume moves. */
   changedCount: number;
   seen: boolean;
   workouts: WeeklyPlanWorkout[];
+  /** Muscle-level volume moves (Loop 3) — rendered as their own rows; a muscle is not a lift. */
+  volume?: WeeklyVolumeMove[];
 }

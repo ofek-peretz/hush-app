@@ -238,16 +238,22 @@ export function Home({ navigation, route }: Props) {
           Object.keys(rotated).find((anchor) => rotated[anchor] === currentExerciseId) ?? null;
         const changes: BriefChange[] | null =
           update && view
-            ? view.workouts.flatMap((w) =>
-                w.lifts
-                  .filter((l) => l.change)
-                  .map((l) => ({
-                    name: l.name,
-                    loadFrom: l.change!.snapshot.loadFrom,
-                    loadTo: l.change!.snapshot.loadTo,
-                    swapped: l.change!.snapshot.swapped,
-                  })),
-              )
+            ? [
+                ...view.workouts.flatMap((w) =>
+                  w.lifts
+                    .filter((l) => l.change)
+                    .map((l) => ({
+                      name: l.name,
+                      loadFrom: l.change!.snapshot.loadFrom,
+                      loadTo: l.change!.snapshot.loadTo,
+                      swapped: l.change!.snapshot.swapped,
+                    })),
+                ),
+                // Loop 3 volume moves are news too: they carry no load and no swap, so they reach
+                // the briefing only as COUNT (the "tuned" sentence) — but they must reach it, or a
+                // volume-only week reads "steady" here while the letter shows what changed.
+                ...(view.volume ?? []).map((v) => ({ name: v.muscle, loadFrom: null, loadTo: null, swapped: false })),
+              ]
             : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
         setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
         setBriefCount(changes ? changes.length : null);

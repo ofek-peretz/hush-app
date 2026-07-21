@@ -259,6 +259,27 @@ export function WeeklyUpdate({ navigation }: Props) {
             })
           : null}
 
+        {/* ── Loop 3 · volume moves — muscle-level news that belongs to no single lift row ── */}
+        {!steady && view?.volume?.length ? (
+          <View style={styles.volumeBlock}>
+            {view.volume.map((v) => (
+              <View key={v.muscle} style={styles.volumeRow}>
+                <View style={styles.volumeTop}>
+                  <Text style={styles.volumeMuscle}>{t(`muscle.${v.muscle}`)}</Text>
+                  <View style={styles.evidenceMoveRow}>
+                    <Text style={[styles.volumeMove, { color: v.setsTo > v.setsFrom ? up[0] : down[0] }]}>
+                      {`${v.setsFrom} → ${v.setsTo}`}
+                    </Text>
+                    <Text style={styles.evidenceUnit}>{t('weekly.setsUnit')}</Text>
+                  </View>
+                </View>
+                {/* The why, in place — a volume move is one sentence, not a foldout. */}
+                <Text style={styles.volumeWhy}>{t(v.explanation.text.key, v.explanation.text.params ?? {})}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* The plan is bigger than the news. One line, so the athlete knows the rest is intact. */}
         {!steady && changedCount > 0 ? <Text style={styles.unchanged}>{t('weekly.unchangedNote')}</Text> : null}
 
@@ -467,6 +488,14 @@ const styles = StyleSheet.create({
 
   // the rest of the plan stands — said once, at the end
   unchanged: { marginTop: 20, fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, textAlign: 'left' },
+
+  // Loop 3 — a volume move is a muscle's news, so it gets a muscle row, not a fake lift row.
+  volumeBlock: { marginTop: 24 },
+  volumeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  volumeRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: color.border },
+  volumeMuscle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  volumeMove: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, textAlign: 'left' },
+  volumeWhy: { marginTop: 6, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
 
   // S-56 — the one question the mirror may ask. A quiet card, not a modal: the letter is hers to
   // read, and the question waits inside it rather than standing in front of it (L9).

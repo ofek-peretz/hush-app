@@ -232,6 +232,22 @@ both lints + `expo export` green.
 6. **And the last v4 self-report is out of the product entirely:** the Capability Portrait's
    "still learning" prior read `profile.experience` (display-only, but a guess wearing a bar). One
    neutral prior now; her own lifts replace it within sessions.
+7. **S-45 · THE MIRROR NAMED THINGS THE ATHLETE COULD NEVER SEE — the plan view dropped three of
+   the change log's four kinds of news.** Found by the third hermetic pass (2026-07-21, same day).
+   `getWeeklyPlanV5` attached changes by `c.exerciseId` and hardcoded `swapped: false` — but a
+   STRUCTURAL change is keyed by the lift that LEFT (absent from the very programme that enacts
+   it), and a VOLUME move is keyed by a MUSCLE (which no slot matches). The data layer named them
+   (`getWeeklyUpdateV5`, proven in stage 7) while every surface the athlete reads consumes the PLAN
+   view — so: the Saturday letter never showed a graduation/rotation/adopted-swap row (its whole
+   `swapped` UI branch was dead); **Home's one-tap rotation-UNDO could never appear** (it keys off
+   `snapshot.swapped`, permanently false); the briefing's swap sentence was dead; and a volume-only
+   week read "steady" on the letter while the Home note claimed the programme was updated. "Built
+   but unconnected" — the exact Part-7 failure, one seam further out than Rev 9 looked. **Fixed:**
+   a structural change attaches to the lift that ARRIVED (`toExercise`), marked `swapped`, shown at
+   its own current number (S-8/S-9 — never the old lift's load); volume moves ride the view as
+   muscle rows (`WeeklyPlanView.volume`), are rendered by the letter with their why, are COUNTED in
+   `changedCount`, and reach Home's briefing as the "tuned" count. Tests: stage 7 (structural →
+   plan view, swapped; volume → counted + carried).
 
 **★ REVISION 8 (2026-07-16, founder ruling from Build #33 manual QA) — THE APPROACH SET IS REMOVED
 ENTIRELY.** S-60 in whole (and its dependents — the "light load" B-1 fraction `APPROACH_FRACTION`, the

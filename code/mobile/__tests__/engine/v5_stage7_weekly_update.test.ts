@@ -60,6 +60,21 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     expect(keys).toContain('explain.swap.observation');
   });
 
+  it('S-45 · a structural change reaches the PLAN VIEW — on the lift that ARRIVED, marked swapped', async () => {
+    // The change is keyed by the lift that LEFT, but after the enacting regeneration only the TO
+    // lift is in the programme. The letter (and Home's swap sentence, and the rotation-undo — both
+    // key off `swapped`) read the plan view, so the change must attach to the arriving lift or the
+    // athlete never sees it anywhere but the data layer.
+    const at = new Date('2026-07-15T10:00:00Z').getTime();
+    await recordStructuralChangeV5('machine_chest_press', 'bb_bench_press', 'swap', at); // rotated INTO bench
+    const view = await getWeeklyPlanV5(program, ROLL2); // program contains bb_bench_press
+    expect(view!.changedCount).toBe(1);
+    const lift = view!.workouts[0].lifts[0];
+    expect(lift.change).not.toBeNull();
+    expect(lift.change!.snapshot.swapped).toBe(true);
+    expect(lift.change!.explanation.observation.key).toBe('explain.swap.observation');
+  });
+
   it('S-45 · a re-enacted structural change is logged once per week (idempotent)', async () => {
     const at = new Date('2026-07-15T10:00:00Z').getTime();
     await recordStructuralChangeV5('bb_bench_press', 'db_bench_press', 'swap', at);
@@ -80,6 +95,13 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     const update = await getWeeklyUpdateV5(ROLL2);
     expect(update).not.toBeNull();
     expect(update!.explanations.some((e) => e.observation.key === 'explain.volumeUp.observation')).toBe(true);
+
+    // …and it reaches the PLAN VIEW too: a muscle is not a lift, so it rides as a volume row and is
+    // COUNTED — a volume-only week must never read "steady" on the letter while the note on Home
+    // says the programme was updated.
+    const view = await getWeeklyPlanV5(program, ROLL2);
+    expect(view!.volume!.some((v) => v.muscle === 'Chest' && v.setsTo > v.setsFrom)).toBe(true);
+    expect(view!.changedCount).toBeGreaterThanOrEqual(1);
   });
 
   it('a steady (all-hold) workout surfaces no changes — the plan is already right', async () => {

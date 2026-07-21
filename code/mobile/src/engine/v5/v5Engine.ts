@@ -17,7 +17,7 @@ import { db, type EngineV5State } from '@/data/local/db';
 import { exerciseMeta } from '@/engine/catalog';
 import { exerciseDisplayName } from '@/data/exercises';
 import { currentWeekOpen } from '@/domain/weekCadence';
-import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, Explanation, ExplanationLine } from '@/engine/weeklyView';
+import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, WeeklyVolumeMove, Explanation, ExplanationLine } from '@/engine/weeklyView';
 import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
 import { repsPerRung } from './repsPerRung';
@@ -559,21 +559,49 @@ export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now
   const state = await load();
   const ex = asStates(state);
   const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
-  const changeByEx = new Map(changes.map((c) => [c.exerciseId, c]));
   const { end } = closedWeek(nowMs);
+
+  // The change log carries FOUR kinds of news, and only one of them is keyed by a lift that is
+  // still in the programme. Attaching everything by `c.exerciseId` — as this function used to —
+  // silently dropped the other three from every SCREEN: a structural change is keyed by the lift
+  // that LEFT (`from`), so after the very regeneration that enacts it no slot matches; a volume
+  // move is keyed by a MUSCLE, which no slot ever matches. The mirror's data layer named them
+  // (getWeeklyUpdateV5, proven in stage 7) while the letter the athlete actually reads — and Home's
+  // briefing, and the rotation-UNDO that keys off `swapped` — could never show one. "Built but
+  // unconnected", the exact Part-7 failure, one seam further out.
+  const loadByEx = new Map(changes.filter((c) => c.kind == null).map((c) => [c.exerciseId, c]));
+  const rungByEx = new Map(changes.filter((c) => c.kind === 'rung').map((c) => [c.exerciseId, c]));
+  // A structural change attaches to the lift that ARRIVED (`toExercise`) — the one she can see.
+  const structByTo = new Map(
+    changes.filter((c) => (c.kind === 'graduate' || c.kind === 'swap') && c.toExercise).map((c) => [c.toExercise!, c]),
+  );
+  const volumeMoves: WeeklyVolumeMove[] = changes
+    .filter((c) => c.kind === 'volume' && c.muscle)
+    .map((c) => ({ muscle: c.muscle!, setsFrom: c.setsFrom, setsTo: c.setsTo, explanation: explainChange(c) }));
 
   const workouts: WeeklyPlanWorkout[] = [];
   for (const day of program.days) {
     if (day.isRest) continue;
     const lifts: WeeklyPlanLift[] = day.slots.map((slot) => {
       const st = ex[slot.exerciseId];
-      const c = changeByEx.get(slot.exerciseId);
+      // A lift that is ITSELF the product of a change (graduation / rotation / adopted swap) is the
+      // bigger news than a load move on it; one row carries one story, structural first.
+      const structural = structByTo.get(slot.exerciseId);
+      const c = structural ?? loadByEx.get(slot.exerciseId) ?? rungByEx.get(slot.exerciseId);
       const change = c
         ? {
             snapshot: {
               slotId: slot.exerciseId, exerciseId: slot.exerciseId,
-              loadFrom: c.loadFrom, loadTo: c.loadTo, setsFrom: c.setsFrom, setsTo: c.setsTo,
-              rangeFrom: c.bandFrom, rangeTo: c.bandTo, swapped: false,
+              // A structural row shows the NEW lift at its own current number (it enters at S-8/S-9,
+              // never at the old lift's load) — `swapped` is what the screens key the badge, the
+              // briefing's swap sentence, and the rotation-undo off.
+              loadFrom: structural ? null : c.loadFrom,
+              loadTo: structural ? (st ? st.load : null) : c.loadTo,
+              setsFrom: structural ? slot.setCount : c.setsFrom,
+              setsTo: structural ? slot.setCount : c.setsTo,
+              rangeFrom: structural && st ? [st.band.lo, st.band.hi] : c.bandFrom,
+              rangeTo: structural && st ? [st.band.lo, st.band.hi] : c.bandTo,
+              swapped: !!structural,
             } as WeekPlanChange,
             explanation: explainChange(c),
           }
@@ -592,6 +620,8 @@ export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now
     });
     workouts.push({ dayId: day.id, name: day.name, groups: day.muscleGroups, lifts });
   }
-  const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0);
-  return { weekIndex: 0, at: new Date(end).toISOString(), changedCount, seen: state.seenWeekEnd === end, workouts };
+  // Every piece of news counts — a week whose only decision was a volume move must not read as "a
+  // steady week" on the letter while the update note on Home says the programme was updated.
+  const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0) + volumeMoves.length;
+  return { weekIndex: 0, at: new Date(end).toISOString(), changedCount, seen: state.seenWeekEnd === end, workouts, volume: volumeMoves };
 }
