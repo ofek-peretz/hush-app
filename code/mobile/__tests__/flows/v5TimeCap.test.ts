@@ -6,6 +6,7 @@
  */
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
+import { exerciseById } from '@/data/exercises';
 import type { Profile, WeeklyVolume, Session, ProgramDay } from '@/data/local/models';
 
 const base: Profile = { units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
@@ -25,9 +26,39 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
     }
   }
 
-  it('a shorter declared budget is honoured too', async () => {
+  /**
+   * S-35's two protected drops outrank the ceiling, and the register says so in as many words: "If
+   * honouring both leaves nothing else to cut, the workout genuinely cannot fit her minutes: that is
+   * S-3, and the engine says so rather than quietly starving a muscle."
+   *
+   * So a shorter budget is honoured until the ONLY way to honour it is to stop training a muscle she
+   * never turned off. At 3 days / 45 minutes the upper day reaches exactly that floor — one lift per
+   * muscle, all at 3 sets bar the day's main lift — and the honest answer is 48 prescribed minutes,
+   * not a silently deleted triceps. (Before the S-35 guard was wired into `enforceTimeCap`, this day
+   * DID come in under 45 — by dropping the athlete's only biceps or triceps lift.)
+   */
+  it('a shorter declared budget is honoured — until honouring it would cost a muscle (S-35 > S-64)', async () => {
     const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: 45 });
-    for (const d of prog.days) expect(estimateSessionMinutes(d)).toBeLessThanOrEqual(45);
+    for (const d of prog.days) {
+      if (estimateSessionMinutes(d) <= 45) continue;
+      // Over budget is legal ONLY at the floor: every non-supplemental muscle down to a single lift.
+      const perMuscle: Record<string, number> = {};
+      for (const s of d.slots) {
+        const m = exerciseById(s.exerciseId)?.muscle;
+        if (m && !s.supplemental) perMuscle[m] = (perMuscle[m] ?? 0) + 1;
+      }
+      expect(Object.values(perMuscle).every((n) => n <= 1)).toBe(true);
+    }
+  });
+
+  it('no muscle is ever silently dropped to fit the budget (S-35 / S-63)', async () => {
+    // The map trains ten muscles; a tight budget may shrink a day, never stop training one of them.
+    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: 45 });
+    const trained = new Set(
+      prog.days.flatMap((d) => d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter(Boolean)),
+    );
+    for (const m of ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves'])
+      expect(trained.has(m)).toBe(true);
   });
 
   it('the last-resort drop never removes a muscle entirely — every trained muscle keeps a lift', async () => {

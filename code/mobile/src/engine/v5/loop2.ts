@@ -11,7 +11,7 @@
 
 import type { Band, ExerciseMeta, ExerciseState, Loop2Result, SetPerf, SessionRecord } from './types';
 import { median, percentileNearestRank } from './stats';
-import { snapDown, moveRungs, nextRung, prevRung, loadFloor } from './grid';
+import { snapDown, moveRungs, nextRung, prevRung, loadFloor, isBigJump } from './grid';
 import { repsPerRung, rungsForHeadroom } from './repsPerRung';
 import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED } from './constants';
 
@@ -119,11 +119,24 @@ function attemptsAtCurrentLoad(state: ExerciseState, thisSessionCleared: boolean
   return count;
 }
 
-/** The heaviest load in her history where ALL sets met Tlo (the back-off target, S-25.1). */
-function heaviestFullClear(history: SessionRecord[], band: Band): number | null {
+/**
+ * The heaviest load in her history where ALL sets met Tlo — the back-off target (S-25.1) — read
+ * STRICTLY BELOW the load she is stalled at.
+ *
+ * The "below" is the whole point and it was missing: S-25.1 says "back OFF and re-climb," and a
+ * back-off target equal to the current load is not a back-off, it is a freeze. It happens on a real
+ * path: she clears 40 (→ 42.5), fails 42.5 twice (→ back to 40), then fails 40 twice — the window
+ * still holds her old 40 clear, so the "heaviest full clear" was 40, the load never moved, and
+ * `isRepeatedStall` never fired either (it needs an occurrence LOWER than the current load, and
+ * 42.5 is not lower). The lift stalled at 40 for ever, decision after decision, with nothing in the
+ * changeLog to show for it. Reading only below the wall means the engine always has a real step
+ * down — her heaviest proven lighter load, else one rung (the caller's fallback).
+ */
+function heaviestFullClear(history: SessionRecord[], band: Band, below: number): number | null {
   let best: number | null = null;
   for (const rec of history.slice(0, RECENCY_WINDOW_SESSIONS)) {
     if (rec.load == null || rec.sets.length === 0) continue;
+    if (rec.load >= below - EPS) continue; // not a back-off — S-25.1 steps DOWN or not at all
     if (rec.sets.every((s) => metTlo(s, band)) && (best == null || rec.load > best)) best = rec.load;
   }
   return best;
@@ -164,7 +177,22 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
   if (allMet) {
     // S-22: progress. Move up by as many rungs as her measured headroom over Tlo justifies.
     const worstReps = Math.min(...sets.map((s) => s.reps));
-    const perRung = repsPerRung(inp.session, state.history, meta);
+    // The rung she is about to be asked for — priced at THE ANCHOR, not at her grid's top (S-28).
+    const perRung = repsPerRung(inp.session, state.history, meta, anchor);
+
+    // S-28 · THE NEXT RUNG IS A BIG JUMP. Two conditions, both stated in the situation itself:
+    //   (1) "a machine with 10 kg pins; NO MICRO-LOADING" — the real rung exceeds the equipment's
+    //       finest step (isBigJump). False on a barbell, so S-22 below is untouched there.
+    //   (2) "the load cannot move without breaking her" — her own measured reps-per-rung says the
+    //       step lands her under Tlo. The release is the same number read the other way: "when her
+    //       reps give her a FULL RUNG'S WORTH OF HEADROOM, the rung is taken" (reps − perRung ≥ Tlo).
+    // Then: "T is hers, so the engine may not quietly raise it" — the load HOLDS at the anchor, she
+    // climbs reps at it, and the engine SAYS SO. Silent until her slope is fitted (F-12): with no
+    // measured perRung there is no fact that the jump breaks her, and B-5's cautious rung stands.
+    if (perRung != null && isBigJump(anchor, meta.equipment, meta.observedLoads) && worstReps - perRung < band.lo) {
+      return { decision: 'rung_out_of_reach', load: anchor, band, sets: state.sets };
+    }
+
     const n = rungsForHeadroom(worstReps - band.lo, perRung);
     let load = snapDown(moveRungs(anchor, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     load = applyRail(load, state.history, band, meta, anchor); // L11 (base = max(settled, anchor))
@@ -179,7 +207,7 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
   if (attempts > N) {
     // S-25.1: back off to the heaviest full-clear load, else one rung down; re-climb. The load backs
     // off in BOTH the back-off and the rotate case (the rotated-from lift trains it until the roll).
-    const backTo = heaviestFullClear(state.history, band);
+    const backTo = heaviestFullClear(state.history, band, state.load);
     const load = backTo != null
       ? snapDown(backTo, meta.equipment, meta.observedLoads)
       : Math.max(loadFloor(meta.equipment, meta.observedLoads), prevRung(state.load, meta.equipment, meta.observedLoads));

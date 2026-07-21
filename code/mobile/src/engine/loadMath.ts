@@ -65,5 +65,8 @@ export function normalizeLoad(load: number, equipment: Equipment, grid?: number[
   }
   const inc = LOAD_INCREMENT[equipment];
   if (inc <= 0) return load;
-  return Math.floor(load / inc) * inc;
+  // S-55's first clause — "a prescription may never fall TO OR BELOW ZERO." Flooring to the
+  // increment would happily return 0 for any ideal under one step, and a 0 kg prescription is not a
+  // light lift, it is no lift. The smallest step IS the smallest thing that exists here.
+  return Math.max(Math.floor(load / inc) * inc, inc);
 }

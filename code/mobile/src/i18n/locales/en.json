@@ -703,6 +703,12 @@
       "conclusion": "Fewer sets keeps it finishable.",
       "action": "I trimmed a set from your {{muscle}} work."
     },
+    "rungOutOfReach": {
+      "text": "{{ex}} cleared every set, but the next weight your gym has is too big a step from here — so I held the weight and we add reps until it is within reach.",
+      "observation": "{{ex}} cleared every set.",
+      "conclusion": "The next weight on this machine is too big a step from here.",
+      "action": "I held the weight. We add reps until the next one is within reach."
+    },
     "reprice": {
       "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",
       "textBw": "Last week {{ex}} came in under its prescription, so I matched it to your demonstrated capability and kept your sets unchanged.",

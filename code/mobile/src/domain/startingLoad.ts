@@ -1,60 +1,63 @@
 /**
  * THE COLD-START LOAD — what Hush puts on the bar the first time it meets an athlete.
  *
- * This was private to the model (fixtureModel). It is lifted out unchanged — same factors, same
- * rounding, same floors — because a SECOND surface now needs the exact same number: the milestone
- * ladders (founder 2026-07-13). "Adapt the weights that open a milestone to what we know about them
- * from onboarding — experience, weight, height, sex, frequency. We already start their programme
- * from that group's numbers; derive the marks from it too."
+ * This was private to the model (fixtureModel). It is lifted out because a SECOND surface needs the
+ * exact same number: the milestone ladders (founder 2026-07-13). The anchor of a club mark is the
+ * load Hush itself prescribed on day one — a 100 kg bench is a landmark for one athlete and an
+ * impossibility for another, while "three times what I started you at" is a landmark for both. One
+ * function, two consumers, no second opinion about how strong an athlete probably is.
  *
- * So the anchor of a club mark is the load Hush itself prescribed on day one. A 100 kg bench is a
- * landmark for one athlete and an impossibility for another; "three times what I started you at"
- * is a landmark for both. One function, two consumers, no second opinion about how strong an
- * athlete probably is.
- *
- * Pure & I/O-free. Inputs: sex × bodyweight × experience × age (the same four the split is built
- * from). Height and frequency are deliberately NOT inputs — height does not predict strength once
- * bodyweight is known, and frequency changes how FAST an athlete arrives at a load, never which
- * load is worth marking.
+ * Pure & I/O-free. **Inputs: sex × bodyweight. That is the whole list** (register B-1). Height,
+ * frequency, age and experience are all deliberately NOT inputs — height does not predict strength
+ * once bodyweight is known, frequency changes how FAST she arrives at a load rather than which load
+ * is worth marking, and the other two are struck below.
  */
 import type { Profile, Experience, Capability } from '@/data/local/models';
 import { BAR_KG } from '@/engine/loadMath';
 import type { Exercise } from '@/data/exercises';
 
-/** The four fields the cold start actually reads. */
-export type LoadProfile = Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'>;
+/**
+ * The TWO fields the cold start reads — **her sex and her bodyweight, and nothing else.**
+ *
+ * B-1, verbatim: *"the catalogue cold-start from **her sex + bodyweight** (nothing else — no
+ * self-report, no age)."* Two v4-era inputs were still multiplying this load and neither has any
+ * standing in the v5 register:
+ *
+ *   · **`experience`** — a SELF-REPORT, scaled 0.78 / 1.00 / 1.22. Part 9 §A deletes it as an input
+ *     ("removed from onboarding, Settings, and the profile's decision path"), and L1 is the reason:
+ *     the engine acts on facts it measured, and what she calls herself is not one. It had been
+ *     removed from the onboarding SCREEN and left in the decision path — so in practice every new
+ *     athlete fell to the `beginner` default and had every day-one load cut by 22%.
+ *   · **`age`** — a per-decade multiplier down to 0.80. Nowhere in the register. S-42 sets the
+ *     precedent explicitly for the neighbouring field: *"She changes height. **Nothing.** Height
+ *     touches no engine decision… Any other use would be a guess."* Age is the same guess.
+ *
+ * What replaces them is not a bigger guess — it is **Loop 1**, which reads her first working set and
+ * moves the iron before the second (B-1, Rev 8). A cold start is a suggestion she can see and edit
+ * (F-2); it was never meant to be right, only to be corrected fast.
+ *
+ * **DAY-ONE LOADS GO UP, and that is the point.** Measured across the catalogue the cold start moves
+ * ×1.00–×1.75 (male 30/80 kg: bench 33 → 43, squat 42 → 53; a 72-year-old: 27 → 43). But an athlete
+ * who had declared "intermediate" sees **no change at all** — 43 → 43 — because the new number IS
+ * the un-multiplied one she always got. The old behaviour was not conservatism; it was a self-report
+ * default. Rev 7 deleted the onboarding question and left the multiplier here, so every athlete
+ * answered "beginner" by omission and took a 22% discount nobody chose.
+ */
+export type LoadProfile = Pick<Profile, 'sex' | 'weightKg'>;
 
-const EXP_FACTOR: Record<Experience, number> = { beginner: 0.78, intermediate: 1.0, advanced: 1.22 };
 const UPPER: Capability[] = ['horizontal_push', 'horizontal_pull', 'vertical_push'];
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi);
 }
 
-/**
- * Age load multiplier — keeps the cold-start conservative across the lifespan. Untrained
- * teens are still developing; strength gently declines past ~40, so masters athletes
- * start lighter (and, in setsFor/repsFor, train with a touch less volume and joint-
- * friendlier reps). Unknown age → no penalty (the base load is already conservative).
- */
-export function ageLoadFactor(age?: number): number {
-  if (age == null) return 1;
-  if (age < 18) return 0.9; // still developing — conservative
-  if (age < 40) return 1.0;
-  if (age < 50) return 0.97;
-  if (age < 60) return 0.92;
-  if (age < 70) return 0.86;
-  return 0.8; // 70+
-}
-
 /** Conservative personalized starting load (kg), or null for bodyweight movements. */
 export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {
   if (ex.bodyweight || ex.baseKg == null) return null;
   const bw = profile.weightKg ?? 75;
-  const exp = EXP_FACTOR[profile.experience ?? 'beginner']; // unknown → conservative
   const bwFactor = ex.bwScaled ? clamp(bw / 75, 0.7, 1.45) : 1;
   const sexFactor = profile.sex === 'female' ? (UPPER.includes(ex.capability) ? 0.62 : 0.72) : 1;
-  let kg = ex.baseKg * bwFactor * sexFactor * exp * ageLoadFactor(profile.age);
+  let kg = ex.baseKg * bwFactor * sexFactor; // B-1: sex + bodyweight, and nothing else
   // Round to a loadable increment.
   // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
   const step = 1;

@@ -82,6 +82,9 @@ export function applyLoop1<T extends LiveStep>(
   /** Her learned real grid for this lift (the loads she has actually performed), so a correction lands
    *  on a weight that exists at her gym. Absent → the equipment default increment (B-6). */
   observedLoads?: number[],
+  /** L11 — the rail for this lift: one rung above her heaviest completed-at-Tlo load (settled history
+   *  plus this session). Absent/null → inactive, exactly as L11 defines it for a never-completed lift. */
+  railCeiling?: number | null,
 ): Loop1Applied<T> {
   const cur = plan.find((s) => s.globalIndex === completedGlobalIndex);
   const noop: Loop1Applied<T> = { plan, corrected: false, direction: 'none', nextLoad: performedLoad };
@@ -104,6 +107,7 @@ export function applyLoop1<T extends LiveStep>(
     meta,
     // Her fitted reps-per-rung (F-13), stamped on the target by the prescription; null → B-5 one rung.
     perRung: cur.target.perRung ?? null,
+    railCeiling, // L11 — an in-session raise is bounded by her own record (S-11, "always inside the rail")
   });
   if (!r.corrected || r.nextLoad == null) return noop;
 

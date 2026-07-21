@@ -44,11 +44,15 @@ const K = {
   schemaVersion: 'hush.schema.version',
 } as const;
 
-/** Athlete-OWNED program customizations, persisted so weekly regeneration honors them
- *  (Program Ownership Contract). Pins are keyed by MUSCLE (swaps are muscle-scoped, so the
- *  muscle is the durable slot identity across regenerations). */
+/** Athlete-OWNED program customizations, persisted so weekly regeneration honors them.
+ *  Keyed by MUSCLE (swaps are muscle-scoped, so the muscle is the durable identity across
+ *  regenerations). **There is no PIN** — nothing here is declared; every entry is LEARNED from her
+ *  in-workout swaps at K=2 (register Rev 7 §B / S-69 / S-71). */
 export interface OwnedPreferences {
-  pinsByMuscle: Record<string, string>; // MuscleGroup -> chosen exerciseId
+  /** S-71 — her learned LEAVE-ITS: MuscleGroup -> the lift the engine must stop rotating away.
+   *  EARNED, never declared: the engine rotated a stalled lift out and she swapped back to it twice
+   *  (K=2). This replaced the v4 pin, which had a button; there is no button and no pin. */
+  leaveItsByMuscle: Record<string, string>;
   backups: Record<string, string>; // primary exerciseId -> equipment-busy backup
   substitutes: Record<string, string>; // primary exerciseId -> preferred substitute
   // Engine v5 (Rev 7) — the LEARNED-swap in-progress counter (S-68): anchor exerciseId -> the pending
@@ -58,8 +62,8 @@ export interface OwnedPreferences {
   // Engine v5 (Rev 7, S-71/S-72) — anchor exerciseId the ENGINE rotated away (a stalled lift, S-25.3)
   // → the lift it rotated TO. Marks a rotation as the engine's, so an athlete swap-BACK to the anchor
   // is recognised as RESISTANCE (not a fresh preference — S-72 keeps the two signals apart). When a
-  // resisted rotation's substitute is cleared by two swap-backs, the anchor becomes a learned "leave
-  // it" (a pin, S-71) and is removed from here.
+  // resisted rotation's substitute is cleared by two swap-backs, the anchor becomes a learned
+  // "leave it" (S-71) and is removed from here.
   engineRotated?: Record<string, string>;
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
@@ -68,7 +72,7 @@ export interface OwnedPreferences {
 }
 
 export const EMPTY_PREFERENCES: OwnedPreferences = {
-  pinsByMuscle: {},
+  leaveItsByMuscle: {},
   backups: {},
   substitutes: {},
   workoutOrder: [],
@@ -130,7 +134,7 @@ export interface EngineV5State {
      *  VOLUME change (S-32/S-34/S-37 — Loop 3 grew or trimmed a muscle's weekly sets). `exerciseId`
      *  holds the FROM lift (or the muscle name, for 'volume'); the mirror narrates each with its copy.
      *  Absent on the ordinary load-change entries. */
-    kind?: 'graduate' | 'swap' | 'volume';
+    kind?: 'graduate' | 'swap' | 'volume' | 'rung';
     toExercise?: string;
     /** For kind 'volume' — the muscle whose weekly set target moved (setsFrom → setsTo). */
     muscle?: string;
@@ -164,12 +168,25 @@ export interface PersistedMode {
   portrait: PortraitState;
 }
 
+/**
+ * Keys whose LAST read hit a stored-but-unreadable value (corrupt JSON, a storage fault) as opposed
+ * to simply not being there yet. The two are indistinguishable from `null`, and that is precisely
+ * what made engine-state loss SILENT (register S-47: "Engine state fails to load. Telemetry fires; a
+ * safe prescription is served. **Never a silent reset.**"). The engine reads this to tell the
+ * difference and report it; `db` stays free of a telemetry dependency.
+ */
+const corruptOnRead = new Set<string>();
+
 async function getJSON<T>(key: string): Promise<T | null> {
   try {
     const raw = await AsyncStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
+    const parsed = raw ? (JSON.parse(raw) as T) : null;
+    corruptOnRead.delete(key);
+    return parsed;
   } catch {
-    // Corrupt/partial value must never brick boot — treat as absent (recovery).
+    // Corrupt/partial value must never brick boot — treat as absent (recovery), but REMEMBER that it
+    // was a failure and not an absence, so the caller can report it rather than reset in silence.
+    corruptOnRead.add(key);
     return null;
   }
 }
@@ -294,6 +311,9 @@ export const db = {
   // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
   loadEngineV5: () => getJSON<EngineV5State>(K.engineV5),
   saveEngineV5: (s: EngineV5State) => setJSON(K.engineV5, s),
+  /** S-47 — did the last `loadEngineV5` FAIL (stored but unreadable), rather than find nothing? The
+   *  engine fires telemetry on true, so a rebuilt-from-history recovery is never silent. */
+  engineV5ReadFailed: () => corruptOnRead.has(K.engineV5),
 
   // ---- Subscription entitlement (local mirror; StoreKit is the source of truth) ----
   loadEntitlement: () => getJSON<Entitlement>(K.entitlement),

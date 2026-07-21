@@ -10,12 +10,15 @@
  * It is keyed by the blueprint ANCHOR (the exercise the assembler would pick before any learning),
  * recovered from the substitutes map itself, so it needs nothing from the assembler to be correct.
  *
- * ⛔ NOT WIRED YET (Revision 7 status): how occurrences are recorded from the live session, and how the
- * assembler reads `substitutes`, is the WIRING step — it lands with the assembler + the body-map
- * onboarding (the v5 cohort is empty until then). The rotation interactions (S-71 the learned
- * "leave it", S-72 an engine rotation is not an athlete swap) also land at wiring, because they depend
- * on the engine's rotation events, which do not exist in this pure layer. Tracked in the register
- * (Part 9) and the open-tasks memory so this core is never a silently-unwired branch.
+ * ✅ WIRED (2026-07-16). `domain/swapLearning.foldSessionSwaps` turns a finished session into
+ * occurrences and folds them here (sessionStore.finishSession); `programAssembly.pickExercises`
+ * reads the resulting `substitutes` at every regeneration; `domain/swapPool.swapCandidates` offers
+ * the blueprint anchor first (S-70); and `learnedLeaveIts` + `engineChanges` carry S-71/S-72. The
+ * old "NOT WIRED YET" header outlived the wiring by a year of commits — the code is the authority.
+ *
+ * `swapMenuOrder` below is the pure statement of S-70. The live menu applies the same rule inside
+ * `swapPool.swapCandidates` (where the admissibility gates live), so this one is the tested
+ * reference, not a second implementation anything calls.
  */
 import { ADOPT_THRESHOLD } from './constants';
 

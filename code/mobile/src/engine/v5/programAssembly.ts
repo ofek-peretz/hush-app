@@ -81,7 +81,7 @@ export function distributeMuscleSets(target: number, maxExercises = Infinity): n
 }
 
 /**
- * Deterministic exercise pick for a muscle: a pinned lift first (guaranteed + leading), then
+ * Deterministic exercise pick for a muscle: a LEAVE-IT first (guaranteed + leading, S-71), then
  * compound-before-isolation, then catalogue order. Swap-only advanced movements (S-61 — hanging leg
  * raise, ab wheel) are never GENERATED: anyone may swap into them, but a day-one athlete is not
  * assigned a lift that needs strength she has not shown. Sliced to `count`.
@@ -94,13 +94,13 @@ export function distributeMuscleSets(target: number, maxExercises = Infinity): n
 export function pickExercises(
   muscle: string,
   count: number,
-  pinned?: string,
+  leaveIt?: string,
   substitutes: Record<string, string> = {},
 ): string[] {
   const pool = exercisesForMuscle(muscle as MuscleGroup).filter((e) => !isSwapOnly(e.id));
   const ordered = [...pool].sort((a, b) => (a.tier === 'compound' ? 0 : 1) - (b.tier === 'compound' ? 0 : 1));
   let ids = ordered.map((e) => e.id);
-  if (pinned && ids.includes(pinned)) ids = [pinned, ...ids.filter((id) => id !== pinned)];
+  if (leaveIt && ids.includes(leaveIt)) ids = [leaveIt, ...ids.filter((id) => id !== leaveIt)];
   const picked = ids.slice(0, Math.max(1, count));
   const out: string[] = [];
   for (const id of picked) {
@@ -149,7 +149,7 @@ function nameDays(regionDays: ('upper' | 'lower')[]): string[] {
 export function assembleV5DayLists(
   map: BodyMap | undefined,
   days: number,
-  pinsByMuscle: Record<string, string> = {},
+  leaveItsByMuscle: Record<string, string> = {},
   substitutes: Record<string, string> = {},
   volumeByMuscle: Record<string, number> = {},
 ): DayList[] {
@@ -181,13 +181,13 @@ export function assembleV5DayLists(
       if (learned != null) {
         // Cap the exercise count at her actual pool so the target lands on real lifts, not a phantom
         // one (which would steal sets and make realized volume non-monotonic as the target grows).
-        const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, pinsByMuscle[m], substitutes).length;
+        const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes).length;
         const dist = distributeMuscleSets(learned, poolSize);
-        const picked = pickExercises(m, dist.length, pinsByMuscle[m], substitutes);
+        const picked = pickExercises(m, dist.length, leaveItsByMuscle[m], substitutes);
         picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
         picks.push(...picked);
       } else {
-        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), pinsByMuscle[m], substitutes));
+        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), leaveItsByMuscle[m], substitutes));
       }
     }
 

@@ -152,7 +152,7 @@ describe('undoEngineRotation — the explicit "leave it"', () => {
   const prefs = () => ({
     substitutes: { bb_bench_press: 'db_bench_press' },
     engineRotated: { bb_bench_press: 'db_bench_press' },
-    pinsByMuscle: {} as Record<string, string>,
+    leaveItsByMuscle: {} as Record<string, string>,
   });
   const muscle = (id: string) => (id === 'bb_bench_press' ? 'Chest' : null);
 
@@ -160,7 +160,7 @@ describe('undoEngineRotation — the explicit "leave it"', () => {
     const next = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
     expect(next.substitutes.bb_bench_press).toBeUndefined(); // the assembler goes back to her lift
     expect(next.engineRotated!.bb_bench_press).toBeUndefined(); // …and it is no longer a rotation
-    expect(next.pinsByMuscle.Chest).toBe('bb_bench_press'); // the pin she just earned (S-30/S-59)
+    expect(next.leaveItsByMuscle.Chest).toBe('bb_bench_press'); // the pin she just earned (S-30/S-59)
   });
 
   it('writes exactly what two silent swap-backs write — one "no", one outcome', () => {
@@ -171,21 +171,21 @@ describe('undoEngineRotation — the explicit "leave it"', () => {
     expect(learnedLeaveIts(before.substitutes, afterFold, before.engineRotated)).toEqual(['bb_bench_press']);
     // …and the button reaches the same place, in one tap.
     const viaButton = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
-    expect(viaButton.pinsByMuscle.Chest).toBe('bb_bench_press');
+    expect(viaButton.leaveItsByMuscle.Chest).toBe('bb_bench_press');
     expect(viaButton.substitutes.bb_bench_press).toBeUndefined();
   });
 
   it('a GRADUATION cannot be undone — it is a fact she demonstrated, not a preference', () => {
     // Graduation writes `substitutes` but never `engineRotated` (S-52/S-71: deliberately not
     // resistible). Without that mark there is nothing here to take back.
-    const graduated = { substitutes: { knee_push_up: 'push_up' }, engineRotated: {}, pinsByMuscle: {} };
+    const graduated = { substitutes: { knee_push_up: 'push_up' }, engineRotated: {}, leaveItsByMuscle: {} };
     expect(undoEngineRotation(graduated, 'knee_push_up', () => 'Chest')).toBe(graduated); // identity: untouched
   });
 
   it('her OWN learned swap is not ours to undo', () => {
     // S-69 adopts a substitute from HER repeated choice. It is not marked `engineRotated`, so the
     // button never appears over it — the app does not argue with the athlete on her behalf.
-    const hers = { substitutes: { leg_press: 'hack_squat' }, engineRotated: {}, pinsByMuscle: {} };
+    const hers = { substitutes: { leg_press: 'hack_squat' }, engineRotated: {}, leaveItsByMuscle: {} };
     expect(undoEngineRotation(hers, 'leg_press', () => 'Quads')).toBe(hers);
   });
 

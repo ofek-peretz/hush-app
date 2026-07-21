@@ -21,10 +21,11 @@ import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, W
 import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
 import { repsPerRung } from './repsPerRung';
-import { snapDown } from './grid';
+import { snapDown, nextRung } from './grid';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
 import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
+import { track } from '@/platform/telemetry';
 
 export type SeedFor = (exerciseId: string) => number | null;
 
@@ -54,6 +55,36 @@ export function observedLoads(exerciseId: string, sessions: Session[]): number[]
     if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
   }
   return [...seen];
+}
+
+/**
+ * L11 — THE RAIL, for the LIVE loop: one rung above the heaviest load she has completed at ≥ `Tlo`
+ * reps on this lift, across her settled history AND this session so far. `null` when she has no such
+ * completed set — the rail is inactive there by definition, and the athlete's own eyes are the guard
+ * (S-49). Legacy approach sets are excluded, exactly as everywhere else (S-60).
+ *
+ * The between-session loop has always clamped to this (`applyRail`, loop2). Loop 1 did not, though
+ * S-11 says a raise is "always inside the rail" and S-14 calls the rail absolute — so a single
+ * implausible rep count could push a mid-session prescription to a load she has never approached.
+ * Computed at the façade because the rail is a fact about her HISTORY, which the pure loop-1 core
+ * (deliberately) cannot see.
+ */
+export function railCeilingFor(exerciseId: string, bandLo: number, sessions: Session[]): number | null {
+  const meta = metaWithGrid(exerciseId, sessions);
+  if (meta.bodyweight) return null; // no load axis, no rail (S-51)
+  // F-8: the rail is a MEASURED statistic, so it reads only the recency window — her most recent
+  // sessions of THIS lift. An unsorted `startedAt` is treated as oldest (it cannot win the window).
+  const recent = sessions
+    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+    .slice(0, RECENCY_WINDOW_SESSIONS);
+  let best: number | null = null;
+  for (const s of recent) for (const log of s.sets) {
+    if (log.exerciseId !== exerciseId || log.isApproach) continue;
+    if (log.actualWeight == null || log.actualReps < bandLo) continue;
+    if (best == null || log.actualWeight > best) best = log.actualWeight;
+  }
+  return best == null ? null : nextRung(best, meta.equipment, meta.observedLoads);
 }
 
 /** Best load she completed at ≥ Tlo reps across history (the established-load read for init). */
@@ -90,11 +121,28 @@ function initExercise(exerciseId: string, band: Band, history: Session[], seedFo
 
 // ───────────────────────────── state io ─────────────────────────────
 const empty = (): EngineV5State => ({ exercises: {}, lastFoldedAt: 0, changeLog: [] });
+
+/**
+ * S-47 — engine state fails to load: **telemetry fires, a safe prescription is served, and it is
+ * never a silent reset.** A corrupt blob and a first-run absence both surface as `null`, so until
+ * now the corrupt case rebuilt every exercise from history and overwrote the stored state without a
+ * word — the recovery is right (her real history IS the safe prescription), but the silence was
+ * exactly what this situation forbids. `db.engineV5ReadFailed()` distinguishes the two, and a failed
+ * read is reported every time it happens.
+ */
 async function load(): Promise<EngineV5State> {
-  try { return (await db.loadEngineV5()) ?? empty(); } catch { return empty(); }
+  let stored: EngineV5State | null = null;
+  try { stored = await db.loadEngineV5(); } catch { stored = null; }
+  if (db.engineV5ReadFailed()) {
+    void track('engine_error', {
+      op: 'loadEngineV5',
+      message: 'engine state unreadable — rebuilding from session history (S-47)',
+    });
+  }
+  return stored ?? empty();
 }
 async function save(s: EngineV5State): Promise<void> {
-  try { await db.saveEngineV5(s); } catch { /* offline/test */ }
+  try { await db.saveEngineV5(s); } catch (e) { void track('engine_error', { op: 'saveEngineV5', message: String(e) }); }
 }
 const asStates = (s: EngineV5State) => s.exercises as Record<string, ExerciseState>;
 
@@ -211,6 +259,14 @@ export async function advanceV5(
       // nothing (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
       if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
         log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
+      }
+      // S-28 · the ONE hold the engine must narrate. Every other hold says nothing (R7/S-16) because
+      // nothing happened; this one is a decision — she cleared every set and the load still did not
+      // move, and the register requires the engine to "say the truth and offer the only honest axis
+      // left." Logged with equal from/to loads, so the mirror's net-no-op filter must let it through
+      // on `kind`, not on a load delta.
+      if (out.decision === 'rung_out_of_reach' && out.load != null) {
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: out.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, kind: 'rung' });
       }
       ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
     }
@@ -367,6 +423,18 @@ function explainChange(c: ChangeEntry): Explanation {
       text: L(up ? 'volumeUp.text' : 'volumeDown.text', { muscle }),
     };
   }
+  // S-28 · the rung is out of reach. She cleared every set, and the load still held — because the
+  // only weight her gym offers next is a step her own reps say she cannot take yet. The engine names
+  // the obstacle and the axis that IS open: reps at this load, until the rung is within reach.
+  if (c.kind === 'rung') {
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L('rungOutOfReach.observation', { ex }),
+      conclusion: L('rungOutOfReach.conclusion'),
+      action: L('rungOutOfReach.action'),
+      text: L('rungOutOfReach.text', { ex }),
+    };
+  }
   // A STRUCTURAL change (S-45): the lift changed identity. A graduation says "you outgrew X → Y"; a
   // rotation / adopted learned-swap says "that slot missed the mark → Y". Reuses the existing copy.
   if (c.kind && c.toExercise) {
@@ -440,7 +508,7 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
   // nets to the same set count. Graduation/rotation/swap (no set delta to net) always survive.
   return [...netByEx.values()].filter((c) => {
     if (c.kind === 'volume') return c.setsFrom !== c.setsTo;
-    if (c.kind != null) return true; // graduate / swap
+    if (c.kind != null) return true; // graduate / swap / rung (S-28 holds the load — no delta to net)
     return c.loadFrom == null || c.loadTo == null || Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)) > 1e-6;
   });
 }

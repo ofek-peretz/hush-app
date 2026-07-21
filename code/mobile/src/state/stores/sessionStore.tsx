@@ -33,7 +33,8 @@ import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageRe
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
-import { recordStructuralChangeV5, observedLoads } from '@/engine/v5/v5Engine';
+import { recordStructuralChangeV5, observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
+import { learnedRestS } from '@/engine/v5/timeBudget';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -53,8 +54,52 @@ export const REST_TRANSITION_S = 120; // between exercises
 /** Plan-level fallback for a stale installed watch app (pre-per-step-rest builds). */
 export const REST_INTER_S = 90;
 
-/** The between-sets rest for an exercise (tier-based; unknown → compound, the safe long side). */
+/**
+ * S-17 — HER MEDIAN REST BECOMES THE PRESCRIPTION.
+ *
+ * "She hammers SKIP on the rest. Recorded. **Her median rest becomes the prescription.** The timer
+ * stops being something she fights." Half of that shipped: `restBeforeS` was recorded (Stage 0) and
+ * her median fed the TIME BUDGET (S-64, fixtureModel.restSecFor) — so a fast rester was credited
+ * with more work inside her hour, while the timer on screen still counted down the same 150 s she
+ * had skipped every single set. The engine measured her and then argued with her.
+ *
+ * This registry is the missing half: the median of the rests she has actually taken on a lift (the
+ * same `learnedRestS` estimator the budget uses, L3 — unknown rests excluded, never read as zero).
+ * It lives at module scope on purpose, because `restInterSecondsFor` is the ONE answer to "how long
+ * is the rest" for the phone, the watch mirror and the standalone watch plan alike — the swap-pool
+ * lesson: one rule, one place, or the surfaces drift.
+ *
+ * Nothing is clamped. The bounds constant (F-5) was retired in Rev 6 with HR-ends-rest; a 40-second
+ * rester gets a 40-second timer, and the budget already credits her for it (S-64).
+ */
+const learnedRestByExercise = new Map<string, number>();
+
+/** Recompute her learned rests from completed-session history (S-17). Idempotent; cheap. */
+export function refreshLearnedRests(history: Session[]): void {
+  const byExercise = new Map<string, (number | null | undefined)[]>();
+  for (const s of history) for (const l of s.sets) {
+    if (l.isApproach) continue; // a measurement is not work, and its rest is not her rest (S-60)
+    const arr = byExercise.get(l.exerciseId);
+    if (arr) arr.push(l.restBeforeS);
+    else byExercise.set(l.exerciseId, [l.restBeforeS]);
+  }
+  learnedRestByExercise.clear();
+  for (const [id, samples] of byExercise) {
+    const median = learnedRestS(samples);
+    if (median != null) learnedRestByExercise.set(id, Math.round(median));
+  }
+}
+
+/**
+ * The between-sets rest for an exercise: HER measured median on that lift (S-17) once she has any,
+ * else the tier bootstrap (B-4 in spirit — a day-one number, replaced by her own the moment one
+ * exists). Unknown exercise → compound, the safe long side.
+ */
 export function restInterSecondsFor(exerciseId: string | null | undefined): number {
+  if (exerciseId) {
+    const learned = learnedRestByExercise.get(exerciseId);
+    if (learned != null) return learned;
+  }
   return (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
 }
 
@@ -770,11 +815,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Rev 7 (S-68…S-70): learn a standing exercise replacement from repeated in-workout swaps.
-      // v5 cohort only (a declared band). Best-effort — the learning never blocks a finished workout.
+      // Best-effort — the learning never blocks a finished workout.
+      //
+      // This used to be gated on `app.profile?.repBand` — the old v5 COHORT switch. There is no
+      // cohort any more (register, corrected 2026-07-17: the burial deleted v4, so nobody can "stay
+      // v4"), and Rev 7 §A deleted the onboarding rep-band question, so `repBand` is exactly the
+      // field that is allowed to be absent. Any profile without it — a legacy athlete, or one whose
+      // profile write lost the default — silently lost the WHOLE of S-68…S-72: her swaps never
+      // became standing replacements and her resistance to a rotation never earned a leave-it. A
+      // legacy fallback is supposed to be free; one that switches off a feature is not.
       // Offered = the day's non-supplemental slots; performed = the distinct WORKING lifts she logged
       // (approach sets excluded). Two consecutive same-target swaps adopt (writes prefs.substitutes,
       // which the assembler honours); the original is offered first ever after (S-70).
-      if (app.profile?.repBand && programDay) {
+      if (programDay) {
         try {
           const offeredIds = programDay.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId);
           const performedIds = [...new Set(saved.sets.filter((s) => !s.isApproach).map((s) => s.exerciseId))];
@@ -790,13 +843,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           // that resistance earns a learned pin: the engine stops rotating it (fixtureModel skips a pin).
           // Only her OWN swap-backs reach this; an engine rotation never advances the counter (S-72).
           const engineRotated = { ...(prefs.engineRotated ?? {}) };
-          const pinsByMuscle = { ...prefs.pinsByMuscle };
+          const leaveItsByMuscle = { ...prefs.leaveItsByMuscle };
           for (const anchor of learnedLeaveIts(prev, next.substitutes, engineRotated)) {
             const m = muscleOf(anchor);
-            if (m) pinsByMuscle[m] = anchor; // learned leave-it — inherits every pin role (S-30/S-59)
+            if (m) leaveItsByMuscle[m] = anchor; // S-71 — never rotated (S-30), cut last (S-59)
             delete engineRotated[anchor];
           }
-          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, pinsByMuscle, engineRotated });
+          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, leaveItsByMuscle, engineRotated });
           // S-45: a newly ADOPTED learned swap (S-69) is a Hush decision — let the Saturday mirror name
           // it. The adoption is the key whose standing substitute just changed.
           for (const k of Object.keys(next.substitutes))
@@ -967,6 +1020,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         pendingRestSRef.current = null;
         loop1Ref.current = { exerciseId: '', count: 0 }; // Loop 1 correction budget resets per session
         historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
+        refreshLearnedRests(historyRef.current); // …and her learned REST timer (S-17)
         const plan2 = buildPlan(day, targets);
         const session: Session = {
           id: `sess_${Date.now()}`,
@@ -1031,6 +1085,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           }
           sessionRef.current = active;
           historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
+          refreshLearnedRests(historyRef.current); // …and her learned REST timer (S-17)
           restStartedAtRef.current = r.restStartedAtMs;
           restExtraSecondsRef.current = r.restExtraS;
           // A rest banked before the kill still belongs to the set the athlete is about to log (L3).
@@ -1140,9 +1195,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Her learned real grid for this lift = the loads she has performed on it, across her history AND
         // this session so far (including the set just logged), so a correction snaps to a weight that
         // exists at her gym rather than the equipment default increment.
-        const grid = observedLoads(current.exerciseId, [updated, ...historyRef.current]);
+        const seen = [updated, ...historyRef.current];
+        const grid = observedLoads(current.exerciseId, seen);
+        // L11 — the rail, live: a mid-session RAISE may never go more than one rung past the heaviest
+        // load she has completed at Tlo (her settled history plus this session). S-11 says "always
+        // inside the rail" and S-14 calls it absolute; until now only Loop 2 honoured it, so one wild
+        // rep count could put a load on the bar she has never come near. Null on a lift with no such
+        // set — the rail is inactive there by definition (S-49), and her own eyes are the guard.
+        const rail = railCeilingFor(current.exerciseId, current.target.repBandLo ?? current.target.recommendedReps, seen);
         const carried = carryWeightForward(plan, current.globalIndex, setLog.actualWeight);
-        const l1 = applyLoop1(carried, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count, grid);
+        const l1 = applyLoop1(carried, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count, grid, rail);
         // THE SIGNATURE MOMENT — set (or cleared) on EVERY logged set, so it always belongs to the
         // set just finished. Until 2026-07-17 the only thing that happened here was the `track`
         // call below: the correction went to analytics and the plan changed underneath her. The set

@@ -63,6 +63,7 @@ export interface ExerciseState {
 export type Loop2Decision =
   | 'progress' // S-22: all sets met Tlo → load up
   | 'hold' // S-24: not every set met Tlo → hold at anchor
+  | 'rung_out_of_reach' // S-28: the next rung is a big jump — hold the load, add reps, and say so
   | 'stall_backoff' // S-25.1: back off and re-climb
   | 'stall_rotate' // S-25.2: rotate the exercise
   | 'approach' // S-60: no recent fact → measure

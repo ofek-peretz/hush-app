@@ -3,7 +3,7 @@
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units, WeeklyVolume } from '@/data/local/models';
+import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
@@ -187,7 +187,7 @@ interface AppApi extends AppState {
    *  derived from progression). Persists the merged profile. Body-data corrections must NOT reset
    *  progression, so the current program is left untouched — they inform the next weekly
    *  regeneration + cold starts. A daysPerWeek change is the exception: the split must match the
-   *  chosen frequency, so it rebuilds the week immediately (like setVolume). */
+   *  chosen frequency, so it rebuilds the week immediately. */
   updateProfileInfo: (fields: {
     age?: number;
     heightCm?: number;
@@ -206,8 +206,6 @@ interface AppApi extends AppState {
      *  progression re-read it live (S-43 recomputes from her history at the new T), so no rebuild. */
     repBandByMuscle?: Record<string, RepBandChoice>;
   }) => Promise<void>;
-  /** Set the weekly set-volume lever (low/moderate/high) and rebuild the week to match. */
-  setVolume: (volume: WeeklyVolume) => Promise<void>;
   /** Persist the Apple Health connection (Settings). The switch's only writer. */
   setHealthConnected: (connected: boolean) => Promise<void>;
   /** Athlete-owned exercise order within a workout (Athlete > Model). Durable + preserved across
@@ -774,26 +772,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         void track('health_connection_changed', { connected });
       },
 
-      async setVolume(volume) {
-        if (!state.profile || (state.profile.volume ?? 'moderate') === volume) return;
-        const profile: Profile = { ...state.profile, volume };
-        await db.saveProfile(profile);
-        dispatch({ type: 'PROFILE_UPDATED', profile });
-        void track('volume_changed', { volume });
-        // Volume changes the set scheme → rebuild the week now (athlete-owned pins/order re-apply
-        // through generateProgram). Best-effort; otherwise it takes effect on the next regeneration.
-        try {
-          const fresh = await model.generateProgram(profile);
-          // Same mid-week rule as the frequency change: the rebuild must keep this week's
-          // finished workouts finished (generateProgram returns them `completed: false`).
-          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
-          await db.saveProgram(program);
-          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-          void track('program_generated', { reason: 'volume', frequency: program.frequency });
-        } catch {
-          /* offline — applies on the next weekly regeneration */
-        }
-      },
 
       // The programme-edit swap (replaceSlotExercise → setExercisePreference, S-31) and the pin/lock
       // toggle (toggleSlotLock, S-30) are DELETED (Rev 7, S-73). Exercise selection is owned through

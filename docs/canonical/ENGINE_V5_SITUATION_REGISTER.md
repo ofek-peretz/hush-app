@@ -13,6 +13,100 @@ the pin survives only as a fact earned by resisting rotation. One evidence-gate 
 K=2); no load-touching constant added. **Supersedes:** the v4 engine (`src/engine/v4/`) in whole. v4
 is not tuned — it is replaced.
 
+**★★ REVISION 10 (2026-07-21) — THE DOCUMENT IS RECONCILED WITH ITSELF, AND LOCKED.** Founder
+instruction: *"this document is the only source of truth — not things that were true for the V4
+engine."* A line-by-line pass for **critical internal contradictions** (facts, not theoretical holes)
+found **six**, all in the seams Revisions 7 and 8 left open, and all now closed. Every fix takes the
+**later, ratified** half of a contradiction and strikes the stale half — no new design was invented.
+
+1. **REV 8 BROKE THE LEDGER'S CENTRAL CLAIM, and nothing said so.** B-1's numbers were declared
+   acceptable *"only because the approach set overwrites them in 90 seconds… not one of them ever
+   survives into a working load."* Rev 8 deleted the approach set — **so a B-1 cold-start number IS
+   now the load on the bar for set 1.** The claim was simply false as written. Fixed at B-1 and in
+   Part 6: **Loop 1 is what redeems B-1 now**, correcting from her first set. Still L2 (a guess
+   immediately tested), but tested by a *working* set, and the honest cost is stated.
+2. **THE RAIL HAD NO FALLBACK.** L11 said it goes quiet on a new or aged-out lift *"where the
+   approach set guards instead."* It doesn't exist. F-10 (the sanity ceiling) was deleted as theory.
+   So that moment had **no guard named anywhere.** Fixed: L11 now names what actually guards it —
+   Loop 1 from set 1, plus the athlete's own eyes on a visible number (S-49). No ceiling invented.
+3. **EIGHT SITUATIONS STILL PRESCRIBED THE APPROACH SET.** S-1, S-8, S-9, S-38, S-41, S-43, L2, F-8
+   all told the engine to do a thing Rev 8 deleted. Rev 8's own note asked the *reader* to mentally
+   patch them — **a document that requires mental patching is not locked.** All eight rewritten.
+4. **★ THERE IS NO PIN (founder, 2026-07-21).** The word carried two incompatible meanings: a
+   **declared quantity** (S-59, S-63, S-66, Part 3 #5) and an **inferred leave-it** (S-71). Rev 7
+   deleted the button but never reconciled the first set. **S-59's question — *"You've pinned six
+   lifts. Four fit in 45 minutes. Which two come out?"* — describes a state she cannot put the engine
+   into**, since a leave-it is earned one lift at a time by swapping back twice to something the
+   engine tried to rotate away (K=2). **That question is deleted.** Everywhere else "pin" is now
+   "leave-it": *nothing is declared, everything is learned from her swaps.*
+5. **LOOP 3 CONTRADICTED ITSELF ON THE UNIT OF VOLUME.** Part 2 said *"each day is its own volume
+   track — this Monday's chest work is adjusted from last Monday's."* The founder-ratified note under
+   S-34 says the fold is **exercise-keyed and day-agnostic by design**, because a historical
+   session's `programDayId` may point at a regenerated programme. Both were in the document. The
+   later, ratified half wins: **the muscle is the unit** (as it is everywhere else here), the
+   decision is per occurrence. Per-day tracks also halved a two-day muscle in practice.
+6. **`experience` WAS DELETED FOR A REASON THAT NO LONGER EXISTS.** Part 9 §A deleted it *"because
+   the approach set measures her."* It doesn't. The deletion stands on **L1** — a self-report is not
+   a fact the engine measured — which was always the stronger ground, and Part 9 §A now says so, and
+   names the cold-start (B-1) explicitly as part of the decision path it must leave.
+
+**Also struck:** Part 7's *"71 situations, 71 tests"* (a count that goes stale on every revision — the
+guarantee is now stated without a number), S-60 from the Stage 1/2 coverage rows, and the Rev-7 audit
+note still claiming `APPROACH_FRACTION` was wired.
+
+**THEN THE CODE WAS SWEPT AGAINST IT — v4 inputs were still deciding loads.** `src/engine/v4/` was
+deleted at the burial, but v4 INPUTS lived on in the layer that CALLS the engine, because nothing
+failed when they did. Each of these multiplied a real prescription and **none appears anywhere in
+this document**; all are now removed, and pinned by `__tests__/laws/onlyV5IsInTheEngine.test.ts`:
+
+| Removed | What it was doing | The register |
+|---|---|---|
+| **`experience`** | a SELF-REPORT scaling every cold-start load ×0.78 / ×1.00 / ×1.22 — and since the onboarding question was deleted but the decision path was not, **every new athlete fell to `beginner` and had her day-one loads cut by 22%** | Part 9 §A deletes it "from onboarding, Settings, **and the profile's decision path**"; L1 bans it |
+| **`age`** | a per-decade cold-start multiplier down to ×0.80, plus −1 set at 65+ | B-1: the cold start is "her sex + bodyweight"; S-42 refuses the identical guess for height |
+| **`goal`** | a fork on a self-reported goal in the set scheme | Part 5 deletes the goal fork — "there is one goal: hypertrophy" |
+| **the weekly VOLUME lever** (`low`/`moderate`/`high`) | ±1 set on every exercise, **by declaration**, with no UI left to set it | Loop 3 earns and cuts volume from FACTS (S-32/S-34) from B-2. A dial is the opposite |
+| **`MAX_SETS = 4`** | a second ceiling fighting F-1, while `distributeMuscleSets` already gave a grown muscle 5 | F-1: 3–5, and only that |
+| **`engineSlotId` / `canonicalEngineId`** | slot keys + a unification hack | Loop 2: "state is keyed to the exercise, never to a slot"; S-29 deletes the hack by name |
+| **the "week 1 is silent" gate** | suppressed the engine's reason line until calendar week 2 | L7 (no weekly boundary) and Part 1's banned inputs ("calendar-driven anything") |
+| **`pinsByMuscle`** | named a thing that no longer exists | renamed `leaveItsByMuscle` — **there is no pin**; it is earned at K=2 (S-71) |
+
+**Did v5 solve each of them? Yes, and by the same mechanism every time: Loop 1.** What `experience`
+and `age` were guessing at — how strong she probably is — Loop 1 measures from her first working set
+and corrects before the second. What the volume lever declared, Loop 3 earns. What the slot key
+tracked, exercise-keying makes unnecessary.
+
+> ### ⚠️ THE CONSEQUENCE, STATED PLAINLY: DAY-ONE LOADS GO UP
+>
+> Deleting `experience` and `age` is not a refactor. It changes the first number a new athlete ever
+> sees, and this document should say so rather than let it be discovered on a stage. **Measured
+> across the catalogue, the cold start moves by ×1.00 to ×1.75.** Real lifts, before → after:
+>
+> | Athlete | Bench | Squat | Pushdown | Lat pulldown |
+> |---|---|---|---|---|
+> | male 30, 80 kg | 33 → **43 kg** | 42 → **53 kg** | 16 → **20 kg** | 27 → **35 kg** |
+> | female 30, 60 kg | 20 → **20 kg** *(at the bar)* | 22 → **29 kg** | 10 → **12 kg** | 17 → **22 kg** |
+> | male 72, 80 kg | 27 → **43 kg** | 33 → **53 kg** | 12 → **20 kg** | 22 → **35 kg** |
+> | male 30, 80 kg, **declared "intermediate"** | 43 → **43 kg** | 53 → **53 kg** | 20 → **20 kg** | 35 → **35 kg** |
+>
+> **Read the last row: nothing changed for her.** The new number is exactly what an athlete who
+> declared "intermediate" was always given. The old behaviour was not a deliberate conservatism —
+> it was a **self-report default**: Rev 7 deleted the onboarding question and left the multiplier in
+> the decision path, so *every* athlete answered "beginner" by omission and took a 22% discount
+> nobody chose. On top of it, a 72-year-old took a further 14%. Removing the two does not make the
+> engine bolder; it stops it from quietly marking her down for a question it no longer asks.
+>
+> **What carries the risk is B-1's own row, and Rev 8 already changed who holds it.** The old
+> protection was the approach set — a light measurement before the real work. It is gone, so the
+> first set of a brand-new lift is now the cold-start number itself. **Loop 1 is the whole guard:**
+> it reads that set and moves the load before the second one, in either direction, and the athlete
+> sees the weight on the stage before she touches it (F-2 — a prescribed rung is a suggestion, never
+> a requirement). That is L2 honoured, not evaded — but it is a working set doing the measuring now,
+> and this is the paragraph that admits it.
+
+**THE DOCUMENT IS NOW SELF-CONSISTENT.** No situation prescribes a deleted mechanism; no law cites a
+guard that does not exist; "pin" appears only as a historical word; and every load-touching bootstrap
+names the thing that actually corrects it.
+
 **★ REVISION 8 (2026-07-16, founder ruling from Build #33 manual QA) — THE APPROACH SET IS REMOVED
 ENTIRELY.** S-60 in whole (and its dependents — the "light load" B-1 fraction `APPROACH_FRACTION`, the
 `isApproach` *prescription*, the F-8/S-38 layoff re-measurement) is **gone from the engine.** Every set,
@@ -58,10 +152,121 @@ prescription already uses. Above her top observed rung it steps by the increment
 S-9). `historyRef` is loaded once at session start (and on resume). Legacy approach sets are excluded
 from the grid (`!isApproach`). Test `v5_loop1_learned_grid` (16 → 18 with grid, 16 → 17 without).
 
+**★ REVISION 9 (2026-07-21) — THE LINE-BY-LINE AUDIT.** A hermetic pass over this document against
+the built engine, situation by situation. Eight defects, each now fixed + tested
+(`__tests__/engine/v5_register_gaps.test.ts`); tsc + 888 tests + both lints + `expo export` green.
+Nothing in the design changed — every fix makes the code do what this document already said.
+
+1. **S-55 · THE BAR WAS NOT THE FLOOR ON THE ENGINE'S OWN GRID.** `engine/loadMath.normalizeLoad`
+   floors barbell loads at `BAR_KG` — but that is the *cold-start seed's* path. v5's live progression
+   walks `engine/v5/grid`, which had no idea a barbell weighs anything: a failed set on `bb_curl` at
+   20 kg prescribed **17.5 kg** for the next set. The exact bug `barIsTheFloor` was written to kill,
+   killed on one path and left alive on the other. The grid reads the same `BAR_KG` now.
+2. **S-55 (b) · `loadFloor` was returning her LIGHTEST PERFORMED LOAD as the floor.** That is not a
+   floor, it is a statistic. On a lift she had only ever done at one weight it made the floor equal
+   the current load — so `max(floor, prevRung)` in the stall back-off clamped to a **no-op**.
+3. **S-25.1 · THE BACK-OFF COULD BACK OFF ONTO ITSELF.** "The heaviest load at which all sets met
+   `Tlo`" was read over the whole window, so a wall she had once cleared answered *itself*. Real
+   path: clear 40 → fail 42.5 twice → back to 40 → fail 40 twice → back to **40**, for ever;
+   `isRepeatedStall` never fired either (it needs an occurrence *lower* than the wall, and 42.5 is
+   not lower). The read is now strictly **below** the wall.
+4. **S-11 / L11 · THE RAIL NEVER REACHED LOOP 1.** S-11 says a raise is "always inside the rail" and
+   S-14 calls the rail absolute; only Loop 2 clamped. One implausible rep count could size a
+   mid-session correction to a load she has never come near. `railCeilingFor` (façade — the rail is a
+   fact about her history) now feeds `correctInSession`. It only ever cancels a raise; it can never
+   pull a load down, and a drop is never railed.
+5. **S-17 · HER MEDIAN REST WAS NEVER THE PRESCRIPTION.** Half of S-17 shipped: `restBeforeS` was
+   recorded and her median fed the time BUDGET — while the timer on screen still counted the same
+   150 s she had skipped every set. The engine measured her and then argued with her. The rest timer
+   is her own median now (phone, watch mirror, and the standalone watch plan, from one registry).
+6. **S-35 / S-59 / S-63 · THE TIME CAP COULD STOP TRAINING A MUSCLE.** `enforceTimeCap`'s isolation
+   drop had neither of S-35's two protected lifts and ignored pins entirely — so a tight budget
+   silently deleted her only biceps or triceps lift, an `off` she never chose. Both guards added, and
+   pinned lifts are cut last (S-59). **Consequence, and it is the register's own ruling:** a day may
+   now finish OVER budget when every trained muscle is down to its last lift. That is S-3 — "the
+   engine says so rather than quietly starving a muscle" — and it is reported rather than silent.
+7. **S-47 · AN UNREADABLE ENGINE STATE WAS A SILENT RESET.** `getJSON` treats corrupt JSON as absent,
+   so a lost `db.engineV5` was indistinguishable from a first run: the engine rebuilt from history
+   and overwrote the blob without a word. The recovery is right (her history IS the safe
+   prescription); the silence is what S-47 forbids. `db.engineV5ReadFailed()` tells the two apart and
+   telemetry fires.
+8. **S-68…S-72 · LEARNED SELECTION WAS STILL BEHIND THE DEAD COHORT GATE.** `sessionStore` gated the
+   swap fold on `profile.repBand` — the old v5 cohort switch, on the one field Rev 7 §A *deleted from
+   onboarding*. Any profile without it lost the whole of learned selection and the learned leave-it.
+   A legacy fallback is meant to be free; one that switches off a feature is not. Gate removed.
+
+**★ AND THEN THE LAW TESTS FOUND TWO MORE (same day).** The audit's own conclusion was that these
+defects are never errors of thinking — they are laws that hold on one path and not its neighbour. So
+`__tests__/laws/loadLawsHoldOnEveryPath.test.ts` was written to state each load law once and sweep
+**every entry point that can put a number on the bar** (the real catalogue × every equipment class ×
+loads on the floor × rep counts from 0 to 60 × with and without her learned grid). It failed on its
+first run, on code nobody had suspected:
+
+9. **`snapDown` SNAPPED UP, and it killed Loop 1's drop.** Its own header promises "snapping is
+   always DOWN — normalization can only ever lower an implied load, never raise it (the safety
+   invariant)". But when the ideal sat **below her lowest observed rung**, the loop's initialiser
+   (`let down = rungs[0]`) returned that rung. On a lift she had only ever performed at ONE weight —
+   **every lift on its second session** — Loop 1 computed the drop to 37.5, `snapDown` hauled it back
+   to 40, and the result reported `corrected: false`. **The load could not ease.** That is the exact
+   shape of the Build-#33 complaint ("no matter how many reps I write it stays at 34"), alive on a
+   path the band-floor fix never touched, and it also re-froze the S-25.1 back-off from defect 3.
+   **Fix (F-2, and the rule `normalizeLoad` already documented):** the learned grid speaks only
+   *within* the range she has performed — outside it the equipment increment is the honest answer.
+   Applied symmetrically to `nextRung` (below her lowest rung it proposed a LEAP up to it) and
+   `prevRung` (above her heaviest it proposed a PLUNGE down to it).
+10. **`normalizeLoad` could return 0.** S-55's first clause is "a prescription may never fall TO OR
+    BELOW ZERO"; flooring to the increment returned 0 for any ideal under one step. Unreachable
+    today — every caller happens to pass a positive number — which is precisely why it would have
+    survived until a caller did not.
+
+**The maintenance contract this earns:** if you add a function that returns a prescribed weight, add
+it to `LOAD_PRODUCERS` in that file. Nothing else stands between this class of bug and the next one.
+
+**11. S-28 · THE COARSE-MACHINE REP-CLIMB — NOW BUILT.** *(It was first logged here as "deliberately
+not built", on the authority of a founder ruling from 2026-06-26. The founder rejected that the same
+day, and was right on every count: that ruling is **v4-era**, it appears **nowhere in this document**,
+and its whole justification — *"on a truly coarse grid the **e1RM rail** is a catch-22 wall"* — rests
+on a rail **v5 deleted** (Part 5; L11: "v4's implied-e1RM rail capped a demand with a **formula**; the
+rail is now a **fact**"). **THIS DOCUMENT IS THE ONLY SOURCE OF TRUTH.** A ruling that is not in it —
+and whose reason the rewrite deleted — does not bind this engine. The correction is kept in place of
+the error because the error is the more useful record.)*
+
+**The situation is reachable, and it was costing real sessions.** F-2's learned grid means a coarse
+stack enters the engine from her own behaviour: once she has performed 40 and 50 on a machine,
+`observedLoads` is `[40, 50]` and `nextRung(40)` is genuinely **50** — no catalogue flag needed. A
+10-session simulation on that grid gave a permanent **40↔50 oscillation**, and — worse — Loop 2 read
+it as a stalled LIFT and **rotated her chest press away** (S-25.2). The exercise was never the
+problem; the granularity of the stack was.
+
+**Both conditions came from this situation's own wording — no constant was added.**
+   1. *"a machine with 10 kg pins; **no micro-loading**"* → the rung she faces (F-2's learned grid)
+      exceeds the equipment's finest step (B-6). `grid.isBigJump`. **False on a barbell**, which is
+      why **S-22 is untouched** there ("All three sets hit 8. The row goes to 47.5" still holds).
+   2. *"the load cannot move without breaking her"* / *"when her reps give a full rung's worth of
+      headroom, the rung is taken"* → one test on her measured reps-per-rung (F-13):
+      `reps − perRung ≥ Tlo`. **One measured fact, both ends of the problem**, exactly as written.
+
+Then the load **holds at the anchor** — *"T is hers, so the engine may not quietly raise it"* — and
+the engine **says so** (`explain.rungOutOfReach`, both locales): the one hold in this engine that is
+narrated, because it is a decision she cleared every set for. Silent until her slope is fitted
+(F-12), so no bootstrap ever triggers it. New `Loop2Decision: 'rung_out_of_reach'`; tests in
+`v5_s28_big_jump.test.ts`, including the 10-session oscillation, which now settles with **zero**
+rotations.
+
+**Applied to Loop 1 as well as Loop 2.** The register places S-28 among the between-session
+situations, but leaving the in-session raise (S-11) free to prescribe the unreachable rung would
+simply re-open the oscillation through the other door — and *"one measured fact governs both ends of
+the problem"*. A law that holds on one path and not its neighbour is how every defect in this audit
+got in.
+
+**One dependency this required:** `repsPerRung` scaled its slope by `nextRung(maxLoad) − maxLoad` —
+the rung at the TOP of her grid — so on a `[40, 50]` grid it priced a 2.5 kg step, not the 10 kg one
+in front of her. It now prices the rung at the load being judged.
+
 **Post-Rev-7 audit fixes (2026-07-16)** — a hermetic code↔register review closed six gaps where the
-build had drifted from this contract, each now WIRED + tested: (1) **the approach set is LIGHT** —
-`APPROACH_FRACTION` (a declared piece of B-1) prescribes set 1 at a fraction of the working load,
-snapped to a real loadable weight, and **Loop 1 no longer sizes a correction off it** (S-60); (2)
+build had drifted from this contract, each now WIRED + tested: (1) ~~**the approach set is LIGHT** —
+`APPROACH_FRACTION`~~ **SUPERSEDED BY REVISION 8 the following day: the approach set and
+`APPROACH_FRACTION` are deleted outright, and Loop 1 acts from set 1 on the real working load**; (2)
 **Core honours the body map** — off → no core, emphasis → a second core movement (S-2/S-4/S-50); (3)
 the dead **`chooseWinner`** (an unwired S-32 give-rule picker) is **deleted** — the give-rule is
 realized structurally by per-muscle independent earning, and only the wired **donor** (S-37) has a
@@ -94,16 +299,16 @@ it does not ship.
 | # | Law |
 |---|---|
 | **L1** | **Facts only.** The engine never asks *why* something happened. It records what happened and acts. It has no concept of fatigue, readiness, recovery, motivation, or effort it did not measure. |
-| **L2** | **A guess that is immediately tested is not theory. Theory is a guess that is never tested.** An approach load is allowed *only* because the next set corrects it. A number the engine must live with for weeks is forbidden. |
+| **L2** | **A guess that is immediately tested is not theory. Theory is a guess that is never tested.** A day-one cold-start load (B-1) is allowed *only* because the very next set corrects it - Loop 1 reads what she actually performed and moves the iron inside the same 90 seconds (Rev 8: the approach set is gone; Loop 1 is the sole in-session safety). A number the engine must live with for weeks is forbidden. |
 | **L3** | **Like for like.** A set is only comparable to a set taken under similar conditions. `restBeforeS` is therefore recorded on every set. Without it, every rep comparison is corrupt. |
 | **L4** | **A missing fact is asked for once — never guessed, and never asked twice.** The answer becomes a durable declared fact. |
 | **L5** | **Constants.** Forbidden when a constant stands in for a fact we could measure. Allowed *only* to define the shape of the product — and then declared out loud and counted (Part 6). |
-| **L6** | **Ownership.** The **engine** owns: load, volume, exercise selection, workout structure. The **athlete** owns: the rep target (**T** — **per-muscle** since Rev 7, Part 9 §A), rest, the body map, and exercise selection. *(Rev 7: selection is expressed through the **in-workout swap**, LEARNED into a standing choice at K=2, S-69; the programme-edit swap and the pin **button** are deleted, S-73. The pin as a **fact** survives — earned by resisting rotation, S-71.)* **A pin binds *which* exercise trains a muscle — never *whether* it is trained, and never how many minutes exist** (S-59). |
+| **L6** | **Ownership.** The **engine** owns: load, volume, exercise selection, workout structure. The **athlete** owns: the rep target (**T** — **per-muscle** since Rev 7, Part 9 §A), rest, the body map, and exercise selection. *(Rev 7: selection is expressed through the **in-workout swap**, LEARNED into a standing choice at K=2, S-69. **THERE IS NO PIN** — the programme-edit swap and the pin button are deleted (S-73), and the declarative pin with them. Its only surviving role is the **learned leave-it** (S-71): a lift the engine tried to rotate away and she swapped back to twice, at the same K=2, so the engine stops rotating it. Nothing is declared; everything is learned from her swaps.)* **A leave-it binds *which* exercise trains a muscle — never *whether* it is trained, and never how many minutes exist** (S-59). |
 | **L7** | **No weekly boundary.** A decision is told at the moment it is born — the end of the set, or the end of the workout. Never on a schedule. |
 | **L8** | **The engine obeys and states the cost.** It never argues, moralises, nags, or claims a reason it did not measure. |
 | **L9** | **A question never stands between the athlete and her workout.** When the engine needs an answer it cannot derive, it assembles the best workout it can, **runs it**, and leaves the question open until she answers. Training is never blocked on a prompt. |
 | **L10** | **The engine steps from a load it cannot be lied to about.** The anchor is the **median** of the sets that met `Tlo` — a single mis-keyed number cannot be the median of several. *(When only one set met `Tlo`, the median is that one set — there the rail (L11) is the guard on an established lift, and on a lift with no rail the athlete's own eyes are, S-49. The layers are named in S-22 and S-49.)* **How far** the load then moves is decided by **her own measured reps-per-rung**, never by a fixed step. There is no clipping constant anywhere, because there is nothing left to clip. |
-| **L11** | **The rail — the one hard stop.** The engine may **never** prescribe a load more than **one rung above the heaviest weight she completed at `Tlo` reps on that exercise.** The base is **`max(her settled record, THIS session's median anchor)`** — the settled record (sessions before the one being judged, inside the recency window F-8) **plus** the median of the loads she met `Tlo` at this session. *(Rev-7 correction, found when the per-workout cadence went live: a "settled history only" rail HALVED progression — she'd have to complete each load twice before advancing, contradicting S-22's one-rung-per-clear. Including the current session's **median** anchor fixes it while keeping the guarantee: the median absorbs a single mis-key, so a fat-finger still can't lift the rail, but a load she cleanly completed this session DOES count.)* Her own record is the ceiling; **a fat-fingered set cannot lift it** (the median, not the raw set, is the base), and **a heroic single from two years ago cannot pin her under a load she can no longer do** (F-8 — after a real layoff the rail goes quiet and the approach set S-60 takes over). *(Replaces v4's implied-e1RM rail, which capped a demand with a **formula**; the rail is now a **fact**.)* Inactive on a lift with no completed set inside the window — where the approach set guards instead. |
+| **L11** | **The rail — the one hard stop.** The engine may **never** prescribe a load more than **one rung above the heaviest weight she completed at `Tlo` reps on that exercise.** The base is **`max(her settled record, THIS session's median anchor)`** — the settled record (sessions before the one being judged, inside the recency window F-8) **plus** the median of the loads she met `Tlo` at this session. *(Rev-7 correction, found when the per-workout cadence went live: a "settled history only" rail HALVED progression — she'd have to complete each load twice before advancing, contradicting S-22's one-rung-per-clear. Including the current session's **median** anchor fixes it while keeping the guarantee: the median absorbs a single mis-key, so a fat-finger still can't lift the rail, but a load she cleanly completed this session DOES count.)* Her own record is the ceiling; **a fat-fingered set cannot lift it** (the median, not the raw set, is the base), and **a heroic single from two years ago cannot pin her under a load she can no longer do** (F-8 — after a real layoff the rail goes quiet). *(Replaces v4's implied-e1RM rail, which capped a demand with a **formula**; the rail is now a **fact**.)* **Inactive on a lift with no completed set inside the window — and since Rev 8 deleted the approach set, nothing replaces it there, deliberately: the guard is Loop 1 correcting from the very first set, plus the athlete's own eyes on a visible number (S-49). No ceiling is invented for that moment — that was F-10, and it was deleted as theory.** |
 
 ---
 
@@ -140,7 +345,7 @@ set. A tripwire test asserts no third kind exists.
 | **The body map** — every muscle is `off` / `normal` / `emphasis` | Onboarding, permanently editable *(also holds the per-muscle T above)* |
 | Exercise selection — **learned** from repeated in-workout swaps (Rev 7, S-69); a stall-resisting swap-back earns a "leave it" (S-71) | In the workout *(the programme-edit screen is deleted, S-73)* |
 
-*(The **goal** question is deleted. There is one goal: hypertrophy. **Experience** is deleted too — Rev 7, Part 9 §A: the approach set measures her, so a self-report never touches a load.)*
+*(The **goal** question is deleted. There is one goal: hypertrophy. **Experience** is deleted too — Rev 7, Part 9 §A. Its original reason was that the approach set measured her; Rev 8 deleted the approach set, and the deletion still stands on the stronger ground it always had: **a self-report is not a fact the engine measured (L1), so it may never touch a load.** Loop 1 measures her instead, from set 1.)*
 
 **What "T" means everywhere in this document — the band she chose is a floor and a ceiling, and
 nothing in between is invented (Revision 4).** She picks `Tlo–Thi` (e.g. 8–10):
@@ -235,11 +440,20 @@ Decides the load for the **next occurrence of this exercise** — not next Satur
 State is keyed to the **exercise**, never to a slot.
 
 ### Loop 3 — The Muscle (end of every occurrence of that muscle)
-Volume is managed **per occurrence of the muscle in the split**, not per calendar week — there is no
-week (L7). If a muscle is trained on two days, each day is its own volume track: the set count at
-*this* Monday's chest work is adjusted from what happened at *last* Monday's chest work, and Thursday
-likewise. Each track is bounded by **its own workout's time budget** — which is the only ceiling
-volume needs, because a muscle can never accrue more sets than fit across the days it is trained on.
+A volume DECISION is taken **at every occurrence of the muscle**, the moment that workout ends — never
+on a schedule (L7). What it moves is **one target per MUSCLE**, not one per day.
+
+> **This paragraph used to say "each day is its own volume track: this Monday's chest work is adjusted
+> from last Monday's." It was struck (2026-07-21) because it contradicts the founder-ratified note
+> under S-34, which is the later and binding half:** the fold is **exercise-keyed and day-agnostic by
+> design**, because a historical session's `programDayId` may point at a regenerated programme, so
+> "which day was this" is not a fact the engine can trust. Per-day tracks also HALVED a two-day
+> muscle in practice. **The muscle is the unit** — it is the unit everywhere else in this document —
+> the decision is per occurrence, and the target it moves is that muscle's whole footprint,
+> distributed back across its exercises at assembly.
+
+The target is bounded by **her time budget** (S-64) — the only ceiling volume needs, because a muscle
+can never accrue more sets than fit across the days it is trained on.
 *("Weekly sets per muscle", where the register uses it — S-32's tie-break — means a
 **rolling 7-day sum**, a read for display and tie-breaking only. It is never a boundary a decision
 waits for.)*
@@ -262,8 +476,8 @@ Constraints, in strict priority:
 3. **The station.** Enter once, leave it finished. Minimising station changes is an **assembly
    objective**, not a post-hoc reorder.
 4. **Compound before isolation** — within a station.
-5. **Deterministic exercise choice** from her pool: minus swapped-away, plus pins.
-   **Pinned exercises are cut LAST** (S-59).
+5. **Deterministic exercise choice** from her pool: minus swapped-away (S-69), plus her learned
+   leave-its (S-71). **A leave-it is cut LAST** (S-59).
 
 **Session structure is an output, not an input.** Mark Glutes + Quads on a 3-day programme and you
 get two lower-body days — because the volume has to go somewhere. She is never asked to pick a split.
@@ -289,8 +503,9 @@ get two lower-body days — because the volume has to go somewhere. She is never
 
 ### A · First contact
 
-**S-1 · Brand-new athlete, zero history.** Every lift opens with an approach set (S-60). There is
-**no calibration mode** — it does not exist any more.
+**S-1 · Brand-new athlete, zero history.** Every lift opens at its **cold-start working load** (B-1),
+from set 1 — there is no approach set (Rev 8) and **no calibration mode**. The first set she performs
+is the measurement, and Loop 1 acts on it before the second set.
 
 **S-2 · A muscle is turned `off`.** It never appears. The engine obeys silently and states the cost
 once, without moralising (L8): *"Legs are off. Your week is four upper-body workouts — more time for
@@ -318,7 +533,8 @@ never shaved below 3 (S-35).
 
 ### B · A new exercise appears
 
-**S-8 · Never performed.** → **Approach set (S-60).** Cost: one set. Not three weeks.
+**S-8 · Never performed.** → The **cold-start seed** (B-1), prescribed as a real working load from
+set 1 and corrected by Loop 1 off that set. Cost: one set. Not three weeks.
 
 **S-9 · Performed before — in any programme.**
 **Her own history is the starting point, never a transfer formula.** T is not stored on a set and
@@ -328,9 +544,10 @@ does not need to be: her history is `(load, reps)` pairs, so the load at which s
 **Two facts of different ages, handled differently — the distinction the F-8 window turns on:**
    - **What she LIFTED is a raw fact and does not expire.** A weight she completed is a weight she
      completed; it seeds the prescription however long ago it was.
-   - **But if that fact has aged out of the recency window (F-8), the seed is not trusted blind** —
-     an approach set (S-60) re-measures her before loading her. So "however long ago" never means
-     "loaded cold on a stale number."
+   - **A fact that has aged out of the recency window (F-8) still seeds the prescription** — and
+     since Rev 8 there is no approach set to re-measure her first. What catches a stale seed is
+     **Loop 1, from set 1**: if she has weakened, that set falls below `Tlo` and the load is eased
+     before the second (S-38). The seed is a suggestion she can see and edit (F-2), never a demand.
    - **Derived statistics** (reps-per-rung, `N`, the rail) read only the **recency window (F-8)** —
      they describe who she is *now*, not who she was.
 
@@ -455,7 +672,8 @@ Then, in order:
       load** — the smallest honest step down. Then climb again.
    2. **Rotate the exercise** — to the same-muscle lift she has gone longest without.
       *"The cable row hasn't moved in five weeks. I've swapped it for a chest-supported row."*
-   A **pinned** lift is never rotated (S-30). A **calendar** never rotates anything.
+   A lift she has earned a **leave-it** on is never rotated (S-30/S-71). A **calendar** never
+   rotates anything.
 
 **S-27 · Bounds.** 3 – 5 sets per exercise (F-1).
 
@@ -471,10 +689,11 @@ problem** — which is how you know it earns its place.
 **S-29 · The same exercise in two workouts in one week.** **One progression, fed by both sessions** —
 automatic under exercise-keying. The `canonicalEngineId` unification hack is deleted.
 
-**S-30 · A pin.** *(Rev 7: the pin BUTTON is deleted, S-73; the pin as a FACT survives — earned by
-resisting the engine's rotation twice, S-71.)* A pinned lift is never rotated, never engine-swapped.
-Pinned **and** stalled → the engine obeys and says so: it still offers the back-off and re-climb
-(S-25), but **it will not take the lift away.**
+**S-30 · A leave-it.** *(**There is no pin.** Rev 7 / S-73 deleted the button, and the declared pin
+with it. This situation is now entirely S-71: a leave-it is EARNED, at K=2, by swapping back twice to
+a lift the engine rotated away. Nothing here is ever declared.)* A lift with a leave-it is never
+rotated, never engine-swapped. Leave-it **and** stalled → the engine obeys and says so: it still
+offers the back-off and re-climb (S-25), but **it will not take the lift away.**
 
 **S-31 · ~~She swaps an exercise in the PROGRAMME EDIT screen.~~ DELETED (Rev 7, S-73).** There is no
 programme-edit screen. Its job — a permanent, declared refusal — is now done by the **learned**
@@ -505,7 +724,7 @@ off, S-2). *(The single in-workout swap, S-20, still declares nothing.)*
 
 **Where the set physically goes** — and this is derived, not chosen: an exercise holds at most 5 sets
 (F-1). When a muscle's earned sets exceed what its current exercises can hold, **the next set opens a
-new exercise** for that muscle (from her pool: minus swapped-away, plus pins). **Emphasis is what
+new exercise** for that muscle (from her pool: minus swapped-away, plus her leave-its). **Emphasis is what
 usually gets a muscle its second exercise** — which is exactly what she asked for when she marked it.
 
 **Emphasis is a priority, not a free lunch (S-63): a muscle that did not progress earns nothing, mark
@@ -539,8 +758,8 @@ Loop 2 is already on it.
 
 **Which exercise goes:** the **last isolation lift** in assembly order. **A compound is never
 sacrificed before an isolation** — the day's main lift keeps its full scheme. *(This is the existing
-`enforceTimeCap` law, and it is right; it is preserved verbatim.)* A **pinned** lift is dropped
-**last of all** (S-59).
+`enforceTimeCap` law, and it is right; it is preserved verbatim.)* A lift with a **leave-it** is
+dropped **last of all** (S-59).
 
 **Two lifts a drop may NEVER take — the guarantees above it win (Part 3 priority):**
    - the **only** exercise of an `emphasis` muscle (S-63 promised it one), and
@@ -573,11 +792,11 @@ held for the next occurrence** — the ceiling is real (S-64), and the engine ne
 adjustment.** The absence machinery is deleted — it existed only because the engine had to predict
 how much she had lost, **and that is a theory** (L1).
 
-**She is caught by exactly the same test as any other lift (S-60):** if the gap pushed her last set
-out of the recency window (F-8), her next set is an **approach set** — a measurement, so she does not
-find out under a loaded bar. If the gap is shorter than that, her recent number stands, and any real
-weakening drops the first working set below `Tlo`, where **Loop 1 eases it in one correction.** One
-window, no separate absence rule.
+**She is caught by exactly the same thing as any other lift: the very first set.** Her last number
+stands — a weight she completed is a fact whatever its age (S-9) — and any real weakening drops that
+first set below `Tlo`, where **Loop 1 eases it in one correction, before the second set.** Since Rev 8
+there is no approach set and no separate absence rule: there is one mechanism, and it is the one that
+runs on every set of every workout.
 
 **S-39 · Her numbers come down across the board.** **The engine follows them down, and back up.**
 There is **no deload construct** (`injury_flag`, `DELOAD_LOAD`, `DELOAD_SETS` — all deleted). A
@@ -586,7 +805,7 @@ deload is a *prediction* device. **A measured descent IS the deload.**
 **S-40 · She changes days per week.** The programme re-assembles. **Nothing resets** — history is
 keyed to the exercise, not the slot. *(In v4 this silently cold-starts every slot.)*
 
-**S-41 · She changes bodyweight.** It is **not a prescribed load**. It feeds the approach load (B-1)
+**S-41 · She changes bodyweight.** It is **not a prescribed load**. It feeds the cold-start seed (B-1)
 and tonnage / Progress. **Loaded lifts are untouched** — their prescriptions are facts.
 
 **S-42 · She changes height.** **Nothing.** Height touches no engine decision. It exists for display.
@@ -594,10 +813,11 @@ Any other use would be a guess.
 
 **S-43 · She changes T.** **Free.** Her history is `(load, reps)` pairs, so the load at which she has
 performed ≥ the new T is **computed** (S-9). If she has never worked at that T on this lift, the
-approach set finds it. **No conversion formula, ever.**
+current load stands and **Loop 1 finds it from her first set at the new band.** **No conversion
+formula, ever.**
 
 **S-44 · She edits the body map.** Re-assemble. A muscle switched back on keeps **all** its
-exercises' history — it **resumes**, it does not restart. **Its pins resume with it** (S-66).
+exercises' history — it **resumes**, it does not restart. **Its leave-its resume with it** (S-66).
 
 **S-45 · Saturday.** **Nothing is decided.** Every decision was already told at the moment it was
 born (L7). Saturday is a **mirror**: *"This week: 4 workouts. 12 loads moved. Your back went up on
@@ -618,8 +838,9 @@ banned.**
 
 **S-49 · An impossible number is logged.** **On an established lift, two layers hold:** the **median**
 (L10) — a mis-key is not the median of several sets — and the **rail** (L11), so the worst a lie does
-is move one rung. **On a lift with no active rail** (brand-new or aged-out, where only a single
-approach set exists), there is no invented ceiling to lean on — and we do not add one (the deleted
+is move one rung. **On a lift with no active rail** (brand-new or aged-out — and since
+Rev 8 there is no approach set standing in front of it either), there is no invented ceiling to lean
+on — and we do not add one (the deleted
 F-10 was theory). Instead the guard is the athlete herself: **the mis-key becomes a visible
 prescription she corrects, or the next set exposes it** (she cannot lift the impossible; S-16 holds
 the load on the resulting zero). **The lie never survives the next set** — which is the same
@@ -645,7 +866,7 @@ lift has no rung, so reaching `Thi` on every set means the movement itself is no
 **S-52 · A bodyweight lift is too easy — OR stalled — so it must get harder.** → **Graduate to the
 harder catalogue variation** (knee push-up → push-up → dip; chin-up → pull-up); or, where a load can
 be added (a belt), it becomes a loaded lift (S-53). Its history carries; the new lift enters at
-S-8/S-9. **A pinned lift never graduates** (S-30).
+S-8/S-9. **A lift with a leave-it never graduates** (S-30/S-71).
 
 **Two triggers, because a bodyweight lift has no load axis to progress on — the only way forward is a
 harder movement:**
@@ -715,14 +936,19 @@ never read as zero (L3).
 
 ### J · The collisions (from the reviews, 2026-07-15)
 
-**S-59 · Her pins do not fit inside her declared minutes.**
-A pin binds **which** exercise, not **whether** it appears (L6). The budget still cuts — but
-**pinned lifts are cut last.** Only when the **pins alone** exceed the budget does the engine surface
-it and ask: *"You've pinned six lifts. Four fit in 45 minutes. Which two come out — or shall we find
-more time?"*
-**It is a collision between two of HER OWN declarations. The engine does not get to break that tie.**
-**And by L9, it does not wait for her either** — it assembles deterministically (pins cut last, in
-assembly order), **runs tonight's workout**, and leaves the question open.
+**S-59 · Her leave-its do not fit inside her declared minutes.**
+A leave-it binds **which** exercise, not **whether** it appears (L6). The budget still cuts — but
+**a lift with a leave-it is cut last**, in assembly order, deterministically.
+
+> **The QUESTION this situation used to ask is deleted (2026-07-21).** It read: *"You've pinned six
+> lifts. Four fit in 45 minutes. Which two come out — or shall we find more time?"* — and it was
+> written for the **declarative pin, which no longer exists** (S-73). A leave-it is not declared; it
+> is **earned**, one lift at a time, by the engine attempting a rotation and her swapping back twice
+> (S-71, K=2). "Six pinned lifts" is not a state she can put the engine into, so the collision the
+> question resolved cannot arise. **There is no collision between two of her declarations, because
+> there is only one declaration left: the body map.** If leave-its ever did exceed the budget, the
+> ordinary rule already answers it — they are cut last, and if that still does not fit, it is S-3 and
+> the engine says so. No prompt, and by L9 nothing waits on one.
 
 **S-60 · The approach set. — ⛔ REMOVED ENTIRELY (Revision 8, 2026-07-16, founder ruling). See the
 Revision 8 note at the top of this document.** The engine no longer prescribes any approach / warm-up /
@@ -785,9 +1011,9 @@ we have for it.
 *(And by L9, tonight's workout still runs, on whatever remains.)*
 
 **S-63 · Emphasis versus the ceiling.**
-**This is NOT the same collision as S-59, and the difference matters.**
-A **pin is a quantity** — *"this exercise must be here."* No room → head-on conflict → only she can
-resolve it.
+**This is NOT the same thing as S-59, and the difference matters.**
+A **leave-it is a quantity** — *"this exercise must be here."* No room → it is cut last, and if
+nothing else can go, S-3.
 An **emphasis is a priority** — *"when there is a set to give, give it here."* Nothing to give →
 **it simply does not fire. Nothing conflicts.**
 **The one real hole: if the budget is so tight the emphasised muscle gets ZERO, we broke a promise
@@ -802,9 +1028,10 @@ guardrail constant is required, and none is added.**
 
 **S-65 · A question goes unanswered.** See **L9**. The engine never blocks a workout on a prompt.
 
-**S-66 · A pinned lift's muscle is switched off, then back on.** **The pin resumes.** Nothing revoked
-it, and S-44 says the muscle resumes rather than restarts — the pin is part of what resumes. **And
-she sees it**: the lift appears in her programme, pinned, as she left it.
+**S-66 · The muscle of a lift she earned a leave-it on is switched off, then back on.** **The
+leave-it resumes.** Nothing revoked it, and S-44 says the muscle resumes rather than restarts — the
+leave-it is part of what resumes. **And she sees it**: the lift is back in her programme, and the
+engine still does not rotate it.
 
 **S-67 · An assisted machine (a load model with an inverted sign).**
 **There are none in the catalogue today, and until there are, this is a guard against adding one
@@ -858,7 +1085,7 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 
 | | Bootstrap | Replaced by |
 |---|---|---|
-| **B-1** | The **approach** load on a never-performed lift. **The rule:** take her nearest evidence — the same-muscle lift she has performed, transferred by the catalogue's `baseKg` ratio; or, with no such lift, the catalogue cold-start from her sex + bodyweight — then take it at a deliberately light fraction so the approach set is *guaranteed* reachable. **This bootstrap contains three catalogue/starter numbers — the `baseKg` table, the sex+bodyweight cold-start, and the light fraction — and they are theory-laden by nature** (assumptions about relative strength). They are acceptable *only* because the approach set overwrites them in 90 seconds (S-60); **not one of them ever survives into a working load**, which is why they live inside a bootstrap and not as standing constants. *(The light fraction is the named constant `APPROACH_FRACTION`, wired 2026-07-16 — S-60.)* | The approach set itself |
+| **B-1** | The **cold-start** load on a never-performed lift. **The rule:** take her nearest evidence — the same-muscle lift she has performed, transferred by the catalogue's `baseKg` ratio; or, with no such lift, the catalogue cold-start from **her sex + bodyweight** (nothing else — no self-report, no age). **This bootstrap contains two catalogue/starter numbers — the `baseKg` table and the sex+bodyweight cold-start — and they are theory-laden by nature** (assumptions about relative strength). **Rev 8 changed what makes them acceptable, and the change is not cosmetic:** they used to be overwritten by the approach set in 90 seconds. **The approach set is gone, so a B-1 number now IS the load on the bar for set 1** — and what redeems it is **Loop 1**, which reads that set and corrects the load before the second one. It is still a guess that is immediately tested (L2), so it is still not theory; but it is now tested by a WORKING set rather than a measurement set, and the honest cost is that her first set of a brand-new lift can be wrong in either direction. That is the founder's ruling (Rev 8) and this row is where it is declared. *(The light fraction `APPROACH_FRACTION` is deleted with the approach set.)* | Loop 1, from set 1 — then her own history (S-9) |
 | **B-2** | Starting sets per muscle | Earned / cut volume (S-32/34) |
 | **B-3** | Attempts-to-clear, before she has history on the lift | Her own statistic (S-25) |
 | **B-4** | **Work + rest seconds per set, on day one** — what assembly uses to know how many exercises fit in her hour | Her measured rest (built, Stage 0) and her set durations (timestamps) |
@@ -882,9 +1109,9 @@ entirely, so the 60-minute cap measured a workout nobody ever had.
 | **F-5** | ~~HR rest margin + timer bounds~~ — **RETIRED (Rev 6)** with S-19. HR is display-only now; rest ends on the learned timer (S-17). | — |
 | **F-6** | ~~gap factor for the approach set~~ — **RETIRED (Rev 6).** The recency window (F-8) alone decides when an approach set fires (S-60). | — |
 | **F-7** | ~~bodyweight graduation rep ceiling~~ — **DELETED (Rev 5).** Graduation now triggers at **her own `Thi`** (S-52); the catalogue keeps only the ladder pointer, which is structure, not a number. The review found a fixed ceiling of 12 trapped an athlete who chose the 12-15 band. | — |
-| **F-8** | The **recency window** — how far back a measured statistic reads: reps-per-rung, `N`, the rest median (S-17), **and the rail (L11)**. Old history outside it is not "her number today." **The one thing it does NOT scope is a raw completed load used to seed a prescription (S-9)** — a weight she lifted is a fact whatever its age; the approach set (S-60), not F-8, guards a stale seed. *(2026-07-16 audit: the FAÇADE's reps-per-rung read now applies this window too — it previously flattened all-time history into one record and slipped the window; the pure core always honoured it.)* | it **scopes** every measured statistic (never a raw seed) |
+| **F-8** | The **recency window** — how far back a measured statistic reads: reps-per-rung, `N`, the rest median (S-17), **and the rail (L11)**. Old history outside it is not "her number today." **The one thing it does NOT scope is a raw completed load used to seed a prescription (S-9)** — a weight she lifted is a fact whatever its age; **Loop 1 from set 1**, not F-8, is what catches a stale seed (Rev 8 deleted the approach set that used to). *(2026-07-16 audit: the FAÇADE's reps-per-rung read now applies this window too — it previously flattened all-time history into one record and slipped the window; the pure core always honoured it.)* | it **scopes** every measured statistic (never a raw seed) |
 | **F-9** | The **canonical muscle order** — the final tie-break for a contested set (S-32 #3, reversed in S-37). It repeatedly allocates real volume, so by our own standard it is a form constant and is named here, not buried in an example. | it **breaks ties** in volume |
-| **F-10** | ~~physical sanity ceiling~~ — **DELETED (Rev 6).** It was a *predicted* human limit resting on the unaudited `baseKg` table — theory. The approach set is guarded by the athlete's own eyes and the next set instead (S-49, S-60). | — |
+| **F-10** | ~~physical sanity ceiling~~ — **DELETED (Rev 6).** It was a *predicted* human limit resting on the unaudited `baseKg` table — theory. A cold-start load is guarded by the athlete's own eyes and by Loop 1 on the next set instead (S-49). | — |
 | **F-11** | The **rest-band width** — how close two sets' `restBeforeS` must be to count as "same conditions" for the reps-per-rung fit (L3), so a set done after a very different rest is not fitted against one that wasn't. | no — it **filters** which sets compare |
 | **F-12** | The **minimum like-for-like pairs** before B-5 (the cautious single rung) gives way to her fitted reps-per-rung slope. | no — it **gates** bootstrap→data |
 | **F-13** | The **reps-per-rung estimator: Theil–Sen** (the median of all pairwise slopes) — **one named algorithm**, not "a robust fit," so identical inputs yield an identical slope (I-24). Likewise `N`'s percentile is the **nearest-rank** method — one rule, stable on the small samples where it matters. | it **fixes** the estimator, not a value |
@@ -913,9 +1140,12 @@ bootstraps, nine form constants now** — no invented number still decides a LOA
 > **The claim this ledger actually makes is narrow, and it is the only one worth making:**
 > **no invented number decides a LOAD and is left standing.** Every load a working set is judged
 > against is measured from her (the anchor, reps-per-rung, `N`, the rest medians, the rail) or
-> physically real (the grid). The two load-touching bootstraps — the approach load (B-1) and the
+> physically real (the grid). The two load-touching bootstraps — the cold-start load (B-1) and the
 > starting equipment step (B-6) — **are overwritten by her own data inside the first sessions, and
-> the approach set guards B-1 in the very first 90 seconds.** What remains permanent are constants
+> Loop 1 corrects B-1 from her very first set** (Rev 8: the approach set that used to do this in 90
+> seconds is gone, and Loop 1 took the job — so B-1 is now a working load that is immediately tested,
+> not a measurement that never reaches the bar. The claim is narrower than it was, and it is stated
+> at B-1 rather than glossed here). What remains permanent are constants
 > that shape a **timer**, a **sentence**, a **set count**, an **exercise swap**, a **tie-break**
 > (F-9), or **fix an estimator's algorithm** (F-13) — never *set* a working load — and each is named
 > above. **The one thing that would have crossed that line — a predicted physical ceiling — was
@@ -972,7 +1202,11 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 > **Every situation S-n gets a test named for it** — `s22_median_anchor.test.ts`,
 > `s15_fat_finger_cannot_move_more_than_one_rung.test.ts`,
 > `s60_approach_set_is_not_a_working_set.test.ts`.
-> **Coverage is a count: 71 situations, 71 tests, green — or we are not done.**
+> **Coverage is a count: every LIVE situation has a test, green — or we are not done.**
+> *(The count itself is deliberately not written here any more. It was "71 situations, 71 tests", and
+> it went stale the moment Rev 8 removed S-60 entirely and Rev 7 removed S-31 — a number that has to
+> be re-derived on every revision is a maintenance trap, not a guarantee. **68 live situations**
+> today: S-1…S-74, minus S-19, S-23, S-26, S-31, S-60, and minus the never-issued S-75+.)*
 > *(S-23 absorbed into S-22 (Rev 3); S-19 and S-26 deleted as feature-creep (Rev 6); S-67 added
 > (Rev 5) — leaving 64 of the S-1…S-67 numbering. **Rev 7 added S-68…S-74** — learned exercise
 > selection (Part 9 §B) — for 71. Tests carry the tripwires (S-54 warm-ups, S-67 assisted, and the
@@ -1017,8 +1251,8 @@ first.** That is why Part 6 exists at all — a "no theory" engine would not nee
 | # | Stage | Owns | Status |
 |---|---|---|---|
 | **0** | **The fact substrate** — `restBeforeS` on every set, phone **and** watch | S-17, S-18, S-54, S-58 | ✅ **BUILT + WIRED** |
-| **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-60, S-61, S-67 | ✅ **BUILT** — Loop 1 now sizes an in-session correction to her FITTED reps-per-rung (`perRungForV5` stamped on the target; 2026-07-16 review), not one cautious rung |
-| **2** | **The set loop, live** — `sessionStore` **and the watch** together | S-11…S-13, S-60 | ✅ **WIRED** |
+| **1** | **The pure core** — Loop 1 + Loop 2, exercise-keyed state, the grid, reps-per-rung | S-8…S-16, S-22…S-31, S-49…S-55, S-61, S-67 | ✅ **BUILT** — Loop 1 now sizes an in-session correction to her FITTED reps-per-rung (`perRungForV5` stamped on the target; 2026-07-16 review), not one cautious rung |
+| **2** | **The set loop, live** — `sessionStore` **and the watch** together | S-11…S-13, S-28 | ✅ **WIRED** |
 | **3** | **Volume + real time** — Loop 3, the time budget from measured rest | S-17, S-18, S-32…S-37, S-64 | ✅ **WIRED (Rev 7 D + 2026-07-16 review)** — advanceV5 runs Loop 3 per muscle per occurrence (grow/hold/trim), the learned target persists (`EngineV5.volumeByMuscle`) and regeneration distributes it (`distributeMuscleSets`, 3..5 each, new exercise on overflow); an over-budget day donates by S-37 (`chooseDonor`). **The TIME BUDGET now uses HER MEASURED REST** (exec + median `restBeforeS` per lift, S-64) — the review found it built-but-unwired and connected it; day-one bootstrap unchanged. Volume moves are NARRATED in the mirror (`explain.volumeUp/Down`) |
 | **4** | **The map + T + assembly** — the programme becomes generated | S-1…S-7, S-44, S-50, S-56, S-57, S-59, S-62, S-63, S-66 | ✅ **WIRED (Rev 7)** — per-muscle T live; map-driven `generateProgram` live for the v5 cohort; the onboarding body-map screen sets `bodyMap`+`repBand` |
 | **5** | **The surfaces** — decision at the end of the WORKOUT (per-workout, L7); Saturday is a mirror | S-45 | ✅ **WIRED** (v5 cohort) — incl. **structural** changes (graduate/rotate/learned-swap) named in the mirror (Rev 7 S-45, 2026-07-16) |
@@ -1106,8 +1340,12 @@ fact-only discipline — and no new number that decides a load.
   fills the budget for a fast rester (S-17); unfinished sets trim it (S-33/34). "Wants more than 60"
   is near-illusory — 60 minutes of prescribed work is a complete session. **No new mechanism, no
   learning.**
-- **`experience` is deleted as an input.** The approach set (S-60) measures her; a self-report never
-  touches a load. Removed from onboarding, Settings, and the profile's decision path.
+- **`experience` is deleted as an input.** A self-report is not a fact the engine measured (L1), so
+  it may never touch a load; **Loop 1 measures her from set 1** instead. *(This bullet originally
+  said "the approach set measures her" — Rev 8 deleted the approach set, and the deletion of
+  `experience` stands on L1, which was always the stronger reason.)* Removed from onboarding,
+  Settings, **and the profile's decision path — including the cold-start load (B-1), which reads her
+  sex and bodyweight and nothing else.**
 - **Reps are NOT learned from behaviour — a learned rep-band was designed and REJECTED (2026-07-15).**
   The signal "high reps at a flat load" is confounded with **S-28** (the coarse-machine rep-climb the
   engine itself induces), it has **no natural re-test surface** (weak L2), and it would ADD per-set
@@ -1143,11 +1381,13 @@ latch, only the current fact. Symmetric in both directions.
 **S-71 · The learned "leave it" — resisting the engine's own rotation.** The engine rotates a
 genuinely **stalled** lift (S-25.2: `attempts > N`, a last resort — weeks of real time, verified in
 `loop2.ts`). If she swaps back to the rotated-away lift, that is an athlete swap; done **twice**, the
-engine adopts it **and stops rotating it** — a learned pin, *earned by resisting rotation*, not
-declared on a button. Thereafter it behaves exactly as S-30's pinned-and-stalled lift: it still gets
-back-off/re-climb, but the engine never takes it away. This bounds the "rotate ↔ swap-back" loop to
-two cycles. The learned pin persists (through reassembly, and a muscle off→on, S-66) until she swaps
-it away herself, and it feeds **S-59** (pins vs. the time budget) unchanged.
+engine adopts it **and stops rotating it** — a **leave-it**, *earned by resisting rotation*, never
+declared on a button. **This is the ONLY thing left of the old "pin", and it is not a pin: she cannot
+place one, only earn one, and only on a lift the engine itself tried to take away.** Thereafter it
+behaves exactly as S-30's leave-it-and-stalled lift: it still gets back-off/re-climb, but the engine
+never takes it away. This bounds the "rotate ↔ swap-back" loop to two cycles. A leave-it persists
+(through reassembly, and a muscle off→on, S-66) until she swaps it away herself, and under the time
+budget it is **cut last** (S-59).
 
 **S-72 · An engine rotation is never counted as an athlete swap.** The two signals stay strictly
 apart: only an athlete-initiated swap advances a pending (S-68/69) or a leave-it (S-71). An engine

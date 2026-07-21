@@ -9,7 +9,7 @@
  */
 
 import type { Band, ExerciseMeta } from './types';
-import { moveRungs, snapDown } from './grid';
+import { moveRungs, snapDown, isBigJump } from './grid';
 import { rungsForHeadroom } from './repsPerRung';
 
 const MAX_CORRECTIONS = 2; // S-13
@@ -23,6 +23,18 @@ export interface Loop1Input {
   meta: ExerciseMeta;
   /** Her measured reps-per-rung on this lift, or null → one cautious rung (B-5). */
   perRung: number | null;
+  /**
+   * L11 — the rail, as a concrete ceiling for THIS lift: one rung above the heaviest load she has
+   * completed at `Tlo` reps (her settled history plus what she has already completed this session).
+   * `null`/absent = the rail is INACTIVE (a lift with no completed set inside the recency window),
+   * which is the one condition L11 names, and there the athlete's own eyes are the guard (S-49).
+   *
+   * S-11 says a raise is "always inside the rail" and S-14 says the rail is absolute — but the live
+   * loop never applied it, so a single implausible rep count (a 30-rep set on a light dumbbell, a
+   * mis-keyed 40 typed as 4 reps' worth of headroom) could size a correction to a load she has never
+   * come near, mid-workout, with nothing underneath it. Loop 2 clamped; Loop 1 did not. It does now.
+   */
+  railCeiling?: number | null;
 }
 
 export interface Loop1Result {
@@ -34,7 +46,7 @@ export interface Loop1Result {
 
 /** Decide the next set's load from the set just performed. Pure. */
 export function correctInSession(inp: Loop1Input): Loop1Result {
-  const { currentLoad, band, repsJustDone, correctionsSoFar, isLastSet, meta, perRung } = inp;
+  const { currentLoad, band, repsJustDone, correctionsSoFar, isLastSet, meta, perRung, railCeiling } = inp;
   const none: Loop1Result = { nextLoad: currentLoad, corrected: false, direction: 'none' };
 
   // S-51: bodyweight has no load to correct. S-13: no correction after the last set, or past the cap.
@@ -42,9 +54,21 @@ export function correctInSession(inp: Loop1Input): Loop1Result {
   if (isLastSet || correctionsSoFar >= MAX_CORRECTIONS) return none;
 
   if (repsJustDone > band.hi) {
+    // S-28 · the same law, on the in-session door. If the next rung is a big jump (no micro-loading)
+    // and her measured reps-per-rung says it lands her under Tlo, the load may not move — "T is hers,
+    // so the engine may not quietly raise it." Leaving Loop 1 free to prescribe the unreachable rung
+    // would simply re-open the oscillation Loop 2 now refuses; the register is explicit that ONE
+    // measured fact governs the problem, and a law that holds on one path and not its neighbour is
+    // how every defect in this engine's audit got in.
+    if (perRung != null && isBigJump(currentLoad, meta.equipment, meta.observedLoads) && repsJustDone - perRung < band.lo) {
+      return none;
+    }
     // S-11 / S-14: above Thi → the load is too light; raise it (as many rungs as the overshoot is worth).
     const n = rungsForHeadroom(repsJustDone - band.hi, perRung);
-    const raised = snapDown(moveRungs(currentLoad, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
+    let raised = snapDown(moveRungs(currentLoad, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
+    // L11 — the rail is the one hard stop, and it binds here exactly as it binds Loop 2 (S-11/S-14).
+    // Never below the load she is on: the rail only ever cancels a raise, it never causes a drop.
+    if (railCeiling != null && raised > railCeiling) raised = Math.max(currentLoad, railCeiling);
     return { nextLoad: raised, corrected: raised !== currentLoad, direction: 'up' };
   }
   if (repsJustDone < band.lo) {

@@ -29,8 +29,11 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     for (const d of p.days) expect(d.slots.length).toBeGreaterThan(0); // no empty workout
     // S-2 end-to-end: not a single lower-body lift is programmed.
     for (const m of ['Quads', 'Hamstrings', 'Glutes', 'Calves']) expect(musclesIn(p).has(m as never)).toBe(false);
-    // Engine-managed slots carry a durable engine slot id (progression keying).
-    expect(p.days.some((d) => d.slots.some((s) => s.engineSlotId != null))).toBe(true);
+    // NO slot carries an engine slot id. v5 keys every decision to the EXERCISE — "State is keyed to
+    // the exercise, never to a slot" (Loop 2) — and S-29 deletes the `canonicalEngineId` unification
+    // that was the key's only consumer. This assertion used to demand the opposite; it was written
+    // for v4's slot-keyed progression and outlived it.
+    expect(p.days.every((d) => d.slots.every((s) => s.engineSlotId == null))).toBe(true);
   });
 
   it('emphasis is honoured end-to-end — an emphasised muscle is trained', async () => {

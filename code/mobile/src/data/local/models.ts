@@ -26,7 +26,6 @@ export type RepBandChoice = '6-8' | '8-10' | '10-12' | '12-15';
 export type MuscleStance = 'off' | 'normal' | 'emphasis';
 
 /** Weekly training volume — the athlete's set-volume lever (default moderate). */
-export type WeeklyVolume = 'low' | 'moderate' | 'high';
 
 /** Training experience — the single biggest input to the cold-start starting weight. */
 export type Experience = 'beginner' | 'intermediate' | 'advanced';
@@ -62,7 +61,6 @@ export interface Profile {
   goal: Goal;
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
-  volume?: WeeklyVolume; // weekly set-volume lever; absent => 'moderate' (parity-preserving)
   /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. Also the
    *  v5-cohort marker (a set value opts the athlete onto the v5 engine) and the per-exercise fallback
    *  when a muscle has no override in `repBandByMuscle`. */
@@ -113,6 +111,10 @@ export interface Slot {
   // identity from equipment clustering + engine swaps, so an engine swap/graduation never shifts
   // it (fixes findings 2 / V1). Absent on core / unmapped slots; deriveSlots falls back to the
   // positional id when absent (backward compatibility with pre-upgrade persisted programs).
+  /** @deprecated v4 slot key — nothing reads it. v5 keys every decision to the EXERCISE, never to
+     *  a slot (register Loop 2: "State is keyed to the exercise, never to a slot"), and S-29 deletes
+     *  the `canonicalEngineId` unification this fed. Kept only so a persisted v4-era programme still
+     *  parses; never written any more. */
   engineSlotId?: string;
 }
 

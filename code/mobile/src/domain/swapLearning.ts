@@ -109,16 +109,16 @@ export function undoEngineRotation<
   P extends {
     substitutes: Record<string, string>;
     engineRotated?: Record<string, string>;
-    pinsByMuscle: Record<string, string>;
+    leaveItsByMuscle: Record<string, string>;
   },
 >(prefs: P, anchor: string, muscleOfExercise: (id: string) => string | null): P {
   const engineRotated = { ...(prefs.engineRotated ?? {}) };
   if (!engineRotated[anchor] || !prefs.substitutes[anchor]) return prefs;
   const substitutes = { ...prefs.substitutes };
-  const pinsByMuscle = { ...prefs.pinsByMuscle };
+  const leaveItsByMuscle = { ...prefs.leaveItsByMuscle };
   delete substitutes[anchor]; // the rotation is undone — the assembler goes back to her lift
   delete engineRotated[anchor]; // …and it is no longer a rotation anyone can resist twice
   const m = muscleOfExercise(anchor);
-  if (m) pinsByMuscle[m] = anchor; // the pin she just earned — identical to the S-71 fold's write
-  return { ...prefs, substitutes, engineRotated, pinsByMuscle };
+  if (m) leaveItsByMuscle[m] = anchor; // the leave-it she just earned — identical to the S-71 fold's write
+  return { ...prefs, substitutes, engineRotated, leaveItsByMuscle };
 }

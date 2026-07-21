@@ -18,7 +18,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, useSession } from '@/state/stores/sessionStore';
+import { REST_INTER_S, REST_TRANSITION_S, restInterSecondsFor, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
@@ -179,6 +179,9 @@ export function Home({ navigation, route }: Props) {
         }
       }
       if (cancelled) return;
+      // S-17 — the standalone watch plan must ship HER rests, not the tier bootstrap. The phone is
+      // the sole authority (S-48), so it hands the wrist the same learned timer it would run itself.
+      refreshLearnedRests(await db.loadHistory().catch(() => []));
       setWatchPlan(
         buildWatchPlanSnapshot({
           days,

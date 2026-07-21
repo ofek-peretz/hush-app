@@ -35,7 +35,19 @@ function fitPoints(session: SetPerf[], history: SessionRecord[]): FitPoint[] {
  * (the normal case). Theil–Sen over the like-for-like pairs (F-11), scaled by the size of one real
  * rung. An implausible non-positive result falls back to null (→ the bootstrap).
  */
-export function repsPerRung(session: SetPerf[], history: SessionRecord[], meta: ExerciseMeta): number | null {
+export function repsPerRung(
+  session: SetPerf[],
+  history: SessionRecord[],
+  meta: ExerciseMeta,
+  /**
+   * Price the rung at THIS load — the step she is actually about to be asked for. A rung is not one
+   * size across a grid: on a `[40, 50]` stack the step from 40 costs 10 kg, while the step above her
+   * top rung costs the equipment increment. Defaulting to her heaviest fitted load keeps every
+   * existing caller identical, but S-28 must ask about the rung in FRONT of her or it prices a 2.5 kg
+   * step for a 10 kg jump and never fires.
+   */
+  atLoad?: number,
+): number | null {
   const pts = fitPoints(session, history);
   if (pts.length < 2) return null;
 
@@ -50,8 +62,8 @@ export function repsPerRung(session: SetPerf[], history: SessionRecord[], meta: 
   if (slopes.length < MIN_PAIRS_FOR_SLOPE) return null;
 
   const medSlope = median(slopes); // d(reps)/d(kg), typically negative
-  const maxLoad = Math.max(...pts.map((p) => p.load));
-  const rungKg = nextRung(maxLoad, meta.equipment, meta.observedLoads) - maxLoad;
+  const priceAt = atLoad ?? Math.max(...pts.map((p) => p.load));
+  const rungKg = nextRung(priceAt, meta.equipment, meta.observedLoads) - priceAt;
   const perRung = -medSlope * (rungKg > 0 ? rungKg : 1);
   return perRung > 0 ? perRung : null;
 }
