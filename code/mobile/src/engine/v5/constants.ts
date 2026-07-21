@@ -28,18 +28,9 @@ export const EMPHASIS_BUDGET = 2;
  * F-8 — the recency window. A measured statistic (reps-per-rung, N, the rest median, the rail)
  * reads only the athlete's most recent sessions of a lift; older history is not "her number today."
  * A raw completed load used only to SEED a prescription (S-9) is exempt — a weight she lifted is a
- * fact whatever its age; the approach set (S-60) guards a stale seed instead.
+ * fact whatever its age; what catches a stale seed is Loop 1, from set 1 (S-38, Rev 8).
  */
 export const RECENCY_WINDOW_SESSIONS = 12;
-
-/**
- * F-8 (time form) — the recency window as DAYS. A completed set older than this is "aged out": the
- * approach set (S-60) fires when a lift has no completed set within this window, which is what makes
- * a long layoff (S-38) re-measure her rather than load her cold on a stale number. Time-based on
- * purpose — a count-based window can never let a gap push a set out (register Rev 6). Applied at the
- * FAÇADE (which has session timestamps); the pure core stays wall-clock-free (I-25).
- */
-export const RECENCY_WINDOW_DAYS = 28;
 
 /**
  * F-11 — the rest-band width (seconds). Two sets are "like-for-like" for the reps-per-rung fit only
@@ -84,12 +75,11 @@ export const CANONICAL_MUSCLE_ORDER: readonly string[] = [
   'Core',
 ] as const;
 
-/**
- * B-4 — day-one per-set cost, before she has performed any set, so assembly can size a workout to
- * her minutes. Replaced by her measured rest (S-17) + set durations (timestamps) within sessions.
- * Seconds of (work + rest) for a compound and an isolation set respectively.
- */
-export const STARTING_SET_SECONDS = { compound: 210, isolation: 150 } as const;
+// B-4 (day-one per-set cost) lives where assembly prices a day — `fixtureModel`'s
+// COMPOUND_SET_MIN / ISOLATION_SET_MIN + SET_EXEC_SECONDS — replaced by her measured rest (S-17)
+// and set durations (learnedExecS) the moment she has them. A second copy of those numbers used to
+// sit HERE (`STARTING_SET_SECONDS`, unwired, and disagreeing with the live ones): one declared
+// constant, one home — it is gone.
 
 /**
  * B-2 — starting weekly sets per muscle, before earned/cut volume (Loop 3) takes over. `base` for a

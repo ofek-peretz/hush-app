@@ -96,8 +96,8 @@ function bestDemonstratedLoad(exerciseId: string, band: Band, sessions: Session[
   return best;
 }
 
-/** Working SetPerfs for an exercise from a set of sessions. Approach sets (S-60) are a measurement,
- *  not work — excluded from the fold (they still carry their mark through for completeness). */
+/** Working SetPerfs for an exercise from a set of sessions. Legacy Build-#33 approach sets are
+ *  excluded from the fold (Rev 8 deleted the mechanism; the mark survives only on old logs). */
 function setPerfs(exerciseId: string, sessions: Session[]): SetPerf[] {
   const out: SetPerf[] = [];
   for (const s of sessions) for (const log of s.sets) {
@@ -115,7 +115,7 @@ function initExercise(exerciseId: string, band: Band, history: Session[], seedFo
     ? null
     : demonstrated != null
       ? snapDown(demonstrated, meta.equipment, meta.observedLoads)
-      : seedFor(exerciseId); // no history → the seed (an approach set measures it, S-60)
+      : seedFor(exerciseId); // no history → the seed; Loop 1 corrects it from her first set (Rev 8)
   return { exerciseId, load, band, sets: Math.max(SETS_MIN, 4), history: [] };
 }
 
@@ -255,8 +255,8 @@ export async function advanceV5(
       else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
       if (out.decision === 'progress') advancedThisOcc.add(id); // a lift of this muscle rose (S-32)
       // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
-      // delta direction (explainChange), never the decision label. hold/ambiguous/approach say
-      // nothing (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
+      // delta direction (explainChange), never the decision label. hold/ambiguous say nothing
+      // (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
       if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
         log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
       }
@@ -407,7 +407,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** A v5 change → the same {observation, conclusion, action, text} i18n lines the Weekly Update
  *  screen renders, reusing the existing `explain.*` copy (no new keys). Only the change decisions
- *  are surfaced; hold/ambiguous/approach are not "changes" (R7). */
+ *  are surfaced; hold/ambiguous are not "changes" (R7). */
 function explainChange(c: ChangeEntry): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
   // A VOLUME change (S-45 / S-32 / S-34): Loop 3 grew or trimmed a muscle's weekly sets. Muscle-keyed,

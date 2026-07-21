@@ -147,12 +147,43 @@ describe('S-51/S-52 · bodyweight progresses on reps and graduates at Thi or on 
     const r = decideExercise({ state: state({ load: null }), session: [S(null, 9), S(null, 9), S(null, 8)], meta: bw });
     expect(r.decision).toBe('progress');
   });
-  it('S-52 trap fixed · stuck below Thi (12 in a 8-12 band, never reaching 12... here 8-15 band) → stall graduates', () => {
+  it("S-52's OWN trap case · a 12-15 athlete stuck FLAT at 3×12 (Tlo met every time) graduates on the stall — never frozen", () => {
+    // The register's motivating example verbatim: she meets Tlo=12 every session, never reaches
+    // Thi=15, and has no load lever. "Failed to clear Tlo" can never fire here — reps not MOVING is
+    // the wall. Two flat occurrences behind her (N=1 seed) + this one → attempts 2 > N → graduate.
     const highBand: Band = { lo: 12, hi: 15 };
-    // stuck at 3×12 for the stall window; N=1 seed, this session did not advance to... it did meet lo=12.
-    // Force a real stall: below lo.
-    const r = decideExercise({ state: state({ load: null, band: highBand, history: [{ load: null, sets: [S(null, 11), S(null, 10)] }] }), session: [S(null, 11), S(null, 10)], meta: bw });
+    const flat = { load: null, sets: [S(null, 12), S(null, 12), S(null, 12)] };
+    const r = decideExercise({ state: state({ load: null, band: highBand, history: [flat, flat] }), session: [S(null, 12), S(null, 12), S(null, 12)], meta: bw });
     expect(r.decision).toBe('graduate');
+    expect(r.wantsChange).toBe('graduate');
+  });
+  it('stuck BELOW Tlo (reps not moving) → the same stall graduates', () => {
+    const highBand: Band = { lo: 12, hi: 15 };
+    const rec = { load: null, sets: [S(null, 11), S(null, 10)] };
+    const r = decideExercise({ state: state({ load: null, band: highBand, history: [rec, rec] }), session: [S(null, 11), S(null, 10)], meta: bw });
+    expect(r.decision).toBe('graduate');
+  });
+  it('climbing below Tlo — every fresh post-graduation lift — is PROGRESS, never a chain-graduation', () => {
+    // 8 → 9 in a 12-15 band: she is adding reps, exactly what a new harder lift looks like (S-52:
+    // "graduating drops her below the new lift's Tlo and she climbs again — no harm"). The old
+    // "not every set met Tlo" read would have graduated her again after two occurrences of honest
+    // climbing, cascading up the ladder.
+    const highBand: Band = { lo: 12, hi: 15 };
+    const r = decideExercise({
+      state: state({ load: null, band: highBand, history: [{ load: null, sets: [S(null, 8), S(null, 8)] }] }),
+      session: [S(null, 9), S(null, 9)],
+      meta: bw,
+    });
+    expect(r.decision).toBe('progress');
+    expect(r.wantsChange).toBeUndefined();
+  });
+  it('repeating a number is not an advance — a flat occurrence HOLDS (S-32b stays honest)', () => {
+    // One flat occurrence is not yet a stall (attempts 1 = N 1) and not progress either: Loop 3 must
+    // not read "she repeated 3×12" as a lift advancing (volume grows only on progress, S-32).
+    const highBand: Band = { lo: 12, hi: 15 };
+    const flat = { load: null, sets: [S(null, 12), S(null, 12), S(null, 12)] };
+    const r = decideExercise({ state: state({ load: null, band: highBand, history: [flat] }), session: [S(null, 12), S(null, 12), S(null, 12)], meta: bw });
+    expect(r.decision).toBe('hold');
   });
 });
 

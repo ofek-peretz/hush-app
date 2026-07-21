@@ -17,7 +17,9 @@ import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED } from '.
 
 const EPS = 1e-6;
 
-/** Working sets only (approach sets are measurements, never decisions — S-60). */
+/** Working sets only. `isApproach` marks LEGACY Build-#33 approach sets (Rev 8 deleted the
+ *  mechanism; nothing writes the mark any more) — they stay excluded so those histories never
+ *  pollute a decision. */
 const working = (sets: SetPerf[]): SetPerf[] => sets.filter((s) => !s.isApproach && s.reps >= 0);
 
 /** Did the set meet the target (reps ≥ Tlo, and it was really performed)? */
@@ -46,9 +48,10 @@ function isRepeatedStall(history: SessionRecord[], currentLoad: number | null, b
 // ── The rail (L11) ─────────────────────────────────────────────────────────
 /**
  * The heaviest load she has COMPLETED at ≥ Tlo reps in her settled history (the sessions before this
- * one, inside the recency window). null when there is no such record → the rail is inactive and the
- * approach set guards instead (S-60). Never reads the current session, so a fat-finger cannot lift
- * its own ceiling.
+ * one, inside the recency window). null when there is no such record → the rail is inactive, and
+ * deliberately nothing replaces it there (L11, Rev 8): the guard is Loop 1 correcting from the very
+ * first set, plus the athlete's own eyes on a visible number (S-49). Never reads the current
+ * session, so a fat-finger cannot lift its own ceiling.
  */
 function railRecord(history: SessionRecord[], band: Band): number | null {
   let best: number | null = null;
@@ -67,7 +70,8 @@ function railRecord(history: SessionRecord[], band: Band): number | null {
  * single mis-key can never lift it (L11's real purpose), yet a load she cleanly completed THIS
  * session DOES count, so normal progression is one rung per clear (S-22) — not the half-speed the
  * literal "settled only" reading would force (a register contradiction resolved in S-22's favour).
- * Inactive (no settled record AND no anchor) → unchanged; the approach set guards a never-done lift.
+ * Inactive (no settled record AND no anchor) → unchanged; on a never-done lift Loop 1 and her own
+ * eyes are the guard (L11 / S-49 — no ceiling is invented for that moment).
  */
 function applyRail(load: number, history: SessionRecord[], band: Band, meta: ExerciseMeta, anchor: number | null): number {
   const rec = railRecord(history, band);
@@ -103,15 +107,12 @@ function attemptsToClearN(history: SessionRecord[], band: Band): number {
   return Math.max(1, percentileNearestRank(runs, N_PERCENTILE));
 }
 
-/** Consecutive newest sessions at the CURRENT load that did not clear (incl. this one). */
-function attemptsAtCurrentLoad(state: ExerciseState, thisSessionCleared: boolean, band: Band): number {
-  let count = thisSessionCleared ? 0 : 1;
-  if (thisSessionCleared) return 0;
+/** Consecutive newest sessions at the CURRENT load that did not clear, incl. this (uncleared) one.
+ *  Loaded lifts only — the bodyweight path runs the same S-25 read on the reps axis instead. */
+function attemptsAtCurrentLoad(state: ExerciseState, band: Band): number {
+  let count = 1;
   for (const rec of state.history.slice(0, RECENCY_WINDOW_SESSIONS)) {
-    // Same load also means "both bodyweight" (null == null) — a bodyweight lift has no load axis.
-    const sameLoad =
-      (rec.load == null && state.load == null) ||
-      (rec.load != null && state.load != null && Math.abs(rec.load - state.load) < EPS);
+    const sameLoad = rec.load != null && state.load != null && Math.abs(rec.load - state.load) < EPS;
     const cleared = rec.sets.length > 0 && rec.sets.every((s) => metTlo(s, band));
     if (!sameLoad || cleared) break;
     count += 1;
@@ -200,7 +201,7 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
   }
 
   // Not all met Tlo → S-24 hold, unless it is a stall (S-25).
-  const attempts = attemptsAtCurrentLoad(state, false, band);
+  const attempts = attemptsAtCurrentLoad(state, band);
   const N = attemptsToClearN(state.history, band);
 
   // S-25: a stall is failing this load MORE times than her own typical attempts-to-clear (strict).
@@ -226,25 +227,71 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
 }
 
 // ── Bodyweight (S-51/52/53) ────────────────────────────────────────────────
+/** The occurrence's WORST working set's reps — the scalar the reps axis progresses on (S-51). Reads
+ *  ALL sets, the same discipline as S-22 ("10/9/8 ≠ 10/7/5"). null when nothing was performed. */
+function repsScore(sets: SetPerf[]): number | null {
+  const usable = sets.filter((s) => !s.isApproach && s.reps > 0);
+  if (usable.length === 0) return null;
+  return Math.min(...usable.map((s) => s.reps));
+}
+
+/**
+ * S-51/S-52 — a bodyweight lift has no load axis, so REPS carry the progression and the S-25 stall
+ * machinery runs on the reps axis:
+ *
+ *   · "advanced" is a FACT: this occurrence's worst-set reps beat every previous occurrence's (a
+ *     first occurrence sets the wall). Merely repeating a number — even a number at Tlo — is not an
+ *     advance, which is what keeps Loop 3 honest (S-32b: completed but nothing advanced → hold).
+ *   · a STALL is exceeding her own attempts-to-improve: N = the 75th percentile (nearest-rank, F-13)
+ *     of the occurrences she has historically spent before adding a rep to her worst set (B-3 seed
+ *     until she has one). This is what frees the register's own trap case — the athlete in a 12-15
+ *     band stuck flat at 3×12: she meets Tlo every time, so a "failed to clear Tlo" read would never
+ *     fire and she would be frozen forever with no load lever. Reps not moving IS the wall.
+ *   · and the converse trap: a lift climbing reps BELOW Tlo (every new lift right after a
+ *     graduation) is ADVANCING, not stalling — the old "not every set met Tlo" read would have
+ *     graduated her again after two occurrences of honest climbing, cascading up the ladder.
+ *
+ * Two graduation triggers, exactly as S-52 states them: every set at Thi (too easy), or a stall.
+ */
 function decideBodyweight(inp: Loop2Input, sets: SetPerf[]): Loop2Result {
-  const { state, meta } = inp;
+  const { state } = inp;
   const band = state.band;
-  const usable = sets.filter((s) => s.reps > 0);
-  if (usable.length === 0) return { decision: 'ambiguous', load: null, band, sets: state.sets };
+  const score = repsScore(sets);
+  if (score == null) return { decision: 'ambiguous', load: null, band, sets: state.sets };
 
   const allMetThi = sets.every((s) => s.reps >= band.hi); // S-52 trigger 1: too easy
   if (allMetThi) {
     return { decision: 'graduate', load: null, band, sets: state.sets, wantsChange: 'graduate' };
   }
 
-  // S-52 trigger 2: stalled below Thi — no load lever, so the only way forward is a harder movement.
-  const attempts = attemptsAtCurrentLoad(state, false, band);
-  const N = attemptsToClearN(state.history, band);
-  const advancedThisSession = sets.every((s) => s.reps >= band.lo); // reps climbing within band
-  if (!advancedThisSession && attempts > N) {
+  // Her past scores, oldest-first, inside the recency window (F-8).
+  const past = [...state.history.slice(0, RECENCY_WINDOW_SESSIONS)]
+    .reverse()
+    .map((r) => repsScore(r.sets))
+    .filter((s): s is number => s != null);
+  let best: number | null = null;
+  let trailing = 0; // consecutive most-recent occurrences that failed to improve
+  const runs: number[] = []; // occurrences spent before each improvement — her attempts-to-improve
+  let run = 0;
+  for (const s of past) {
+    run += 1;
+    if (best == null || s > best) {
+      runs.push(run);
+      run = 0;
+      best = s;
+      trailing = 0;
+    } else {
+      trailing += 1;
+    }
+  }
+  const advanced = best == null || score > best;
+  if (advanced) return { decision: 'progress', load: null, band, sets: state.sets };
+
+  // S-52 trigger 2: a stall below Thi — she cannot add reps, and there is no load to add.
+  const N = runs.length === 0 ? ATTEMPTS_TO_CLEAR_SEED : Math.max(1, percentileNearestRank(runs, N_PERCENTILE));
+  const attempts = trailing + 1; // the flat occurrences before this one, plus this one
+  if (attempts > N) {
     return { decision: 'graduate', load: null, band, sets: state.sets, wantsChange: 'graduate' };
   }
-
-  // Otherwise reps carry the progression within the band (no load to move).
-  return { decision: advancedThisSession ? 'progress' : 'hold', load: null, band, sets: state.sets };
+  return { decision: 'hold', load: null, band, sets: state.sets };
 }

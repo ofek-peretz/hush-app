@@ -82,7 +82,8 @@ export const TONNAGE_THRESHOLDS_KG = [
  *      deadlift, RDL) and one upper (bench); men get the five classics plus the hip thrust, because
  *      the posterior chain is not a women's subject.
  *  2 · WHICH RUNGS on those lifts — from the athlete's cold-start load, the SAME number the engine
- *      put on the bar on day one (domain/startingLoad: sex × bodyweight × experience × age). The
+ *      put on the bar on day one (domain/startingLoad: sex × bodyweight, B-1 — experience and age
+ *      were struck from the cold start by the register and are no longer inputs here either). The
  *      rungs are the multiples 1.2× / 1.5× / 2× / 2.5× / 3× of that start, snapped to the nearest
  *      round, plate-friendly load. So a club is always a real number a human would say out loud
  *      ("80 kg squat") AND always a genuine step up from where THIS athlete began.
@@ -112,11 +113,13 @@ const CLUB_LIFTS: Readonly<Record<'male' | 'female', readonly string[]>> = {
 /** A club ladder is the athlete's start, multiplied. Five rungs — the last is a career. */
 const CLUB_MULTIPLES = [1.2, 1.5, 2, 2.5, 3] as const;
 
-/** The profile the ladders are cut from — the onboarding answers, and only those. */
-export type MilestoneProfile = Pick<Profile, 'sex' | 'weightKg' | 'startWeightKg' | 'experience' | 'age'>;
+/** The profile the ladders are cut from — the two facts the cold start reads (B-1), plus the
+ *  onboarding-bodyweight anchor. (`experience`/`age` were in this Pick as v4 leftovers; nothing
+ *  here ever read them, and the register strikes both from every load path.) */
+export type MilestoneProfile = Pick<Profile, 'sex' | 'weightKg' | 'startWeightKg'>;
 
 /** Sensible stranger: an athlete we know nothing about is started like the median man. */
-const DEFAULT_PROFILE: MilestoneProfile = { sex: 'male', weightKg: 75, experience: 'intermediate' };
+const DEFAULT_PROFILE: MilestoneProfile = { sex: 'male', weightKg: 75 };
 
 export type ClubLadders = Readonly<Record<string, readonly number[]>>;
 

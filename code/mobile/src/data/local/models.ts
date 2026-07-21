@@ -160,9 +160,6 @@ export interface SetTarget {
   /** Engine v5 — Thi, the top of her declared band (the "too light" mark Loop 1 reads). Absent on
    *  profiles with no declared T => the live loop falls back to a provisional window. */
   repBandHi?: number;
-  /** Engine v5 — the first set of a lift with no recent fact is an APPROACH set: a measurement, not
-   *  a working set (S-60). Marked on setIndex 0 only; excluded from every engine decision. */
-  isApproach?: boolean;
   /** Engine v5 — her fitted reps-per-rung for this lift (F-13), so Loop 1 sizes an in-session
    *  correction to HER number, not one cautious rung (B-5). Absent until enough like-for-like pairs
    *  exist, or for bodyweight → the live loop falls back to a single rung. */
@@ -182,8 +179,9 @@ export interface SetLog {
   actualWeight: number | null;
   actualReps: number;
   edited: boolean; // true if athlete used Edit Result
-  /** Engine v5 — this set was an APPROACH measurement (S-60), not a working set. Carried from the
-   *  target so the engine can exclude it from the weekly fold. */
+  /** LEGACY (Build #33) — this set was an approach measurement. Rev 8 deleted the mechanism and
+   *  nothing writes this mark any more; it survives so already-logged approach sets in testers'
+   *  on-device histories stay excluded from the engine's fold. */
   isApproach?: boolean;
   persistedAt: string; // ISO
   /**

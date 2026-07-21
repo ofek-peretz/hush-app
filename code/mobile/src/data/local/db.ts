@@ -308,7 +308,7 @@ export const db = {
     await setJSON(K.preferences, p);
   },
 
-  // ---- Hush v4 engine state (gated per-slot progression; durable across regen) ----
+  // ---- Hush v5 engine state (exercise-keyed progression; durable across regen) ----
   loadEngineV5: () => getJSON<EngineV5State>(K.engineV5),
   saveEngineV5: (s: EngineV5State) => setJSON(K.engineV5, s),
   /** S-47 — did the last `loadEngineV5` FAIL (stored but unreadable), rather than find nothing? The

@@ -132,6 +132,43 @@ line that produces the fact the copy needs.
 guard that does not exist; "pin" appears only as a historical word; and every load-touching bootstrap
 names the thing that actually corrects it.
 
+**★ REVISION 11 (2026-07-21) — THE POST-LOCK SWEEP.** A line-by-line code↔register pass after the
+lock. One real behavioural defect, a Rev-8 residue sweep, and three calibration fixes — all built,
+tested (931 green + tsc + both lints + `expo export`), nothing in the design changed.
+
+1. **S-52 · THE BODYWEIGHT STALL RAN ON THE WRONG AXIS — this situation's OWN trap case was still
+   frozen.** The built stall read was "failed to clear `Tlo`", which is the LOADED lift's clear. On a
+   bodyweight lift that read is wrong three ways at once:
+   - **The register's motivating example — a 12-15 athlete stuck flat at 3×12 — never graduated.**
+     She meets `Tlo` every session, so "failed to clear" never fires; she never reaches `Thi`=15 and
+     has no load lever. Frozen forever — the exact wording of the trap Rev 6 recorded as fixed.
+   - **A fresh post-graduation lift climbing reps BELOW `Tlo` graduated AGAIN after two occurrences.**
+     8 → 9 in a 12-15 band read as "not cleared" twice → `attempts > N` → graduate — a
+     chain-graduation up the ladder while she was honestly climbing, which is the opposite of
+     *"graduating drops her below the new lift's `Tlo` and she climbs again — no harm."*
+   - **A flat occurrence at `Tlo` counted as a lift "advancing" for Loop 3** — so a muscle's volume
+     could grow (S-32) on a session where nothing moved, an S-32b breach.
+   **Fix — the S-25 machinery, run on the reps axis, no new constant:** the scalar is the
+   occurrence's **worst-set reps** (all sets, the S-22 discipline); *advanced* = it beat every prior
+   occurrence's (a first occurrence sets the wall); `N` = her own **attempts-to-improve** (the
+   nearest-rank 75th percentile of occurrences historically spent before adding a rep, F-13; B-3
+   seed); stall = exceeding it → graduate. `Thi` on every set still graduates immediately.
+   Tests: `v5_stage1_core` ("S-52's OWN trap case", the chain-graduation guard, the S-32b hold).
+2. **Rev-8 residue swept out of the code** (this document deleted the approach set; these survived
+   it): the unreachable `Loop2Decision 'approach'` + `Loop2Result.isApproach`; **`SetTarget.isApproach`
+   and the `completeSet` line that copied it onto new logs** — "nothing writes the mark any more" is
+   now literally true (`SetLog.isApproach` stays, read-only, for the legacy Build-#33 fold-exclusion);
+   `RECENCY_WINDOW_DAYS` (its only job was the approach trigger; unused since); and
+   `STARTING_SET_SECONDS` — a second, unwired declaration of B-4's day-one cost whose numbers
+   (210/150 s) disagreed with the live ones. One declared constant, one home.
+3. **Three calibrations:** the seed's e1RM→working conversion priced every transfer at a fixed **8
+   reps** whatever band she declared — it now prices at **her `Tlo`** (identical for the default band;
+   a 12-15 athlete's transfer is no longer ~12% heavy); the S-3 over-budget report was priced with
+   her measured REST but the bootstrap EXEC (so the report could disagree with the enforcement about
+   whether a day fits) — both measured halves now; and the stage's reason-delta could read a legacy
+   15 kg approach set as "her previous weight" — excluded. Also struck: `milestones`' profile type
+   still carried `experience`/`age` (unused v4 leftovers in a load-adjacent surface).
+
 **★ REVISION 8 (2026-07-16, founder ruling from Build #33 manual QA) — THE APPROACH SET IS REMOVED
 ENTIRELY.** S-60 in whole (and its dependents — the "light load" B-1 fraction `APPROACH_FRACTION`, the
 `isApproach` *prescription*, the F-8/S-38 layoff re-measurement) is **gone from the engine.** Every set,

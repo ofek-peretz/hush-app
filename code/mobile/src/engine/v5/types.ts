@@ -19,7 +19,8 @@ export interface SetPerf {
   reps: number;
   /** Seconds rested immediately before this set (L3). Absent = unknown, never zero. */
   restBeforeS?: number;
-  /** The engine marked this a measurement, not work (S-60). Excluded from every decision. */
+  /** LEGACY Build-#33 approach-set mark (Rev 8 deleted the mechanism; nothing writes it any more).
+   *  Kept so those on-device histories stay excluded from every decision. */
   isApproach?: boolean;
 }
 
@@ -66,7 +67,6 @@ export type Loop2Decision =
   | 'rung_out_of_reach' // S-28: the next rung is a big jump — hold the load, add reps, and say so
   | 'stall_backoff' // S-25.1: back off and re-climb
   | 'stall_rotate' // S-25.2: rotate the exercise
-  | 'approach' // S-60: no recent fact → measure
   | 'graduate' // S-52: bodyweight too easy / stalled → harder variation
   | 'ambiguous'; // S-16: nothing usable → hold
 
@@ -76,8 +76,6 @@ export interface Loop2Result {
   load: number | null;
   band: Band;
   sets: number;
-  /** True when this prescription is an approach set (measurement, not work). */
-  isApproach?: boolean;
   /** Set when decision === 'graduate' / 'stall_rotate': the exercise to move to (id resolved upstream). */
   wantsChange?: 'graduate' | 'rotate';
 }

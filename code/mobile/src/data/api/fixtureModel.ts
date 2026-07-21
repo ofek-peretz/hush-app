@@ -441,28 +441,33 @@ function bestPatternE1rm(pattern: Pattern, history: Session[]): { e1rm: number; 
   return { e1rm, baseKg };
 }
 
-const HYPERTROPHY_REP_TARGET = 8; // goal is hypertrophy for everyone (founder 2026-07-09)
+/** The e1RM→working-load conversion's DEFAULT rep count — the default band's Tlo. Callers that know
+ *  her declared band pass its real Tlo instead, so a 12-15 athlete's transfer is priced at 12 reps,
+ *  not at a number she never chose ("the band she has IS the target", register Part 1). */
+const DEFAULT_SEED_REP_TARGET = 8;
 
 /**
- * Smart starting load for a lift (founder 2026-07-09): a swap / new exercise must ADAPT to the
- * athlete's PROVEN strength, not restart from a beginner cold-start (a year-trained bencher moving
- * to the chest-press machine must not begin at ~half their real pushing load). Priority:
- *   1. the lift's OWN demonstrated e1RM (already trained it) → working load at the rep target;
+ * Smart starting load for a lift (founder 2026-07-09, B-1/S-9): a swap / new exercise must ADAPT to
+ * the athlete's PROVEN strength, not restart from a beginner cold-start (a year-trained bencher
+ * moving to the chest-press machine must not begin at ~half their real pushing load). Priority:
+ *   1. the lift's OWN demonstrated e1RM (already trained it) → working load at HER Tlo;
  *   2. else the athlete's best e1RM on the SAME engine pattern, scaled by the two lifts' baseKg
  *      ratio (relative difficulty) → a strength transfer onto the new lift;
  *   3. else the conservative cold-start seed (a genuinely new pattern / the first program).
- * Bodyweight lifts have no external load. The result still enters CALIBRATING, which fine-tunes it.
- * Injected into the engine as `seedFor`; discarded at calibration exit (C-8, §4.4).
+ * Bodyweight lifts have no external load. The seed is a suggestion she can see and edit (F-2), and
+ * Loop 1 corrects it from her very first working set (Rev 8 — there is no approach set).
  */
 export function smartSeed(
   id: string,
   profile: Pick<Profile, 'sex' | 'weightKg'>,
   history: Session[],
+  /** Her Tlo for this lift's muscle — what a "working load" means to HER (default: the 8-10 band's). */
+  repTarget: number = DEFAULT_SEED_REP_TARGET,
 ): number | null {
   const ex = exerciseById(id);
   if (!ex) return null;
   if (ex.bodyweight || ex.baseKg == null) return startingWeight(ex, profile); // null for bodyweight
-  const toWorking = (e1rm: number) => normalizeLoad(e1rm / (1 + HYPERTROPHY_REP_TARGET / 30), ex.equipment as Equipment);
+  const toWorking = (e1rm: number) => normalizeLoad(e1rm / (1 + repTarget / 30), ex.equipment as Equipment);
   // 1. the lift's own demonstrated capability.
   let own = 0;
   for (const s of history)
@@ -572,7 +577,9 @@ async function foldEngine(
     const m = exerciseById(exId)?.muscle;
     return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
   };
-  const seedFor = (id: string) => smartSeed(id, profile, history);
+  // The seed's working-load conversion is priced at HER Tlo for the lift's muscle (S-9/S-43 — no
+  // invented rep count sizes a load once she has declared a band).
+  const seedFor = (id: string) => smartSeed(id, profile, history, bandOf(id).lo);
   const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
   // Loop 3 (D) reads the (time-trimmed) prescribed sets to know whether she COMPLETED a muscle this
   // occurrence (per exercise) and to seed/cap its learned volume at what actually fit — from the
@@ -729,7 +736,9 @@ export const fixtureModel: ModelClient = {
     // trimV5ToBudget), and Rev 10 deleted the old prompt because a declarative pin no longer exists.
     // If the redesign wants to surface anything here, it is the same S-3 sentence, not a question.
     for (const d of days) {
-      const mins = estimateSessionMinutes(d, restSecFor);
+      // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
+      // report can never disagree with the enforcement about whether a day fits.
+      const mins = estimateSessionMinutes(d, restSecFor, execSecFor);
       if (mins > budgetMin + 1e-9)
         void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
     }
@@ -769,7 +778,6 @@ export const fixtureModel: ModelClient = {
     const out: SetTarget[] = [];
 
     const program = await db.loadProgram();
-    const seedFor = (id: string) => smartSeed(id, profile, history);
     const prefs = await loadPreferencesSafe();
     // The bucket the athlete is actually executing (null pre-upgrade). The engine advances WITH it,
     // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
@@ -783,8 +791,10 @@ export const fixtureModel: ModelClient = {
     // moment it is born") and Part 1's banned inputs ("calendar-driven anything"). It was also
     // near-vacuous — in her first week there is no prior logged weight to compare against, so the
     // reason stays silent on its own, from a FACT rather than from the calendar.
+    // Legacy approach sets are excluded: a light Build-#33 measurement set must never be the
+    // "previous weight" a reason-delta is computed against.
     const lastLogged = new Map<string, number>();
-    for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
+    for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !set.isApproach && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
 
     // The v5 engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It
     // advances per workout and its prescription drives every exercise it manages; unmanaged / swap-only
@@ -816,7 +826,7 @@ export const fixtureModel: ModelClient = {
     for (const ex of EXERCISES) {
       const v5t = v5targets[ex.id];
       // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
-      const weight = v5t ? v5t.weight : smartSeed(ex.id, profile, history);
+      const weight = v5t ? v5t.weight : smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
       const reps = v5t ? v5t.reps : bandOf(ex.id).lo;
       const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
       let reasonType: SetTarget['reasonType'];
