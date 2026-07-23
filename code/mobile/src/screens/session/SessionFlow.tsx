@@ -36,7 +36,7 @@ import { db } from '@/data/local/db';
 import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius, press } from '@/design/tokens';
+import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius, press, line } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
@@ -463,8 +463,10 @@ export function SessionFlow({ navigation }: Props) {
  * size a person can actually read mid-set. `ordinal` is mono and legible; `center` is the quiet
  * uppercase legend the rest screens use ("REST" / "NEXT EXERCISE").
  */
-function StageBar({ center, ordinal, onExit }: { center?: string; ordinal?: string; onExit: () => void }) {
+function StageBar({ center, ordinal, elapsedFrom, onExit }: { center?: string; ordinal?: string; elapsedFrom?: number | null; onExit: () => void }) {
   const { t } = useCopy();
+  const hasLabel = !!(ordinal || center);
+  const hasClock = elapsedFrom != null;
   return (
     <View style={styles.stageBar}>
       <View style={styles.stageBarSide}>
@@ -472,16 +474,43 @@ function StageBar({ center, ordinal, onExit }: { center?: string; ordinal?: stri
           <Icon name="pause" size={17} color={stage.ink1} strokeWidth={2.2} />
         </IconButton>
       </View>
-      {ordinal ? (
-        <Text style={styles.stageBarOrdinal}>{ordinal}</Text>
-      ) : center ? (
-        <Text style={styles.stageBarCenter}>{center}</Text>
+      {hasLabel || hasClock ? (
+        <View style={styles.stageBarCentre}>
+          {ordinal ? (
+            <Text style={styles.stageBarOrdinal}>{ordinal}</Text>
+          ) : center ? (
+            <Text style={styles.stageBarCenter}>{center}</Text>
+          ) : null}
+          {hasLabel && hasClock ? <View style={styles.stageBarDot} /> : null}
+          {hasClock ? <ElapsedClock from={elapsedFrom as number} /> : null}
+        </View>
       ) : (
         <View style={styles.flex} />
       )}
       <View style={[styles.stageBarSide, styles.stageBarRight]} />
     </View>
   );
+}
+
+/**
+ * THE ELAPSED CLOCK (handoff 2.2) — mm:ss since the session began, ticking once a second.
+ *
+ * It rides in the chrome beside the ordinal: the one running number on a training screen that is
+ * not a load or a rep. MONO digits only — never a translated word — so it stays inside the
+ * two-voice law (`monoCarriesNoWords`): mono is what the instrument MEASURES; it never speaks.
+ * The clock reads from `session.startedAtMs` (the epoch instant the workout began), so it survives
+ * a screen change and a pause — it is the wall-clock length of the session, not a per-screen timer.
+ */
+function ElapsedClock({ from }: { from: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const totalS = Math.max(0, Math.floor((now - from) / 1000));
+  const mm = Math.floor(totalS / 60);
+  const ss = totalS % 60;
+  return <Text style={styles.stageBarClock}>{`${mm}:${String(ss).padStart(2, '0')}`}</Text>;
 }
 
 /**
@@ -683,6 +712,11 @@ function ActiveSet({
   const setM = session.setLabel?.m ?? 1;
 
   const isBodyweight = target.recommendedWeight == null;
+  // The engine v5 rep BAND — a floor to clear, a ceiling that means "too light" (models.ts §159/162).
+  // `recommendedReps` starts equal to the floor but the athlete's edit overwrites it with her PERFORMED
+  // reps, so the band must be read from repBandLo/Hi (mirrors Home.tsx's fallback ladder).
+  const bandLo = target.repBandLo ?? target.recommendedReps ?? 8;
+  const bandHi = target.repBandHi ?? bandLo;
   const weight = displayWeight(target.recommendedWeight, units);
   const reason = target.reasonType; // 'increase' | 'hold' | 'decrease' | undefined
   const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
@@ -735,7 +769,7 @@ function ActiveSet({
           all". The previous pass over-corrected by dragging it down into the body next to the
           muscle group, which cost the muscle group its place: it belongs CENTRED over the lift's
           name, as its eyebrow, in the same ink as the ordinal. Chrome above, the lift below. */}
-      <StageBar ordinal={t('workout.exerciseCount', { n: exNo, N: total })} onExit={onExit} />
+      <StageBar ordinal={t('workout.exerciseCount', { n: exNo, N: total })} elapsedFrom={session.startedAtMs} onExit={onExit} />
       <View style={styles.stageBody}>
         {group ? <Text style={styles.group}>{t(`muscle.${group}`).toUpperCase()}</Text> : null}
         <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
@@ -801,13 +835,31 @@ function ActiveSet({
             {/* 2 · INSTRUCTION — what the athlete physically does now (part of the prescription). */}
             {setup ? <ExecInstruction setup={setup} toLoad={session.toLoad} units={units} /> : null}
 
-            {/* 3 · REPS — the execution target. Absent on a bodyweight lift: the reps ARE the hero
-                  above, and repeating them here would say the same thing twice. */}
+            {/* 3 · REPS — the execution target, as an engraved band (handoff 2.2). Absent on a
+                  bodyweight lift: the reps ARE the hero above, and repeating them here would say
+                  the same thing twice.
+                  The old pill said ONE number (× N). The engine v5 target is a BAND — a floor she
+                  must clear and a ceiling that means "too light" — so the band is what the athlete
+                  should read, not a single figure. Moss is spent exactly once on this screen, here:
+                  the range is the one thing the stage marks in the accent. The floor/ceiling are the
+                  only translated-free facts (digits), so they are mono; "reps" and the legend are
+                  words, so they are sans (the two-voice law). */}
             {!isBodyweight ? (
-              <View style={styles.repsPill}>
-                <Text style={styles.repsTimes}>×</Text>
-                <Text style={styles.repsNum}>{target.recommendedReps}</Text>
-                <Text style={styles.repsWord}>{t('workout.repsUnit')}</Text>
+              <View
+                style={styles.repBand}
+                accessible
+                accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
+              >
+                <Text style={styles.repBandLegend}>{t('workout.repRange').toUpperCase()}</Text>
+                <View style={styles.repBandRule}>
+                  <View style={styles.repBandBase} />
+                  <View style={styles.repBandBar} />
+                  <View style={[styles.repBandTick, styles.repBandTickL]} />
+                  <View style={[styles.repBandTick, styles.repBandTickR]} />
+                  <Text style={[styles.repBandNum, styles.repBandNumL]}>{bandLo}</Text>
+                  <Text style={styles.repBandReps}>{t('workout.repsUnit')}</Text>
+                  <Text style={[styles.repBandNum, styles.repBandNumR]}>{bandHi}</Text>
+                </View>
               </View>
             ) : null}
 
@@ -1153,6 +1205,7 @@ function Rest({
                 N: session.exerciseProgress.total,
               })
         }
+        elapsedFrom={session.startedAtMs}
         onExit={onExit}
       />
       <View style={styles.stageBody}>
@@ -1391,6 +1444,13 @@ const styles = StyleSheet.create({
   // the digits from dancing as the count climbs. Same face and same ink as the muscle group below,
   // which is what the founder asked for when he said "make it the same colour".
   stageBarOrdinal: { fontFamily: font.sansSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.wide), color: stage.ink1, textAlign: 'center' },
+  // The chrome's centre group: [ordinal] · [elapsed] (handoff 2.2). A dim dot parts the ordinal
+  // (where am I) from the clock (how long have I been here) — two facts, one line.
+  stageBarCentre: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  stageBarDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: line[1] },
+  // The elapsed clock — mono, because it carries only digits and a colon (the two-voice law). Medium
+  // weight, no tracking — mm:ss reads as a running instrument, matching the mock's LIFT ordinal.
+  stageBarClock: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: stage.ink2, textAlign: 'left' },
 
   stageBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter },
   stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 14, gap: 10 },
@@ -1423,9 +1483,27 @@ const styles = StyleSheet.create({
   // minHeight keeps the quiet look while giving the tap a full 44pt target.
   whyDeltaRow: { marginTop: 12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
   whyText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
-  repsPill: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'baseline', gap: 7, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stage[2], borderRadius: radius.full },
-  repsTimes: { fontFamily: font.mono, fontSize: textScale.md, color: stage.ink2, textAlign: 'left' },
-  repsNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
+  // 3 · THE ENGRAVED REP-RANGE BAND (handoff 2.2) — a floor and a ceiling, drawn as a rule with
+  // two moss end-ticks and a moss bar between them. Moss is spent exactly once per set screen, here.
+  // 220-wide rule matches the handoff's fixed engraving; the numbers hang off each end, "reps" sits
+  // in the middle, and the legend rides above in the same quiet sans the rest of the chrome uses.
+  repBand: { marginTop: 18, alignSelf: 'center', alignItems: 'center' },
+  repBandLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'center', marginBottom: 14 },
+  repBandRule: { width: 220, height: 44 },
+  // The engraved groove — a translucent-cream hairline the moss bar sits on top of (inset 20 to meet
+  // the ticks, exactly under the bar — the mock's base line is NOT full-width).
+  repBandBase: { position: 'absolute', top: 9, left: 20, right: 20, height: 2, borderRadius: 1, backgroundColor: line[1] },
+  // The lit span between the ticks (inset 20 each side to meet them).
+  repBandBar: { position: 'absolute', top: 8, left: 20, right: 20, height: 4, borderRadius: 2, backgroundColor: up.stage },
+  repBandTick: { position: 'absolute', top: 1, width: 2.5, height: 18, borderRadius: 2, backgroundColor: up.stage },
+  repBandTickL: { left: 18 },
+  repBandTickR: { right: 18 },
+  repBandNum: { position: 'absolute', top: 22, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: up.stage }, // rtl-ok: base; the repBandNumL/R variants each set textAlign explicitly
+  // The floor hangs off the left end (left:8); the ceiling off the right (right:0) — asymmetric because
+  // one is a single digit left-aligned and the other can be two digits right-aligned (handoff 2.2).
+  repBandNumL: { left: 8, textAlign: 'left' },
+  repBandNumR: { right: 0, textAlign: 'right' },
+  repBandReps: { position: 'absolute', top: 27, left: 0, right: 0, fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'center' },
   addFifteen: { alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: radius.md },
   // The 7s ignition before the first set. Loud is lift, not hue.
   ignition: { backgroundColor: stage.lift },
@@ -1443,7 +1521,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'left',
   },
-  repsWord: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
 
   // Inline edit
   editBlock: { marginTop: 30, width: '100%', maxWidth: 300, gap: 16 },
@@ -1455,7 +1532,10 @@ const styles = StyleSheet.create({
   dotsWrap: { marginTop: 24, alignItems: 'center' },
   dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
   dot: { height: 7, borderRadius: 4 },
-  dotDone: { backgroundColor: up.stage },
+  // NEUTRAL, not moss (handoff 2.2: "set position in neutral pips so moss is spent only once, on the
+  // rep-range band"). The done pips are a muted cream, the current one bright cream and elongated, the
+  // to-come ones the faint stage rule — a progression read in weight, not hue.
+  dotDone: { backgroundColor: stage.ink2 },
   dotActive: { backgroundColor: stage.ink0 },
   dotRest: { backgroundColor: stage[2] },
   setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
@@ -1469,7 +1549,9 @@ const styles = StyleSheet.create({
   // Logged beat
   loggedRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   loggedHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loggedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0], textAlign: 'left' },
+  // LIT moss on the dark stage (v7 shows #A9C49F). `up[0]` is the PAPER moss — near-invisible here;
+  // this screen was never part of the READOUT ladder inversion, so it silently held the wrong rung.
+  loggedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up.stage, textAlign: 'left' },
   loggedValue: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: 30 },
   loggedNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['5xl'], color: stage.ink0, lineHeight: Math.round(textScale['5xl'] * 1.06), letterSpacing: trackingPx(textScale['5xl'], tracking.display), includeFontPadding: false, textAlign: 'left' },
   loggedUnit: { fontFamily: font.mono, fontSize: textScale.lg, color: stage.ink2, textAlign: 'left' },

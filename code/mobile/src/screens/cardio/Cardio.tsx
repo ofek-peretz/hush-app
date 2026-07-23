@@ -1,75 +1,76 @@
 /**
- * Cardio — "Open training" (run / walk), rebuilt 1:1 from the Claude Design
- * "Design System" Cardio (ui_kits/app/Cardio.jsx).
+ * Cardio — the v7 open-tracking surface (handoff 3.4 / 3.4a / 3.4c). Run or walk, recorded beside
+ * your lifting; the strength engine never touches it.
  *
- * A deliberate departure from the rest of Hush: the v4 strength engine does NOT
- * coach a run — it records it. Hush owns load and progression on the platform;
- * outdoors, the athlete owns the effort and Hush simply keeps an honest log.
- * Nothing here ever feeds the engine, the program, loads, or selection.
+ * v7 REBUILD (2026-07-23, "Full 1:1 match" ruling): the surface is stripped to timer-first OPEN
+ * tracking, exactly as the handoff shows. The READY step (3.4a) now lives in the Cardio TAB
+ * (CardioReady, so the bottom bar stays visible at rest); this stage is pushed above the bar and
+ * opens straight into the countdown —
+ *   · LIVE (3.4): the elapsed clock as the hero; a 1,000 m band whose dot travels the CURRENT
+ *     kilometre with its metres riding under it in moss; one readable row — kilometre, heart, burn;
+ *     a split pill when a kilometre logs; a single cream "Pause".
+ *   · DONE (3.4c): centred like a milestone — "Cardio · saved", "That's the distance.", the distance
+ *     alone in the light, three facts (time · kcal · avg hr), one cream "Done".
  *
- * Flow: select (paper) → 3·2·1 (stage) → active (stage) → pause → complete (stage).
- * Live distance / pace / calories come from `useCardioTracker` (real GPS, honestly
- * gated — see that module). Heart rate has no phone-side source and shows a dash.
+ * What was removed per the ruling: distance/time GOALS and the in-run run/walk toggle (the surface is
+ * open-tracking only now). The RECORDING flow underneath is untouched — real GPS via useCardioTracker,
+ * the honest GPS-lock gating, the Live Activity, and the once-on-mount persistence (route + splits +
+ * hr + calories still saved to the log, they are simply not drawn on the done stage).
  *
- * Controls are deliberately minimal (founder, 2026-07-06): while active there is ONE
- * action in the thumb zone — Pause; while paused there are exactly two — Resume and
- * finish. No hidden gestures, no second finish path.
- *
- * Founder 2026-07-12, all about a body in motion rather than a body at a desk:
- *  • The 3·2·1 is FELT (rising haptics, sustained on GO) — the phone is in a pocket by then.
- *  • The run/walk toggle moved to the TOP BAR. It sat millimetres above Pause; a wet,
- *    imprecise thumb reaching to stop the run could hit "Walk" instead, and vice versa.
- *  • Finishing ASKS. A stray tap must never end a 10 km run — but a press-and-hold was the wrong
- *    cure: a gesture the athlete has to be taught, performed with a shaking hand, out of breath.
- *    It is a confirm sheet now, the same guard the watch has always had.
- *  • The summary draws the ROUTE — the shape of what they actually did (components/RouteTrace).
- *  • The explanation card is gone: the athlete came here to go outside, not to read a disclaimer.
+ * THE LAW (monoCarriesNoWords): mono carries only figures (the clock, the metres, the km/hr/kcal
+ * numbers). Every word — "CARDIO", "KM", "1,000 m", "km 3 logged", the legends — is SANS.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend, Button, SegmentedControl, WheelPicker } from '@/components/ds';
+import { Legend, Button } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
-import { RouteTrace, MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
+import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useCardioTracker, fmtClock, fmtPace, hrZone } from '@/platform/cardio/cardioTracker';
+import { useCardioTracker, fmtClock, fmtPace } from '@/platform/cardio/cardioTracker';
 import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
-import type { CardioActivity, CardioGait, CardioGoalKind, CardioPoint } from '@/data/local/models';
-import { durationMinutes } from '@/domain/duration';
+import type { CardioActivity, CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
 import * as haptics from '@/platform/haptics';
-import { textEnd } from '@/i18n/bidi';
-import { color, space, font, textScale, radius, stage as stageC, signal, up, tracking, trackingPx, paper } from '@/design/tokens';
+import { color, font, textScale, radius, stage as stageC, signal, tracking, trackingPx } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Cardio'>;
-type Phase = 'select' | 'countdown' | 'active' | 'complete';
+type Phase = 'countdown' | 'active' | 'complete';
 
 export function Cardio({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  // Foreground-only GPS (no background-location entitlement yet): the screen stays
-  // awake for the whole cardio surface so a live activity never loses its fix mid-run.
+  // Foreground-only GPS (no background-location entitlement yet): the screen stays awake for the
+  // whole cardio surface so a live activity never loses its fix mid-run.
   useKeepAwake();
-  const [phase, setPhase] = useState<Phase>('select');
-  const [gait, setGait] = useState<CardioGait>('run'); // chosen mode
-  const [live, setLive] = useState<CardioGait>('run'); // current interval gait
-  const [goalKind, setGoalKind] = useState<CardioGoalKind>('open');
-  const [goalDist, setGoalDist] = useState(5); // km
-  const [goalTime, setGoalTime] = useState(30); // min
+  // The stage opens straight into the countdown — the READY step lives in the Cardio tab now.
+  const [phase, setPhase] = useState<Phase>('countdown');
+  // Open tracking only (v7): gait is fixed to a run; no picker, no in-run toggle.
+  const live: CardioGait = 'run';
   const [count, setCount] = useState(3);
   const [paused, setPaused] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // 3.4b · KILOMETRE LOGGED — the split that just landed rises alone in the light, then the run
+  // resumes on its own. A moment, mirrored to the watch; the tracking underneath never pauses.
+  const [kmMoment, setKmMoment] = useState<CardioSplit | null>(null);
+  const [backIn, setBackIn] = useState(3);
+  const shownSplitsRef = useRef(0);
+  const backBar = useRef(new Animated.Value(0)).current;
   const startedAtRef = useRef<string>('');
+  // Stamp the start the moment the stage mounts (the countdown is already running).
+  useEffect(() => {
+    startedAtRef.current = new Date().toISOString();
+  }, []);
 
-  // GPS warms up during the 3·2·1 countdown (active from 'countdown' on); the clock and
-  // accumulation start only once the phase is truly 'active' and unpaused.
+  // GPS warms up during the 3·2·1 countdown; the clock and accumulation start only once the phase
+  // is truly 'active' and unpaused.
   const sample = useCardioTracker(
     phase === 'countdown' || phase === 'active',
     paused || phase !== 'active',
@@ -78,9 +79,7 @@ export function Cardio({ navigation }: Props) {
   );
   const { elapsedSec, distanceKm, paceSec, hr, calories, splits, gps, route } = sample;
 
-  // Live Activity / Dynamic Island — start when the activity goes live, update each
-  // tick, end when the screen unmounts (Done / View in history both leave it). The
-  // native rendering is in modules/hush-live-activity (built on macOS — see handoff).
+  // Live Activity / Dynamic Island — start when live, update each tick, end on unmount.
   const laStarted = useRef(false);
   useEffect(() => {
     if (phase !== 'active') return;
@@ -105,33 +104,17 @@ export function Cardio({ navigation }: Props) {
       void cardioLiveActivity.update(state).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, elapsedSec, paused, live]);
+  }, [phase, elapsedSec, paused]);
   useEffect(() => () => {
     if (laStarted.current) void cardioLiveActivity.end().catch(() => {});
   }, []);
 
-  // Dark glyphs on the paper "select" step, light on the stage phases; restored to
-  // dark on blur so Home/History never inherit invisible glyphs.
-  useFocusedStatusBar(phase === 'select' ? 'dark' : 'light');
+  // Every cardio phase is a dark stage now — light glyphs throughout, restored on blur.
+  useFocusedStatusBar('light');
 
-  // Swipe-back works on the SELECT step like any other paper screen (founder
-  // 2026-07-10); once the activity is live the gesture is off — a live GPS
-  // recording must never be dismissed by an accidental edge swipe.
-  useEffect(() => {
-    navigation.setOptions({ gestureEnabled: phase === 'select' });
-  }, [navigation, phase]);
-
-  // Countdown 3 → 2 → 1 → Go → active.
-  //
-  // Every beat is FELT (founder 2026-07-12). Most athletes are pocketing the phone or
-  // strapping it to an arm during these three seconds — they are not looking at the screen,
-  // so a purely visual countdown starts the run without them. Rising taps on 3-2-1, a
-  // sustained double on GO. (Audio beeps are the natural partner and need a native audio
-  // dependency; deferred by founder decision rather than faked.)
+  // Countdown 3 → 2 → 1 → Go → active. Every beat is FELT (rising haptics, a sustained double on GO).
   useEffect(() => {
     if (phase !== 'countdown') return;
-    // count === 0 IS the "Go" beat; count < 0 is only the tick that hands over to the run.
-    // Firing the haptic before this guard would sound Go twice.
     if (count < 0) {
       setPhase('active');
       return;
@@ -141,16 +124,33 @@ export function Cardio({ navigation }: Props) {
     return () => clearTimeout(id);
   }, [phase, count]);
 
-  const begin = () => {
-    setLive(gait);
-    setCount(3);
-    startedAtRef.current = new Date().toISOString();
-    setPhase('countdown');
-  };
+  // A kilometre just closed → raise the moment for the newest split. We compare against a stamped
+  // count (not just length) so a moment fires exactly once per completed km, even across re-renders.
+  useEffect(() => {
+    if (phase !== 'active') return;
+    if (splits.length <= shownSplitsRef.current) return;
+    shownSplitsRef.current = splits.length;
+    haptics.setLogged();
+    setKmMoment(splits[splits.length - 1]);
+  }, [phase, splits]);
+
+  // The moment breathes on its own: a 3-second "back to run" countdown with a filling bar, then it
+  // clears itself — no tap. Mirrors the set-logged moment's timing and dismissal.
+  useEffect(() => {
+    if (!kmMoment) return;
+    setBackIn(3);
+    backBar.setValue(0);
+    Animated.timing(backBar, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: false }).start();
+    const tick = setInterval(() => setBackIn((n) => Math.max(0, n - 1)), 1000);
+    const done = setTimeout(() => setKmMoment(null), 3150);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(done);
+    };
+  }, [kmMoment, backBar]);
+
   const finish = () => {
-    // NOT PERFORMED (founder 2026-07-10): finishing with no real activity is not a
-    // workout — nothing is recorded, nothing enters History (parity with the strength
-    // "not started" rule). The unmount effect ends the Live Activity.
+    // NOT PERFORMED (founder 2026-07-10): finishing with no real activity records nothing.
     if (!cardioPerformed(elapsedSec, distanceKm)) {
       navigation.goBack();
       return;
@@ -159,36 +159,16 @@ export function Cardio({ navigation }: Props) {
     setPhase('complete');
   };
 
-  if (phase === 'select') {
-    return (
-      <CardioSelect
-        gait={gait}
-        setGait={setGait}
-        goalKind={goalKind}
-        setGoalKind={setGoalKind}
-        goalDist={goalDist}
-        setGoalDist={setGoalDist}
-        goalTime={goalTime}
-        setGoalTime={setGoalTime}
-        onBack={() => navigation.goBack()}
-        onBegin={begin}
-      />
-    );
-  }
-
   if (phase === 'countdown') {
     return (
       <View style={styles.stage}>
         <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
           <View style={styles.countdownWrap}>
-            {/* Read at arm's length, a second before a run starts — so it is set at real
-                size and real weight, not a 10px whisper (founder 2026-07-12). */}
             <Text style={styles.startingLegend}>
-              {(gait === 'run' ? t('cardio.run') : t('cardio.walk')).toUpperCase()} · {t('cardio.starting').toUpperCase()}
+              {t('cardio.run').toUpperCase()} · {t('cardio.starting').toUpperCase()}
             </Text>
-            {/* 3 · 2 · 1 are FIGURES (mono, tabular — they must not jitter as they count down);
-                "GO" is a WORD, and the word is what the mono font cannot even draw in Hebrew.
-                Same size, same weight, the voice that each one belongs to. */}
+            {/* 3 · 2 · 1 are FIGURES (mono, tabular); "GO" is a WORD (sans) — the mono font cannot
+                even draw it in Hebrew. Same size, same weight, each in the voice it belongs to. */}
             <Text style={[styles.countNum, count <= 0 && styles.countGo]}>
               {count <= 0 ? t('cardio.go') : count}
             </Text>
@@ -202,7 +182,7 @@ export function Cardio({ navigation }: Props) {
     return (
       <CardioComplete
         navigation={navigation}
-        gait={gait}
+        gait={live}
         startedAt={startedAtRef.current}
         elapsedSec={elapsedSec}
         distanceKm={distanceKm}
@@ -214,131 +194,74 @@ export function Cardio({ navigation }: Props) {
     );
   }
 
-  // ---- active (stage) ----
-  const goalFrac =
-    goalKind === 'distance'
-      ? Math.min(1, distanceKm / goalDist)
-      : goalKind === 'time'
-        ? Math.min(1, elapsedSec / (goalTime * 60))
-        : 0;
+  // ---- LIVE (stage) ----
+  const metresTotal = distanceKm * 1000;
+  const metresIntoKm = metresTotal % 1000; // 0–1000 within the current kilometre
+  const dotFrac = Math.max(0, Math.min(1, metresIntoKm / 1000));
+  const kmDone = Math.floor(distanceKm);
+  const lastSplit = splits[splits.length - 1];
 
   return (
     <View style={styles.stage}>
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
-        {/* TOP BAR — the gait toggle lives here now (founder 2026-07-12, a safety fix).
-            It used to sit a few millimetres above Pause. A runner's thumb is wet, moving and
-            imprecise: reaching for Pause and hitting "Walk" — or reaching for Walk and
-            stopping the run — is not hypothetical, and both mistakes are silent. The two
-            controls now sit at OPPOSITE ENDS of the screen. Gait up here, the single stop
-            action at the bottom, a whole screen of stage between them. */}
-        <View style={styles.stageBar}>
-          <View style={styles.gaitToggle}>
-            {(['run', 'walk'] as CardioGait[]).map((v) => (
-              <Pressable
-                key={v}
-                // A single-select pair, not two independent buttons — VoiceOver should say
-                // "selected / not selected", not offer two unrelated actions.
-                accessibilityRole="radio"
-                accessibilityLabel={v === 'run' ? t('cardio.run') : t('cardio.walk')}
-                accessibilityState={{ selected: live === v, checked: live === v }}
-                hitSlop={{ top: 12, bottom: 12 }}
-                onPress={() => {
-                  if (live !== v) haptics.confirm();
-                  setLive(v);
-                }}
-                style={[styles.gaitPill, live === v && styles.gaitPillActive]}
-              >
-                <Text style={[styles.gaitPillText, live === v && styles.gaitPillTextActive]}>
-                  {v === 'run' ? t('cardio.run') : t('cardio.walk')}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+        {/* "CARDIO" — a legend, a word: sans. */}
+        <View style={styles.liveTop}>
+          <Text style={styles.liveLegend}>{t('cardio.liveLegend').toUpperCase()}</Text>
         </View>
 
-        {/* hero */}
-        <View style={styles.activeBody}>
-          <Text style={styles.heroLegend}>{(goalKind === 'distance' ? t('cardio.distance') : t('cardio.elapsed')).toUpperCase()}</Text>
-          {goalKind === 'distance' ? (
-            <View style={styles.heroRow}>
-              <Text style={styles.heroNum}>{distanceKm.toFixed(2)}</Text>
-              <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
-            </View>
-          ) : (
-            <Text style={styles.heroNum}>{fmtClock(elapsedSec)}</Text>
-          )}
+        <View style={styles.liveBody}>
+          {/* the elapsed clock — the hero. Pure figures + ":" — mono. */}
+          <Text style={styles.clock}>{fmtClock(elapsedSec)}</Text>
 
-          {/* live pace chip — movement pace, blank until there is real movement */}
-          <View style={styles.paceChip}>
-            <Text style={styles.paceLegend}>{t('cardio.pace').toUpperCase()}</Text>
-            <View style={styles.paceValRow}>
-              <Text style={styles.paceVal}>{fmtPace(paceSec)}</Text>
-              <Text style={styles.paceUnit}>{t('cardio.perKm')}</Text>
+          {/* the 1,000 m band — the dot travels the current kilometre, metres riding under it. */}
+          <View style={styles.band}>
+            <View style={styles.bandLabels}>
+              <Text style={styles.bandTick}>0</Text>
+              <Text style={styles.bandTick}>{t('cardio.bandEnd')}</Text>
+            </View>
+            <View style={styles.bandLine} />
+            <View style={styles.bandCapL} />
+            <View style={styles.bandCapR} />
+            <View style={[styles.bandFill, { width: `${dotFrac * 100}%` }]} />
+            <View style={[styles.bandDot, { left: `${dotFrac * 100}%` }]} />
+            <View style={[styles.bandMetres, { left: `${dotFrac * 100}%` }]}>
+              <Text style={styles.bandMetresNum}>{Math.round(metresIntoKm)}</Text>
+              <Text style={styles.bandMetresUnit}> {t('cardio.metresUnit')}</Text>
             </View>
           </View>
 
-          {/* GPS truth line — never confident zeros while there is no lock. The slot has a
-              fixed height so the layout never jumps when the fix arrives or drops. */}
+          {/* GPS truth line — never confident zeros while there is no lock. Fixed height, no jump. */}
           <View style={styles.gpsSlot}>
             {gps === 'acquiring' ? <Text style={styles.gpsStatus}>{t('cardio.gpsAcquiring')}</Text> : null}
             {gps === 'denied' || gps === 'unavailable' ? <Text style={styles.gpsStatus}>{t('cardio.gpsOff')}</Text> : null}
           </View>
 
-          {/* PROGRESS — and only progress (founder 2026-07-12).
-              An OPEN run has no target, so it had no progress to show — and yet it drew a
-              lone ochre bar in the middle of the screen anyway, which looked like a
-              measurement and measured nothing. Ochre means "this is live and it means
-              something"; spending it on decoration devalues it everywhere else in the app.
-              An open run now shows nothing here. A goal run shows a real gauge against a
-              real target. */}
-          {goalKind === 'time' ? (
-            <View style={styles.timeBarWrap}>
-              <View style={styles.timeBarTrack}>
-                <View style={[styles.timeBarFill, { width: `${goalFrac * 100}%` }]} />
-              </View>
-              <View style={styles.timeBarLabels}>
-                <Text style={styles.timeBarLabel}>
-                  {fmtClock(elapsedSec)} / {goalTime}:00
-                </Text>
-                <Text style={styles.timeBarLabel}>{Math.round(goalFrac * 100)}%</Text>
-              </View>
-            </View>
-          ) : goalKind === 'distance' ? (
-            <View style={styles.dotsRow}>
-              {Array.from({ length: Math.ceil(goalDist) }).map((_, i) => {
-                const done = distanceKm >= i + 1;
-                const current = !done && distanceKm > i;
-                return (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      { width: current ? 22 : 7, backgroundColor: done ? up.stage : current ? stageC.ink0 : stageC[2] },
-                    ]}
-                  />
-                );
-              })}
-            </View>
-          ) : null}
-
-          {/* secondary metric cluster */}
-          <View style={styles.metricCluster}>
-            <CardioStat value={goalKind === 'distance' ? fmtClock(elapsedSec) : distanceKm.toFixed(2)} unit={goalKind === 'distance' ? undefined : t('cardio.km')} label={goalKind === 'distance' ? t('cardio.elapsed') : t('cardio.distance')} />
-            <View style={styles.clusterDivider} />
-            <CardioStat value={Math.round(calories)} unit={t('cardio.kcal')} label={t('cardio.calories')} />
-            <View style={styles.clusterDivider} />
-            {/* no phone-side HR source — an honest dash, never a modelled number */}
-            <CardioStat
-              value={hr != null ? hr : '—'}
-              unit={hr != null ? t('cardio.bpm') : undefined}
-              label={hr != null ? `${t('cardio.heart')} · ${hrZone(hr)}` : t('cardio.heart')}
-            />
+          {/* one readable row: kilometre · heart · burn */}
+          <View style={styles.liveRow}>
+            <LiveStat value={kmDone} label={t('cardio.km')} />
+            <LiveStat value={hr != null ? Math.round(hr) : '—'} label={t('cardio.hrShort')} icon="heart" />
+            <LiveStat value={Math.round(calories)} label={t('cardio.kcal')} icon="flame" />
           </View>
         </View>
 
-        {/* The one action while running: stop. Nothing else shares the thumb zone. */}
-        <View style={styles.activeFooter}>
-          <Button variant="onstage" size="lg" block label={t('cardio.pause')} onPress={() => setPaused(true)} leading={<Icon name="pause" size={18} color={stageC[0]} />} />
+        <View style={styles.liveFooter}>
+          {/* the split pill — a kilometre just logged, at the pace it took. Words → sans. */}
+          {lastSplit ? (
+            <View style={styles.splitPill}>
+              <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
+              <Text style={styles.splitPillText}>
+                {t('cardio.splitLogged', { km: lastSplit.km, pace: fmtPace(lastSplit.paceSec) }).toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
+          <Button
+            variant="onstage"
+            size="lg"
+            block
+            label={t('cardio.pause')}
+            onPress={() => setPaused(true)}
+            leading={<Icon name="pause" size={18} color={stageC[0]} />}
+          />
         </View>
 
         {/* pause overlay */}
@@ -357,28 +280,21 @@ export function Cardio({ navigation }: Props) {
                 block
                 label={t('cardio.resume')}
                 onPress={() => {
-                  setConfirmEnd(false); // going back to the run disarms the guard
+                  setConfirmEnd(false);
                   setPaused(false);
                 }}
                 leading={<Icon name="play" size={18} color={stageC[0]} />}
               />
-              {/* Ending ASKS (founder 2026-07-12). A stray tap must not end a 10 km run — but a
-                  press-and-hold is not the answer either: it is a gesture the athlete has to be
-                  TAUGHT, performed with a shaking hand, on a phone held at arm's length, out of
-                  breath. The watch already guards this correctly with a confirm screen; the
-                  phone now does the same thing. One tap to propose, one tap to mean it. */}
               <Button variant="danger" size="lg" block label={t('cardio.finish')} onPress={() => setConfirmEnd(true)} leading={<Icon name="flag" size={18} color={stageC.ink0} />} />
             </View>
           </View>
         ) : null}
 
-        {/* Bound to the SAME condition as the overlay that arms it. An `confirmEnd` left standing
-            after the run ends could otherwise greet the athlete on their NEXT run, asking them to
-            confirm the end of something they have not started. */}
+        {/* end-confirm sheet — bound to the same condition as the overlay that arms it. */}
         {confirmEnd && paused && phase === 'active' ? (
           <BottomSheet onClose={() => setConfirmEnd(false)}>
             <Legend style={styles.sheetLegend}>{t('cardio.endLegend')}</Legend>
-            <Text style={styles.sheetTitle}>{gait === 'run' ? t('cardio.endTitleRun') : t('cardio.endTitleWalk')}</Text>
+            <Text style={styles.sheetTitle}>{t('cardio.endTitleRun')}</Text>
             <Text style={styles.sheetBody}>{t('cardio.endBody')}</Text>
             <View style={styles.sheetActions}>
               <Button variant="primary" block label={t('cardio.keepGoing')} onPress={() => setConfirmEnd(false)} />
@@ -386,106 +302,68 @@ export function Cardio({ navigation }: Props) {
             </View>
           </BottomSheet>
         ) : null}
+
+        {/* 3.4b · KILOMETRE LOGGED — fires over the run each km, clears itself. */}
+        {kmMoment ? <KmMoment split={kmMoment} splits={splits} backIn={backIn} progress={backBar} /> : null}
       </SafeAreaView>
     </View>
   );
 }
 
-/* ============================ SELECT (paper) ============================ */
-function CardioSelect(props: {
-  gait: CardioGait;
-  setGait: (g: CardioGait) => void;
-  goalKind: CardioGoalKind;
-  setGoalKind: (k: CardioGoalKind) => void;
-  goalDist: number;
-  setGoalDist: (n: number) => void;
-  goalTime: number;
-  setGoalTime: (n: number) => void;
-  onBack: () => void;
-  onBegin: () => void;
-}) {
+/* ===================== KILOMETRE LOGGED (moment) — 3.4b ===================== */
+function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; splits: CardioSplit[]; backIn: number; progress: Animated.Value }) {
   const { t } = useCopy();
+  const paces = splits.map((s) => s.paceSec);
+  const avg = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : split.paceSec;
+  const fastest = paces.length ? Math.min(...paces) : split.paceSec;
+  const quickest = split.paceSec <= fastest; // this split IS the quickest so far (ties count)
+  // Place the split against the run average — faster (lower pace) sits left of centre, slower right.
+  const dev = avg > 0 ? Math.max(-0.4, Math.min(0.4, (split.paceSec - avg) / avg)) : 0;
+  const dotFrac = 0.5 + dev;
+  const barW = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
   return (
-    <SafeAreaView style={styles.paperRoot} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={10} onPress={props.onBack} style={styles.back}>
-          <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
-        </Pressable>
-        <View style={styles.headTitles}>
-          <Legend>{t('cardio.legend')}</Legend>
-          <Text style={styles.title} accessibilityRole="header">{t('cardio.title')}</Text>
-        </View>
+    <View style={styles.kmMoment}>
+      <View style={styles.liveTop}>
+        <Text style={styles.liveLegend}>{t('cardio.liveLegend').toUpperCase()}</Text>
       </View>
 
-      {/* The explanation card is GONE (founder 2026-07-12): "Run or walk" is the whole screen,
-          and a paragraph about how I record but do not grade your runs is a disclaimer, not an
-          instruction. The athlete came here to go outside. */}
-      <ScrollView contentContainerStyle={styles.selectScroll} showsVerticalScrollIndicator={false}>
-        <Legend style={styles.fieldLegend}>{t('cardio.mode')}</Legend>
-        <SegmentedControl
-          block
-          size="lg"
-          value={props.gait}
-          onChange={(v) => props.setGait(v as CardioGait)}
-          options={[
-            // The selected segment is filled ochre now (SegmentedControl, founder 2026-07-13), so
-            // the chosen gait's glyph goes cream with its label — an ink glyph would be the one
-            // dark mark left sitting on the brown.
-            /*
-             * The icon follows the LABEL's rule (SegmentedControl `labelActive`/`label`), because
-             * it sits on the same segment and is the same kind of mark.
-             *
-             * It read `paper[0]` when selected, which was right only while the active segment was an
-             * OCHRE fill — a near-white mark on brown. The READOUT redesign made the active segment
-             * `color.lift` (WHITE) and inverted the ladder under `paper[0]` (#fbfaf8 → #e8e5e0), so
-             * the selected icon became warm grey on white: ~1.17:1, i.e. GONE. The label survived
-             * only because it asks for `color.textPrimary` by name instead of a ladder position.
-             *
-             * The component could not fix this itself — the icon is injected by the caller, so it
-             * sat outside the redesign that changed the surface underneath it.
-             */
-            { value: 'run', label: t('cardio.run'), icon: <Icon name="runner" size={16} color={props.gait === 'run' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
-            { value: 'walk', label: t('cardio.walk'), icon: <Icon name="wind" size={16} color={props.gait === 'walk' ? color.textPrimary : color.textSecondary} strokeWidth={2} /> },
-          ]}
-        />
-
-        <Legend style={styles.fieldLegendGoal}>{t('cardio.goalLegend')}</Legend>
-        <SegmentedControl
-          block
-          value={props.goalKind}
-          onChange={(v) => props.setGoalKind(v as CardioGoalKind)}
-          options={[
-            { value: 'open', label: t('cardio.goalOpen') },
-            { value: 'distance', label: t('cardio.goalDistance') },
-            { value: 'time', label: t('cardio.goalTime') },
-          ]}
-        />
-
-        {/* "No goal. Move as long as you like" is what the OPEN segment already says by being
-            selected — the helper line under it was the button explaining itself (founder). */}
-        {props.goalKind === 'distance' ? (
-          <View style={styles.goalCol}>
-            <Text style={styles.goalRowLabel}>{t('cardio.targetDistance')}</Text>
-            <WheelPicker value={props.goalDist} onChange={props.setGoalDist} step={0.5} min={0.5} max={50} unit={t('cardio.km')} label={t('cardio.targetDistance')} style={styles.goalWheel} />
+      <View style={styles.kmBody}>
+        <View style={styles.kmBandWrap}>
+          <View style={styles.kmBand}>
+            <View style={styles.kmBandLine} />
+            <View style={styles.kmBandSeg} />
+            <View style={[styles.kmBandCap, { left: '24%' }]} />
+            <View style={[styles.kmBandCap, { left: '76%' }]} />
+            <View style={[styles.kmBandDot, { left: `${dotFrac * 100}%` }]} />
           </View>
-        ) : null}
-        {props.goalKind === 'time' ? (
-          <View style={styles.goalCol}>
-            <Text style={styles.goalRowLabel}>{t('cardio.targetTime')}</Text>
-            <WheelPicker value={props.goalTime} onChange={props.setGoalTime} step={5} min={5} max={240} unit={t('cardio.minUnit')} label={t('cardio.targetTime')} style={styles.goalWheel} />
-          </View>
-        ) : null}
-
-        <View style={styles.startWrap}>
-          <Button variant="primary" size="lg" block label={props.gait === 'run' ? t('cardio.startRun') : t('cardio.startWalk')} onPress={props.onBegin} leading={<Icon name="play" size={18} color={color.onAccent} />} />
+          <Text style={styles.kmBandLabel}>{t('cardio.kmMomentLabel', { km: split.km }).toUpperCase()}</Text>
         </View>
-        <Text style={styles.gpsNote}>{t('cardio.gpsNote')}</Text>
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* the split — figures alone in the light: mono. */}
+        <View style={styles.kmSplit}>
+          <Text style={styles.kmSplitNum}>{fmtPace(split.paceSec)}</Text>
+          <Text style={styles.kmSplitUnit}>{t('cardio.perKm')}</Text>
+        </View>
+
+        {quickest ? (
+          <View style={styles.kmQuickest}>
+            <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
+            <Text style={styles.kmQuickestText}>{t('cardio.kmMomentQuickest').toUpperCase()}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.kmFooter}>
+        <Text style={styles.kmBackText}>{t('cardio.kmMomentBack', { n: backIn }).toUpperCase()}</Text>
+        <View style={styles.kmBarTrack}>
+          <Animated.View style={[styles.kmBarFill, { width: barW }]} />
+        </View>
+      </View>
+    </View>
   );
 }
 
-/* ============================ COMPLETE (stage) ============================ */
+/* ============================ DONE (stage) — 3.4c ============================ */
 function CardioComplete(props: {
   navigation: Props['navigation'];
   gait: CardioGait;
@@ -499,23 +377,15 @@ function CardioComplete(props: {
 }) {
   const { t } = useCopy();
   const { navigation, gait, elapsedSec, distanceKm, avgHr, splits, route } = props;
-  const [traceW, setTraceW] = useState(0);
-  // Average pace only once there is real distance — never elapsed ÷ noise.
   const avgPace = distanceKm >= 0.05 ? elapsedSec / distanceKm : 0;
-  const fastest = splits.length ? Math.min(...splits.map((s) => s.paceSec)) : 0;
-  const slowest = splits.length ? Math.max(...splits.map((s) => s.paceSec)) : 0;
-  // A route is only shown when there IS one: a treadmill run, or a run with no location
-  // permission, records no path — and an empty frame would be worse than no frame.
   const hasRoute = route.length >= MIN_ROUTE_POINTS;
 
-  // Persist the recorded activity exactly once, on mount (sealed from the engine).
-  // HR/calories/route are OPTIONAL in the record — absent when no real source existed.
+  // Persist the recorded activity exactly once, on mount (sealed from the engine). Route / splits /
+  // hr / calories are all still saved to the log — they are simply not drawn on this stage.
   const saved = useRef(false);
   useEffect(() => {
     if (saved.current) return;
     saved.current = true;
-    // Defense in depth: never persist a not-performed record even if this screen is
-    // ever reached without the finish() gate.
     if (!cardioPerformed(elapsedSec, distanceKm)) return;
     const activity: CardioActivity = {
       kind: 'cardio',
@@ -528,9 +398,6 @@ function CardioComplete(props: {
       ...(avgHr != null ? { avgHr: Math.round(avgHr) } : {}),
       ...(props.calories > 0 ? { calories: Math.round(props.calories) } : {}),
       splits,
-      // Thinned to a drawable trace and rounded to ~1 m. GPS fires once a second, so an hour's
-      // run is ~3,600 raw fixes — and every cardio record lives in ONE stored value that History
-      // parses on open. The full trace would put megabytes there for a picture 300px wide.
       ...(hasRoute
         ? { route: simplifyRoute(route).map((p) => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5) })) }
         : {}),
@@ -542,84 +409,27 @@ function CardioComplete(props: {
   return (
     <View style={styles.stage}>
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.completeScroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.recordedRow}>
-            <Icon name="checkCheck" size={16} color={up.stage} strokeWidth={2} />
-            <Text style={styles.recordedText}>{t('cardio.recorded').toUpperCase()}</Text>
+        <View style={styles.doneBody}>
+          <View style={styles.savedRow}>
+            <Icon name="checkCheck" size={15} color={signal[0]} strokeWidth={2.4} />
+            <Text style={styles.savedLegend}>{t('cardio.savedLegend').toUpperCase()}</Text>
           </View>
-          <Text style={styles.loggedTitle}>{gait === 'run' ? t('cardio.runLogged') : t('cardio.walkLogged')}</Text>
+          <Text style={styles.savedTitle}>{t('cardio.savedTitle')}</Text>
 
-          <View style={styles.completeHero}>
-            <Text style={styles.heroNum}>{distanceKm.toFixed(2)}</Text>
-            <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
-          </View>
-
-          {/* THE ROUTE (founder 2026-07-12) — the shape of what they actually did. Not a tiled
-              map: the GPS trace itself, engraved. See components/RouteTrace.
-              A run with no lock (a treadmill, a denied permission) has no route, and this block
-              takes NO space at all — not an empty frame, and not a silent 24px of air. */}
-          <View
-            style={hasRoute ? styles.traceWrap : styles.traceWrapEmpty}
-            onLayout={(e) => setTraceW(e.nativeEvent.layout.width)}
-          >
-            {hasRoute && traceW > 0 ? (
-              <>
-                <Text style={styles.splitsLegend}>{t('cardio.routeLegend').toUpperCase()}</Text>
-                <RouteTrace route={route} width={traceW} height={Math.round(traceW * 0.62)} />
-              </>
-            ) : null}
+          <View style={styles.doneHero}>
+            <Text style={styles.doneHeroNum}>{distanceKm.toFixed(1)}</Text>
+            <Text style={styles.doneHeroUnit}>{t('cardio.km')}</Text>
           </View>
 
-          <View style={styles.completeMetrics}>
-            {/* a recorded duration is minutes, not a clock (domain/duration) */}
-            <CompleteMetric value={durationMinutes(elapsedSec)} unit={t('common.minShort')} label={t('cardio.duration')} />
-            <CompleteMetric value={fmtPace(avgPace)} unit={t('cardio.perKm')} label={t('cardio.avgPace')} />
-            {avgHr != null ? <CompleteMetric value={avgHr} unit={t('cardio.bpm')} label={t('cardio.avgHeart')} /> : null}
+          <View style={styles.doneRow}>
+            <DoneStat value={fmtClock(elapsedSec)} label={t('cardio.timeShort')} />
+            <DoneStat value={Math.round(props.calories)} label={t('cardio.kcal')} icon="flame" />
+            <DoneStat value={avgHr != null ? Math.round(avgHr) : '—'} label={t('cardio.avgHrShort')} icon="heart" />
           </View>
+        </View>
 
-          {splits.length > 0 ? (
-            <View style={styles.splitsWrap}>
-              <Text style={styles.splitsLegend}>{t('cardio.splitsPerKm').toUpperCase()}</Text>
-              <View style={styles.splitsList}>
-                {splits.map((s) => {
-                  const frac = slowest > fastest ? (s.paceSec - fastest) / (slowest - fastest) : 0;
-                  const w = 30 + (1 - frac) * 70; // faster = longer bar
-                  const isFast = s.paceSec <= fastest;
-                  return (
-                    <View key={s.km} style={styles.splitRow}>
-                      <Text style={styles.splitKm}>{s.km}</Text>
-                      <View style={styles.splitTrack}>
-                        <View style={[styles.splitFill, { width: `${w}%`, backgroundColor: isFast ? up.stage : stageC[2] }]} />
-                        {s.gait === 'walk' ? <Text style={styles.splitWalkTag}>{t('cardio.walkTag')}</Text> : null}
-                      </View>
-                      <Text style={[styles.splitPace, isFast && { color: up.stage, fontFamily: font.monoSemibold, textAlign: 'left' }]}>{fmtPace(s.paceSec)}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          <View style={styles.savedNoteRow}>
-            <Icon name="lock" size={15} color={stageC.ink1} strokeWidth={2} />
-            <Text style={styles.savedNoteText}>{t('cardio.savedNote')}</Text>
-          </View>
-        </ScrollView>
-
-        <View style={styles.completeFooter}>
+        <View style={styles.doneFooter}>
           <Button variant="onstage" size="lg" block label={t('cardio.done')} onPress={() => navigation.goBack()} />
-          {/* History is a TAB now, not a sibling on this stack. Reset to the tab host on its
-              History tab: the run just recorded lands in the timeline, and this cardio stage does
-              not linger underneath it (a "back" from History would otherwise return to a finished
-              run). */}
-          <Button
-            variant="onstageGhost"
-            block
-            label={t('cardio.viewInHistory')}
-            onPress={() =>
-              navigation.reset({ index: 0, routes: [{ name: 'HomeTabs', state: { routes: [{ name: 'History' }] } } as never] })
-            }
-          />
         </View>
       </SafeAreaView>
     </View>
@@ -627,109 +437,77 @@ function CardioComplete(props: {
 }
 
 /* ---- small instrument readouts ---- */
-function CardioStat({ value, unit, label }: { value: string | number; unit?: string; label: string }) {
+function LiveStat({ value, label, icon }: { value: string | number; label: string; icon?: 'heart' | 'flame' }) {
   return (
-    <View style={styles.cardioStat}>
-      <View style={styles.cardioStatRow}>
-        <Text style={styles.cardioStatVal}>{value}</Text>
-        {unit ? <Text style={styles.cardioStatUnit}>{unit}</Text> : null}
+    <View style={styles.liveStat}>
+      <View style={styles.liveStatRow}>
+        {icon ? <Icon name={icon} size={18} color={signal[0]} strokeWidth={2} /> : null}
+        <Text style={styles.liveStatVal}>{value}</Text>
       </View>
-      <Text style={styles.cardioStatLabel}>{label.toUpperCase()}</Text>
+      <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
     </View>
   );
 }
 
-function CompleteMetric({ value, unit, label }: { value: string | number; unit?: string; label: string }) {
+function DoneStat({ value, label, icon }: { value: string | number; label: string; icon?: 'heart' | 'flame' }) {
   return (
-    <View style={styles.completeMetric}>
-      <View style={styles.cardioStatRow}>
-        <Text style={styles.completeMetricVal}>{value}</Text>
-        {unit ? <Text style={styles.completeMetricUnit}>{unit}</Text> : null}
+    <View style={styles.doneStat}>
+      <View style={styles.liveStatRow}>
+        {icon ? <Icon name={icon} size={16} color={signal[0]} strokeWidth={2} /> : null}
+        <Text style={styles.doneStatVal}>{value}</Text>
       </View>
-      <Text style={styles.cardioStatLabel}>{label.toUpperCase()}</Text>
+      <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
     </View>
   );
 }
+
+const MOSS_WASH = 'rgba(169,196,159,0.12)';
+const MOSS_BORDER = 'rgba(169,196,159,0.3)';
+const LINE = 'rgba(241,238,229,0.16)';
 
 const styles = StyleSheet.create({
-  // paper (select)
-  paperRoot: { flex: 1, backgroundColor: color.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
-  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
-  selectScroll: { paddingHorizontal: space.gutter, paddingTop: 4, paddingBottom: 24 },
-  fieldLegend: { marginBottom: 10 },
-  fieldLegendGoal: { marginTop: 26, marginBottom: 10 },
-  goalCol: { marginTop: 16, gap: 8 },
-  goalWheel: { alignSelf: 'stretch' },
-  goalRowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
-  startWrap: { marginTop: 32 },
-  gpsNote: { textAlign: 'center', fontFamily: font.sans, fontSize: textScale['2xs'], color: color.textTertiary, marginTop: 14, letterSpacing: 0.2 },
-
   // stage (shared)
   stage: { flex: 1, backgroundColor: stageC[0] },
   stageSafe: { flex: 1 },
-  // The top bar carries the gait toggle — as far from the Pause target as the screen allows.
-  stageBar: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingTop: 6 },
 
   // countdown
   countdownWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  // Read at arm's length, one second before the athlete starts moving.
   startingLegend: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.legend), color: stageC.ink1, marginBottom: 28, textAlign: 'left' },
   countNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 140, lineHeight: 150, letterSpacing: -6, color: stageC.ink0, textAlign: 'left' },
-  // The word at the end of the count — sans (it is a word), ochre (it is the moment).
-  // The count-in's GO. It was the ochre; on the stage the loudest thing is the whitest.
-  // A MODIFIER composed onto `countNum` (which declares the logical start); it dresses the final
-  // "GO" of the count-in. It never renders alone.
   countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: stageC.lift }, // rtl-ok
 
-  // active hero
-  activeBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  heroLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
-  heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono
-  // digit tops — the 0.95 the web design tolerates is unsafe here (see SessionFlow `hero`).
-  heroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.06), includeFontPadding: false, letterSpacing: -3, color: stageC.ink0, textAlign: 'left' },
-  heroUnit: { fontFamily: font.sansMedium, fontSize: textScale.xl, color: stageC.ink2, marginStart: 6, marginBottom: 8, textAlign: 'left' },
+  // LIVE (3.4)
+  liveTop: { alignItems: 'center', paddingTop: 14 },
+  liveLegend: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: trackingPx(textScale.xs, tracking.legend), color: stageC.ink1, textAlign: 'left' },
+  liveBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28 },
+  clock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 84, lineHeight: 90, includeFontPadding: false, letterSpacing: -3, color: stageC.ink0, textAlign: 'left' },
 
-  paceChip: { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: stageC[2], borderRadius: radius.full },
-  gpsSlot: { height: 28, justifyContent: 'flex-end' },
+  band: { width: '100%', maxWidth: 310, height: 64, marginTop: 4 },
+  bandLabels: { position: 'absolute', left: 0, right: 0, top: -2, flexDirection: 'row', justifyContent: 'space-between' },
+  bandTick: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: 0.4, color: stageC.ink2, textAlign: 'left' },
+  bandLine: { position: 'absolute', left: 0, right: 0, top: 30, height: 1, backgroundColor: LINE },
+  bandCapL: { position: 'absolute', left: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
+  bandCapR: { position: 'absolute', right: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
+  bandFill: { position: 'absolute', left: 0, top: 29, height: 3, borderRadius: 2, backgroundColor: signal[0] },
+  bandDot: { position: 'absolute', top: 24, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  bandMetres: { position: 'absolute', top: 44, marginLeft: -22, flexDirection: 'row', alignItems: 'baseline', width: 60, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: signal[0], textAlign: 'left' },
+  bandMetresUnit: { fontFamily: font.sansMedium, fontSize: textScale.xs, color: signal[0], textAlign: 'left' },
+
+  gpsSlot: { height: 20, justifyContent: 'center' },
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
-  paceLegend: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink2, textAlign: 'left' },
-  paceValRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  paceVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stageC.ink0, textAlign: 'left' },
-  paceUnit: { fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
 
-  dotsRow: { flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', marginTop: 26, minHeight: 7, flexWrap: 'wrap', maxWidth: 280 },
-  dot: { height: 7, borderRadius: 4 },
-  timeBarWrap: { width: '100%', maxWidth: 280, marginTop: 26 },
-  timeBarTrack: { height: 4, borderRadius: 2, backgroundColor: stageC[2], overflow: 'hidden' },
-  timeBarFill: { height: '100%', backgroundColor: stageC.ink0, borderRadius: 2 },
-  timeBarLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  // A LIVE clock: tabular figures or the whole label shivers every time a 1 becomes an 8.
-  timeBarLabel: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
+  liveRow: { flexDirection: 'row', width: '100%', maxWidth: 340, justifyContent: 'space-evenly', borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 26 },
+  liveStat: { alignItems: 'center', gap: 5 },
+  liveStatRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 36, letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
+  statLabel: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink1, textTransform: 'uppercase', textAlign: 'left' },
 
-  metricCluster: { flexDirection: 'row', alignItems: 'stretch', marginTop: 40, paddingTop: 26, borderTopWidth: 1, borderTopColor: stageC[2], width: '100%', maxWidth: 320 },
-  clusterDivider: { width: 1, backgroundColor: stageC[2], alignSelf: 'center', height: 34 },
-  cardioStat: { flex: 1, alignItems: 'center', gap: 5 },
-  cardioStatRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  cardioStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['2xl'], letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
-  cardioStatUnit: { fontFamily: font.sansMedium, fontSize: 13, color: stageC.ink2, textAlign: 'left' },
-  cardioStatLabel: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: trackingPx(10, tracking.legend), color: stageC.ink2, textTransform: 'uppercase', textAlign: 'left' },
-
-  // active footer — one action, alone in the thumb zone
-  activeFooter: { paddingHorizontal: 20, paddingBottom: 16 },
-  gaitToggle: { flexDirection: 'row', gap: 2, padding: 3, backgroundColor: stageC[1], borderRadius: radius.full },
-  gaitPill: { paddingVertical: 8, paddingHorizontal: 22, borderRadius: radius.full },
-  gaitPillActive: { backgroundColor: stageC.ink0 },
-  gaitPillText: { fontFamily: font.sansSemibold, fontSize: 13, color: stageC.ink1, textAlign: 'left' },
-  gaitPillTextActive: { color: stageC[0] },
+  liveFooter: { paddingHorizontal: 26, paddingBottom: 30, gap: 12 },
+  splitPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 11, paddingHorizontal: 16, borderRadius: radius.full, backgroundColor: MOSS_WASH, borderWidth: 1, borderColor: MOSS_BORDER },
+  splitPillText: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: 0.4, color: signal[0], textAlign: 'left' },
 
   // pause overlay
-  // Near-opaque (RN has no cheap backdrop-blur like the web design): at 0.86 the
-  // live metrics behind bled through and collided with the "Finish & save" flag +
-  // label, reading as a stray floating flag. A solid cover keeps the pause panel clean.
   pauseOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,17,14,0.985)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
   pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0, textAlign: 'left' },
@@ -737,38 +515,42 @@ const styles = StyleSheet.create({
   pauseStat: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
   pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
 
-  // the end-confirm sheet (paper — it is a decision, not part of the stage)
+  // the end-confirm sheet (paper — a decision, not part of the stage)
   sheetLegend: { marginBottom: 10 },
   sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, textAlign: 'left' },
   sheetBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
   sheetActions: { marginTop: 22, gap: 10 },
 
-  // complete
-  completeScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16 },
-  recordedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordedText: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: up[0], textAlign: 'left' },
-  loggedTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: stageC.ink0, marginTop: 12, textAlign: 'left' },
-  completeHero: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginTop: 24 },
-  completeMetrics: { flexDirection: 'row', marginTop: 26, paddingTop: 22, borderTopWidth: 1, borderTopColor: stageC[2] },
-  completeMetric: { flex: 1, gap: 4 },
-  completeMetricVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
-  completeMetricUnit: { fontFamily: font.sansMedium, fontSize: 12, color: stageC.ink2, textAlign: 'left' },
+  // DONE (3.4c)
+  doneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 26, paddingHorizontal: 34 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  savedLegend: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: trackingPx(textScale.xs, tracking.legend), color: signal[0], textAlign: 'left' },
+  savedTitle: { fontFamily: font.serif, fontSize: textScale['3xl'], lineHeight: 44, color: stageC.ink0, textAlign: 'center' },
+  doneHero: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
+  doneHeroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.02), includeFontPadding: false, letterSpacing: -4, color: stageC.ink0, textAlign: 'left' },
+  doneHeroUnit: { fontFamily: font.sansMedium, fontSize: textScale.xl, color: stageC.ink1, textAlign: 'left' },
+  doneRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-evenly', borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 26 },
+  doneStat: { alignItems: 'center', gap: 5 },
+  doneStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['2xl'], letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
+  doneFooter: { paddingHorizontal: 26, paddingBottom: 30 },
 
-  traceWrap: { marginTop: 24 },
-  // Zero-height, but still laid out — so onLayout can hand us the column width even on a
-  // run that has no route to draw.
-  traceWrapEmpty: { height: 0 },
-  splitsWrap: { marginTop: 28 },
-  splitsLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 14, textAlign: 'left' },
-  splitsList: { gap: 9 },
-  splitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  splitKm: { width: 16, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink2, textAlign: 'left' },
-  splitTrack: { flex: 1, height: 22, backgroundColor: stageC[1], borderRadius: 4, overflow: 'hidden', justifyContent: 'center' },
-  splitFill: { height: '100%', borderRadius: 4 },
-  splitWalkTag: { position: 'absolute', end: 8, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), color: stageC.ink1, textTransform: 'uppercase', textAlign: 'left' },
-  splitPace: { width: 52, textAlign: textEnd, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink0 },
-
-  savedNoteRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 26, paddingTop: 16, borderTopWidth: 1, borderTopColor: stageC[2] },
-  savedNoteText: { flex: 1, fontFamily: font.sans, fontSize: textScale.sm, color: stageC.ink1, lineHeight: 20, textAlign: 'left' },
-  completeFooter: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: stageC[2] },
+  // KILOMETRE LOGGED (3.4b) — a full, opaque overlay; the run keeps tracking underneath.
+  kmMoment: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: stageC[0] },
+  kmBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingHorizontal: 34, marginTop: -16 },
+  kmBandWrap: { alignItems: 'center', gap: 12 },
+  kmBand: { width: 230, height: 20, justifyContent: 'center' },
+  kmBandLine: { position: 'absolute', left: 0, right: 0, top: 9.5, height: 1, backgroundColor: 'rgba(241,238,229,0.18)' },
+  kmBandSeg: { position: 'absolute', left: '24%', right: '24%', top: 9, height: 2, backgroundColor: 'rgba(169,196,159,0.5)' },
+  kmBandCap: { position: 'absolute', top: 3, width: 1.5, height: 14, backgroundColor: 'rgba(169,196,159,0.5)' },
+  kmBandDot: { position: 'absolute', top: 4.5, marginLeft: -5.5, width: 11, height: 11, borderRadius: 6, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the km band is a direction-neutral data axis
+  kmBandLabel: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink1, textAlign: 'left' },
+  kmSplit: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  kmSplitNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 104, lineHeight: 108, includeFontPadding: false, letterSpacing: -4.5, color: signal[0], textAlign: 'left' },
+  kmSplitUnit: { fontFamily: font.sansMedium, fontSize: textScale.lg, color: stageC.ink1, textAlign: 'left' },
+  kmQuickest: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kmQuickestText: { fontFamily: font.sansMedium, fontSize: 11.5, letterSpacing: trackingPx(11.5, tracking.legend), color: signal[0], textAlign: 'left' },
+  kmFooter: { paddingHorizontal: 26, paddingBottom: 30, alignItems: 'center', gap: 9 },
+  kmBackText: { fontFamily: font.sansMedium, fontSize: 12.5, letterSpacing: trackingPx(12.5, tracking.legend), color: stageC.ink1, textAlign: 'left' },
+  kmBarTrack: { width: 130, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)', overflow: 'hidden' },
+  kmBarFill: { height: '100%', backgroundColor: signal[0] },
 });

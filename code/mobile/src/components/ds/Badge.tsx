@@ -30,8 +30,8 @@ const FG: Record<Tone, string> = {
   neutral: color.textSecondary,
   outline: color.textSecondary,
   signal: color.accentText,
-  up: up[0],
-  down: down[0],
+  up: up.stage,
+  down: down.stage,
   solid: paper.lift, // white on the ink badge — the VALUE by name, never a ladder position
 };
 

@@ -35,7 +35,7 @@ import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, tracking, trackingPx, up, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ProgramCreated'>;
@@ -128,7 +128,7 @@ export function ProgramCreated({ route }: Props) {
                   <View key={i} style={styles.stepRow}>
                     <View style={styles.stepIcon}>
                       {done ? (
-                        <Icon name="check" size={18} color={up[0]} strokeWidth={2.4} />
+                        <Icon name="check" size={18} color={color.up} strokeWidth={2.4} />
                       ) : running ? (
                         <ActivityIndicator size="small" color={color.textMuted} />
                       ) : (
@@ -158,7 +158,7 @@ export function ProgramCreated({ route }: Props) {
                 { opacity: seal, transform: [{ scale: seal.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }) }] },
               ]}
             >
-              <Icon name="check" size={34} color={up[0]} strokeWidth={2.6} />
+              <Icon name="check" size={34} color={color.up} strokeWidth={2.6} />
             </Animated.View>
             <Text style={styles.readyLegend}>{t('ob.readyLegend').toUpperCase()}</Text>
             {/* THE NAME (founder 2026-07-13). We ask for it at the door and then never say it. This
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     color: color.textMuted,
     textAlign: 'left',
   },
-  buildingTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), color: color.textPrimary, marginTop: 8, marginBottom: 28, textAlign: 'left' },
+  buildingTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: color.textPrimary, marginTop: 8, marginBottom: 28, textAlign: 'left' },
   steps: { gap: 16 },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepIcon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
@@ -210,13 +210,13 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 2,
-    borderColor: up[0],
+    borderColor: color.up,
     backgroundColor: color.upWash,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 26,
   },
-  readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: up[0], textAlign: 'left' },
+  readyLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.up, textAlign: 'left' },
   // The name is spoken in the SPEAKING voice, a beat before the statement — not folded into it.
   readyName: {
     fontFamily: font.sans,
@@ -227,9 +227,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   readyTitle: {
-    fontFamily: font.sansSemibold,
+    fontFamily: font.serif,
     fontSize: textScale['3xl'],
-    lineHeight: Math.round(textScale['3xl'] * 1.08),
+    lineHeight: Math.round(textScale['3xl'] * 1.1),
     letterSpacing: trackingPx(textScale['3xl'], tracking.display),
     color: color.textPrimary,
     textAlign: 'center',

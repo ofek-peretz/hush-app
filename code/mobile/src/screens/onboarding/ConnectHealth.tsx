@@ -21,7 +21,7 @@ import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
 import * as haptics from '@/platform/haptics';
-import { color, font, textScale, radius, up } from '@/design/tokens';
+import { color, font, textScale, radius } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
@@ -68,7 +68,7 @@ export function ConnectHealth({ navigation, route }: Props) {
       progress={{ index: 2, total: 5 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
-      sub={t('ob.healthSub')}
+      voice={t('ob.healthSub')}
       footer={
         <Button
           variant="primary"
@@ -90,7 +90,7 @@ export function ConnectHealth({ navigation, route }: Props) {
         style={({ pressed }) => [styles.card, connected && styles.cardOn, pressed && styles.cardPressed]}
       >
         <View style={styles.iconBox}>
-          <Icon name="heart" size={22} color={connected ? up[0] : color.textSecondary} strokeWidth={2} />
+          <Icon name="heart" size={22} color={connected ? color.up : color.textSecondary} strokeWidth={2} />
         </View>
         <View style={styles.info}>
           <Text style={styles.title}>{t('ob.healthCardTitle')}</Text>
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: color.surface,
   },
-  cardOn: { borderColor: up[0], backgroundColor: color.upWash },
+  cardOn: { borderColor: color.up, backgroundColor: color.upWash },
   cardPressed: { backgroundColor: color.fillSubtle },
   iconBox: { width: 38, height: 38, borderRadius: radius.md, backgroundColor: color.fillSubtle, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1, minWidth: 0 },

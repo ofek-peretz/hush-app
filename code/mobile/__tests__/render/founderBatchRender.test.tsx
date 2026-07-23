@@ -18,7 +18,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { color, stage, signal, ink, paper, up, down } from '@/design/tokens';
+import { color, stage, signal, ink, paper, cream, up, down } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
@@ -191,6 +191,19 @@ function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
+/**
+ * Flatten a translucent `rgba(r,g,b,a)` over a solid hex ground to the hex it actually
+ * paints — v7's raised surfaces are translucent cream, so a real reader sees them
+ * composited over the stage, not the raw alpha. Passes solid hex through untouched.
+ */
+function over(fg: string, ground: string): string {
+  const m = fg.match(/rgba?\(([^)]+)\)/);
+  if (!m) return fg;
+  const [r, g, b, a = '1'] = m[1].split(',').map((s) => parseFloat(s.trim()));
+  const gc = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16));
+  const mix = [r, g, b].map((c, i) => Math.round(c * a + gc[i] * (1 - a)));
+  return '#' + mix.map((c) => c.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * READOUT (founder-ratified 2026-07-17). These three tests replace the three that
@@ -200,65 +213,72 @@ function contrast(a: string, b: string): number {
  * would "fix" the founder's brown by accident. There is no brown to fix now.
  */
 describe('READOUT: no accent hue — emphasis is distance from the ground', () => {
-  it('the primary action is the darkest thing on the page, not a colour', () => {
+  it('the primary action is the brightest thing on the page, not a colour', () => {
     const r = mount(<Button variant="primary" size="lg" block label="Begin Push A" onPress={() => {}} />);
     const json = JSON.stringify(r.toJSON());
-    expect(json).toContain(signal.fill); // graphite
-    expect(json).toContain(color.onAccent); // cream on it
-    expect(json).not.toContain(signal[0]); // the mark never fills a control
+    expect(json).toContain(signal.fill); // cream, standing in the light
+    expect(json).toContain(color.onAccent); // ink on it
+    expect(json).not.toContain(signal[0]); // the moss mark never fills the primary action
     expect(texts(r)).toContain('Begin Push A');
   });
 
-  it('the ochre is the MARK and nothing else — the fill and the mark have parted', () => {
-    // The inverse of the old law. `signal.fill` used to be forbidden from diverging from
-    // `signal[0]`, because a second, darker brown was what the founder rejected on sight.
-    // Under READOUT they are different KINDS: `signal[0]` is a seal (HushMark only),
-    // `signal.fill` is a control's ground. The seal is the only ochre the product owns.
+  it('the accent is MOSS — a mark, not the ground of the primary action', () => {
+    // v7 inverts the light-era law: now `signal.fill` (the primary button's ground) is CREAM,
+    // the brightest thing standing on the dark stage, while `signal[0]` is lit MOSS — the seal,
+    // the selection mark, the live ring. They are different KINDS and must stay parted.
     expect(signal.fill).not.toBe(signal[0]);
-    expect(signal.fill).toBe(ink[0]);
-    expect(signal[0]).toBe('#c8873a');
-    // Retired slots must not quietly resurrect a coloured surface or coloured text.
-    expect(signal.wash).toBe(paper[1]);
-    expect(signal.ink).toBe(ink[0]);
-    expect(up.wash).toBe(paper[1]);
-    expect(down.wash).toBe(paper[1]);
+    expect(signal.fill).toBe(cream[0]); // the primary ground is cream on dark
+    expect(signal[0]).toBe('#a9c49f'); // lit moss — the mark on the stage
+    expect(signal[1]).toBe('#3e573f'); // deep moss — the mark on paper
+    // The washes are faint MOSS/clay veils now (a live channel, a scan), not a paper tint.
+    expect(signal.wash).toBe('rgba(169,196,159,0.12)');
+    expect(signal.ink).toBe(signal[0]);
+    expect(up.wash).toBe('rgba(169,196,159,0.12)');
+    expect(down.wash).toBe('rgba(197,106,78,0.12)');
   });
 
-  it('nothing coloured carries text, so nothing can fail contrast', () => {
-    // This assertion used to read `.toBeLessThan(4.5)`. That is the entire redesign.
+  it('everything that carries text clears AA, on the ground it actually paints on', () => {
+    // The primary label: ink on the cream button.
     expect(contrast(signal.fill, color.onAccent)).toBeGreaterThanOrEqual(4.5);
 
-    // Every tier licensed to carry text, on every ground it is allowed to sit on.
-    for (const t of [color.textPrimary, color.textSecondary, color.textMuted, color.textTertiary]) {
-      expect(contrast(color.bg, t)).toBeGreaterThanOrEqual(4.5); // on the ground
-      expect(contrast(color.surface, t)).toBeGreaterThanOrEqual(4.5); // on a raised card
-      expect(contrast(color.lift, t)).toBeGreaterThanOrEqual(4.5); // on the active thing
-      expect(contrast(color.fillSubtle, t)).toBeGreaterThanOrEqual(4.5); // in a well
+    // CREAM tiers on the solid dark grounds — every tier licensed to carry text clears AA on
+    // both the stage ground and a raised stage card.
+    for (const t of [color.textPrimary, color.textSecondary, color.textMuted]) {
+      expect(contrast(stage[0], t)).toBeGreaterThanOrEqual(4.5); // on the ground
+      expect(contrast(stage[1], t)).toBeGreaterThanOrEqual(4.5); // on a raised stage card
+    }
+    // The brightest translucent raise (surface3, composited over a stage card) is only ever a
+    // ground for the STRONG tiers — the selected segment's label, a lit value. Muted copy stays
+    // on the dark ground/wells, where it has room; it is not licensed onto a bright raise.
+    const raise = over(color.surface3, stage[1]);
+    for (const t of [color.textPrimary, color.textSecondary]) {
+      expect(contrast(raise, t)).toBeGreaterThanOrEqual(4.5);
     }
 
-    // The stage. `ink2` is included deliberately: the old test stopped at `ink1`, which is
-    // why #767471 shipped at 4.04:1 and nobody saw it.
-    for (const t of [stage.ink0, stage.ink1, stage.ink2]) {
-      expect(contrast(stage[0], t)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(stage[1], t)).toBeGreaterThanOrEqual(4.5); // and on a raised stage card
+    // INK tiers on the paper card (dark ink on the one light surface v7 keeps).
+    for (const t of [ink[0], ink[1], ink[2]]) {
+      expect(contrast(paper[0], t)).toBeGreaterThanOrEqual(4.5);
     }
 
-    // Semantics survive the accent's death — so they answer to the same bar, in both worlds.
-    expect(contrast(color.bg, up[0])).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(color.bg, down[0])).toBeGreaterThanOrEqual(4.5);
+    // Semantic load marks answer to the same bar, each on its own world: the paper variants on
+    // paper, the stage variants on the stage.
+    expect(contrast(paper[0], up[0])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(paper[0], down[0])).toBeGreaterThanOrEqual(4.5);
     expect(contrast(stage[0], up.stage)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(stage[0], down.stage)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('the ladder climbs: a raised card is lighter than the page it sits on', () => {
-    // The pre-2026-07-17 file had `paper[1]` DARKER than `paper[0]` — "raised" meant a tint,
-    // not an elevation, which is why a card needed a hairline to be seen at all.
+  it('the ladder climbs: on the dark stage a raised thing is LIGHTER than the ground', () => {
+    // v7's whole elevation law in one line — emphasis is distance from the ground, and on the
+    // dark stage that means brighter. The raises climb; the ground is the darkest thing.
+    expect(luminance(stage[2])).toBeGreaterThan(luminance(stage[1]));
+    expect(luminance(stage[1])).toBeGreaterThan(luminance(stage[0]));
+    expect(luminance(stage[0])).toBeLessThan(0.05); // a genuinely dark stage
+    // Paper is cards-only now, but its own internal ladder still climbs toward the light.
     expect(luminance(paper.lift)).toBeGreaterThan(luminance(paper[1]));
     expect(luminance(paper[1])).toBeGreaterThan(luminance(paper[0]));
     expect(luminance(paper[0])).toBeGreaterThan(luminance(paper[2]));
     expect(luminance(paper[2])).toBeGreaterThan(luminance(paper[3]));
-    // The ground is paper, not white. 78.6% — a Braun housing, not a lamp.
-    expect(luminance(paper[0])).toBeLessThan(0.85);
   });
 
   it('nothing in the system is a neutral grey', () => {

@@ -13,9 +13,11 @@
  * one act: the reference proves a huge Begin button and a quiet ink tab row coexist fine.
  *
  * DELIBERATELY CUSTOM, not the default bar: the stock tab bar is iOS-blue on a translucent white
- * blur, which is neither the palette nor the READOUT law. This one is ink-on-paper — the active tab
- * is `textPrimary` (the darkest thing, i.e. emphasis by distance from the ground, no accent hue),
- * the rest are `textTertiary`. A hairline separates it from the page; nothing else is drawn.
+ * blur, which is neither the palette nor the v7 law. This one is cream-on-stage — the active tab is
+ * `textPrimary` (the brightest thing, emphasis by distance from the ground), the rest are
+ * `textMuted`. And the active tab WEARS THE MARK: a small moss "measured-range" glyph (a hairline
+ * with two end ticks) is struck beneath its label — the one place the brand's range mark signs the
+ * navigation (design 1.0 / 2.1). A hairline separates the bar from the page; nothing else is drawn.
  *
  * It is hidden entirely on the deeper screens (a live workout, cardio, a modal) — those are pushed
  * ABOVE the tab navigator, so the bar is simply not in their tree. A stage has no navigation.
@@ -30,17 +32,17 @@ import * as haptics from '@/platform/haptics';
 import { color, font, textScale } from '@/design/tokens';
 
 const ICON: Record<string, IconName> = {
-  Home: 'home',
+  Today: 'home',
+  Cardio: 'runner',
   Progress: 'trendingUp',
-  History: 'history',
-  Settings: 'settings',
+  You: 'user',
 };
 
 const LABEL: Record<string, string> = {
-  Home: 'nav.home',
+  Today: 'nav.today',
+  Cardio: 'nav.cardio',
   Progress: 'nav.progress',
-  History: 'nav.history',
-  Settings: 'nav.settings',
+  You: 'nav.you',
 };
 
 export function HushTabBar({ state, navigation }: BottomTabBarProps) {
@@ -57,7 +59,7 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
           haptics.tick();
           navigation.navigate(route.name);
         };
-        const tint = focused ? color.textPrimary : color.textTertiary;
+        const tint = focused ? color.textPrimary : color.textMuted;
         return (
           <Pressable
             key={route.key}
@@ -69,12 +71,29 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
             hitSlop={6}
           >
             <Icon name={ICON[route.name] ?? 'home'} size={22} color={tint} strokeWidth={focused ? 2.2 : 1.9} />
-            <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+            <Text style={[styles.label, focused && styles.labelActive, { color: tint }]} numberOfLines={1}>
               {t(LABEL[route.name] ?? route.name)}
             </Text>
+            <RangeMark active={focused} />
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * The measured-range mark — a hairline spanning two end ticks. Struck in moss beneath the
+ * ACTIVE tab (the brand's range glyph signing the navigation); an empty 6pt spacer otherwise,
+ * so the row never reflows as the selection moves.
+ */
+function RangeMark({ active }: { active: boolean }) {
+  if (!active) return <View style={styles.markSpacer} />;
+  return (
+    <View style={styles.mark}>
+      <View style={styles.markBar} />
+      <View style={[styles.markTick, styles.markTickStart]} />
+      <View style={[styles.markTick, styles.markTickEnd]} />
     </View>
   );
 }
@@ -90,4 +109,12 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44 },
   label: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: 0.2, textAlign: 'center' },
+  labelActive: { fontFamily: font.sansSemibold }, // rtl-ok: merged onto label, which sets textAlign:'center'
+  // The moss range-mark under the active tab (16 × 6): a hairline bar struck between two end ticks.
+  mark: { width: 16, height: 6 },
+  markSpacer: { width: 16, height: 6 },
+  markBar: { position: 'absolute', start: 0, end: 0, top: 2.5, height: 1.5, backgroundColor: color.accent },
+  markTick: { position: 'absolute', top: 0, width: 1.5, height: 6, backgroundColor: color.accent },
+  markTickStart: { start: 0 },
+  markTickEnd: { end: 0 },
 });

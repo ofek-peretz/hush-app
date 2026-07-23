@@ -1,12 +1,13 @@
 /**
  * ProgressMeter — 1:1 from the design `components/data/ProgressMeter.jsx`.
- * A quiet horizontal gauge for completion/progress. Filled with ink by default;
- * tone="signal" for an active measure, tone="up" for progress. Optional `mark`
- * draws a reference tick (e.g. the initial peak vs the best peak since).
+ * A quiet horizontal gauge for completion/progress. On the dark stage the fill is
+ * the LIT thing — cream by default (emphasis is distance from the ground);
+ * tone="signal" is moss for an active measure, tone="up" for progress. Optional
+ * `mark` draws a reference tick (e.g. the initial peak vs the best peak since).
  */
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
-import { color, font, textScale, ink, signal, up } from '@/design/tokens';
+import { color, font, textScale, up } from '@/design/tokens';
 import { Legend } from './Legend';
 
 type Tone = 'ink' | 'signal' | 'up' | 'muted';
@@ -22,7 +23,7 @@ interface Props {
   style?: ViewStyle | ViewStyle[];
 }
 
-const FILL: Record<Tone, string> = { ink: ink[0], signal: ink[0], up: up[0], muted: ink[3] };
+const FILL: Record<Tone, string> = { ink: color.textPrimary, signal: color.accent, up: up.stage, muted: color.textMuted };
 
 export function ProgressMeter({ value = 0, max = 100, label, valueLabel, tone = 'ink', size = 'md', mark, style }: Props) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));

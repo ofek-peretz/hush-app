@@ -35,9 +35,12 @@ interface Props {
   /** The milestones gallery (Progress screen only — the quarterly report stays a pure
    *  peak-weight comparison): earned emblems + each family's single next silhouette. */
   milestones?: { earned: EarnedMilestone[]; next: NextMilestone[] } | null;
+  /** Opens the full session log. History is no longer a tab (v7) — this is its one door,
+   *  at the foot of the all-time report. Omitted in the quarterly window. */
+  onHistory?: () => void;
 }
 
-export function ProgressReportView({ title, legend, entries, loaded, units, onBack, milestones }: Props) {
+export function ProgressReportView({ title, legend, entries, loaded, units, onBack, milestones, onHistory }: Props) {
   const { t } = useCopy();
   // The header total is a kg story — bodyweight (reps-mode) gains are real progress
   // but never counted as "kg added".
@@ -199,6 +202,20 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                 </View>
               </View>
             ) : null}
+
+            {/* The one door to the full log — History is no longer a tab (v7). A quiet row at the
+                foot of the all-time report, never on the 12-week window. */}
+            {onHistory ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('progress.viewHistory')}
+                onPress={onHistory}
+                style={({ pressed }) => [styles.historyLink, { opacity: pressed ? press.opacity : 1 }]}
+              >
+                <Text style={styles.historyText}>{t('progress.viewHistory')}</Text>
+                <Icon name="chevronRight" size={18} color={color.textMuted} strokeWidth={2} />
+              </Pressable>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -223,7 +240,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
+  // v7 (2026-07-22): the section headline is the serif — "Progress" in the coach's voice, not UI chrome.
+  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, marginTop: 2, textAlign: 'left' },
 
   body: { paddingHorizontal: space.gutter, paddingBottom: 40, flexGrow: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 60 },
@@ -264,6 +282,18 @@ const styles = StyleSheet.create({
   footNow: { color: color.up },
   backOff: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9 },
   backOffText: { flex: 1, fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 17, color: color.textMuted, textAlign: 'left' },
+
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 30,
+    paddingTop: 22,
+    borderTopWidth: 1,
+    borderTopColor: color.border,
+    minHeight: 44,
+  },
+  historyText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
 
   milestones: { marginTop: 30, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
   emblemGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16 },

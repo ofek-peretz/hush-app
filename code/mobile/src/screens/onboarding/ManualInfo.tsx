@@ -43,7 +43,8 @@ export function ManualInfo({ navigation, route }: Props) {
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
       progress={{ index: 3, total: 5 }}
-      legend={t('ob.bodyLegend')}
+      // v7 1.4: "About you" is the serif TITLE now — no mono legend above it (the image leads
+      // with the headline, not a label). The sub carries the "seeds, then overwritten" law.
       title={t('ob.bodyTitle')}
       sub={t('ob.bodySub')}
       // The navigator's back-swipe is OFF for this step (Root) — three horizontal wheels cannot

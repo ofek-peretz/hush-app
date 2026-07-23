@@ -23,7 +23,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { HomeView, type HomeViewProps } from '@/screens/home/HomeView';
 import { initI18n, tg } from '@/i18n';
 import { bidi } from '@/i18n/bidi';
-import { up, signal, ink, color } from '@/design/tokens';
+import { color } from '@/design/tokens';
 
 beforeAll(async () => {
   await initI18n();
@@ -35,13 +35,29 @@ const METRICS: Metrics = {
   insets: { top: 59, left: 0, right: 0, bottom: 34 },
 };
 
+/**
+ * Every renderer created in a test is tracked and unmounted in afterEach. The Recovery moment runs
+ * an async AsyncStorage read (the once-a-week "seal") whose resolution calls setState; a resting
+ * render that is never unmounted lets that promise land AFTER the test, logging on a torn-down tree.
+ * Unmounting fires the effect's cleanup (active = false) before the microtask resolves, so the late
+ * settle is a no-op — no console noise, and the async seal path is still genuinely exercised.
+ */
+const mounted: ReactTestRenderer[] = [];
+
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
   act(() => {
     r = renderer.create(<SafeAreaProvider initialMetrics={METRICS}>{el}</SafeAreaProvider>);
   });
+  mounted.push(r);
   return r;
 }
+
+afterEach(() => {
+  act(() => {
+    while (mounted.length) mounted.pop()!.unmount();
+  });
+});
 
 type Json = { type: string; props: Record<string, unknown>; children: Json[] | null } | string | null;
 
@@ -123,46 +139,52 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
   };
 }
 
+/** The small unseen dot the change pill wears (6×6, borderRadius 3) — found by its shape so
+ *  the assertion survives whether byLabel lands on the composite or its host. */
+function unseenDots(r: ReactTestRenderer): ReactTestInstance[] {
+  return r.root.findAll((n) => {
+    const s = n.props.style;
+    const flat = Array.isArray(s) ? Object.assign({}, ...s.filter(Boolean)) : s;
+    return !!flat && flat.width === 6 && flat.height === 6 && flat.borderRadius === 3;
+  });
+}
+
 describe('the app says what it does', () => {
-  it('prints Hush\'s own sentence about the week — the decision, not a slogan', () => {
-    const r = mount(<HomeView {...props()} />);
-    const said = texts(r).join(' ');
-    expect(said).toContain('I raised your Bench Press to 62.5 kg.');
-    expect(said).toContain(tg('home.briefOpen')); // …and the way into the WHY
+  /**
+   * v7 (2026-07-22): the engine's sentence is NO LONGER spilled onto Today as a framed card. The
+   * change count rides a small moss pill on the title; the paragraph lives behind it, on the WHY
+   * surface the pill opens. Today states the fact (N changed); the Weekly Update tells the story.
+   */
+  it('the change count rides a moss pill on the title — not a paragraph on the stage', () => {
+    const said = texts(mount(<HomeView {...props()} />)).join(' ');
+    expect(said).toContain(tg('home.briefChanges', { count: 3 }).toUpperCase());
+    // the engine's full sentence is NOT printed on Today — it is one tap away, never a wall of text
+    expect(said).not.toContain('I raised your Bench Press');
   });
 
-  it('the sentence is a door: it opens the Weekly Update', () => {
+  it('the pill is a door: it opens the Weekly Update', () => {
     let opened = 0;
     const r = mount(<HomeView {...props({ onWeeklyUpdate: () => void opened++ })} />);
     act(() => {
-      byLabel(r, tg('home.briefOpen'))!.props.onPress();
+      byLabel(r, tg('home.briefChanges', { count: 3 }))!.props.onPress();
     });
     expect(opened).toBe(1);
   });
 
-  it('an unread update wears the ochre mark; a read one is quiet', () => {
-    expect(texts(mount(<HomeView {...props({ briefUnseen: true })} />)).join(' ')).toContain(
-      tg('home.briefNew').toUpperCase(),
-    );
-    expect(texts(mount(<HomeView {...props({ briefUnseen: false })} />)).join(' ')).not.toContain(
-      tg('home.briefNew').toUpperCase(),
-    );
+  it('an unread update wears the unseen dot; a read one is quiet', () => {
+    expect(unseenDots(mount(<HomeView {...props({ briefUnseen: true })} />)).length).toBeGreaterThan(0);
+    expect(unseenDots(mount(<HomeView {...props({ briefUnseen: false })} />))).toHaveLength(0);
   });
 
-  it('states HOW MANY lifts changed before it says anything else — or that none did', () => {
+  it('states HOW MANY lifts changed — and a steady week shows no pill at all', () => {
     expect(texts(mount(<HomeView {...props({ briefCount: 3 })} />)).join(' ')).toContain(
-      tg('home.briefChanges', { count: 3 }),
+      tg('home.briefChanges', { count: 3 }).toUpperCase(),
     );
-    const steady = texts(
-      mount(<HomeView {...props({ briefCount: 0, brief: [{ key: 'home.briefSteady' }] })} />),
-    ).join(' ');
-    expect(steady).toContain(tg('home.briefNoChanges'));
-    expect(steady).toContain(tg('home.briefOpen')); // …and the why is still one tap away
-  });
-
-  it('says NOTHING rather than something invented when the engine record cannot be read', () => {
-    const r = mount(<HomeView {...props({ brief: null })} />);
-    expect(texts(r).join(' ')).not.toContain(tg('home.briefOpen'));
+    // Zero changes = no pill, no text. The "no changes" sentence belongs to the WHY surface, not
+    // to Today, which would otherwise carry a label explaining that nothing happened.
+    const rSteady = mount(<HomeView {...props({ briefCount: 0 })} />);
+    expect(byLabel(rSteady, tg('home.briefChanges', { count: 3 }))).toBeNull();
+    expect(texts(rSteady).join(' ')).not.toContain(tg('home.briefNoChanges'));
   });
 });
 
@@ -226,7 +248,10 @@ describe('the week is on the page, and it is a door', () => {
     );
     const said = texts(r).join(' ');
     expect(said).toContain('Bench Press');
-    expect(said).toContain('80 kg · 3 × 8–10'); // the BAND, not Tlo dressed as the target
+    // v7 splits the figure into two styled spans — the load (moss when changed) and the scheme —
+    // so assert the two facts rather than one glued string: the load, and the BAND (not Tlo).
+    expect(said).toContain('80 kg');
+    expect(said).toContain('3 × 8–10');
     // A bodyweight lift states the reps and invents no weight.
     expect(said).toContain('3 × 10–12');
     expect(said).not.toMatch(/null|undefined|NaN/);
@@ -327,41 +352,35 @@ describe('the week is on the page, and it is a door', () => {
     expect(chosen).toEqual([]);
   });
 
-  it('a trained workout is SAGE, and the queued one LIFTS — the two marks never trade places', () => {
-    // The law is unchanged; only its mechanism is. Done vs. queued used to be sage vs. ochre.
-    // Under READOUT (2026-07-17) there is no ochre, so "you are here" is said the way the whole
-    // product now says it: the chip lifts off the ground toward white. What must never happen —
-    // and what this test is actually for — is the two states becoming confusable.
+  it('a trained workout wears the MOSS check, and the queued one LIFTS — never confusable', () => {
+    // Under v7 "All Dark" the queued chip LIFTS off the dark stage toward the light: it is a PAPER
+    // pill (cream ground, dark ink), not the harsh #fff — cream copy on #fff would be invisible.
+    // The done chip is the other pole: a moss check on a moss veil. The one law that must hold is
+    // that the two never share a colour — no paper on the done chip, no moss on the queued one.
     const r = mount(<HomeView {...props()} />);
 
-    // Done: the sage mark. (Its LABEL is ink, as all legible copy is — it is the MARK that
-    // carries the verdict.)
+    // Done: the moss mark on the moss veil. (Its LABEL is cream, as all legible copy is — it is
+    // the MARK that carries the verdict, not the text.)
     const doneChip = colors(byLabel(r, 'Push A')!);
-    expect(doneChip).toContain(up[0]);
-    expect(doneChip).not.toContain(signal[0]); // the brand's seal is not a UI state
+    expect(doneChip).toContain(color.up); // the lit moss check/border (== the single accent)
+    expect(doneChip).not.toContain(color.paper); // done is moss, never the queued paper pill
 
-    // Queued: it lifts, and carries no check — a check means DONE and nothing else.
+    // Queued: the paper pill, and no check — a check means DONE and nothing else.
     const queuedChip = colors(byLabel(r, 'Pull A')!);
-    expect(queuedChip).toContain(color.lift);
-    expect(queuedChip).not.toContain(up[0]);
-    expect(queuedChip).not.toContain(signal[0]);
-
-    // And the two are still told apart by their marks, not by their labels.
-    expect(doneChip).not.toContain(color.lift);
+    expect(queuedChip).toContain(color.paper);
+    expect(queuedChip).not.toContain(color.up); // no moss on the queued chip at all
   });
 });
 
-describe('cardio is Home\'s second door — and it never rivals the first', () => {
-  it('a run is one tap from Home — the path the chooser sheet used to occupy', () => {
-    let ran = 0;
-    const r = mount(<HomeView {...props({ onCardio: () => void ran++ })} />);
-    act(() => {
-      byLabel(r, tg('cardio.title'))!.props.onPress();
-    });
-    expect(ran).toBe(1);
+describe('cardio is its own tab now — it does not rival the one act on Today', () => {
+  it('does NOT appear on the training-state Home — it moved to the tab bar (v7)', () => {
+    // The run link that used to sit under Begin is gone: Cardio is a peer TAB now, one tap from
+    // anywhere, so putting it back on Today would be a second act competing with the first.
+    const r = mount(<HomeView {...props()} />);
+    expect(byLabel(r, tg('cardio.title'))).toBeNull();
   });
 
-  it('and on a RECOVERY day it is the day\'s act — its card is back', () => {
+  it('returns only on a RECOVERY day, where a run IS the day\'s act', () => {
     const r = mount(<HomeView {...props({ resting: true, dayName: null })} />);
     expect(byLabel(r, tg('cardio.title'))).not.toBeNull();
   });
@@ -385,22 +404,27 @@ describe('the screen does not stutter', () => {
    * where a name is worth most — a bare "Begin" under six named lifts would be the button declining
    * to say what it is about to start.
    */
-  it('the primary act names the workout — the second of exactly two mentions', () => {
+  it('the primary act names the workout', () => {
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
     expect(said).toContain(tg('home.begin', { name: bidi('Pull A') }));
   });
 
-  it('the queued workout is named exactly TWICE: the hero (what you are doing) + its chip (where it sits)', () => {
+  it('the queued workout is named THREE times: the serif headline, the act, and its lit chip', () => {
+    // v7 (2026-07-22) restores the big serif headline, so the name is set THREE places on purpose:
+    // the coach names the session (title), the button says it as it starts it, and the lit chip
+    // says it a third time only while it is the selection. That is hierarchy, not an echo.
     const named = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('Pull A'));
-    expect(named).toHaveLength(2);
+    expect(named).toHaveLength(3);
   });
 
-  it("the week's count is stated ONCE — and the chips SHOW it, which is why the meter went", () => {
-    // Unchanged law, moved home. The chips always drew this: four chips with one checked IS 1 / 4,
-    // and the meter's bar was a second picture of it directly above them. The bar is gone; the
-    // figures returned to the card head, which is now the only place they are stated.
+  it('training Home carries NO numeric week meter — the chips are the only picture of the count', () => {
+    // v7 dissolved the week card, and with it the "1 / 3" meter. The chips (one per workout, the
+    // done one checked) ARE the count now; a numeric meter above them would be a second picture of
+    // the same fact. (The meter survives only in RECOVERY, where "3 / 3" is the closing verdict.)
     const counted = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('/ 3'));
-    expect(counted).toHaveLength(1);
+    expect(counted).toHaveLength(0);
+    const r = mount(<HomeView {...props()} />);
+    for (const w of WORKOUTS) expect(byLabel(r, w.name)).not.toBeNull();
   });
 
   it('an INTERRUPTED session keeps its name — there it is a fact, not an echo', () => {

@@ -5,7 +5,7 @@
  * Founder 2026-07-12: the bordered well read as a generic form field — the one place the
  * instrument looked like everybody else's app. A single baseline under the text is what an
  * instrument does: the value sits ON something, the way a figure sits on a scale. The rule
- * inks up and turns ochre on focus, so the active field is unmistakable without a box, and
+ * inks up and turns moss on focus, so the active field is unmistakable without a box, and
  * the type itself steps up to display size — the athlete's name is the largest thing on
  * the screen, because it is the answer.
  */
@@ -36,7 +36,9 @@ export function TextField({ label, block, style, onFocus, onBlur, ...input }: Pr
             onBlur?.(e);
           }}
           placeholderTextColor={color.textTertiary}
+          // v7 1.2: the caret is moss — selectionColor carries it on iOS, cursorColor on Android.
           selectionColor={color.accent}
+          cursorColor={color.accent}
           style={styles.input}
         />
       </View>

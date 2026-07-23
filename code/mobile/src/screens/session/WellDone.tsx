@@ -52,6 +52,7 @@ import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
+import { recordCardFromHistory } from '@/domain/shareCard';
 import { strengthSessionKcal } from '@/domain/energy';
 import { durationMinutes } from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
@@ -177,6 +178,10 @@ export function WellDone({ navigation, route }: Props) {
     () => (history ? newlyEarned(history, app.profile)[0] ?? null : null),
     [history, app.profile],
   );
+  // Did THIS session set a personal record worth showing? (domain/shareCard — a real new all-time
+  // load, never fabricated.) When it did, the closing beat offers to post it (§9.1); when it did
+  // not, there is simply nothing to share and no affordance appears.
+  const recordCard = useMemo(() => (history ? recordCardFromHistory(history, units) : null), [history, units]);
   const celebrated = useRef(false);
   const pendingExit = useRef<(() => void) | null>(null);
   /** An exit the athlete asked for before the history had been read (see `leave`). */
@@ -448,6 +453,14 @@ export function WellDone({ navigation, route }: Props) {
   const durationMs = summary?.durationMs ?? 0;
   // Honest MET estimate (domain/energy) — absent bodyweight ⇒ no number, never a guess.
   const kcal = strengthSessionKcal(durationMs, app.profile?.weightKg);
+  // TOTAL MOVED — the third stat the handoff strikes beside MIN and KCAL (v7 2.5: "11.7 T MOVED").
+  // Pure arithmetic on the saved sets (weight × reps, summed), expressed in metric tonnes — the
+  // conventional unit for training volume and the product's native measure. A bodyweight-only
+  // session moves no barbell tonnage, so it earns no figure rather than a hollow zero.
+  const tonnesMoved = (() => {
+    const kg = (session?.sets ?? []).reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
+    return kg > 0 ? +(kg / 1000).toFixed(1) : null;
+  })();
 
   return (
     <View style={styles.root}>
@@ -523,12 +536,27 @@ export function WellDone({ navigation, route }: Props) {
                 <Metric onStage value={kcal} unit={t('complete.kcal')} label={t('complete.caloriesEst')} size="md" />
               </View>
             ) : null}
+            {tonnesMoved != null ? (
+              <View style={styles.stat}>
+                <Metric onStage value={tonnesMoved} unit={t('complete.tonneUnit')} label={t('complete.moved')} size="md" />
+              </View>
+            ) : null}
           </View>
 
         </ScrollView>
 
         <View style={styles.footer}>
           <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={() => leave(goHome)} />
+          {recordCard ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('share.shareRecord')}
+              onPress={() => navigation.navigate('ShareCardModal', { card: recordCard })}
+              style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
+            >
+              <Text style={styles.ghostLabel}>{t('share.shareRecord')}</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('complete.viewRecord')}
@@ -554,8 +582,11 @@ const styles = StyleSheet.create({
   // beats 1+2
   savedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  savedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up[0], textAlign: 'left' },
-  savedTitle: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], lineHeight: Math.round(textScale['3xl'] * 1.02), letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: stage.ink0, marginTop: 14, textAlign: 'left' },
+  // LIT moss on the dark stage (v7 "· SAVED" is #A9C49F). `up[0]` is PAPER moss — near-invisible
+  // here; the stage screens were never part of the READOUT ladder inversion.
+  savedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up.stage, textAlign: 'left' },
+  // v7: the closing line is the coach's serif voice, not a sans headline.
+  savedTitle: { fontFamily: font.serif, fontSize: textScale['3xl'], lineHeight: Math.round(textScale['3xl'] * 1.1), letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: stage.ink0, marginTop: 14, textAlign: 'left' },
   stillOpen: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: stage.ink2, marginTop: 10, textAlign: 'left' },
   reading: { marginTop: 34 },
   readingHead: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
@@ -577,7 +608,8 @@ const styles = StyleSheet.create({
 
   // beat 3
   resultScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16, flexGrow: 1, justifyContent: 'center' },
-  resultTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: Math.round(textScale['2xl'] * 1.05), color: stage.ink0, marginTop: 12, textAlign: 'left' },
+  // v7 2.5: "That's the work." is Frank Ruhl Libre serif, ~46px — the workout's closing sentence.
+  resultTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: stage.ink0, marginTop: 12, textAlign: 'left' },
   copy: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: stage.ink1, marginTop: 10, maxWidth: 320, textAlign: 'left' },
 
   topCard: { marginTop: 22, padding: 16, borderRadius: radius.lg, backgroundColor: stage[1] },
@@ -618,7 +650,8 @@ const styles = StyleSheet.create({
   milestoneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   milestoneLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
   milestoneEmblem: { marginTop: 36, marginBottom: 36 },
-  milestoneTitle: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: Math.round(textScale['2xl'] * 1.08), color: stage.ink0, textAlign: 'center' },
+  // v7: the milestone's fact is stamped in the coach's serif voice.
+  milestoneTitle: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), lineHeight: Math.round(textScale['2xl'] * 1.12), color: stage.ink0, textAlign: 'center' },
   milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', marginTop: 10, maxWidth: 300 },
   milestoneDate: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, marginTop: 18, textAlign: 'left' },
 

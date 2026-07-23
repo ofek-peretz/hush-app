@@ -495,28 +495,31 @@ const styles = StyleSheet.create({
 
   // The index line (height + offset come from anchorGeometry).
   //
-  // This was the ochre, and it was the last honest argument for keeping one: an index
-  // mark on a measuring rule is exactly what a Leica's red line IS. It loses anyway,
-  // for a reason that outranks the analogy — the founder has said the wordmark itself
-  // may not survive (2026-07-17), so nothing load-bearing may depend on the brand's
-  // colour. The line is the most load-bearing mark in the product: it is what says
-  // *this is your number*. It gets the strongest ink its world has, in both worlds.
+  // This was the ochre; in v5 it went cream, because the wordmark itself might not survive
+  // (2026-07-17) and nothing load-bearing could depend on a brand HUE. v7 changes the premise,
+  // not the principle: MOSS is no longer a brand mark, it is the app's SOLE semantic signal —
+  // the rise, the live timer, the rep-range band all speak in it. So the line is re-hued to
+  // moss, matching the handoff, which strikes the chosen value with a single moss tick on every
+  // wheel (1.4 the onboarding rulers, 2.2b the in-workout edit). The line is still the most
+  // load-bearing mark in the product — it is what says *this is your number* — and it now gets
+  // the one accent the whole app reserves for meaning. Both worlds sit on the dark stage.
   anchor: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center' },
-  anchorLine: { width: 2, borderRadius: 1, backgroundColor: color.textPrimary },
-  anchorLineStage: { backgroundColor: stage.ink0 },
+  anchorLine: { width: 2, borderRadius: 1, backgroundColor: color.accent },
+  anchorLineStage: { backgroundColor: color.accent },
 
   // The unit sits in its own bordered cell, separate from the scrolling digits.
   unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
   // UNDER THE FINGER, THE RULE LIFTS. The instrument lighting up used to be an ochre
   // tint; now it is the law itself — the thing being touched moves toward the light,
-  // away from the ground. Same gesture on the stage, same direction.
-  wrapLive: { borderColor: color.textPrimary, backgroundColor: color.lift },
+  // away from the ground. On the dark stage the lift is a BRIGHTER translucent-cream
+  // raise (not full paper: cream numerals must stay legible on it), ringed in cream.
+  wrapLive: { borderColor: color.borderStrong, backgroundColor: color.surface3 },
   wrapLiveStage: { borderColor: stage.ink0, backgroundColor: stage[1] },
 
   // Inverted "stage" treatment — graphite surface + ink.
   wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
-  unitBoxLive: { backgroundColor: color.lift, borderStartColor: color.border },
+  unitBoxLive: { backgroundColor: color.surface3, borderStartColor: color.border },
   unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
   unitStage: { color: stage.ink2 },
 });

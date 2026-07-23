@@ -2,32 +2,13 @@
  * SegmentedControl — the primary choice control (units, language, days/week).
  * A single decisive selection.
  *
- * ════ THE CHOICE LIFTS ════ (2026-07-17, and this reverses a ruling — read on)
+ * ════ THE CHOICE LIFTS INTO THE LIGHT ════ (v7)
  *
- * The selected segment is `color.lift` — white — on a `fillSubtle` well. A settled
- * choice is a fact, and facts are not coloured; the chosen one is simply the thing
- * closest to the athlete.
- *
- * **This is the second time this has been tried.** The first (pre-2026-07-13) put a
- * white card on a grey track and it FAILED on a device: the language switch on the
- * front door "hid from the eye", and the founder replaced it with the ochre fill.
- * That rejection was right, and the diagnosis was wrong. The card did not hide
- * because white-on-grey cannot work — it hid because THE PAGE WAS ALREADY WHITE:
- *
- *     old   card #ffffff vs page #fbfaf8  =   4.3 points of luminance
- *     new   lift #ffffff vs ground #e8e5e0 = 21.4 points   ← 5×
- *
- * Nothing can lift off a surface that is already at 95.7%. The ochre was a bandage
- * on an upside-down ladder (see `paper` in tokens.ts), treating the symptom of a
- * bug the founder himself found on 2026-07-17. With the ground at 78.6% the
- * original cure works, five times harder than it could before.
- *
- * The track needs no border: it is a well, and a well is already separated by tone.
- * That is the same law the stage has always used.
- *
- * ⚠️ THIS ONE WANTS THE FOUNDER'S EYE ON A DEVICE. It is the only element being
- * restored after a device rejection. Look at the language switch on the sign-in
- * first. If it hides again, the reasoning above is wrong and the fill comes back.
+ * The track is a shallow translucent-cream well on the stage; the selected segment
+ * is a slightly brighter cream raise carrying a subtle shadow — it steps toward the
+ * light. A settled choice is a fact, not a hue, so it isn't moss-filled; it is
+ * simply the thing closest to the athlete. The selected label is full cream, the
+ * rest rest in shadow.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
@@ -81,9 +62,9 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
-    // A well. Separated from the ground by tone — no border. See the header.
+    // A shallow translucent-cream well on the stage — no border, tone alone. See the header.
     backgroundColor: color.fillSubtle,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     padding: 3,
     gap: 2,
   },
@@ -95,14 +76,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space[2],
     paddingHorizontal: space[4],
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
   },
   icon: { alignItems: 'center', justifyContent: 'center' },
   itemBlock: { flex: 1 },
   itemStack: { flex: 0, alignItems: 'flex-start', justifyContent: 'center', width: '100%' },
-  // 21.4 points above the ground, 29.6 above its own track. It cannot hide.
-  itemActive: { backgroundColor: color.lift, ...(shadow.md as object) },
-  label: { fontFamily: font.sansMedium, color: color.textSecondary, textAlign: 'left' },
-  // Ink on white: 17.5:1. The old cream-on-ochre was 2.6:1.
+  // The settled choice: a brighter translucent-cream raise stepping toward the light,
+  // carrying the warm shadow. NOT full paper — bright cream is reserved for the primary action.
+  itemActive: { backgroundColor: color.surface3, ...(shadow.md as object) },
+  label: { fontFamily: font.sansMedium, color: color.textMuted, textAlign: 'left' },
+  // Full cream on the raise; the unselected rest in shadow.
   labelActive: { fontFamily: font.sansSemibold, color: color.textPrimary, textAlign: 'left' },
 });

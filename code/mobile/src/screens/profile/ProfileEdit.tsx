@@ -145,7 +145,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 4, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headerTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, textAlign: 'left' },
+  // v7 (2026-07-22): the edit screen's headline is the serif — the coach's voice.
+  headerTitle: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 6, paddingBottom: 24 },
   sub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, marginBottom: 16, textAlign: 'left' },

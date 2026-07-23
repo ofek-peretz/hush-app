@@ -12,6 +12,7 @@
  */
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CardioActivity, OnboardingInputs, SessionSummary } from '@/data/local/models';
+import type { ShareCard } from '@/domain/shareCard';
 
 /** Profile fields gathered in onboarding — from HealthKit (granted) or Manual Info. */
 export interface OnboardingProfileDraft {
@@ -57,16 +58,20 @@ export type OnboardingParamList = {
  * everything deeper is pushed ABOVE them on `MainParamList`, where the bar is absent.
  */
 export type HomeTabsParamList = {
-  Home: undefined;
+  // TODAY — the daily loop (the Home component). Renamed from "Home" in v7: the tab bar carries a
+  // measured-range mark under it and the design calls the destination "Today".
+  Today: undefined;
+  // CARDIO — a launcher tab. Open training is a full-screen STAGE (no tab bar during a live run),
+  // so this tab intercepts its own press and pushes the Main-stack Cardio screen instead of
+  // rendering anything itself (Root.tsx). The working run/walk flow is untouched.
+  Cardio: undefined;
   // Progression report (founder, 2026-06-21). Default = all-time + the milestones gallery;
   // `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens (the former
-  // QuarterlyReport screen, merged in here 2026-07-15).
+  // QuarterlyReport screen, merged in here 2026-07-15). History folds into this surface in v7.
   Progress: { window?: 'all' | 'quarter' } | undefined;
-  History: undefined;
-  // Settings (ProfileSheet) is a tab now, not a modal — a peer surface you return to, not a
-  // one-off sheet. Its back button is gone with the modal presentation (a tab has nowhere to go
-  // back TO); it exits by tapping another tab.
-  Settings: undefined;
+  // YOU (ProfileSheet) — a peer surface you return to, not a one-off sheet. It exits by tapping
+  // another tab. Renamed from "Settings" in v7.
+  You: undefined;
 };
 
 export type MainParamList = {
@@ -77,6 +82,9 @@ export type MainParamList = {
   Cardio: undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
+  // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
+  // Progress surface and is pushed here on the Main stack (opened from Progress).
+  History: undefined;
   // Edit body data after onboarding (opened from Settings).
   ProfileEdit: undefined;
   /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
@@ -91,4 +99,8 @@ export type MainParamList = {
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
   Paywall: { source: 'gate' | 'profile' } | undefined;
+  // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
+  // modal over whatever surfaced it (a completed workout, the week's close). `card` carries the
+  // already-derived facts (domain/shareCard); the screen renders and captures, deriving nothing.
+  ShareCardModal: { card: ShareCard };
 };

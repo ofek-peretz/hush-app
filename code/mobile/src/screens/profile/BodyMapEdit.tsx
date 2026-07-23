@@ -43,7 +43,7 @@ import { validateMap, emphasisMuscles, type BodyMap } from '@/engine/v5/bodyMap'
 import { CANONICAL_MUSCLE_ORDER, EMPHASIS_BUDGET } from '@/engine/v5/constants';
 import * as haptics from '@/platform/haptics';
 import type { RepBandChoice } from '@/data/local/models';
-import { color, font, textScale, space, radius } from '@/design/tokens';
+import { color, font, textScale, space, radius, tracking, trackingPx } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'BodyMapEdit'>;
@@ -131,7 +131,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: space.gutter, paddingVertical: space[3] },
-  title: { fontFamily: font.sansBold, fontSize: textScale.xl, color: color.textPrimary, textAlign: 'left' },
+  // v7 (2026-07-22): the editor's headline is the serif — the coach's voice.
+  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
   body: { paddingHorizontal: space.gutter, paddingBottom: space[6], gap: space[4] },
   sub: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 22, textAlign: 'left' },
   foot: { paddingHorizontal: space.gutter, paddingTop: space[3], paddingBottom: space[2], gap: space[3] },

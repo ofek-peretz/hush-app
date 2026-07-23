@@ -24,8 +24,11 @@ interface Props {
   onStage?: boolean;
 }
 
+// v7 (2026-07-22): the triple always sits on the dark stage now (the Saturday letter, the
+// session read-back), so the tone marks take the LIT variants — `up[0]`/`down[0]` are the paper
+// tones, near-invisible on the dark. Moss for a rise, clay for a match-down, moss accent for a swap.
 function toneColor(kind: WhyKind): string {
-  return kind === 'up' ? up[0] : kind === 'down' ? down[0] : kind === 'swap' ? color.accentText : color.textPrimary;
+  return kind === 'up' ? up.stage : kind === 'down' ? down.stage : kind === 'swap' ? color.accentText : color.textPrimary;
 }
 
 export function WhyTriple({ saw, means, did, kind = 'neutral', onStage = false }: Props) {

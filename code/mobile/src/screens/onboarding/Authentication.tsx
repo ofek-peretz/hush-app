@@ -123,9 +123,10 @@ export function Authentication({ navigation }: Props) {
           />
           <HushMark size={46} />
         </View>
+        {/* v7 1.1: just "hush" in the coach's serif — no trailing moss dot. The moss on this
+            screen lives once, in the mark's halo above (the pulse ring), not after the word. */}
         <View style={[styles.brand, styles.brandSpacing]}>
           <Text style={styles.wordmark}>hush</Text>
-          <View style={styles.dot} />
         </View>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
             This was a boast — "The best training experience in the world." — above the deal that
@@ -134,6 +135,10 @@ export function Authentication({ navigation }: Props) {
             better in every way — first person, provable, and it IS the promise. So it takes the
             size the boast was wearing, and the boast is gone. */}
         <Text style={styles.promise}>{t('ob.signinTagline')}</Text>
+        {/* v7 1.1: the coach's affirmation under the promise — spaced small caps, the mono
+            "voice" of a legend. SANS, not mono: it carries a translated word, and mono in this
+            app holds only digits/units (monoCarriesNoWords). */}
+        <Text style={styles.affirm}>{t('ob.signinAffirm')}</Text>
       </View>
       <View style={styles.actions}>
         {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
@@ -245,17 +250,28 @@ const styles = StyleSheet.create({
   // Brand lockup stays LTR ("Hush·") in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
   brandSpacing: { marginTop: 18 },
-  wordmark: { fontFamily: font.sansSemibold, fontSize: 44, letterSpacing: trackingPx(44, tracking.display), color: color.textPrimary, textAlign: 'left' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: signal[0], marginLeft: 4, marginBottom: 9 }, // rtl-ok: inside LTR brand lockup
+  // v7: the wordmark is the coach's serif, matching the "hush" on Home — not a sans logotype.
+  wordmark: { fontFamily: font.serif, fontSize: 52, letterSpacing: trackingPx(52, tracking.display), color: color.textPrimary, textAlign: 'left' },
+  // v7: the promise is spoken — italic serif, the coach's voice, one breath.
   promise: {
-    fontFamily: font.sansSemibold,
-    fontSize: textScale.lg,
-    lineHeight: 28,
-    letterSpacing: trackingPx(textScale.lg, tracking.tight),
+    fontFamily: font.serif,
+    fontStyle: 'italic',
+    fontSize: textScale.xl,
+    lineHeight: 32,
     color: color.textPrimary,
     textAlign: 'center',
     marginTop: 20,
     maxWidth: 300,
+  },
+  // The affirmation: spaced small caps in the muted cream, a legend's cadence (handoff .22em).
+  affirm: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale['2xs'],
+    letterSpacing: trackingPx(textScale['2xs'], 0.22),
+    textTransform: 'uppercase',
+    color: color.textMuted,
+    textAlign: 'center',
+    marginTop: 22,
   },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },

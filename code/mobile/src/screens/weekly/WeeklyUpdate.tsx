@@ -25,7 +25,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { IconButton, Legend, Button } from '@/components/ds';
+import { IconButton, Legend, Button, Metric } from '@/components/ds';
 import { WhyTriple, type WhyKind } from '@/components/WhyTriple';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -35,6 +35,8 @@ import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPl
 import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
+import { currentWeekOpen } from '@/domain/weekCadence';
+import { strengthSessionKcal } from '@/domain/energy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { bidi } from '@/i18n/bidi';
 import type { Session, Units } from '@/data/local/models';
@@ -48,6 +50,20 @@ type Props = NativeStackScreenProps<MainParamList, 'WeeklyUpdate'>;
 const fmtLoad = (n: number | null, units: Units): string =>
   n == null ? 'BW' : String(+((displayWeight(n, units) ?? 0).toFixed(2)));
 const rangeStr = (r: [number, number]): string => `${r[0]}-${r[1]}`;
+
+// The letter's fact band (v7 3.1): "4/4 WORKOUTS · 46.8 t MOVED · 3,120 KCAL". Computed as display
+// arithmetic on the logged week, never through the engine — the mirror reports what happened, and a
+// wall-clock duration (first set-start → last set persisted) is the honest input the kcal MET estimate
+// already runs on elsewhere.
+type WeekBand = { done: number; planned: number; tonnes: number; kcal: number | null };
+const sessionDurationMs = (s: Session): number => {
+  const start = new Date(s.startedAt).getTime();
+  let end = start;
+  for (const set of s.sets ?? []) {
+    if (set.persistedAt) end = Math.max(end, new Date(set.persistedAt).getTime());
+  }
+  return Math.max(0, end - start);
+};
 
 export function WeeklyUpdate({ navigation }: Props) {
   const { t } = useCopy();
@@ -193,6 +209,52 @@ export function WeeklyUpdate({ navigation }: Props) {
     }
   }
 
+  /**
+   * THE WEEK'S FACTS (v7 3.1). The mirror opens with the numbers the week actually earned — workouts
+   * done of planned, tonnage moved, calories — a border-bound band under "Week six.". Display-only:
+   * computed from the logged history and the on-disk program, never from an engine type.
+   */
+  const [band, setBand] = useState<WeekBand | null>(null);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [history, program] = await Promise.all([
+          db.loadHistory(),
+          db.loadProgram().catch(() => app.program),
+        ]);
+        if (!active) return;
+        const weekEnd = currentWeekOpen(Date.now());
+        const weekStart = weekEnd - 7 * 24 * 60 * 60 * 1000;
+        const inWeek = (history ?? []).filter((s) => {
+          const at = new Date(s.startedAt).getTime();
+          return at >= weekStart && at < weekEnd;
+        });
+        // "N/M workouts" counts whole workouts trained (the workout-count rule: trained !== false).
+        const done = inWeek.filter((s) => s.trained !== false).length;
+        const planned = program ? program.days.filter((d) => !d.isRest).length : 0;
+        let kg = 0;
+        let kcal = 0;
+        let kcalSeen = false;
+        for (const s of inWeek) {
+          for (const set of s.sets ?? []) kg += (set.actualWeight ?? 0) * set.actualReps;
+          const k = strengthSessionKcal(sessionDurationMs(s), app.profile?.weightKg);
+          if (k != null) {
+            kcal += k;
+            kcalSeen = true;
+          }
+        }
+        setBand({ done, planned, tonnes: +(kg / 1000).toFixed(1), kcal: kcalSeen ? kcal : null });
+      } catch {
+        if (active) setBand(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const changedCount = view?.changedCount ?? 0;
   const whenLabel = view
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
@@ -213,6 +275,19 @@ export function WeeklyUpdate({ navigation }: Props) {
         {/* A letter opens with the name of the person it is written to (founder 2026-07-13). */}
         {name ? <Text style={styles.vocative}>{t('common.vocative', { name: bidi(name) })}</Text> : null}
         <Text style={styles.title}>{view ? t('weekly.weekTitle', { n: view.weekIndex + 1 }) : t('weekly.title')}</Text>
+
+        {/* THE WEEK'S FACTS (v7 3.1) — the band that follows the headline: workouts / tonnage / kcal.
+            Mono figures via Metric (the law: mono carries no words, so each label rides in sans). */}
+        {band && (band.planned > 0 || band.done > 0) ? (
+          <View style={styles.statBand}>
+            <Metric onStage size="sm" value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
+            <Metric onStage size="sm" value={band.tonnes} unit={t('weekly.tonneUnit')} label={t('weekly.statMoved')} />
+            {band.kcal != null ? (
+              <Metric onStage size="sm" value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} />
+            ) : null}
+          </View>
+        ) : null}
+
         <Text style={styles.intro}>
           {steady ? t('weekly.evidenceIntro') : t('weekly.intro', { count: changedCount })}
         </Text>
@@ -267,7 +342,7 @@ export function WeeklyUpdate({ navigation }: Props) {
                 <View style={styles.volumeTop}>
                   <Text style={styles.volumeMuscle}>{t(`muscle.${v.muscle}`)}</Text>
                   <View style={styles.evidenceMoveRow}>
-                    <Text style={[styles.volumeMove, { color: v.setsTo > v.setsFrom ? up[0] : down[0] }]}>
+                    <Text style={[styles.volumeMove, { color: v.setsTo > v.setsFrom ? up.stage : down.stage }]}>
                       {`${v.setsFrom} → ${v.setsTo}`}
                     </Text>
                     <Text style={styles.evidenceUnit}>{t('weekly.setsUnit')}</Text>
@@ -314,6 +389,10 @@ export function WeeklyUpdate({ navigation }: Props) {
             <Text style={styles.evidenceClose}>{t('weekly.evidenceEmpty')}</Text>
           )
         ) : null}
+
+        {/* THE SIGN-OFF (v7 2026-07-22). This screen is framed as a letter throughout — it opens
+            with the athlete's name; it closes the way a letter closes, in the coach's own hand. */}
+        {loaded ? <Text style={styles.signature}>{t('weekly.signature')}</Text> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -336,7 +415,7 @@ function LiftRow({ lift, open, onToggle }: { lift: WeeklyPlanLift; open: boolean
   const rangeChanged = !!ch && (ch.rangeFrom[0] !== ch.rangeTo[0] || ch.rangeFrom[1] !== ch.rangeTo[1]);
   const prominent = loadChanged || setsChanged || rangeChanged || swapped;
   const tone: WhyKind = swapped ? 'swap' : loadChanged ? (ch!.loadTo! >= (ch!.loadFrom ?? -Infinity) ? 'up' : 'down') : 'neutral';
-  const loadColor = tone === 'up' ? up[0] : tone === 'down' ? down[0] : color.textPrimary;
+  const loadColor = tone === 'up' ? up.stage : tone === 'down' ? down.stage : color.textPrimary;
 
   const toLoad = ch ? ch.loadTo : lift.loadKg;
   const sets = ch ? ch.setsTo : lift.sets;
@@ -449,8 +528,22 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: space.gutter, paddingBottom: 20 },
   eyebrow: { marginTop: 12, marginBottom: 10 },
   vocative: { fontFamily: font.sans, fontSize: textScale.lg, color: color.textSecondary, textAlign: 'left', marginBottom: 2 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale['3xl'], letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: color.textPrimary, lineHeight: textScale['3xl'] * 1.02, textAlign: 'left' },
+  // v7 (2026-07-22): the letter's headline is the COACH's voice — the serif ("Week six."), not UI
+  // chrome. It opens the mirror, so it carries the size of a statement.
+  title: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), color: color.textPrimary, lineHeight: 46, textAlign: 'left' },
   intro: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, maxWidth: 340, textAlign: 'left' },
+
+  // The week's facts (v7 3.1) — three mono figures bound top and bottom by a hairline, sitting
+  // directly beneath the headline before the letter's prose begins.
+  statBand: {
+    flexDirection: 'row',
+    gap: 26,
+    marginTop: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: color.borderStrong,
+  },
 
   workout: { marginTop: 24 },
   workoutHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: color.borderStrong },
@@ -517,10 +610,13 @@ const styles = StyleSheet.create({
   },
   evidenceName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   // A measurement, in the measuring voice — and it is a RISE, so it is sage.
-  evidenceMove: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: up[0], textAlign: 'left' },
+  evidenceMove: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, color: up.stage, textAlign: 'left' },
   evidenceMoveRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
   evidenceUnit: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
   evidenceClose: { marginTop: 22, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, textAlign: 'left' },
+
+  // The coach's hand — the serif, closing the letter. Quiet, set apart from the last line above it.
+  signature: { marginTop: 28, fontFamily: font.serif, fontSize: textScale.lg, color: color.textSecondary, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
 });

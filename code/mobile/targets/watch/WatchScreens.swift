@@ -1,12 +1,13 @@
 import SwiftUI
 import WatchKit
 
-// SwiftUI realization of the Claude Design watch (ui_kits/watch) — "the same
-// instrument, on the wrist." The watch IS the inverted "stage": a warm graphite
-// surface, off-white ink, ONE ochre signal, sage/clay load deltas, and mono numbers
-// (the load is the largest mark on any Hush surface). Six live screens + the carried-
-// over Choose / Edit / Swap / Pause. The phone is the sole authority; every button
-// proposes an intent.
+// SwiftUI realization of the Hush watch — "the same instrument, on the wrist." Under v7
+// (All Dark · One Lit Stage) the PHONE became a dark stage too, so the two surfaces have
+// converged: a warm near-black ground, cream ink, ONE MOSS accent (ochre is retired app-
+// wide — tokens.ts holds none), moss/clay load deltas, and mono numbers (the load is the
+// largest mark on any Hush surface). The primary action is CREAM standing on the dark
+// stage, not a hued fill. Six live screens + the carried-over Choose / Edit / Swap / Pause.
+// The phone is the sole authority; every button proposes an intent.
 //
 // Execution screens page HORIZONTALLY (founder 2026-07-10, the Apple Workout idiom):
 // swipe right → the Controls page (big Pause / End + live Elapsed / Heart / Kcal from
@@ -30,32 +31,31 @@ enum Fit {
   static func s(_ v: CGFloat) -> CGFloat { (v * factor).rounded() }
 }
 
-// MARK: Palette (stage tokens)
+// MARK: Palette (v7 stage tokens — mirror of the phone's design/tokens.ts)
 
 enum Palette {
-  static let stage0 = Color(red: 0.098, green: 0.090, blue: 0.078) // bg
-  static let stage1 = Color(red: 0.145, green: 0.133, blue: 0.122) // raised / card
-  static let stage2 = Color(red: 0.208, green: 0.196, blue: 0.180) // line / track
-  static let ink0 = Color(red: 0.957, green: 0.953, blue: 0.941) // primary text
-  static let ink1 = Color(red: 0.702, green: 0.694, blue: 0.678) // secondary
-  static let ink2 = Color(red: 0.463, green: 0.455, blue: 0.443) // muted
-  /// The active thing on the stage — the mirror of the phone's `stage.lift`. The v5 READOUT law:
-  /// emphasis is DISTANCE FROM THE GROUND, never a hue. Pure white is the brightest value the
-  /// stage has, and it is reserved for the news (today: the corrected load).
+  static let stage0 = Color(red: 0.075, green: 0.071, blue: 0.063) // stage[0] #131210 — the ground
+  static let stage1 = Color(red: 0.106, green: 0.098, blue: 0.078) // stage[1] #1b1914 — raised / card
+  static let stage2 = Color(red: 0.165, green: 0.157, blue: 0.133) // stage[2] #2a2822 — line / track
+  static let ink0 = Color(red: 0.945, green: 0.933, blue: 0.898) // cream[0] #f1eee5 — primary text
+  static let ink1 = Color(red: 0.659, green: 0.635, blue: 0.565) // cream[1] #a8a290 — secondary
+  static let ink2 = Color(red: 0.545, green: 0.518, blue: 0.455) // cream[2] #8b8474 — muted
+  /// Pure white — the brightest value the stage has, reserved for the news (the corrected load).
+  /// v7 keeps the READOUT law: emphasis is standing in the light, never a hue (`stage.lift`).
   static let lift = Color.white
-  static let signal = Color(red: 0.800, green: 0.569, blue: 0.278) // ochre accent — lines, rings, dots
-  /// The ochre a letter sits on — and it is THE ochre (founder 2026-07-13, final): the deeper
-  /// #9c6522 cut reached a device and was rejected ("bring back the familiar brown — this dark
-  /// brown is not pretty"). One brown on every surface, phone and wrist. In step with the phone's
-  /// `signal.fill`; see design/tokens.ts for the full ruling and its bounded contrast cost.
-  static let signalFill = signal
-  static let signalFillPressed = Color(red: 0.780, green: 0.502, blue: 0.169) // #c7802b
-  /// Cream — the ink on `signalFill`.
-  static let onAccent = Color(red: 0.984, green: 0.980, blue: 0.973)
-  static let up = Color(red: 0.349, green: 0.498, blue: 0.376) // sage (increase)
-  static let upWash = Color(red: 0.890, green: 0.945, blue: 0.898)
-  static let down = Color(red: 0.627, green: 0.376, blue: 0.298) // clay (decrease)
-  static let downWash = Color(red: 0.996, green: 0.914, blue: 0.882)
+  /// MOSS — THE accent (phone `signal[0]` / `up.stage` #a9c49f). Marks a selection, a landed tick,
+  /// the live ring, a toggle that's on. Ochre is retired: v7's tokens.ts holds none.
+  static let signal = Color(red: 0.663, green: 0.769, blue: 0.624) // lit moss #a9c49f
+  /// The PRIMARY BUTTON ground is CREAM now (phone `signal.fill` #f1eee5) — light standing on the
+  /// dark stage, not a hued fill. The label on it is stage ink (`onAccent`).
+  static let signalFill = Color(red: 0.945, green: 0.933, blue: 0.898) // cream #f1eee5
+  static let signalFillPressed = Color(red: 0.890, green: 0.871, blue: 0.816) // #e3ded0
+  /// Stage ink — the label on the cream primary button (phone `color.onAccent` = stage[0]).
+  static let onAccent = Color(red: 0.075, green: 0.071, blue: 0.063)
+  static let up = Color(red: 0.663, green: 0.769, blue: 0.624) // moss on stage #a9c49f (increase)
+  static let upWash = Color(.sRGB, red: 0.663, green: 0.769, blue: 0.624, opacity: 0.12) // faint moss veil
+  static let down = Color(red: 0.816, green: 0.502, blue: 0.392) // clay on stage #d08064 (decrease)
+  static let downWash = Color(.sRGB, red: 0.773, green: 0.416, blue: 0.306, opacity: 0.12) // faint clay veil
 }
 
 private enum EditField { case weight, reps }

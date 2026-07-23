@@ -10,13 +10,15 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import { ProgressReportView } from '@/screens/progress/ProgressReportView';
+import { ProgressLifts } from '@/screens/progress/ProgressLifts';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { allTimePeakProgress, quarterlyPeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
-import { trainingWeekNumber } from '@/domain/weekCadence';
-import { earnedMilestones, nextUp } from '@/domain/milestones';
-import type { Session } from '@/data/local/models';
+import { progressAggregate, type ProgressAggregate } from '@/domain/progressAggregate';
+import { trainingWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
+import { weekCardFromHistory } from '@/domain/shareCard';
+import type { Session, CardioActivity } from '@/data/local/models';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
 // A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
@@ -31,10 +33,13 @@ export function Progress({ navigation, route }: Props) {
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [cardio, setCardio] = useState<CardioActivity[]>([]);
   const quarter = route.params?.window === 'quarter';
 
   useEffect(() => {
     db.loadHistory().then(setSessions);
+    // The all-time lens sums cardio into its lifetime burn + distance badges; load it alongside.
+    db.loadCardio().then(setCardio).catch(() => setCardio([]));
   }, []);
 
   const entries = useMemo<QuarterlyProgressEntry[]>(
@@ -45,28 +50,48 @@ export function Progress({ navigation, route }: Props) {
     [sessions, quarter],
   );
 
-  // The 12-week view reads "Weeks N–M"; the all-time view keeps its own legend + the milestones
-  // gallery (earned stamps + each family's next silhouette), derived — never stored — from the same
-  // history. The club ladders are the athlete's own (cut from their onboarding answers), so the
-  // profile is an input here exactly as the history is (founder 2026-07-13). The quarterly window
-  // shows no milestones (they are lifetime facts — as the former QuarterlyReport did).
-  const profile = app.profile;
-  const week = trainingWeekNumber(profile?.memberSince, Date.now());
-  const legend = quarter ? t('report.weekRange', { from: Math.max(1, week - 11), to: week }) : t('progress.legend');
-  const title = quarter ? t('report.title') : t('progress.title');
-  const milestones = useMemo(
-    () => (quarter || !sessions ? null : { earned: earnedMilestones(sessions, profile), next: nextUp(sessions, profile) }),
-    [sessions, profile, quarter],
+  // The all-time aggregate (tonnage hero, weekly-volume series, milestone badges). Display-only:
+  // computed from history + cardio + the account's start, never from an engine type.
+  const aggregate = useMemo<ProgressAggregate | null>(
+    () =>
+      sessions && !quarter
+        ? progressAggregate(sessions, cardio, app.profile?.memberSince, app.profile?.weightKg, Date.now())
+        : null,
+    [sessions, cardio, quarter, app.profile?.memberSince, app.profile?.weightKg],
   );
 
+  // THE ALL-TIME LENS IS THE v7 "Progress · Lifts" screen (3.2): the tonnage hero, the weekly-volume
+  // graph, and the aggregate milestone badges — which REPLACE the old emblem gallery (the handoff is
+  // the source of truth). "Log" opens the history ledger. The every-12-weeks notification still opens
+  // the legacy peak-comparison report in its quarterly window.
+  if (!quarter) {
+    // §9.2 — the week's share card, from THIS training week's logged work (null when the week is
+    // still empty, so the affordance simply doesn't appear). Derived here where the raw sessions
+    // and bodyweight live; ProgressLifts only receives the opener.
+    const weekCard = sessions
+      ? weekCardFromHistory(sessions, currentWeekOpen(Date.now()), app.profile?.weightKg, units)
+      : null;
+    return (
+      <ProgressLifts
+        entries={entries}
+        aggregate={aggregate}
+        loaded={sessions != null}
+        units={units}
+        onLog={() => navigation.navigate('History')}
+        onShareWeek={weekCard ? () => navigation.navigate('ShareCardModal', { card: weekCard }) : undefined}
+      />
+    );
+  }
+
+  const week = trainingWeekNumber(app.profile?.memberSince, Date.now());
   return (
     <ProgressReportView
-      title={title}
-      legend={legend}
+      title={t('report.title')}
+      legend={t('report.weekRange', { from: Math.max(1, week - 11), to: week })}
       entries={entries}
       loaded={sessions != null}
       units={units}
-      milestones={milestones}
+      milestones={null}
     />
   );
 }

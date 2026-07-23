@@ -23,8 +23,9 @@ import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout } from '@/domain/schedule';
-import { displayWeekNumber } from '@/domain/weekCadence';
-import { isTrainingGated } from '@/domain/entitlement';
+import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
+import { strengthSessionKcal } from '@/domain/energy';
+import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import type { Line } from '@/domain/voice';
 import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
@@ -35,7 +36,7 @@ import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 // Home is a TAB now, but it pushes onto the parent stack (SessionFlow, Cardio, WeeklyUpdate…), so
 // its navigation is the composite of both — the tab it lives in and the stack above it.
 type Props = CompositeScreenProps<
-  BottomTabScreenProps<HomeTabsParamList, 'Home'>,
+  BottomTabScreenProps<HomeTabsParamList, 'Today'>,
   NativeStackScreenProps<MainParamList>
 >;
 
@@ -80,6 +81,9 @@ export function Home({ navigation, route }: Props) {
    * chip needs no caption explaining what it does.
    */
   const [planTargets, setPlanTargets] = useState<SetTarget[] | null>(null);
+  // Which lifts the engine touched this week — so Today can strike their figure in moss (the v7
+  // "changed" mark). Populated by the briefing effect below; empty in week one.
+  const [changedIds, setChangedIds] = useState<Set<string>>(() => new Set());
   const [formFor, setFormFor] = useState<string | null>(null);
   const dayIdForPlan = day?.id ?? null;
   useEffect(() => {
@@ -117,9 +121,10 @@ export function Home({ navigation, route }: Props) {
         load: first?.recommendedWeight ?? null,
         sets: slot.setCount,
         band: [lo, hi] as [number, number],
+        changed: changedIds.has(slot.exerciseId),
       };
     });
-  }, [day, planTargets]);
+  }, [day, planTargets, changedIds]);
 
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
@@ -212,6 +217,9 @@ export function Home({ navigation, route }: Props) {
   // one, where there is no update to count (founder 2026-07-13).
   const [briefCount, setBriefCount] = useState<number | null>(null);
   const [briefUnseen, setBriefUnseen] = useState(false);
+  // How many lifts the engine RAISED this week (loadTo > loadFrom) — the "LOADS UP" fact on the
+  // recovery band. A subset of the change count: swaps and matches-down are not raises.
+  const [loadsUp, setLoadsUp] = useState(0);
   /** The engine rotation she can take back — see `undoEngineSwap`. Null unless one is live. */
   const [undoable, setUndoable] = useState<{ anchor: string; name: string } | null>(null);
   useEffect(() => {
@@ -257,6 +265,25 @@ export function Home({ navigation, route }: Props) {
             : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
         setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
         setBriefCount(changes ? changes.length : null);
+        setLoadsUp(
+          (view?.workouts ?? [])
+            .flatMap((w) => w.lifts)
+            .filter(
+              (l) =>
+                l.change != null &&
+                l.change.snapshot.loadFrom != null &&
+                l.change.snapshot.loadTo != null &&
+                l.change.snapshot.loadTo > l.change.snapshot.loadFrom,
+            ).length,
+        );
+        setChangedIds(
+          new Set(
+            (view?.workouts ?? [])
+              .flatMap((w) => w.lifts)
+              .filter((l) => l.change)
+              .map((l) => l.exerciseId),
+          ),
+        );
         // The undo, if the engine rotated a lift away this week. At most one is offered: the
         // sentence names one swap ("I swapped one lift — X"), so the button beside it can only
         // honestly belong to that one.
@@ -275,6 +302,8 @@ export function Home({ navigation, route }: Props) {
         if (!cancelled) {
           setBrief(null);
           setBriefCount(null);
+          setChangedIds(new Set());
+          setLoadsUp(0);
         }
       }
     })();
@@ -381,6 +410,49 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
+  // ── RECOVERY FACTS (v7 3.5 "THE WEEK IS DONE") — the day strip + the week's tonnage/kcal, read
+  //    from this week's saved history. Best-effort and only while resting: an unread history simply
+  //    leaves the strip and band undrawn (HomeView treats both as optional).
+  const [weekDays, setWeekDays] = useState<{ trained: boolean; today: boolean }[] | undefined>(undefined);
+  const [weekEnergy, setWeekEnergy] = useState<{ tonnes: number; kcal: number | null } | null>(null);
+  useEffect(() => {
+    if (!isFocused || !resting) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const all = await db.loadHistory();
+        if (cancelled) return;
+        const weekOpen = currentWeekOpen(Date.now());
+        const wk = all.filter((s) => Date.parse(s.startedAt) >= weekOpen);
+        // Seven marks, Sun→Sat: a day is "trained" if any session started on it this week.
+        const todayDow = new Date().getDay();
+        const trained = new Array(7).fill(false) as boolean[];
+        for (const s of wk) trained[new Date(s.startedAt).getDay()] = true;
+        setWeekDays(trained.map((tr, i) => ({ trained: tr, today: i === todayDow })));
+        // Tonnage (kg lifted → t) and calories (from total wall-clock work time) across the week.
+        let kg = 0;
+        let ms = 0;
+        for (const s of wk) {
+          for (const set of s.sets) kg += (set.actualWeight ?? 0) * set.actualReps;
+          if (s.sets.length) {
+            const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
+            ms += Math.max(0, last - Date.parse(s.startedAt));
+          }
+        }
+        setWeekEnergy({ tonnes: kg / 1000, kcal: strengthSessionKcal(ms, app.profile?.weightKg) });
+      } catch {
+        if (!cancelled) {
+          setWeekDays(undefined);
+          setWeekEnergy(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, resting, app.profile?.weightKg]);
+
   async function onResume() {
     let ok = false;
     try {
@@ -452,8 +524,13 @@ export function Home({ navigation, route }: Props) {
         await app.undoEngineSwap(undoable.anchor);
       }}
       briefUnseen={briefUnseen}
+      trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions)}
+      onAccount={() => navigation.navigate('You')}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       onCardio={() => navigation.navigate('Cardio')}
+      weekDays={weekDays}
+      weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
+      nextWorkoutName={program?.days.find((d) => !d.isRest)?.name ?? null}
       />
       {/* The form clip — the one job the plan screen did that the list on Home does not. It was a
           whole screen away (Home → chip → chip again → a row's ▶); it is now a tap on the lift. */}

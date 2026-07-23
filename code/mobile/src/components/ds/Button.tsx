@@ -1,8 +1,8 @@
 /**
- * Button — 1:1 from the design `components/core/Button.jsx`.
- * Primary carries the single signal color and is reserved for the one true next
- * action. Everything else is secondary, ghost, quiet, danger, or onstage. No
- * gradients, no rest shadow; press settles 1px, never bounces.
+ * Button — v7. The primary action is CREAM standing on the dark stage, reserved
+ * for the one true next action. Everything else is secondary, ghost, quiet,
+ * danger, or onstage. No gradients, no rest shadow; press settles to 0.98 scale,
+ * never bounces.
  */
 import React from 'react';
 import { Pressable, Text, View, StyleSheet, type ViewStyle } from 'react-native';
@@ -69,7 +69,7 @@ export function Button({
         {
           height: HEIGHT[size],
           paddingHorizontal: PADX[size],
-          borderRadius: size === 'sm' ? radius.sm : radius.md,
+          borderRadius: size === 'lg' ? radius.button : size === 'sm' ? radius.md : radius.control,
         },
         FILL[variant].container,
         block && styles.block,
@@ -95,9 +95,8 @@ export function Button({
 }
 
 const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: string }> = {
-  // Graphite, with cream on it — 15.7:1. The primary action is the darkest thing on the page:
-  // under READOUT the strongest affordance is the one furthest from the ground, and on paper that
-  // is ink. (This was the ochre until 2026-07-17; the label was 2.6:1 and shipped anyway.)
+  // Cream, with ink on it — the primary action is light standing on the dark stage.
+  // Under v7 the strongest affordance is the one furthest into the light.
   primary: { container: { backgroundColor: signal.fill }, pressed: { backgroundColor: signal.fillPressed }, fg: color.onAccent },
   secondary: {
     container: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.borderControl },
@@ -107,9 +106,11 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
   ghost: { container: { backgroundColor: 'transparent' }, pressed: { backgroundColor: color.fillSubtle }, fg: color.textPrimary },
   quiet: { container: { backgroundColor: 'transparent' }, pressed: {}, fg: color.textSecondary },
   danger: {
+    // v7 (2026-07-22): clay on the DARK stage — `down[0]` is the paper clay, too dark to read on
+    // the sheet the confirm buttons sit on. `down.stage` is the lit clay the rest of the app uses.
     container: { backgroundColor: 'transparent', borderWidth: 1, borderColor: color.borderControl },
-    pressed: { backgroundColor: down.wash, borderColor: down[0] },
-    fg: down[0],
+    pressed: { backgroundColor: down.wash, borderColor: down.stage },
+    fg: down.stage,
   },
   onstage: { container: { backgroundColor: stageC.ink0 }, pressed: { backgroundColor: paper[0] }, fg: stageC[0] },
   // Ghost on the inverted stage — light ink on the dark surface (the paper `ghost`
@@ -120,7 +121,7 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
 const styles = StyleSheet.create({
   base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderWidth: 1, borderColor: 'transparent' },
   block: { alignSelf: 'stretch', width: '100%' },
-  pressed: { transform: [{ translateY: 1 }] },
+  pressed: { transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.4 },
   label: { fontFamily: font.sansSemibold, textAlign: 'left' },
 });

@@ -36,6 +36,12 @@ interface Props {
   legend?: string;
   title: string;
   sub?: string;
+  /**
+   * The coach's line, in italic serif (v7): a single spoken sentence that sits between the
+   * title and the body — "I show it. It never decides a weight." It is the voice, not the
+   * fine print; a step's factual `sub` stays sans below it. Rendered only when given.
+   */
+  voice?: string;
   keyboard?: boolean; // wrap the body in a KeyboardAvoidingView (typed inputs)
   footer?: React.ReactNode;
   /**
@@ -58,7 +64,7 @@ interface Props {
   children?: React.ReactNode;
 }
 
-export function OnboardingScaffold({ onBack, progress, legend, title, sub, keyboard, footer, onSwipeBack, centerContent, children }: Props) {
+export function OnboardingScaffold({ onBack, progress, legend, title, sub, voice, keyboard, footer, onSwipeBack, centerContent, children }: Props) {
   const { t } = useCopy();
 
   // The drag travels in the reading direction's "back": rightwards in LTR, leftwards in RTL —
@@ -88,6 +94,7 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, keybo
       <View style={styles.head}>
         {legend ? <Legend style={styles.legend}>{legend}</Legend> : null}
         <Text style={styles.title} accessibilityRole="header">{title}</Text>
+        {voice ? <Text style={styles.voice}>{voice}</Text> : null}
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
       {centerContent ? <View style={styles.centerWrap}>{children}</View> : children}
@@ -148,7 +155,10 @@ const styles = StyleSheet.create({
   // Centre a short control set in the space between the head and the footer (centerContent).
   centerWrap: { flex: 1, justifyContent: "center", paddingBottom: 24 },
   legend: { marginBottom: 8 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.tight), lineHeight: textScale['2xl'] * 1.1, color: color.textPrimary, textAlign: 'left' },
+  // v7: the step's headline is the coach's serif voice, not a sans label — 44px Frank Ruhl Libre.
+  title: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: color.textPrimary, textAlign: 'left' },
+  // The spoken line under the title — italic serif, one breath. (Faux-italic where no italic cut ships.)
+  voice: { fontFamily: font.serif, fontStyle: 'italic', fontSize: textScale.xl, lineHeight: 30, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
   sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 12, gap: 10 },

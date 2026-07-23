@@ -1,53 +1,45 @@
 /**
- * History (§4.22/§4.23) — the flight recorder, rebuilt 1:1 to the Claude Design
- * "Design System" History (ui_kits/app/History.jsx). A single unified, reverse-
- * chronological timeline of everything recorded: completed strength sessions AND
- * recorded cardio activities (run / walk). The header sums the strength work so
- * far; cardio is simply another recorded activity type in the same timeline.
+ * History — "Progress · Log" (v7 3.3). The month-chaptered ledger: a single reverse-chronological
+ * timeline of everything recorded — completed strength sessions AND recorded cardio (run / walk).
  *
- * Tapping a strength row opens its read-only record (WorkoutDetail); tapping a
- * cardio row opens its activity details (CardioDetail). Records without
- * interpreting — no praise, no PRs, and no grade on a run.
+ * Rebuilt 1:1 from the handoff (3.3). It is the LOG lens of the Progress tab: the header is the same
+ * serif "Progress" + Lifts / Log toggle the Lifts lens wears (ProgressLifts), with Log active; the
+ * toggle's Lifts segment returns to that lens. A one-line summary sits under it ("18 sessions · 46.8 t
+ * moved."), then the timeline reads in month chapters ("July" in the coach's serif) with compact rows:
  *
- * Founder 2026-07-10 (design pass): the timeline reads in month chapters — a quiet
- * legend when the month changes; a wall of rows isn't a record.
+ *   · a date column — weekday (sans) over the day number (mono)
+ *   · the name — "Upper A" / "Run · 4.2 km" — with a mono-free meta line ("6 lifts · 52 min",
+ *     "318 kcal · 141 avg hr")
+ *   · a trailing mark — strength: "N up" in moss (the raises that session); cardio: "recorded"
+ *   · a chevron into the read-only record (WorkoutDetail) or the cardio details (CardioDetail)
  *
- * Founder 2026-07-17 (from the reference): a strength session is a CARD you can read — its lifts,
- * each with the top set it took ("Barbell Bench Press · 80 kg"). This does not reopen the
- * 2026-07-12 "no trailing figure" ruling; it honours it. That banned ONE bare number on a whole
- * session ("17 kg" — top set? average?), which the athlete could not interpret. A LABELLED per-lift
- * line answers exactly what it shows. The set-by-set detail still lives one tap in (WorkoutDetail).
+ * Everything is display arithmetic over the logged history (db.loadHistory / db.loadCardio); no engine
+ * type is read. Durations read in MINUTES, never as a clock ("52 min", not "0:52").
  *
- * Durations everywhere read in MINUTES ("63 min"), never as a clock — "1:03" next to a date reads
- * as one in the morning (see domain/duration).
+ * THE LAW (monoCarriesNoWords): mono carries only figures. Every word-bearing string here — the
+ * weekday, the meta line, "N up", "recorded" — is SANS, because in Hebrew those are Hebrew words and
+ * the mono face has no Hebrew glyph.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { CompositeScreenProps } from '@react-navigation/native';
 import { Icon } from '@/components/Icon';
-import { Legend, ListRow } from '@/components/ds';
+import { SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
-import { exerciseDisplayName } from '@/data/exercises';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
-import { sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
-import { fmtMinutes } from '@/domain/duration';
+import { sessionDayName } from '@/domain/schedule';
+import { durationMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
-import { color, space, font, textScale, tracking, trackingPx, press, radius } from '@/design/tokens';
-import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
+import { color, space, font, textScale, tracking, trackingPx, radius, signal } from '@/design/tokens';
+import type { MainParamList } from '@/app/navigation';
 
-// A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
-// composite of the tab it lives in and the stack above it.
-type Props = CompositeScreenProps<
-  BottomTabScreenProps<HomeTabsParamList, 'History'>,
-  NativeStackScreenProps<MainParamList>
->;
+// A Main-stack screen in v7 (folded out of the tab bar, opened from Progress · Lifts).
+type Props = NativeStackScreenProps<MainParamList, 'History'>;
 
 /** Wall-clock seconds from the session's start to its last logged set. */
 function sessionDurationSec(s: Session): number {
@@ -61,48 +53,60 @@ function sessionVolumeKg(s: Session): number {
   return s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
 }
 
+/** How many distinct lifts a session trained (the "N lifts" figure on the row). */
+function sessionLiftCount(s: Session): number {
+  return new Set(s.sets.map((x) => x.exerciseId)).size;
+}
+
 /**
- * The lifts a session trained, each with the top set it took — the record read at a glance
- * (founder 2026-07-17, from the reference: History lists "Bench Press · 80 kg" per lift).
+ * The raises per session — how many lifts beat their own prior best load that day ("3 up").
  *
- * This does NOT reopen the "no trailing figure" ruling (2026-07-12). That banned ONE bare number on
- * a whole session — "17 kg", top set? average? — which the athlete could not interpret. A LABELLED
- * per-lift line is the opposite: "Bench Press · 80 kg" answers exactly what it shows. The set-by-set
- * detail still lives in WorkoutDetail; this is the spine of it, on the card.
- *
- * The top set is the heaviest work (weight × reps), ties to the longer set — the same comparator the
- * closing read-back uses (sessionMirror.summaryLifts), so History and Well Done never name different
- * sets for the same lift.
+ * Display arithmetic, chronological: walk oldest → newest keeping each lift's running-best top-load;
+ * a session's raise count is the lifts whose heaviest set that day exceeded that running best. The
+ * first time a lift appears is not a raise (there is nothing to beat). Mirrors progressAggregate's
+ * raises so the Log and the Lifts lens never disagree.
  */
-function sessionLifts(s: Session): Array<{ exerciseId: string; load: number | null; reps: number }> {
-  const order: string[] = [];
-  const best = new Map<string, { load: number | null; reps: number }>();
-  const vol = (w: number | null, r: number) => (w ?? 0) * r;
-  for (const set of s.sets) {
-    const cur = best.get(set.exerciseId);
-    if (!cur) order.push(set.exerciseId);
-    const better =
-      !cur ||
-      vol(set.actualWeight, set.actualReps) > vol(cur.load, cur.reps) ||
-      (vol(set.actualWeight, set.actualReps) === vol(cur.load, cur.reps) && set.actualReps > cur.reps);
-    if (better) best.set(set.exerciseId, { load: set.actualWeight, reps: set.actualReps });
+function raisesBySession(strength: Session[]): Map<string, number> {
+  const chron = [...strength].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  const best = new Map<string, number>();
+  const out = new Map<string, number>();
+  for (const s of chron) {
+    const top = new Map<string, number>();
+    for (const set of s.sets) {
+      const w = set.actualWeight ?? 0;
+      if (w > (top.get(set.exerciseId) ?? 0)) top.set(set.exerciseId, w);
+    }
+    let raises = 0;
+    for (const [id, load] of top) {
+      const prev = best.get(id);
+      if (prev != null && load > prev) raises++;
+      if (prev == null || load > prev) best.set(id, load);
+    }
+    out.set(s.id, raises);
   }
-  return order.map((id) => ({ exerciseId: id, ...best.get(id)! }));
+  return out;
 }
 
-function dateLabelOf(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+/** Weekday, localized + uppercased ("SAT"). A WORD — rendered in sans, never mono. */
+function dowOf(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase();
 }
-
-/** Month chapter label — "July 2026", locale-aware. */
-function monthLabelOf(iso: string): string {
+/** The day of the month ("18"). A figure — mono. */
+function dayOf(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric' });
+}
+/** Month chapter display name ("July"). */
+function monthNameOf(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'long' });
+}
+/** Month + year, for grouping (so July 2025 and July 2026 stay distinct chapters). */
+function monthKeyOf(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
 export function History({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const units = app.profile?.units ?? 'kg';
   const [sessions, setSessions] = useState<Session[] | null>(null); // null = loading
   const [cardio, setCardio] = useState<CardioActivity[]>([]);
 
@@ -122,11 +126,11 @@ export function History({ navigation }: Props) {
 
   const dayName = (s: Session) => sessionDayName(s, app.program);
 
-  // Only PERFORMED work is a record (founder 2026-07-10): a session with zero
-  // completed sets or a cardio false-start never shows here. Writers already gate
-  // these; this display gate also covers records persisted before the rule existed.
+  // Only PERFORMED work is a record (founder 2026-07-10): a session with zero completed sets or a
+  // cardio false-start never shows here.
   const strength = (sessions ?? []).filter((s) => s.sets.length > 0);
   const performedCardio = cardio.filter((a) => cardioPerformed(a.durationSec, a.distanceKm));
+  const raises = raisesBySession(strength);
 
   // Unified, reverse-chronological timeline (newest first).
   const items: HistoryItem[] = [
@@ -134,30 +138,33 @@ export function History({ navigation }: Props) {
     ...performedCardio,
   ].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
-  // Header summary — the STRENGTH work so far (the engine's record; cardio is
-  // never graded and never counted as "kg moved").
+  // Header summary — the STRENGTH work so far (cardio is never counted as "t moved").
   const totalSessions = strength.length;
-  const totalKg = Math.round(strength.reduce((sum, s) => sum + sessionVolumeKg(s), 0));
-  const totalVol = displayWeight(totalKg, units) ?? 0;
-  const earliest = strength.length ? Math.min(...strength.map((s) => Date.parse(s.startedAt))) : Date.now();
-  const weeks = Math.max(1, Math.ceil((Date.now() - earliest) / (7 * 24 * 60 * 60 * 1000)));
+  const totalTonnes = strength.reduce((sum, s) => sum + sessionVolumeKg(s), 0) / 1000;
+  const tonnesLabel = totalTonnes >= 10 ? String(Math.round(totalTonnes)) : String(+totalTonnes.toFixed(1));
 
   const isEmpty = sessions != null && items.length === 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* No back chevron — History is a tab now; you leave by tapping another tab. The title sits
-          at the page edge (like the reference), not indented behind a chevron that is not there. */}
+      {/* The Progress tab's header, LOG lens — the same serif name + Lifts / Log toggle the Lifts
+          lens wears; Log is active, and its Lifts segment returns to that lens. */}
       <View style={styles.header}>
-        <View style={styles.headTitles}>
-          <Legend>{t('history.legend')}</Legend>
-          <Text style={styles.title} accessibilityRole="header">{t('history.title')}</Text>
-        </View>
+        <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
+        <SegmentedControl
+          options={[
+            { value: 'lifts', label: t('progress.tabLifts') },
+            { value: 'log', label: t('progress.tabLog') },
+          ]}
+          value="log"
+          onChange={(v) => {
+            if (v === 'lifts') navigation.goBack();
+          }}
+        />
       </View>
 
       {isEmpty ? (
-        // The first day is not a blank page (founder 2026-07-12) — it is the ledger, open
-        // and clean. An empty state is a chance to say what this place IS.
+        // The first day is not a blank page (founder 2026-07-12) — it is the ledger, open and clean.
         <View style={styles.emptyWrap}>
           <View style={styles.emptyMark}>
             <Icon name="history" size={24} color={color.textTertiary} strokeWidth={1.75} />
@@ -168,81 +175,80 @@ export function History({ navigation }: Props) {
       ) : (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           {totalSessions > 0 ? (
-            <View style={styles.summary}>
-              <Legend>{t('history.summaryLegend')}</Legend>
-              <View style={styles.summaryCountRow}>
-                <Text style={styles.summaryCount}>{totalSessions}</Text>
-                <Text style={styles.summaryCountLabel}>{t('history.sessionsLogged')}</Text>
-              </View>
-              <Text style={styles.summaryBody}>
-                <Text style={styles.summaryStrong}>{totalVol.toLocaleString()} {unitLabel(units)}</Text>
-                {/* "…across 1 week" / "…across 6 weeks" — i18next plural forms. A product that
-                    prints "1 weeks" is not a premium product (founder 2026-07-12). */}
-                {t('history.summaryMoved', { count: weeks })}
-              </Text>
-            </View>
+            // "18 sessions · 46.8 t moved. Every rep you've done is here." — the figures ride mono
+            // inside a sans sentence.
+            <Text style={styles.summaryLine}>
+              <Text style={styles.summaryFig}>{totalSessions}</Text> {t('history.logSessions')} ·{' '}
+              <Text style={styles.summaryFig}>{tonnesLabel}</Text> {t('history.tonneUnit')} {t('history.logMoved')}
+            </Text>
           ) : null}
 
           {items.map((item, i) => {
-            // Month chapters: a quiet legend where the month turns; each chapter's
-            // final row drops its divider so chapters read as distinct blocks.
-            const month = monthLabelOf(item.startedAt);
-            const newMonth = i === 0 || monthLabelOf(items[i - 1].startedAt) !== month;
-            const last = i === items.length - 1 || monthLabelOf(items[i + 1].startedAt) !== month;
-            const row =
-              item.kind === 'cardio' ? (
-                <ListRow
-                  title={item.gait === 'run' ? t('cardio.run') : t('cardio.walk')}
-                  // "Sat, 11 Jul · 63 min" — a duration, never a clock (see domain/duration).
-                  subtitle={`${dateLabelOf(item.startedAt)} · ${fmtMinutes(item.durationSec, t('common.minShort'))}`}
-                  chevron
-                  last={last}
-                  onPress={() => navigation.navigate('CardioDetail', { activity: item })}
-                  leading={
-                    <View style={styles.iconBox}>
-                      <Icon name={item.gait === 'run' ? 'runner' : 'footprints'} size={16} color={color.textSecondary} strokeWidth={2} />
-                    </View>
-                  }
-                  // Distance is what a run IS — it stays.
-                  trailing={<Text style={styles.vol}>{item.distanceKm.toFixed(2)} {t('cardio.km')}</Text>}
-                />
-              ) : (
-                /* A READABLE RECORD, not a row that hides one (founder 2026-07-17, from the
-                   reference). The header dates it and names it; the lines under it are the lifts
-                   with the top set each took — "Barbell Bench Press · 80 kg". You read what you did
-                   without tapping in; the set-by-set detail is still one tap away (WorkoutDetail). */
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`${dayName(item)} · ${dateLabelOf(item.startedAt)}`}
-                  onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.id })}
-                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                >
-                  <View style={styles.cardHead}>
-                    <Text style={styles.cardDate}>{dateLabelOf(item.startedAt)}</Text>
-                    <View style={styles.namePill}>
-                      <Text style={styles.namePillText} numberOfLines={1}>{bidi(dayName(item))}</Text>
-                    </View>
-                    {/* SANS, not mono: the duration ends in a translated word — "63 min" but
-                        "63 דק׳" in Hebrew, and JetBrains Mono has no Hebrew glyphs. */}
-                    <Text style={styles.cardMin} allowFontScaling>{fmtMinutes(sessionDurationSec(item), t('common.minShort'))}</Text>
-                  </View>
-                  {sessionLifts(item).map((lift) => {
-                    // The load string is BUILT here, then rendered as a plain value — so the mono
-                    // Text holds no `t(` call (the load is figures + a Latin unit: kg / lb / BW).
-                    const loadLabel = lift.load == null ? t('workout.bw') : `${displayWeight(lift.load, units)} ${unitLabel(units)}`;
-                    return (
-                      <View key={lift.exerciseId} style={styles.liftLine}>
-                        <Text style={styles.liftName} numberOfLines={1}>{bidi(exerciseDisplayName(lift.exerciseId))}</Text>
-                        <Text style={styles.liftLoad}>{loadLabel}</Text>
-                      </View>
-                    );
-                  })}
-                </Pressable>
-              );
+            // Month chapters: a serif legend where the month turns; each chapter's final row keeps a
+            // bottom rule so chapters read as distinct blocks.
+            const key = monthKeyOf(item.startedAt);
+            const newMonth = i === 0 || monthKeyOf(items[i - 1].startedAt) !== key;
+            const last = i === items.length - 1 || monthKeyOf(items[i + 1].startedAt) !== key;
+
+            const isCardio = item.kind === 'cardio';
+            const name = isCardio
+              ? `${item.gait === 'run' ? t('cardio.run') : t('cardio.walk')} · ${item.distanceKm.toFixed(2)} ${t('cardio.km')}`
+              : bidi(dayName(item));
+            const meta = isCardio
+              ? item.calories != null && item.avgHr != null
+                ? t('history.rowCardioMeta', { kcal: item.calories, hr: item.avgHr })
+                : item.calories != null
+                  ? t('history.rowCardioMetaNoHr', { kcal: item.calories })
+                  : t('history.minutesShort', { min: durationMinutes(item.durationSec) })
+              : t('history.rowStrengthMeta', {
+                  lifts: sessionLiftCount(item),
+                  min: durationMinutes(sessionDurationSec(item)),
+                });
+            const raiseN = isCardio ? 0 : raises.get(item.id) ?? 0;
+
             return (
               <View key={item.id}>
-                {newMonth ? <Legend style={styles.monthLegend}>{month}</Legend> : null}
-                {row}
+                {newMonth ? <Text style={styles.monthLabel}>{monthNameOf(item.startedAt)}</Text> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${name} · ${meta}`}
+                  onPress={() =>
+                    isCardio
+                      ? navigation.navigate('CardioDetail', { activity: item })
+                      : navigation.navigate('WorkoutDetail', { sessionId: item.id })
+                  }
+                  style={({ pressed }) => [styles.row, last && styles.rowLast, pressed && styles.rowPressed]}
+                >
+                  <View style={styles.dateCol}>
+                    <Text style={styles.dow}>{dowOf(item.startedAt)}</Text>
+                    <Text style={styles.day}>{dayOf(item.startedAt)}</Text>
+                  </View>
+
+                  <View style={styles.rowMid}>
+                    {isCardio ? (
+                      <View style={styles.cardioTitleRow}>
+                        <Icon
+                          name={item.gait === 'run' ? 'runner' : 'footprints'}
+                          size={13}
+                          color={color.textSecondary}
+                          strokeWidth={1.8}
+                        />
+                        <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
+                    )}
+                    <Text style={styles.rowMeta} numberOfLines={1}>{meta.toUpperCase()}</Text>
+                  </View>
+
+                  {isCardio ? (
+                    <Text style={styles.recorded}>{t('history.rowRecorded').toUpperCase()}</Text>
+                  ) : raiseN > 0 ? (
+                    <Text style={styles.rowUp}>{t('history.rowRaises', { count: raiseN }).toUpperCase()}</Text>
+                  ) : null}
+
+                  <Icon name="chevronRight" size={15} color={color.textTertiary} strokeWidth={1.8} />
+                </Pressable>
               </View>
             );
           })}
@@ -254,10 +260,18 @@ export function History({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 12, minHeight: 44 },
-  back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headTitles: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 1, textAlign: 'left' },
+
+  // Shared with ProgressLifts: the serif section name + the Lifts / Log toggle.
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.gutter,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
+
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
   emptyMark: {
     width: 56,
@@ -272,45 +286,39 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
   empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
+
   list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
 
-  summary: { paddingTop: 6, paddingBottom: 20, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: color.border },
-  summaryCountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 8 },
-  summaryCount: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -1.4, color: color.textPrimary, textAlign: 'left' },
-  summaryCountLabel: { fontFamily: font.sans, fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },
-  summaryBody: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
-  summaryStrong: { fontFamily: font.mono, fontVariant: ['tabular-nums'], color: color.textPrimary, textAlign: 'left' },
+  // One-line summary: a sans sentence with mono figures.
+  summaryLine: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 22, color: color.textSecondary, marginTop: 2, marginBottom: 8, textAlign: 'left' },
+  summaryFig: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], color: color.textPrimary }, // rtl-ok: nested figure span, inherits textAlign from summaryLine
 
-  monthLegend: { marginTop: 20, marginBottom: 4 },
+  // Month chapter — the coach's serif.
+  monthLabel: { fontFamily: font.serif, fontSize: textScale.xl, color: color.textPrimary, marginTop: 18, paddingBottom: 6, textAlign: 'left' },
 
-  iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    backgroundColor: color.fillSubtle,
-    borderWidth: 1,
-    borderColor: color.border,
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 2,
+    borderTopWidth: 1,
+    borderTopColor: color.border,
   },
-  vol: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
+  rowLast: { borderBottomWidth: 1, borderBottomColor: color.border },
+  rowPressed: { opacity: 0.6 },
 
-  /* A session, read at a glance — a raised card, its lifts and loads listed. */
-  card: {
-    marginTop: 12,
-    padding: 16,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.surface,
-  },
-  cardPressed: { backgroundColor: color.fillSubtle },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  cardDate: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
-  namePill: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
-  namePillText: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
-  cardMin: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: "right" },
-  liftLine: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingVertical: 3 },
-  liftName: { flex: 1, minWidth: 0, fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
-  liftLoad: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'right' },
+  dateCol: { width: 44 },
+  dow: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.textMuted, textAlign: 'left' },
+  day: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
+
+  rowMid: { flex: 1, minWidth: 0, gap: 3 },
+  cardioTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rowName: { flexShrink: 1, fontFamily: font.sansSemibold, fontSize: 15.5, color: color.textPrimary, textAlign: 'left' },
+  // SANS, not mono: "6 LIFTS · 52 MIN" / "318 KCAL · 141 AVG HR" carry translated words.
+  rowMeta: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: 0.3, color: color.textMuted, textAlign: 'left' },
+
+  // Trailing marks — moss for a raise, muted for a recorded cardio. Both are WORDS → sans.
+  rowUp: { fontFamily: font.sansSemibold, fontSize: textScale.xs, letterSpacing: 0.4, color: signal[0], textAlign: 'right' },
+  recorded: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.textMuted, textAlign: 'right' },
 });

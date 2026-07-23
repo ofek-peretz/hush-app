@@ -1,9 +1,9 @@
 /**
- * Card — 1:1 from the design system `components/core/Card.jsx`.
- * A surface sits on the page with a HAIRLINE, not a shadow. Elevation is
- * reserved for things that truly float. `interactive` firms the border + settles
- * 1px on press; `accent` marks the active item; `stage` flips to the inverted
- * focus surface; `raised` lifts with the warm md shadow.
+ * Card — v7. A surface floats on the dark stage as a faint translucent-cream
+ * raise with a hairline. `paper` flips it to an opaque warm paper card carrying
+ * dark ink (the "cards only" paper). `interactive` settles to 0.98 on press;
+ * `accent` marks the active item with moss; `stage` is a deeper dark card;
+ * `raised` lifts with the deep warm shadow.
  */
 import React from 'react';
 import { View, Pressable, StyleSheet, type ViewStyle } from 'react-native';
@@ -18,6 +18,7 @@ interface Props {
   interactive?: boolean;
   accent?: boolean;
   stage?: boolean;
+  paper?: boolean;
   onPress?: () => void;
   style?: ViewStyle | ViewStyle[];
   children?: React.ReactNode;
@@ -30,6 +31,7 @@ export function Card({
   interactive = false,
   accent = false,
   stage = false,
+  paper = false,
   onPress,
   style,
   children,
@@ -42,6 +44,7 @@ export function Card({
     raised ? styles.raisedBorder : null,
     accent ? styles.accent : null,
     stage ? styles.stage : null,
+    paper ? styles.paper : null,
   ].filter(Boolean) as ViewStyle[];
 
   if (onPress || interactive) {
@@ -66,7 +69,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
     borderWidth: border.width,
     borderColor: color.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
   },
   padMd: { padding: space[6] },
   padLg: { padding: space[7] },
@@ -74,5 +77,6 @@ const styles = StyleSheet.create({
   raisedBorder: { borderColor: 'transparent' },
   accent: { borderColor: color.accent },
   stage: { backgroundColor: stageC[1], borderColor: stageC[2] },
-  pressed: { transform: [{ translateY: 1 }], borderColor: color.borderStrong },
+  paper: { backgroundColor: color.paper, borderColor: 'transparent' },
+  pressed: { transform: [{ scale: 0.985 }], borderColor: color.borderStrong },
 });

@@ -9,25 +9,44 @@ import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Assistant_400Regular, Assistant_500Medium, Assistant_600SemiBold, Assistant_700Bold } from '@expo-google-fonts/assistant';
+import { FrankRuhlLibre_400Regular, FrankRuhlLibre_500Medium, FrankRuhlLibre_700Bold } from '@expo-google-fonts/frank-ruhl-libre';
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono';
 import { initI18n } from '@/i18n';
 import { HomeView } from '@/screens/home/HomeView';
 import { color } from '@/design/tokens';
+import { installGlobalFontDefault } from '@/design/typography';
+
+installGlobalFontDefault();
 
 export default function App() {
   const [ready, setReady] = useState(false);
   const [resting, setResting] = useState(false);
+  const [fontsLoaded] = useFonts({
+    Assistant: Assistant_400Regular,
+    'Assistant-Medium': Assistant_500Medium,
+    'Assistant-SemiBold': Assistant_600SemiBold,
+    'Assistant-Bold': Assistant_700Bold,
+    FrankRuhlLibre: FrankRuhlLibre_400Regular,
+    'FrankRuhlLibre-Medium': FrankRuhlLibre_500Medium,
+    'FrankRuhlLibre-Bold': FrankRuhlLibre_700Bold,
+    IBMPlexMono: IBMPlexMono_400Regular,
+    'IBMPlexMono-Medium': IBMPlexMono_500Medium,
+    'IBMPlexMono-SemiBold': IBMPlexMono_600SemiBold,
+  });
 
   useEffect(() => {
     initI18n().then(() => setReady(true));
   }, []);
 
-  if (!ready) return <View style={styles.canvas} />;
+  if (!ready || !fontsLoaded) return <View style={styles.canvas} />;
 
   const dateLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <View style={styles.phone}>
         <HomeView
           resting={resting}

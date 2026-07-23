@@ -29,7 +29,7 @@ import { swapScore } from '@/domain/swapPool';
 import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
-import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
@@ -827,6 +827,25 @@ export const fixtureModel: ModelClient = {
     return getSessionEarnedV5(startedAtMs).catch((e): Explanation[] => {
       void track('engine_error', { op: 'sessionEarned', message: String(e) });
       return [];
+    });
+  },
+
+  /**
+   * The absolute next load per lift one occurrence set (v7 3.3b Record badges). Folds first — so the
+   * most recent whistle is decided before we read it back — then reads the stamped changeLog. A lift
+   * that held has no entry; the screen reads its absence as "holds at what she lifted".
+   */
+  async sessionForward({ startedAtMs }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+    const program = await db.loadProgram();
+    if (!program) return {};
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    const prefs = await loadPreferencesSafe();
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
+    await foldEngine(program, profile, history, prefs, bucketOpenMs);
+    return getSessionForwardV5(startedAtMs).catch((e): Record<string, { loadFrom: number | null; loadTo: number | null }> => {
+      void track('engine_error', { op: 'sessionForward', message: String(e) });
+      return {};
     });
   },
 

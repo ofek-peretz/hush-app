@@ -41,7 +41,7 @@ import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 // A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
 // composite of the tab it lives in and the stack above it.
 type Props = CompositeScreenProps<
-  BottomTabScreenProps<HomeTabsParamList, 'Settings'>,
+  BottomTabScreenProps<HomeTabsParamList, 'You'>,
   NativeStackScreenProps<MainParamList>
 >;
 type Overlay = 'none' | 'delete' | 'signout';
@@ -375,13 +375,15 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 4, minHeight: 44 },
   back: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
-  headerTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, textAlign: 'left' },
+  // v7 (2026-07-22): the section headline is the serif — the coach's voice, matching Progress/History.
+  headerTitle: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
   scroll: { flex: 1 },
   body: { paddingHorizontal: space.gutter, paddingTop: 6, paddingBottom: 24 },
 
   identity: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 6, paddingBottom: 18 },
   identityText: { flex: 1, minWidth: 0 },
-  name: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
+  // v7 4.2 (2026-07-23): the athlete is named in the coach's serif, matching the wordmark on Today.
+  name: { fontFamily: font.serif, fontSize: textScale['2xl'], lineHeight: Math.round(textScale['2xl'] * 1.02), color: color.textPrimary, textAlign: 'left' },
   identitySub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   sectionLegend: { marginTop: 20, marginBottom: 2 },
@@ -390,7 +392,7 @@ const styles = StyleSheet.create({
   rowPressed: { opacity: 0.6 },
   rowText: { flex: 1, minWidth: 0 },
   rowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
-  rowDanger: { color: down[0] },
+  rowDanger: { color: down.stage },
   rowSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   // membership card
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
   actions: { marginTop: 32, gap: 2 },
   exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
-  exitDanger: { color: down[0] },
+  exitDanger: { color: down.stage },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
   tagline: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 4, letterSpacing: 0.2 },
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },

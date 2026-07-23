@@ -5,12 +5,12 @@
  * Idioms (spec §1, §7.1): full-layer Slide Left/Right; sheets present as modals;
  * Pause/Finish are modal-frozen (handled inside SessionFlow).
  *
- * NAVIGATION SHAPE (founder 2026-07-17). The four peer surfaces — Home · Progress · History ·
- * Settings — live under a BOTTOM TAB navigator (`HomeTabs`), one tap from each other. Everything
- * deeper (a live workout, a run, a record, a modal) is pushed ABOVE the tabs on the Main stack, so
- * the bar is simply absent from those trees — a stage has no navigation. This replaced the old
- * hub-and-spoke, where the three long-view surfaces were reached from Home and were two taps apart
- * from one another.
+ * NAVIGATION SHAPE (founder 2026-07-17; v7 tabs 2026-07-22). The four peer surfaces — Today ·
+ * Cardio · Progress · You — live under a BOTTOM TAB navigator (`HomeTabs`), one tap from each
+ * other. Everything deeper (a live workout, a run, a record, a modal) is pushed ABOVE the tabs on
+ * the Main stack, so the bar is simply absent from those trees — a stage has no navigation. Cardio
+ * is a launcher tab: its press opens the full-screen Cardio stage on the Main stack (so a live run
+ * carries no tab bar), and History folded out of the bar into the Progress surface.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -50,26 +50,37 @@ import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { Cardio } from '@/screens/cardio/Cardio';
+import { CardioReady } from '@/screens/cardio/CardioReady';
 import { CardioDetail } from '@/screens/cardio/CardioDetail';
 import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { Paywall } from '@/screens/subscription/Paywall';
+import { ShareCardModal } from '@/screens/share/ShareCardModal';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
 const Tabs = createBottomTabNavigator<HomeTabsParamList>();
 
-/** The four peer surfaces, under the bottom bar. Everything else is pushed above them. */
+/** The Cardio tab's resting surface — the READY stage (handoff 3.4a), hosted INSIDE the tab so the
+ *  bottom bar stays visible while at rest. "Start cardio" pushes the full-screen live stage onto the
+ *  Main stack (which opens straight into the 3·2·1 countdown), so a live run carries no tab bar. */
+function CardioTab() {
+  return <CardioReady onBegin={() => navigateMain('Cardio')} />;
+}
+
+/** The four peer surfaces, under the bottom bar (v7: Today · Cardio · Progress · You). Everything
+ *  deeper is pushed above them. The Cardio tab shows the READY stage at rest; "Start cardio" opens
+ *  the Main-stack live stage, so a live run has no tab bar in its tree. */
 function HomeTabs() {
   return (
     <Tabs.Navigator
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.bgBase } }}
       tabBar={(props) => <HushTabBar {...props} />}
     >
-      <Tabs.Screen name="Home" component={Home} />
+      <Tabs.Screen name="Today" component={Home} />
+      <Tabs.Screen name="Cardio" component={CardioTab} />
       <Tabs.Screen name="Progress" component={Progress} />
-      <Tabs.Screen name="History" component={History} />
-      <Tabs.Screen name="Settings" component={ProfileSheet} />
+      <Tabs.Screen name="You" component={ProfileSheet} />
     </Tabs.Navigator>
   );
 }
@@ -143,14 +154,23 @@ function MainNavigator() {
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
+      {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
+      <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
-      {/* Open training (run / walk) — full-screen focus; fades in like the session flow.
-          Swipe-back is enabled on the select step only (the screen flips gestureEnabled
-          per phase; a live recording is never swipe-dismissable). */}
+      {/* The live cardio stage — full-screen focus, fades in like the session flow, and opens
+          straight into the 3·2·1 countdown (the READY step now lives in the Cardio tab). A live GPS
+          recording is never swipe-dismissable, so the back gesture stays off for the whole stage. */}
       <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
+      {/* The share card floats over its opener as a transparent modal — the preview sits on a dim
+          stage, the sheet rises from the bottom. Never part of a back-stack a gesture walks into. */}
+      <MainStack.Screen
+        name="ShareCardModal"
+        component={ShareCardModal}
+        options={{ presentation: 'transparentModal', animation: 'fade', animationDuration: 200 }}
+      />
     </MainStack.Navigator>
   );
 }

@@ -102,6 +102,15 @@ export interface ModelClient {
   sessionEarned?(args: { startedAtMs: number }): Promise<Explanation[]>;
 
   /**
+   * The ABSOLUTE next load per lift that one occurrence set — keyed by exerciseId, `{ loadFrom,
+   * loadTo }`. The Record screen (v7 3.3b) stamps "NEXT: 41" (a load moved up) or "HOLDS 44" (no
+   * entry ⇒ held at what she lifted) beside each exercise. Read-only, from the same stamped
+   * changeLog `sessionEarned` narrates; a lift absent from the map simply held. Optional for the
+   * same reason as `sessionEarned` (the decommissioned HTTP path owns no engine).
+   */
+  sessionForward?(args: { startedAtMs: number }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>>;
+
+  /**
    * Per-capability relative scores + confidence + still-learning flags for the
    * Portrait (spec §8.7). Stored as a snapshot at each program construction
    * (§8.4). The app renders bars/words from this; it never computes the scores.

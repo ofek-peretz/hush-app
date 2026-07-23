@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
-import { color, font, textScale, tracking, trackingPx, paper, up } from '@/design/tokens';
+import { color, font, textScale, tracking, trackingPx, up } from '@/design/tokens';
 import { Icon } from '@/components/Icon';
 
 interface Props {
@@ -44,9 +44,9 @@ export function ListRow({
     lead = (
       <View style={[styles.idx, done && styles.idxDone]}>
         {done ? (
-          // White on the sage disc. `paper[0]` dropped this to 5.00:1 when the ladder inverted;
-          // `paper.lift` is what it always meant, and restores the 6.02:1 it shipped with.
-          <Icon name="check" size={15} color={paper.lift} strokeWidth={2.4} />
+          // Dark ink on the LIT moss disc. On the dark stage the done-disc is lit moss (up.stage);
+          // a dark tick reads on it where the old white tick would wash out.
+          <Icon name="check" size={15} color={color.onAccent} strokeWidth={2.4} />
         ) : (
           <Text style={styles.idxText}>{index}</Text>
         )}
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   // DONE IS SAGE (founder 2026-07-13: "why is a completed workout a BLACK tick? green is our
   // colour for something that is finished"). The black square was the heaviest mark on the week's
   // list and it said nothing — ink is the product's structural colour, not its verdict.
-  idxDone: { backgroundColor: up[0], borderColor: up[0] },
+  idxDone: { backgroundColor: up.stage, borderColor: up.stage },
   idxText: { fontFamily: font.mono, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   bodyCol: { flex: 1, minWidth: 0, gap: 2 },
   title: {

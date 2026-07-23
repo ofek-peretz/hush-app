@@ -267,9 +267,10 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: space.gutter, paddingBottom: space[6] },
 
   eyebrow: { marginTop: 14, marginBottom: 8 },
+  // v7 (2026-07-22): the pitch is the coach speaking — the serif, not UI chrome.
   title: {
     color: color.textPrimary,
-    fontFamily: font.sansSemibold,
+    fontFamily: font.serif,
     fontSize: textScale['3xl'],
     lineHeight: Math.round(textScale['3xl'] * 1.04),
     letterSpacing: trackingPx(textScale['3xl'], tracking.display),

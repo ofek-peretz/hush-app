@@ -27,7 +27,8 @@ interface Props {
 
 export function LoadDelta({ value = 0, unit = 'kg', direction, pill, size = 'md', showValue = true, holdLabel = 'hold', style }: Props) {
   const dir: Dir = direction || (value > 0 ? 'up' : value < 0 ? 'down' : 'hold');
-  const tint = dir === 'up' ? up[0] : dir === 'down' ? down[0] : color.textMuted;
+  // On the dark stage the load marks are the LIT moss / clay (the paper variants are near-black here).
+  const tint = dir === 'up' ? up.stage : dir === 'down' ? down.stage : color.textMuted;
   const pillBg = dir === 'up' ? up.wash : dir === 'down' ? down.wash : color.fillSubtle;
   const mag = Math.abs(value);
   const label = dir === 'hold' ? holdLabel : `${dir === 'up' ? '+' : '−'}${mag}${unit ? ' ' + unit : ''}`;

@@ -534,6 +534,29 @@ export async function getSessionEarnedV5(sessionStartedAtMs: number): Promise<Ex
   return (state.changeLog ?? []).filter((c) => c.at === sessionStartedAtMs).map(explainChange);
 }
 
+/**
+ * WHAT ONE WORKOUT SET AS THE NEXT LOAD — the per-lift forward numbers a single occurrence decided.
+ *
+ * Read-only twin of `getSessionEarnedV5`. Where that returns the *narrated* changes (the delta and
+ * its reason), the Record screen (v7 3.3b) needs the ABSOLUTE next load per lift — "NEXT: 41" — to
+ * stamp beside each exercise. Both read the very same stamped changeLog; nothing is recomputed here.
+ *
+ * Only plain load moves (`kind == null`) carry a forward number; a graduation/rotation/volume move is
+ * a different kind of news and has no per-lift "next weight". A lift that HELD has no entry at all —
+ * a hold is not a change (R7) — so the caller reads a missing exercise as "holds at what she lifted".
+ */
+export async function getSessionForwardV5(
+  sessionStartedAtMs: number,
+): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+  const state = await load();
+  const out: Record<string, { loadFrom: number | null; loadTo: number | null }> = {};
+  for (const c of state.changeLog ?? []) {
+    if (c.at !== sessionStartedAtMs || c.kind != null) continue;
+    out[c.exerciseId] = { loadFrom: c.loadFrom, loadTo: c.loadTo };
+  }
+  return out;
+}
+
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
 export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<WeeklyUpdate | null> {
   const state = await load();

@@ -6,11 +6,11 @@
  * running-max staircase (the entry's `series`): it only ever holds or rises, because the report's
  * premise is that a peak never falls. So there is no dip to misread — the line is the record of PRs.
  *
- * COLOUR: sage (`up`), and this is the one place a hue is right under READOUT — it is SEMANTIC, not
- * accent: every point of this line is progress by construction (deltaKg ≥ 0), the same meaning
- * sage carries everywhere (a lift that went up, a set that was done). `up[0]` clears contrast on the
- * paper ground for a 2px stroke; on the stage it would take `up.stage`, but Progress is a paper
- * screen. The current point gets a filled dot — "you are here".
+ * COLOUR: moss (`up`), and this is the one place a hue is right — it is SEMANTIC, not accent: every
+ * point of this line is progress by construction (deltaKg ≥ 0), the same meaning moss carries
+ * everywhere (a lift that went up, a set that was done). v7 (2026-07-22): Progress is a STAGE screen
+ * now, so the line takes `up.stage` (lit moss) — `up[0]` is paper moss, near-invisible on the dark.
+ * The current point gets a filled dot — "you are here".
  *
  * Defensive by construction: 0 points draws nothing, 1 point draws a single dot (no line from a
  * point to itself), a flat series draws a flat line at mid-height. It never throws on a degenerate
@@ -49,14 +49,14 @@ export function Sparkline({ data, width = 88, height = 32 }: Props) {
         <Polyline
           points={data.map((v, i) => `${x(i)},${y(v)}`).join(' ')}
           fill="none"
-          stroke={up[0]}
+          stroke={up.stage}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       ) : null}
       {/* "You are here" — the current best, always drawn (it is the point of the picture). */}
-      <Circle cx={lastX} cy={lastY} r={3} fill={up[0]} />
+      <Circle cx={lastX} cy={lastY} r={3} fill={up.stage} />
     </Svg>
   );
 }

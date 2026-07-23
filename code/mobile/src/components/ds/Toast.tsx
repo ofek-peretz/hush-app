@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, font, press, radius, shadow, space, textScale, up } from '@/design/tokens';
+// The toast is a dark floating card on the stage — its check is the LIT moss (up.stage),
+// not the paper variant which reads near-black here.
 
 const VISIBLE_MS = 2500;
 const VISIBLE_ACTIONS_MS = 6000; // actionable toasts wait for a decision a little longer
@@ -115,7 +117,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           style={[styles.host, { paddingBottom: insets.bottom + 28 }]}
         >
           <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
-            <Icon name="check" size={16} color={up[0]} strokeWidth={2.4} />
+            <Icon name="check" size={16} color={up.stage} strokeWidth={2.4} />
             <Text style={styles.text} numberOfLines={2}>{toast.message}</Text>
             {toast.actions.map((a) => (
               <Pressable

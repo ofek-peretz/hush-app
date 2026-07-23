@@ -4,11 +4,11 @@ import WidgetKit
 
 // The Hush Live Activities (Lock Screen + Dynamic Island): strength session + cardio.
 //
-// Visual source of truth: the design sheet in
-// `screen shots/notes & Dynamic island & live activity/` — inverted "stage"
-// (near-black), warm ink, a single ochre accent, monospaced digits for every
-// measured number. JetBrains Mono is not bundled in this extension, so measured
-// numbers use the sanctioned fallback: monospaced system digits.
+// Visual source of truth: the app's design tokens (design/tokens.ts) under v7
+// (All Dark · One Lit Stage) — the warm near-black stage, cream ink, a single MOSS
+// accent (ochre is retired app-wide), monospaced digits for every measured number.
+// JetBrains Mono is not bundled in this extension, so measured numbers use the
+// sanctioned fallback: monospaced system digits.
 //
 // The widget extension's deployment target is iOS 16.2 (expo-target.config.js), so
 // ActivityKit + Live Activities are unconditionally available here — no `@available`
@@ -24,10 +24,10 @@ import WidgetKit
 
 // MARK: - Tokens (matches the app's design tokens)
 private enum HX {
-  static let stage = Color(red: 0.10, green: 0.09, blue: 0.08)
-  static let ink0 = Color(red: 0.96, green: 0.95, blue: 0.94)
-  static let ink2 = Color(red: 0.62, green: 0.60, blue: 0.57)
-  static let accent = Color(red: 0.80, green: 0.57, blue: 0.28) // ochre
+  static let stage = Color(red: 0.075, green: 0.071, blue: 0.063) // stage[0] #131210
+  static let ink0 = Color(red: 0.945, green: 0.933, blue: 0.898) // cream[0] #f1eee5
+  static let ink2 = Color(red: 0.545, green: 0.518, blue: 0.455) // cream[2] #8b8474
+  static let accent = Color(red: 0.663, green: 0.769, blue: 0.624) // lit moss #a9c49f — the live/rest accent
 }
 
 private func legend(_ s: String) -> some View {

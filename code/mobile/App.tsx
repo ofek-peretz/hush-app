@@ -1,9 +1,10 @@
 /**
- * App entry. Loads the two type voices (Hanken Grotesk + JetBrains Mono — the
- * design's Google-Fonts substitutes), boots i18n, then renders the navigation
- * host inside the app + session providers.
+ * App entry. Loads the three v7 voices — Assistant (interface), Frank Ruhl Libre
+ * (the coach's serif), IBM Plex Mono (facts) — boots i18n, then renders the
+ * navigation host inside the app + session providers.
  *
- * Light "instrument" theme (2026-06-21 design): warm paper base, dark status bar.
+ * "All Dark · one lit stage" theme (v7, 2026-07-22): warm dark ground, light
+ * status bar.
  */
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,16 +13,21 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, StyleSheet, AppState } from 'react-native';
 import { useFonts } from 'expo-font';
 import {
-  HankenGrotesk_400Regular,
-  HankenGrotesk_500Medium,
-  HankenGrotesk_600SemiBold,
-  HankenGrotesk_700Bold,
-} from '@expo-google-fonts/hanken-grotesk';
+  Assistant_400Regular,
+  Assistant_500Medium,
+  Assistant_600SemiBold,
+  Assistant_700Bold,
+} from '@expo-google-fonts/assistant';
 import {
-  JetBrainsMono_400Regular,
-  JetBrainsMono_500Medium,
-  JetBrainsMono_600SemiBold,
-} from '@expo-google-fonts/jetbrains-mono';
+  FrankRuhlLibre_400Regular,
+  FrankRuhlLibre_500Medium,
+  FrankRuhlLibre_700Bold,
+} from '@expo-google-fonts/frank-ruhl-libre';
+import {
+  IBMPlexMono_400Regular,
+  IBMPlexMono_500Medium,
+  IBMPlexMono_600SemiBold,
+} from '@expo-google-fonts/ibm-plex-mono';
 import { initI18n } from '@/i18n';
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
@@ -37,13 +43,16 @@ export default function App() {
   const [i18nReady, setI18nReady] = useState(false);
   const [fontsLoaded] = useFonts({
     // keys must match `font.*` in design/tokens.ts
-    HankenGrotesk: HankenGrotesk_400Regular,
-    'HankenGrotesk-Medium': HankenGrotesk_500Medium,
-    'HankenGrotesk-SemiBold': HankenGrotesk_600SemiBold,
-    'HankenGrotesk-Bold': HankenGrotesk_700Bold,
-    JetBrainsMono: JetBrainsMono_400Regular,
-    'JetBrainsMono-Medium': JetBrainsMono_500Medium,
-    'JetBrainsMono-SemiBold': JetBrainsMono_600SemiBold,
+    Assistant: Assistant_400Regular,
+    'Assistant-Medium': Assistant_500Medium,
+    'Assistant-SemiBold': Assistant_600SemiBold,
+    'Assistant-Bold': Assistant_700Bold,
+    FrankRuhlLibre: FrankRuhlLibre_400Regular,
+    'FrankRuhlLibre-Medium': FrankRuhlLibre_500Medium,
+    'FrankRuhlLibre-Bold': FrankRuhlLibre_700Bold,
+    IBMPlexMono: IBMPlexMono_400Regular,
+    'IBMPlexMono-Medium': IBMPlexMono_500Medium,
+    'IBMPlexMono-SemiBold': IBMPlexMono_600SemiBold,
   });
 
   useEffect(() => {
@@ -63,7 +72,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <AppProvider>
           <SessionProvider>
             <ToastProvider>
