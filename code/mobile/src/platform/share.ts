@@ -27,11 +27,14 @@ export interface ShareHost {
   captureAndShare(ref: RefObject<View | null>, filename: string, dialogTitle?: string): Promise<ShareResult>;
 }
 
-/** Require a module without letting an absent one break the bundle or a test run. */
-function optionalRequire<T = unknown>(name: string): T | null {
+/**
+ * Require a module without letting an absent one break the bundle or a test run.
+ * The caller passes a thunk holding a LITERAL require — Metro resolves dynamic
+ * `require(variable)` at bundle time and rejects it, so the string must be static.
+ */
+function optionalRequire<T = unknown>(load: () => T): T | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-    return require(name) as T;
+    return load();
   } catch {
     return null;
   }
@@ -46,8 +49,8 @@ interface SharingModule {
 }
 
 // Resolved once. On web there is no native capture; elsewhere it depends on the build.
-const viewShot = Platform.OS === 'web' ? null : optionalRequire<ViewShotModule>('react-native-view-shot');
-const sharing = Platform.OS === 'web' ? null : optionalRequire<SharingModule>('expo-sharing');
+const viewShot = Platform.OS === 'web' ? null : optionalRequire<ViewShotModule>(() => require('react-native-view-shot'));
+const sharing = Platform.OS === 'web' ? null : optionalRequire<SharingModule>(() => require('expo-sharing'));
 
 export const shareStub: ShareHost = {
   available: () => false,
