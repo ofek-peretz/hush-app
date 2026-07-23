@@ -755,12 +755,6 @@
     "savePct": "Save {{pct}}%"
   },
   "explain": {
-    "progressReps": {
-      "text": "{{ex}} is near the top of its range, so I added a rep per set.",
-      "observation": "{{ex}} is improving and close to the top of its range.",
-      "conclusion": "Another rep per set comes before more weight.",
-      "action": "I set the target to {{reps}} reps."
-    },
     "progressLoad": {
       "text": "{{ex}} hit the top of its range with room, so I added {{delta}} kg.",
       "textVariation": "{{ex}} is holding the top of its range — keep it there and the harder variation comes next.",
@@ -802,58 +796,11 @@
       "action": "I set it to {{load}} kg and kept your sets unchanged.",
       "actionBw": "I matched it to your demonstrated capability and kept your sets unchanged."
     },
-    "leverVol": {
-      "text": "{{ex}} held steady, so I added a set for more stimulus.",
-      "observation": "{{ex}} held steady at full effort.",
-      "conclusion": "More sets give it more stimulus.",
-      "action": "I took it to {{sets}} sets."
-    },
-    "leverLoad": {
-      "text": "{{ex}} stalled with full volume, so I added {{delta}} kg to break it.",
-      "textStep": "{{ex}} stalled with full volume, so I stepped the load up to break it.",
-      "observation": "{{ex}} stalled with its full volume in place.",
-      "conclusion": "A small load increase breaks the stall.",
-      "action": "I added {{delta}} kg.",
-      "actionStep": "I stepped the load up."
-    },
-    "leverRange": {
-      "text": "{{ex}} stalled with full volume, so I changed the range to {{lo}} to {{hi}} and kept the lift.",
-      "observation": "{{ex}} stalled with its full volume in place.",
-      "conclusion": "A new rep range keeps the same lift moving.",
-      "action": "I set the range to {{lo}} to {{hi}}."
-    },
-    "patientHold": {
-      "text": "{{ex}} is steady, so I hold it and re-test before pushing.",
-      "observation": "{{ex}} is steady right now.",
-      "conclusion": "I hold and re-test before pushing.",
-      "action": "I hold this week and probe a small increase soon.",
-      "actionHold": "I hold it this week."
-    },
     "swap": {
       "text": "That slot missed the mark for a few weeks while your other lifts held, so I swapped it to {{ex}}.",
       "observation": "That slot has missed the mark for a few weeks while your other lifts held.",
       "conclusion": "The exercise is the thing to change.",
       "action": "I moved the slot to {{ex}}."
-    },
-    "deload": {
-      "text": "I pulled the weight and volume back so you can keep training safely.",
-      "observation": "You flagged something to train around.",
-      "conclusion": "I pull the weight and volume back so you can train safely.",
-      "action": "I eased it to {{load}} kg and {{sets}} sets.",
-      "actionBw": "I eased it to bodyweight and {{sets}} sets."
-    },
-    "absence": {
-      "text": "After more than a week away, I eased the load about ten percent and we rebuild.",
-      "observation": "More than a week passed without training.",
-      "conclusion": "I ease back in to rebuild safely.",
-      "action": "I eased about ten percent to {{load}} kg.",
-      "actionBw": "I eased back to bodyweight."
-    },
-    "adherenceHold": {
-      "text": "I held everything and trimmed the volume to make this week finishable.",
-      "observation": "Last week did not fully happen.",
-      "conclusion": "I hold everything and trim volume so this week is finishable.",
-      "action": "I trimmed it to {{sets}} sets."
     }
   },
   "profileEdit": {
