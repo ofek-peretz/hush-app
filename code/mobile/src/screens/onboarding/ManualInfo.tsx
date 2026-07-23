@@ -1,12 +1,17 @@
 /**
- * Body data (§4.3) — legend → title → sub → three labelled WheelPickers (Age / Height /
- * Weight — swipe straight to your value). Calibrates starting loads. Continue → Training,
+ * Body data (§4.3) — title → sub → ONE labelled WheelPicker (Weight — swipe straight to your
+ * value). Seeds the cold-start load; the first working set overwrites it. Continue → Training,
  * carrying the draft.
  *
- * SEX IS NO LONGER ASKED HERE (founder 2026-07-12). It was the fourth control on the most
- * crowded step in the app and it drowned; it now lives on the NAME step, where it is also
- * early enough for the copy layer to conjugate Hebrew for the right person. It still travels
- * in this draft (route param) so the profile and the starting-load model are unchanged.
+ * AGE AND HEIGHT ARE NO LONGER ASKED (founder 2026-07-23, Rev 14). Neither was ever an engine
+ * input — the cold start reads SEX × BODYWEIGHT only (register B-1), and Loop 1 corrects from the
+ * first set. Two wheels that decided nothing are two wheels that shouldn't be asked. Bodyweight
+ * stays because it genuinely seeds the opening load.
+ *
+ * SEX IS NO LONGER ASKED HERE EITHER (founder 2026-07-12). It was a control on the most crowded
+ * step and it drowned; it now lives on the NAME step, early enough for the copy layer to conjugate
+ * Hebrew for the right person. It still travels in this draft (route param) so the profile and the
+ * starting-load model are unchanged.
  */
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -28,14 +33,12 @@ export function ManualInfo({ navigation, route }: Props) {
   // addressing her correctly — a divergence nobody would ever see and the engine would never
   // recover from. The gender store holds what she actually chose on the previous screen.
   const sex = route.params?.sex ?? getGender();
-  const [age, setAge] = useState(28);
-  const [height, setHeight] = useState(178);
   // Weight is entered by hand — Health is now read for cardio metrics, not bodyweight.
   const [weight, setWeight] = useState(82);
 
   function onContinue() {
     navigation.navigate('Training', {
-      profile: { healthConnected, age, sex, heightCm: height, weightKg: weight },
+      profile: { healthConnected, sex, weightKg: weight },
     });
   }
 
@@ -53,17 +56,9 @@ export function ManualInfo({ navigation, route }: Props) {
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
       <View style={styles.rows}>
-        <View style={styles.col}>
-          <Legend>{t('ob.age')}</Legend>
-          <WheelPicker value={age} onChange={setAge} min={14} max={90} label={t('ob.age')} style={styles.wheel} />
-        </View>
-        {/* No unit cells (founder 2026-07-12): "178" under a legend that says Height is a
-            height in centimetres, and "82.5" under Weight is kilograms. The chip was a label
-            for a number that already labels itself, and it cost the scale its full width. */}
-        <View style={styles.col}>
-          <Legend>{t('ob.height')}</Legend>
-          <WheelPicker value={height} onChange={setHeight} min={120} max={220} label={t('ob.height')} style={styles.wheel} />
-        </View>
+        {/* No unit cell (founder 2026-07-12): "82.5" under a legend that says Weight is
+            kilograms. The chip was a label for a number that already labels itself, and it
+            cost the scale its full width. */}
         <View style={styles.col}>
           <Legend>{t('ob.weight')}</Legend>
           <WheelPicker value={weight} onChange={setWeight} step={0.5} min={35} max={250} label={t('ob.weight')} style={styles.wheel} />
@@ -74,8 +69,8 @@ export function ManualInfo({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // Sex moved to the Name step (2026-07-12), which gave this step its air back: three wheels
-  // instead of four controls, so the rhythm can breathe again.
+  // Down to a single wheel (Rev 14): sex moved to the Name step, and age/height were struck for
+  // deciding nothing. One clean measure — bodyweight — with all the air on the page it wants.
   rows: { gap: 22 },
   col: { gap: 8 },
   wheel: { alignSelf: 'stretch' },

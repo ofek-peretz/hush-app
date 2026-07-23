@@ -29,7 +29,7 @@
     "evidenceEmpty": "I changed nothing this week. Once you have a few sessions logged I set your next weights at the end of each workout, and show you the whole week here every Saturday.",
     "whyLink": "Why?",
     "unchangedNote": "Every other lift stands as it was.",
-    "askBackTitle": "{{muscle}} has been off a while. Want it back?",
+    "askBackTitle": "{{muscle}} is switched off. Want it back?",
     "askBackBody": "Everything it earned is kept. One tap and I pick it up exactly where you left it.",
     "askBackYes": "Bring it back",
     "askBackNo": "Leave it off",
@@ -72,6 +72,7 @@
     "restSubNamed": "{{name}}, muscle is built on days like this. Nothing is scheduled — that's the program working.",
     "planMinutes": "~{{min}} min",
     "planShape": "{{lifts}} lifts · ~{{min}} min",
+    "overBudget": "This one won't fit in {{n}} minutes. Add time, or turn a muscle off.",
     "trialLeft_one": "1 workout left in your trial",
     "trialLeft_other": "{{count}} workouts left in your trial",
     "undoSwap": "Keep {{lift}}",
@@ -167,10 +168,8 @@
     "healthSkip": "Skip for now",
     "bodyLegend": "About you",
     "bodyTitle": "About you",
-    "bodySub": "Seeds your first weights. Your first session overwrites them.",
+    "bodySub": "Your weight sets a starting point. Your first set decides the rest.",
     "sex": "Sex",
-    "age": "Age",
-    "height": "Height",
     "weight": "Weight",
     "weightWith": "Weight · {{unit}}",
     "daysLabel": "Sessions per week",
@@ -210,7 +209,7 @@
     "mapBudgetFull": "{{a}} and {{b}} have it. Turn one down to move it.",
     "mapUpperOnly": "Your week is upper-body work.",
     "mapLowerOnly": "Your week is lower-body work.",
-    "mapNothingOn": "Nothing's on — I have nothing to build a week from.",
+    "mapNothingOn": "Nothing's on — turn one back on and I'll build your week.",
     "regionUpper": "Upper",
     "regionLower": "Lower",
     "mapEditSub": "Everything's on unless you turn it off. Pick up to two for me to lead with — and tap a muscle to set the reps you like on it.",
@@ -228,7 +227,7 @@
     "button": "Choose workout"
   },
   "calibration": {
-    "framing": "The first few workouts are for me to learn you. Weights start light — that's deliberate.",
+    "framing": "Your first {{n}} workouts are for me to learn you. Weights start light — that's deliberate.",
     "stillLearning": "still learning this"
   },
   "workout": {
@@ -726,7 +725,7 @@
     "complete": "{{name}} complete.",
     "done": "Done",
     "swapTitle": "Swap exercise",
-    "swapHint": "I recalibrate the load.",
+    "swapHint": "I set the load for it.",
     "cancel": "Cancel"
   },
   "paywall": {
@@ -743,7 +742,7 @@
     "perMonth": "/month",
     "billedYearly": "Billed yearly",
     "billedMonthly": "Billed monthly",
-    "onlyBilled": "You're only billed after your seven free calibration sessions.",
+    "onlyBilled": "You're only billed after your seven free sessions.",
     "freeTrial": "{{period}} free",
     "subscribe": "Subscribe",
     "subscribePlan": "Subscribe · {{plan}}",

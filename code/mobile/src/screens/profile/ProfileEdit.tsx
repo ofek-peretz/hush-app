@@ -1,10 +1,12 @@
 /**
- * Edit profile (§4.28) — the edit surface is HEIGHT, WEIGHT, SESSIONS PER WEEK and the
- * WORKOUT-LENGTH CEILING (default 60). Nothing else:
+ * Edit profile (§4.28) — the edit surface is WEIGHT, SESSIONS PER WEEK and the WORKOUT-LENGTH
+ * CEILING (default 60). Nothing else:
  *  - Sex is fixed at onboarding (it never changes, so it is never re-asked). It seeds the first
  *    load and nothing more — it is not what she trains (that is the body map).
- *  - Age is asked once and the app advances it yearly by itself (domain/profileAge) —
- *    programs always see the current age without the athlete maintaining it.
+ *  - **Age and height do not exist here** (founder 2026-07-23, Rev 14): neither was ever an engine
+ *    input — the cold start reads SEX × BODYWEIGHT only (register B-1). Age is no longer asked at
+ *    all, so there is nothing to advance and nothing to edit; height decided nothing, so it is gone
+ *    from every surface that used to collect it.
  *  - **Experience does not exist.** v5 deleted it outright (register Part 9 §A): the first working
  *    set measures her, so a self-report never touches a load. (This header used to say experience
  *    was "derived from the athlete's real progression" — that was the v4 world, and it also listed
@@ -14,8 +16,8 @@
  *    editor, reached from Settings.
  *
  * Corrections must never reset progression, and they cannot: v5 keys progression to the EXERCISE
- * (register L2), never to a slot or a day. Height/weight inform cold starts; a changed frequency
- * or length rebuilds the week immediately, and the loads it rebuilds with are the ones she earned.
+ * (register L2), never to a slot or a day. Weight informs cold starts; a changed frequency or
+ * length rebuilds the week immediately, and the loads it rebuilds with are the ones she earned.
  *
  * A save is ACKNOWLEDGED before the screen closes (founder 2026-07-11): the button itself
  * turns into "Saved ✓" with a confirm haptic and holds for a beat, so the athlete SEES the
@@ -43,7 +45,6 @@ export function ProfileEdit({ navigation }: Props) {
   const p = app.profile;
   const units = p?.units ?? 'kg';
 
-  const [height, setHeight] = useState(p?.heightCm ?? 178);
   // Weight is edited in the athlete's display units, stored as kg.
   const [weight, setWeight] = useState(displayWeight(p?.weightKg ?? 82, units) ?? 82);
   const [days, setDays] = useState(p?.daysPerWeek ?? 4);
@@ -56,7 +57,6 @@ export function ProfileEdit({ navigation }: Props) {
 
   const wStep = units === 'kg' ? 0.5 : 1;
   const dirty =
-    height !== (p?.heightCm ?? 178) ||
     weight !== (displayWeight(p?.weightKg ?? 82, units) ?? 82) ||
     days !== (p?.daysPerWeek ?? 4) ||
     minutes !== (p?.workoutMinutes ?? 60);
@@ -67,7 +67,7 @@ export function ProfileEdit({ navigation }: Props) {
     const weightKg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     const daysChanged = days !== p?.daysPerWeek;
     try {
-      await app.updateProfileInfo({ heightCm: height, weightKg, daysPerWeek: days, workoutMinutes: minutes });
+      await app.updateProfileInfo({ weightKg, daysPerWeek: days, workoutMinutes: minutes });
     } catch {
       setSaving('idle'); // nothing persisted — let the athlete try again rather than lie
       return;
@@ -98,13 +98,9 @@ export function ProfileEdit({ navigation }: Props) {
         <Text style={styles.sub}>{t('profileEdit.sub')}</Text>
 
         {/* The unit cells are gone from the rules (founder 2026-07-12) — a number under a legend
-            that says Height is a height. Where the unit is genuinely ambiguous (kg vs lb) it now
+            that says Weight is a weight. Where the unit is genuinely ambiguous (kg vs lb) it now
             rides the LEGEND, which is where a field's unit belongs anyway. */}
         <View style={styles.rows}>
-          <View style={styles.col}>
-            <Legend>{t('ob.height')}</Legend>
-            <WheelPicker value={height} onChange={setHeight} min={120} max={220} label={t('ob.height')} style={styles.wheel} />
-          </View>
           <View style={styles.col}>
             <Legend>{t('ob.weightWith', { unit: unitLabel(units) })}</Legend>
             <WheelPicker value={weight} onChange={setWeight} step={wStep} min={units === 'kg' ? 35 : 75} max={units === 'kg' ? 250 : 550} label={t('ob.weightWith', { unit: unitLabel(units) })} style={styles.wheel} />

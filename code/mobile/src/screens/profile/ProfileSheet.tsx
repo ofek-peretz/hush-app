@@ -135,11 +135,10 @@ export function ProfileSheet({ navigation }: Props) {
     setOverlay('delete');
   }
 
-  // Body data summary — exactly what the edit screen manages (founder 2026-07-10:
-  // height + weight + sessions/week; sex/age/experience are system-maintained, so
-  // they are neither shown here nor editable). Goal is no longer a per-user setting.
+  // Body data summary — exactly what the edit screen manages (Rev 14: weight + sessions/week;
+  // sex is system-maintained, and age/height are no longer collected at all — neither was ever an
+  // engine input, register B-1). Goal is no longer a per-user setting.
   const bodyBits = [
-    p?.heightCm != null ? `${p.heightCm} cm` : null,
     // The athlete's OWN unit (an lb athlete never reads their bodyweight in kg).
     p?.weightKg != null ? `${displayWeight(p.weightKg, units)} ${unitLabel(units)}` : null,
     p?.daysPerWeek != null ? t('profile.daysSummary', { n: p.daysPerWeek }) : null,
@@ -270,7 +269,7 @@ export function ProfileSheet({ navigation }: Props) {
             "Experience" row opened the same screen and experience is now derived, not edited. */}
         <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
         {/* The body map (brief, Family 4) — its own row, not folded into the one above, because it is
-            not body DATA. Height and weight describe her; the map is the decision that shapes the
+            not body DATA. Weight describes her; the map is the decision that shapes the
             whole programme (register Part 3), and it is the only place the per-muscle rep band is
             ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
             same screen twice — this opens something else entirely. */}

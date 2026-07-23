@@ -798,8 +798,12 @@ export const fixtureModel: ModelClient = {
       // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
       // report can never disagree with the enforcement about whether a day fits.
       const mins = estimateSessionMinutes(d, restSecFor, execSecFor, transitionS);
-      if (mins > budgetMin + 1e-9)
+      if (mins > budgetMin + 1e-9) {
+        // S-3 — carry the verdict onto the day so the surface can SAY it (Home), not only telemetry.
+        // Same estimate the trims enforced, so the sentence can never disagree with the enforcement.
+        d.overBudget = true;
         void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
+      }
     }
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order

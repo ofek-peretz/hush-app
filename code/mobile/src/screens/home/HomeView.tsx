@@ -95,6 +95,12 @@ export interface HomeViewProps {
   plan: HomePlanLift[] | null;
   /** Honest work-time estimate for the selected workout (minutes). 0 = unknown. */
   planMinutes?: number;
+  /** S-3 — the engine could not fit this day inside her declared minutes even after every legal cut
+   *  (every trained muscle is down to its last lift). Set on ProgramDay by generateProgram. When
+   *  true, Hush SAYS so under the plan rather than starving a muscle in silence. */
+  overBudget?: boolean;
+  /** Her declared time budget in minutes (profile.workoutMinutes) — the number the S-3 line names. */
+  budgetMinutes?: number;
   /** Open one lift's form clip — a tap on the lift's row. */
   onForm: (exerciseId: string) => void;
   /** The selected workout is already trained this week: it can be READ, never started again
@@ -372,6 +378,16 @@ export function HomeView(props: HomeViewProps) {
                 <View style={styles.planLoading} />
               )}
 
+              {/* S-3 · the day genuinely cannot fit her minutes. The engine has already cut everything
+                  it legally can (a muscle's last lift is protected), so it says so plainly and offers
+                  the two levers she owns — more minutes, or a muscle off — rather than starve one in
+                  silence. A quiet note, not an alarm: it is a fact about her budget, not an error. */}
+              {props.overBudget && props.plan?.length ? (
+                <Text style={styles.overBudgetNote}>
+                  {t('home.overBudget', { n: props.budgetMinutes ?? 0 })}
+                </Text>
+              ) : null}
+
               {/* THE CHOOSER — the week's workouts as a horizontal scroller. The queued one is cream
                   (standing in the light); a done one wears the moss check; the rest rest in shadow.
                   One act: a tap selects, and the plan above repaints. A done workout can be read but
@@ -585,6 +601,8 @@ const styles = StyleSheet.create({
   figureChanged: { color: color.accent, fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
   figureScheme: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   planLoading: { height: 168 },
+  // S-3 — a quiet note, not an alarm. Sans (it carries words), secondary ink, sits under the plan.
+  overBudgetNote: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, textAlign: 'left', marginTop: 10 },
   doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 4 },
   doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
 

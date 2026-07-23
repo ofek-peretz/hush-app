@@ -507,6 +507,8 @@ export function Home({ navigation, route }: Props) {
       weekNumber={weekNumber}
       plan={plan}
       planMinutes={day ? Math.max(5, Math.round(estimateSessionMinutes(day) / 5) * 5) : 0}
+      overBudget={!!day?.overBudget}
+      budgetMinutes={app.profile?.workoutMinutes ?? 60}
       dayDone={!!day?.completed}
       units={app.profile?.units ?? 'kg'}
       onForm={setFormFor}

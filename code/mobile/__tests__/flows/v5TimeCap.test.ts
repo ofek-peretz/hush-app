@@ -67,6 +67,27 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
     const trained = new Set(prog.days.flatMap((d) => d.slots.map((s) => s.exerciseId)));
     expect(trained.size).toBeGreaterThanOrEqual(6); // a real, non-degenerate programme
   });
+
+  /**
+   * S-3 · THE ENGINE SAYS SO — the day carries the verdict, so the surface can speak it (Home).
+   * The flag is set on ProgramDay by generateProgram at the same estimate the trims enforced, so it
+   * can never disagree with the enforcement. With a fresh profile (no logged rest) the un-parameterised
+   * `estimateSessionMinutes` equals the engine's internal estimate, so the biconditional is exact:
+   * `overBudget` is true iff the day genuinely exceeds her minutes after every legal cut.
+   */
+  it('S-3 · a day that cannot fit her minutes is flagged overBudget; a day that fits is not', async () => {
+    const budget = 45;
+    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: budget });
+    let sawOver = false;
+    for (const d of prog.days) {
+      const over = estimateSessionMinutes(d) > budget + 1e-9;
+      expect(!!d.overBudget).toBe(over); // set exactly when — and only when — the day cannot fit
+      if (over) sawOver = true;
+    }
+    // The scenario exists to exercise the flag: at 3d / 45min the dense upper day reaches the S-35
+    // floor (one lift per muscle) and lands ~48 prescribed minutes — over budget, and correctly so.
+    expect(sawOver).toBe(true);
+  });
 });
 
 describe('v5 · the budget is computed from HER MEASURED REST (S-64), not a fixed estimate', () => {

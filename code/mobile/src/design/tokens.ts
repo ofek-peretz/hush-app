@@ -87,7 +87,11 @@ export const cream = {
   0: '#f1eee5', // primary text on stage.        16.9:1 on stage[0]
   1: '#a8a290', // secondary text on stage.        8.1:1 on stage[0]
   2: '#8b8474', // muted / eyebrow on stage.       5.4:1 on stage[0]
-  3: '#7a7260', // faint / mono legend on stage.   4.5:1 on stage[0]
+  // v7 Rev 14 — the faint tier is LIFTED to the muted value. `#7a7260` cleared AA only against
+  // the mid gradient (4.5:1 on stage[0]) and dropped to 3.7:1 against the LIGHTEST stop — text
+  // sitting on the top of the gradient was sub-AA. It now equals cream[2] (4.7:1 worst-case);
+  // there is no legible tier below the muted one on the stage. Locked by contrastHoldsOnTheStage.
+  3: '#8b8474', // faint / mono legend on stage.   ≥4.5:1 on the lightest stage ground
 } as const;
 
 /**
@@ -106,6 +110,8 @@ export const line = {
  */
 export const signal = {
   0: '#a9c49f', // lit moss — the mark & accent ON THE STAGE
+  // `1` is a PAPER ink. On the dark stage it reads 2.2:1 — invisible. NEVER color stage TEXT with
+  // it; reach for `0` (lit moss) there. Locked by contrastHoldsOnTheStage.
   1: '#3e573f', // deep moss — the mark & accent ON PAPER
   wash: 'rgba(169,196,159,0.12)', // faint moss veil (a live channel, a scan)
   ring: '#a9c49f', // the rest / live ring

@@ -132,6 +132,14 @@ export interface ProgramDay {
   // 'completed'|'skipped'). The Program screen renders a completed workout green; Home advances
   // to the next UNFINISHED workout. Rest begins only after ALL of the week's workouts are done.
   completed?: boolean;
+  // S-3 · THE DAY GENUINELY CANNOT FIT HER MINUTES. Set by the engine (generateProgram) when a day
+  // is still over her declared budget after every legal cut — because every trained muscle is down
+  // to its last lift (S-35's protected drops), so there is nothing left to cut without starving a
+  // muscle. It is the ONE fact the engine already computed for telemetry (engine_cannot_fit_budget)
+  // and used to throw away; carrying it here lets the surface SAY it, in words, rather than starve
+  // a muscle in silence. Absent (the norm) whenever the day fits. Read-only: it changes no load,
+  // volume, selection or order — enforceTimeCap has already run; this only reports its verdict.
+  overBudget?: boolean;
 }
 
 export interface Program {
