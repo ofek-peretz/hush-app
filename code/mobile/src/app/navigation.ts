@@ -13,6 +13,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CardioActivity, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
+import type { WristOffer } from '@/platform/watch/watchPresence';
 
 /** The Saturday letter's fact band — workouts done of planned, tonnes moved, calories. */
 export interface WeeklyBand {
@@ -30,7 +31,11 @@ export type OnboardingParamList = {
   // founder 2026-07-12: Hebrew conjugates the second person, so the copy layer needs it
   // before the next screen speaks). Sex rides the params from here to the profile.
   NameEntry: undefined;
-  ConnectHealth: { sex: 'male' | 'female' } | undefined;
+  // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
+  // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
+  // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
+  // watch decides, as it always has.
+  ConnectHealth: { sex?: 'male' | 'female'; previewWrist?: WristOffer } | undefined;
   // About you + Your week (v7 1.4, merged 2026-07-24): bodyweight seeds the cold-start load and
   // sessions-per-week shapes the split — one screen. `healthConnected` records whether Health was
   // connected; `sex` is carried from NameEntry. Assembles OnboardingInputs and continues to BodyMap.

@@ -995,6 +995,22 @@
     "allow": "Allow notifications",
     "notNow": "Not now"
   },
+  "onWrist": {
+    "legend": "On your wrist",
+    "title": "Your watch already has me.",
+    "titleInstall": "Your watch can carry me.",
+    "sub": "I install alongside the iPhone app — nothing to set up, nothing to allow. Raise your wrist at the rack and today's set is already there.",
+    "subInstall": "Auto-install is off on this iPhone, so the wrist is still empty. Open the Watch app, find me under Available Apps, and install. That is the whole of it.",
+    "cardTitle": "Apple Watch",
+    "cardLegend": "Load · reps · rest",
+    "noticeOn": "Your watch already has me — the set, the rest, the tick.",
+    "noticeInstall": "Your watch can carry me. Open the Watch app and install from Available Apps.",
+    "willSet": "The set on your wrist — the load, the reps, and the tick that logs them",
+    "willRest": "Rest counts down there and taps you the moment it ends",
+    "willStandalone": "The whole workout runs with the phone in your bag",
+    "helper": "Your heart rate is measured on the wrist while you lift, and the finished workout lands in Health. The phone still decides every load.",
+    "done": "Got it"
+  },
   "comeback": {
     "legend": "Welcome back · {{days}} days away",
     "title": "Good to see you. Right where you left off.",

@@ -34,6 +34,7 @@ import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
 import { setGender, resetGender } from '@/i18n/gender';
+import { resetWristOffered } from '@/platform/watch/watchPresence';
 import { billing, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
 import { BILLING_EVENTS } from '@/platform/events';
 import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
@@ -305,6 +306,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // person, in Hebrew, all the way to the step where they finally get to say who they are),
         // and certainly not their NAME, which is still sitting in the pending ref.
         resetGender();
+        // …and not the in-memory latch that says the wrist has already been named. `db.clearAll`
+        // removed the key; this drops the shadow over it, or a wiped phone goes on telling the
+        // next athlete "already told" until the app is force-quit.
+        resetWristOffered();
         pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       })();
@@ -991,6 +996,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // person, in Hebrew, all the way to the step where they finally get to say who they are),
         // and certainly not their NAME, which is still sitting in the pending ref.
         resetGender();
+        // …and not the in-memory latch that says the wrist has already been named. `db.clearAll`
+        // removed the key; this drops the shadow over it, or a wiped phone goes on telling the
+        // next athlete "already told" until the app is force-quit.
+        resetWristOffered();
         pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       },
@@ -1017,6 +1026,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // person, in Hebrew, all the way to the step where they finally get to say who they are),
         // and certainly not their NAME, which is still sitting in the pending ref.
         resetGender();
+        // …and not the in-memory latch that says the wrist has already been named. `db.clearAll`
+        // removed the key; this drops the shadow over it, or a wiped phone goes on telling the
+        // next athlete "already told" until the app is force-quit.
+        resetWristOffered();
         pendingNameRef.current = null;
         dispatch({ type: 'RESET' });
       },

@@ -52,6 +52,30 @@ public final class HushWatchConnectivityModule: Module {
       WCSession.isSupported() ? WCSession.default.isReachable : false
     }
 
+    // IS THERE A WATCH ON THIS WRIST AT ALL?
+    //
+    // `isReachable` cannot answer that: it is false whenever the watch app is not in the
+    // foreground, which is nearly always. `isPaired` / `isWatchAppInstalled` are the two
+    // facts WCSession holds about the DEVICE, and they are iPhone-only members.
+    //
+    // `activated` is part of the answer, not an implementation detail. Both flags read
+    // false until activation completes (it is asynchronous, started in OnCreate), so a
+    // caller that could not tell "no watch" from "not asked yet" would tell an Apple Watch
+    // owner they have no watch on the one boot it lost the race. JS treats
+    // `activated: false` as UNKNOWN and simply asks again next time.
+    Function("pairingState") { () -> [String: Any] in
+      guard WCSession.isSupported() else {
+        return ["activated": true, "paired": false, "appInstalled": false]
+      }
+      let session = WCSession.default
+      let activated = session.activationState == .activated
+      return [
+        "activated": activated,
+        "paired": activated && session.isPaired,
+        "appInstalled": activated && session.isWatchAppInstalled,
+      ]
+    }
+
     // Publish the latest envelope. Always update the coalesced application context
     // (survives the watch being asleep / unreachable); also push a live message when
     // the watch is reachable for low-latency updates.

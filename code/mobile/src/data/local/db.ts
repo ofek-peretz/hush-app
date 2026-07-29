@@ -42,6 +42,23 @@ const K = {
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
   schemaVersion: 'hush.schema.version',
+
+  /* ── ONCE-PER-ATHLETE FLAGS ──────────────────────────────────────────────────────────────────
+   * Each is declared next to the surface that owns it (the name here is the ONLY copy that must
+   * agree). They are registered in K for one reason: `clearAll` wipes exactly `Object.values(K)`,
+   * so a flag that is not here SURVIVES A WIPED IDENTITY — and the next athlete on that phone is
+   * silently never asked, never told, never greeted. Every one of these means "we already said
+   * this to HER", and "her" is precisely what a wipe changes.
+   *
+   * Found 2026-07-29 while adding `watchOffered`; the other two had the same hole already.
+   * `everyStorageKeyIsAccountedFor` now sweeps the source so the next one cannot be forgotten.
+   *
+   * Clearing `notificationsAsked` does NOT burn iOS's one prompt: `shouldAskForNotifications`
+   * still reads the system state first, so a permission already granted or refused-for-good is
+   * never re-asked — only a fresh athlete on a still-askable phone sees the pre-ask again. */
+  notificationsAsked: 'hush.notifications.asked', // 8.2 · platform/notifications
+  watchOffered: 'hush.watch.offered', // 1.3 + 10.4 · platform/watch/watchPresence
+  recoverySealed: 'hush.recovery.sealed', // 3.5 · screens/home/HomeView
 } as const;
 
 /** Athlete-OWNED program customizations, persisted so weekly regeneration honors them.

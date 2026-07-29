@@ -37,6 +37,7 @@ import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
+import { OnYourWristView } from '@/screens/watch/OnYourWrist';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
@@ -57,10 +58,13 @@ import { font, stage } from '@/design/tokens';
  *   `device` — built and wired IN THE APP, but it cannot mount here: it reads SQLite, GPS, the
  *              engine, or a beat that only a real session produces. Its correctness is held by the
  *              unit tests, not by this page.
- *   `todo`   — not built yet.
- *   `held`   — deliberately not built; the note says on whose word.
+ *   `todo`   — not built yet, and still wanted.
+ *   `cancelled` — WITHDRAWN from the product (founder 2026-07-29). Not "later" and not "blocked":
+ *              these are off the list, and they stay listed only so the id is never silently
+ *              reused and nobody re-derives them from the handoff as missing work. They do not
+ *              count against "built" — a screen the product does not want is not a screen it owes.
  */
-export type ScreenStatus = 'live' | 'device' | 'todo' | 'held';
+export type ScreenStatus = 'live' | 'device' | 'todo' | 'cancelled';
 
 export interface GalleryEntry {
   id: string;
@@ -742,10 +746,14 @@ export const GALLERY: GalleryEntry[] = [
   // ── 01 · ARRIVE ────────────────────────────────────────────────────────────────────────────
   { id: '1.1', label: 'Sign in', status: 'live', render: () => mount(Authentication) },
   { id: '1.2', label: 'Name + sex', status: 'live', render: () => mount(NameEntry) },
-  { id: '1.3', label: 'Connect health', status: 'live', render: () => mount(ConnectHealth, { sex: 'male' }) },
+  { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
+  // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
+  // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
+  { id: '1.3b', label: 'Connect health — a watch is paired', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'confirm' }) },
+  { id: '1.3c', label: 'Connect health — watch, not installed', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'install' }) },
   { id: '1.4', label: 'About you + your week', status: 'live', render: () => mount(ManualInfo, { healthConnected: false, sex: 'male' }) },
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
-  { id: '1.6', label: 'Bring your history', status: 'held', note: 'founder — revisit at the end' },
+  { id: '1.6', label: 'Bring your history', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
 
   // ── 02 · TRAIN ─────────────────────────────────────────────────────────────────────────────
   // The card rises once per install, so the harness has to hold it open — and it hands the
@@ -755,7 +763,7 @@ export const GALLERY: GalleryEntry[] = [
   { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
   { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
-  { id: '2.1e', label: "When the day won't fit", status: 'held', note: 'needs S-3 trim detail from the engine' },
+  { id: '2.1e', label: "When the day won't fit", status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
   { id: '2.2', label: 'The set', status: 'live', render: () => mount(SessionFlow) },
   { id: '2.2b', label: 'Edit set', status: 'live', note: 'tap the weight on 2.2', render: () => mount(SessionFlow) },
   { id: '2.2c', label: 'Form', status: 'live', note: 'the clip itself needs a device build; the cues and chrome are real', render: () => (
@@ -830,7 +838,7 @@ export const GALLERY: GalleryEntry[] = [
   ) },
   { id: '2.6', label: 'Milestone', status: 'live', render: () => <InApp><MilestoneBeat value="40" caption="kg" title="Forty on the bench." meta="MEASURED · 17 JULY 2026" glyph="plates" /></InApp> },
   { id: '2.6b', label: 'Milestone — ten workouts', status: 'live', render: () => <InApp><MilestoneBeat value="10" caption="workouts" title="Ten workouts. You kept coming." meta="21.4 T MOVED · 8 RAISES · 3 WEEKS" /></InApp> },
-  { id: '2.6c', label: 'The block, sealed', status: 'held', note: 'needs the 12-session block concept' },
+  { id: '2.6c', label: 'The block, sealed', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
 
   // ── 03 · REFLECT ───────────────────────────────────────────────────────────────────────────
   { id: '3.1', label: 'The Saturday letter', status: 'live', note: "a week WITH decisions — the handoff's own example, nothing special about its number", render: () => mount(WeeklyUpdate, { previewPlan: letterWeek }) },
@@ -914,7 +922,7 @@ export const GALLERY: GalleryEntry[] = [
   ) },
   { id: '3.5', label: 'The week is done', status: 'live', render: () => <InApp><UnderTabs active={0}>{weekDoneView}</UnderTabs></InApp> },
   { id: '3.6b', label: 'Progress — day one', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
-  { id: '3.6c', label: 'The next twelve', status: 'held', note: 'needs the 12-session block concept' },
+  { id: '3.6c', label: 'The next twelve', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
 
   // ── 04 · OWN ───────────────────────────────────────────────────────────────────────────────
   { id: '4.1', label: 'Body map — editor', status: 'live', note: 'tap a muscle; Front / Back turns the body', render: () => mount(BodyMapEdit) },
@@ -929,7 +937,7 @@ export const GALLERY: GalleryEntry[] = [
   { id: '6.2', label: 'Lock screen · live activity', status: 'device', note: 'the same activity, expanded — strength and cardio both' },
   // The one WidgetKit StaticConfiguration in the repo is the WATCH complication; there is no iOS
   // home-screen widget yet, so this stays honest.
-  { id: '7.1', label: 'Widgets', status: 'todo', note: 'the watch complication exists; the iOS home-screen widget does not' },
+  { id: '7.1', label: 'Widgets', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn; the WATCH complication ships, the iOS home-screen widget is not wanted' },
   { id: '8.1', label: 'Notifications', status: 'device', note: 'built + scheduled locally (platform/notifications.ts) — the OS draws them' },
   { id: '8.2', label: 'Permission · the honest ask', status: 'live', note: 'shown once, after the first session', render: () => <InApp><NotificationAsk onAllow={noop} onDecline={noop} /></InApp> },
   { id: '8.3', label: 'In-workout · rest ending', status: 'device', note: 'the 7-second tap — fires on a running rest (platform/restHaptics.ts)' },
@@ -964,6 +972,16 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '10.3', label: 'Win-back push', status: 'device', note: 'one notification, weeks after lapsing — the OS draws it' },
+  // Not in the handoff — founder 2026-07-29, designed in-house on 1.3. It is filed in §10 because
+  // that is what it IS: a third state that replaces Today, on the same mechanism as 10.1 / 10.2.
+  // The harness can show both faces; on a device WCSession decides, and neither face exists for a
+  // phone with no watch paired to it.
+  { id: '10.4', label: 'On your wrist', status: 'live', note: 'for the athlete who got a watch SINCE — someone who had one was told at 1.3b', render: () => (
+    <InApp><OnYourWristView offer="confirm" onDone={noop} /></InApp>
+  ) },
+  { id: '10.4b', label: 'On your wrist — not installed', status: 'live', note: 'auto-install is off on this iPhone', render: () => (
+    <InApp><OnYourWristView offer="install" onDone={noop} /></InApp>
+  ) },
   // §11's live half (invite / shared session / the partner feed) needs a server between two
   // devices, and the launch is 100% on-device. The two halves that DON'T are built: a plan travels
   // as an opaque link, so nothing but the shape ever leaves the phone.

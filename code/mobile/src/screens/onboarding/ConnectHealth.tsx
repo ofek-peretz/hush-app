@@ -10,8 +10,25 @@
  * fine print is a mono legend — "HR · KCAL · KM — DISPLAY ONLY" — stating what flows and, in
  * caps, that it never decides. A sans helper line under the card carries the law in words, and
  * the footer holds BOTH exits: Continue (paper) and a quiet "Skip for now" ghost.
+ *
+ * ════ AND THE WRIST, WHEN THERE IS ONE (founder 2026-07-29) ════
+ *
+ * "If the system detects a watch, the connection to it can be added on 1.3. If it does not, it
+ * does not appear on this screen at all."
+ *
+ * This is the earliest honest moment to say it, and saying it here is what stops the first workout
+ * from happening without a watch the athlete owned the whole time. It is drawn ONLY when WCSession
+ * reports a paired watch (`platform/watch/watchPresence`), so a phone with no watch never sees a
+ * word about one — the screen is exactly what it was.
+ *
+ * IT IS A NOTICE, NOT A SECOND CARD, and the distinction is the whole design. The Health card is a
+ * SWITCH: the founder's 2026-07-12 ruling is that a card here reads as a control, and a card that
+ * is not one is the exact bug he rejected. There is nothing to grant for a watch — it auto-installs
+ * with its companion, nothing is paired here, no permission exists — so drawing it as a second card
+ * would promise a decision that does not exist. It is a ruled row: a glyph, a sentence, no
+ * affordance, visibly not the object above it.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
@@ -21,6 +38,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
+import { markWristOffered, readWatchPresence, wristFace } from '@/platform/watch/watchPresence';
 import * as haptics from '@/platform/haptics';
 import { color, font, textScale, radius } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -32,6 +50,18 @@ export function ConnectHealth({ navigation, route }: Props) {
   const sex = route.params?.sex;
   const [connected, setConnected] = useState(false);
   const [asking, setAsking] = useState(false);
+
+  /**
+   * The wrist, if there is one. Read ONCE — a watch is not paired during the four seconds this
+   * screen is on the glass, and a notice that appeared mid-read would be the interruption this
+   * product does not do. `route.params.previewWrist` is the gallery's seam and nothing else: the
+   * harness has no WCSession, so without it this row could only ever be looked at ABSENT — which
+   * is the one state it says nothing in. Never passed by the app.
+   */
+  const wrist = useMemo(
+    () => route.params?.previewWrist ?? wristFace(readWatchPresence()),
+    [route.params?.previewWrist],
+  );
 
   async function toggle() {
     // Off → on: run the real system flow. On → off is not ours to revoke (iOS only allows
@@ -60,6 +90,11 @@ export function ConnectHealth({ navigation, route }: Props) {
 
   function proceed(withHealth: boolean) {
     if (!withHealth) void track('health_skipped', {});
+    // SHE HAS BEEN TOLD — but only if this screen actually drew the row. The flag is the one seam
+    // between here and 10.4: set it and the later screen stays silent for her forever; leave it
+    // unset (no watch, or WCSession did not answer in time) and 10.4 remains armed to say it the
+    // first open that knows. Both exits set it, because both leave the screen having shown it.
+    if (wrist) void markWristOffered();
     navigation.navigate('ManualInfo', { healthConnected: withHealth, sex });
   }
 
@@ -126,6 +161,22 @@ export function ConnectHealth({ navigation, route }: Props) {
 
       {/* v7 helper line — the law in words, under the card, sans. */}
       <Text style={styles.helper}>{t('ob.healthHelper')}</Text>
+
+      {/* THE WRIST — a ruled row, and only for someone who has one. No Pressable, no switch, no
+          chevron: there is nothing here to decide, and the shape says so before the words do. */}
+      {wrist ? (
+        <View style={styles.wrist}>
+          <Icon
+            name="watch"
+            size={20}
+            color={wrist === 'confirm' ? color.accent : color.textSecondary}
+            strokeWidth={1.8}
+          />
+          <Text style={styles.wristText}>
+            {wrist === 'confirm' ? t('onWrist.noticeOn') : t('onWrist.noticeInstall')}
+          </Text>
+        </View>
+      ) : null}
     </OnboardingScaffold>
   );
 }
@@ -150,6 +201,18 @@ const styles = StyleSheet.create({
   sub: { color: color.textSecondary, marginTop: 3 },
   // The law in words, under the card.
   helper: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, marginTop: 18, textAlign: 'left' },
+  // The wrist row — ruled off the helper above it, so it reads as a separate FACT rather than a
+  // second sentence about Health. A hairline is the lightest thing that can say "and also".
+  wrist: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 20,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: color.border,
+  },
+  wristText: { flex: 1, fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
   // The quiet second exit.
   skip: { fontFamily: font.sansMedium, fontSize: 14, color: color.textMuted, textAlign: 'center', paddingVertical: 4 },
 });

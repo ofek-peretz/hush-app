@@ -65,7 +65,8 @@ export type IconName =
   | 'alert' // a warning triangle — the ONE place it appears is the pain door (v7 13.1)
   | 'share' // a tray with an arrow out of it — sending a plan link (v7 11.4)
   | 'twoPeople' // two figures — the door to the share cards, from Today (v7 2.1)
-  | 'eyeOff'; // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
+  | 'eyeOff' // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
+  | 'watch'; // a watch on its band, crown at the side — the wrist (10.4)
 
 interface Props {
   name: IconName;
@@ -484,6 +485,18 @@ function render(
         <G {...common}>
           <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
           <Path d="M4 4l16 16" />
+        </G>
+      );
+    case 'watch':
+      // The wrist (10.4): the case, the two band stubs above and below it, and the crown on the
+      // side. It is a DEVICE, not a clock — no hands inside it, because the one thing this glyph
+      // must never say is "time".
+      return (
+        <G {...common}>
+          <Rect x="6" y="6" width="12" height="12" rx="3.6" />
+          <Path d="M9 6V3.6h6V6" />
+          <Path d="M9 18v2.4h6V18" />
+          <Path d="M19.6 10.4v3.2" />
         </G>
       );
     case 'alert':

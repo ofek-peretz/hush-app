@@ -32,6 +32,16 @@ import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { comebackAfterGap } from '@/domain/comeback';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
+import { OnYourWristView } from '@/screens/watch/OnYourWrist';
+import {
+  hasOfferedTheWrist,
+  markWristOffered,
+  offerTheWrist,
+  readWatchPresence,
+  WATCH_PRESENCE_UNKNOWN,
+  type WatchPresence,
+  type WristOffer,
+} from '@/platform/watch/watchPresence';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
@@ -565,10 +575,47 @@ export function Home({ navigation, route }: Props) {
   // 10.1 · AFTER A GAP. Shown once per return: dismissing it starts the day, and coming back
   // tomorrow is not a gap any more, so nothing has to be remembered.
   const [greeted, setGreeted] = useState(false);
-  const comeback = useMemo(
-    () => (greeted || lapsed ? null : comebackAfterGap(saved ?? [], Date.now())),
-    [greeted, lapsed, saved],
+  // Whether a greeting was DUE on this arrival, independent of whether it has been dismissed —
+  // 10.4 reads it to stay out of the way, and `greeted` would tell it the opposite.
+  const comebackDue = useMemo(
+    () => (lapsed ? null : comebackAfterGap(saved ?? [], Date.now())),
+    [lapsed, saved],
   );
+  const comeback = greeted ? null : comebackDue;
+
+  /* ════ 10.4 · ON YOUR WRIST — the third state that replaces Today ════
+   *
+   * Same mechanism as the two above it and for the same reason: it answers "what is true when she
+   * opens the app", and you do not GO to owning an Apple Watch. `platform/watch/watchPresence`
+   * holds every rule — chiefly that WCSession says a watch is actually paired to this iPhone, so
+   * it can never appear as an advertisement to someone who owns no watch.
+   *
+   * It is the SECOND of the two surfaces that tell her, and deliberately the smaller one: an
+   * athlete who already owned a watch was told at 1.3 during onboarding, which sets the same flag
+   * this reads. What is left here is the athlete who acquired a watch since — and that is exactly
+   * why it is read on FOCUS rather than once at mount. A watch bought this afternoon shows up on
+   * the next open, with no restart and nothing to find in settings.
+   */
+  const [wristPresence, setWristPresence] = useState<WatchPresence>(WATCH_PRESENCE_UNKNOWN);
+  const [wristOffered, setWristOffered] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isFocused) return;
+    setWristPresence(readWatchPresence());
+    let alive = true;
+    void hasOfferedTheWrist().then((yes) => alive && setWristOffered(yes));
+    return () => {
+      alive = false;
+    };
+  }, [isFocused]);
+
+  const wristOffer: WristOffer | null =
+    wristOffered == null
+      ? null // still finding out — a screen that flashes in and out is worse than one that waits
+      : offerTheWrist({
+          presence: wristPresence,
+          offered: wristOffered,
+          greetingBack: !!comebackDue,
+        });
 
   if (lapsed) {
     const last = (saved ?? [])[0];
@@ -604,6 +651,20 @@ export function Home({ navigation, route }: Props) {
           load: l.load == null ? null : displayWeight(l.load, app.profile?.units ?? 'kg') ?? null,
         }))}
         onStart={() => setGreeted(true)}
+      />
+    );
+  }
+
+  if (wristOffer) {
+    return (
+      <OnYourWristView
+        offer={wristOffer}
+        onDone={() => {
+          // Spent the moment it is read, exactly like 8.2's ask: the flag is written AND the local
+          // state flips, so Today is underneath before the write returns.
+          setWristOffered(true);
+          void markWristOffered();
+        }}
       />
     );
   }

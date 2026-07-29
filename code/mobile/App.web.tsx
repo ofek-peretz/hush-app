@@ -138,13 +138,16 @@ function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
   ];
   const live = GALLERY.filter((g) => g.status === 'live').length;
   const built = GALLERY.filter((g) => g.status === 'live' || g.status === 'device').length;
+  // A withdrawn screen is not work outstanding, so it leaves the denominator entirely — otherwise
+  // this line reads as five screens still owed, forever, and someone eventually rebuilds them.
+  const owed = GALLERY.filter((g) => g.status !== 'cancelled').length;
 
   return (
     <ScrollView contentContainerStyle={styles.index}>
       <Text style={styles.indexTitle}>{entry ? entry.label : id ? `No screen "${id}"` : 'v7'}</Text>
       {entry?.note ? <Text style={styles.indexNote}>{entry.note}</Text> : null}
       <Text style={styles.indexNote}>
-        {`${built} of ${GALLERY.length} built · ${live} open here`}
+        {`${built} of ${owed} built · ${live} open here · ${GALLERY.length - owed} withdrawn`}
       </Text>
 
       {sections.map((sec) => {

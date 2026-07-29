@@ -20,8 +20,17 @@ import { requireOptionalNativeModule, type EventSubscription } from 'expo-module
 import { serializeEnvelope, type WatchStateEnvelope } from './protocol';
 import { watchTransportStub, type WatchTransport } from './watchBridge';
 
+/** What WCSession knows about the DEVICE (not about the connection) — see `pairingState` in
+ *  `HushWatchConnectivityModule.swift`. `activated: false` means "not asked yet", never "no". */
+export interface NativeWatchPairing {
+  activated: boolean;
+  paired: boolean;
+  appInstalled: boolean;
+}
+
 interface HushWatchConnectivityNativeModule {
   isReachable(): boolean;
+  pairingState(): NativeWatchPairing;
   sendState(json: string): void;
   /** Durably acknowledge a reconciled watch-local session record (transferUserInfo). */
   ackRecord(recordId: string): void;
@@ -40,6 +49,26 @@ const native =
 function parseIntent(json: string): unknown {
   try {
     return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What WCSession knows about the wrist, or null where there is no native module (web / Expo
+ * Go / jest / a build without the watch target). NULL AND `activated: false` MEAN THE SAME
+ * THING to a caller — we do not know — and neither is ever reported as "no watch".
+ *
+ * This is the only native read outside the transport, and it lives here so the module handle
+ * has exactly one home.
+ */
+export function nativeWatchPairing(): NativeWatchPairing | null {
+  if (!native) return null;
+  try {
+    const state = native.pairingState();
+    // A malformed answer is an unknown one, never a negative.
+    if (typeof state?.activated !== 'boolean') return null;
+    return { activated: state.activated, paired: !!state.paired, appInstalled: !!state.appInstalled };
   } catch {
     return null;
   }

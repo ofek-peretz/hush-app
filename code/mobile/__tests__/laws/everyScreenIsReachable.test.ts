@@ -11,6 +11,13 @@
  *   · every route declared on `MainParamList` is registered on the navigator, and
  *   · every registered route is either navigated to somewhere, or named here as a deliberate
  *     exception with the reason it has no in-app caller.
+ *
+ * ── AND THE SCREENS THAT ARE NOT ROUTES ───────────────────────────────────────────────────────
+ * §10's screens answer "what is true when she opens the app", so they are STATES Today returns
+ * instead of itself — you do not GO to having been away, or to owning an Apple Watch. A route
+ * walker is blind to every one of them, which is precisely how 10.1 and 10.2 came to be finished
+ * and unreachable in the first place. The gallery is blind too: it mounts `HomeView`, and not one
+ * of these three lives there. So they are checked where they actually live — the `Home` container.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -64,4 +71,30 @@ describe('the navigation graph has no orphans', () => {
     const stale = Object.keys(REACHED_WITHOUT_NAVIGATE).filter((r) => !registered.has(r));
     expect({ staleExceptions: stale }).toEqual({ staleExceptions: [] });
   });
+});
+
+/**
+ * §10 · the screens Today returns INSTEAD OF ITSELF. Each pairs the view with the module that
+ * decides whether it is due, because a state whose gate is never consulted is unreachable in the
+ * same way a route with no `navigate` is — it simply fails silently instead of loudly.
+ */
+const STATES_THAT_REPLACE_TODAY: { view: string; gate: string; what: string }[] = [
+  { view: 'WelcomeBackView', gate: 'comebackAfterGap', what: '10.1 · after a gap' },
+  { view: 'LapsedView', gate: 'entitlement', what: '10.2 · subscription lapsed' },
+  { view: 'OnYourWristView', gate: 'offerTheWrist', what: '10.4 · on your wrist' },
+];
+
+describe('the states that replace Today are rendered by Today', () => {
+  const home = read('screens/home/Home.tsx');
+
+  for (const { view, gate, what } of STATES_THAT_REPLACE_TODAY) {
+    it(`${what} — Home imports it, renders it, and consults its gate`, () => {
+      expect({
+        state: what,
+        imported: new RegExp(`import\\s*\\{[^}]*\\b${view}\\b`, 's').test(home),
+        rendered: new RegExp(`<${view}\\b`).test(home),
+        gated: home.includes(gate),
+      }).toEqual({ state: what, imported: true, rendered: true, gated: true });
+    });
+  }
 });
