@@ -101,15 +101,20 @@ export function WhyChangedSheet(props: WhyChangedProps) {
           as the engine speaking rather than a form appearing — and it is the VERDICT'S light. The
           handoff tints the whole sheet by verdict (2.1d is sand end to end); with the founder's law
           the hue is blue instead, but the structure is the handoff's: one sheet, one colour. */}
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-        <Defs>
-          <RadialGradient id="whyGlow" cx="50%" cy="-12%" rx="120%" ry="78%">
-            <Stop offset="0" stopColor={tone.fg} stopOpacity="0.12" />
-            <Stop offset="0.58" stopColor={tone.fg} stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#whyGlow)" />
-      </Svg>
+      {/* absoluteFill on the WRAPPER, percentages inside (the `components/ds/Stage` pattern).
+          Both on the <Svg> gives it two ways to be sized and they disagree on the first native
+          frame — the defect the founder photographed on the first-four card (build 36). */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Svg width="100%" height="100%">
+          <Defs>
+            <RadialGradient id="whyGlow" cx="50%" cy="-12%" rx="120%" ry="78%">
+              <Stop offset="0" stopColor={tone.fg} stopOpacity="0.12" />
+              <Stop offset="0.58" stopColor={tone.fg} stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#whyGlow)" />
+        </Svg>
+      </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>

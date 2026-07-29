@@ -590,15 +590,26 @@ export function SessionFlow({ navigation, route }: Props) {
         <View style={StyleSheet.absoluteFill}>
           <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={dismissFirstGym} style={styles.calScrim} />
           <View style={styles.calCard}>
-            <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-              <Defs>
-                <SvgGradient id="calCard" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor="#231f19" />
-                  <Stop offset="1" stopColor="#15140f" />
-                </SvgGradient>
-              </Defs>
-              <Rect x="0" y="0" width="100%" height="100%" rx="28" fill="url(#calCard)" />
-            </Svg>
+            {/* THE GROUND IS DRAWN THE WAY `components/ds/Stage` DRAWS IT — absoluteFill on a
+                WRAPPER, percentages inside it — and not with both on the <Svg> itself.
+                `style={absoluteFill}` AND `width="100%"` gave the element two ways to be sized,
+                and on the first native frame — before the card's height has settled — they
+                disagreed: the founder's very first workout drew the gradient offset from the card
+                it was supposed to fill (build 36). The web harness never showed it, because there
+                the two happen to resolve the same.
+                `rx` is gone with it: the card already clips itself (overflow + borderRadius 28),
+                and a second radius is just a second thing that can disagree. */}
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Svg width="100%" height="100%">
+                <Defs>
+                  <SvgGradient id="calCard" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor="#231f19" />
+                    <Stop offset="1" stopColor="#15140f" />
+                  </SvgGradient>
+                </Defs>
+                <Rect x="0" y="0" width="100%" height="100%" fill="url(#calCard)" />
+              </Svg>
+            </View>
             <Legend track={0.2} tone="accent" style={styles.calLegend}>{t('firstGym.legend', { count: learnCount })}</Legend>
             <Text style={styles.calTitle}>{t('firstGym.title', { count: learnCount })}</Text>
             <Text style={styles.calBody}>{t('firstGym.body')}</Text>

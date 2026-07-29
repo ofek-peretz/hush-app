@@ -31,8 +31,12 @@ export function FormMedia({ exerciseId, title }: Props) {
 
   return (
     <View style={styles.frame}>
-      {/* striped instructional field */}
-      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+      {/* striped instructional field. absoluteFill goes on the WRAPPER and percentages inside it
+          (the `components/ds/Stage` pattern) — putting both on the <Svg> gives it two ways to be
+          sized, and they disagree on the first native frame before layout settles. See the
+          first-four card in SessionFlow, where that is exactly what the founder photographed. */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%">
         <Defs>
           <Pattern id="formStripes" width={22} height={22} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <Rect width={11} height={22} fill={paper[3]} />
@@ -41,6 +45,7 @@ export function FormMedia({ exerciseId, title }: Props) {
         </Defs>
         <Rect width="100%" height="100%" fill="url(#formStripes)" />
       </Svg>
+      </View>
 
       {motion ? (
         <MotionFigure rig={motion} style={StyleSheet.absoluteFill as object} />
