@@ -937,8 +937,8 @@ final class WatchModel: ObservableObject {
       workoutId: workoutId,
       exerciseId: exerciseId,
       seconds: seconds,
-      area: area,
-      severity: severity
+      severity: severity,
+      area: area
     )
     if let json = WatchWire.encodeIntent(intent) { manager.send(intentJSON: json) }
   }

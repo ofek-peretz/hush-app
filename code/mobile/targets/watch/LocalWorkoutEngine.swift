@@ -362,6 +362,10 @@ final class LocalWorkoutEngine {
       restEndsAt: nil,
       restRemainingS: nil,
       restTotalS: nil,
+      // WT5 — the plan snapshot already carries HER rest per step (the phone measured it, S-17), so
+      // the wrist really is running her pace here. It says so only when the step names one; the
+      // plan-level fallback is the tier bootstrap and the claim would be false.
+      restIsLearned: cur.restInterS != nil,
       nextExerciseName: nil,
       nextExerciseGroup: nil,
       nextTargetWeight: nil,
@@ -372,16 +376,12 @@ final class LocalWorkoutEngine {
       nextLoadDeltaKg: nil,
       liftIndex: lift.index,
       liftCount: lift.count,
-      workoutName: state.workoutName,
       // WT13c · GLANCE — the standalone engine owes the wrist the SAME two live figures the phone
       // sends, or a phone-absent workout glances at a blank. Same arithmetic as the closing
       // summary's `volumeKg` (bodyweight contributes 0), read off the sets already logged here.
       liveVolumeKg: state.sets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) },
       liveSets: state.sets.count,
-      // WT5 — the plan snapshot already carries HER rest per step (the phone measured it, S-17), so
-      // the wrist really is running her pace here. It says so only when the step names one; the
-      // plan-level fallback is the tier bootstrap and the claim would be false.
-      restIsLearned: cur.restInterS != nil,
+      workoutName: state.workoutName,
       summary: nil,
       swapOptions: nil, // no offline swaps — the phone owns exercise selection
       nextSwapOptions: nil,

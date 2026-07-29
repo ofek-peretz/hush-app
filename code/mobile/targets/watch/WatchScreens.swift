@@ -672,6 +672,10 @@ private struct GlanceScreen: View {
 /// PRIMARY (you already tapped End to arrive here) with "Keep going" the outlined way back.
 private struct EndConfirmScreen: View {
   var title: String = WatchCopy.endConfirmTitle
+  /// The irreversible act's own label. A strength workout ENDS; a run is FINISHED AND SAVED, and
+  /// the cardio guard asks "Finish & save?" — a button reading "End workout" under that question
+  /// answers a different one. Defaulted, so the two strength call sites are untouched.
+  var confirmTitle: String = WatchCopy.endWorkout
   var lift: (i: Int, n: Int)? = nil
   let onConfirm: () -> Void
   let onKeep: () -> Void
@@ -692,7 +696,7 @@ private struct EndConfirmScreen: View {
       Spacer(minLength: 8)
       VStack(spacing: 6) {
         // Clay FILL, stage ink — the irreversible act, now the primary (the guard was the earlier tap).
-        StageButton(title: WatchCopy.endWorkout, kind: .danger, height: 42, fontSize: 15, action: onConfirm)
+        StageButton(title: confirmTitle, kind: .danger, height: 42, fontSize: 15, action: onConfirm)
         OutlineButton(title: WatchCopy.keepGoing, tint: Palette.ink1,
                       border: Palette.ink0.opacity(0.2), height: 34, fontSize: 12, action: onKeep)
       }
@@ -1402,9 +1406,11 @@ struct InterRestScreen: View {
         Text(WatchCopy.yourPace)
           .font(.system(size: 8.5, design: .monospaced)).tracking(0.4)
           .foregroundStyle(Palette.signal)
+          // These two belong to the LABEL, not to the `if` — dangling after the brace they applied
+          // to nothing and the watch target refused to compile (build 36).
+          .frame(maxWidth: .infinity)
+          .padding(.top, 2)
       }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 2)
       // On a correction rest the ring pays for the note out of its own diameter (76 → 56); every
       // ordinary rest keeps it full (S-13 caps corrections at 2 per exercise).
       RestRing(
