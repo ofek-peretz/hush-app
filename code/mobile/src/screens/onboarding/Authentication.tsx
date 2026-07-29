@@ -11,36 +11,25 @@
  * records it the moment the provider returns, and the line above the buttons says so before
  * a finger lands on one. On success → NameEntry.
  *
- * The provider buttons follow the PLATFORM's brand guidelines, not ours (founder 2026-07-12):
- * Apple is black with a white mark; Google is white with the four-colour G and a hairline.
- * Painting Apple in the Hush ochre and leaving Google plain white read as a preference for
- * Apple users — and neither is what Apple's or Google's sign-in guidelines permit. Neither
- * button is the primary action here; the ACCOUNT is.
+ * v7 1.1 button treatment: Apple is the CREAM primary (dark glyph + label on paper), Google
+ * the dark hairline-outline secondary with cream label and no logo. The account is the action,
+ * not either brand — so the two share one geometry and the design carries no platform colour.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, Animated, Easing, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { HushMark } from '@/components/HushMark';
 import { SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, ink, press } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press } from '@/design/tokens';
+import { monoCanDraw } from '@/design/monoVoice';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
-
-/**
- * Apple's white — the mark and label on the dark Sign in with Apple button (Apple HIG).
- *
- * A LITERAL, deliberately, like Google's `#ffffff` below it: this is Apple's surface, not Hush's,
- * so it must not move when Hush's paper ladder moves. It once read `paper[0]`, and when the READOUT
- * redesign inverted that ladder (0: lightest → 0: the ground) Apple's mark silently went grey.
- */
-const APPLE_WHITE = '#ffffff';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Authentication'>;
 
@@ -51,6 +40,7 @@ export function Authentication({ navigation }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const locale = currentLocale();
+  const affirm = t('ob.signinAffirm').toUpperCase();
 
   /**
    * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12). It used to be buried in Settings,
@@ -103,29 +93,36 @@ export function Authentication({ navigation }: Props) {
     <SafeAreaView style={styles.root}>
       <View style={styles.topBar}>
         <SegmentedControl
-          style={styles.langSwitch}
-          options={[{ value: 'he', label: 'עב' }, { value: 'en', label: 'EN' }]}
+          size="pill"
+          options={[{ value: 'en', label: 'EN' }, { value: 'he', label: 'עב' }]}
           value={locale}
           onChange={(v) => void pickLocale(v)}
         />
       </View>
       <View style={styles.hero}>
+        {/* v7 1.1 mark: a moss ring blooms behind the cream span-bracket, and a moss dot
+            rests at its centre — "line grows, ticks strike, the dot rolls home". */}
         <View style={styles.markWrap}>
           <Animated.View
             pointerEvents="none"
             style={[
               styles.halo,
               {
-                opacity: halo.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.55, 0.16] }),
+                opacity: halo.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.55, 0.5] }),
                 transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }],
               },
             ]}
           />
-          <HushMark size={46} />
+          <View style={styles.bracket}>
+            <View style={styles.bracketBar} />
+            <View style={styles.bracketTickStart} />
+            <View style={styles.bracketTickEnd} />
+            <View style={styles.bracketDot} />
+          </View>
         </View>
         {/* v7 1.1: just "hush" in the coach's serif — no trailing moss dot. The moss on this
             screen lives once, in the mark's halo above (the pulse ring), not after the word. */}
-        <View style={[styles.brand, styles.brandSpacing]}>
+        <View style={styles.brand}>
           <Text style={styles.wordmark}>hush</Text>
         </View>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
@@ -135,18 +132,21 @@ export function Authentication({ navigation }: Props) {
             better in every way — first person, provable, and it IS the promise. So it takes the
             size the boast was wearing, and the boast is gone. */}
         <Text style={styles.promise}>{t('ob.signinTagline')}</Text>
-        {/* v7 1.1: the coach's affirmation under the promise — spaced small caps, the mono
-            "voice" of a legend. SANS, not mono: it carries a translated word, and mono in this
-            app holds only digits/units (monoCarriesNoWords). */}
-        <Text style={styles.affirm}>{t('ob.signinAffirm')}</Text>
+        {/* v7 1.1: the coach's affirmation under the promise — IBM Plex Mono 500 at .22em,
+            exactly as the handoff draws it. The face is chosen from the STRING: a locale mono
+            cannot draw falls back to Assistant rather than breaking mid-line. */}
+        <View style={styles.affirmRule} />
+        <Text style={[styles.affirm, !monoCanDraw(affirm) && styles.affirmSans]}>{affirm}</Text>
       </View>
       <View style={styles.actions}>
         {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
+        {/* v7 1.1: Apple is the cream PRIMARY (dark glyph on paper); Google is the dark
+            outline SECONDARY with no logo — the account is the action, not either brand. */}
         <ProviderButton
           label={t('ob.apple')}
           onPress={() => onSignIn('apple')}
           disabled={busy}
-          logo={<AppleLogo color={APPLE_WHITE} />}
+          logo={<AppleLogo color={color.onAccent} />}
           style={styles.apple}
           pressedStyle={styles.applePressed}
           labelStyle={styles.appleLabel}
@@ -155,16 +155,17 @@ export function Authentication({ navigation }: Props) {
           label={t('ob.google')}
           onPress={() => onSignIn('google')}
           disabled={busy}
-          logo={<GoogleG />}
+          logo={null}
           style={styles.google}
           pressedStyle={styles.googlePressed}
           labelStyle={styles.googleLabel}
         />
         {/* The agreement, in one line, where the decision is actually made. Legible ink —
-            a legal line the athlete cannot read is not consent (founder 2026-07-12). */}
+            a legal line the athlete cannot read is not consent (founder 2026-07-12). One
+            weight, one tone: the handoff draws it as a single 12px muted sentence. */}
         <Text style={styles.legal}>
           {t('ob.signinLegalPre')}
-          <Text style={styles.legalStrong}>{t('ob.signinLegalTerms')}</Text>
+          {t('ob.signinLegalTerms')}
           {t('ob.signinLegalPost')}
         </Text>
         {/* The "your data is only used for your recommendations, they are never sold" line is
@@ -217,69 +218,82 @@ function ProviderButton({
   );
 }
 
-function AppleLogo({ color: c, size = 19 }: { color: string; size?: number }) {
+/** Apple's mark exactly as the handoff draws it — 17 × 20 on a 17 × 20 box. */
+function AppleLogo({ color: c }: { color: string }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg width={17} height={20} viewBox="0 0 17 20">
       <Path
         fill={c}
-        d="M16.365 1.43c0 1.14-.46 2.22-1.21 3.01-.81.85-2.13 1.51-3.23 1.42-.13-1.09.43-2.25 1.13-2.98.79-.83 2.18-1.45 3.31-1.45zM20.5 17.06c-.55 1.27-.81 1.84-1.52 2.96-.99 1.56-2.39 3.5-4.12 3.51-1.54.02-1.93-1-4.02-.99-2.09.01-2.52 1.01-4.06.99-1.73-.02-3.05-1.77-4.04-3.33C-.07 16.99-.32 12.16 1.4 9.59c1.22-1.83 3.15-2.9 4.96-2.9 1.84 0 3 .99 4.52.99 1.48 0 2.38-.99 4.51-.99 1.61 0 3.32.88 4.54 2.39-3.99 2.19-3.34 7.89.07 8.98z"
+        d="M14.1 10.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.9C4.2 5 2.7 6 1.9 7.4c-1.7 2.9-.4 7.2 1.2 9.5.8 1.2 1.7 2.4 2.9 2.4 1.2 0 1.6-.8 3-.8s1.8.8 3.1.8c1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.2-.9-2.2-3.7zM11.7 3.2c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.2 1.9-1 2.9 1 .1 2-.5 2.7-1.3z"
       />
-    </Svg>
-  );
-}
-
-function GoogleG({ size = 19 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 48 48">
-      <Path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
-      <Path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z" />
-      <Path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34A21.99 21.99 0 0 0 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z" />
-      <Path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z" />
     </Svg>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
-  topBar: { paddingHorizontal: space.gutter, paddingTop: 6, alignItems: 'flex-end' },
-  langSwitch: { width: 116 },
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  markWrap: { alignItems: 'center', justifyContent: 'center' },
-  // The ignition — an ochre ring that opens once behind the mark and settles.
-  halo: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 1.5, borderColor: signal[0] },
-  // Brand lockup stays LTR ("Hush·") in every locale rather than mirroring.
+  // The switch sits at the READING START of the top bar, 30px in — where the handoff puts it.
+  topBar: { paddingHorizontal: 30, paddingTop: 18, alignItems: 'flex-start' },
+  // One 30px rhythm down the whole hero (mark → wordmark → promise → affirmation).
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20, gap: 30 },
+  markWrap: { width: 180, height: 120, alignItems: 'center', justifyContent: 'center' },
+  // The ignition — a moss ring that blooms once behind the mark and settles (118px).
+  halo: { position: 'absolute', width: 118, height: 118, borderRadius: 59, borderWidth: 1.5, borderColor: signal[0] },
+  // The span-bracket: a cream hairline between two end ticks, wider than the ring (150×26).
+  bracket: { width: 150, height: 26 },
+  bracketBar: { position: 'absolute', left: 0, right: 0, top: 12, height: 2, backgroundColor: color.textPrimary },
+  bracketTickStart: { position: 'absolute', left: 0, top: 3, width: 2, height: 20, backgroundColor: color.textPrimary },
+  bracketTickEnd: { position: 'absolute', right: 0, top: 3, width: 2, height: 20, backgroundColor: color.textPrimary },
+  // The moss dot resting at the centre of the span.
+  // rtl-ok — the centring idiom: `left:'50%'` then back off HALF THE DOT's width. Both halves are
+  // about the dot's own geometry, not about a reading direction, so a logical margin here would
+  // shift it off centre in one locale and not the other.
+  bracketDot: { position: 'absolute', left: '50%', marginLeft: -6, top: 7, width: 12, height: 12, borderRadius: 6, backgroundColor: signal[0] }, // rtl-ok — centring idiom, not a reading direction
+  // Brand lockup stays LTR ("hush") in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
-  brandSpacing: { marginTop: 18 },
-  // v7: the wordmark is the coach's serif, matching the "hush" on Home — not a sans logotype.
-  wordmark: { fontFamily: font.serif, fontSize: 52, letterSpacing: trackingPx(52, tracking.display), color: color.textPrimary, textAlign: 'left' },
-  // v7: the promise is spoken — italic serif, the coach's voice, one breath.
+  // v7: the wordmark is the coach's serif, 76px — matching the welcome mock.
+  wordmark: { fontFamily: font.serif, fontSize: 76, lineHeight: 76, letterSpacing: trackingPx(76, tracking.display), color: color.textPrimary, textAlign: 'left' },
+  /* ════ TWO LINES, BECAUSE IT IS TWO PROMISES (founder 2026-07-28) ════
+     "You train. I carry the rest." is a deal with two halves — what SHE does, and what HUSH does —
+     and set as one wrapped paragraph the split fell wherever the width happened to put it. Given a
+     line each, the sentence keeps its own shape on every case size and the second half lands as
+     the answer to the first. `maxWidth` is gone with the wrapping it existed to control; the break
+     is in the copy now (`\n`), so it is the same break in every locale and at every text size. */
   promise: {
     fontFamily: font.serif,
     fontStyle: 'italic',
-    fontSize: textScale.xl,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 42,
     color: color.textPrimary,
     textAlign: 'center',
-    marginTop: 20,
-    maxWidth: 300,
   },
-  // The affirmation: spaced small caps in the muted cream, a legend's cadence (handoff .22em).
+  /* The affirmation: the mono legend voice at .22em (see `monoVoice` for the Hebrew fallback).
+     It is the only CLAIM this screen makes — the whole product's argument in three words — and it
+     was set at the smallest size the app has, in the faintest ink, where nobody noticed it
+     (founder 2026-07-28). Up two rungs and out of the muted tone: still a legend, no longer a
+     whisper. It sits under a hairline so it reads as a seal on the promise above rather than a
+     stray caption. */
   affirm: {
-    fontFamily: font.sansMedium,
-    fontSize: textScale['2xs'],
-    letterSpacing: trackingPx(textScale['2xs'], 0.22),
+    fontFamily: font.monoMedium,
+    fontSize: textScale.sm,
+    letterSpacing: trackingPx(textScale.sm, 0.22),
     textTransform: 'uppercase',
-    color: color.textMuted,
+    color: color.textSecondary,
     textAlign: 'center',
-    marginTop: 22,
   },
-  actions: { paddingHorizontal: space.gutter, paddingBottom: 32, gap: 10 },
+  // The hairline the seal rests on — as wide as the words, never a full rule across the screen.
+  affirmRule: { width: 30, height: 1, backgroundColor: 'rgba(241,238,229,0.28)', marginBottom: 14 },
+  // …and the sans sibling the same slot swaps to when the string is not Latin. Naming a sans
+  // style here is also the contract `monoCarriesNoWords` reads: this mono slot keeps its promise.
+  affirmSans: { fontFamily: font.sansMedium },
+  actions: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 12 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
 
-  // provider buttons — identical geometry, platform-native colour
+  // provider buttons — identical geometry (58px pill); Apple is the cream primary,
+  // Google the dark outline secondary.
   provider: {
     height: control.hLg,
-    borderRadius: radius.md,
+    borderRadius: radius.button,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -289,9 +303,10 @@ const styles = StyleSheet.create({
   },
   providerPressed: { transform: [{ translateY: press.translateY }] },
   providerDisabled: { opacity: 0.4 },
-  providerLabel: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), textAlign: 'left' },
-  apple: { backgroundColor: ink[0] },
-  applePressed: { backgroundColor: '#000000' },
+  providerLabel: { fontFamily: font.sansSemibold, fontSize: 16, textAlign: 'left' },
+  // Apple — the cream PRIMARY, dark glyph + label on paper.
+  apple: { backgroundColor: color.accentFill },
+  applePressed: { backgroundColor: color.accentFillPressed },
   /*
    * APPLE'S WHITE, NOT HUSH'S — a brand literal on purpose, exactly like Google's below.
    *
@@ -305,12 +320,12 @@ const styles = StyleSheet.create({
    * never move when Hush's paper moves. A Hush token here is a promise this screen cannot keep —
    * Sign in with Apple's dark variant requires a WHITE mark and label (Apple HIG), full stop.
    */
-  appleLabel: { color: APPLE_WHITE },
-  google: { backgroundColor: '#ffffff', borderColor: color.borderControl },
-  googlePressed: { backgroundColor: color.fillSubtle },
-  googleLabel: { color: ink[0] },
+  appleLabel: { color: color.onAccent },
+  // Google — the dark outline SECONDARY, cream label, no logo.
+  google: { backgroundColor: color.fillSubtle, borderColor: color.borderControl },
+  googlePressed: { backgroundColor: color.fillSubtleStrong },
+  googleLabel: { color: color.textPrimary },
 
-  // The legal line is READ, not decoration: secondary ink, not the near-invisible tertiary.
-  legal: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 19 },
-  legalStrong: { fontFamily: font.sansSemibold, color: color.textSecondary, textAlign: 'center' },
+  // The legal line is READ, not decoration: one weight, one muted tone, 12px, 4px under the pair.
+  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', marginTop: 4, lineHeight: 18 },
 });

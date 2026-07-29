@@ -29,6 +29,8 @@ export type IconName =
   | 'close' // xmark
   | 'grip' // reorder handle
   | 'home' // house / house.fill
+  | 'todayRange' // v7 2.1 — the brand's measured range with the dot at centre (the Today tab)
+  | 'lineChart' // v7 2.1 — a bare polyline, no arrowhead (the Progress tab)
   | 'program' // square.grid.2x2
   | 'history' // clock.arrow.circlepath
   | 'portrait' // chart.bar / chart.bar.fill
@@ -57,7 +59,13 @@ export type IconName =
   | 'flag' // flag (finish a cardio activity)
   | 'flame' // flame (calories burned — cardio)
   | 'checkCheck' // check-check (cardio recorded)
-  | 'activity'; // pulse waveform (cardio record header — v7 3.3c)
+  | 'activity' // pulse waveform (cardio record header — v7 3.3c)
+  | 'star' // a solid five-point star — a MARK EARNED (v7 3.2b Milestones)
+  | 'plus' // plus — "where it began", inside a dashed ring (v7 3.2b)
+  | 'alert' // a warning triangle — the ONE place it appears is the pain door (v7 13.1)
+  | 'share' // a tray with an arrow out of it — sending a plan link (v7 11.4)
+  | 'twoPeople' // two figures — the door to the share cards, from Today (v7 2.1)
+  | 'eyeOff'; // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
 
 interface Props {
   name: IconName;
@@ -175,6 +183,18 @@ function render(
           <Line x1="18" y1="6" x2="6" y2="18" />
         </G>
       );
+    case 'todayRange':
+      // v7 2.1 — the Today tab wears the brand's own glyph: a span between two end ticks with
+      // the dot landed at its centre. Today IS the measurement, so the tab says so.
+      return (
+        <G {...common}>
+          <Path d="M4 12h16M4 8.5v7M20 8.5v7" />
+          <Circle cx="12" cy="12" r="2.6" fill={stroke} stroke="none" />
+        </G>
+      );
+    case 'lineChart':
+      // v7 2.1 — Progress: a bare trace, no arrowhead. The shape is the point, not the direction.
+      return <Path d="M4 17l6-6 4 3 6-8" {...common} />;
     case 'home':
       return filled ? (
         <Path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3z" fill={stroke} />
@@ -235,14 +255,14 @@ function render(
         </G>
       );
     case 'play':
-      // lucide `play` — a clean rounded triangle (outline), used on Begin CTAs.
-      return <Path d="M8 5.2l11 6.8-11 6.8z" {...common} />;
+      // v7: the Begin CTA's triangle is SOLID — `M8 5v14l11-7z`, filled, no stroke.
+      return <Path d="M8 5v14l11-7z" fill={stroke} />;
     case 'playCircle':
-      // lucide `circle-play` — Form action.
+      // lucide `circle-play` — the form-clip glyph on every plan row.
       return (
         <G {...common}>
           <Circle cx="12" cy="12" r="9" />
-          <Path d="M10 8.5l5.5 3.5-5.5 3.5z" fill={stroke} />
+          <Path d="M10 8.5l5 3.5-5 3.5z" fill={stroke} stroke="none" />
         </G>
       );
     case 'repeat':
@@ -425,6 +445,54 @@ function render(
       return (
         <G {...common}>
           <Path d="M3 12h4l2-6 4 12 2-6h6" />
+        </G>
+      );
+    case 'star':
+      // SOLID, not outlined: a milestone is a thing that HAPPENED. It is the only filled glyph in
+      // the set, which is exactly why it reads as a seal beside the stroke-drawn rest.
+      return <Path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill={stroke} stroke="none" />;
+    case 'plus':
+      return (
+        <G {...common}>
+          <Path d="M12 6v12M6 12h12" />
+        </G>
+      );
+    case 'twoPeople':
+      /* Traced from the canonical HTML's Today screen (§02) — two heads over two shoulder arcs,
+         the second slightly behind the first. It is the door to the SHARE cards, and it says what
+         sharing IS here: another person, not a network. Circles carry no stroke-linecap, so they
+         are drawn with the same `common` props the paths use. */
+      return (
+        <G {...common}>
+          <Circle cx={8} cy={9} r={2.6} />
+          <Circle cx={16} cy={9} r={2.6} />
+          <Path d="M3.4 18c.9-2.4 2.6-3.4 4.6-3.4 1.3 0 2.5.4 3.4 1.3" />
+          <Path d="M14 15.9c.9-.9 2.1-1.3 3.4-1.3 2 0 3.7 1 4.6 3.4" />
+        </G>
+      );
+    case 'share':
+      // lucide `share`/upload — a tray with the arrow rising out of it. Never mirrored: it means
+      // "out of this device", not a direction of travel through the text.
+      return (
+        <G {...common}>
+          <Path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+          <Path d="M16 6l-4-4-4 4M12 2v13" />
+        </G>
+      );
+    case 'eyeOff':
+      return (
+        <G {...common}>
+          <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+          <Path d="M4 4l16 16" />
+        </G>
+      );
+    case 'alert':
+      // lucide `triangle-alert`. It marks the pain door and nothing else — Hush does not warn.
+      return (
+        <G {...common}>
+          <Path d="M10.3 3.9L2.6 17.5A2 2 0 004.3 20.5h15.4a2 2 0 001.7-3l-7.7-13.6a2 2 0 00-3.4 0z" />
+          <Path d="M12 8v5" />
+          <Path d="M12 16.4v.2" />
         </G>
       );
     default:

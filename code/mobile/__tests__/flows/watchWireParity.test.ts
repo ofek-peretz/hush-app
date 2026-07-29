@@ -19,6 +19,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { projectSessionMirror, type SessionMirror } from '@/platform/sessionMirror';
+import {
+  WATCH_PROTOCOL_VERSION, WATCH_PLAN_SCHEMA_VERSION, makeStateEnvelope, parseWatchIntent,
+  parseSessionRecord, parseCardioRecord,
+  type WatchIntent, type WatchLobby, type WatchLobbyWorkout, type WatchPlanSnapshot,
+  type WatchPlanStep, type WatchPlanWorkout, type WatchRecordSet, type WatchSessionRecord,
+  type WatchCardioRecord,
+} from '@/platform/watch/protocol';
 
 const SWIFT = readFileSync(join(__dirname, '../../targets/watch/WatchWire.swift'), 'utf8');
 
@@ -250,6 +257,15 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
    */
   it("the watch's STANDALONE engine projects the same fields the phone does", () => {
     const engine = readFileSync(join(__dirname, '../../targets/watch/LocalWorkoutEngine.swift'), 'utf8');
+    // EVERY field, not a hand-picked few. The list below named five, and the sixth is exactly how
+    // this class of bug survives: `targetRepsHi` was never set here, so the phone-absent athlete —
+    // the one the standalone runtime exists FOR — saw a single rep target where every mirrored set
+    // shows a RANGE, and WT2's "8 … 10" ruler collapsed to "8". Nothing failed; it quietly told
+    // her less.
+    const unset = swiftFields('WireMirror')
+      .map((f) => f.name)
+      .filter((name) => !new RegExp('(\\b' + name + ':|m\\.' + name + '\\s*=)').test(engine));
+    expect({ neverSetByTheStandaloneProjector: unset }).toEqual({ neverSetByTheStandaloneProjector: [] });
     // The fields that carry meaning on a REST frame — the frame both projectors have got wrong.
     for (const field of ['nextSetLabel', 'nextSetNumber', 'nextExerciseName', 'nextTargetWeight', 'nextSetsInExercise']) {
       expect({ field, projected: new RegExp(`m\\.${field}\\s*=`).test(engine) }).toEqual({ field, projected: true });
@@ -264,5 +280,121 @@ describe('the wire the watch decodes is the wire the phone sends', () => {
     const round = JSON.parse(JSON.stringify(mirror)) as SessionMirror;
     expect(round).toEqual(JSON.parse(JSON.stringify(mirror)));
     expect(round.summary?.lifts?.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * ════ THE OTHER TEN STRUCTS ════
+ *
+ * The block above proved ONE contract — `WireMirror` ↔ `SessionMirror` — and it proved it well.
+ * But sixteen `Wire*` structs cross this bridge and only six were ever held to a counterpart, so
+ * ten of them were two hand-written declarations in two languages with nothing joining them:
+ *
+ *   · `WireLobby` — the Start screen. A drifted field there means WT1 shows the wrong workout, or
+ *     WT7's first-workout face never appears because the flag arrives under a different name.
+ *   · `WireIntent` — the only thing that travels wrist → phone. A misspelled field is not a
+ *     degraded screen; it is an action of hers that the phone throws away as malformed. When
+ *     `severity` was added for WT14b, a typo here would have dropped **every pain report she
+ *     ever filed**, in silence, with the screen still working perfectly.
+ *   · `WirePlan*` / `WireSessionRecord` — the standalone contract, in both directions: the
+ *     workout she trains with the phone in a locker, and the record that carries it home.
+ *
+ * The rule is the same one-directional rule: the watch may decode FEWER fields than the phone
+ * sends, but never a field the phone does not send, and never under a different spelling.
+ */
+describe('every struct that crosses the bridge is joined, not just the mirror', () => {
+  /** Every key a TS value can put on the wire, including the ones only some shapes carry. */
+  const keysOf = (...samples: object[]): Set<string> => {
+    const out = new Set<string>();
+    for (const s of samples) for (const k of Object.keys(JSON.parse(JSON.stringify(s)) as object)) out.add(k);
+    return out;
+  };
+
+  /** Swift decodes only names the phone can actually emit — spelled identically. */
+  const joined = (struct: string, sent: Set<string>, declined: Record<string, string> = {}) => {
+    const strangers = swiftFields(struct)
+      .map((f) => f.name)
+      .filter((n) => !sent.has(n) && !(n in declined));
+    expect({ struct, decodedButNeverSent: strangers }).toEqual({ struct, decodedButNeverSent: [] });
+  };
+
+  it('WireLobby + WireLobbyWorkout — the Start screen the wrist draws (WT1 / WT1b / WT7)', () => {
+    const workout: WatchLobbyWorkout = { id: 'd1', name: 'Upper A', lifts: 6, muscles: 'chest · back', done: false };
+    const lobby: WatchLobby = {
+      workoutId: 'd1', workoutName: 'Upper A', muscles: 'chest · back', lifts: 6,
+      durationLabel: '~48 min', firstWorkout: true, resting: false, gated: false, workouts: [workout],
+    };
+    joined('WireLobby', keysOf(lobby));
+    joined('WireLobbyWorkout', keysOf(workout));
+  });
+
+  it('WireIntent — the ONE thing that travels wrist → phone (a typo here silently drops her action)', () => {
+    const intent: WatchIntent = {
+      v: WATCH_PROTOCOL_VERSION, type: 'report_pain', intentId: 'i1',
+      issuedAt: new Date(NOW).toISOString(), expectedGlobalIndex: 0, actualReps: 8, actualWeight: 60,
+      workoutId: 'd1', exerciseId: 'db_bench_press', seconds: 15, area: 'Shoulders', severity: 'pain',
+    };
+    joined('WireIntent', keysOf(intent));
+    // …and every field the wrist SENDS is one the phone's parser reads back, or the payload is
+    // accepted and the value quietly lost.
+    const parsed = parseWatchIntent(JSON.parse(JSON.stringify(intent)));
+    expect(parsed).not.toBeNull();
+    for (const f of swiftFields('WireIntent')) {
+      expect({ field: f.name, survivesParsing: Object.prototype.hasOwnProperty.call(parsed, f.name) })
+        .toEqual({ field: f.name, survivesParsing: true });
+    }
+  });
+
+  it('WirePlan* — the standalone plan the wrist executes with the phone in a locker', () => {
+    const step: WatchPlanStep = {
+      exerciseId: 'db_bench_press', exerciseName: 'DB Bench', exerciseGroup: 'chest',
+      setIndexInExercise: 0, totalSetsInExercise: 3, globalIndex: 0, targetWeight: 20, targetReps: 8,
+      targetRepsHi: 10,
+      blockId: 'b1', reasonType: 'increase', reasonDelta: 2.5, loadSetup: null, restInterS: 90,
+    };
+    const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step] };
+    const plan: WatchPlanSnapshot = {
+      schema: WATCH_PLAN_SCHEMA_VERSION, planId: 'p1', generatedAt: new Date(NOW).toISOString(),
+      restInterS: 90, restTransitionS: 120, workouts: [workout],
+    };
+    joined('WirePlanStep', keysOf(step));
+    joined('WirePlanWorkout', keysOf(workout));
+    joined('WirePlan', keysOf(plan));
+  });
+
+  it('WireSessionRecord + WireRecordSet — the standalone workout carried home', () => {
+    const set: WatchRecordSet = {
+      exerciseId: 'db_bench_press', setIndex: 0, blockId: 'b1', recommendedWeight: 20,
+      recommendedReps: 8, actualWeight: 20, actualReps: 9, completedAt: new Date(NOW).toISOString(),
+    };
+    const record: WatchSessionRecord = {
+      v: WATCH_PROTOCOL_VERSION, type: 'session_record', recordId: 'r1', planId: 'p1',
+      workoutId: 'd1', workoutName: 'Upper A', startedAt: new Date(NOW).toISOString(),
+      endedAt: new Date(NOW).toISOString(), earlyFinish: false, kcal: 412, sets: [set],
+    };
+    joined('WireRecordSet', keysOf(set));
+    joined('WireSessionRecord', keysOf(record));
+    // The phone must be able to READ what the wrist writes — the reconciliation, end to end.
+    expect(parseSessionRecord(JSON.parse(JSON.stringify(record)))).not.toBeNull();
+  });
+
+  it('WireCardioRecord — the run the wrist carries home (founder 2026-07-28)', () => {
+    const record: WatchCardioRecord = {
+      v: WATCH_PROTOCOL_VERSION, type: 'cardio_record', recordId: 'c1', gait: 'run',
+      startedAt: new Date(NOW).toISOString(), endedAt: new Date(NOW + 1574_000).toISOString(),
+      durationSec: 1574, distanceKm: 4.2, avgHr: 141, kcal: 318,
+    };
+    joined('WireCardioRecord', keysOf(record));
+    // …and the phone can read what the wrist writes, end to end.
+    expect(parseCardioRecord(JSON.parse(JSON.stringify(record)))).not.toBeNull();
+  });
+
+  it('WireEnvelope — the wrapper every frame arrives in', () => {
+    const env = makeStateEnvelope(widestMirror(), 7, NOW, null, null);
+    joined('WireEnvelope', keysOf(env));
+  });
+
+  it('WireSwapOption — the replacement the wrist offers is one the phone chose', () => {
+    joined('WireSwapOption', keysOf({ id: 'db_bench_press', name: 'DB Bench' }));
   });
 });

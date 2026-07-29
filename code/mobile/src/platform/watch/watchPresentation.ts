@@ -115,6 +115,9 @@ export interface WatchScreen {
   liftCount?: number;
   targetWeight?: number | null;
   targetReps?: number;
+  /** The rep band's ceiling (floor == targetReps); drives the 8–10 rep-range ruler (WT2).
+   *  Null/omitted when the target is a single rep count. */
+  targetRepsHi?: number | null;
   /** Signed kg load change → the LoadDelta mark (sage ▲ / clay ▼ / hold). */
   loadDeltaKg?: number;
   /** In-class alternatives for the Swap overlay (empty/undefined = no swap glyph). */
@@ -280,6 +283,7 @@ export function projectWatchScreen(
         liftCount: mirror.liftCount,
         targetWeight: mirror.targetWeight,
         targetReps: mirror.targetReps,
+        targetRepsHi: mirror.targetRepsHi,
         loadDeltaKg: mirror.loadDeltaKg,
         swapOptions: mirror.swapOptions,
         actions,

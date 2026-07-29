@@ -106,13 +106,45 @@ final class WatchStore {
 
   /// All records still awaiting an ack, oldest first (stable resend order).
   func outboxRecords() -> [WireSessionRecord] {
+    outbox(WireSessionRecord.self).sorted { $0.endedAt < $1.endedAt }
+  }
+
+  // MARK: Cardio outbox (founder 2026-07-28)
+  //
+  // A run recorded on the wrist used to write its HKWorkout to Health and stop — so the kilometres
+  // appeared in Apple Health and NOWHERE in Hush. It rides the SAME durable path as a strength
+  // record (own file, at-least-once, cleared by the phone's ack) and a SEPARATE directory, because
+  // the two decode to different shapes and a `compactMap` that silently drops the other kind would
+  // be indistinguishable from an empty outbox.
+
+  private var cardioDir: URL { dir.appendingPathComponent("cardio-outbox", isDirectory: true) }
+  private func cardioURL(_ recordId: String) -> URL {
+    try? FileManager.default.createDirectory(at: cardioDir, withIntermediateDirectories: true)
+    return cardioDir.appendingPathComponent("\(recordId).json")
+  }
+
+  func enqueueCardioRecord(_ record: WireCardioRecord) {
+    write(record, to: cardioURL(record.recordId))
+  }
+
+  func removeCardioRecord(_ recordId: String) {
+    try? FileManager.default.removeItem(at: cardioURL(recordId))
+  }
+
+  /// Cardio records still awaiting an ack, oldest first.
+  func outboxCardioRecords() -> [WireCardioRecord] {
+    outbox(WireCardioRecord.self, in: cardioDir).sorted { $0.endedAt < $1.endedAt }
+  }
+
+  /// One reader for both outboxes — a decode failure drops that FILE, never the queue.
+  private func outbox<T: Decodable>(_ type: T.Type, in folder: URL? = nil) -> [T] {
+    let d = folder ?? outboxDir
     let files = (try? FileManager.default.contentsOfDirectory(
-      at: outboxDir, includingPropertiesForKeys: nil
+      at: d, includingPropertiesForKeys: nil
     )) ?? []
     return files
       .filter { $0.pathExtension == "json" }
       .sorted { $0.lastPathComponent < $1.lastPathComponent }
-      .compactMap { read(WireSessionRecord.self, from: $0) }
-      .sorted { $0.endedAt < $1.endedAt }
+      .compactMap { read(type, from: $0) }
   }
 }

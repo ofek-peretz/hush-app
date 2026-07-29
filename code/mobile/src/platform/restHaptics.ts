@@ -26,6 +26,7 @@ import * as Notifications from 'expo-notifications';
 import { tg } from '@/i18n';
 import { ensureNotificationPermission } from '@/platform/notifications';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
+import { liveActivityRunning } from '@/platform/liveActivity';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
@@ -81,8 +82,26 @@ export const restHaptics: RestHaptics = {
       if (!(await ensureNotificationPermission())) return;
       // The wrist owns the BUZZ when it is there; the phone still lights up (silent).
       const sound = phoneOwnsRestHaptics();
+      /**
+       * ════ THE LIVE ACTIVITY OWNS THE WARNING (founder 2026-07-29) ════
+       *
+       * "If we have a Live Activity running in the background, how do you suggest combining this?
+       * Because then I don't think we need a pile of notifications on the screen."
+       *
+       * Exactly right, and the resolution runs the other way from the obvious one. These alerts are
+       * a BACKSTOP for a countdown the athlete cannot see: a JS timer is suspended the moment the
+       * phone is locked, so without them the last seconds of a rest happen in the dark. A Live
+       * Activity runs in ActivityKit, NOT in JS — while one is up, the countdown is already on the
+       * lock screen, ticking. The "7 seconds left" note is then a second copy of a thing she is
+       * looking at, and two alerts for one moment is the pile.
+       *
+       * So the WARNING stands down while a Live Activity is live. The rest-OVER alert always
+       * fires: it is a discrete instant that needs a beat, not a number that needs reading, and a
+       * glanceable ring reaching zero is not the same as being told to go.
+       */
+      const laOwnsTheWarning = liveActivityRunning();
 
-      if (warnInS != null) {
+      if (warnInS != null && !laOwnsTheWarning) {
         await Notifications.scheduleNotificationAsync({
           identifier: WARN_ID,
           content: {
@@ -111,7 +130,7 @@ export const restHaptics: RestHaptics = {
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: doneInS, repeats: false },
         });
       }
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'rest_alerts', warnInS, doneInS, sound });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'rest_alerts', warnInS, doneInS, sound, laOwnsTheWarning });
     } catch {
       // never throw — a rest-notification failure must not break the workout
     }

@@ -77,6 +77,11 @@ export interface WatchSessionDeps {
   swapExercise?: (exerciseId?: string) => void;
   /** Extend the running rest by N seconds (Rest screen "+15 sec"). Optional seam. */
   addRest?: (seconds: number) => void;
+  /** Record a muscle the wrist flagged as hurting, with the severity SHE chose (WT14 → WT14b).
+   *  The phone owns what a pain flag DOES to the model — this only delivers her two answers.
+   *  Optional in the type only so a harness may omit it; `everyWristIntentLandsSomewhere` proves
+   *  the app itself always supplies it. */
+  reportPain?: (area: string, severity: string) => void;
   /** Telemetry sink (track) — every lifecycle/intent event lands in the dataset. */
   track: (type: string, data?: Record<string, unknown>) => void;
   now: () => number;
@@ -232,6 +237,9 @@ export class WatchSession {
         break;
       case 'add_rest':
         this.d.addRest?.(action.seconds);
+        break;
+      case 'report_pain':
+        this.d.reportPain?.(action.area, action.severity);
         break;
     }
   }

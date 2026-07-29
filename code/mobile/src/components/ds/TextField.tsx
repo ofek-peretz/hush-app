@@ -11,7 +11,7 @@
  */
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
-import { color, control, font, textScale, tracking, trackingPx } from '@/design/tokens';
+import { color, font, textScale, tracking, trackingPx } from '@/design/tokens';
 
 interface Props extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -48,30 +48,31 @@ export function TextField({ label, block, style, onFocus, onBlur, ...input }: Pr
 
 const styles = StyleSheet.create({
   block: { width: '100%' },
+  // v7: the field's label is the same mono legend every other legend on the stage is.
   label: {
-    fontFamily: font.sansMedium,
+    fontFamily: font.monoMedium,
     fontSize: textScale['2xs'],
-    letterSpacing: 0.99, // ~0.09em of 11px
+    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
     textTransform: 'uppercase',
     color: color.textMuted,
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'left',
   },
-  // The rule: a baseline the value is written on. No box, no fill.
+  // The rule: a baseline the value is written on. No box, no fill — 12px of air above a
+  // 1.5px INK line (`rgba(27,25,19,.35)`), which on the stage reads as a shadow, not a border.
   well: {
-    height: control.hLg,
     borderBottomWidth: 1.5,
-    borderBottomColor: color.borderControl,
-    paddingHorizontal: 2,
+    borderBottomColor: 'rgba(27,25,19,0.35)',
+    paddingBottom: 12,
     justifyContent: 'center',
   },
-  wellFocused: { borderBottomColor: color.accent, borderBottomWidth: 2 },
+  wellFocused: { borderBottomColor: color.accent },
   input: {
     fontFamily: font.sans,
-    fontSize: textScale.lg,
+    fontSize: 30,
+    lineHeight: 38,
     color: color.textPrimary,
     padding: 0,
-    letterSpacing: trackingPx(textScale.lg, tracking.tight),
     textAlign: 'left',
   },
 });

@@ -11,8 +11,8 @@
 
 import type { Band, ExerciseMeta, ExerciseState, Loop2Result, SetPerf, SessionRecord } from './types';
 import { median, percentileNearestRank } from './stats';
-import { snapDown, moveRungs, nextRung, prevRung, loadFloor, isBigJump } from './grid';
-import { repsPerRung, rungsForHeadroom } from './repsPerRung';
+import { snapDown, moveRungs, nextRung, prevRung, loadFloor } from './grid';
+import { repsPerRung, rungsForHeadroom, rungOutOfReach } from './repsPerRung';
 import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED } from './constants';
 
 const EPS = 1e-6;
@@ -163,6 +163,34 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
   // S-16: no usable working data → hold, bank nothing.
   const usable = sets.filter((s) => s.load != null && s.reps > 0);
   if (usable.length === 0) {
+    // ════ ZERO REPS IS DATA — AND ON A FLOORED LIFT IT IS THE ONLY DATA THAT MATTERS ════
+    //
+    // S-16 is written for **no data**: nothing logged, nothing to reason on, bank nothing. But this
+    // branch also swallows the opposite case — she performed the sets and got **zero reps** — which
+    // is not missing data, it is the clearest datum the engine will ever receive. Held as
+    // "ambiguous", that lift sits in her programme unchanged for ever.
+    //
+    // It is the same dead end already closed on the bodyweight axis, alive on the LOADED one, and
+    // it is reachable in an ordinary way: `canLoad` (S-55b) asks whether the load B-1 MODELLED for
+    // her clears the equipment floor — and B-1 is a model, so an athlete weaker than it gets a
+    // barbell whose empty bar she cannot move. Then there is nothing below to back off to (the
+    // floor), no rung to ease (already there), and no clear to count — so the stall machinery below
+    // is never even reached, because this branch returns first.
+    //
+    // The count is hers, not ours: more consecutive all-zero occurrences than her own
+    // attempts-to-clear (B-3 until she has a statistic). One aborted set still just holds.
+    const attempted = sets.length > 0;
+    const noneUsable = (rec: SessionRecord) => rec.sets.length > 0 && !rec.sets.some((s) => s.load != null && s.reps > 0);
+    if (attempted && inp.rotationAvailable) {
+      let zeros = 1; // this occurrence
+      for (const rec of state.history.slice(0, RECENCY_WINDOW_SESSIONS)) {
+        if (!noneUsable(rec)) break;
+        zeros += 1;
+      }
+      if (zeros > attemptsToClearN(state.history, band)) {
+        return { decision: 'stall_rotate', load: state.load, band, sets: state.sets, wantsChange: 'rotate' };
+      }
+    }
     return { decision: 'ambiguous', load: state.load, band, sets: state.sets };
   }
 
@@ -190,7 +218,7 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     // Then: "T is hers, so the engine may not quietly raise it" — the load HOLDS at the anchor, she
     // climbs reps at it, and the engine SAYS SO. Silent until her slope is fitted (F-12): with no
     // measured perRung there is no fact that the jump breaks her, and B-5's cautious rung stands.
-    if (perRung != null && isBigJump(anchor, meta.equipment, meta.observedLoads) && worstReps - perRung < band.lo) {
+    if (rungOutOfReach(anchor, band, perRung, meta, worstReps)) {
       return { decision: 'rung_out_of_reach', load: anchor, band, sets: state.sets };
     }
 
@@ -212,11 +240,25 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     const load = backTo != null
       ? snapDown(backTo, meta.equipment, meta.observedLoads)
       : Math.max(loadFloor(meta.equipment, meta.observedLoads), prevRung(state.load, meta.equipment, meta.observedLoads));
-    // S-25.2: rotate ONLY on a REPEATED stall at the same wall (back-off-and-re-climb has failed) —
-    // never on a first stall. `wantsChange` signals the structural swap, enacted only if a same-muscle
-    // target exists (else the lift simply backs off, S-53). rotationAvailable stays a hook the caller
-    // may gate; the persistence test is the trigger.
-    if (inp.rotationAvailable && isRepeatedStall(state.history, state.load, band)) {
+    // ════ S-25.1 IS UNAVAILABLE AT THE FLOOR — SO STEP 2 IS THE ONLY STEP LEFT ════
+    //
+    // The register orders the response: 1. back off and re-climb, 2. rotate. When she is already on
+    // the lightest weight the equipment physically offers, step 1 does not exist: the back-off
+    // computes to the load she is standing on, the changeLog records nothing (no delta), and
+    // `isRepeatedStall` can NEVER fire either — it looks for an occurrence LOWER than the current
+    // load, and there is no lower. So a lift that reached its floor and still could not make the
+    // band was frozen there for ever, one dead exercise in her programme every session, with the
+    // engine deciding "stall_backoff" over and over and moving nothing.
+    //
+    // It is reachable on real equipment: a beginner on the empty bar, or on the first pin of a
+    // stack. This is not a new rule — it is S-25's own step 2, taken because step 1 is exhausted.
+    const atFloor = Math.abs(load - state.load) < EPS
+      && Math.abs(state.load - loadFloor(meta.equipment, meta.observedLoads)) < EPS;
+    // S-25.2: otherwise rotate ONLY on a REPEATED stall at the same wall (back-off-and-re-climb has
+    // failed) — never on a first stall. `wantsChange` signals the structural swap, enacted only if a
+    // same-muscle target exists (else the lift simply backs off, S-53). rotationAvailable stays a
+    // hook the caller may gate; the persistence test is the trigger.
+    if (inp.rotationAvailable && (atFloor || isRepeatedStall(state.history, state.load, band))) {
       return { decision: 'stall_rotate', load, band, sets: state.sets, wantsChange: 'rotate' };
     }
     return { decision: 'stall_backoff', load, band, sets: state.sets };
@@ -257,7 +299,36 @@ function decideBodyweight(inp: Loop2Input, sets: SetPerf[]): Loop2Result {
   const { state } = inp;
   const band = state.band;
   const score = repsScore(sets);
-  if (score == null) return { decision: 'ambiguous', load: null, band, sets: state.sets };
+  if (score == null) {
+    // ════ SHE TRIED IT AND COULD NOT DO ONE REP ════
+    //
+    // `repsScore` returns null for two very different things, and until now both got S-16's
+    // "ambiguous → hold": **nothing was logged** (the honest no-data case S-16 is written for), and
+    // **every set she logged was ZERO reps** — which is not missing data, it is the clearest datum
+    // there is. On the reps axis there is no load to ease (S-51) and the ladder only climbs (S-52's
+    // `harder`), so that lift held at "impossible" in every session, for ever, with no way out.
+    //
+    // It is not a corner: a light beginner's chest and back pool can leave a **pull-up** or a
+    // **chest dip** leading the muscle once the barbell lifts are refused as unloadable (S-55b), and
+    // most beginners cannot do a single one. This is the bodyweight twin of the floor dead-end
+    // above, and it takes the same answer — S-25's step 2, because step 1 does not exist here
+    // either. Rotation resolves to a lift she can actually steer (`rotationTarget` prefers loadable).
+    //
+    // The count is her own, not ours: more consecutive all-zero occurrences than her attempts-to-
+    // clear (B-3 until she has a statistic). One bad day still just holds.
+    const attempted = sets.some((s) => !s.isApproach);
+    if (attempted && inp.rotationAvailable) {
+      let zeros = 1; // this occurrence
+      for (const rec of state.history.slice(0, RECENCY_WINDOW_SESSIONS)) {
+        if (repsScore(rec.sets) != null || rec.sets.length === 0) break;
+        zeros += 1;
+      }
+      if (zeros > attemptsToClearN(state.history, band)) {
+        return { decision: 'stall_rotate', load: null, band, sets: state.sets, wantsChange: 'rotate' };
+      }
+    }
+    return { decision: 'ambiguous', load: null, band, sets: state.sets };
+  }
 
   const allMetThi = sets.every((s) => s.reps >= band.hi); // S-52 trigger 1: too easy
   if (allMetThi) {

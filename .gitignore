@@ -90,3 +90,13 @@ $RECYCLE.BIN/
 # local review scratch
 /attachments.zip
 /attachments_extracted/
+
+# ---- Local agent scratch (machine-specific; never a teammate's business) ----
+.claude/scheduled_tasks.lock
+# Stray capture logs from device debugging sessions (the `logs/` rule above only
+# catches the directory form).
+logs*.txt
+
+# A 68 MB design archive — its contents already live unpacked in _v7_handoff/.
+# Kept on disk, out of history (a blob this size is permanent and GitHub warns above 50 MB).
+docs/canonical/*.zip

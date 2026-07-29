@@ -17,7 +17,7 @@
  */
 import type { Session, Units } from '@/data/local/models';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { strengthSessionKcal } from '@/domain/energy';
+import { sessionKcal } from '@/domain/energy';
 
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
@@ -190,7 +190,7 @@ export function weekCardFromHistory(
     const tonnage = sessionTonnageKg(s);
     dayTonnage[dayIdx] += tonnage;
     movedKg += tonnage;
-    const k = strengthSessionKcal(durationMs(s), weightKg);
+    const k = sessionKcal(s, durationMs(s), weightKg);
     if (k != null) {
       kcal = (kcal ?? 0) + k;
       kcalKnown = true;

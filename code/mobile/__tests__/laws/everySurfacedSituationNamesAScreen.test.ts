@@ -101,7 +101,7 @@ describe('the register and the surface speak the same language (L5, one layer ou
     'S-64': 'src/screens/profile/ProfileEdit.tsx',        // the time budget is a ceiling she sets
     'S-17': 'src/screens/home/Home.tsx',                  // her learned rest rides to the wrist
     'B-1': 'src/screens/onboarding/ManualInfo.tsx',       // cold start = sex × bodyweight only
-    'F-4': 'src/components/BodyMapField.tsx',             // the 2-mark emphasis budget, refused out loud
+    'F-4': 'src/screens/profile/BodyMapEdit.tsx',         // the 2-mark emphasis budget, refused out loud
   };
 
   for (const [tag, file] of Object.entries(coverage)) {

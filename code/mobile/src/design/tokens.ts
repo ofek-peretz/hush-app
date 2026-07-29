@@ -122,8 +122,20 @@ export const signal = {
 } as const;
 
 /**
- * Semantic load: a rise is moss, a fall is warm clay. `0` sits on paper; `stage`
- * sits on the dark. Use the `stage` sibling on the stage — always.
+ * ════ SEMANTIC LOAD — AND A FALL IS NOT A FAILURE (founder 2026-07-28) ════
+ *
+ * A rise is moss. A fall was a warm CLAY — and clay, next to moss, on a dark ground, reads as the
+ * red half of a red/green pair: the colour of a mistake. But an eased load is the engine doing its
+ * job. Loop 1 saw the reps and matched the weight to the body that showed up today; there is
+ * nothing to apologise for and nobody failed. Told in the wrong colour it lands as a demotion, and
+ * the athlete learns to dread the one moment the product should be trusted for.
+ *
+ * So a fall is **BLUE** — cool, calm, clinical. It is the colour of care rather than alarm, it is
+ * unmistakably NOT the green beside it, and it is far enough from clay that "eased" and "warning"
+ * can never be confused for one another again.
+ *
+ * `0` sits on paper; `stage` sits on the dark. Use the `stage` sibling on the stage — always
+ * (`paperTonesStayOffTheStage` enforces it, and the stage tone is tuned to clear AA on `#131210`).
  */
 export const up = {
   0: '#3e573f', // moss on paper
@@ -131,10 +143,70 @@ export const up = {
   stage: '#a9c49f', // moss on stage
 } as const;
 export const down = {
-  0: '#9b5d45', // clay on paper
-  wash: 'rgba(197,106,78,0.12)',
-  stage: '#d08064', // clay on stage
+  0: '#2f5d78', // deep blue on paper
+  wash: 'rgba(126,178,214,0.14)',
+  stage: '#7eb2d6', // lit blue on stage — eased, not failed
 } as const;
+
+/**
+ * ════ CLAY DID NOT LEAVE — IT WENT BACK TO ITS REAL JOB (founder 2026-07-29) ════
+ *
+ * "Things to do with an INJURY or with how badly it hurts cannot appear in blue. Blue is for a
+ * load coming down; red is for the part to do with pain."
+ *
+ * When `down` moved from clay to blue, everything that had been borrowing `down` FOR ITS CLAY went
+ * blue with it — §13.1's "something doesn't feel right" door, §13.2's severity grades, the body
+ * map's tender halo, the destructive Button variant, the account-deletion rows. The 2026-07-28 note
+ * on `down` even says "clay is reserved for pain and for destructive confirms", and then the clay
+ * was replaced rather than kept beside it. That is the whole bug: the token carried two meanings
+ * and only one of them was allowed to move.
+ *
+ * `alert` is that clay, back, and it is the ONLY thing pain and destruction may draw in. It is the
+ * deeper clay the wrist has always reserved for exactly this (`Palette.clay` #c56a4e), so the two
+ * surfaces agree. It is never a direction, and no load ever wears it.
+ */
+export const alert = {
+  0: '#8c3f27', // deep clay on paper
+  wash: 'rgba(197,106,78,0.14)',
+  stage: '#c56a4e', // lit clay on stage — pain, and destructive confirms
+} as const;
+
+/**
+ * A HOLD is the third thing, and it is neither. The load did not move because nothing asked it to
+ * (R7/S-24 — a hold is not news), so it takes the cream the rest of the stage speaks in: no hue, no
+ * verdict, no implied direction.
+ */
+export const hold = {
+  0: '#3a362d',
+  wash: 'rgba(241,238,229,0.10)',
+  stage: '#f1eee5', // cream on stage
+} as const;
+
+/**
+ * ════ THE DIRECTION LAW (founder 2026-07-29) ════
+ *
+ * "I want this to be a law in the whole app, even on TODAY or on any other screen: **down = blue,
+ * hold = our cream, raise = our green.**"
+ *
+ * It was ratified as a palette on 2026-07-28 and then applied to exactly ONE beat. The other
+ * surfaces each kept their own answer: the Saturday letter drew an eased load in MOSS (the colour
+ * of a raise — worse than red, because it says the engine did the opposite of what it did), the
+ * why-sheet was moss on all three verdicts, and Today lit every changed load in ochre, refusing to
+ * say which way it had gone.
+ *
+ * So the mapping has ONE home. A surface that draws a direction asks here; it never picks a hue.
+ * `everyDirectionIsDrawnByTheLaw` sweeps the source for anyone who tries.
+ */
+export type LoadDirection = 'up' | 'down' | 'hold';
+
+export function directionTone(direction: LoadDirection): string {
+  return direction === 'up' ? up.stage : direction === 'down' ? down.stage : hold.stage;
+}
+
+/** The same three, at wash weight — for a chip, a pill's ground, or a filled span. */
+export function directionWash(direction: LoadDirection): string {
+  return direction === 'up' ? up.wash : direction === 'down' ? down.wash : hold.wash;
+}
 
 /**
  * THE STAGE — the ground of the entire app. Lit from above.
@@ -208,10 +280,14 @@ export const color = {
   downWash: down.wash,
   hold: cream[2],
 
+  // PAIN + DESTRUCTION — clay, never the direction blue (see `alert`).
+  alert: alert.stage,
+  alertWash: alert.wash,
+
   // ---- legacy aliases ----
   accentBlue: cream[0], // links are weight, not hue
   accentGreen: signal[0], // live timer / rest ring / progress → moss
-  danger: down.stage, // destructive
+  danger: alert.stage, // destructive — a confirm she cannot undo is not a load coming down
 
   // DONE chip
   doneText: cream[2],
@@ -258,15 +334,27 @@ export const font = {
 
 /**
  * Size scale (px).
- * 2xs 11 · xs 12 · sm 13 · base 15 · md 17 · lg 20 · xl 24 · 2xl 30 · 3xl 38 ·
+ * 2xs 13 · xs 14 · sm 15 · base 16 · md 18 · lg 20 · xl 24 · 2xl 30 · 3xl 38 ·
  * 4xl 44 · 5xl 64 · data 84.
+ *
+ * ════ THE FLOOR IS 13, AND IT IS A GYM FLOOR (founder 2026-07-28) ════
+ *
+ * "There is text here so small nobody notices it — let alone mid-workout." The bottom four rungs
+ * were 11 / 12 / 13 / 15, sizes chosen while looking at a screen held still, at a desk, in good
+ * light. None of that describes the room this app is used in: the phone is on the floor or propped
+ * on a rack, she is two paces away, her eyes are moving and her heart is at 150. Eleven points is
+ * decoration there, not information.
+ *
+ * So the small end moves up and the large end does not — the hierarchy is unchanged, the bottom of
+ * it is simply legible now. `2xs` is the mono eyebrow, which is the smallest thing the product is
+ * allowed to say, and 13 is where it stops being a whisper.
  */
 export const textScale = {
-  '2xs': 11,
-  xs: 12,
-  sm: 13,
-  base: 15,
-  md: 17,
+  '2xs': 13,
+  xs: 14,
+  sm: 15,
+  base: 16,
+  md: 18,
   lg: 20,
   xl: 24,
   '2xl': 30,
@@ -301,12 +389,12 @@ export const type = {
   titleXL: { size: textScale['4xl'], lineHeight: 46, weight: weight.regular, serif: true }, // 44 — coach headline
   titleL: { size: textScale['2xl'], lineHeight: 36, weight: weight.regular, serif: true }, // 30 — section headline
   titleM: { size: textScale.xl, lineHeight: 30, weight: weight.medium, serif: true }, // 24 — screen headline
-  bodyL: { size: textScale.md, lineHeight: 26, weight: weight.regular }, // 17 — emphasized body
-  bodyM: { size: textScale.base, lineHeight: 23, weight: weight.regular }, // 15 — body / default UI
-  caption: { size: textScale.sm, lineHeight: 19, weight: weight.regular }, // 13 — secondary UI
-  micro: { size: textScale.xs, lineHeight: 16, weight: weight.regular }, // 12 — legend / caption
-  legend: { size: textScale['2xs'], lineHeight: 14, weight: weight.medium, mono: true }, // 11 — mono eyebrow
-  unit: { size: textScale.base, lineHeight: 15, weight: weight.medium, mono: true }, // unit beside a value
+  bodyL: { size: textScale.md, lineHeight: 27, weight: weight.regular }, // 18 — emphasized body
+  bodyM: { size: textScale.base, lineHeight: 24, weight: weight.regular }, // 16 — body / default UI
+  caption: { size: textScale.sm, lineHeight: 21, weight: weight.regular }, // 15 — secondary UI
+  micro: { size: textScale.xs, lineHeight: 19, weight: weight.regular }, // 14 — legend / caption
+  legend: { size: textScale['2xs'], lineHeight: 17, weight: weight.medium, mono: true }, // 13 — mono eyebrow
+  unit: { size: textScale.base, lineHeight: 17, weight: weight.medium, mono: true }, // unit beside a value
 } as const;
 
 /* ============================================================================

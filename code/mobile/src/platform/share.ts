@@ -14,7 +14,7 @@
  * bundles and TESTS even when they are absent — capture cannot be verified off a
  * device, so every path degrades to a clean "unavailable" rather than throwing.
  */
-import { Platform } from 'react-native';
+import { Platform, Share as RNShare } from 'react-native';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
@@ -77,3 +77,20 @@ export const shareNative: ShareHost = {
 
 /** The single swap point: native when the modules are present, the stub otherwise. */
 export const share: ShareHost = viewShot && sharing ? shareNative : shareStub;
+
+/**
+ * Hand a piece of TEXT to the OS share sheet (v7 11.4 — a plan link).
+ *
+ * React Native's own `Share` covers this with no extra module, on both platforms, so it does not
+ * ride the `viewShot`/`expo-sharing` swap above — a build without those can still send a link. On
+ * web there is no sheet: the caller is told, and says so, rather than appearing to have sent it.
+ */
+export async function shareText(message: string): Promise<'shared' | 'unavailable' | 'error'> {
+  if (Platform.OS === 'web') return 'unavailable';
+  try {
+    const result = await RNShare.share({ message });
+    return result.action === RNShare.dismissedAction ? 'error' : 'shared';
+  } catch {
+    return 'error';
+  }
+}

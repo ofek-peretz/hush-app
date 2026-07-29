@@ -66,6 +66,13 @@ jest.mock('@/state/stores/appStore', () => ({
 }));
 
 type Json = { type: string; props: Record<string, unknown>; children: Json[] | null } | string | null;
+/** The question's headline, with the muscle in HEADLINE CASE — `muscle.*` is written for
+ *  mid-sentence, and this word opens the sentence (WeeklyUpdate.headlineCase). */
+const askTitle = (muscle: string) => {
+  const m = tg(`muscle.${muscle}`);
+  return tg('weekly.askBackTitle', { muscle: m ? m[0].toLocaleUpperCase() + m.slice(1) : m });
+};
+
 function texts(r: ReactTestRenderer): string[] {
   const out: string[] = [];
   const walk = (n: Json | Json[]): void => {
@@ -111,13 +118,13 @@ describe('S-56 · the one question, at the Saturday mirror', () => {
     await db.appendCompletedSession(quadsSession);
     const r = await open();
 
-    expect(texts(r).join(' ')).toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Quads') }));
+    expect(texts(r).join(' ')).toContain(askTitle('Quads'));
     await act(async () => byLabel(r, tg('weekly.askBackYes'))!.props.onPress());
 
     expect(mockProfileUpdates).toHaveLength(1);
     expect((mockProfileUpdates[0].bodyMap as Record<string, string>).Quads).toBe('normal');
     expect((await db.loadPreferences()).askedBackMuscles).toContain('Quads');
-    expect(texts(r).join(' ')).not.toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Quads') }));
+    expect(texts(r).join(' ')).not.toContain(askTitle('Quads'));
   });
 
   it('"leave it off" is honoured — the map is untouched, and the question is never raised again (L4)', async () => {
@@ -130,21 +137,23 @@ describe('S-56 · the one question, at the Saturday mirror', () => {
     expect((await db.loadPreferences()).askedBackMuscles).toContain('Quads');
     // …and a fresh open never asks about Quads again.
     const r2 = await open();
-    expect(texts(r2).join(' ')).not.toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Quads') }));
+    expect(texts(r2).join(' ')).not.toContain(askTitle('Quads'));
   });
 
   it('an OFF muscle she never trained is honoured in silence — asking would be nagging (L8)', async () => {
     mockBodyMap = { Calves: 'off' };
     const r = await open();
-    expect(texts(r).join(' ')).not.toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Calves') }));
+    expect(texts(r).join(' ')).not.toContain(askTitle('Calves'));
   });
 
-  it('S-65 / L9 · the question never blocks the letter — Done works with the card on screen', async () => {
+  it('S-65 / L9 · the question never blocks the letter — the way out works with the card on screen', async () => {
     mockBodyMap = { Quads: 'off' };
     await db.appendCompletedSession(quadsSession);
     const r = await open();
-    expect(texts(r).join(' ')).toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Quads') }));
-    await act(async () => byLabel(r, tg('weekly.done'))!.props.onPress());
+    expect(texts(r).join(' ')).toContain(askTitle('Quads'));
+    // v7 3.1 closes the letter with the × in its chrome, not a Done button in the footer — a letter
+    // ends, it is not dismissed. The law is unchanged: the question never holds her here.
+    await act(async () => byLabel(r, tg('common.close'))!.props.onPress());
     expect(goBack).toHaveBeenCalled(); // she owes the letter nothing
   });
 });
@@ -168,9 +177,62 @@ describe('S-45 · a Loop 3 volume move is muscle news, and the letter shows it',
     const r = await open();
     const said = texts(r).join(' ');
     expect(said).toContain(tg('muscle.Chest'));
-    expect(said).toContain('9 → 10');
-    expect(said).toContain(tg('explain.volumeUp.text', { muscle: 'Chest' }));
+    // v7 splits the move into two styled spans — where it came from, and where it went — so assert
+    // the two facts rather than one glued string.
+    expect(said).toContain('9');
+    expect(said).toContain(`→ 10 ${tg('weekly.setsUnit')}`);
+    // The reason UNFOLDS: a muscle has no case sheet to open, so its WHY is a sentence in place.
+    expect(said).not.toContain(tg('explain.volumeUp.text', { muscle: 'Chest' }));
+    await act(async () => byLabel(r, tg('weekly.whyLink'))!.props.onPress());
+    expect(texts(r).join(' ')).toContain(tg('explain.volumeUp.text', { muscle: 'Chest' }));
     // A volume-only week is NOT a "steady" week — the evidence screen must not appear.
-    expect(said).not.toContain(tg('weekly.evidenceIntro'));
+    expect(texts(r).join(' ')).not.toContain(tg('weekly.evidenceIntro'));
+  });
+});
+
+/**
+ * ════ THE LETTER MAY NOT SPEAK BEFORE IT HAS READ (founder 2026-07-28) ════
+ *
+ * "When there are 0 changes, write something else — 'there are 0 changes' reads robotic."
+ *
+ * There were two ways to reach that sentence, and only one of them was the steady week. `view` is
+ * null until the roll, the fold and the read have all finished, and `changedCount` falls back to 0
+ * while it is — so the letter printed "I read last week's sessions and changed 0 lifts. Tap any of
+ * them to see why": a count Hush had not counted, a claim to have read what it had not read, and an
+ * instruction to tap rows that did not exist. A letter whose read FAILS keeps that sentence forever.
+ */
+describe('a week with no changes is never reported as a count', () => {
+  it('says nothing at all until the read lands', async () => {
+    // The read never resolves — the state every letter passes through, and the one a storage
+    // failure stops in.
+    mockView = null;
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const real = jest.requireMock('@/domain/weeklyUpdate') as { getWeeklyPlan: () => Promise<unknown> };
+    const original = real.getWeeklyPlan;
+    real.getWeeklyPlan = async () => { await held; return null; };
+    try {
+      const r = await open();
+      const said = texts(r).join(' ');
+      // The week's fact band is measured and may stand; the SENTENCE about what Hush decided may not.
+      expect(said).not.toContain(tg('weekly.intro', { count: 0 }));
+      expect(said).not.toContain(tg('weekly.evidenceIntro'));
+    } finally {
+      release();
+      real.getWeeklyPlan = original;
+    }
+  });
+
+  it('…and once it has, a steady week answers with the standing record, not a zero', async () => {
+    mockView = { ...baseView(), changedCount: 0 };
+    await db.appendCompletedSession(quadsSession);
+    const r = await open();
+    const said = texts(r).join(' ');
+    expect(said).not.toContain(tg('weekly.intro', { count: 0 }));
+    expect(said).toContain(tg('weekly.evidenceIntro'));
+    // What the weeks have added up to — her own totals, read off her own sets. (A Legend draws in
+    // upper case, so the comparison is made in the case the athlete actually sees.)
+    expect(said.toUpperCase()).toContain(tg('weekly.standingLegend').toUpperCase());
+    expect(said.toUpperCase()).toContain(tg('weekly.statSets').toUpperCase());
   });
 });

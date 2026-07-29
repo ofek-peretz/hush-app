@@ -72,8 +72,18 @@ describe('every locale carries every plural form its language has', () => {
 
   it('the two locales agree on which keys are plural at all', () => {
     // A key pluralised in one locale and flat in the other resolves inconsistently.
+    //
+    // The GENDER context is stripped first, and it has to be: Hebrew conjugates a sentence that
+    // counts things, so `weekly.intro` legitimately becomes `intro_female_one / _two / _other`,
+    // while English has no context at all (`useCopy` injects it only for `he`). Comparing the raw
+    // stems would read `weekly.intro_female` as a Hebrew-only PLURAL key and fail — punishing the
+    // locale for having the grammar this whole file exists to serve.
     const basesOf = (r: Tree) =>
-      new Set(flatten(r).filter((k) => SUFFIX.test(k)).map((k) => k.replace(SUFFIX, '')));
+      new Set(
+        flatten(r)
+          .filter((k) => SUFFIX.test(k))
+          .map((k) => k.replace(SUFFIX, '').replace(/_female$/, '')),
+      );
     expect([...basesOf(en as unknown as Tree)].sort()).toEqual([...basesOf(he as unknown as Tree)].sort());
   });
 });

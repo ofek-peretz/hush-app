@@ -209,13 +209,13 @@ describe('the v4 world is gone from the copy, in both locales', () => {
     ).map(([k, v]) => `${k} — "${v}"`);
     expect({ sexShapingTheProgramme: volumeFromSex }).toEqual({ sexShapingTheProgramme: [] });
 
-    // …and the caption that carries the truth must actually carry it: sex seeds a first load, and
-    // the first session overwrites it. A screen that just says "physiological calculations" is
-    // hiding the thing the brief asks it to say plainly.
-    for (const loc of [en, he] as Tree[]) {
-      const why = (flatten(loc).find(([k]) => k === 'ob.sexWhy') ?? ['', ''])[1];
-      expect(why).not.toMatch(/volume|נפח/i);
-    }
+    // The caption this rule was written against (`ob.sexWhy*`) is DELETED — founder 2026-07-28: a
+    // note defending a control nobody had objected to, pointing at a body map two steps ahead that
+    // she has not seen. So the assertion above is the whole law now, and it is the stronger half:
+    // it scans EVERY line in both locales rather than one key, so the claim cannot come back under
+    // a different name. Reading the dead key here would have been an assertion about nothing.
+    expect(flatten(en as Tree).some(([k]) => k.startsWith('ob.sexWhy'))).toBe(false);
+    expect(flatten(he as Tree).some(([k]) => k.startsWith('ob.sexWhy'))).toBe(false);
   });
 
   /**

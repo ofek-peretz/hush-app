@@ -1,6 +1,6 @@
 /**
  * Progress — the ALL-TIME aggregate (v7 3.2 "Progress · Lifts"). Everything the "All time" lens
- * shows above the per-lift chips: the lifetime tonnage, the number of raises the engine has made,
+ * shows above the per-lift chips: the lifetime tonnage, the number of times a lift beat its own best,
  * the workouts-and-weeks line, the lifetime burn and cardio distance, and the weekly-volume series
  * the area graph draws.
  *
@@ -9,7 +9,7 @@
  * last set persisted) feeds the same MET kcal estimate the Complete screen already uses.
  */
 import type { Session, CardioActivity } from '@/data/local/models';
-import { strengthSessionKcal } from './energy';
+import { sessionKcal } from './energy';
 import { currentWeekOpen, trainingWeekNumber } from './weekCadence';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -21,7 +21,17 @@ export interface ProgressAggregate {
   workouts: number;
   /** Training weeks elapsed since the account was created ("N weeks"). */
   weeks: number;
-  /** Times a lift beat its own all-time best load — the engine's raises. */
+  /**
+   * Times a lift beat its own all-time best load — **her personal bests, not "the engine's raises".**
+   *
+   * The distinction is not pedantry, and this comment used to get it wrong. The engine's raises are
+   * stamped in `changeLog`; this counts peaks in her logged history, and the two differ in both
+   * directions: a weight SHE reached for is counted here though Hush did not decide it, and a real
+   * engine raise that re-climbs toward an old peak is not counted here though Hush did. Reading the
+   * changeLog instead would be exact but bounded — it keeps ~200 entries — and this is the ALL-TIME
+   * lens, so a veteran's count would silently stop growing. A peak is the right unbounded fact for
+   * this surface; the claim about who caused it is the part that has to stay honest.
+   */
   raises: number;
   /** Lifetime kcal: strength MET estimate + recorded cardio calories. 0 when nothing is estimable. */
   kcal: number;
@@ -59,7 +69,7 @@ export function progressAggregate(
   for (const s of hist) {
     liftedKg += sessionTonnageKg(s);
     if (s.trained !== false) workouts += 1;
-    const k = strengthSessionKcal(sessionDurationMs(s), weightKg);
+    const k = sessionKcal(s, sessionDurationMs(s), weightKg);
     if (k != null) kcal += k;
 
     // Raises — a lift that, this session, exceeded its own all-time peak load. One per lift per session.

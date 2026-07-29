@@ -14,7 +14,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Polyline, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { signal, font, textScale, color } from '@/design/tokens';
+import { signal, font, color } from '@/design/tokens';
+import { monoCanDraw } from '@/design/monoVoice';
 
 interface Props {
   /** Tonnes per training week, oldest → newest. */
@@ -24,6 +25,9 @@ interface Props {
   startLabel?: string;
   endLabel?: string;
 }
+
+/** Mono when the face can draw the reading; the interface sans when it cannot. */
+const labelFace = (v: string) => (monoCanDraw(v) ? font.monoMedium : font.sansMedium);
 
 export function VolumeArea({ data, width, height = 150, startLabel, endLabel }: Props) {
   const padX = 12;
@@ -66,18 +70,23 @@ export function VolumeArea({ data, width, height = 150, startLabel, endLabel }: 
         ) : null}
         <Circle cx={lastX} cy={lastY} r={5} fill={signal[0]} />
       </Svg>
-      {startLabel ? <Text style={[styles.label, styles.start]}>{startLabel}</Text> : null}
-      {endLabel ? <Text style={[styles.label, styles.end]}>{endLabel}</Text> : null}
+      {startLabel ? (
+        <Text style={[styles.label, styles.start, { fontFamily: labelFace(startLabel) }]}>{startLabel}</Text>
+      ) : null}
+      {endLabel ? (
+        <Text style={[styles.label, styles.end, { fontFamily: labelFace(endLabel) }]}>{endLabel}</Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // v7 3.2 sets both ends of the graph in the instrument's mono at 11px — they are readings off
+  // the trace, not captions about it. The caller uppercases; the face is chosen per string so a
+  // Hebrew reading falls back rather than breaking (see `monoVoice`).
   label: {
     position: 'absolute',
-    fontFamily: font.sansMedium,
-    fontSize: textScale['2xs'],
-    letterSpacing: 0.4,
+    fontSize: 14.5,
     textAlign: 'left', // logical start; the `end` variant overrides to 'right'
   },
   start: { left: 10, bottom: 4, color: color.textMuted },

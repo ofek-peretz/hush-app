@@ -20,9 +20,9 @@
  * find out.
  */
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, I18nManager } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, I18nManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconButton, Legend } from '@/components/ds';
+import { Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { color, space, font, textScale, tracking, trackingPx } from '@/design/tokens';
@@ -61,10 +61,35 @@ interface Props {
    * the balance reads as unfinished. Off by default so no existing step shifts; opt in per screen.
    */
   centerContent?: boolean;
+  /**
+   * Air between the head and the body. The handoff's onboarding steps are one flex column
+   * with a single gap, and that gap is not the same on every step: 1.2 breathes at 40, 1.3
+   * — which carries a legend, a title, a spoken line AND a card — closes to 32.
+   */
+  headGap?: number;
+  /** Air above the head. 44 on the steps that lead with a headline; 30 where the body is long. */
+  bodyTop?: number;
+  /** The headline's size. 44 by default; 1.4 sets 42 to fit "About you" over two rulers. */
+  titleSize?: number;
   children?: React.ReactNode;
 }
 
-export function OnboardingScaffold({ onBack, progress, legend, title, sub, voice, keyboard, footer, onSwipeBack, centerContent, children }: Props) {
+export function OnboardingScaffold({
+  onBack,
+  progress,
+  legend,
+  title,
+  sub,
+  voice,
+  keyboard,
+  footer,
+  onSwipeBack,
+  centerContent,
+  headGap = 40,
+  bodyTop = 44,
+  titleSize = textScale['4xl'],
+  children,
+}: Props) {
   const { t } = useCopy();
 
   // The drag travels in the reading direction's "back": rightwards in LTR, leftwards in RTL —
@@ -85,15 +110,20 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, voice
   const Body = (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, { paddingTop: bodyTop }]}
       // Reads as a static page until the moment it cannot be one.
       showsVerticalScrollIndicator={false}
       bounces={false}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.head}>
+      <View style={[styles.head, { marginBottom: headGap }]}>
         {legend ? <Legend style={styles.legend}>{legend}</Legend> : null}
-        <Text style={styles.title} accessibilityRole="header">{title}</Text>
+        <Text
+          style={[styles.title, { fontSize: titleSize, lineHeight: Math.round(titleSize * 1.05), letterSpacing: trackingPx(titleSize, tracking.display) }]}
+          accessibilityRole="header"
+        >
+          {title}
+        </Text>
         {voice ? <Text style={styles.voice}>{voice}</Text> : null}
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
@@ -111,16 +141,22 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, voice
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
         {onBack ? (
-          <IconButton accessibilityLabel={t('common.back')} onPress={onBack}>
-            <Icon name="chevronLeft" size={20} color={color.textPrimary} strokeWidth={2} />
-          </IconButton>
+          // The glyph sits flush at the 26px gutter — no button padding around it, exactly
+          // 22px of chevron. The tap target is bought with hitSlop instead of with air.
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={onBack} hitSlop={12} style={styles.back}>
+            <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
+          </Pressable>
         ) : null}
         {progress ? (
-          <View style={styles.progress}>
-            {Array.from({ length: progress.total }).map((_, i) => (
-              <View key={i} style={[styles.seg, i < progress.index ? styles.segOn : styles.segOff]} />
-            ))}
-          </View>
+          <>
+            <View style={styles.progress}>
+              {Array.from({ length: progress.total }).map((_, i) => (
+                <View key={i} style={[styles.seg, i < progress.index ? styles.segOn : styles.segOff]} />
+              ))}
+            </View>
+            {/* v7: the mono step counter sits at the end of the progress rail. */}
+            <Text style={styles.count}>{`${progress.index}/${progress.total}`}</Text>
+          </>
         ) : null}
       </View>
 
@@ -142,24 +178,32 @@ export function OnboardingScaffold({ onBack, progress, legend, title, sub, voice
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   flex: { flex: 1 },
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: space.gutter - 4, paddingTop: 4, minHeight: 44 },
-  progress: { flexDirection: 'row', gap: 5, flex: 1, paddingHorizontal: 4 },
+  // The rail: 26px gutter, 20px down from the status bar, 16px between glyph · bars · count.
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: space.gutter, paddingTop: 20 },
+  back: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  progress: { flexDirection: 'row', gap: 6, flex: 1 },
   seg: { flex: 1, height: 3, borderRadius: 2 },
   segOn: { backgroundColor: color.textPrimary },
-  segOff: { backgroundColor: color.fillSubtleStrong },
+  // The steps ahead: a 15% cream rail, not the 10% fill used for control grounds.
+  segOff: { backgroundColor: 'rgba(241,238,229,0.15)' },
+  // "3/6" at the END of the progress rail — the rail mirrors, so the counter follows it.
+  count: { fontFamily: font.monoMedium, fontSize: textScale['2xs'], color: color.textMuted, textAlign: 'right' },
 
   // flexGrow (not flex) — the content keeps its natural height and only takes the full
   // viewport when it is SHORTER than it, which is what makes the page read as static.
-  body: { flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: 12, paddingBottom: 12 },
-  head: { marginBottom: 22 },
+  // The body's own gutter is 30 (the rail and the footer sit at 26).
+  body: { flexGrow: 1, paddingHorizontal: 30, paddingBottom: 12 },
+  head: {},
   // Centre a short control set in the space between the head and the footer (centerContent).
   centerWrap: { flex: 1, justifyContent: "center", paddingBottom: 24 },
-  legend: { marginBottom: 8 },
-  // v7: the step's headline is the coach's serif voice, not a sans label — 44px Frank Ruhl Libre.
-  title: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: color.textPrimary, textAlign: 'left' },
-  // The spoken line under the title — italic serif, one breath. (Faux-italic where no italic cut ships.)
-  voice: { fontFamily: font.serif, fontStyle: 'italic', fontSize: textScale.xl, lineHeight: 30, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
-  sub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
+  legend: { marginBottom: 18 },
+  // v7: the step's headline is the coach's serif voice, not a sans label — 44px/1.05 Frank Ruhl Libre.
+  title: { fontFamily: font.serif, color: color.textPrimary, textAlign: 'left' },
+  // The spoken line under the title — italic serif, 22px/1.4, one breath.
+  voice: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 22, lineHeight: 31, color: color.textSecondary, marginTop: 18, textAlign: 'left' },
+  // The factual line under the title — sans, 14/1.5, and it sits CLOSE (8): it finishes the
+  // headline's sentence rather than starting a new thought.
+  sub: { fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textSecondary, marginTop: 8, textAlign: 'left' },
 
-  footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 12, gap: 10 },
+  footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 30, gap: 14 },
 });

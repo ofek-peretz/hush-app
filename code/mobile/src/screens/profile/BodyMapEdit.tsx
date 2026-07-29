@@ -1,17 +1,17 @@
 /**
- * The body-map EDITOR (brief, Family 4) — the same map she drew at signup, editable forever.
+ * The body-map EDITOR (v7 4.1) — "the same map, forever editable".
  *
- * It renders `components/BodyMapField`, the very component onboarding renders, because the brief
- * requires exactly that ("reuses the onboarding map"). A map that looked one way at signup and
- * another in Settings would be two maps, and she would have to learn it twice.
+ * The map is a FIGURE now, not a list (see `components/BodyMapFigure` for why the old ruling against
+ * one was overturned and how its objection is answered). A tapped muscle raises the sheet: its
+ * stance, and — here only — its rep band on an engraved ruler.
  *
  * What the editor adds over onboarding:
  *
  *  · **The per-muscle rep band** (register Part 9). Onboarding never asks for it — it is a set-once
  *    preference at a default (8–10) most athletes never touch, and asking at signup is deliberation
- *    at the worst moment. Here it is one tap from the muscle's name, and invisible until wanted.
- *    The engine has read `repBandByMuscle` all along (fixtureModel resolves each exercise's band
- *    from its primary muscle); this is the first surface that could ever WRITE it.
+ *    at the worst moment. Here it is one tap from the muscle, and invisible until wanted. The engine
+ *    has read `repBandByMuscle` all along (each exercise resolves its band from its primary muscle);
+ *    this is the only surface that ever WRITES it.
  *
  *  · **S-56 — the OFF is obeyed in SILENCE.** An earlier build put a confirm sheet in front of the
  *    toggle; that mechanism appears nowhere in the register, and it argued with a choice she was in
@@ -29,12 +29,13 @@
  * and nothing may ever be added here that does.
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '@/components/ds';
+import { Button, SegmentedControl } from '@/components/ds';
 import { Icon } from '@/components/Icon';
-import { BodyMapField } from '@/components/BodyMapField';
+import { BodyMapFigure, viewOf, type BodyView } from '@/components/BodyMapFigure';
+import { BodyMapSheet } from '@/components/BodyMapSheet';
 import { bodyMapNote } from '@/domain/bodyMapNote';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -42,8 +43,8 @@ import { useToast } from '@/components/ds';
 import { validateMap, emphasisMuscles, type BodyMap } from '@/engine/v5/bodyMap';
 import { CANONICAL_MUSCLE_ORDER, EMPHASIS_BUDGET } from '@/engine/v5/constants';
 import * as haptics from '@/platform/haptics';
-import type { RepBandChoice } from '@/data/local/models';
-import { color, font, textScale, space, radius, tracking, trackingPx } from '@/design/tokens';
+import type { MuscleStance, RepBandChoice } from '@/data/local/models';
+import { color, font, textScale, space, tracking, trackingPx } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'BodyMapEdit'>;
@@ -53,10 +54,18 @@ export function BodyMapEdit({ navigation }: Props) {
   const app = useApp();
   const toast = useToast();
   const p = app.profile;
+  // The window is the STARTING answer and the stage's own layout is the final one. A figure gated
+  // on measurement alone never draws where there is no layout engine (a test) and blinks on the
+  // first frame where there is; a figure that only ever trusts the window runs off any surface
+  // narrower than it (a harness, a split view). Take the window, then correct it.
+  const winW = useWindowDimensions().width;
+  const [stageW, setStageW] = useState(0);
+  const figureW = stageW || Math.max(0, Math.round(winW - 30));
 
   const [map, setMap] = useState<BodyMap>(p?.bodyMap ?? {});
   const [bands, setBands] = useState<Record<string, RepBandChoice>>(p?.repBandByMuscle ?? {});
   const [refused, setRefused] = useState(false);
+  const [view, setView] = useState<BodyView>('front');
   const [open, setOpen] = useState<string | null>(null);
   const [saving, setSaving] = useState<'idle' | 'saving'>('idle');
 
@@ -71,6 +80,34 @@ export function BodyMapEdit({ navigation }: Props) {
   const dirty =
     JSON.stringify(map) !== JSON.stringify(p?.bodyMap ?? {}) ||
     JSON.stringify(bands) !== JSON.stringify(p?.repBandByMuscle ?? {});
+
+  function setStance(m: string, s: MuscleStance) {
+    // The emphasis budget is a hard limit (F-4) — but a refusal she cannot see is a bug, not a
+    // limit. The note under the figure names who holds it (the brief: "legible, not a hidden error").
+    if (s === 'emphasis' && (map[m] ?? 'normal') !== 'emphasis' && emphasised.length >= EMPHASIS_BUDGET) {
+      haptics.tick();
+      setRefused(true);
+      return;
+    }
+    // S-56 — an OFF is obeyed in silence (L8). The one "want it back?" question is asked later, at
+    // the Saturday mirror, for a muscle she has actually trained (WeeklyUpdate · askBackMuscle).
+    haptics.tick();
+    setRefused(false);
+    setMap((prev) => {
+      const next = { ...prev };
+      // Only her decisions are stored — 'normal' is the ABSENCE of one, not one of them.
+      if (s === 'normal') delete next[m];
+      else next[m] = s;
+      return next;
+    });
+  }
+
+  /** A tapped zone opens it; tapping the open one again puts the sheet away. */
+  function pressMuscle(m: string) {
+    haptics.tick();
+    setRefused(false);
+    setOpen((cur) => (cur === m ? null : m));
+  }
 
   async function save() {
     if (!check.ok || !dirty || saving === 'saving') return;
@@ -91,28 +128,56 @@ export function BodyMapEdit({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        {/* back · the surface's name in the serif · the face of the body being shown */}
         <View style={styles.head}>
           <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => navigation.goBack()} hitSlop={12}>
-            <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
+            <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
           </Pressable>
           <Text style={styles.title} accessibilityRole="header">{t('profile.bodyMap')}</Text>
-        </View>
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sub}>{t('ob.mapEditSub')}</Text>
-          <BodyMapField
-            value={map}
-            onChange={setMap}
-            onRefused={setRefused}
-            bands={bands}
-            onBandChange={(m, b) => setBands((prev) => ({ ...prev, [m]: b }))}
-            openMuscle={open}
-            onOpenMuscle={setOpen}
+          <SegmentedControl
+            size="pill"
+            options={[
+              { value: 'front', label: t('ob.mapFront') },
+              { value: 'back', label: t('ob.mapBack') },
+            ]}
+            value={view}
+            onChange={(v) => {
+              const next = v as BodyView;
+              setView(next);
+              // The open sheet belongs to a muscle on the other face — turning the body puts it away.
+              setOpen((cur) => (cur && viewOf(cur) !== next ? null : cur));
+            }}
           />
-        </ScrollView>
+        </View>
+
+        <View
+          style={styles.stage}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            setStageW((cur) => (cur === w ? cur : w));
+          }}
+        >
+          <BodyMapFigure value={map} view={view} openMuscle={open} onPressMuscle={pressMuscle} width={figureW} />
+        </View>
+
+        {/* One line, and only ever one — what the map is saying right now. */}
+        <Text style={[styles.note, note.loud && styles.noteLoud]}>{t(note.key, note.params)}</Text>
+      </SafeAreaView>
+
+      {/* THE SHEET — a tapped muscle, opened. Nothing is shown until something is asked for. */}
+      {open ? (
+        <BodyMapSheet
+          muscle={open}
+          stance={map[open] ?? 'normal'}
+          onStance={(s) => setStance(open, s)}
+          band={bands[open]}
+          onBandChange={(b) => setBands((prev) => ({ ...prev, [open]: b }))}
+        />
+      ) : null}
+
+      <SafeAreaView edges={['bottom']} style={styles.footSafe}>
         <View style={styles.foot}>
-          {/* One line, and only ever one — what the map is saying right now. */}
-          <Text style={[styles.note, note.loud && styles.noteLoud]}>{t(note.key, note.params)}</Text>
           <Button
             variant="primary"
             size="lg"
@@ -130,13 +195,16 @@ export function BodyMapEdit({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: space.gutter, paddingVertical: space[3] },
-  // v7 (2026-07-22): the editor's headline is the serif — the coach's voice.
-  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
-  body: { paddingHorizontal: space.gutter, paddingBottom: space[6], gap: space[4] },
-  sub: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 22, textAlign: 'left' },
-  foot: { paddingHorizontal: space.gutter, paddingTop: space[3], paddingBottom: space[2], gap: space[3] },
-  note: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center' },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, paddingTop: 18, paddingBottom: 4 },
+  // v7 4.1: the surface's name in the coach's serif at 24 — a screen headline.
+  title: { flex: 1, fontFamily: font.serif, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.display), color: color.textPrimary, textAlign: 'center' },
+  // THE FIGURE SITS IN THE MIDDLE (founder 2026-07-28). It hung from the top, which left the body
+  // pressed against the header and a pool of dead space beneath it — on a screen whose whole subject
+  // is a body. `center` gives it the room it was already taking up, on both sides of it.
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+  note: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center', paddingHorizontal: space.gutter, paddingBottom: space[2] },
   /* A refusal is Hush answering something she just did — it earns full ink, not a shout. */
   noteLoud: { color: color.textPrimary },
+  footSafe: { backgroundColor: color.bg },
+  foot: { paddingHorizontal: space.gutter, paddingTop: space[3], paddingBottom: space[2] },
 });

@@ -42,6 +42,14 @@ struct CardioSummary: Equatable {
 }
 
 /// The screen to render, with the data each one needs.
+/// CR3 · KM LOGGED — one whole kilometre, closed. Facts only: which kilometre, how long it took,
+/// and whether it was the quickest of this recording. Nothing here is a target or a grade.
+struct KmSplit: Equatable {
+  let km: Int
+  let splitS: TimeInterval
+  let quickest: Bool
+}
+
 enum WatchScreen: Equatable {
   case idle
   case start(WireLobby)
@@ -109,6 +117,14 @@ final class WatchModel: ObservableObject {
   // Km-split beat (founder 2026-07-12): one strong haptic per whole kilometre of a wrist
   // run/walk — the wrist is the runner's eyes. Reset at every cardio start.
   private var lastKmSplit = 0
+  /// CR3 · KM LOGGED — the split just closed, held for the beat the screen is on stage, then
+  /// cleared. Published so the cardio stage can hand it straight to the view; the km itself and
+  /// its seconds are FACTS off the runtime clock, never an estimate.
+  @Published private(set) var kmSplit: KmSplit?
+  /// The elapsed second each whole kilometre closed at — the split is the gap between two of them.
+  private var kmMarks: [TimeInterval] = []
+  /// The quickest split of THIS recording, so the screen can say when one is her best.
+  private var bestSplitS: TimeInterval?
   private var cancellables = Set<AnyCancellable>()
 
   // Watch-local cardio (run/walk): a live recording OWNS the display + the OS runtime
@@ -203,6 +219,14 @@ final class WatchModel: ObservableObject {
     workoutRuntime.metrics.$distanceKm
       .compactMap { $0 }
       .sink { [weak self] km in self?.kmTicked(km) }
+      .store(in: &cancellables)
+    // ONE NUMBER PER WORKOUT (founder 2026-07-28). The standalone engine builds its record and
+    // enqueues it DURABLY inside its own `finish()`, so the measured energy has to already be on
+    // the engine by then — stamping it afterwards would send a figure the outbox copy does not
+    // carry, and a replay after a crash would deliver the other one. Kept current here instead, on
+    // every reading, so whenever the last set lands the record is already right.
+    workoutRuntime.metrics.$activeKcal
+      .sink { [weak self] kcal in self?.localEngine?.measuredKcal = kcal }
       .store(in: &cancellables)
     // Standalone recovery: a local session that survived an app termination
     // resumes exactly where it was (elapsed rests are caught up wall-clock).
@@ -418,11 +442,21 @@ final class WatchModel: ObservableObject {
     for record in store.outboxRecords() {
       manager.transferRecord(record)
     }
+    // The wrist's runs travel the same way (founder 2026-07-28). Flushed in the same breath, so a
+    // reconnect settles BOTH queues; a run that waited three days for the phone still lands.
+    for record in store.outboxCardioRecords() {
+      manager.transferCardioRecord(record)
+    }
   }
 
   /// The phone durably acknowledged a record — reconciliation is complete.
+  ///
+  /// One ack clears both queues, because one channel carries both and the id is unique across them
+  /// (a UUID). Removing from the queue that does not hold it is a no-op, so the ack stays a single
+  /// call and cannot half-clear.
   func recordAcked(_ recordId: String) {
     store.removeRecord(recordId)
+    store.removeCardioRecord(recordId)
   }
 
   func setReachable(_ reachable: Bool) {
@@ -580,6 +614,30 @@ final class WatchModel: ObservableObject {
     if let engine = localEngine { engine.finishEarly() } else { sendIntent(type: "finish_early") }
   }
 
+  /// The athlete flagged a body area that hurts (WT14). It is a REPORT, not a session action: it
+  /// never touches the local engine's execution — it rides to the phone as `report_pain`, and the
+  /// phone (which owns the body map + the model) decides what to do with it. Sent only when the
+  /// phone is the authority; a standalone wrist session has no channel and no store for it, so it
+  /// simply surfaces nothing rather than pretending to record.
+  /// WT14 → WT14b. The wrist asks the same two questions the phone asks — WHERE, then HOW SHARP —
+  /// and sends both. Nothing is assumed on her behalf: without a severity the phone records nothing,
+  /// so the flow is only ever complete or absent, never half-guessed.
+  /// Returns TRUE when the report actually left for the phone.
+  ///
+  /// It matters because WT15 says "Easing your <muscle> today" — a claim about something the PHONE
+  /// does (the body map, the ease window, the swaps). On a standalone wrist session there is no
+  /// channel and no local store for a pain flag, so the report goes nowhere; drawing the
+  /// acknowledgement anyway would be Hush stating, in its own voice, that it had acted when it had
+  /// not. The wrist takes the flag with a haptic either way — she was heard — and only claims the
+  /// ease when the phone is there to make it.
+  @discardableResult
+  func reportPain(_ area: String, severity: String) -> Bool {
+    onEntryHaptic.send(.paused) // a quiet acknowledgement that the flag was taken
+    guard localEngine == nil, manager.isReachable else { return false }
+    sendIntent(type: "report_pain", area: area, severity: severity)
+    return true
+  }
+
   func dismissComplete() {
     completeHold = nil // the athlete closed the completion — the lobby may take the stage again
     completeKcal = nil
@@ -732,6 +790,9 @@ final class WatchModel: ObservableObject {
     cardioPausedAt = nil
     cardioPausedTotal = 0
     lastKmSplit = 0 // the split beat counts THIS recording's kilometres
+    kmMarks = []
+    bestSplitS = nil
+    kmSplit = nil
     workoutRuntime.trackLive(paused: false, activity: gait == "run" ? .running : .walking, indoor: false)
     onEntryHaptic.send(.readyTapped)
     recompute()
@@ -760,6 +821,24 @@ final class WatchModel: ObservableObject {
     guard whole > lastKmSplit else { return }
     lastKmSplit = whole
     onEntryHaptic.send(.kmSplit)
+    // CR3 · KM LOGGED — the haptic has fired here since the beat was built, and it was the ONLY
+    // thing that happened: a whole kilometre closed and the wrist showed nothing. "Every kilometre
+    // lands like a logged set", so it gets the same shape as one — the number, the split, a breath,
+    // and back to the run. The screen dismisses itself; a runner does not tap.
+    let now = cardioElapsed()
+    let previous = kmMarks.last ?? 0
+    kmMarks.append(now)
+    let split = max(0, now - previous)
+    let best = bestSplitS.map { split < $0 } ?? true
+    if bestSplitS == nil || split < bestSplitS! { bestSplitS = split }
+    kmSplit = KmSplit(km: whole, splitS: split, quickest: best)
+    recompute()
+    let shown = kmSplit
+    DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) { [weak self] in
+      guard let self, self.kmSplit == shown else { return } // a newer split already replaced it
+      self.kmSplit = nil
+      self.recompute()
+    }
   }
 
   /// Elapsed seconds for the cardio stage. The WATCH owns this clock (founder 2026-07-11:
@@ -775,6 +854,10 @@ final class WatchModel: ObservableObject {
 
   func endCardio() {
     guard let gait = cardioGait else { return }
+    // The start instant, BEFORE the teardown below clears it — the record needs it and the
+    // bookkeeping is about to be reset. (Reading `cardioStartedAt` after this block is nil, which
+    // would have stamped every wrist run with the epoch.)
+    let began = cardioStartedAt ?? Date()
     // Snapshot the record BEFORE finishing: the runtime clears its live metrics as it persists
     // the HKWorkout, and the completion screen must show what the athlete actually did.
     cardioSummary = CardioSummary(
@@ -791,6 +874,31 @@ final class WatchModel: ObservableObject {
     // Persist the honest record to Health (HR / kcal / distance); the strength
     // engine never sees it — recorded, never coached.
     workoutRuntime.finish()
+    // …and carry it HOME (founder 2026-07-28). Until now this stopped at Health, so the kilometres
+    // she ran on her wrist appeared in Apple Health and in no part of Hush — not her Log, not her
+    // Progress distance, not her lifetime burn. It is queued DURABLY first and only then offered,
+    // exactly like a standalone strength record: the phone may be in a locker, and a run she
+    // actually did must not depend on the pair being in range at the moment she stops.
+    if let summary = cardioSummary, summary.elapsedS >= 1 {
+      let record = WireCardioRecord(
+        v: WATCH_PROTOCOL_VERSION,
+        type: "cardio_record",
+        recordId: UUID().uuidString,
+        gait: summary.gait,
+        startedAt: WatchWire.iso(began),
+        endedAt: WatchWire.iso(Date()),
+        durationSec: summary.elapsedS,
+        distanceKm: summary.distanceKm,
+        // NO avgHr. The runtime publishes the LATEST beat, not an average, and sending the last
+        // reading of the run under a field called `avgHr` would be Hush stating a number it never
+        // computed. The HKWorkout in Health carries the real average; Hush omits what it cannot
+        // measure (the same honesty rule `kcalForKm` follows for a missing bodyweight).
+        avgHr: nil,
+        kcal: summary.kcal
+      )
+      store.enqueueCardioRecord(record)
+      manager.transferCardioRecord(record)
+    }
     onEntryHaptic.send(.workoutSaved)
     recompute() // → the completion screen, held until Done
   }
@@ -814,7 +922,9 @@ final class WatchModel: ObservableObject {
     actualWeight: Double? = nil,
     workoutId: String? = nil,
     exerciseId: String? = nil,
-    seconds: Int? = nil
+    seconds: Int? = nil,
+    area: String? = nil,
+    severity: String? = nil
   ) {
     let intent = WireIntent(
       v: WATCH_PROTOCOL_VERSION,
@@ -826,7 +936,9 @@ final class WatchModel: ObservableObject {
       actualWeight: actualWeight,
       workoutId: workoutId,
       exerciseId: exerciseId,
-      seconds: seconds
+      seconds: seconds,
+      area: area,
+      severity: severity
     )
     if let json = WatchWire.encodeIntent(intent) { manager.send(intentJSON: json) }
   }

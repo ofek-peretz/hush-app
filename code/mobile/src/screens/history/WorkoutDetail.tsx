@@ -15,11 +15,10 @@ import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { fixtureModel } from '@/data/api/fixtureModel';
 import { exerciseDisplayName } from '@/data/exercises';
 import { durationMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
-import { strengthSessionKcal } from '@/domain/energy';
+import { sessionKcal } from '@/domain/energy';
 import type { Session, SetLog } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -36,9 +35,7 @@ function durationSec(s: Session): number {
 }
 
 export function WorkoutDetail({ navigation, route }: Props) {
-  const { t } = useCopy();
   const app = useApp();
-  const units = app.profile?.units ?? 'kg';
   const [session, setSession] = useState<Session | null>(null);
   const [forward, setForward] = useState<Forward>({});
   const [loading, setLoading] = useState(true);
@@ -53,7 +50,11 @@ export function WorkoutDetail({ navigation, route }: Props) {
       // The forward loads this occurrence set — read back from the engine's own stamped fold
       // (never recomputed here). A held lift has no entry; its badge falls back to "HOLDS".
       if (s) {
-        fixtureModel
+        // Through the SEAM (`app.model`), never the fixture directly. Reaching past it works today
+        // only because the fixture IS the model; the moment a backend client is selected this screen
+        // would keep reading the local engine while every other surface moved on, and nothing would
+        // fail — it would just quietly show a different set of numbers than the rest of the app.
+        app.model
           .sessionForward?.({ startedAtMs: Date.parse(s.startedAt) })
           .then((f) => active && setForward(f ?? {}))
           .catch(() => active && setForward({}));
@@ -63,6 +64,44 @@ export function WorkoutDetail({ navigation, route }: Props) {
       active = false;
     };
   }, [route.params.sessionId]);
+
+  return (
+    <WorkoutDetailView
+      session={session}
+      forward={forward}
+      loading={loading}
+      units={app.profile?.units ?? 'kg'}
+      dayName={session ? sessionDayName(session, app.program) : ''}
+      bodyweightKg={app.profile?.weightKg}
+      onBack={() => navigation.goBack()}
+    />
+  );
+}
+
+/**
+ * 3.3b · THE RECORD, as a pure view.
+ *
+ * Split from the container so the gallery can draw a real record: everything here is one saved
+ * session plus the engine log that session stamped, and a harness has neither.
+ */
+export function WorkoutDetailView({
+  session,
+  forward,
+  loading,
+  units,
+  dayName,
+  bodyweightKg,
+  onBack,
+}: {
+  session: Session | null;
+  forward: Forward;
+  loading: boolean;
+  units: 'kg' | 'lb';
+  dayName: string;
+  bodyweightKg?: number;
+  onBack: () => void;
+}) {
+  const { t } = useCopy();
 
   // Group logged sets by exercise, preserving the order they were trained.
   const order: string[] = [];
@@ -87,7 +126,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
 
   // ── The facts row: MIN · KCAL · T MOVED · UP ── all read from the saved session.
   const durSec = session ? durationSec(session) : 0;
-  const kcal = strengthSessionKcal(durSec * 1000, app.profile?.weightKg);
+  const kcal = session ? sessionKcal(session, durSec * 1000, bodyweightKg) : null;
   const tonnes = (() => {
     const kg = (session?.sets ?? []).reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
     return kg > 0 ? (kg / 1000).toFixed(1) : null;
@@ -102,7 +141,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           hitSlop={10}
-          onPress={() => navigation.goBack()}
+          onPress={onBack}
           style={({ pressed }) => [styles.back, { opacity: pressed ? press.opacity : 1 }]}
         >
           <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
@@ -113,7 +152,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
 
       {loading || !session ? null : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title} accessibilityRole="header">{sessionDayName(session, app.program)}</Text>
+          <Text style={styles.title} accessibilityRole="header">{dayName}</Text>
 
           <View style={styles.facts}>
             <Fact value={String(durationMinutes(durSec))} label={t('common.minShort')} />
@@ -197,7 +236,9 @@ const styles = StyleSheet.create({
   back: { width: 22, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headLegend: { flex: 1 },
   headSpacer: { width: 22 },
-  body: { paddingTop: 16, paddingHorizontal: space.gutter, paddingBottom: 44 },
+  // flexGrow so the closing line can be pushed to the FOOT of the page (the handoff's margin-top:auto)
+  // on a short record, while a long one still scrolls it into place after the last lift.
+  body: { flexGrow: 1, paddingTop: 16, paddingHorizontal: space.gutter, paddingBottom: 44 },
 
   // v7 (2026-07-22): the record's headline is the serif — the workout named in the coach's voice.
   title: { fontFamily: font.serif, fontSize: textScale['4xl'], lineHeight: Math.round(textScale['4xl'] * 1.05), color: color.textPrimary, textAlign: 'left' },
@@ -215,14 +256,14 @@ const styles = StyleSheet.create({
   exName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   badge: { textAlign: 'left' },
   // "Next" / "Holds" are words (he: "הבא" / "נשאר") — sans, never mono.
-  badgeLabel: { fontFamily: font.sansMedium, fontSize: 12, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
+  badgeLabel: { fontFamily: font.sansMedium, fontSize: 15, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
   badgeLabelUp: { color: signal[0] },
-  badgeNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 12, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
+  badgeNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
   badgeNumUp: { color: signal[0] },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingVertical: 5, paddingHorizontal: 11, backgroundColor: CHIP_BG, borderRadius: 100 },
-  chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 12, color: color.textMuted, textAlign: 'left' },
+  chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, color: color.textMuted, textAlign: 'left' },
 
-  footer: { marginTop: 26, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

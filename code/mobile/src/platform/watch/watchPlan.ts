@@ -57,6 +57,8 @@ function buildSteps(day: ProgramDay, targets: SetTarget[], restInterSFor?: (exer
         globalIndex: global,
         targetWeight: target.recommendedWeight,
         targetReps: target.recommendedReps,
+        // Her band's ceiling, so the wrist can draw the same ruler standalone that it draws mirrored.
+        targetRepsHi: target.repBandHi,
         blockId: target.blockId,
         reasonType: target.reasonType,
         reasonDelta: target.reasonDelta,

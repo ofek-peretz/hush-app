@@ -94,6 +94,8 @@ export const WATCH_EVENTS = {
   /** A watch-local session record arrived for reconciliation (`outcome`:
    *  'applied' | 'duplicate' | 'rejected'). */
   recordReceived: 'watch_record_received',
+  /** A run/walk the WRIST recorded, delivered for reconciliation (founder 2026-07-28). */
+  cardioRecordReceived: 'watch_cardio_record_received',
 } as const;
 
 /** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */

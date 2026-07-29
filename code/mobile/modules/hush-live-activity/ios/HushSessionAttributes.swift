@@ -37,5 +37,9 @@ struct HushSessionAttributes: ActivityAttributes {
     var nextExerciseName: String?
     var nextTargetWeight: Double?
     var nextTargetReps: Int?
+    /// Which set of how many, as NUMBERS — v7 6.2 draws the set count as a row of dots beside the
+    /// load, and a dot row cannot be parsed out of the localized `setLabel` string.
+    var setIndex: Int
+    var setCount: Int
   }
 }

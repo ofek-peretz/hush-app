@@ -18,3 +18,24 @@ export function strengthSessionKcal(durationMs: number, weightKg: number | null 
   if (!weightKg || weightKg <= 0 || !Number.isFinite(durationMs) || durationMs <= 0) return null;
   return Math.round(STRENGTH_MET * weightKg * (durationMs / 3_600_000));
 }
+
+/**
+ * THE session's calories — the measurement when there is one, the estimate otherwise.
+ *
+ * Seven surfaces used to call `strengthSessionKcal` directly, each re-deriving the same figure from
+ * duration × bodyweight. That was fine while there was only ever one figure. A workout the WATCH
+ * executed standalone now arrives with the real thing (HealthKit's active energy, from her heart
+ * and her motion), and a surface that kept estimating would print a different number for the same
+ * session than the wrist did — and than the surface beside it.
+ *
+ * So this is the only door. `measuredKcal` wins because it was measured; the estimate stands
+ * everywhere else; and null still means null (no bodyweight ⇒ no number, never a guessed body).
+ */
+export function sessionKcal(
+  session: { measuredKcal?: number; earlyFinish?: boolean },
+  durationMs: number,
+  weightKg: number | null | undefined,
+): number | null {
+  if (session.measuredKcal != null && session.measuredKcal > 0) return Math.round(session.measuredKcal);
+  return strengthSessionKcal(durationMs, weightKg);
+}

@@ -1,0 +1,986 @@
+/**
+ * THE v7 GALLERY — one entry per handoff screen id (WEB PREVIEW ONLY).
+ *
+ * Lives under `screens/dev` on purpose: that path is the app's agreed internal-debug
+ * surface and is excluded from the copy/voice laws, because nothing here ships. Every
+ * entry mounts a REAL screen — never a copy of one — inside fixture contexts, so what
+ * the browser draws is what the device draws.
+ *
+ * Add an entry as each screen is built; the id must match the handoff exactly
+ * (`screenshots/screens/<id>.png`), because that PNG is the acceptance test.
+ */
+import React from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
+import { AppContext } from '@/state/stores/appStore';
+import { SessionContext } from '@/state/stores/sessionStore';
+import { HushTabBar } from '@/app/HushTabBar';
+import { ToastProvider } from '@/components/ds';
+import { Authentication } from '@/screens/onboarding/Authentication';
+import { NameEntry } from '@/screens/onboarding/NameEntry';
+import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
+import { ManualInfo } from '@/screens/onboarding/ManualInfo';
+import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
+import { HomeView } from '@/screens/home/HomeView';
+import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
+import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
+import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
+import { ProgressLifts } from '@/screens/progress/ProgressLifts';
+import { LiftDetailView } from '@/screens/progress/LiftDetail';
+import { CardioReady } from '@/screens/cardio/CardioReady';
+import { CardioDetail } from '@/screens/cardio/CardioDetail';
+import { CardioLiveView, CardioComplete, KmMoment } from '@/screens/cardio/Cardio';
+import { HistoryView } from '@/screens/history/History';
+import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
+import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { Paywall } from '@/screens/subscription/Paywall';
+import { ShareCardModal } from '@/screens/share/ShareCardModal';
+import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
+import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
+import { LapsedView } from '@/screens/subscription/Lapsed';
+import { SharePlanView } from '@/screens/plan/SharePlan';
+import { PlanReceivedView } from '@/screens/plan/PlanReceived';
+import { PainWhere } from '@/screens/pain/PainWhere';
+import { PainResponse } from '@/screens/pain/PainResponse';
+import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { exerciseCues } from '@/data/exercises';
+import { tg } from '@/i18n';
+import { WhyChangedSheet, type WhyChangedProps } from '@/components/WhyChangedSheet';
+import { MilestoneEmblem } from '@/components/MilestoneEmblem';
+import { Legend } from '@/components/ds';
+import { Text } from 'react-native';
+import { font, stage } from '@/design/tokens';
+
+/**
+ * How a handoff screen stands, from this harness's point of view.
+ *
+ *   `live`   — built, and it mounts here against fixtures. Click it and look at it.
+ *   `device` — built and wired IN THE APP, but it cannot mount here: it reads SQLite, GPS, the
+ *              engine, or a beat that only a real session produces. Its correctness is held by the
+ *              unit tests, not by this page.
+ *   `todo`   — not built yet.
+ *   `held`   — deliberately not built; the note says on whose word.
+ */
+export type ScreenStatus = 'live' | 'device' | 'todo' | 'held';
+
+export interface GalleryEntry {
+  id: string;
+  label: string;
+  status: ScreenStatus;
+  /** Why it cannot be shown here, or why it is not built. One short line. */
+  note?: string;
+  render?: () => React.ReactNode;
+}
+
+/* ============================================================================
+ * Fixtures — the same people and numbers the handoff draws.
+ * ==========================================================================*/
+
+const noop = () => {};
+const asyncNoop = async () => {};
+
+/** Everything a screen may read off `useApp()`, with the handoff's own athlete in it. */
+const appFixture = {
+  booted: true,
+  // The map starts with one LEAD, so 4.1 draws its moss zone and its leader line on arrival.
+  profile: { id: 'p1', name: 'Erez', sex: 'male', units: 'kg', weightKg: 78, bodyMap: { Chest: 'emphasis' }, repBandByMuscle: {} },
+  program: null,
+  sessions: [],
+  entitlement: { status: 'trial', sessionsUsed: 0 },
+  // The model seam, empty: every member a screen reaches for is optional there, so a gallery
+  // mount simply yields nothing rather than booting the engine.
+  model: {},
+  pendingName: () => 'Erez',
+  setPendingName: noop,
+  setPendingSex: noop,
+  signIn: asyncNoop,
+  acceptConsent: asyncNoop,
+  completeOnboarding: asyncNoop,
+  // A screen that PERFORMS the weekly roll before it reads (WeeklyUpdate) calls this on mount.
+  // Without it the harness threw an unhandled rejection on 3.1b — harmless to the render, but it
+  // is exactly the kind of noise that hides the next real one.
+  refreshProgram: asyncNoop,
+  modeState: { completedSessions: 0 },
+} as unknown as React.ContextType<typeof AppContext>;
+
+/**
+ * A live session frozen on 2.2's own set — Bench Press, set 2 of 4, 34 kg into an 8–10 band,
+ * lift 1 of 6. Actions are inert: the gallery is for LOOKING at a screen, not driving it.
+ */
+const sessionFixture = {
+  active: true,
+  phase: 'SET_PRESENTED',
+  displayPhase: 'SET_PRESENTED',
+  paused: false,
+  currentExercise: { id: 'bb_bench_press', name: 'Bench Press', muscle: 'Chest', equipment: 'barbell' },
+  currentExerciseId: 'bb_bench_press',
+  sessionExerciseIds: ['bb_bench_press'],
+  currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+  nextExerciseId: 'bb_bench_press',
+  setLabel: { n: 2, m: 4 },
+  globalProgress: { index: 1, total: 24 },
+  exerciseProgress: { index: 0, total: 6 },
+  nextExercise: null,
+  nextTarget: null,
+  nextSetLabel: { n: 3, m: 4 },
+  restSeconds: 147,
+  restExtraSeconds: 0,
+  watchLoggedSet: null,
+  startedAtMs: Date.now() - 23 * 60 * 1000 - 41 * 1000,
+  toLoad: false,
+  canMarkOccupied: false,
+  endResult: null,
+  correction: null,
+  start: asyncNoop,
+  loadResumable: async () => null,
+  resumeSaved: async () => false,
+  completeSet: asyncNoop,
+  editCurrentSet: noop,
+  endRest: noop,
+  extendRest: noop,
+  pause: noop,
+  resume: noop,
+  finishEarly: asyncNoop,
+  swapNextExercise: noop,
+  swapCurrentExercise: noop,
+  markEquipmentOccupied: noop,
+  publishWatchLobby: noop,
+  setWatchHomeActions: noop,
+  clearEndResult: noop,
+  clearCorrection: noop,
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** 2.4 · REST — the same lift, 2:27 left, with Loop 1's eased load waiting on the next set. */
+const restFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  displayPhase: 'REST_INTER',
+  restSeconds: 147,
+  nextExercise: { id: 'bb_bench_press', name: 'Bench Press', muscle: 'Chest', equipment: 'barbell' },
+  nextTarget: { exerciseId: 'bb_bench_press', setIndex: 2, recommendedWeight: 31.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+  correction: { exerciseId: 'bb_bench_press', direction: 'down', from: 34, to: 31.5, reps: 5, band: [8, 10] },
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** 2.4b · TRANSITION REST — the crossing from Bench Press to Overhead Press. */
+const crossingFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  displayPhase: 'REST_TRANSITION',
+  restSeconds: 72,
+  nextExerciseId: 'bb_overhead_press',
+  nextExercise: { id: 'bb_overhead_press', name: 'Overhead Press', muscle: 'Shoulders', equipment: 'barbell' },
+  nextTarget: { exerciseId: 'bb_overhead_press', setIndex: 0, recommendedWeight: 22.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+  nextSetLabel: { n: 1, m: 4 },
+  correction: null,
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** 13.1 · PAUSED — the same set, held. The pause SHEET follows `session.paused`, so the fixture
+ *  has to actually be paused; a fixture whose `pause()` is a no-op can never open it. */
+const pausedFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  paused: true,
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** 2.3b · LAST SET — the fourth set of four, just logged. */
+const lastSetFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  setLabel: { n: 4, m: 4 },
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** A React Navigation prop pair that satisfies every screen's props and does nothing. */
+function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    navigation: {
+      navigate: noop,
+      goBack: noop,
+      push: noop,
+      pop: noop,
+      replace: noop,
+      setOptions: noop,
+      addListener: () => noop,
+      canGoBack: () => true,
+    },
+    route: { key: 'k', name: 'n', params },
+  };
+}
+
+function InApp({ children, session = sessionFixture }: { children: React.ReactNode; session?: React.ContextType<typeof SessionContext> }) {
+  return (
+    <AppContext.Provider value={appFixture}>
+      <SessionContext.Provider value={session}>
+        <ToastProvider>{children}</ToastProvider>
+      </SessionContext.Provider>
+    </AppContext.Provider>
+  );
+}
+
+/**
+ * The four peer surfaces sit UNDER the bottom bar, and the bar belongs to the navigator — not to
+ * the screen. A gallery mount has no navigator, so a tab screen shown bare is missing the one piece
+ * of chrome it always ships with. This puts the REAL `HushTabBar` back under it, with a minimal
+ * navigation state, so what the browser draws is what the device draws.
+ */
+function UnderTabs({ active, children }: { active: number; children: React.ReactNode }) {
+  const routes = ['Today', 'Cardio', 'Progress', 'You'].map((name) => ({ key: name, name }));
+  const tabProps = {
+    state: { index: active, routes },
+    navigation: { emit: () => ({ defaultPrevented: false }), navigate: noop },
+    descriptors: {},
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  } as Record<string, unknown>;
+  return (
+    <View style={styles.underTabs}>
+      <View style={styles.tabScene}>{children}</View>
+      {React.createElement(HushTabBar as never, tabProps as never)}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  underTabs: { flex: 1 },
+  tabScene: { flex: 1 },
+  // 3.4b fires OVER the running stage; the harness gives it the same dark ground to land on.
+  kmStage: { flex: 1, backgroundColor: stage[0] },
+});
+
+/** The four kilometres 3.4 / 3.4b / 3.4c all read. */
+const runSplits = [
+  { km: 1, durationSec: 362, paceSec: 362, gait: 'run' as const },
+  { km: 2, durationSec: 371, paceSec: 371, gait: 'run' as const },
+  { km: 3, durationSec: 384, paceSec: 384, gait: 'run' as const },
+  { km: 4, durationSec: 379, paceSec: 379, gait: 'run' as const },
+];
+
+/** The closing summary 2.5 reads — the handoff's own Upper A: 52 minutes, finished whole. */
+const sessionSummary = {
+  workoutName: 'Upper A',
+  sets: 21,
+  progressed: 2,
+  durationMs: 52 * 60 * 1000,
+  earlyFinish: false,
+  startedAtMs: Date.now() - 52 * 60 * 1000,
+  trained: true,
+};
+
+/** The onboarding answers 1.5 reads its name out of. */
+const onboardingInputs = {
+  name: 'Erez',
+  sex: 'male',
+  units: 'metric',
+  daysPerWeek: 4,
+  bodyweightKg: 78,
+  healthConnected: false,
+} as never;
+
+/** 2.1b / 2.1c / 2.1d — the same argument, three verdicts. Straight from the handoff's own copy. */
+const whyRaised: WhyChangedProps = {
+  liftName: 'Barbell Row',
+  dateLabel: '18 Jul',
+  verdict: 'up',
+  loadFrom: '44',
+  loadTo: '47.5',
+  unit: 'kg',
+  delta: '+3.5',
+  band: [8, 10],
+  title: 'Your reps\nsized this.',
+  bandNote: 'Every rep landed inside your band',
+  sessions: [
+    { label: '15 July · last session', figure: '44 × 9·9·8', reached: false },
+    { label: '18 July · today', figure: '44 × 10·10·10', reached: true },
+  ],
+  line: 'Two sessions, every rep inside 8–10. That’s the signal to load — so I did, by the smallest honest step.',
+  onClose: noop,
+};
+
+const whyHeld: WhyChangedProps = {
+  ...whyRaised,
+  liftName: 'Bench Press',
+  dateLabel: '22 Jul',
+  verdict: 'hold',
+  loadFrom: null,
+  loadTo: '44',
+  delta: null,
+  title: 'Your reps\nheld this.',
+  bandNote: 'Inside your band — but short of the top',
+  sessions: [
+    { label: '15 July · last session', figure: '44 × 8·8·7', reached: false },
+    { label: '22 July · today', figure: '44 × 9·8·8', reached: false },
+  ],
+  line: 'Both sessions stayed inside 8–10 — but neither reached the top twice. So I hold. Top your band and the weight goes up.',
+};
+
+const whyEased: WhyChangedProps = {
+  ...whyRaised,
+  liftName: 'Back Squat',
+  dateLabel: '22 Jul',
+  verdict: 'down',
+  loadFrom: '60',
+  loadTo: '57.5',
+  delta: '−2.5',
+  title: 'Your reps\nasked for less.',
+  bandNote: 'Reps fell below your band, twice',
+  sessions: [
+    { label: '15 July · last session', figure: '60 × 6·6·5', reached: false },
+    { label: '22 July · today', figure: '60 × 6·5·5', reached: false },
+  ],
+  line: 'Reps came in under your band both times. Two sessions below the floor is my signal to ease — so I did, by the smallest honest step. No guess about why; win the band back and it returns.',
+};
+
+/** 2.6 · MILESTONE — the seal, at the size and rhythm the handoff draws it. */
+function MilestoneBeat({ value, caption, title, meta, glyph }: { value: string; caption: string; title: string; meta: string; glyph?: 'plates' }) {
+  return (
+    <View style={milestoneStyles.body}>
+      <Legend size={12} track={0.24} align="center" tone="onStage">MILESTONE</Legend>
+      <View style={milestoneStyles.seal}>
+        <MilestoneEmblem size={216} onStage pulse value={value} caption={caption} glyph={glyph} />
+      </View>
+      <View style={milestoneStyles.words}>
+        <Text style={milestoneStyles.title}>{title}</Text>
+        <Legend size={13.5} track={0} weight="regular" align="center" tone="onStage">{meta}</Legend>
+      </View>
+    </View>
+  );
+}
+
+const milestoneStyles = StyleSheet.create({
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20, backgroundColor: stage[0] },
+  seal: { marginTop: 30, marginBottom: 30 },
+  words: { alignItems: 'center', gap: 10 },
+  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 46, color: stage.ink0, textAlign: 'center' },
+});
+
+/** 3.2 · PROGRESS — LIFTS. The handoff's own six weeks: 186 t, 38 raises, 18 workouts. */
+const progressView = (
+  <ProgressLifts
+    loaded
+    units="kg"
+    entries={[
+      { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 47.5, series: [40, 41, 44, 44, 47.5] },
+      { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 30, periodPeakKg: 41, series: [30, 34, 34, 38, 41] },
+      { exerciseId: 'bb_deadlift', mode: 'weight', initialPeakKg: 70, periodPeakKg: 92.5, series: [70, 80, 85, 90, 92.5] },
+    ] as never}
+    aggregate={{
+      liftedKg: 186000,
+      workouts: 18,
+      weeks: 6,
+      kcal: 82000,
+      raises: 38,
+      cardioKm: 32,
+      weeklyTonnes: [7.9, 7.2, 9.4, 8.8, 10.6, 10.1, 11.8, 12.4],
+    } as never}
+    onLog={noop}
+  />
+);
+
+/** 3.2b · LIFT DETAIL — the handoff's own Barbell Row: 34 → 47.5 kg, three marks, the engine log. */
+const DAY = 24 * 60 * 60 * 1000;
+const daysAgo = (n: number) => Date.now() - n * DAY;
+
+const liftDetailView = (
+  <LiftDetailView
+    exerciseId="bb_row"
+    units="kg"
+    loaded
+    band={[8, 10]}
+    onBack={noop}
+    climb={{
+      mode: 'load',
+      firstAtMs: daysAgo(46),
+      current: 47.5,
+      best: 47.5,
+      points: [
+        { atMs: daysAgo(46), value: 34, dayBest: 34, sessionId: 's1' },
+        { atMs: daysAgo(39), value: 36, dayBest: 36, sessionId: 's2' },
+        { atMs: daysAgo(32), value: 38, dayBest: 38, sessionId: 's3' },
+        { atMs: daysAgo(25), value: 40, dayBest: 40, sessionId: 's4' },
+        { atMs: daysAgo(18), value: 42.5, dayBest: 42.5, sessionId: 's5' },
+        { atMs: daysAgo(11), value: 42.5, dayBest: 42.5, sessionId: 's6' },
+        { atMs: daysAgo(4), value: 44, dayBest: 44, sessionId: 's7' },
+        { atMs: Date.now(), value: 47.5, dayBest: 47.5, sessionId: 's8' },
+      ],
+    }}
+    moments={[
+      { kind: 'best', value: 47.5, atMs: Date.now() },
+      {
+        kind: 'club',
+        value: 40,
+        atMs: daysAgo(25),
+        milestone: { id: 'club_bb_row_40', family: 'club', value: 40, exerciseId: 'bb_row', earnedAt: new Date(daysAgo(25)).toISOString(), sessionId: 's4' },
+      },
+      { kind: 'origin', value: 34, atMs: daysAgo(46) },
+    ]}
+    changes={[
+      { atMs: Date.now(), loadFrom: 44, loadTo: 47.5, decision: 'progress' },
+      { atMs: daysAgo(4), loadFrom: 42.5, loadTo: 44, decision: 'progress' },
+      { atMs: daysAgo(11), loadFrom: 42.5, loadTo: 42.5, decision: 'hold' },
+      { atMs: daysAgo(18), loadFrom: 40, loadTo: 42.5, decision: 'progress' },
+      { atMs: daysAgo(25), loadFrom: 38, loadTo: 40, decision: 'progress' },
+      { atMs: daysAgo(32), loadFrom: 36, loadTo: 38, decision: 'progress' },
+      { atMs: daysAgo(39), loadFrom: 34, loadTo: 36, decision: 'progress' },
+      { atMs: daysAgo(46), loadFrom: null, loadTo: 34, decision: 'seed' },
+    ]}
+  />
+);
+
+/** 3.6b · PROGRESS — DAY ONE. History has been READ and it is empty; that is the whole screen. */
+const progressDayOne = <ProgressLifts loaded units="kg" entries={[]} aggregate={null} onLog={noop} />;
+
+/** 3.3c · CARDIO RECORD — the handoff's own Friday run: 4.2 km, 26:14, four splits.
+ *  A factory, not a constant: `mount` is declared below and a const would read it in its TDZ. */
+const cardioRecord = () => mount(CardioDetail, {
+  activity: {
+    id: 'c1',
+    kind: 'cardio',
+    gait: 'run',
+    startedAt: new Date(daysAgo(1)).toISOString(),
+    durationSec: 26 * 60 + 14,
+    distanceKm: 4.2,
+    calories: 318,
+    avgHr: 141,
+    splits: [
+      { km: 1, durationSec: 362, paceSec: 362, gait: 'run' },
+      { km: 2, durationSec: 371, paceSec: 371, gait: 'run' },
+      { km: 3, durationSec: 384, paceSec: 384, gait: 'run' },
+      { km: 4, durationSec: 379, paceSec: 379, gait: 'run' },
+    ],
+  },
+});
+
+/**
+ * Sun→Sat, four of them trained. `today` follows the DEVICE's weekday, because the eyebrow above
+ * the strip reads off the same clock — a fixture that froze Friday would contradict itself on a
+ * Monday, and this page's whole job is to show what the device shows.
+ */
+const weekStrip = [true, false, true, true, false, true, false].map((trained, i) => ({
+  trained,
+  today: i === new Date().getDay(),
+}));
+
+/* ── 3.1 · THE SATURDAY LETTER ────────────────────────────────────────────────────────────────
+ * The letter's rows are a WEEK OF ENGINE DECISIONS, so with no engine behind it the harness could
+ * only ever show the empty letter — the one state it says least in. These are the handoff's own
+ * week six: twelve changes, four of them large enough to lead, and Loop 3's set on the chest.
+ *
+ * The screen still does everything: it orders by how far each load travelled (so the reading order
+ * here is Bench, Row, the volume set, then the Front Squat — the engine's rule, not the mock's
+ * layout), holds the rest behind "View all 12", and opens each WHY itself.
+ */
+const explain = (key: string, params?: Record<string, string | number>) => ({
+  key: `explain.${key}`,
+  ...(params ? { params } : {}),
+});
+const liftRow = (exerciseId: string, name: string, from: number, to: number) => ({
+  exerciseId,
+  name,
+  loadKg: to,
+  sets: 4,
+  repRange: [8, 10] as [number, number],
+  change: {
+    snapshot: {
+      slotId: exerciseId, exerciseId, loadFrom: from, loadTo: to, setsFrom: 4, setsTo: 4,
+      rangeFrom: [8, 10] as [number, number], rangeTo: [8, 10] as [number, number], swapped: false,
+    },
+    explanation: {
+      slotId: exerciseId,
+      pattern: '',
+      observation: explain(to > from ? 'progressLoad.observation' : 'reprice.observation', { ex: name }),
+      conclusion: explain(to > from ? 'progressLoad.conclusion' : 'reprice.conclusion'),
+      action: explain(to > from ? 'progressLoad.action' : 'reprice.action', to > from ? { delta: +(to - from).toFixed(2) } : { load: to }),
+      text: explain(to > from ? 'progressLoad.text' : 'reprice.text', to > from ? { ex: name, delta: +(to - from).toFixed(2) } : { ex: name, load: to }),
+    },
+  },
+});
+
+const letterWeek = {
+  plan: {
+    weekIndex: 5, // "Week six."
+    at: new Date().toISOString(),
+    changedCount: 12, // eleven lifts + Loop 3's set — the handoff's "Twelve changes this week"
+    seen: false,
+    workouts: [
+      { dayId: 'd0', name: 'Upper A', groups: ['Chest', 'Back'], lifts: [
+        liftRow('bb_bench_press', 'Barbell Bench Press', 34, 41),
+        liftRow('bb_row', 'Barbell Row', 44, 47.5),
+        liftRow('bb_overhead_press', 'Overhead Press', 21, 22.5),
+        liftRow('lat_pulldown', 'Lat Pulldown', 45, 47.5),
+        liftRow('triceps_pushdown', 'Triceps Pushdown', 16, 17.5),
+        liftRow('bb_curl', 'Barbell Curl', 25, 26),
+      ] },
+      { dayId: 'd1', name: 'Lower A', groups: ['Quads', 'Hamstrings'], lifts: [
+        // The one that came DOWN: matched to what her reps showed, drawn in blue, never red.
+        liftRow('front_squat', 'Front Squat', 38.5, 34),
+        liftRow('bb_rdl', 'Romanian Deadlift', 60, 62.5),
+        liftRow('leg_press', 'Leg Press', 120, 122.5),
+        liftRow('leg_curl', 'Leg Curl', 32, 34),
+        liftRow('standing_calf_raise', 'Standing Calf Raise', 40, 42.5),
+      ] },
+    ],
+    volume: [{
+      muscle: 'Chest',
+      setsFrom: 3,
+      setsTo: 4,
+      explanation: {
+        slotId: 'Chest', pattern: '',
+        observation: explain('volumeUp.observation', { muscle: 'Chest' }),
+        conclusion: explain('volumeUp.conclusion'),
+        action: explain('volumeUp.action', { muscle: 'Chest' }),
+        text: explain('volumeUp.text', { muscle: 'Chest' }),
+      },
+    }],
+  },
+  band: { done: 4, planned: 4, tonnes: 46.8, kcal: 3120 },
+} as never;
+
+/**
+ * …and the week the engine changed NOTHING — the letter's other face (founder note 15).
+ *
+ * Six weeks of her own sessions ride along, because a steady week's whole answer is drawn FROM
+ * them: the standing record counts them, and the travelled lifts are read out of them. Without a
+ * history the screen falls to its "too early to have proof" line, which is the state the founder
+ * called robotic in the first place.
+ */
+const steadyHistory = [0, 1, 2, 3, 4, 5].map((week) => {
+  const at = new Date(daysAgo(38 - week * 7)).toISOString();
+  const load = (base: number, step: number) => base + step * week;
+  return {
+    id: `sv-steady-${week}`,
+    programDayId: 'd0',
+    programDayName: 'Upper A',
+    startedAt: at,
+    state: 'SAVED' as const,
+    trained: true,
+    sets: [
+      ...[1, 2, 3, 4].map((n) => ({ exerciseId: 'bb_bench_press', setIndex: n, actualWeight: load(27, 1.5), actualReps: 9, persistedAt: at })),
+      ...[1, 2, 3, 4].map((n) => ({ exerciseId: 'bb_row', setIndex: n, actualWeight: load(37, 1.5), actualReps: 9, persistedAt: at })),
+      ...[1, 2, 3].map((n) => ({ exerciseId: 'bb_overhead_press', setIndex: n, actualWeight: load(18, 0.75), actualReps: 8, persistedAt: at })),
+    ],
+  };
+});
+
+const steadyWeek = {
+  plan: { weekIndex: 5, at: new Date().toISOString(), changedCount: 0, seen: false, workouts: [], volume: [] },
+  band: { done: 4, planned: 4, tonnes: 46.8, kcal: 3120 },
+  history: steadyHistory,
+} as never;
+
+/** §9.1 — the record card: 47.5 on the row, +3.5 up from a 34 that was eight weeks ago. */
+const recordCard = {
+  kind: 'record' as const,
+  exerciseId: 'bb_row',
+  weight: 47.5,
+  unit: 'kg',
+  reps: 8,
+  delta: 3.5,
+  firstWeight: 34,
+  weeksAgo: 8,
+  dateMs: Date.now(),
+};
+
+/** §9.2 — the week card: four days trained, 12.4 t moved, up 5% on the week before. */
+const weekCard = {
+  kind: 'week' as const,
+  weekNumber: 6,
+  days: [
+    { trained: true, height: 0.82 },
+    { trained: false, height: 0 },
+    { trained: true, height: 1 },
+    { trained: true, height: 0.74 },
+    { trained: false, height: 0 },
+    { trained: true, height: 0.9 },
+    { trained: false, height: 0 },
+  ],
+  moved: 12400,
+  unit: 'kg',
+  kcal: 3120,
+  deltaPct: 5,
+  trainedDays: 4,
+  startMs: daysAgo(6),
+  endMs: Date.now(),
+};
+
+/** A saved session, as SQLite would hand it back — 3.3 and 3.3b both read one. */
+const savedSession = {
+  id: 'sv1',
+  programDayId: 'd0',
+  startedAt: new Date(daysAgo(1)).toISOString(),
+  state: 'SAVED',
+  earlyFinish: false,
+  sets: [
+    ['bb_bench_press', 34, 9], ['bb_bench_press', 34, 9], ['bb_bench_press', 34, 8], ['bb_bench_press', 34, 8],
+    ['bb_overhead_press', 21, 8], ['bb_overhead_press', 21, 8], ['bb_overhead_press', 21, 8],
+    ['bb_row', 44, 8], ['bb_row', 44, 7], ['bb_row', 44, 6],
+    ['bb_curl', 25, 9], ['bb_curl', 25, 8],
+  ].map(([exerciseId, w, r], i) => ({
+    exerciseId,
+    setIndex: i,
+    actualWeight: w,
+    actualReps: r,
+    persistedAt: new Date(daysAgo(1) + i * 3 * 60 * 1000).toISOString(),
+  })),
+} as never;
+
+/** The engine's stamped forward loads for that session — what 3.3b prints beside each lift. */
+const savedForward = {
+  bb_bench_press: { loadFrom: 34, loadTo: 41 },
+  bb_overhead_press: { loadFrom: 21, loadTo: 22.5 },
+  bb_curl: { loadFrom: 25, loadTo: 25 },
+};
+
+/** A recorded run, for 3.3's cardio row. */
+const savedRun = {
+  kind: 'cardio' as const,
+  id: 'cr1',
+  gait: 'run',
+  startedAt: new Date(daysAgo(2)).toISOString(),
+  durationSec: 26 * 60 + 14,
+  distanceKm: 4.2,
+  calories: 318,
+  avgHr: 141,
+  splits: [1, 2, 3, 4].map((km) => ({ km, durationSec: 370, paceSec: 370, gait: 'run' })),
+} as never;
+
+/** §11.4 / 11.5 — the handoff's own Upper/Lower: four days, 22 lifts, one band. */
+const sharedFixture = {
+  v: 1 as const,
+  from: 'Dana',
+  days: [
+    { name: 'Upper A', muscleGroups: ['Chest', 'Back', 'Shoulders'], exerciseIds: ['a', 'b', 'c', 'd', 'e', 'f'] },
+    { name: 'Lower A', muscleGroups: ['Quads', 'Hamstrings', 'Glutes'], exerciseIds: ['a', 'b', 'c', 'd', 'e'] },
+    { name: 'Upper B', muscleGroups: ['Shoulders', 'Arms', 'Back'], exerciseIds: ['a', 'b', 'c', 'd', 'e', 'f'] },
+    { name: 'Lower B', muscleGroups: ['Hamstrings', 'Quads', 'Calves'], exerciseIds: ['a', 'b', 'c', 'd', 'e'] },
+  ],
+  repBandByMuscle: { Chest: '8-10', Back: '8-10', Quads: '8-10' },
+};
+
+/** 3.5 · THE WEEK IS DONE — Today, on a rest day that closes a full week (4/4). */
+const weekDoneView = (
+  <HomeView
+    resting
+    name="Erez"
+    dayName={null}
+    muscles=""
+    trainedThisWeek={4}
+    startError={false}
+    weekNumber={6}
+    units="kg"
+    plan={null}
+    workouts={[
+      { id: 'd0', name: 'Upper A', muscles: '' },
+      { id: 'd1', name: 'Lower A', muscles: '' },
+      { id: 'd2', name: 'Upper B', muscles: '' },
+      { id: 'd3', name: 'Lower B', muscles: '' },
+    ]}
+    weekDays={weekStrip}
+    weekStats={{ tonnes: 46.8, kcal: 3120, loadsUp: 12 }}
+    nextWorkoutName="Upper A"
+    brief={null}
+    briefCount={null}
+    briefUnseen={false}
+    onForm={noop}
+    onStart={noop}
+    onChooseWorkout={noop}
+    onWeeklyUpdate={noop}
+    onShare={noop}
+  />
+);
+
+/* ============================================================================
+ * The gallery.
+ * ==========================================================================*/
+
+/** Screens take React Navigation props; the gallery hands them stubs. */
+type AnyScreen = (props: never) => React.ReactElement | null;
+const mount = (Screen: unknown, params?: Record<string, unknown>, session?: React.ContextType<typeof SessionContext>) => {
+  const S = Screen as AnyScreen;
+  return <InApp session={session}>{React.createElement(S as never, nav(params) as never)}</InApp>;
+};
+
+/** 2.1 · TODAY — the handoff's own Tuesday: Upper A, three changes, six lifts, ~55 min. */
+const todayView = (
+  <HomeView
+    resting={false}
+    name="Erez"
+    dayName="Upper A"
+    dayId="d0"
+    muscles="Chest · Shoulders · Triceps"
+    trainedThisWeek={2}
+    startError={false}
+    weekNumber={11}
+    units="kg"
+    planMinutes={55}
+    plan={[
+      // Two raises and one ease, so Today shows the direction law in one glance.
+      { exerciseId: 'bench', name: 'Barbell Bench Press', load: 41, sets: 4, band: [8, 10], changed: 'up' as const },
+      { exerciseId: 'ohp', name: 'Overhead Press', load: 22.5, sets: 4, band: [8, 10], changed: 'down' as const },
+      { exerciseId: 'row', name: 'Barbell Row', load: 47.5, sets: 4, band: [8, 10], changed: 'up' as const },
+      { exerciseId: 'curl', name: 'Barbell Curl', load: 25, sets: 3, band: [8, 10] },
+      { exerciseId: 'push', name: 'Triceps Pushdown', load: 16, sets: 3, band: [8, 10] },
+      { exerciseId: 'ab', name: 'Ab Crunch Machine', load: 25, sets: 3, band: [8, 10] },
+    ]}
+    workouts={[
+      { id: 'd0', name: 'Upper A', muscles: '' },
+      { id: 'd1', name: 'Lower A', muscles: '' },
+      { id: 'd2', name: 'Upper B', muscles: '' },
+      { id: 'd3', name: 'Lower B', muscles: '' },
+      { id: 'd4', name: 'Upper C', muscles: '' },
+      { id: 'd5', name: 'Lower C', muscles: '' },
+    ]}
+    brief={null}
+    briefCount={3}
+    briefUnseen={false}
+    trialLeft={11}
+    onForm={noop}
+    onStart={noop}
+    onChooseWorkout={noop}
+    onWeeklyUpdate={noop}
+    onShare={noop}
+  />
+);
+
+/**
+ * EVERY SCREEN IN THE HANDOFF, and where it stands. The ids match the handoff exactly, in the
+ * handoff's own order, so this page can be read next to it line for line.
+ */
+export const GALLERY: GalleryEntry[] = [
+  // ── 01 · ARRIVE ────────────────────────────────────────────────────────────────────────────
+  { id: '1.1', label: 'Sign in', status: 'live', render: () => mount(Authentication) },
+  { id: '1.2', label: 'Name + sex', status: 'live', render: () => mount(NameEntry) },
+  { id: '1.3', label: 'Connect health', status: 'live', render: () => mount(ConnectHealth, { sex: 'male' }) },
+  { id: '1.4', label: 'About you + your week', status: 'live', render: () => mount(ManualInfo, { healthConnected: false, sex: 'male' }) },
+  { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
+  { id: '1.6', label: 'Bring your history', status: 'held', note: 'founder — revisit at the end' },
+
+  // ── 02 · TRAIN ─────────────────────────────────────────────────────────────────────────────
+  // The card rises once per install, so the harness has to hold it open — and it hands the
+  // learning length (the handoff's own four) rather than reading a programme it does not have.
+  { id: '2.0', label: 'First workout — the first four', status: 'live', note: 'shown over 2.2', render: () => mount(SessionFlow, { previewFirstGym: 4 }) },
+  { id: '2.1', label: 'Today', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView}</UnderTabs></InApp> },
+  { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
+  { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
+  { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
+  { id: '2.1e', label: "When the day won't fit", status: 'held', note: 'needs S-3 trim detail from the engine' },
+  { id: '2.2', label: 'The set', status: 'live', render: () => mount(SessionFlow) },
+  { id: '2.2b', label: 'Edit set', status: 'live', note: 'tap the weight on 2.2', render: () => mount(SessionFlow) },
+  { id: '2.2c', label: 'Form', status: 'live', note: 'the clip itself needs a device build; the cues and chrome are real', render: () => (
+    <InApp>
+      <ExerciseDemo
+        title="Bench Press"
+        cues={exerciseCues('bb_bench_press')}
+        focusLabel={tg('workout.focusOn')}
+        formGuideLabel={tg('workout.formGuide')}
+        doneLabel={tg('workout.tapAnywhere')}
+        exerciseId="bb_bench_press"
+        onDone={noop}
+      />
+    </InApp>
+  ) },
+  { id: '2.3', label: 'The correction', status: 'live', render: () => (
+    <InApp>
+      <Logged
+        units="kg"
+        confirm={{ weight: 34, reps: 5, n: 2, m: 4 }}
+        correction={{ exerciseId: 'bb_bench_press', direction: 'down', from: 34, to: 31.5, reps: 5, band: [8, 10] } as never}
+      />
+    </InApp>
+  ) },
+  { id: '2.3b', label: 'Last set — exercise done', status: 'live', note: 'press Complete set', render: () => mount(SessionFlow, undefined, lastSetFixture) },
+  { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
+  { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
+  { id: '2.4c', label: 'The scan', status: 'live', note: 'held mid-read — lift 3 of 6', render: () => (
+    <InApp>
+      <SessionScan
+        read={2}
+        setsOf={() => 4}
+        onSkip={noop}
+        lifts={[
+          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press' },
+          { exerciseId: 'bb_overhead_press', name: 'Overhead Press' },
+          { exerciseId: 'bb_row', name: 'Barbell Row' },
+          { exerciseId: 'bb_curl', name: 'Barbell Curl' },
+          { exerciseId: 'tri_pushdown', name: 'Triceps Pushdown' },
+          { exerciseId: 'ab_crunch', name: 'Ab Crunch Machine' },
+        ]}
+      />
+    </InApp>
+  ) },
+  { id: '2.4d', label: 'Rest — learned', status: 'live', note: 'press Start next set on 2.4', render: () => mount(SessionFlow, undefined, restFixture) },
+  // Mounting the whole of WellDone showed the SCAN for 3.4 s and then an empty ledger — the harness
+  // has no history and no engine, so the one thing 2.5 exists to say could not be seen at all. The
+  // beat is a view now, and this is the handoff's own Upper A: three decided lifts and Loop 3's set.
+  { id: '2.5', label: 'What this session earned', status: 'live', render: () => (
+    <InApp>
+      <SessionEarned
+        savedLegend="Upper A · Saved"
+        partial={false}
+        durationLabel="52"
+        kcal={412}
+        tonnes={11.7}
+        answered
+        decisions={[
+          { key: 'bb_bench_press', name: 'Barbell Bench Press', from: '34', to: '41', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Bench Press', delta: 7 } } },
+          { key: 'bb_overhead_press', name: 'Overhead Press', from: '21', to: '22.5', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Overhead Press', delta: 1.5 } } },
+          { key: 'bb_row', name: 'Barbell Row', from: '44', to: '44', held: true,
+            reason: { key: 'explain.rungOutOfReach.text', params: { ex: 'Barbell Row' } } },
+        ]}
+        volume={[{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } }]}
+        onDone={noop}
+        onRecord={noop}
+        onShare={noop}
+      />
+    </InApp>
+  ) },
+  { id: '2.6', label: 'Milestone', status: 'live', render: () => <InApp><MilestoneBeat value="40" caption="kg" title="Forty on the bench." meta="MEASURED · 17 JULY 2026" glyph="plates" /></InApp> },
+  { id: '2.6b', label: 'Milestone — ten workouts', status: 'live', render: () => <InApp><MilestoneBeat value="10" caption="workouts" title="Ten workouts. You kept coming." meta="21.4 T MOVED · 8 RAISES · 3 WEEKS" /></InApp> },
+  { id: '2.6c', label: 'The block, sealed', status: 'held', note: 'needs the 12-session block concept' },
+
+  // ── 03 · REFLECT ───────────────────────────────────────────────────────────────────────────
+  { id: '3.1', label: 'The Saturday letter', status: 'live', note: "a week WITH decisions — the handoff's own example, nothing special about its number", render: () => mount(WeeklyUpdate, { previewPlan: letterWeek }) },
+  { id: '3.1b', label: 'The one question', status: 'live', note: 'held open on Quads', render: () => mount(WeeklyUpdate, { previewAskBack: 'Quads' }) },
+  { id: '3.1c', label: 'The Saturday letter — a steady week', status: 'live', note: 'nothing changed; the standing record answers', render: () => mount(WeeklyUpdate, { previewPlan: steadyWeek }) },
+  { id: '3.2', label: 'Progress — lifts', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressView}</UnderTabs></InApp> },
+  { id: '3.2b', label: 'Lift detail', status: 'live', note: 'tap a point on the climb', render: () => <InApp>{liftDetailView}</InApp> },
+  { id: '3.3', label: 'Progress — log', status: 'live', render: () => (
+    <InApp>
+      <UnderTabs active={2}>
+        <HistoryView
+          sessions={[savedSession]}
+          cardio={[savedRun]}
+          dayName={() => 'Upper A'}
+          onLifts={noop}
+          onSession={noop}
+          onCardio={noop}
+        />
+      </UnderTabs>
+    </InApp>
+  ) },
+  { id: '3.3b', label: 'The record', status: 'live', render: () => (
+    <InApp>
+      <WorkoutDetailView
+        session={savedSession}
+        forward={savedForward}
+        loading={false}
+        units="kg"
+        dayName="Upper A"
+        bodyweightKg={78}
+        onBack={noop}
+      />
+    </InApp>
+  ) },
+  { id: '3.3c', label: 'Cardio record', status: 'live', render: cardioRecord },
+  { id: '3.4', label: 'Cardio — live', status: 'live', note: 'the clock is frozen — the harness has no GPS', render: () => (
+    <InApp>
+      <CardioLiveView
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.62}
+        hr={141}
+        calories={318}
+        splits={runSplits}
+        gps="ready"
+        paused={false}
+        confirmEnd={false}
+        kmMoment={null}
+        backIn={0}
+        backBar={new Animated.Value(0)}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  { id: '3.4a', label: 'Cardio — ready', status: 'live', render: () => <InApp><UnderTabs active={1}><CardioReady onBegin={noop} /></UnderTabs></InApp> },
+  { id: '3.4b', label: 'Kilometre logged', status: 'live', render: () => (
+    <InApp>
+      <View style={styles.kmStage}>
+        <KmMoment split={runSplits[3]} splits={runSplits} backIn={3} progress={new Animated.Value(0.4)} />
+      </View>
+    </InApp>
+  ) },
+  { id: '3.4c', label: 'Cardio — done', status: 'live', note: 'preview — the harness never writes a run to the log', render: () => (
+    <InApp>
+      <CardioComplete
+        preview
+        navigation={{ goBack: noop, navigate: noop } as never}
+        gait="run"
+        startedAt={new Date(daysAgo(0)).toISOString()}
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.2}
+        avgHr={141}
+        calories={318}
+        splits={runSplits}
+        route={[]}
+      />
+    </InApp>
+  ) },
+  { id: '3.5', label: 'The week is done', status: 'live', render: () => <InApp><UnderTabs active={0}>{weekDoneView}</UnderTabs></InApp> },
+  { id: '3.6b', label: 'Progress — day one', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
+  { id: '3.6c', label: 'The next twelve', status: 'held', note: 'needs the 12-session block concept' },
+
+  // ── 04 · OWN ───────────────────────────────────────────────────────────────────────────────
+  { id: '4.1', label: 'Body map — editor', status: 'live', note: 'tap a muscle; Front / Back turns the body', render: () => mount(BodyMapEdit) },
+  { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
+
+  // ── 06–11 · SURFACES ───────────────────────────────────────────────────────────────────────
+  // §06 IS BUILT, and none of it is a React screen: it is ActivityKit. The RN seam that projects
+  // the session into the ContentState is `platform/liveActivity.ts`; the SwiftUI that draws it is
+  // `targets/widget/HushLiveActivityWidget.swift`. A browser cannot render either — the acceptance
+  // test for these two is a device with a live workout on it.
+  { id: '6.1', label: 'Dynamic Island', status: 'device', note: 'ActivityKit — platform/liveActivity.ts → targets/widget/HushLiveActivityWidget.swift' },
+  { id: '6.2', label: 'Lock screen · live activity', status: 'device', note: 'the same activity, expanded — strength and cardio both' },
+  // The one WidgetKit StaticConfiguration in the repo is the WATCH complication; there is no iOS
+  // home-screen widget yet, so this stays honest.
+  { id: '7.1', label: 'Widgets', status: 'todo', note: 'the watch complication exists; the iOS home-screen widget does not' },
+  { id: '8.1', label: 'Notifications', status: 'device', note: 'built + scheduled locally (platform/notifications.ts) — the OS draws them' },
+  { id: '8.2', label: 'Permission · the honest ask', status: 'live', note: 'shown once, after the first session', render: () => <InApp><NotificationAsk onAllow={noop} onDecline={noop} /></InApp> },
+  { id: '8.3', label: 'In-workout · rest ending', status: 'device', note: 'the 7-second tap — fires on a running rest (platform/restHaptics.ts)' },
+  { id: '9.1', label: 'Share card — personal record', status: 'live', render: () => mount(ShareCardModal, { card: recordCard }) },
+  { id: '9.2', label: 'Share card — week complete', status: 'live', render: () => mount(ShareCardModal, { card: weekCard }) },
+  { id: '10.1', label: 'After a gap · the welcome back', status: 'live', render: () => (
+    <InApp>
+      <WelcomeBackView
+        daysAway={11}
+        unit="kg"
+        lifts={[
+          { exerciseId: 'bb_bench_press', name: 'Bench press', load: 42.5 },
+          { exerciseId: 'bb_back_squat', name: 'Squat', load: 60 },
+        ]}
+        onStart={noop}
+      />
+    </InApp>
+  ) },
+  { id: '10.2', label: 'Subscription lapsed · read-only', status: 'live', render: () => (
+    <InApp>
+      <LapsedView
+        dayName="Monday, Push"
+        endedOn="28 July"
+        priceLabel="$59.99/year"
+        onResume={noop}
+        kept={[
+          { key: 'last', title: 'Last session · 27 July', detail: 'Push · 5 lifts · 4,200 kg moved', onOpen: noop },
+          { key: 'best', title: 'Bench press · all-time', detail: 'Best 42.5 kg × 8 · +12.5 in 12 weeks', onOpen: noop },
+          { key: 'letters', title: 'The Saturday letters', detail: '12 weeks, all saved', onOpen: noop },
+        ]}
+      />
+    </InApp>
+  ) },
+  { id: '10.3', label: 'Win-back push', status: 'device', note: 'one notification, weeks after lapsing — the OS draws it' },
+  // §11's live half (invite / shared session / the partner feed) needs a server between two
+  // devices, and the launch is 100% on-device. The two halves that DON'T are built: a plan travels
+  // as an opaque link, so nothing but the shape ever leaves the phone.
+  { id: '11.1', label: 'Invite a partner', status: 'todo', note: 'needs a server between two devices — the launch is on-device only' },
+  { id: '11.2', label: 'Shared session · your turn', status: 'todo', note: 'needs a live link between two phones' },
+  { id: '11.3', label: 'The partner, seen', status: 'todo', note: 'needs a server to carry a feed' },
+  { id: '11.4', label: 'Share your plan', status: 'live', note: 'the card IS the payload — no weight is in it', render: () => (
+    <InApp><SharePlanView splitName="Upper / Lower" plan={sharedFixture} onSend={noop} onPreview={noop} /></InApp>
+  ) },
+  { id: '11.5', label: 'Plan, received', status: 'live', render: () => (
+    <InApp><PlanReceivedView splitName="Upper / Lower" plan={sharedFixture} onAdopt={noop} onDecline={noop} /></InApp>
+  ) },
+
+  // ── 13 · WHEN SOMETHING HURTS ──────────────────────────────────────────────────────────────
+  { id: '13.1', label: 'Paused · the affordance', status: 'live', note: 'the door sits under the two acts', render: () => mount(SessionFlow, undefined, pausedFixture) },
+  { id: '13.2', label: 'Where, and how much', status: 'live', note: 'tap a muscle, then a grade', render: () => mount(PainWhere, { exerciseId: 'bb_bench_press' }) },
+  { id: '13.3', label: 'The engine responds', status: 'live', render: () => mount(PainResponse, { muscle: 'Shoulders', severity: 'pain', exerciseId: 'bb_bench_press' }) },
+];
+
+export const DEFAULT_SCREEN = '';

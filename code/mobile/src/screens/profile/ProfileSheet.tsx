@@ -35,7 +35,7 @@ import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
-import { color, space, font, textScale, tracking, trackingPx, press, down, radius, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
 // A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
@@ -273,7 +273,9 @@ export function ProfileSheet({ navigation }: Props) {
             whole programme (register Part 3), and it is the only place the per-muscle rep band is
             ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
             same screen twice — this opens something else entirely. */}
-        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} last />
+        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} />
+        {/* §11.4 — the ONE door to sharing a plan. Structure only: her weights never travel. */}
+        <Row label={t('planShare.legend')} sub={t('planShare.structureTail')} onPress={() => navigation.navigate('SharePlan')} last />
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
@@ -391,7 +393,8 @@ const styles = StyleSheet.create({
   rowPressed: { opacity: 0.6 },
   rowText: { flex: 1, minWidth: 0 },
   rowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
-  rowDanger: { color: down.stage },
+  // Deleting an account is not a load coming down — it takes the CLAY (see `alert` in tokens).
+  rowDanger: { color: alert.stage },
   rowSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   // membership card
@@ -432,7 +435,7 @@ const styles = StyleSheet.create({
   actions: { marginTop: 32, gap: 2 },
   exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
-  exitDanger: { color: down.stage },
+  exitDanger: { color: alert.stage },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
   tagline: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 4, letterSpacing: 0.2 },
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },

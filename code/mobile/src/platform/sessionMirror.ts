@@ -67,6 +67,9 @@ export interface MirrorStep {
   globalIndex: number; // 0-based within the whole session
   targetWeight: number | null; // null => bodyweight
   targetReps: number;
+  /** The rep band's ceiling (floor == targetReps). Carried so the watch draws the same
+   *  8–10 rep-range rule the phone's stage does (WT2). */
+  repBandHi?: number;
   /** Advisory model reason for THIS set's load vs last comparable (§4.4). Carried so
    *  the watch can render the LoadDelta mark; never authoritative. */
   reasonType?: ReasonType;
@@ -140,6 +143,18 @@ export interface MirrorSummary {
   timeLabel: string;
   sets: number;
   up: number;
+  /** Total external load moved this session, in KILOGRAMS (Σ weight × reps over the logged sets;
+   *  bodyweight sets contribute 0). The watch Complete screen renders it as tonnes ("11.7 T").
+   *  0 when no weighted set was logged. */
+  volumeKg: number;
+  /**
+   * The session's calories, AS THE PHONE COMPUTED THEM — one number per workout (founder
+   * 2026-07-28). The wrist can read HealthKit's active energy and the phone cannot, so for a
+   * phone-authority session the two surfaces used to print different figures for the same workout.
+   * The authority produces it; the wrist renders it. Null when it cannot be estimated honestly
+   * (no bodyweight — Hush never guesses a body to bill calories against).
+   */
+  kcal?: number | null;
   lifts: MirrorSummaryLift[];
   /** Present ONLY on the session that crossed it — a mark is celebrated once, on its own workout. */
   milestone?: MirrorMilestone | null;
@@ -176,6 +191,9 @@ export interface SessionMirror {
   totalSets: number;
   targetWeight: number | null;
   targetReps: number;
+  /** The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same
+   *  8–10 rep-range ruler the phone's stage does (WT2). Null when the target is a single rep. */
+  targetRepsHi: number | null;
   /** Absolute instant the current rest ends (ISO); null unless resting. */
   restEndsAt: string | null;
   /** Convenience snapshot derived from restEndsAt at projection time. */
@@ -209,6 +227,19 @@ export interface SessionMirror {
   liftCount: number;
   /** The session's workout name (program day) — shown on the Complete screen. */
   workoutName: string;
+  /**
+   * WT13c · GLANCE — what she has DONE so far, live, while the workout is still running.
+   *
+   * The summary below carries the same two figures, but only on the terminal frame, so a glance
+   * mid-session had nothing to read: the wrist could show her heart and her burn (the OS supplies
+   * those) and not one thing about her own lifting. These are the athlete's frontier, from the
+   * ACTUALS in step order — bodyweight sets contribute 0 kg, exactly as the summary treats them.
+   */
+  liveVolumeKg: number;
+  liveSets: number;
+  /** WT5 — true when the running rest is HER measured median on this lift (S-17) rather than the
+   *  tier bootstrap. Presentational only: the seconds are already hers either way. */
+  restIsLearned?: boolean;
   /** Complete-frame summary (only on the terminal frame): wall-clock time, total
    *  sets logged, and lifts progressed (distinct exercises the model raised). */
   summary: MirrorSummary | null;
@@ -250,6 +281,8 @@ export interface MirrorInputs {
   total: number;
   machine: SessionMachine;
   restInterS: number;
+  /** WT5 — is `restInterS` her MEASURED median on this lift, or the tier bootstrap? */
+  restIsLearned?: boolean;
   restTransitionS: number;
   /** When the current rest began (ms epoch), or null when not resting. Drives the
    *  absolute restEndsAt so the timer never drifts as the mirror is re-projected. */
@@ -273,6 +306,9 @@ export interface MirrorInputs {
   /** Distinct lifts the athlete actually trained AND that the model raised — the
    *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
   progressedLifts?: number;
+  /** The session's calories as the PHONE computed them (`domain/energy.sessionKcal`) — carried so
+   *  the wrist prints the same number rather than its own HealthKit reading (founder 2026-07-28). */
+  kcal?: number | null;
   /** The mark this session crossed (already-rendered English copy), for the terminal frame only. */
   milestone?: MirrorMilestone | null;
   /** Whether the CURRENT set still needs the equipment set (TO-LOAD) — see SessionMirror.toLoad. */
@@ -387,6 +423,11 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const lift = liftPosition(steps, Math.min(idx, steps.length - 1));
 
   // Terminal — a read-only "complete" frame. No rest, no next.
+  // WT13c · GLANCE — her own work so far, computed ONCE for every frame (the glance is reachable
+  // from any live phase, so it cannot hang off the terminal branch below).
+  const liveSets = inp.completedSets ?? 0;
+  const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0);
+
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
     // Lifts progressed = distinct exercises the model raised this session.
     const up = new Set(
@@ -399,6 +440,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       // early finish must never report every planned set as done.
       sets: inp.completedSets ?? total,
       up: inp.progressedLifts ?? up,
+      // External tonnage actually moved — from the ACTUALS, in step order. Bodyweight sets
+      // (weight null) contribute 0, exactly as the read-back's volume comparator treats them.
+      volumeKg: (inp.loggedSets ?? []).reduce((sum, s) => sum + (s.weight ?? 0) * s.reps, 0),
+      kcal: inp.kcal ?? null,
       lifts: summaryLifts(steps, inp.completedSets ?? total, inp.loggedSets),
       milestone: inp.milestone ?? null,
     };
@@ -417,6 +462,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       totalSets: total,
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
+      targetRepsHi: cur.repBandHi ?? null,
       restEndsAt: null,
       restRemainingS: null,
       nextExerciseName: null,
@@ -429,6 +475,9 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       liftIndex: lift.index,
       liftCount: lift.count,
       workoutName,
+      liveVolumeKg,
+      liveSets,
+      restIsLearned: inp.restIsLearned ?? false,
       summary,
       swapOptions: [],
       nextSwapOptions: [],
@@ -506,6 +555,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     totalSets: total,
     targetWeight: cur.targetWeight,
     targetReps: cur.targetReps,
+    targetRepsHi: cur.repBandHi ?? null,
     restEndsAt,
     restRemainingS,
     restTotalS,
@@ -523,6 +573,9 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     liftIndex: lift.index,
     liftCount: lift.count,
     workoutName,
+    liveVolumeKg,
+    liveSets,
+    restIsLearned: inp.restIsLearned ?? false,
     summary: null,
     swapOptions: phase === 'active_set' ? cur.swapOptions ?? [] : [],
     nextSwapOptions: isTransition && next ? next.swapOptions ?? [] : [],

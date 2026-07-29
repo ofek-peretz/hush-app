@@ -35,15 +35,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
-import { Legend, Display, Body, Button } from '@/components/ds';
+import { Legend, Display, Body, Button, Stage } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import type { Line } from '@/domain/voice';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, radius } from '@/design/tokens';
+import { color, space, font, textScale, radius, signal, directionTone, type LoadDirection } from '@/design/tokens';
 
 /** The week whose Recovery moment has already been given (never repeat a celebration). */
 const RECOVERY_SEAL_KEY = 'hush.recovery.sealed';
@@ -60,7 +61,9 @@ export interface HomeWorkoutOption {
 /**
  * One lift of the selected workout, as Home prints it. The LOAD is the point — the one number Hush
  * decides, sitting on the first screen the athlete opens. A lift the engine CHANGED this week has
- * its load struck in moss (v7 2.1): "changed loads sit in moss."
+ * its load lit — IN THE DIRECTION IT MOVED (founder 2026-07-29: raise = moss, ease = blue, hold =
+ * cream, on every screen without exception). It used to be one ochre for all three, so the first
+ * screen of the day told her something had changed and refused to say which way.
  */
 export interface HomePlanLift {
   exerciseId: string;
@@ -74,8 +77,8 @@ export interface HomePlanLift {
    * the FLOOR, dressed as the whole target.
    */
   band: [number, number];
-  /** The engine raised / lowered / swapped this lift's load this week — it stands in moss. */
-  changed?: boolean;
+  /** Which way the engine moved this lift's load this week; absent = it did not touch it. */
+  changed?: LoadDirection;
 }
 
 export interface HomeViewProps {
@@ -127,12 +130,12 @@ export interface HomeViewProps {
   undoable?: { anchor: string; name: string } | null;
   onUndoSwap?: () => void;
   onWeeklyUpdate: () => void;
-  onCardio: () => void; // Open training (run / walk) — recorded, not coached; a tab now
   /** Workouts left in the free trial — one quiet line under the act; absent once the trial is over
    *  or the athlete is a member. */
   trialLeft?: number | null;
   /** Open the account surface (the You tab) — the avatar opposite the wordmark. */
-  onAccount?: () => void;
+  /** Open the SHARE surface — the two-figure door opposite the wordmark (v7 2.1). */
+  onShare?: () => void;
 
   // ── RECOVERY, v7 3.5 "THE WEEK IS DONE" — all optional, all best-effort. Absent → the section
   //    simply does not draw (the closing verdict still reads from the seal + copy alone).
@@ -191,6 +194,7 @@ export function HomeView(props: HomeViewProps) {
 
   return (
     <View style={styles.root}>
+      <Stage />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         {/* brand + account — the range-mark and "hush" in the coach's serif, the avatar opposite */}
         <View style={styles.brandRow}>
@@ -198,15 +202,21 @@ export function HomeView(props: HomeViewProps) {
             <RangeMark />
             <Text style={styles.wordmark}>hush</Text>
           </View>
-          {props.onAccount ? (
+          {/* ════ THE DOOR OPPOSITE THE WORDMARK IS THE SHARE DOOR (founder 2026-07-28) ════
+              It was an initial in a circle — a second way into the You tab, which the tab bar
+              already owns, sitting in the most valuable corner of the first screen she sees. The
+              canonical HTML puts the two-figure glyph here instead, and it earns the spot: sharing
+              is the one thing on Today that nothing else offers a way to. The icon is traced from
+              that file (`twoPeople`), in the moss it is drawn in there. */}
+          {props.onShare ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t('nav.you')}
-              hitSlop={8}
-              onPress={props.onAccount}
-              style={({ pressed }) => [styles.avatar, pressed && styles.pressedDim]}
+              accessibilityLabel={t('planShare.title')}
+              hitSlop={10}
+              onPress={props.onShare}
+              style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
             >
-              <Text style={styles.avatarText}>{(props.name?.trim()?.[0] ?? '·').toUpperCase()}</Text>
+              <Icon name="twoPeople" size={22} color={signal[0]} strokeWidth={1.8} />
             </Pressable>
           ) : null}
         </View>
@@ -295,30 +305,17 @@ export function HomeView(props: HomeViewProps) {
                 <Text style={styles.restNext}>{t('home.restNext')}</Text>
               </View>
 
-              {/* On a recovery day, a run IS the act — so here it keeps its card. */}
-              <View style={styles.openTraining}>
-                <Legend style={styles.hubLegend}>{t('home.openTraining')}</Legend>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('cardio.title')}
-                  onPress={props.onCardio}
-                  style={({ pressed }) => [styles.cardioCard, pressed && styles.cardioCardPressed]}
-                >
-                  <View style={styles.cardioIconBox}>
-                    <Icon name="runner" size={20} color={color.textSecondary} strokeWidth={2} />
-                  </View>
-                  <View style={styles.cardioText}>
-                    <Text style={styles.cardioTitle}>{t('cardio.title')}</Text>
-                    <Text style={styles.cardioSub}>{t('cardio.recordedNotCoached')}</Text>
-                  </View>
-                  <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
-                </Pressable>
-              </View>
+              {/* THE RUN CARD IS GONE (founder 2026-07-27). Cardio has its own seat in the tab
+                  bar now, one tap away from every surface — so a second door to it on the rest day
+                  was the same act offered twice. The week's close says the week is closed; anyone
+                  who wants to run already knows where the tab is. */}
             </View>
           ) : (
             <View style={styles.block}>
-              {/* UP NEXT — a quiet eyebrow, never a day. The engine has no calendar (register L7). */}
-              <Legend>{t('home.nextWorkout')}</Legend>
+              {/* "TUESDAY · UP NEXT" — the weekday is the DEVICE's, read off the clock exactly like
+                  the rest state's; it is not the engine claiming a calendar (register L7). What is
+                  up next is still the queued workout, whatever day it is opened on. */}
+              <Legend track={0.18}>{`${restWeekday} · ${t('home.upNext')}`}</Legend>
 
               {/* THE NAME, in the coach's serif — with the change count in a moss pill beside it.
                   Tap the pill for the week's decisions (the WHY surface, where the undo lives). */}
@@ -333,19 +330,20 @@ export function HomeView(props: HomeViewProps) {
                     style={({ pressed }) => [styles.changePill, pressed && styles.pressedDim]}
                   >
                     {props.briefUnseen ? <View style={styles.changeDot} /> : null}
-                    <Text style={styles.changePillText}>
-                      {t('home.briefChanges', { count: props.briefCount }).toUpperCase()}
-                    </Text>
+                    {/* The pill says the fact — "3 CHANGES". The screen reader gets the longer
+                        sentence above, where there is room for "this week". */}
+                    <Legend size={11.5} track={0.08} weight="semibold" tone="accent">
+                      {t('home.briefChangesShort', { count: props.briefCount })}
+                    </Legend>
                   </Pressable>
                 ) : null}
               </View>
 
-              {/* The shape of the session, one line. SANS (not mono): it holds translated words
-                  ("LIFTS", "MIN"), and mono has no Hebrew glyphs (law monoCarriesNoWords). */}
+              {/* The shape of the session, one line — "6 LIFTS · ~55 MIN". */}
               {liftCount ? (
-                <Text style={styles.shapeLine}>
-                  {t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 }).toUpperCase()}
-                </Text>
+                <Legend size={12.5} track={0.04} weight="regular" tone="onStage" style={styles.shapeLine}>
+                  {t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })}
+                </Legend>
               ) : null}
 
               {/* TODAY'S LIFTS — a table the eye scans down. Each row: form-clip glyph + name on the
@@ -359,17 +357,27 @@ export function HomeView(props: HomeViewProps) {
                       accessibilityLabel={`${lift.name} · ${planFigureLabel(lift, props.units)}`}
                       accessibilityHint={t('workout.form')}
                       onPress={() => props.onForm(lift.exerciseId)}
-                      style={({ pressed }) => [styles.planRow, pressed && styles.pressedDim]}
+                      style={({ pressed }) => [
+                        styles.planRow,
+                        // The table is CLOSED — the last row carries the bottom rule, so the plan
+                        // reads as a block of facts rather than a list that trails off.
+                        i === props.plan!.length - 1 && styles.planRowLast,
+                        pressed && styles.pressedDim,
+                      ]}
                     >
                       <View style={styles.planLeft}>
                         <Icon name="playCircle" size={15} color={color.textMuted} strokeWidth={1.5} />
                         <Text style={styles.planName} numberOfLines={1}>{bidi(lift.name)}</Text>
                       </View>
+                      {/* A CHANGED load stands lit IN ITS OWN DIRECTION and carries its scheme in
+                          shadow; an unchanged row is one quiet tone end to end. */}
                       <Text style={styles.planFigure} numberOfLines={1}>
-                        <Text style={lift.changed ? styles.figureChanged : styles.figureLoad}>
+                        <Text style={[lift.changed ? styles.figureChanged : styles.figureQuiet, lift.changed ? { color: directionTone(lift.changed) } : null]}>
                           {figureLoad(lift, props.units)}
                         </Text>
-                        <Text style={styles.figureScheme}>{figureScheme(lift)}</Text>
+                        <Text style={lift.changed ? styles.figureScheme : styles.figureQuiet}>
+                          {figureScheme(lift)}
+                        </Text>
                       </Text>
                     </Pressable>
                   ))}
@@ -393,6 +401,7 @@ export function HomeView(props: HomeViewProps) {
                   One act: a tap selects, and the plan above repaints. A done workout can be read but
                   not started again; an interrupted session freezes the row (the CTA disagrees). */}
               {props.workouts.length ? (
+                <View style={styles.chipStrip}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -437,6 +446,20 @@ export function HomeView(props: HomeViewProps) {
                     );
                   })}
                 </ScrollView>
+                {/* The strip runs off the page rather than stopping — a 52px fade at the end
+                    edge says "there is more here" without a scrollbar or an arrow. */}
+                <View pointerEvents="none" style={styles.chipFade}>
+                  <Svg width="100%" height="100%">
+                    <Defs>
+                      <SvgGradient id="chipFade" x1="0" y1="0" x2="1" y2="0">
+                        <Stop offset="0" stopColor={color.bg} stopOpacity="0" />
+                        <Stop offset="1" stopColor={color.bg} stopOpacity="1" />
+                      </SvgGradient>
+                    </Defs>
+                    <Rect x="0" y="0" width="100%" height="100%" fill="url(#chipFade)" />
+                  </Svg>
+                </View>
+                </View>
               ) : null}
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
@@ -449,7 +472,7 @@ export function HomeView(props: HomeViewProps) {
                     block
                     label={t('home.continueWorkout', { name: bidi(props.resumable.workoutName) })}
                     onPress={props.onResume}
-                    leading={<Icon name="play" size={18} color={color.onAccent} />}
+                    leading={<Icon name="play" size={16} color={color.onAccent} />}
                   />
                 ) : props.dayDone ? (
                   <View style={styles.doneRow}>
@@ -463,13 +486,15 @@ export function HomeView(props: HomeViewProps) {
                     block
                     label={t('home.begin', { name: bidi(props.dayName) })}
                     onPress={props.onStart}
-                    leading={<Icon name="play" size={18} color={color.onAccent} />}
+                    leading={<Icon name="play" size={16} color={color.onAccent} />}
                   />
                 ) : null}
 
                 {/* the trial — one quiet mono line under the act, gone when the trial is */}
                 {props.trialLeft != null && props.trialLeft > 0 && !props.dayDone ? (
-                  <Text style={styles.trialLine}>{t('home.trialLeft', { count: props.trialLeft }).toUpperCase()}</Text>
+                  <Legend size={10.5} track={0.1} align="center" style={styles.trialLine}>
+                    {t('home.trialLeft', { count: props.trialLeft })}
+                  </Legend>
                 ) : null}
               </View>
             </View>
@@ -494,24 +519,31 @@ function RangeMark() {
   );
 }
 
-/** The load, formatted for display — "80", "" for bodyweight. */
+/**
+ * The load, formatted for display — "41", "" for bodyweight.
+ *
+ * NO UNIT HERE (v7 2.1). The plan is a COLUMN of loads in one declared unit; repeating "kg" on
+ * every row turns a scannable column into six sentences. The unit is stated where the working
+ * number is — the set screen — and nowhere it can be inferred.
+ */
 function figureLoad(lift: HomePlanLift, units: 'kg' | 'lb'): string {
   if (lift.load == null) return '';
   const w = displayWeight(lift.load, units);
-  return w == null ? '' : `${+w.toFixed(2)} ${unitLabel(units)}`;
+  return w == null ? '' : String(+w.toFixed(2));
 }
 
-/** The scheme, with an EN-dash range: " · 4 × 8–10" (a leading separator when a load precedes it). */
+/** The scheme, tight and with an EN-dash range: " · 4×8–10" (leading separator when a load precedes). */
 function figureScheme(lift: HomePlanLift): string {
   const [lo, hi] = lift.band;
-  const scheme = `${lift.sets} × ${hi > lo ? `${lo}–${hi}` : lo}`;
+  const scheme = `${lift.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
   return lift.load == null ? scheme : ` · ${scheme}`;
 }
 
-/** The whole right-hand figure, for accessibility labels. */
+/** The whole right-hand figure, for accessibility labels — which DO name the unit, since a
+ *  screen reader has no column to infer it from. */
 function planFigureLabel(lift: HomePlanLift, units: 'kg' | 'lb'): string {
   const load = figureLoad(lift, units);
-  return load ? `${load}${figureScheme(lift)}` : figureScheme(lift);
+  return load ? `${load} ${unitLabel(units)}${figureScheme(lift)}` : figureScheme(lift);
 }
 
 /** The short weekday label for the day strip's column i (0 = Sunday), in the active locale. */
@@ -538,8 +570,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space.gutter,
-    paddingTop: 8,
+    paddingHorizontal: 30,
+    paddingTop: 16,
   },
   // The wordmark stays LTR ("hush") in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9, direction: 'ltr' },
@@ -550,6 +582,9 @@ const styles = StyleSheet.create({
   markTick: { position: 'absolute', top: 0, width: 1.5, height: 11, backgroundColor: color.textPrimary },
   markTickStart: { start: 0 },
   markTickEnd: { end: 0 },
+  // The share door: the same 34 px touch circle the avatar held, without its fill — the glyph is
+  // the mark, and a ring around it would compete with the range-mark across from it.
+  shareDoor: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   avatar: {
     width: 36,
     height: 36,
@@ -560,13 +595,16 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontFamily: font.sansSemibold, fontSize: 14, color: color.textPrimary, textAlign: 'center' },
 
-  scroll: { paddingHorizontal: space.gutter, paddingTop: 22, paddingBottom: 32 },
-  block: { gap: 13 },
+  // v7 2.1: the page's own gutter is 30; only the ACT drops to 26 (see `cta`).
+  // flexGrow so the ACT can sit at the foot of a short page (the handoff's `margin-top:auto`)
+  // while a long one still scrolls.
+  scroll: { flexGrow: 1, paddingHorizontal: 30, paddingTop: 22, paddingBottom: 8 },
+  block: { flexGrow: 1, gap: 13 },
   pressedDim: { opacity: 0.62 },
 
   // ── the title row ──
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  title: { flex: 1, fontFamily: font.serif, fontSize: 54, lineHeight: 56, color: color.textPrimary, textAlign: 'left' },
+  title: { flex: 1, fontFamily: font.serif, fontSize: 54, lineHeight: 54, color: color.textPrimary, textAlign: 'left' },
   changePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -574,13 +612,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 13,
     borderRadius: radius.full,
-    backgroundColor: color.accentWash,
+    // A heavier moss veil than the app's default wash — the pill has to hold its own beside a
+    // 54px headline. `.18` is the handoff's value for exactly this chip.
+    backgroundColor: 'rgba(169,196,159,0.18)',
   },
-  changePillText: { fontFamily: font.sansSemibold, fontSize: 11.5, letterSpacing: 0.6, color: color.accent, textAlign: 'left' },
   changeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.accent },
 
-  // the shape line — SANS, holds translated words
-  shapeLine: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: 0.5, color: color.textSecondary, textAlign: 'left' },
+  shapeLine: { color: color.textSecondary },
 
   // ── the plan table ──
   plan: { marginTop: 2 },
@@ -589,16 +627,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    minHeight: 44,
-    paddingVertical: 10.5,
+    // THE PLAN IS THE POINT OF THIS SCREEN (founder 2026-07-28). It was set as a dense list — 44 px
+    // rows, a 15 pt name, a 13.5 pt load — under a card that had room to spare. She reads it to
+    // decide whether to go to the gym; it should be the easiest thing here to read, not the
+    // tightest.
+    minHeight: 54,
+    paddingVertical: 14,
+    paddingHorizontal: 2,
     borderTopWidth: 1,
-    borderTopColor: color.border,
+    borderTopColor: 'rgba(241,238,229,0.10)',
   },
-  planLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  planName: { flex: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
-  planFigure: { flex: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 13.5, textAlign: 'right' },
-  figureLoad: { color: color.textSecondary, fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
-  figureChanged: { color: color.accent, fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
+  planRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.10)' },
+  // The FIGURE is never squeezed: it is the fact the row exists for. The name shrinks and
+  // truncates around it (handoff: the load span is `flex:none; white-space:nowrap`).
+  planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  planFigure: { flexGrow: 0, flexShrink: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, textAlign: 'right' },
+  figureQuiet: { color: color.textSecondary, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
+  // The face only — the COLOUR is `directionTone(lift.changed)` at the call site, so this row can
+  // never hold an opinion about direction that the rest of the app does not share.
+  figureChanged: { fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
   figureScheme: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   planLoading: { height: 168 },
   // S-3 — a quiet note, not an alarm. Sans (it carries words), secondary ink, sits under the plan.
@@ -607,12 +655,14 @@ const styles = StyleSheet.create({
   doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
 
   // ── the chooser (horizontal chips) ──
+  chipStrip: { position: 'relative', overflow: 'hidden' },
+  chipFade: { position: 'absolute', top: 0, bottom: 0, end: 0, width: 52 },
   chips: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 4, paddingEnd: space.gutter },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 7,
+    paddingVertical: 6,
     paddingHorizontal: 13,
     borderRadius: radius.full,
     borderWidth: 1,
@@ -628,10 +678,10 @@ const styles = StyleSheet.create({
 
   // ── the act ──
   error: { marginTop: 4 },
-  cta: { marginTop: 10, gap: 12 },
-  // SANS, not mono: it holds translated words ("workouts left in your trial"), and mono carries no
-  // Hebrew glyphs (law monoCarriesNoWords).
-  trialLine: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: 1, color: color.textMuted, textAlign: 'center' },
+  // The act drops to the 26px gutter the whole product's primary buttons sit at, and negative
+  // margin walks it back out of the page's 30px column so the two agree.
+  cta: { marginTop: 'auto', marginHorizontal: -4, paddingTop: 24, gap: 12 },
+  trialLine: { marginTop: 4 },
 
   // ── recovery (v7 3.5 "THE WEEK IS DONE") ──
   restBlock: { paddingTop: 6, alignItems: 'center' },
@@ -682,7 +732,7 @@ const styles = StyleSheet.create({
   stripDotOn: { backgroundColor: color.up },
   stripDotOff: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: color.borderStrong },
   stripDotToday: { borderWidth: 3, borderStyle: 'solid', borderColor: color.upWash },
-  stripLabel: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 9, letterSpacing: 0.4, color: color.textMuted, textAlign: 'center' },
+  stripLabel: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 13, letterSpacing: 0.4, color: color.textMuted, textAlign: 'center' },
   stripLabelToday: { fontFamily: font.monoSemibold, color: color.up }, // rtl-ok: merged onto stripLabel, which sets textAlign:'center'
 
   // the italic-serif rest note, opened by a moss range-mark
@@ -719,34 +769,9 @@ const styles = StyleSheet.create({
 
   // NEXT — name only, no fabricated load
   nextRow: { alignSelf: 'stretch', marginTop: 16, textAlign: 'left' },
-  nextLabel: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: 0.8, color: color.textMuted }, // rtl-ok: nested span, inherits textAlign from nextRow
+  nextLabel: { fontFamily: font.sansMedium, fontSize: 14.5, letterSpacing: 0.8, color: color.textMuted }, // rtl-ok: nested span, inherits textAlign from nextRow
   nextName: { fontFamily: font.sansSemibold, fontSize: 13, color: color.textPrimary }, // rtl-ok: nested span, inherits textAlign from nextRow
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, alignSelf: 'stretch' },
   restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
-  openTraining: { marginTop: 30, alignSelf: 'stretch' },
-  hubLegend: { marginBottom: 8 },
-  cardioCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.surface,
-    borderRadius: radius.lg,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  cardioCardPressed: { backgroundColor: color.fillSubtle },
-  cardioIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    backgroundColor: color.fillSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardioText: { flex: 1, minWidth: 0 },
-  cardioTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
-  cardioSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 });

@@ -14,6 +14,7 @@
  */
 import type { Profile, Experience, Capability } from '@/data/local/models';
 import { BAR_KG } from '@/engine/loadMath';
+import { loadFloor } from '@/engine/v5/grid';
 import type { Exercise } from '@/data/exercises';
 
 /**
@@ -69,12 +70,56 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /** Conservative personalized starting load (kg), or null for bodyweight movements. */
-export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {
+/**
+ * The load B-1 actually MODELS for her, before any equipment floor is applied — sex × bodyweight and
+ * nothing else.
+ *
+ * Split out because the floor hides the model's own answer. `startingWeight` clamps a barbell up to
+ * `BAR_KG`, so asking it "does this lift fit her?" always answers yes: it returns the floor. The
+ * selector (S-55b) needs the number BEFORE the clamp, because the whole question it asks is whether
+ * the modelled load survives the clamp at all.
+ */
+export function modelledLoadKg(ex: Exercise, profile: LoadProfile): number | null {
   if (ex.bodyweight || ex.baseKg == null) return null;
   const bw = profile.weightKg ?? 75;
   const bwFactor = ex.bwScaled ? clamp(bw / 75, 0.7, 1.45) : 1;
   const sexFactor = profile.sex === 'female' ? (UPPER.includes(ex.capability) ? FEMALE_UPPER_FACTOR : FEMALE_LOWER_FACTOR) : 1;
-  let kg = ex.baseKg * bwFactor * sexFactor; // B-1: sex + bodyweight, and nothing else
+  return ex.baseKg * bwFactor * sexFactor; // B-1: sex + bodyweight, and nothing else
+}
+
+/**
+ * ════ S-55b · CAN THIS EQUIPMENT HOLD HER LOAD? ════
+ *
+ * A barbell cannot weigh less than the bar. Every grid function floors a barbell at `BAR_KG`, so a
+ * prescription below it is not a prescription — it is the floor, and **no loop can correct downward
+ * out of a floor.** The athlete's only escape is a manual swap.
+ *
+ * So before any mechanism puts a lift in front of her — the assembler CHOOSING one, or Loop 2
+ * ROTATING to one — it asks this single physical question of the load B-1 already computed. It is
+ * not a demographic shelf (S-58): nothing here reads sex to pick a lift. A 95 kg man and a 50 kg
+ * woman run identical code and get different answers because the arithmetic differs, not because
+ * the catalogue has two shelves.
+ *
+ * It lives HERE, beside `modelledLoadKg`, because the two selectors that need it — the assembler
+ * (engine) and the rotation resolver (domain) — must not each carry their own copy. They did, for
+ * one revision, and the rotation's copy was the one that did not exist: the assembler refused a
+ * barbell bench for a 52 kg beginner, which made that barbell bench the lift she had "gone longest
+ * without" — so the stall rotation handed her the exact lift the selector had just protected her
+ * from, at 20 kg, where it froze for ever.
+ *
+ * No profile (tests, the S-3 fallback) → the question is not asked and catalogue order stands.
+ */
+export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
+  if (!profile) return true;
+  const want = modelledLoadKg(ex, profile); // the MODELLED number, before the equipment clamp
+  if (want == null) return true; // bodyweight / unpriced — no load axis to overflow
+  return want >= loadFloor(ex.equipment);
+}
+
+export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {
+  const modelled = modelledLoadKg(ex, profile);
+  if (modelled == null) return null;
+  let kg = modelled;
   // Round to a loadable increment.
   // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
   const step = 1;

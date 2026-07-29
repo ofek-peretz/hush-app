@@ -20,6 +20,17 @@ export interface BodyweightSample {
   recordedAt?: string;
 }
 
+/**
+ * A heart-rate reading from Health, with the instant it was MEASURED.
+ *
+ * `atMs` is load-bearing: a watch batches its writes, so the newest sample in Health is regularly
+ * minutes old. Only `domain/heartRate` decides whether that is still worth drawing.
+ */
+export interface HeartRateSample {
+  bpm: number;
+  atMs: number;
+}
+
 /** Durable record of the Health connection (persisted via db; see DataProtection). */
 export interface HealthState {
   permission: HealthPermissionState;

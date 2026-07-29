@@ -17,7 +17,7 @@
  *     it reads ~2.2:1, present in the markup and gone to the eye. The guard asserts it genuinely fails
  *     AA on the stage (so the ban has teeth) AND that no stage text token resolves to it.
  */
-import { cream, signal, stage, color } from '@/design/tokens';
+import { cream, signal, stage, color, up, down, hold, alert } from '@/design/tokens';
 
 /** sRGB hex → relative luminance (WCAG 2.x). */
 function luminance(hex: string): number {
@@ -55,6 +55,16 @@ describe('contrast holds on the stage', () => {
     'color.accentText (lit moss label)': color.accentText,
     'color.tabInactive': color.tabInactive,
     'color.doneText': color.doneText,
+    // The DIRECTION tones carry text too — "+2.5", "31.5", "HOLDS" — and they were never in this
+    // list, so the one palette decision most likely to be made by eye was the one nothing checked.
+    // It mattered the moment `down` moved from clay to blue (founder 2026-07-28: an eased load is
+    // the engine working, not a failure, and clay beside moss reads as the red half of red/green).
+    'up.stage (a load that rose)': up.stage,
+    'down.stage (a load that eased)': down.stage,
+    'hold.stage (a load that held)': hold.stage,
+    // …and the ALERT clay, which carries the words on the pain door (13.1) and the severity
+    // grades (13.2). It is a separate token precisely so it can stop following `down` around.
+    'alert.stage (pain, and destructive confirms)': alert.stage,
   };
 
   it.each(Object.entries(stageText))('%s clears AA on the lightest stage ground', (_role, hex) => {

@@ -631,6 +631,18 @@ The new rule fires on **her own measured relationship between load and reps**, a
 **Cap: at most 2 corrections per exercise per session** (a correction is itself a hypothesis, and
 each one is tested by the very next set — L2).
 
+> **Where the correction now SURFACES (2026-07-24, presentation only — no engine mechanic changed).**
+> Loop 1 still computes the correction exactly as above and publishes it on `SessionView.correction`.
+> As of the v7 reconciliation, `completeSet` ALSO returns the same `LiveCorrection` on its
+> `CompleteResult`, so the phone can reveal it **synchronously, on the "Set logged" beat itself**
+> (the correction moment: old load struck through, the eased/raised load rising in moss, with the
+> reps that earned it named — R7, nothing invented). The between-sets **rest card** then carries only
+> the eased/raised load in moss under an "Eased/Raised for you" pill — the one number the up-next law
+> licenses between sets, because a corrected load is *news, not a reminder*. This is a split of the
+> SAME fact across two beats; the decision, the cap, the rail, and the learned-grid snap are all
+> untouched. (The last set of a session never corrects — it has no next set — so the beat reveal
+> never fires there and the session-end path is unaffected.)
+
 ### Loop 2 — The Exercise (end of every occurrence)
 Decides the load for the **next occurrence of this exercise** — not next Saturday.
 State is keyed to the **exercise**, never to a slot.
@@ -1168,6 +1180,23 @@ a second, parallel display of the same facts.)*
 converted. Session history is untouched and remains the substrate (S-9) — but `restBeforeS` is absent
 on every historical set, so those sets are **excluded from the reps-per-rung rest filter** (F-11) and
 never read as zero (L3).
+
+**S-76 · The Complete-screen calorie estimate is a declared constant, not an engine fact (v7 2.5, 2026-07-25).**
+The 2.5 close (IMG_8260) shows **EST. CALORIES** beside DURATION. The founder's source-of-truth rule for
+that screen is that *every input must be an already-measured fact* — so the estimate and its one constant
+are declared here, like any other engine number, even though **the engine neither computes nor stores it**.
+
+> **kcal = round(MET × bodyweightKg × hours)**, where `MET = STRENGTH_MET = 4.5` (the compendium band for a
+> multi-exercise resistance session *including* its rest — moderate 3.5 … vigorous 6.0), `bodyweightKg` is the
+> athlete's declared `Profile.weightKg` (a measured fact, never guessed), and `hours = durationMs / 3_600_000`
+> where `durationMs` is the session's own wall-clock span (start → last logged set), carried on the summary.
+> Implemented in `domain/energy.ts` (`strengthSessionKcal`), used by both the Complete screen and the read-only
+> record (`WorkoutDetail`). **Honesty gate (the cardio precedent `cardioMath.kcalForKm`): no bodyweight ⇒ NO
+> number.** Hush never invents a body to bill calories against — the stat simply does not render.
+>
+> This touches **no loop, no write path, no stored field**: it is arithmetic over two facts that already exist
+> at render time. It is registered only so the constant `4.5` has a home and its provenance is auditable — not
+> because the engine owns it (it does not).
 
 ---
 

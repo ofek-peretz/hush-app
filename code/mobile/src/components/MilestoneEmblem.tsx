@@ -1,149 +1,146 @@
 /**
- * MilestoneEmblem — the engraved medallion (founder 2026-07-10). Not a game
- * medal: a stamp. An ochre-foil bezel of 48 engraved ticks around a double ring,
- * with the mark's MOTIF struck in the middle of it and the value set beneath in the
- * mono instrument face.
+ * MilestoneEmblem — the mark, v7 (2.6 / 2.6b / 2.6c).
  *
- * Founder 2026-07-12: the motif is the point. A badge that only carries a figure makes
- * a 60 kg bench and a 60 kg squat the same object, and engraves "250" where the copy
- * promises the Statue of Liberty. Every mark now brings its own glyph
- * (components/MilestoneGlyph) — the lift, the object moved, the ledger, the raise.
+ * ════ IT IS A SEAL, NOT A MEDAL ════
  *
- * Tones:
- *   'foil'   — earned. Ochre engraving; on the stage it reads as foil on graphite,
- *              on paper as ochre ink.
- *   'locked' — the gallery silhouette of the NEXT mark: same geometry, muted ink.
+ * This used to be an engraved medallion: 48 foil ticks around a double ring, a motif struck in the
+ * middle, the figure beneath. It read as a game trophy — the one thing the product is not. v7 draws
+ * it as a SEAL: a dashed outer ring, a plain inner ring, the figure lit inside it, and a small moss
+ * check stamped at the crown where a seal's mark goes. Nothing is gold, nothing is foil, and the
+ * only accent on the whole object is that check and the mark's own glyph.
  *
- * `pulse` lights a slow ochre halo behind the bezel — reserved for the celebration
- * beat, where the mark should feel like it is giving off heat, not sitting in a list.
+ * The dashed ring is the point of the drawing: a seal is made of the thing it certifies, and what
+ * certifies a milestone here is a countable number of sessions. So the ring is a measure, drawn as
+ * a measure, rather than a laurel.
+ *
+ * `pulse` adds one slow moss ring breathing outward behind it — the celebration beat only, where
+ * the mark should feel like it is giving off heat rather than sitting in a list.
  */
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import Svg, { Circle, Line } from 'react-native-svg';
 import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneGlyph';
-import { stage, ink, font } from '@/design/tokens';
+import { Icon } from '@/components/Icon';
+import { stage, signal, font } from '@/design/tokens';
 
 export interface MilestoneEmblemProps {
   size: number;
   tone?: 'foil' | 'locked';
   onStage?: boolean; // dark stage vs paper
-  value: string; // the figure beneath the motif, e.g. "100", "250 t", "×2"
-  caption?: string; // tiny line under the figure, e.g. "KG" / "WORKOUTS"
-  glyph?: MilestoneGlyphName; // the mark's meaning, struck in the middle
-  /** Celebration only: a slow ochre halo breathing behind the bezel. */
+  value: string; // the figure inside the seal, e.g. "40", "10", "12"
+  caption?: string; // the line under the figure, e.g. "KG" / "WORKOUTS"
+  glyph?: MilestoneGlyphName; // the mark's meaning, struck in moss above the figure
+  /** Celebration only: one slow moss ring breathing outward behind the seal. */
   pulse?: boolean;
 }
 
-const TICKS = 48;
-
 export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, caption, glyph, pulse = false }: MilestoneEmblemProps) {
-  // 'foil' is the app's one licensed loud beat. Under READOUT loud is not a colour — it is the
-  // furthest thing from the ground: white on the stage, full ink on paper.
-  const engrave = tone === 'foil' ? (onStage ? stage.lift : ink[0]) : onStage ? stage.ink2 : ink[3];
-  const text = tone === 'foil' ? (onStage ? stage.ink0 : ink[0]) : onStage ? stage.ink2 : ink[3];
+  // A LOCKED mark (the gallery's silhouette of what is next) is the same object with the light
+  // taken out of it: the rings recede and the figure stops glowing.
+  const locked = tone === 'locked';
+  const ring = locked ? 'rgba(241,238,229,0.16)' : 'rgba(241,238,229,0.4)';
+  const innerRing = locked ? 'rgba(241,238,229,0.10)' : 'rgba(241,238,229,0.18)';
+  const figure = locked ? stage.ink2 : '#f6f3ea';
+  const accent = locked ? stage.ink2 : signal[0];
 
-  // Geometry in a 100-unit frame.
-  const c = 50;
-  const rOuter = 48;
-  const tickOut = 44;
-  const tickIn = 41;
-  const rInner = 36;
-  const ticks = Array.from({ length: TICKS }, (_, i) => {
-    const a = (i / TICKS) * 2 * Math.PI;
-    return {
-      x1: c + tickOut * Math.cos(a),
-      y1: c + tickOut * Math.sin(a),
-      x2: c + tickIn * Math.cos(a),
-      y2: c + tickIn * Math.sin(a),
-    };
-  });
+  // The handoff's proportions, held at any size: the inner ring is 82% of the seal, the figure a
+  // third of it, and the caption a fifth of the figure.
+  const inner = Math.round(size * 0.824);
+  const valueSize = Math.round(size * (value.length > 2 ? 0.26 : 0.315));
+  const captionSize = Math.max(9, Math.round(size * (caption && caption.length > 12 ? 0.049 : 0.06)));
+  const badge = Math.round(size * 0.093);
 
-  // With a motif present the figure is a caption to it, not the hero — so it steps down.
-  // A mark with NO figure (the first raise: an event, not a number) gives the motif the
-  // whole medallion.
-  const valueSize = Math.round(size * (glyph ? 0.155 : value.length > 4 ? 0.16 : value.length > 2 ? 0.2 : 0.26));
-  const glyphSize = Math.round(size * (value ? 0.36 : 0.5));
-
-  // The halo: a slow breath, never a flash. Two full cycles a second would read as an
-  // alert; ~2.4s in / 2.4s out reads as something warm.
+  // The breath: outward and away, 4s, never a flash.
   const halo = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!pulse) return;
     const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(halo, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(halo, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
+      Animated.timing(halo, { toValue: 1, duration: 4000, easing: Easing.bezier(0.22, 1, 0.36, 1), useNativeDriver: true }),
     );
     loop.start();
     return () => loop.stop();
   }, [pulse, halo]);
 
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       {pulse ? (
         <Animated.View
           pointerEvents="none"
           style={[
-            styles.halo,
+            styles.pulseRing,
             {
-              borderRadius: size / 2,
-              backgroundColor: onStage ? stage.lift : ink[0],
-              opacity: halo.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.16] }),
-              transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.12] }) }],
+              borderRadius: (size + 28) / 2,
+              opacity: halo.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.5, 0, 0] }),
+              transform: [{ scale: halo.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.9] }) }],
             },
           ]}
         />
       ) : null}
-      <Svg width={size} height={size} viewBox="0 0 100 100">
-        <Circle cx={c} cy={c} r={rOuter} stroke={engrave} strokeWidth={1.75} fill="none" />
-        {ticks.map((p, i) => (
-          <Line key={i} x1={p.x1} y1={p.y1} x2={p.x2} y2={p.y2} stroke={engrave} strokeWidth={1} opacity={0.55} />
-        ))}
-        <Circle cx={c} cy={c} r={rInner} stroke={engrave} strokeWidth={0.75} opacity={0.4} fill="none" />
-      </Svg>
-      <View style={styles.center} pointerEvents="none">
-        {glyph ? (
-          <View style={{ marginBottom: Math.round(size * 0.02) }}>
-            <MilestoneGlyph name={glyph} size={glyphSize} color={engrave} />
-          </View>
-        ) : null}
-        {value ? (
-          <Text
-            style={{
-              fontFamily: font.monoSemibold,
-              fontVariant: ['tabular-nums'],
-              fontSize: valueSize,
-              color: text,
-              textAlign: 'left',
-            }}
-            numberOfLines={1}
-          >
-            {value}
-          </Text>
-        ) : null}
-        {caption ? (
-          <Text
-            style={{
-              fontFamily: font.sansMedium,
-              fontSize: Math.max(8, Math.round(size * 0.062)),
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: engrave,
-              marginTop: 1,
-              textAlign: 'left',
-            }}
-            numberOfLines={1}
-          >
-            {caption}
-          </Text>
-        ) : null}
+
+      {/* The seal itself: a dashed measure around a plain rule. */}
+      <View style={[styles.outer, { width: size, height: size, borderRadius: size / 2, borderColor: ring }]}>
+        <View style={[styles.inner, { width: inner, height: inner, borderRadius: inner / 2, borderColor: innerRing }]}>
+          {glyph ? (
+            <View style={styles.glyph}>
+              <MilestoneGlyph name={glyph} size={Math.round(size * 0.139)} color={accent} />
+            </View>
+          ) : null}
+          {value ? (
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.value,
+                {
+                  fontSize: valueSize,
+                  lineHeight: valueSize,
+                  letterSpacing: -valueSize * 0.03,
+                  color: figure,
+                  textShadowColor: locked ? 'transparent' : 'rgba(246,243,234,0.14)',
+                },
+              ]}
+            >
+              {value}
+            </Text>
+          ) : null}
+          {caption ? (
+            <Text numberOfLines={1} style={[styles.caption, { fontSize: captionSize, letterSpacing: captionSize * 0.22 }]}>
+              {caption}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* The stamp at the crown — the one place this object is allowed an accent. */}
+        <View
+          style={[
+            styles.badge,
+            { width: badge, height: badge, borderRadius: badge / 2, top: -badge / 2 + 1, marginStart: -badge / 2, borderColor: accent },
+          ]}
+        >
+          <Icon name="check" size={Math.round(badge * 0.55)} color={accent} strokeWidth={3} />
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  halo: { ...StyleSheet.absoluteFillObject },
+  pulseRing: { ...StyleSheet.absoluteFillObject, margin: -14, borderWidth: 1.5, borderColor: 'rgba(169,196,159,0.35)' },
+  outer: { borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  inner: { borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  glyph: { marginBottom: 6 },
+  value: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+    textShadowRadius: 40,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  caption: { fontFamily: font.monoMedium, textTransform: 'uppercase', color: stage.ink1, textAlign: 'center' },
+  badge: {
+    position: 'absolute',
+    start: '50%',
+    backgroundColor: stage[0],
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

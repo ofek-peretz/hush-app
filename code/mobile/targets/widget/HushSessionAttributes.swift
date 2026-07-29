@@ -5,7 +5,7 @@ import Foundation
 //
 // ActivityKit decodes ContentState across the app↔widget process boundary by its
 // Codable shape, so both targets MUST declare this type identically. The app target
-// encodes the FULL 14-field state (HushActivityController.strengthState); a widget copy
+// encodes the FULL 16-field state (HushActivityController.strengthState); a widget copy
 // with a divergent (smaller) shape is what stops the Live Activity from pairing/rendering
 // reliably (TestFlight item 8). Keep the two copies byte-identical; if you change one,
 // change the other. The widget UI may render only a subset of these fields.
@@ -35,5 +35,9 @@ struct HushSessionAttributes: ActivityAttributes {
     var nextExerciseName: String?
     var nextTargetWeight: Double?
     var nextTargetReps: Int?
+    /// Which set of how many, as NUMBERS — v7 6.2 draws the set count as a row of dots beside the
+    /// load, and a dot row cannot be parsed out of the localized `setLabel` string.
+    var setIndex: Int
+    var setCount: Int
   }
 }

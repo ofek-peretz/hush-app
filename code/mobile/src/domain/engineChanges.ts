@@ -10,6 +10,7 @@
  * `substitutes`, bypassing the learned-swap occurrence counter — so a rotation never reads as a swap.
  */
 import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, progressionRule } from '@/data/exercises';
+import { canLoad, type LoadProfile } from '@/domain/startingLoad';
 import type { Session } from '@/data/local/models';
 
 /** S-52 — the next harder catalogue variation for a bodyweight lift (knee push-up → push-up → dip).
@@ -19,13 +20,30 @@ export function graduationTarget(exerciseId: string): string | undefined {
   return rule.mode === 'reps' ? rule.harder : undefined;
 }
 
-/** S-25.3 — the same-muscle lift she has gone LONGEST without (a never-performed lift counts as
- *  longest). From her pool minus swap-only advanced movements and the stalled lift itself; ties break
- *  on catalogue order (deterministic). Undefined when the muscle has no other lift to rotate to. */
-export function rotationTarget(exerciseId: string, history: Session[]): string | undefined {
+/**
+ * S-25.3 — the same-muscle lift she has gone LONGEST without (a never-performed lift counts as
+ * longest). From her pool minus swap-only advanced movements and the stalled lift itself; ties break
+ * on catalogue order (deterministic). Undefined when the muscle has no other lift to rotate to.
+ *
+ * ════ AND IT MUST BE A LIFT SHE CAN LOAD (S-55b) ════
+ *
+ * "Longest without" and "cannot load" were, for a light athlete, THE SAME SET. The assembler refuses
+ * a lift whose floor sits above her modelled load — so those lifts are precisely the ones she has
+ * never performed, which put every one of them at the front of this queue. A 52 kg beginner's chest
+ * press stalled and the engine rotated her onto a **barbell bench at the empty bar**: a load she
+ * could not move, on a lift no loop can correct downward out of, written to `substitutes` where it
+ * STANDS until something replaces it. Measured over sixteen simulated weeks it happened to her
+ * bench, her overhead press, her hip thrust and her front squat — four dead lifts in one programme.
+ *
+ * Loadable lifts lead; the rest stay behind them rather than being deleted, so a muscle whose every
+ * option is too heavy still rotates (her own eyes are the guard there, S-49) instead of freezing.
+ */
+export function rotationTarget(exerciseId: string, history: Session[], profile?: LoadProfile): string | undefined {
   const ex = exerciseById(exerciseId);
   if (!ex) return undefined;
-  const pool = exercisesForMuscle(ex.muscle).filter((e) => !isSwapOnly(e.id) && e.id !== exerciseId);
+  const all = exercisesForMuscle(ex.muscle).filter((e) => !isSwapOnly(e.id) && e.id !== exerciseId);
+  const fits = all.filter((e) => canLoad(e, profile));
+  const pool = fits.length > 0 ? fits : all;
   if (pool.length === 0) return undefined;
 
   const lastPerformed = new Map<string, number>();
@@ -43,8 +61,9 @@ export function engineChangeTarget(
   exerciseId: string,
   kind: 'graduate' | 'rotate',
   history: Session[],
+  profile?: LoadProfile,
 ): string | undefined {
-  return kind === 'graduate' ? graduationTarget(exerciseId) : rotationTarget(exerciseId, history);
+  return kind === 'graduate' ? graduationTarget(exerciseId) : rotationTarget(exerciseId, history, profile);
 }
 
 /** One concrete engine enactment: replace `from` with `to`; `rotated` marks a rotation (S-71/S-72). */
@@ -68,12 +87,14 @@ export function resolveEngineEnactments(
   changes: Record<string, 'graduate' | 'rotate'>,
   leaveItsByMuscle: Record<string, string>,
   history: Session[],
+  /** Her sex + bodyweight — read ONLY to ask whether a rotation target is loadable for her (S-55b). */
+  profile?: LoadProfile,
 ): EngineEnactment[] {
   const out: EngineEnactment[] = [];
   for (const id of Object.keys(changes)) {
     const muscle = muscleOf(id);
     if (muscle && leaveItsByMuscle[muscle] === id) continue; // S-30/S-71: a leave-it is never taken away
-    const target = engineChangeTarget(id, changes[id], history);
+    const target = engineChangeTarget(id, changes[id], history, profile);
     if (target && target !== id)
       out.push({ from: id, to: target, kind: changes[id] === 'graduate' ? 'graduate' : 'swap', rotated: changes[id] === 'rotate' });
   }

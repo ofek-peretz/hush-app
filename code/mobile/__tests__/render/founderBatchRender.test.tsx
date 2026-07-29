@@ -18,7 +18,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
 import { OptStack } from '@/components/onboarding/OptStack';
-import { color, stage, signal, ink, paper, cream, up, down } from '@/design/tokens';
+import { color, stage, signal, ink, paper, cream, up, down, hold } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
@@ -230,11 +230,18 @@ describe('READOUT: no accent hue — emphasis is distance from the ground', () =
     expect(signal.fill).toBe(cream[0]); // the primary ground is cream on dark
     expect(signal[0]).toBe('#a9c49f'); // lit moss — the mark on the stage
     expect(signal[1]).toBe('#3e573f'); // deep moss — the mark on paper
-    // The washes are faint MOSS/clay veils now (a live channel, a scan), not a paper tint.
+    // The washes are faint veils (a live channel, a scan), not a paper tint.
     expect(signal.wash).toBe('rgba(169,196,159,0.12)');
     expect(signal.ink).toBe(signal[0]);
     expect(up.wash).toBe('rgba(169,196,159,0.12)');
-    expect(down.wash).toBe('rgba(197,106,78,0.12)');
+    // A FALL IS BLUE, not clay (founder 2026-07-28). Clay beside moss on a dark ground reads as
+    // the red half of a red/green pair — the colour of a mistake — and an eased load is the engine
+    // doing its job: Loop 1 matched the weight to the body that showed up. Blue is calm, is
+    // unmistakably not the green beside it, and cannot be confused with a warning.
+    expect(down.wash).toBe('rgba(126,178,214,0.14)');
+    expect(down.stage).toBe('#7eb2d6');
+    // …and a HOLD is neither direction: nothing moved, so it takes the stage's own cream.
+    expect(hold.stage).toBe(cream[0]);
   });
 
   it('everything that carries text clears AA, on the ground it actually paints on', () => {

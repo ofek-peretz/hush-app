@@ -50,3 +50,46 @@ describe('v4 explanation copy', () => {
     expect(heLeaves.map((l) => l.path).sort()).toEqual(enLeaves.map((l) => l.path).sort());
   });
 });
+
+/**
+ * ════ ONE SENTENCE (founder 2026-07-29) ════
+ *
+ * "Limit it to a sentence. People finishing a workout do not read scrolls."
+ *
+ * `text` is the form the engine's reason takes on the CLOSING screen (2.5), read standing in a gym
+ * with a pulse still up — so it gets one sentence and no more. `rungOutOfReach.text` was two, the
+ * first of them 30 words long, and it was the row the founder was looking at.
+ *
+ * The reasoning is NOT thinned to fit: the triple (`observation` / `conclusion` / `action`) is the
+ * long form, opened deliberately from a WHY, and the escape hatch that sentence carried still lives
+ * in `rungOutOfReach.action` word for word. One fact, one place, at the length its place can hold.
+ */
+describe('a reason on the closing screen is ONE sentence', () => {
+  /** Sentences, counted the way a reader counts them — a full stop that ends a clause. */
+  const sentences = (s: string): string[] =>
+    s
+      .replace(/\{\{[^}]+\}\}/g, 'X') // an interpolated lift name is not a sentence break
+      .split(/(?<=[.!?])\s+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  for (const [tag, tree] of [['en', explainEn], ['he', explainHe]] as const) {
+    it(`${tag}: every explain.*.text lands in one`, () => {
+      const out: { path: string; v: string }[] = [];
+      leaves(tree, '', out);
+      const tooLong = out
+        .filter((x) => /\.text(Bw|Variation)?$/.test(x.path))
+        .filter((x) => sentences(x.v).length > 1)
+        .map((x) => `${x.path} — ${sentences(x.v).length} sentences`);
+      expect({ scrolls: tooLong }).toEqual({ scrolls: [] });
+    });
+  }
+
+  it('…and the long form still exists, so nothing was thinned to fit', () => {
+    // The F-2 escape hatch (register Rev 12) survives where the athlete goes to read the argument.
+    const rung = explainEn.rungOutOfReach as Record<string, string>;
+    expect(rung.action).toContain('smaller jump');
+    expect(rung.observation).toBeTruthy();
+    expect(rung.conclusion).toBeTruthy();
+  });
+});

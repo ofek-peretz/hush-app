@@ -392,8 +392,17 @@ export function perRungForV5(exerciseId: string, history: Session[]): number | n
     .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
     .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
     .slice(0, RECENCY_WINDOW_SESSIONS);
-  const sets = setPerfs(exerciseId, recent); // her recent performed working sets (load, reps, rest)
-  return repsPerRung([], [{ load: null, sets }], meta);
+  // ONE RECORD PER SESSION — not one bag of every set.
+  //
+  // This used to flatten the whole window into a single `SessionRecord`, which was harmless while
+  // the fit treated all points alike and became wrong the moment L3 started refusing pairs from
+  // inside one occurrence: with every set stamped as the same occurrence, EVERY pair is refused and
+  // the façade returns null for an athlete with a perfectly good history. The occurrence boundary is
+  // a fact about her training, and flattening it away destroyed the fact.
+  const records = recent
+    .map((s) => ({ load: null, sets: setPerfs(exerciseId, [s]) }))
+    .filter((r) => r.sets.length > 0);
+  return repsPerRung([], records, meta);
 }
 
 /** Reset all v5 engine state (account wipe / tests). */

@@ -177,6 +177,39 @@ describe('S-39 · the engine follows her down, and back up — no deload constru
   });
 });
 
+describe('S-16 · "no usable data" and "she got zero" are not the same fact', () => {
+  // The SAME dead end as the bodyweight one below, on the LOADED path — and more reachable, because
+  // `canLoad` (S-55b) asks whether the load B-1 MODELLED for her clears the equipment floor, and B-1
+  // is a model. An athlete weaker than it is handed a barbell whose EMPTY BAR she cannot move: no
+  // load below to back off to, no rung to ease, and — because this branch returned "ambiguous"
+  // first — the stall machinery was never even reached. One dead lift in every session, for ever.
+  const floored = (): ExerciseState => state({ exerciseId: 'bb_rdl', load: 20, history: [] });
+  const zeroOcc = { load: 20, sets: [S(20, 0), S(20, 0), S(20, 0)] };
+
+  it('a loaded lift at the bar floor she cannot do ONE rep of is rotated away', () => {
+    const r = decideExercise({
+      state: { ...floored(), history: [zeroOcc, zeroOcc] },
+      session: [S(20, 0), S(20, 0), S(20, 0)],
+      meta: bb(),
+      rotationAvailable: true,
+    });
+    expect(r.decision).toBe('stall_rotate');
+    expect(r.wantsChange).toBe('rotate');
+  });
+
+  it('one aborted occurrence still just holds — never premature (S-24/S-33)', () => {
+    const r = decideExercise({ state: floored(), session: [S(20, 0), S(20, 0)], meta: bb(), rotationAvailable: true });
+    expect(r.decision).toBe('ambiguous');
+    expect(r.wantsChange).toBeUndefined();
+  });
+
+  it('genuinely NO sets logged is still S-16 ambiguous — the engine banks nothing about the lift', () => {
+    const r = decideExercise({ state: floored(), session: [], meta: bb(), rotationAvailable: true });
+    expect(r.decision).toBe('ambiguous');
+    expect(r.wantsChange).toBeUndefined();
+  });
+});
+
 describe('S-51/S-52 · bodyweight progresses on reps and graduates at Thi or on a stall', () => {
   const bw = bb({ bodyweight: true, equipment: 'bodyweight' });
   it('every set reaches Thi → graduate (too easy)', () => {
@@ -204,6 +237,41 @@ describe('S-51/S-52 · bodyweight progresses on reps and graduates at Thi or on 
     const r = decideExercise({ state: state({ load: null, band: highBand, history: [rec, rec] }), session: [S(null, 11), S(null, 10)], meta: bw });
     expect(r.decision).toBe('graduate');
   });
+  it('a lift she TRIED and could not do one rep of is rotated away, not held for ever', () => {
+    // The bodyweight twin of the floor dead-end. `repsScore` is null for two different things —
+    // nothing logged, and every logged set at ZERO reps — and both used to take S-16's "ambiguous →
+    // hold". On the reps axis there is no load to ease (S-51) and the ladder only climbs (S-52), so
+    // the second case froze at "impossible" in every session for ever. It is reachable: once S-55b
+    // refuses a light beginner the barbell lifts, a PULL-UP or a CHEST DIP can lead her chest or
+    // back, and most beginners cannot do one.
+    const zero = { load: null, sets: [S(null, 0), S(null, 0), S(null, 0)] };
+    const r = decideExercise({
+      state: state({ load: null, history: [zero, zero] }),
+      session: [S(null, 0), S(null, 0), S(null, 0)],
+      meta: bw,
+      rotationAvailable: true,
+    });
+    expect(r.decision).toBe('stall_rotate');
+    expect(r.wantsChange).toBe('rotate'); // never 'graduate' — the ladder above her is not the answer
+  });
+
+  it('ONE bad day of zeros still just holds — the rotation needs more than her attempts-to-clear', () => {
+    const r = decideExercise({
+      state: state({ load: null, history: [] }),
+      session: [S(null, 0), S(null, 0)],
+      meta: bw,
+      rotationAvailable: true,
+    });
+    expect(r.decision).toBe('ambiguous');
+    expect(r.wantsChange).toBeUndefined();
+  });
+
+  it('genuinely NO data (nothing logged) is still S-16 ambiguous — it is not a verdict about the lift', () => {
+    const r = decideExercise({ state: state({ load: null, history: [] }), session: [], meta: bw, rotationAvailable: true });
+    expect(r.decision).toBe('ambiguous');
+    expect(r.wantsChange).toBeUndefined();
+  });
+
   it('climbing below Tlo — every fresh post-graduation lift — is PROGRESS, never a chain-graduation', () => {
     // 8 → 9 in a 12-15 band: she is adding reps, exactly what a new harder lift looks like (S-52:
     // "graduating drops her below the new lift's Tlo and she climbs again — no harm"). The old

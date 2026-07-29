@@ -658,7 +658,7 @@ async function foldEngine(
   // Resolve the wanted changes to concrete substitutions, honouring leave-it pins (S-30/S-71: a
   // lift with a leave-it is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
   // enacts what the resolver returns.
-  const enacted = resolveEngineEnactments(changes, prefs.leaveItsByMuscle, history);
+  const enacted = resolveEngineEnactments(changes, prefs.leaveItsByMuscle, history, profile);
   if (enacted.length) {
     await editPreferences((p) => {
       for (const e of enacted) {
@@ -713,11 +713,11 @@ export const fixtureModel: ModelClient = {
       void track('engine_error', { op: 'getVolumeTargetsV5', message: String(e) });
       return {};
     });
-    let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume);
+    let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
     // Safety net: everything-off (S-3) is prevented by the body-map screen (validateMap), but if a map
     // ever yields no workout, fall back to an ALL-NORMAL map (never a demographic shelf) so a workout
     // always exists. Unreachable in practice.
-    if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume);
+    if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
     const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts));
 
     // S-29 · "The same exercise in two workouts in one week. **One progression, fed by both
@@ -865,18 +865,47 @@ export const fixtureModel: ModelClient = {
     // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
     // change (weekCadence.firstBucketOpen).
     const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
-    // Reason lines: surface the engine's per-lift decision — did the load go up or down vs her last
-    // logged weight — so the WHY sheet, Home's "lifts up" and Well Done reflect what Hush actually did.
+    // ════ THE REASON ARROW IS THE ENGINE'S DECISION, NOT A DIFF AGAINST HER HISTORY ════
     //
-    // The v4 "WEEK 1 is the learning week: silent" gate is REMOVED. It suppressed the reason until
-    // calendar week 2, and v5 bans exactly that: L7 ("no weekly boundary — a decision is told at the
-    // moment it is born") and Part 1's banned inputs ("calendar-driven anything"). It was also
-    // near-vacuous — in her first week there is no prior logged weight to compare against, so the
-    // reason stays silent on its own, from a FACT rather than from the calendar.
-    // Legacy approach sets are excluded: a light Build-#33 measurement set must never be the
-    // "previous weight" a reason-delta is computed against.
-    const lastLogged = new Map<string, number>();
-    for (const sess of history) for (const set of sess.sets) if (set.actualWeight != null && !set.isApproach && !lastLogged.has(set.exerciseId)) lastLogged.set(set.exerciseId, set.actualWeight);
+    // "↑ 2.5" beside a load is Hush claiming, in its own voice, that it raised her. It used to be
+    // computed by comparing the new prescription to the LAST WEIGHT SHE LOGGED — and those are not
+    // the same question, because **Loop 1 moves the load mid-session**. Her last logged weight is
+    // wherever Loop 1 left her, not the load Loop 2 stepped from.
+    //
+    // The failure is not exotic; a six-week simulation produced it on an ordinary lift. Loop 1 eased
+    // her hammer curl to 2 kg late in the session; Loop 2 then decided the occurrence's real move,
+    // **4 → 3 — a cut** — and the stage compared 3 against the 2 she last logged and drew an **UP
+    // arrow**. Hush announced a raise on the very occurrence it took weight off the bar.
+    //
+    // The engine already stamps exactly this, per occurrence, in the changeLog: `loadFrom → loadTo`,
+    // the number the Complete screen and the Saturday mirror both read (`getSessionForwardV5`). So
+    // the stage reads the same record instead of re-deriving a rival one.
+    //
+    // R7 / S-16 · **a hold says nothing.** The arrow belongs to the lift's MOST RECENT occurrence, so
+    // an entry is only news while no later session has trained that lift — once she trains it again
+    // and it holds, the engine decided nothing and the stage falls silent, rather than re-announcing
+    // a move from a fortnight ago every time she opens the workout.
+    //
+    // The v4 "WEEK 1 is the learning week: silent" gate stays REMOVED (L7 — a decision is told at
+    // the moment it is born, never on a calendar). In her first week there is simply no stamped
+    // decision yet, so the reason stays silent from a FACT rather than from the calendar.
+    const engineState = await db.loadEngineV5().catch(() => null);
+    const lastTrainedAt = new Map<string, number>();
+    for (const sess of history) {
+      const at = Date.parse(sess.startedAt);
+      if (!Number.isFinite(at)) continue;
+      for (const set of sess.sets) {
+        if (set.isApproach) continue;
+        lastTrainedAt.set(set.exerciseId, Math.max(lastTrainedAt.get(set.exerciseId) ?? 0, at));
+      }
+    }
+    /** exerciseId → the load move the engine made at that lift's most recent occurrence. */
+    const decided = new Map<string, { from: number; to: number }>();
+    for (const c of engineState?.changeLog ?? []) {
+      if (c.kind != null || c.loadFrom == null || c.loadTo == null) continue; // structural/volume news is not an arrow
+      if (c.at !== lastTrainedAt.get(c.exerciseId)) continue; // superseded by a later occurrence → a hold
+      decided.set(c.exerciseId, { from: c.loadFrom, to: c.loadTo });
+    }
 
     // The v5 engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It
     // advances per workout and its prescription drives every exercise it manages; unmanaged / swap-only
@@ -913,12 +942,14 @@ export const fixtureModel: ModelClient = {
       const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
-      if (weight != null) {
-        const prev = lastLogged.get(ex.id);
-        if (prev != null && prev !== weight) {
-          reasonType = weight > prev ? 'increase' : 'decrease';
-          reasonDelta = Math.round((weight - prev) * 10) / 10;
-        }
+      // The engine's own stamped move for this lift's last occurrence — never a diff against the
+      // weight Loop 1 happened to leave her on. `to !== weight` means something changed the
+      // prescription since (a band change, an edit): the stamped entry is no longer what she is
+      // being asked for, and Hush says nothing rather than something stale.
+      const move = decided.get(ex.id);
+      if (weight != null && move != null && move.to === weight && move.from !== move.to) {
+        reasonType = move.to > move.from ? 'increase' : 'decrease';
+        reasonDelta = Math.round((move.to - move.from) * 10) / 10;
       }
       // No approach / warm-up set (founder ruling, 2026-07-16): every set is the working weight from
       // set 1, and Loop 1 responds to her performance from the first set (as v4 did).

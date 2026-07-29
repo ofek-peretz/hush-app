@@ -31,10 +31,11 @@ import { useCopy } from '@/i18n/useCopy';
 import * as haptics from '@/platform/haptics';
 import { color, font, textScale } from '@/design/tokens';
 
+/** v7 2.1 draws these four exactly: the range mark, the activity waveform, a bare trace, a head. */
 const ICON: Record<string, IconName> = {
-  Today: 'home',
-  Cardio: 'runner',
-  Progress: 'trendingUp',
+  Today: 'todayRange',
+  Cardio: 'activity',
+  Progress: 'lineChart',
   You: 'user',
 };
 
@@ -70,7 +71,7 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
             style={styles.tab}
             hitSlop={6}
           >
-            <Icon name={ICON[route.name] ?? 'home'} size={22} color={tint} strokeWidth={focused ? 2.2 : 1.9} />
+            <Icon name={ICON[route.name] ?? 'home'} size={22} color={tint} strokeWidth={1.8} />
             <Text style={[styles.label, focused && styles.labelActive, { color: tint }]} numberOfLines={1}>
               {t(LABEL[route.name] ?? route.name)}
             </Text>
@@ -104,11 +105,11 @@ const styles = StyleSheet.create({
     backgroundColor: color.bg,
     borderTopWidth: 1,
     borderTopColor: color.border,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingHorizontal: 8,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44 },
-  label: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: 0.2, textAlign: 'center' },
+  label: { fontFamily: font.sansMedium, fontSize: 14.5, textAlign: 'center' },
   labelActive: { fontFamily: font.sansSemibold }, // rtl-ok: merged onto label, which sets textAlign:'center'
   // The moss range-mark under the active tab (16 × 6): a hairline bar struck between two end ticks.
   mark: { width: 16, height: 6 },

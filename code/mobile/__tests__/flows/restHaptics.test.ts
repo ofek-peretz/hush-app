@@ -11,7 +11,7 @@
 // be referenced inside a factory.
 const mockScheduled: Array<{ identifier: string; content: { data?: { kind?: string }; sound?: boolean; interruptionLevel?: string }; trigger: { seconds?: number } }> = [];
 const mockCanceled: string[] = [];
-const mockState = { reachable: false, granted: true };
+const mockState = { reachable: false, granted: true, liveActivity: false };
 
 jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { WEEKLY: 'weekly', TIME_INTERVAL: 'timeInterval' },
@@ -37,6 +37,8 @@ jest.mock('@/platform/watch/watchTransportNative', () => ({
 
 jest.mock('@/platform/telemetry', () => ({ track: () => {} }));
 
+jest.mock('@/platform/liveActivity', () => ({ liveActivityRunning: () => mockState.liveActivity }));
+
 import { restHaptics, restAlertDelays, phoneOwnsRestHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 
 const NOW = 1_700_000_000_000;
@@ -46,6 +48,7 @@ beforeEach(() => {
   mockCanceled.length = 0;
   mockState.reachable = false;
   mockState.granted = true;
+  mockState.liveActivity = false;
   jest.spyOn(Date, 'now').mockReturnValue(NOW);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -150,5 +153,41 @@ describe('disarm', () => {
   it('cancels both rest alerts', async () => {
     await restHaptics.disarm();
     expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+});
+
+/**
+ * ════ THE LIVE ACTIVITY OWNS THE WARNING (founder 2026-07-29) ════
+ *
+ * These alerts are a BACKSTOP for a countdown the athlete cannot see — a JS timer is suspended the
+ * moment the phone is locked. A Live Activity runs in ActivityKit, not in JS, so while one is up
+ * the countdown is already on the lock screen and the "7 seconds" note is a second copy of a thing
+ * she is looking at. The rest-OVER alert always stands: a ring reaching zero is not the same as
+ * being told to go.
+ */
+describe('a Live Activity takes over the 7-second warning', () => {
+  const kinds = () => mockScheduled.map((n) => n.content.data?.kind);
+
+  it('with no Live Activity, BOTH alerts are scheduled — the backstop is doing its job', async () => {
+    await restHaptics.arm(NOW + 60_000);
+    expect(kinds()).toEqual(['rest_warn', 'rest_done']);
+  });
+
+  it('with one up, the warning stands down and the rest-over alert still fires', async () => {
+    mockState.liveActivity = true;
+    await restHaptics.arm(NOW + 60_000);
+    expect(kinds()).toEqual(['rest_done']);
+  });
+
+  it('…and the pair is still CANCELLED first, so a stale warning can never survive the change', async () => {
+    // A rest armed while no activity was up, then re-armed once one is: the earlier warning is in
+    // iOS's queue and would fire over a Live Activity that is already counting.
+    await restHaptics.arm(NOW + 60_000);
+    mockCanceled.length = 0;
+    mockScheduled.length = 0; // only the SECOND arm is under test
+    mockState.liveActivity = true;
+    await restHaptics.arm(NOW + 60_000);
+    expect(mockCanceled).toEqual(expect.arrayContaining(['hush.rest_warn', 'hush.rest_done']));
+    expect(kinds().filter((k) => k === 'rest_warn')).toEqual([]);
   });
 });

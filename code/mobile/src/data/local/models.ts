@@ -73,6 +73,15 @@ export interface Profile {
   /** Engine v5 — the body map: per-muscle stance. Absent on older profiles => every muscle 'normal'
    *  (the parity-preserving default). Keyed by MuscleGroup. */
   bodyMap?: Record<string, MuscleStance>;
+  /**
+   * v7 §13 — muscles resting because she said they hurt, each with the day it comes back.
+   *
+   * Kept BESIDE the map, never inside it: `bodyMap` is the map she drew, and a tender shoulder must
+   * not quietly rewrite a decision she made. The programme is built from the two composed together
+   * (`domain/painReport.effectiveBodyMap`), so when a window lapses the muscle returns to HER stance
+   * with nothing to undo. Structural, so `domain/painReport` need not be imported here.
+   */
+  painEases?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp'; fromMs: number; untilMs: number }[];
   /** Engine v5 — minutes she has for a workout (the time-budget ceiling, S-64). Absent => 60. */
   workoutMinutes?: number;
   healthConnected: boolean;
@@ -252,6 +261,17 @@ export interface Session {
   state: SessionState;
   earlyFinish: boolean;
   sets: SetLog[];
+  /**
+   * ONE NUMBER PER WORKOUT (founder 2026-07-28).
+   *
+   * Active kilocalories as the WRIST MEASURED them, present only on a session the watch executed
+   * standalone. Everywhere else Hush estimates (`strengthSessionKcal`: MET × bodyweight × hours),
+   * and the estimate is honest — but the two are different numbers, and a workout that reads 412
+   * on her wrist and 380 in her Log is the kind of small lie that costs more trust than the extra
+   * accuracy buys. So whichever surface was the AUTHORITY produces the figure, and the other
+   * renders what it is handed: read it through `domain/energy.sessionKcal`, never re-derived.
+   */
+  measuredKcal?: number;
   // Owner-voice History annotation — present only when Hush acted or the athlete
   // ended early (spec §4.10, §2.10). `annotationCapability` carries the load noun.
   annotation?: HistoryAnnotation;

@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "v7-design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5599", "--directory", "C:\\Users\\ofek3\\Downloads\\_hush_redesign\\design_handoff_hush_watch"],
+      "port": 5599
+    },
+    {
+      "name": "hush-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8082"],
+      "port": 8082,
+      "cwd": "C:\\Users\\ofek3\\Desktop\\Hush\\code\\mobile"
+    }
+  ]
+}

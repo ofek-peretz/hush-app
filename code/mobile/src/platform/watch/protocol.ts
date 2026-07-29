@@ -94,6 +94,13 @@ export interface WatchPlanStep {
   globalIndex: number; // 0-based within the workout
   targetWeight: number | null; // null => bodyweight
   targetReps: number;
+  /**
+   * The TOP of her band (`Thi`). Without it a standalone workout could not draw the rep RULER at
+   * all — `WireMirror.targetRepsHi` was the one mirror field the wrist's own projector never set,
+   * so the phone-absent athlete saw a single number where every phone-run set shows a range, and
+   * WT2's "8 … 10" collapsed to "8". Optional so a stale watch build simply keeps collapsing it.
+   */
+  targetRepsHi?: number;
   /** Backend block id — carried through to the record so a reconciled set syncs
    *  to the right block, exactly like a phone-logged one. */
   blockId?: string;
@@ -158,7 +165,107 @@ export interface WatchSessionRecord {
   startedAt: string; // ISO
   endedAt: string; // ISO
   earlyFinish: boolean;
+  /** Active kilocalories the WRIST measured (founder 2026-07-28). The phone has no such sensor, so
+   *  on a standalone workout the wrist is the authority and its figure becomes the session's —
+   *  read everywhere through `domain/energy.sessionKcal`, never re-estimated beside it. */
+  kcal?: number;
   sets: WatchRecordSet[];
+}
+
+/**
+ * ════ A RUN THE WRIST RECORDED, CARRIED HOME ════
+ *
+ * The strength side has had this since the standalone runtime shipped; cardio never did. A wrist
+ * run wrote its `HKWorkout` to Health and stopped there — so the kilometres appeared in Apple
+ * Health and **nowhere in Hush**: not in Progress's distance, not in her Log, not in the lifetime
+ * burn. She had done the work and her own app did not know it (founder 2026-07-28: approved).
+ *
+ * Deliberately NOT the phone's `CardioActivity` verbatim. The wrist has no GPS trace worth carrying
+ * (the route belongs to the phone's `watchPositionAsync`) and no per-kilometre split history to
+ * replay — it has the four facts a wrist can honestly measure, and the reconciler builds the
+ * activity from those. Every optional field is optional because the wrist may genuinely not have
+ * it: no heart-rate source, no bodyweight to bill calories against (`kcalForKm`'s honesty rule).
+ *
+ * Same delivery contract as `WatchSessionRecord`, for the same reason: durable on the wrist,
+ * at-least-once, de-duped on `recordId`, cleared only by the phone's ack.
+ */
+export interface WatchCardioRecord {
+  v: typeof WATCH_PROTOCOL_VERSION;
+  type: 'cardio_record';
+  /** Idempotency key; also the reconciled activity's identity (`watch_<recordId>`). */
+  recordId: string;
+  gait: 'run' | 'walk';
+  startedAt: string; // ISO
+  endedAt: string; // ISO
+  /** The WATCH's own clock — pause-aware, and the reason this is not `end − start` (founder
+   *  2026-07-11: "pause doesn't stop the time" is exactly what it must not do). */
+  durationSec: number;
+  distanceKm?: number;
+  avgHr?: number;
+  kcal?: number;
+}
+
+/**
+ * Which KIND of record is this payload? The two share one durable channel, so the receiver has to
+ * tell them apart before it can parse either — and it must do so without throwing on a string, a
+ * null, or a shape from a future watch build.
+ *
+ * Deliberately shallow: it reads the discriminator and nothing else. The real validation is each
+ * parser's job, and a payload that claims to be cardio but is malformed must be REJECTED as cardio
+ * rather than silently attempted as a session record (which would ack it against the wrong queue).
+ */
+export function isCardioRecordPayload(raw: unknown): boolean {
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+  }
+  return !!o && typeof o === 'object' && (o as Record<string, unknown>).type === 'cardio_record';
+}
+
+/** Parse a wire-form cardio record defensively — anything unreadable is null, never a throw. */
+export function parseCardioRecord(raw: unknown): WatchCardioRecord | null {
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!o || typeof o !== 'object') return null;
+  const r = o as Record<string, unknown>;
+  if (r.v !== WATCH_PROTOCOL_VERSION || r.type !== 'cardio_record') return null;
+  if (typeof r.recordId !== 'string' || r.recordId.length === 0) return null;
+  if (r.gait !== 'run' && r.gait !== 'walk') return null;
+  if (typeof r.startedAt !== 'string' || typeof r.endedAt !== 'string') return null;
+  // A recording with no duration is not an activity; it is a tap. Reject rather than save a zero.
+  // `undefined` (absent) and `null` (present but junk) are both fatal here: an activity with no
+  // duration is not an activity, and a duration we cannot read is not a duration.
+  const durationSec = num(r, 'durationSec', 1, 24 * 3600, false);
+  if (durationSec == null) return null;
+  // The measurements. `null` from `num` means "present but junk" — dropped, never coerced to 0,
+  // because a 0 km run and a run whose distance we could not read are different claims.
+  // NOT an integer — a 4.2 km run is the normal case, and validating distance as a whole number
+  // silently dropped every real one. HR and kcal ARE integers (the runtime rounds them).
+  const distanceKm = num(r, 'distanceKm', 0, 1000, false) ?? undefined;
+  const avgHr = num(r, 'avgHr', 20, 250, true) ?? undefined;
+  const kcal = num(r, 'kcal', 0, 20000, true) ?? undefined;
+  return {
+    v: WATCH_PROTOCOL_VERSION,
+    type: 'cardio_record',
+    recordId: r.recordId,
+    gait: r.gait,
+    startedAt: r.startedAt,
+    endedAt: r.endedAt,
+    durationSec,
+    ...(distanceKm === undefined ? {} : { distanceKm }),
+    ...(avgHr === undefined ? {} : { avgHr }),
+    ...(kcal === undefined ? {} : { kcal }),
+  };
 }
 
 /** Parse a wire-form session record defensively — anything unreadable is null,
@@ -186,7 +293,13 @@ export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
     if (typeof set.exerciseId !== 'string' || typeof set.setIndex !== 'number') return null;
     if (typeof set.actualReps !== 'number') return null;
   }
-  return r as unknown as WatchSessionRecord;
+  // `kcal` is the one field here the phone STORES as a measurement rather than re-deriving, so it
+  // is the one field that must not ride the blanket cast below. Junk is dropped (the session falls
+  // back to the estimate); it is never coerced, and never stamped as a measurement it is not.
+  const kcal = num(r, 'kcal', 0, 20000, true);
+  const record = r as unknown as WatchSessionRecord;
+  if (kcal === null || kcal === undefined) delete (record as { kcal?: number }).kcal;
+  return record;
 }
 
 // ---- Watch → Phone ---------------------------------------------------------
@@ -207,7 +320,10 @@ export type WatchIntentType =
   | 'select_workout'
   | 'start_workout'
   | 'swap_exercise'
-  | 'add_rest';
+  | 'add_rest'
+  // The wrist flagged a body area that hurts (WT14 · What's off). A REPORT the phone acts on —
+  // never an authoritative session action. Carries `area`.
+  | 'report_pain';
 
 // ---- Pre-session lobby (the Start screen) ----------------------------------
 
@@ -233,6 +349,14 @@ export interface WatchLobby {
   /** Exercise count + estimated duration label ("6 lifts" / "~48 min"). */
   lifts?: number;
   durationLabel?: string;
+  /**
+   * WT7 · THE FIRST FOUR — she has no completed workout yet.
+   *
+   * The lobby's ordinary face reports on a week ("3 CHG", "6 LIFTS · ~55 MIN") and compares to a
+   * history. On day one there is no week and no history, so every one of those figures is either
+   * blank or a claim about nothing. The honest first face says what the engine is about to DO.
+   */
+  firstWorkout?: boolean;
   /** True when the week is locked (resting) — Begin is replaced by a recovery note. */
   resting?: boolean;
   /** True when training is GATED behind the paywall (free sessions spent, no active
@@ -263,6 +387,12 @@ export interface WatchIntent {
   exerciseId?: string;
   /** Seconds to add to the current rest (add_rest; default 15). */
   seconds?: number;
+  /** The body area a `report_pain` intent flags — a MUSCLE the body map knows ("Shoulders",
+   *  "Quads", …), so the phone rests exactly what she named (founder 2026-07-28). */
+  area?: string;
+  /** How sharp it is, in her words (WT14b) — the wrist asks the SAME three the phone asks, so the
+   *  window is hers and never a default the engine picked for her. */
+  severity?: string;
 }
 
 /** Why an intent was rejected (telemetered + useful in tests). */
@@ -291,7 +421,9 @@ export type WatchPhoneAction =
   | { kind: 'start_workout'; workoutId?: string }
   // Swap the current/next exercise (the phone recalibrates the load); extend rest.
   | { kind: 'swap_exercise'; exerciseId?: string }
-  | { kind: 'add_rest'; seconds: number };
+  | { kind: 'add_rest'; seconds: number }
+  // The wrist flagged a hurting area; the phone records it against the body map / model.
+  | { kind: 'report_pain'; area: string; severity: string };
 
 export interface WatchIntentDecision {
   accept: boolean;
@@ -302,10 +434,13 @@ export interface WatchIntentDecision {
   latencyMs?: number;
 }
 
-const INTENT_TYPES: WatchIntentType[] = [
+/** Every intent the wrist may send. Exported because it is the CONTRACT: `everyWristIntentLands
+ *  Somewhere` walks it to prove each one both parses here and reaches a handler on the phone. */
+export const WATCH_INTENT_TYPES: readonly WatchIntentType[] = [
   'complete_set', 'end_rest', 'pause', 'resume', 'finish_early', 'exercise_busy',
-  'select_workout', 'start_workout', 'swap_exercise', 'add_rest',
+  'select_workout', 'start_workout', 'swap_exercise', 'add_rest', 'report_pain',
 ];
+const INTENT_TYPES = WATCH_INTENT_TYPES;
 
 /** The lobby proposals are valid only when there is NO active session (the Start
  *  screen). They are handled before the active-session gates below. */
@@ -368,6 +503,8 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
   const seconds = num(o, 'seconds', 1, MAX_ADD_REST_S, true);
   const workoutId = str(o, 'workoutId');
   const exerciseId = str(o, 'exerciseId');
+  const area = str(o, 'area');
+  const severity = str(o, 'severity');
   // `actualWeight: null` is MEANINGFUL — it is bodyweight, and it must survive the sieve.
   const rawWeight = o.actualWeight;
   const actualWeight =
@@ -381,7 +518,9 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
     (actualWeight === null && rawWeight !== null) || // null is bodyweight; null FROM `num` is junk
     seconds === null ||
     workoutId === null ||
-    exerciseId === null
+    exerciseId === null ||
+    area === null ||
+    severity === null
   ) {
     return null;
   }
@@ -397,6 +536,8 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
     workoutId,
     exerciseId,
     seconds,
+    area,
+    severity,
   };
 }
 
@@ -425,6 +566,13 @@ function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
       return { kind: 'swap_exercise', exerciseId: intent.exerciseId };
     case 'add_rest':
       return { kind: 'add_rest', seconds: intent.seconds ?? 15 };
+    case 'report_pain':
+      // A pain report with no area names nothing — drop it (malformed) rather than record a blank.
+      // Severity is REQUIRED too: the wrist now asks (WT14b), so a report without one is a
+      // half-finished flow, not a report, and the engine may not choose a rest window she did not.
+      return intent.area && intent.severity
+        ? { kind: 'report_pain', area: intent.area, severity: intent.severity }
+        : null;
     default:
       return null;
   }

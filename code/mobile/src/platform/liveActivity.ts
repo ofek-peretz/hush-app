@@ -36,6 +36,9 @@ export interface LiveActivityState {
   phase: LiveActivityPhase;
   exerciseName: string;
   setLabel: string; // "Set 1 of 4"
+  /** The same count as NUMBERS — v7 6.2 draws it as a dot row, which a localized string cannot be. */
+  setIndex: number;
+  setCount: number;
   liftIndex: number; // 1-based ordinal among distinct lifts
   liftCount: number;
   targetWeight: number | null; // null => bodyweight
@@ -133,6 +136,9 @@ export function liveActivityStateFromMirror(mirror: SessionMirror): LiveActivity
       isResting && mirror.nextSetNumber > 0
         ? tg('workout.setOfM', { n: mirror.nextSetNumber, m: mirror.nextSetsInExercise })
         : tg('workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
+    // The dot row follows the SAME set the label names — on a rest that is the set still to come.
+    setIndex: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetNumber : mirror.setNumber,
+    setCount: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetsInExercise : mirror.setsInExercise,
     liftIndex: mirror.liftIndex,
     liftCount: mirror.liftCount,
     targetWeight: mirror.targetWeight,
@@ -147,6 +153,25 @@ export function liveActivityStateFromMirror(mirror: SessionMirror): LiveActivity
 }
 
 // ───────────────────────────── Native + stub hosts ─────────────────────────────
+
+/**
+ * ════ IS A LIVE ACTIVITY ON THE LOCK SCREEN RIGHT NOW? ════
+ *
+ * Asked by `restHaptics` (founder 2026-07-29). The rest notifications exist ONLY because a JS timer
+ * is suspended when the phone is locked — they are a backstop for a countdown the athlete cannot
+ * see. A Live Activity runs in ActivityKit, not in JS, so while one is up the countdown IS on the
+ * lock screen, and the "7 seconds left" note becomes a second copy of something already visible.
+ *
+ * Tracked here rather than asked of the native module, because the answer has to be TRUE ON THE
+ * STUB as well: on any surface with no ActivityKit there is no Live Activity, so the warning is not
+ * redundant and must still be sent.
+ */
+let activityIsLive = false;
+
+export function liveActivityRunning(): boolean {
+  return activityIsLive;
+}
+
 export const liveActivityStub: LiveActivityHost = {
   async start() {},
   async update() {},
@@ -156,6 +181,7 @@ export const liveActivityStub: LiveActivityHost = {
 export const liveActivityNative: LiveActivityHost = {
   async start(mirror) {
     if (!nativeModule) return;
+    activityIsLive = true;
     await nativeModule.startActivity(liveActivityStateFromMirror(mirror));
   },
   async update(mirror) {
@@ -164,6 +190,7 @@ export const liveActivityNative: LiveActivityHost = {
   },
   async end() {
     if (!nativeModule) return;
+    activityIsLive = false;
     await nativeModule.endActivity();
   },
 };

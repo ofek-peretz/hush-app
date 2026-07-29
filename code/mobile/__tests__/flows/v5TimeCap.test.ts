@@ -76,7 +76,11 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
    * `overBudget` is true iff the day genuinely exceeds her minutes after every legal cut.
    */
   it('S-3 · a day that cannot fit her minutes is flagged overBudget; a day that fits is not', async () => {
-    const budget = 45;
+    // 25 minutes, not 45. Since the day lists deal COMPOUNDS across the week's days rather than
+    // concentrating every muscle's lead on one of them (founder 2026-07-27), no day at 45 minutes is
+    // lopsided enough to break the budget any more — which is the point of that change. The flag
+    // still has to be exercised, so the scenario asks for a budget nothing can fit.
+    const budget = 25;
     const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: budget });
     let sawOver = false;
     for (const d of prog.days) {
@@ -84,8 +88,8 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
       expect(!!d.overBudget).toBe(over); // set exactly when — and only when — the day cannot fit
       if (over) sawOver = true;
     }
-    // The scenario exists to exercise the flag: at 3d / 45min the dense upper day reaches the S-35
-    // floor (one lift per muscle) and lands ~48 prescribed minutes — over budget, and correctly so.
+    // The scenario exists to exercise the flag: at 3d / 25min a day reaches the S-35 floor (one lift
+    // per muscle) and still overruns — over budget, and correctly so.
     expect(sawOver).toBe(true);
   });
 });
@@ -118,7 +122,11 @@ describe('v5 · the budget is computed from HER MEASURED REST (S-64), not a fixe
       const ids = ['bb_bench_press', 'bb_overhead_press', 'bb_row', 'bb_back_squat', 'bb_deadlift', 'hip_thrust'];
       const sess: Session = { id: 's1', programDayId: 'd', startedAt: '2026-07-10T10:00:00Z', state: 'SAVED', earlyFinish: false, sets: ids.flatMap((id) => [0, 1, 2, 3].map((i) => set(id, i, rest))) };
       await db.appendCompletedSession(sess);
-      const p = await fixtureModel.generateProgram({ ...base, daysPerWeek: 4 });
+      // 40 minutes, not the 60 default: the day lists now deal compounds ACROSS the week rather
+      // than piling every muscle's lead onto one day (founder 2026-07-27), so at 60 min even a
+      // 210-second rester fits her whole prescription and the cap never binds — which is the point
+      // of that change, and which makes the cap invisible unless the budget is tight enough to bite.
+      const p = await fixtureModel.generateProgram({ ...base, daysPerWeek: 4, workoutMinutes: 40 });
       return p.days.reduce((n, d) => n + d.slots.reduce((k, s) => k + s.setCount, 0), 0);
     };
     const fastSets = await seed(30);

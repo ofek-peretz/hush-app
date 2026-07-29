@@ -4,23 +4,22 @@
  *
  * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18; Goal step removed
  * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
- * Experience + Days per week merged into one Training step 2026-07-10):
+ * Body data + Training merged into one "About you + Your week" step, v7 2026-07-24):
  *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
- *   → Manual Info
- *   → Training → Program Created → Home.
+ *   → About you + Your week (ManualInfo) → Body map → Program Created → Home.
  * Invite-token enrollment is removed.
  */
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { CardioActivity, OnboardingInputs, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';
+import type { WeeklyPlanView } from '@/engine/weeklyView';
 
-/** Profile fields gathered in onboarding — from HealthKit (granted) or Manual Info. */
-export interface OnboardingProfileDraft {
-  healthConnected: boolean;
-  age?: number;
-  sex?: 'male' | 'female';
-  heightCm?: number;
-  weightKg?: number;
+/** The Saturday letter's fact band — workouts done of planned, tonnes moved, calories. */
+export interface WeeklyBand {
+  done: number;
+  planned: number;
+  tonnes: number;
+  kcal: number | null;
 }
 
 export type OnboardingParamList = {
@@ -32,15 +31,13 @@ export type OnboardingParamList = {
   // before the next screen speaks). Sex rides the params from here to the profile.
   NameEntry: undefined;
   ConnectHealth: { sex: 'male' | 'female' } | undefined;
-  // Age / height / weight (§4.3) — shown to EVERYONE (HealthKit is read for cardio only).
-  // `healthConnected` records whether Health was connected; `sex` is carried from NameEntry.
+  // About you + Your week (v7 1.4, merged 2026-07-24): bodyweight seeds the cold-start load and
+  // sessions-per-week shapes the split — one screen. `healthConnected` records whether Health was
+  // connected; `sex` is carried from NameEntry. Assembles OnboardingInputs and continues to BodyMap.
   ManualInfo: { healthConnected: boolean; sex?: 'male' | 'female' } | undefined;
-  // Training (merged Experience + Days per week, 2026-07-10): experience drives the
-  // starting weights, frequency shapes the split — one screen, whole in the viewport.
-  Training: { profile: OnboardingProfileDraft };
   // The BODY MAP (Revision 7) — off / normal / emphasis per muscle; the programme's shape follows
   // from it (register Part 3), replacing the demographic split. Carries the assembled inputs from
-  // Training, writes bodyMap, then continues to the build.
+  // the previous step, writes bodyMap, then continues to the build.
   BodyMap: { inputs: OnboardingInputs };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
@@ -79,7 +76,11 @@ export type MainParamList = {
   HomeTabs: NavigatorScreenParams<HomeTabsParamList> | undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
   // strength engine. The recorded activity lands in the unified History timeline.
-  Cardio: undefined;
+  // NAME IS UNIQUE ON PURPOSE (not "Cardio"): the HomeTabs child also has a "Cardio"
+  // route (the READY tab). A shared name made `navigate('Cardio')` from the focused
+  // Cardio tab resolve back to that tab — so "Start cardio" no-op'd. The live stage
+  // owns its own name so the launch always pushes it.
+  CardioLive: undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
   // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
@@ -89,16 +90,40 @@ export type MainParamList = {
   ProfileEdit: undefined;
   /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
   BodyMapEdit: undefined;
-  SessionFlow: undefined;
+  // The live workout. `previewFirstGym` is the v7 GALLERY's seam and nothing else: 2.0 is an
+  // overlay over this screen that rises ONCE PER INSTALL, so the first look at it in the harness
+  // was also the last (it wrote the device's "seen" flag and never came back). The harness passes
+  // the learning length it wants drawn; it holds the card open and never writes. Never passed by
+  // the app — on a device the flag decides, as it always has.
+  SessionFlow: { previewFirstGym?: number } | undefined;
   // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
   // Done renders the calm "Workout not started" state instead of a completion.
   WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   WorkoutDetail: { sessionId: string };
+  // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
+  // offer the ordinary swap for it; absent when the report is made outside a session.
+  PainWhere: { exerciseId?: string } | undefined;
+  PainResponse: { muscle: string; severity: 'twinge' | 'pain' | 'sharp'; exerciseId?: string };
+  // ONE LIFT'S CARD (v7 3.2b) — its climb, the marks it crossed, and the engine's stamped log for
+  // it. Pushed from a chip on Progress · Lifts, so it opens above the tabs, not inside them.
+  LiftDetail: { exerciseId: string };
   // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
-  WeeklyUpdate: undefined;
+  // `previewAskBack` is the v7 GALLERY's seam and nothing else: the one question (3.1b) is derived
+  // from the map + a real history, which a harness cannot produce. Never passed by the app.
+  // `previewPlan` is the second half of the same seam: the letter's rows come from a week of engine
+  // decisions, which a harness has no way to produce, so 3.1 could only ever be looked at EMPTY —
+  // the one state it is least interesting in. The harness hands the engine's answer and the week's
+  // band; the screen still does all the reading, ordering and drawing itself.
+  WeeklyUpdate: { previewAskBack?: string; previewPlan?: { plan: WeeklyPlanView; band: WeeklyBand; history?: Session[] } } | undefined;
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
   Paywall: { source: 'gate' | 'profile' } | undefined;
+  // §11.4 / 11.5 — a plan travels as an opaque link and nothing else leaves the phone
+  // (domain/planShare is an allow-list). `SharePlan` is opened from You; `PlanReceived` is opened
+  // by the link itself, and carries the encoded token rather than a decoded plan so the screen
+  // does the reading — an unreadable token must never have produced a route in the first place.
+  SharePlan: undefined;
+  PlanReceived: { token: string };
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
   // modal over whatever surfaced it (a completed workout, the week's close). `card` carries the
   // already-derived facts (domain/shareCard); the screen renders and captures, deriving nothing.

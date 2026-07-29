@@ -9,23 +9,25 @@
  *   · A LIFT: that lift's climb — its running-max sparkline and where it started / stands now
  *
  * Everything here is display arithmetic over the logged history (domain/progressAggregate) — no
- * engine type is read. The chips' deeper per-lift card (3.2b — the engine change-log) is a separate
- * surface and is intentionally NOT built here.
+ * engine type is read. A LIFT CHIP OPENS ITS OWN CARD (3.2b, screens/progress/LiftDetail): the
+ * handoff retired the always-open inline history, so this surface only ever draws the aggregate.
+ *
+ * DAY ONE (3.6b): before any workout is logged there is nothing measured to draw, and Hush shows
+ * only what was measured — so the page says so, over a ghost of the graph to come.
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Legend, SegmentedControl, Sparkline, VolumeArea } from '@/components/ds';
+import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
+import { GhostClimb, Legend, SegmentedControl, VolumeArea } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
-import { displayWeight, unitLabel } from '@/domain/schedule';
+import { monoCanDraw } from '@/design/monoVoice';
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
 import type { ProgressAggregate } from '@/domain/progressAggregate';
 import type { Units } from '@/data/local/models';
 import { Icon } from '@/components/Icon';
 import { color, space, font, textScale, tracking, trackingPx, radius, signal, press } from '@/design/tokens';
-
-const CONTENT_W = Math.round(Dimensions.get('window').width - space.gutter * 2);
 
 interface Props {
   entries: QuarterlyProgressEntry[];
@@ -34,6 +36,8 @@ interface Props {
   units: Units;
   /** Opens the history ledger (the "Log" tab). */
   onLog?: () => void;
+  /** Opens one lift's own card (3.2b) — what a lift chip does now. */
+  onLift?: (exerciseId: string) => void;
   /** Opens the week's share card (§9.2) — present only when this week has real work to show. */
   onShareWeek?: () => void;
 }
@@ -45,11 +49,13 @@ const fmtTonnes = (kg: number): string => {
 };
 const fmtK = (n: number): string => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
 
-export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onShareWeek }: Props) {
+export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onLift, onShareWeek }: Props) {
   const { t } = useCopy();
-  // null = the "All time" aggregate; otherwise the selected lift's exerciseId.
-  const [lift, setLift] = useState<string | null>(null);
-  const selected = lift ? entries.find((e) => e.exerciseId === lift) ?? null : null;
+  // DAY ONE (3.6b) — nothing has been measured yet. The page then holds only its own name: there is
+  // no Lifts/Log choice to make when both are empty, and no chip strip to scroll.
+  const dayOne = loaded && entries.length === 0;
+
+  if (dayOne) return <DayOne />;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -57,6 +63,8 @@ export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onShar
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
         <SegmentedControl
+          size="pill"
+          style={styles.lens}
           options={[
             { value: 'lifts', label: t('progress.tabLifts') },
             { value: 'log', label: t('progress.tabLog') },
@@ -70,39 +78,70 @@ export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onShar
 
       {/* the per-lift chip row — "All time" then each trained lift */}
       {entries.length > 0 ? (
+        <View style={styles.chipsWrap}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}
           style={styles.chipsRow}
         >
-          <Chip label={t('progress.chipAllTime')} active={lift == null} onPress={() => setLift(null)} />
+          {/* "All time" is where this surface stands; every other chip LEAVES it for that lift's
+              own card (3.2b), so it is a door, not a filter. */}
+          <Chip label={t('progress.chipAllTime')} active />
           {entries.map((e) => (
             <Chip
               key={e.exerciseId}
               label={exerciseDisplayName(e.exerciseId)}
-              active={lift === e.exerciseId}
-              onPress={() => setLift(e.exerciseId)}
+              active={false}
+              onPress={() => onLift?.(e.exerciseId)}
             />
           ))}
         </ScrollView>
+        <View pointerEvents="none" style={styles.chipsFade}>
+          <Svg width="100%" height="100%">
+            <Defs>
+              <SvgGradient id="progChipFade" x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={color.bg} stopOpacity="0" />
+                <Stop offset="1" stopColor={color.bg} stopOpacity="1" />
+              </SvgGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#progChipFade)" />
+          </Svg>
+        </View>
+        </View>
       ) : null}
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {loaded && entries.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={styles.emptyMark}>
-              <Icon name="trendingUp" size={24} color={color.textTertiary} strokeWidth={1.75} />
-            </View>
-            <Text style={styles.emptyTitle}>{t('report.emptyTitle')}</Text>
-            <Text style={styles.empty}>{t('report.empty')}</Text>
-          </View>
-        ) : selected ? (
-          <LiftFocus entry={selected} units={units} />
-        ) : aggregate ? (
-          <AllTime aggregate={aggregate} units={units} onShareWeek={onShareWeek} />
-        ) : null}
+        {aggregate ? <AllTime aggregate={aggregate} units={units} onShareWeek={onShareWeek} /> : null}
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * 3.6b · PROGRESS — DAY ONE. "A ghost of the graph to come, and a promise that reads like a fact."
+ *
+ * No numbers, because none have been measured, and Hush shows only what was measured (R7). The one
+ * lit thing on the page is where she stands: a single moss point at the foot of a dashed climb.
+ */
+function DayOne() {
+  const { t } = useCopy();
+  // The live window width, not a Dimensions snapshot taken at import — see LiftDetail's note.
+  const ghostW = Math.round(useWindowDimensions().width - 64);
+  return (
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <View style={styles.dayOneHeader}>
+        <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
+      </View>
+      <View style={styles.dayOne}>
+        {ghostW > 0 ? <GhostClimb width={ghostW} height={150} label={t('progress.youAreHere')} /> : null}
+        <Text style={styles.dayOneTitle}>{t('progress.dayOneTitle')}</Text>
+        <Text style={styles.dayOneBody}>{t('progress.dayOneBody')}</Text>
+        <View style={styles.dayOneNote}>
+          <Icon name="check" size={15} color={signal[0]} strokeWidth={2.2} />
+          <Text style={styles.dayOneNoteText}>{t('progress.dayOneFirstMark')}</Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -110,10 +149,15 @@ export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onShar
 /** The aggregate lens: tonnage hero, weekly-volume graph, all-time milestone badges. */
 function AllTime({ aggregate, units, onShareWeek }: { aggregate: ProgressAggregate; units: Units; onShareWeek?: () => void }) {
   const { t } = useCopy();
+  // Live, not a snapshot taken at import — the graph follows a rotation or a split view.
+  const graphW = Math.round(useWindowDimensions().width - 60);
   const a = aggregate;
   const series = a.weeklyTonnes;
   const first = series[0] ?? 0;
   const last = series[series.length - 1] ?? 0;
+
+  const tonneUnit = t('progress.tonneUnit');
+  const raises = t('progress.raises', { count: a.raises });
 
   const badges: { value: string; unit: string; caption: string }[] = [
     { value: fmtTonnes(a.liftedKg), unit: t('progress.unitTonnes'), caption: t('progress.badgeLifted') },
@@ -131,14 +175,16 @@ function AllTime({ aggregate, units, onShareWeek }: { aggregate: ProgressAggrega
           <Legend tone="onStage">{t('progress.everythingLifted')}</Legend>
           <View style={styles.heroValueRow}>
             <Text style={styles.heroValue}>{fmtTonnes(a.liftedKg)}</Text>
-            <Text style={styles.heroUnit}>{t('progress.tonneUnit')}</Text>
+            {/* "t" is a unit, so it is mono like the figure — unless the locale spells it in a
+                script mono cannot draw, in which case it hands over to sans. */}
+            <Text style={[styles.heroUnit, !monoCanDraw(tonneUnit) && styles.heroUnitWord]}>{tonneUnit}</Text>
           </View>
         </View>
         <View style={styles.heroRight}>
           <View style={styles.raisesPill}>
-            <Text style={styles.raisesText}>{t('progress.raises', { count: a.raises })}</Text>
+            <Text style={[styles.raisesText, !monoCanDraw(raises) && styles.raisesTextWord]}>{raises}</Text>
           </View>
-          <Text style={styles.heroMeta}>{t('progress.workoutsWeeks', { workouts: a.workouts, weeks: a.weeks })}</Text>
+          <Legend size={10} track={0.12} align="right">{t('progress.workoutsWeeks', { workouts: a.workouts, weeks: a.weeks })}</Legend>
         </View>
       </View>
 
@@ -146,10 +192,10 @@ function AllTime({ aggregate, units, onShareWeek }: { aggregate: ProgressAggrega
       <View style={styles.graph}>
         <VolumeArea
           data={series}
-          width={CONTENT_W}
+          width={graphW}
           height={150}
-          startLabel={`${first} ${t('progress.unitTonnes')} · ${t('progress.volWeekOne')}`}
-          endLabel={`${last} ${t('progress.unitTonnes')} · ${t('progress.volThisWeek')}`}
+          startLabel={`${first} ${t('progress.unitTonnes')} · ${t('progress.volWeekOne')}`.toUpperCase()}
+          endLabel={`${last} ${t('progress.unitTonnes')} · ${t('progress.volThisWeek')}`.toUpperCase()}
         />
         {onShareWeek ? (
           <Pressable
@@ -177,46 +223,33 @@ function AllTime({ aggregate, units, onShareWeek }: { aggregate: ProgressAggrega
   );
 }
 
-/** One lift's climb — the running-max sparkline and its started → now numbers. */
-function LiftFocus({ entry, units }: { entry: QuarterlyProgressEntry; units: Units }) {
-  const { t } = useCopy();
-  const isReps = entry.mode === 'reps';
-  const conv = (v: number) => (isReps ? v : displayWeight(v, units) ?? 0);
-  const unit = isReps ? t('report.repsUnit') : unitLabel(units);
-  const initial = conv(entry.initialPeakKg);
-  const best = conv(entry.periodPeakKg);
-
-  return (
-    <View style={styles.focus}>
-      <View style={styles.focusHead}>
-        <Text style={styles.focusName}>{exerciseDisplayName(entry.exerciseId)}</Text>
-        <Text style={styles.focusBest}>
-          {best}
-          <Text style={styles.focusBestUnit}> {unit}</Text>
-        </Text>
-      </View>
-      <View style={styles.focusSpark}>
-        <Sparkline data={entry.series} width={CONTENT_W} height={120} />
-      </View>
-      <View style={styles.focusFoot}>
-        <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit })}</Text>
-        <Text style={[styles.footText, styles.footNow]}>{t('report.best', { value: best, unit })}</Text>
-      </View>
-    </View>
+/**
+ * A chip. WITHOUT `onPress` it is not a button at all — "All time" names the surface you are
+ * already standing on, and a control that announces itself to a screen reader and then does
+ * nothing is a lie the size of a tap.
+ */
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress?: () => void }) {
+  const body = (
+    <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextIdle]} numberOfLines={1}>
+      {label}
+    </Text>
   );
-}
-
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const shape = [styles.chip, active ? styles.chipActive : styles.chipIdle];
+  if (!onPress) {
+    return (
+      <View accessible accessibilityState={{ selected: active }} style={shape}>
+        {body}
+      </View>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={({ pressed }) => [styles.chip, active ? styles.chipActive : styles.chipIdle, { opacity: pressed ? press.opacity : 1 }]}
+      style={({ pressed }) => [...shape, { opacity: pressed ? press.opacity : 1 }]}
     >
-      <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextIdle]} numberOfLines={1}>
-        {label}
-      </Text>
+      {body}
     </Pressable>
   );
 }
@@ -228,7 +261,7 @@ function StatBadge({ value, unit, caption }: { value: string; unit: string; capt
       <View style={styles.badgeRing}>
         <View style={styles.badgeInner}>
           <Text style={styles.badgeValue}>{value}</Text>
-          <Text style={styles.badgeUnit}>{unit.toUpperCase()}</Text>
+          <Legend size={7.5} track={0.12} align="center">{unit}</Legend>
         </View>
       </View>
       <Text style={styles.badgeCaption} numberOfLines={1}>{caption}</Text>
@@ -243,62 +276,63 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: space.gutter,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 30,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
-  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
+  // "Progress" at 40 — a surface title, one step below the letter's 56 and above a step's 32.
+  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
+  // The Lifts / Log switch rides on the headline's shoulder, not on its baseline.
+  lens: { marginTop: 8 },
 
   chipsRow: { flexGrow: 0 },
-  chips: { paddingHorizontal: space.gutter, gap: 8, paddingBottom: 12 },
+  chipsWrap: { position: 'relative', overflow: 'hidden' },
+  // The strip runs off the page rather than stopping — the same 56px fade Today's chooser uses.
+  chipsFade: { position: 'absolute', top: 0, bottom: 0, end: 0, width: 56 },
+  chips: { paddingHorizontal: 30, gap: 8, paddingBottom: 12 },
   chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: radius.full, justifyContent: 'center' },
   chipActive: { backgroundColor: color.textPrimary },
-  chipIdle: { borderWidth: 1, borderColor: color.borderStrong },
-  chipText: { fontFamily: font.sansMedium, fontSize: textScale.sm, textAlign: 'left' },
+  chipIdle: { borderWidth: 1, borderColor: 'rgba(241,238,229,0.2)' },
+  chipText: { fontFamily: font.sansMedium, fontSize: 13, textAlign: 'left' },
   chipTextActive: { color: color.bg, fontFamily: font.sansSemibold }, // rtl-ok: merged onto chipText, which sets textAlign
   chipTextIdle: { color: color.textSecondary },
 
-  body: { paddingHorizontal: space.gutter, paddingBottom: 40, flexGrow: 1 },
+  body: { paddingHorizontal: 30, paddingTop: 20, paddingBottom: 40, flexGrow: 1 },
 
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 60 },
-  emptyMark: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
-  empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
+  // ── 3.6b · day one ──────────────────────────────────────────────────────────────────────────
+  dayOneHeader: { paddingHorizontal: 30, paddingTop: 20 },
+  // Centred in the page, not stacked under the title: on day one the page IS this block.
+  dayOne: { flex: 1, justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 40, gap: 22 },
+  // 34 in the coach's serif — the promise, at the size of a screen headline.
+  dayOneTitle: { fontFamily: font.serif, fontSize: 34, lineHeight: 39, color: color.textPrimary, textAlign: 'left' },
+  dayOneBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, textAlign: 'left' },
+  dayOneNote: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 16 },
+  dayOneNoteText: { flex: 1, fontFamily: font.sans, fontSize: 14, color: color.textSecondary, textAlign: 'left' },
 
   // tonnage hero
-  hero: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 4 },
-  heroLeft: { gap: 6 },
+  hero: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
+  heroLeft: { flexShrink: 1, gap: 3 },
   heroValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  heroValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 56, letterSpacing: trackingPx(56, tracking.display), color: color.textPrimary, textAlign: 'left' },
-  // The unit rides in SANS — mono carries no words (the law), the same split Metric makes.
-  heroUnit: { fontFamily: font.sansMedium, fontSize: textScale.lg, color: color.textMuted, textAlign: 'left' },
-  heroRight: { alignItems: 'flex-end', gap: 6 },
-  raisesPill: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.full, backgroundColor: 'rgba(169,196,159,0.18)' },
-  raisesText: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: signal[0], textAlign: 'left' },
-  heroMeta: { fontFamily: font.sansMedium, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], letterSpacing: 0.4, color: color.textMuted, textAlign: 'left' },
+  heroValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 56, lineHeight: 56, letterSpacing: -1.68, color: color.textPrimary, textAlign: 'left' },
+  // "t" is a UNIT, and a unit is a measurement — mono, like the figure it belongs to.
+  heroUnit: { fontFamily: font.mono, fontSize: 20, color: color.textMuted, textAlign: 'left' },
+  heroUnitWord: { fontFamily: font.sans },
+  heroRight: { flexShrink: 0, alignItems: 'flex-end', gap: 4 },
+  raisesPill: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: radius.full, backgroundColor: 'rgba(169,196,159,0.18)' },
+  raisesText: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 18, color: signal[0], textAlign: 'left' },
+  raisesTextWord: { fontFamily: font.sansSemibold },
 
-  graph: { marginTop: 20, alignItems: 'flex-start' },
+  graph: { marginTop: 14, alignItems: 'flex-start' },
   shareWeek: { marginTop: 14, alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
   shareWeekLabel: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
 
   // all-time milestone badges
-  milestones: { marginTop: 26 },
-  badgeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
+  milestones: { marginTop: 26, gap: 14 },
+  badgeRow: { flexDirection: 'row', gap: 6 },
   badgeCell: { flex: 1, alignItems: 'center', gap: 7 },
-  badgeRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderStyle: 'dashed', borderColor: color.borderStrong, alignItems: 'center', justifyContent: 'center' },
-  badgeInner: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' },
-  badgeValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'center' },
-  badgeUnit: { fontFamily: font.sansMedium, fontSize: 7.5, letterSpacing: 0.6, color: color.textMuted, textAlign: 'center' },
-  badgeCaption: { fontFamily: font.sans, fontSize: textScale['2xs'], color: color.textSecondary, textAlign: 'center' },
+  badgeRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(241,238,229,0.4)', alignItems: 'center', justifyContent: 'center' },
+  badgeInner: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: 'rgba(241,238,229,0.15)', backgroundColor: color.fillSubtle, alignItems: 'center', justifyContent: 'center' },
+  badgeValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14, color: color.textPrimary, textAlign: 'center' },
+  badgeCaption: { fontFamily: font.sans, fontSize: 14, lineHeight: 14, color: color.textSecondary, textAlign: 'center' },
 
-  // lift focus
-  focus: { marginTop: 4 },
-  focusHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  focusName: { fontFamily: font.serif, fontSize: textScale.xl, color: color.textPrimary, flexShrink: 1, textAlign: 'left' },
-  focusBest: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
-  focusBestUnit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted }, // rtl-ok: nested unit span, inherits textAlign from focusBest
-  focusSpark: { marginTop: 18, alignItems: 'flex-start' },
-  focusFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
-  footText: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale['2xs'], color: color.textTertiary, textAlign: 'left' },
-  footNow: { color: color.up },
 });

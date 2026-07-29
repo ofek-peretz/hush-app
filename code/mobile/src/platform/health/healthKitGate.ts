@@ -27,10 +27,11 @@ import {
   AuthorizationRequestStatus,
   getRequestStatusForAuthorization,
   isHealthDataAvailableAsync,
+  queryQuantitySamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
 import type { HealthGate } from '@/platform/health';
-import type { BodyweightSample, HealthPermissionState } from './healthModel';
+import type { BodyweightSample, HealthPermissionState, HeartRateSample } from './healthModel';
 
 // String-union identifiers (v14 dropped the enum). Read-only cardio scopes — the
 // metrics the run / walk recorder shows: heart rate, active energy (calories),
@@ -80,5 +81,35 @@ export const healthKitGate: HealthGate = {
 
   async latestBodyweightKg(): Promise<number | null> {
     return null;
+  },
+
+  /**
+   * The newest heart-rate sample the watch has written, with WHEN it was measured.
+   *
+   * The read scope has been requested since the gate was written (`HEART_RATE` is in `READ_AUTH`) —
+   * nothing had ever read it. This is the read, and it is deliberately dumb: newest sample, its
+   * value, its instant. Whether that is still worth drawing is `domain/heartRate`'s decision, not
+   * this file's, because the same answer has to hold for the live row and for the average.
+   *
+   * A denial is indistinguishable from "no data" in HealthKit by design — both come back as an
+   * empty result, which is exactly the null this returns. Nothing here throws.
+   */
+  async latestHeartRate(): Promise<HeartRateSample | null> {
+    try {
+      const samples = await queryQuantitySamples(HEART_RATE, {
+        limit: 1,
+        ascending: false, // newest first
+        unit: 'count/min',
+      });
+      const s = samples[0];
+      if (!s) return null;
+      // `endDate` is when the beat was measured; `startDate` for an instantaneous sample is the
+      // same instant. Prefer the end — a batched write can span a few seconds.
+      const atMs = new Date(s.endDate ?? s.startDate).getTime();
+      if (!Number.isFinite(s.quantity) || !Number.isFinite(atMs)) return null;
+      return { bpm: s.quantity, atMs };
+    } catch {
+      return null;
+    }
   },
 };

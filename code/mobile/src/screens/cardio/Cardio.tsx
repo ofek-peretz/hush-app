@@ -26,13 +26,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Legend, Button } from '@/components/ds';
+import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
+import { monoCanDraw } from '@/design/monoVoice';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useCardioTracker, fmtClock, fmtPace } from '@/platform/cardio/cardioTracker';
+import { useCardioTracker, fmtClock, fmtPace, type GpsState } from '@/platform/cardio/cardioTracker';
 import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
@@ -41,11 +43,16 @@ import * as haptics from '@/platform/haptics';
 import { color, font, textScale, radius, stage as stageC, signal, tracking, trackingPx } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<MainParamList, 'Cardio'>;
+type Props = NativeStackScreenProps<MainParamList, 'CardioLive'>;
 type Phase = 'countdown' | 'active' | 'complete';
 
 export function Cardio({ navigation }: Props) {
   const { t } = useCopy();
+  // The unit words, read once: each rides a MONO slot in the handoff and hands over to sans in a
+  // script mono cannot draw (see `unitWord`).
+  const metresUnit = t('cardio.metresUnit');
+  const perKm = t('cardio.perKm');
+  const kmUnit = t('cardio.km');
   const app = useApp();
   // Foreground-only GPS (no background-location entitlement yet): the screen stays awake for the
   // whole cardio surface so a live activity never loses its fix mid-run.
@@ -77,7 +84,7 @@ export function Cardio({ navigation }: Props) {
     live,
     app.profile?.weightKg,
   );
-  const { elapsedSec, distanceKm, paceSec, hr, calories, splits, gps, route } = sample;
+  const { elapsedSec, distanceKm, paceSec, hr, avgHr, calories, splits, gps, route } = sample;
 
   // Live Activity / Dynamic Island — start when live, update each tick, end on unmount.
   const laStarted = useRef(false);
@@ -186,7 +193,9 @@ export function Cardio({ navigation }: Props) {
         startedAt={startedAtRef.current}
         elapsedSec={elapsedSec}
         distanceKm={distanceKm}
-        avgHr={hr}
+        // The MEAN of every live reading, not the last one — `hr` is what the row is showing
+        // this second, and a summary that called that "average" would be reporting one heartbeat.
+        avgHr={avgHr ?? null}
         calories={calories}
         splits={splits}
         route={route}
@@ -195,6 +204,60 @@ export function Cardio({ navigation }: Props) {
   }
 
   // ---- LIVE (stage) ----
+  return (
+    <CardioLiveView
+      elapsedSec={elapsedSec}
+      distanceKm={distanceKm}
+      hr={hr}
+      calories={calories}
+      splits={splits}
+      gps={gps}
+      paused={paused}
+      confirmEnd={confirmEnd}
+      kmMoment={kmMoment}
+      backIn={backIn}
+      backBar={backBar}
+      onPause={() => setPaused(true)}
+      onResume={() => {
+        setConfirmEnd(false);
+        setPaused(false);
+      }}
+      onAskEnd={() => setConfirmEnd(true)}
+      onKeepGoing={() => setConfirmEnd(false)}
+      onFinish={finish}
+    />
+  );
+}
+
+/**
+ * 3.4 · CARDIO — LIVE, as a pure view.
+ *
+ * Split from the container for the same reason Home/HomeView and LiftDetail are: the stage's whole
+ * content comes from a live GPS tracker, and a harness cannot produce one. Everything here is
+ * props, so the gallery draws exactly what a running phone draws — the band, the split pill, the
+ * paused stage and the end sheet included.
+ */
+export function CardioLiveView(props: {
+  elapsedSec: number;
+  distanceKm: number;
+  hr: number | null;
+  calories: number;
+  splits: CardioSplit[];
+  gps: GpsState;
+  paused: boolean;
+  confirmEnd: boolean;
+  kmMoment: CardioSplit | null;
+  backIn: number;
+  backBar: Animated.Value;
+  onPause: () => void;
+  onResume: () => void;
+  onAskEnd: () => void;
+  onKeepGoing: () => void;
+  onFinish: () => void;
+}) {
+  const { t } = useCopy();
+  const metresUnit = t('cardio.metresUnit');
+  const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment, backIn, backBar } = props;
   const metresTotal = distanceKm * 1000;
   const metresIntoKm = metresTotal % 1000; // 0–1000 within the current kilometre
   const dotFrac = Math.max(0, Math.min(1, metresIntoKm / 1000));
@@ -206,7 +269,7 @@ export function Cardio({ navigation }: Props) {
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
         {/* "CARDIO" — a legend, a word: sans. */}
         <View style={styles.liveTop}>
-          <Text style={styles.liveLegend}>{t('cardio.liveLegend').toUpperCase()}</Text>
+          <Legend size={12} tone="onStage">{t('cardio.liveLegend')}</Legend>
         </View>
 
         <View style={styles.liveBody}>
@@ -216,8 +279,8 @@ export function Cardio({ navigation }: Props) {
           {/* the 1,000 m band — the dot travels the current kilometre, metres riding under it. */}
           <View style={styles.band}>
             <View style={styles.bandLabels}>
-              <Text style={styles.bandTick}>0</Text>
-              <Text style={styles.bandTick}>{t('cardio.bandEnd')}</Text>
+              <Legend size={10} track={0}>0</Legend>
+              <Legend size={10} track={0}>{t('cardio.bandEnd')}</Legend>
             </View>
             <View style={styles.bandLine} />
             <View style={styles.bandCapL} />
@@ -226,7 +289,7 @@ export function Cardio({ navigation }: Props) {
             <View style={[styles.bandDot, { left: `${dotFrac * 100}%` }]} />
             <View style={[styles.bandMetres, { left: `${dotFrac * 100}%` }]}>
               <Text style={styles.bandMetresNum}>{Math.round(metresIntoKm)}</Text>
-              <Text style={styles.bandMetresUnit}> {t('cardio.metresUnit')}</Text>
+              <Text style={[styles.bandMetresUnit, !monoCanDraw(metresUnit) && styles.unitWord]}> {metresUnit}</Text>
             </View>
           </View>
 
@@ -245,60 +308,56 @@ export function Cardio({ navigation }: Props) {
         </View>
 
         <View style={styles.liveFooter}>
-          {/* the split pill — a kilometre just logged, at the pace it took. Words → sans. */}
+          {/* the split pill — a kilometre just logged, at the pace it took. */}
           {lastSplit ? (
             <View style={styles.splitPill}>
               <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
-              <Text style={styles.splitPillText}>
-                {t('cardio.splitLogged', { km: lastSplit.km, pace: fmtPace(lastSplit.paceSec) }).toUpperCase()}
-              </Text>
+              <Legend size={12} track={0.04} tone="accent">
+                {t('cardio.splitLogged', { km: lastSplit.km, pace: fmtPace(lastSplit.paceSec) })}
+              </Legend>
             </View>
           ) : null}
           <Button
             variant="onstage"
-            size="lg"
+            size="act"
             block
             label={t('cardio.pause')}
-            onPress={() => setPaused(true)}
+            onPress={props.onPause}
             leading={<Icon name="pause" size={18} color={stageC[0]} />}
           />
         </View>
 
-        {/* pause overlay */}
-        {paused && phase === 'active' ? (
-          <View style={styles.pauseOverlay}>
-            <Text style={styles.pauseLegend}>{t('cardio.paused').toUpperCase()}</Text>
-            <Text style={styles.pauseClock}>{fmtClock(elapsedSec)}</Text>
-            <View style={styles.pauseStats}>
-              <Text style={styles.pauseStat}>{distanceKm.toFixed(2)} {t('cardio.km')}</Text>
-              <Text style={styles.pauseStat}>{fmtPace(paceSec)} {t('cardio.perKm')}</Text>
+        {/* 13.1 · PAUSED — the SAME stage the gym session raises. One pause screen for the whole
+            product: same mark, same sentence, same two acts. What differs is only what is stated
+            under it (the run's clock and distance) and that a run offers no pain door — it trains
+            no muscle Hush prescribes, so there is nothing for a report to act on. v7 fixes the
+            gait to a run (no picker, no in-run toggle), so the subject is one word. */}
+        {paused ? (
+          <PausedStage
+            subject={t('cardio.run')}
+            onResume={props.onResume}
+            endLabel={t('cardio.finish')}
+            onEnd={props.onAskEnd}
+          >
+            <View style={styles.pausedFacts}>
+              <Text style={styles.pausedClock}>{fmtClock(elapsedSec)}</Text>
+              <View style={styles.pausedStats}>
+                <Text style={styles.pauseStat}>{distanceKm.toFixed(2)} {t('cardio.km')}</Text>
+                <Text style={styles.pauseStat}>{fmtPace(distanceKm >= 0.05 ? elapsedSec / distanceKm : 0)} {t('cardio.perKm')}</Text>
+              </View>
             </View>
-            <View style={styles.pauseActions}>
-              <Button
-                variant="onstage"
-                size="lg"
-                block
-                label={t('cardio.resume')}
-                onPress={() => {
-                  setConfirmEnd(false);
-                  setPaused(false);
-                }}
-                leading={<Icon name="play" size={18} color={stageC[0]} />}
-              />
-              <Button variant="danger" size="lg" block label={t('cardio.finish')} onPress={() => setConfirmEnd(true)} leading={<Icon name="flag" size={18} color={stageC.ink0} />} />
-            </View>
-          </View>
+          </PausedStage>
         ) : null}
 
         {/* end-confirm sheet — bound to the same condition as the overlay that arms it. */}
-        {confirmEnd && paused && phase === 'active' ? (
-          <BottomSheet onClose={() => setConfirmEnd(false)}>
+        {confirmEnd && paused ? (
+          <BottomSheet onClose={props.onKeepGoing}>
             <Legend style={styles.sheetLegend}>{t('cardio.endLegend')}</Legend>
             <Text style={styles.sheetTitle}>{t('cardio.endTitleRun')}</Text>
             <Text style={styles.sheetBody}>{t('cardio.endBody')}</Text>
             <View style={styles.sheetActions}>
-              <Button variant="primary" block label={t('cardio.keepGoing')} onPress={() => setConfirmEnd(false)} />
-              <Button variant="danger" block label={t('cardio.finish')} onPress={finish} />
+              <Button variant="primary" block label={t('cardio.keepGoing')} onPress={props.onKeepGoing} />
+              <Button variant="danger" block label={t('cardio.finish')} onPress={props.onFinish} />
             </View>
           </BottomSheet>
         ) : null}
@@ -311,8 +370,10 @@ export function Cardio({ navigation }: Props) {
 }
 
 /* ===================== KILOMETRE LOGGED (moment) — 3.4b ===================== */
-function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; splits: CardioSplit[]; backIn: number; progress: Animated.Value }) {
+/** EXPORTED for the gallery (3.4b): it already takes only props. */
+export function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; splits: CardioSplit[]; backIn: number; progress: Animated.Value }) {
   const { t } = useCopy();
+  const perKm = t('cardio.perKm');
   const paces = splits.map((s) => s.paceSec);
   const avg = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : split.paceSec;
   const fastest = paces.length ? Math.min(...paces) : split.paceSec;
@@ -324,7 +385,7 @@ function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; spl
   return (
     <View style={styles.kmMoment}>
       <View style={styles.liveTop}>
-        <Text style={styles.liveLegend}>{t('cardio.liveLegend').toUpperCase()}</Text>
+        <Legend size={12} tone="onStage">{t('cardio.liveLegend')}</Legend>
       </View>
 
       <View style={styles.kmBody}>
@@ -336,25 +397,25 @@ function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; spl
             <View style={[styles.kmBandCap, { left: '76%' }]} />
             <View style={[styles.kmBandDot, { left: `${dotFrac * 100}%` }]} />
           </View>
-          <Text style={styles.kmBandLabel}>{t('cardio.kmMomentLabel', { km: split.km }).toUpperCase()}</Text>
+          <Legend size={11} tone="onStage">{t('cardio.kmMomentLabel', { km: split.km })}</Legend>
         </View>
 
         {/* the split — figures alone in the light: mono. */}
         <View style={styles.kmSplit}>
           <Text style={styles.kmSplitNum}>{fmtPace(split.paceSec)}</Text>
-          <Text style={styles.kmSplitUnit}>{t('cardio.perKm')}</Text>
+          <Text style={[styles.kmSplitUnit, !monoCanDraw(perKm) && styles.unitWord]}>{perKm}</Text>
         </View>
 
         {quickest ? (
           <View style={styles.kmQuickest}>
             <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
-            <Text style={styles.kmQuickestText}>{t('cardio.kmMomentQuickest').toUpperCase()}</Text>
+            <Legend size={11.5} track={0.12} tone="accent">{t('cardio.kmMomentQuickest')}</Legend>
           </View>
         ) : null}
       </View>
 
       <View style={styles.kmFooter}>
-        <Text style={styles.kmBackText}>{t('cardio.kmMomentBack', { n: backIn }).toUpperCase()}</Text>
+        <Legend size={12.5} tone="onStage">{t('cardio.kmMomentBack', { n: backIn })}</Legend>
         <View style={styles.kmBarTrack}>
           <Animated.View style={[styles.kmBarFill, { width: barW }]} />
         </View>
@@ -364,8 +425,15 @@ function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; spl
 }
 
 /* ============================ DONE (stage) — 3.4c ============================ */
-function CardioComplete(props: {
+/**
+ * EXPORTED for the gallery (3.4c). `preview` is the harness's contract: the gallery is for LOOKING
+ * at a screen, and this one PERSISTS on mount — a mount that saved a fictional run into the real
+ * log would be the harness changing the data it exists to show.
+ */
+export function CardioComplete(props: {
   navigation: Props['navigation'];
+  /** Gallery only — render the stage without recording anything. */
+  preview?: boolean;
   gait: CardioGait;
   startedAt: string;
   elapsedSec: number;
@@ -376,6 +444,7 @@ function CardioComplete(props: {
   route: CardioPoint[];
 }) {
   const { t } = useCopy();
+  const kmUnit = t('cardio.km');
   const { navigation, gait, elapsedSec, distanceKm, avgHr, splits, route } = props;
   const avgPace = distanceKm >= 0.05 ? elapsedSec / distanceKm : 0;
   const hasRoute = route.length >= MIN_ROUTE_POINTS;
@@ -386,6 +455,7 @@ function CardioComplete(props: {
   useEffect(() => {
     if (saved.current) return;
     saved.current = true;
+    if (props.preview) return; // the harness looks; it never writes
     if (!cardioPerformed(elapsedSec, distanceKm)) return;
     const activity: CardioActivity = {
       kind: 'cardio',
@@ -412,13 +482,13 @@ function CardioComplete(props: {
         <View style={styles.doneBody}>
           <View style={styles.savedRow}>
             <Icon name="checkCheck" size={15} color={signal[0]} strokeWidth={2.4} />
-            <Text style={styles.savedLegend}>{t('cardio.savedLegend').toUpperCase()}</Text>
+            <Legend size={11.5} tone="accent">{t('cardio.savedLegend')}</Legend>
           </View>
           <Text style={styles.savedTitle}>{t('cardio.savedTitle')}</Text>
 
           <View style={styles.doneHero}>
             <Text style={styles.doneHeroNum}>{distanceKm.toFixed(1)}</Text>
-            <Text style={styles.doneHeroUnit}>{t('cardio.km')}</Text>
+            <Text style={[styles.doneHeroUnit, !monoCanDraw(kmUnit) && styles.unitWord]}>{kmUnit}</Text>
           </View>
 
           <View style={styles.doneRow}>
@@ -444,7 +514,7 @@ function LiveStat({ value, label, icon }: { value: string | number; label: strin
         {icon ? <Icon name={icon} size={18} color={signal[0]} strokeWidth={2} /> : null}
         <Text style={styles.liveStatVal}>{value}</Text>
       </View>
-      <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
+      <Legend size={10.5} track={0.14} tone="onStage">{label}</Legend>
     </View>
   );
 }
@@ -456,7 +526,7 @@ function DoneStat({ value, label, icon }: { value: string | number; label: strin
         {icon ? <Icon name={icon} size={16} color={signal[0]} strokeWidth={2} /> : null}
         <Text style={styles.doneStatVal}>{value}</Text>
       </View>
-      <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
+      <Legend size={10.5} track={0.14} tone="onStage">{label}</Legend>
     </View>
   );
 }
@@ -478,21 +548,33 @@ const styles = StyleSheet.create({
 
   // LIVE (3.4)
   liveTop: { alignItems: 'center', paddingTop: 14 },
-  liveLegend: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: trackingPx(textScale.xs, tracking.legend), color: stageC.ink1, textAlign: 'left' },
   liveBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28 },
-  clock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 84, lineHeight: 90, includeFontPadding: false, letterSpacing: -3, color: stageC.ink0, textAlign: 'left' },
+  // The elapsed clock is the lit thing on a run, exactly as the load is on a set: the BRIGHT
+  // cream with a wide soft glow, never the plain ink.
+  clock: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 84,
+    lineHeight: 88,
+    includeFontPadding: false,
+    letterSpacing: -3.36,
+    color: '#f6f3ea',
+    textAlign: 'left',
+    textShadowColor: 'rgba(246,243,234,0.12)',
+    textShadowRadius: 44,
+    textShadowOffset: { width: 0, height: 0 },
+  },
 
   band: { width: '100%', maxWidth: 310, height: 64, marginTop: 4 },
   bandLabels: { position: 'absolute', left: 0, right: 0, top: -2, flexDirection: 'row', justifyContent: 'space-between' },
-  bandTick: { fontFamily: font.sansMedium, fontSize: 10, letterSpacing: 0.4, color: stageC.ink2, textAlign: 'left' },
   bandLine: { position: 'absolute', left: 0, right: 0, top: 30, height: 1, backgroundColor: LINE },
   bandCapL: { position: 'absolute', left: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
   bandCapR: { position: 'absolute', right: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
   bandFill: { position: 'absolute', left: 0, top: 29, height: 3, borderRadius: 2, backgroundColor: signal[0] },
   bandDot: { position: 'absolute', top: 24, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
   bandMetres: { position: 'absolute', top: 44, marginLeft: -22, flexDirection: 'row', alignItems: 'baseline', width: 60, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: signal[0], textAlign: 'left' },
-  bandMetresUnit: { fontFamily: font.sansMedium, fontSize: textScale.xs, color: signal[0], textAlign: 'left' },
+  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 21, color: signal[0], textAlign: 'left' },
+  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 21, color: signal[0], textAlign: 'left' },
 
   gpsSlot: { height: 20, justifyContent: 'center' },
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
@@ -500,20 +582,17 @@ const styles = StyleSheet.create({
   liveRow: { flexDirection: 'row', width: '100%', maxWidth: 340, justifyContent: 'space-evenly', borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 26 },
   liveStat: { alignItems: 'center', gap: 5 },
   liveStatRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  liveStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 36, letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
-  statLabel: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: stageC.ink1, textTransform: 'uppercase', textAlign: 'left' },
+  liveStatVal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 36, color: stageC.ink0, textAlign: 'left' },
 
   liveFooter: { paddingHorizontal: 26, paddingBottom: 30, gap: 12 },
   splitPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 11, paddingHorizontal: 16, borderRadius: radius.full, backgroundColor: MOSS_WASH, borderWidth: 1, borderColor: MOSS_BORDER },
-  splitPillText: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: 0.4, color: signal[0], textAlign: 'left' },
 
-  // pause overlay
-  pauseOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,17,14,0.985)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  pauseLegend: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink2, marginBottom: 12, textAlign: 'left' },
-  pauseClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0, textAlign: 'left' },
-  pauseStats: { flexDirection: 'row', gap: 24, marginTop: 10 },
-  pauseStat: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'left' },
-  pauseActions: { width: '100%', maxWidth: 280, marginTop: 30, gap: 10 },
+  // 13.1 — what a PAUSED RUN states under the sentence. The lifting stage states nothing there:
+  // a set has no clock of its own to hold, and a run does.
+  pausedFacts: { alignItems: 'center', gap: 10 },
+  pausedClock: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['4xl'], letterSpacing: -1.4, color: stageC.ink0, textAlign: 'center' },
+  pausedStats: { flexDirection: 'row', gap: 24 },
+  pauseStat: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stageC.ink1, textAlign: 'center' },
 
   // the end-confirm sheet (paper — a decision, not part of the stage)
   sheetLegend: { marginBottom: 10 },
@@ -524,14 +603,25 @@ const styles = StyleSheet.create({
   // DONE (3.4c)
   doneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 26, paddingHorizontal: 34 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  savedLegend: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: trackingPx(textScale.xs, tracking.legend), color: signal[0], textAlign: 'left' },
-  savedTitle: { fontFamily: font.serif, fontSize: textScale['3xl'], lineHeight: 44, color: stageC.ink0, textAlign: 'center' },
+  savedTitle: { fontFamily: font.serif, fontSize: 40, lineHeight: 44, color: stageC.ink0, textAlign: 'center' },
   doneHero: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
-  doneHeroNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.02), includeFontPadding: false, letterSpacing: -4, color: stageC.ink0, textAlign: 'left' },
-  doneHeroUnit: { fontFamily: font.sansMedium, fontSize: textScale.xl, color: stageC.ink1, textAlign: 'left' },
+  doneHeroNum: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 106,
+    lineHeight: 108,
+    includeFontPadding: false,
+    letterSpacing: -4.77,
+    color: '#f6f3ea',
+    textAlign: 'left',
+    textShadowColor: 'rgba(246,243,234,0.14)',
+    textShadowRadius: 44,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  doneHeroUnit: { fontFamily: font.mono, fontSize: 22, color: stageC.ink1, textAlign: 'left' },
   doneRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-evenly', borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 26 },
   doneStat: { alignItems: 'center', gap: 5 },
-  doneStatVal: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['2xl'], letterSpacing: -0.6, color: stageC.ink0, textAlign: 'left' },
+  doneStatVal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: stageC.ink0, textAlign: 'left' },
   doneFooter: { paddingHorizontal: 26, paddingBottom: 30 },
 
   // KILOMETRE LOGGED (3.4b) — a full, opaque overlay; the run keeps tracking underneath.
@@ -543,14 +633,25 @@ const styles = StyleSheet.create({
   kmBandSeg: { position: 'absolute', left: '24%', right: '24%', top: 9, height: 2, backgroundColor: 'rgba(169,196,159,0.5)' },
   kmBandCap: { position: 'absolute', top: 3, width: 1.5, height: 14, backgroundColor: 'rgba(169,196,159,0.5)' },
   kmBandDot: { position: 'absolute', top: 4.5, marginLeft: -5.5, width: 11, height: 11, borderRadius: 6, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the km band is a direction-neutral data axis
-  kmBandLabel: { fontFamily: font.sansMedium, fontSize: 11, letterSpacing: trackingPx(11, tracking.legend), color: stageC.ink1, textAlign: 'left' },
   kmSplit: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  kmSplitNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 104, lineHeight: 108, includeFontPadding: false, letterSpacing: -4.5, color: signal[0], textAlign: 'left' },
-  kmSplitUnit: { fontFamily: font.sansMedium, fontSize: textScale.lg, color: stageC.ink1, textAlign: 'left' },
+  kmSplitNum: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 104,
+    lineHeight: 106,
+    includeFontPadding: false,
+    letterSpacing: -4.68,
+    color: signal[0],
+    textAlign: 'left',
+    textShadowColor: 'rgba(169,196,159,0.18)',
+    textShadowRadius: 44,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  kmSplitUnit: { fontFamily: font.mono, fontSize: 20, color: stageC.ink1, textAlign: 'left' },
   kmQuickest: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  kmQuickestText: { fontFamily: font.sansMedium, fontSize: 11.5, letterSpacing: trackingPx(11.5, tracking.legend), color: signal[0], textAlign: 'left' },
   kmFooter: { paddingHorizontal: 26, paddingBottom: 30, alignItems: 'center', gap: 9 },
-  kmBackText: { fontFamily: font.sansMedium, fontSize: 12.5, letterSpacing: trackingPx(12.5, tracking.legend), color: stageC.ink1, textAlign: 'left' },
   kmBarTrack: { width: 130, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)', overflow: 'hidden' },
   kmBarFill: { height: '100%', backgroundColor: signal[0] },
+  // The sans sibling every mono UNIT slot hands over to when the locale spells it in Hebrew.
+  unitWord: { fontFamily: font.sans },
 });

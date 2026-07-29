@@ -182,3 +182,44 @@ export function allTimePeakProgress(sessions: Session[], nowMs: number): Quarter
   });
   return entriesFromPeaks(peaks, ALL_TIME_MIN_WEEKS);
 }
+
+/**
+ * ════ THE STANDING RECORD — WHAT EVERY WEEK HAS ADDED UP TO ════
+ *
+ * The Saturday letter's answer to a week in which the engine changed nothing (founder 2026-07-28:
+ * "0 changes reads robotic — use that moment to show what the whole use of the app has come to, so
+ * it doesn't look empty and she feels she can rely on us").
+ *
+ * A steady week is the plan being RIGHT, and the honest way to say so is the total the weeks have
+ * built: how many workouts she has finished, how much she has moved, how many sets are on record.
+ * The letter's other band is the same three facts for THIS week — the contrast between them is the
+ * whole point, and neither is a forecast, a score or a streak. Every figure is read straight off
+ * her logged sets, so the number cannot decay the way an engine log capped to its last N entries
+ * would.
+ *
+ * Pure & I/O-free, like everything else in this file.
+ */
+export interface StandingRecord {
+  /** Whole workouts on record — a session left half-done (`trained === false`) is not one. */
+  workouts: number;
+  /** Σ(weight × reps) over every logged set, in tonnes to one decimal. Bodyweight adds nothing
+   *  rather than a guessed load — the same rule 2.5's "tonnes moved" keeps. */
+  tonnes: number;
+  /** Every set she has logged, of every lift, ever. */
+  sets: number;
+}
+
+export function standingRecord(sessions: Session[]): StandingRecord {
+  let kg = 0;
+  let sets = 0;
+  let workouts = 0;
+  for (const s of sessions) {
+    if (s.sets.length === 0) continue; // a session with nothing in it never happened
+    if (s.trained !== false) workouts += 1;
+    for (const log of s.sets) {
+      sets += 1;
+      kg += (log.actualWeight ?? 0) * log.actualReps;
+    }
+  }
+  return { workouts, tonnes: Math.round(kg / 100) / 10, sets };
+}

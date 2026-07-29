@@ -300,5 +300,5 @@ const styles = StyleSheet.create({
   emblemCell: { width: '33.33%', alignItems: 'center', paddingHorizontal: 6, marginBottom: 22 },
   emblemTitle: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], color: color.textPrimary, textAlign: 'center', marginTop: 10, lineHeight: textScale['2xs'] * 1.35 },
   emblemLocked: { color: color.textMuted },
-  emblemFoot: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: 10, color: color.textTertiary, marginTop: 3, textAlign: 'left' },
+  emblemFoot: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: 14, color: color.textTertiary, marginTop: 3, textAlign: 'left' },
 });

@@ -13,7 +13,7 @@
  * carries no tab bar), and History folded out of the bar into the Progress surface.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -22,7 +22,7 @@ import { useApp } from '@/state/stores/appStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
 import { onReloadRequested } from './reload';
-import { navigationRef, navigateMain, navigateTab } from './navigationRef';
+import { navigationRef, navigateMain } from './navigationRef';
 import {
   addNotificationDeliveryListener,
   addNotificationResponseListener,
@@ -38,7 +38,6 @@ import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
-import { Training } from '@/screens/onboarding/Training';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
@@ -49,6 +48,9 @@ import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
+import { LiftDetail } from '@/screens/progress/LiftDetail';
+import { PainWhere } from '@/screens/pain/PainWhere';
+import { PainResponse } from '@/screens/pain/PainResponse';
 import { Cardio } from '@/screens/cardio/Cardio';
 import { CardioReady } from '@/screens/cardio/CardioReady';
 import { CardioDetail } from '@/screens/cardio/CardioDetail';
@@ -56,6 +58,8 @@ import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
+import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
+import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -65,7 +69,7 @@ const Tabs = createBottomTabNavigator<HomeTabsParamList>();
  *  bottom bar stays visible while at rest. "Start cardio" pushes the full-screen live stage onto the
  *  Main stack (which opens straight into the 3·2·1 countdown), so a live run carries no tab bar. */
 function CardioTab() {
-  return <CardioReady onBegin={() => navigateMain('Cardio')} />;
+  return <CardioReady onBegin={() => navigateMain('CardioLive')} />;
 }
 
 /** The four peer surfaces, under the bottom bar (v7: Today · Cardio · Progress · You). Everything
@@ -117,7 +121,6 @@ function OnboardingNavigator() {
         component={ManualInfo}
         options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
       />
-      <OnboardingStack.Screen name="Training" component={Training} />
       {/* The body map (Rev 7) — a vertical list, so the default horizontal back-swipe is fine. */}
       <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
       {/* The build/ready step is the ONE place with no way back: the program exists. */}
@@ -157,10 +160,15 @@ function MainNavigator() {
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
+      <MainStack.Screen name="LiftDetail" component={LiftDetail} />
+      <MainStack.Screen name="SharePlan" component={SharePlanScreen} />
+      <MainStack.Screen name="PlanReceived" component={PlanReceivedScreen} />
+      <MainStack.Screen name="PainWhere" component={PainWhere} />
+      <MainStack.Screen name="PainResponse" component={PainResponse} />
       {/* The live cardio stage — full-screen focus, fades in like the session flow, and opens
           straight into the 3·2·1 countdown (the READY step now lives in the Cardio tab). A live GPS
           recording is never swipe-dismissable, so the back gesture stays off for the whole stage. */}
-      <MainStack.Screen name="Cardio" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+      <MainStack.Screen name="CardioLive" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
@@ -179,9 +187,12 @@ function MainNavigator() {
 function routeNotificationIntent(intent: NotificationIntent | null, enrolled: boolean): void {
   if (!intent || !enrolled) return;
   void track('notification_opened', { kind: intent.kind });
-  // v4: the weekly notification opens the Weekly Update (what changed + Why).
-  if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate'); // 1.20 (v4 Weekly Update + Why)
-  else if (intent.kind === 'quarterly_report') navigateTab('Progress', { window: 'quarter' }); // 12-week view (merged into Progress) — Progress is a tab
+  // The weekly notification opens the Saturday letter (what changed + Why).
+  if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate');
+  // A KILOMETRE note routes NOWHERE. It is delivered mid-run, and the run is already the screen
+  // she is on — bringing the app forward is the whole of it. Navigating anywhere from here would
+  // take her off her own live run to show her a fact she has just been told.
+
 }
 
 export function Root() {
@@ -205,6 +216,27 @@ export function Root() {
   // Bumping this key recreates the whole navigator subtree with the new direction.
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => onReloadRequested(() => setReloadKey((k) => k + 1)), []);
+
+  /**
+   * §11.5 — A SHARED PLAN ARRIVES AS A LINK. `hush://plan?p=<token>`.
+   *
+   * Both doors are covered: a cold start (the app was opened BY the link) and a warm one (it was
+   * already running). The token is handed to the screen unread — `decodePlan` is the only thing
+   * that decides whether a payload is trustworthy, and it lives there. A link that is not ours,
+   * or carries no token, is ignored in silence: an unknown URL is not an error the athlete caused.
+   */
+  useEffect(() => {
+    const open = (url: string | null) => {
+      if (!url) return;
+      const token = /[?&]p=([^&]+)/.exec(url)?.[1];
+      if (!token || !url.includes('plan')) return;
+      if (!enrolledRef.current) return; // nothing to adopt a plan INTO yet
+      navigateMain('PlanReceived', { token: decodeURIComponent(token) });
+    };
+    void Linking.getInitialURL().then(open).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => open(e.url));
+    return () => sub.remove();
+  }, []);
 
   // Warm taps: app already running. Route every notification response (or stash a
   // boot-time one until the container mounts).

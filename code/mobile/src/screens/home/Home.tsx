@@ -7,7 +7,8 @@
  * no Portrait — it was removed long before v5 — and there are no tabs. Corrected 2026-07-17; the
  * only trace left is the vestigial `unlockedPortrait` flag on the session store's end result.)
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -15,22 +16,30 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import { HomeView } from '@/screens/home/HomeView';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
-import { nextWorkout } from '@/domain/schedule';
+import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
 import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
-import { strengthSessionKcal } from '@/domain/energy';
+import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
+import { comebackAfterGap } from '@/domain/comeback';
+import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
+import { LapsedView } from '@/screens/subscription/Lapsed';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
+import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase';
+import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import type { Line } from '@/domain/voice';
 import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
+import type { LoadDirection } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
 // Home is a TAB now, but it pushes onto the parent stack (SessionFlow, Cardio, WeeklyUpdate…), so
@@ -81,9 +90,31 @@ export function Home({ navigation, route }: Props) {
    * chip needs no caption explaining what it does.
    */
   const [planTargets, setPlanTargets] = useState<SetTarget[] | null>(null);
-  // Which lifts the engine touched this week — so Today can strike their figure in moss (the v7
-  // "changed" mark). Populated by the briefing effect below; empty in week one.
-  const [changedIds, setChangedIds] = useState<Set<string>>(() => new Set());
+  /** The saved history, newest first — §10 reads it for the gap and for the last session's row. */
+  const [saved, setSaved] = useState<Session[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    db.loadHistory()
+      .then((h) => alive && setSaved(h))
+      .catch(() => alive && setSaved([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Which lifts the engine touched this week AND WHICH WAY — so Today can light their figure in the
+  // direction it moved (founder 2026-07-29; it used to be one ochre for all three, which named a
+  // change and refused to say whether the load had gone up or down). Empty in week one.
+  const [changedDir, setChangedDir] = useState<Record<string, LoadDirection>>({});
+  /**
+   * THE ARGUMENT BEHIND EACH CHANGED LIFT (v7 2.1b), keyed by exercise.
+   *
+   * Today shows the CONCLUSION — a load in moss. Tapping it opens the case: the load it came from,
+   * the band, the two sessions that made it, and the engine's own sentence. Every figure comes off
+   * the stamped weekly view and the saved history; nothing on that sheet is computed at read time,
+   * because a reason Hush did not measure is not a reason (R7).
+   */
+  const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
+  const [whyFor, setWhyFor] = useState<string | null>(null);
   const [formFor, setFormFor] = useState<string | null>(null);
   const dayIdForPlan = day?.id ?? null;
   useEffect(() => {
@@ -121,10 +152,10 @@ export function Home({ navigation, route }: Props) {
         load: first?.recommendedWeight ?? null,
         sets: slot.setCount,
         band: [lo, hi] as [number, number],
-        changed: changedIds.has(slot.exerciseId),
+        changed: changedDir[slot.exerciseId],
       };
     });
-  }, [day, planTargets, changedIds]);
+  }, [day, planTargets, changedDir]);
 
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
@@ -276,12 +307,27 @@ export function Home({ navigation, route }: Props) {
                 l.change.snapshot.loadTo > l.change.snapshot.loadFrom,
             ).length,
         );
-        setChangedIds(
-          new Set(
-            (view?.workouts ?? [])
-              .flatMap((w) => w.lifts)
-              .filter((l) => l.change)
-              .map((l) => l.exerciseId),
+        const changedLifts = (view?.workouts ?? []).flatMap((w) => w.lifts).filter((l) => l.change);
+        // The direction the row is lit in, from the stamped snapshot and nothing else. A structural
+        // change (a graduation, a rotation) has no load it came FROM, so it is not a fall — it is a
+        // new lift arriving, and it lights like one.
+        setChangedDir(
+          Object.fromEntries(
+            changedLifts.map((l) => {
+              const s = l.change!.snapshot;
+              const dir: LoadDirection =
+                s.loadFrom == null || s.loadTo == null ? 'up' : s.loadTo < s.loadFrom ? 'down' : s.loadTo > s.loadFrom ? 'up' : 'hold';
+              return [l.exerciseId, dir];
+            }),
+          ),
+        );
+        // …and the case for each, read off the same stamped view plus the two most recent sessions
+        // of that lift in the athlete's own history.
+        const history = await db.loadHistory().catch(() => [] as Session[]);
+        if (cancelled) return;
+        setWhyByExercise(
+          Object.fromEntries(
+            changedLifts.map((l) => [l.exerciseId, changedLiftCase(l, history, app.profile?.units ?? 'kg')]),
           ),
         );
         // The undo, if the engine rotated a lift away this week. At most one is offered: the
@@ -302,7 +348,7 @@ export function Home({ navigation, route }: Props) {
         if (!cancelled) {
           setBrief(null);
           setBriefCount(null);
-          setChangedIds(new Set());
+          setChangedDir({});
           setLoadsUp(0);
         }
       }
@@ -359,6 +405,9 @@ export function Home({ navigation, route }: Props) {
       lifts,
       // Rough estimate (no per-day duration on the model yet): ~8 min per lift.
       durationLabel: lifts ? `~${lifts * 8} min` : undefined,
+      // WT7 — her very first: no completed session anywhere in her history. Read from the same
+      // history every other surface reads, so the wrist and the phone agree about which day it is.
+      firstWorkout: saved != null && saved.length === 0,
       resting,
       gated,
       workouts: (program?.days ?? [])
@@ -432,14 +481,22 @@ export function Home({ navigation, route }: Props) {
         // Tonnage (kg lifted → t) and calories (from total wall-clock work time) across the week.
         let kg = 0;
         let ms = 0;
+        // PER SESSION, not one estimate over the pooled minutes: a workout the WATCH executed
+        // standalone carries the wrist's MEASURED energy, and pooling the durations first would
+        // throw that measurement away and re-estimate the whole week (founder 2026-07-28 — one
+        // number per workout, and the week is the sum of them).
+        let kcal: number | null = null;
         for (const s of wk) {
           for (const set of s.sets) kg += (set.actualWeight ?? 0) * set.actualReps;
           if (s.sets.length) {
             const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
-            ms += Math.max(0, last - Date.parse(s.startedAt));
+            const sessionMs = Math.max(0, last - Date.parse(s.startedAt));
+            ms += sessionMs;
+            const k = sessionKcal(s, sessionMs, app.profile?.weightKg);
+            if (k != null) kcal = (kcal ?? 0) + k;
           }
         }
-        setWeekEnergy({ tonnes: kg / 1000, kcal: strengthSessionKcal(ms, app.profile?.weightKg) });
+        setWeekEnergy({ tonnes: kg / 1000, kcal });
       } catch {
         if (!cancelled) {
           setWeekDays(undefined);
@@ -494,6 +551,63 @@ export function Home({ navigation, route }: Props) {
   // Weekly model: completed (non-rest) workouts in the current program week.
   const trainedThisWeek = program ? program.days.filter((d) => d.completed && !d.isRest).length : 0;
 
+  /* ════ §10 · THE TWO STATES THAT REPLACE TODAY ════
+   *
+   * Both are answers to "what is true when she opens the app", so both belong HERE — Today is the
+   * first screen, and a screen that greets a return or states a lapse cannot live anywhere else.
+   * Neither is a route: routes are places you go, and you do not GO to having been away.
+   */
+
+  // 10.2 · LAPSED. She subscribed and no longer is — not the free trial running out (that is the
+  // paywall's gate, and it is a different sentence). Read-only, never a lock-out.
+  const lapsed = !app.entitlement.active && app.entitlement.source !== 'none';
+
+  // 10.1 · AFTER A GAP. Shown once per return: dismissing it starts the day, and coming back
+  // tomorrow is not a gap any more, so nothing has to be remembered.
+  const [greeted, setGreeted] = useState(false);
+  const comeback = useMemo(
+    () => (greeted || lapsed ? null : comebackAfterGap(saved ?? [], Date.now())),
+    [greeted, lapsed, saved],
+  );
+
+  if (lapsed) {
+    const last = (saved ?? [])[0];
+    return (
+      <LapsedView
+        dayName={day?.name ?? null}
+        endedOn={app.entitlement.expiresAt ? new Date(app.entitlement.expiresAt).toLocaleDateString() : ''}
+        priceLabel={null}
+        onResume={() => navigation.navigate('Paywall', { source: 'profile' })}
+        kept={[
+          ...(last
+            ? [{
+                key: 'last',
+                title: t('lapsed.lastSession', { date: new Date(last.startedAt).toLocaleDateString() }),
+                detail: sessionDayName(last, program),
+                onOpen: () => navigation.navigate('WorkoutDetail', { sessionId: last.id }),
+              }]
+            : []),
+          { key: 'log', title: t('progress.title'), detail: t('progress.viewHistory'), onOpen: () => navigation.navigate('History') },
+        ]}
+      />
+    );
+  }
+
+  if (comeback) {
+    return (
+      <WelcomeBackView
+        daysAway={comeback.daysAway}
+        unit={unitLabel(app.profile?.units ?? 'kg')}
+        lifts={(plan ?? []).slice(0, 2).map((l) => ({
+          exerciseId: l.exerciseId,
+          name: l.name,
+          load: l.load == null ? null : displayWeight(l.load, app.profile?.units ?? 'kg') ?? null,
+        }))}
+        onStart={() => setGreeted(true)}
+      />
+    );
+  }
+
   return (
     <>
     <HomeView
@@ -511,7 +625,10 @@ export function Home({ navigation, route }: Props) {
       budgetMinutes={app.profile?.workoutMinutes ?? 60}
       dayDone={!!day?.completed}
       units={app.profile?.units ?? 'kg'}
-      onForm={setFormFor}
+      // A CHANGED ROW OPENS ITS CASE (v7 2.1b); an unchanged one opens the form clip. The rule is
+      // the row's own state, so there is nothing to teach: the lift Hush moved is already the one
+      // drawn differently, and it is the only one with an argument to read.
+      onForm={(id) => (whyByExercise[id] ? setWhyFor(id) : setFormFor(id))}
       resumable={resumable}
       onResume={onResume}
       onStart={onStart}
@@ -527,13 +644,19 @@ export function Home({ navigation, route }: Props) {
       }}
       briefUnseen={briefUnseen}
       trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions)}
-      onAccount={() => navigation.navigate('You')}
+      onShare={() => navigation.navigate('SharePlan')}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
-      onCardio={() => navigation.navigate('Cardio')}
       weekDays={weekDays}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
       nextWorkoutName={program?.days.find((d) => !d.isRest)?.name ?? null}
       />
+      {/* WHY THIS CHANGED — the engine's argument for the lift it moved, at full length. */}
+      {whyFor && whyByExercise[whyFor] ? (
+        <View style={StyleSheet.absoluteFill}>
+          <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />
+        </View>
+      ) : null}
+
       {/* The form clip — the one job the plan screen did that the list on Home does not. It was a
           whole screen away (Home → chip → chip again → a row's ▶); it is now a tap on the lift. */}
       {formFor ? (
@@ -543,7 +666,7 @@ export function Home({ navigation, route }: Props) {
           cues={exerciseCues(formFor)}
           focusLabel={t('workout.focusOn')}
           formGuideLabel={t('workout.form')}
-          doneLabel={t('common.close')}
+          doneLabel={t('workout.tapAnywhere')}
           onDone={() => setFormFor(null)}
         />
       ) : null}

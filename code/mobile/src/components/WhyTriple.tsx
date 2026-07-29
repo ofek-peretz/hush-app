@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   rowGap: { marginTop: 16 },
   dot: { position: 'absolute', start: -22, top: 3, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
   dotFill: { position: 'absolute', top: 1.5, left: 1.5, right: 1.5, bottom: 1.5, borderRadius: 3 },
-  k: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', marginBottom: 4, textAlign: 'left' },
+  k: { fontFamily: font.sansMedium, fontSize: 14, letterSpacing: trackingPx(10.5, tracking.legend), textTransform: 'uppercase', marginBottom: 4, textAlign: 'left' },
   kStrong: { fontFamily: font.sansSemibold, textAlign: 'left' },
   v: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, textAlign: 'left' },
 });

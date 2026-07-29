@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
-import { color, font, textScale, up, down } from '@/design/tokens';
+import { color, font, textScale, directionTone, directionWash } from '@/design/tokens';
 
 type Dir = 'up' | 'down' | 'hold';
 type Size = 'sm' | 'md' | 'lg';
@@ -27,9 +27,10 @@ interface Props {
 
 export function LoadDelta({ value = 0, unit = 'kg', direction, pill, size = 'md', showValue = true, holdLabel = 'hold', style }: Props) {
   const dir: Dir = direction || (value > 0 ? 'up' : value < 0 ? 'down' : 'hold');
-  // On the dark stage the load marks are the LIT moss / clay (the paper variants are near-black here).
-  const tint = dir === 'up' ? up.stage : dir === 'down' ? down.stage : color.textMuted;
-  const pillBg = dir === 'up' ? up.wash : dir === 'down' ? down.wash : color.fillSubtle;
+  // The direction law, from its one home (`design/tokens`): moss up, blue down, cream on a hold.
+  // A hold used to be `textMuted` — grey, i.e. a fourth answer to a three-answer question.
+  const tint = directionTone(dir);
+  const pillBg = directionWash(dir);
   const mag = Math.abs(value);
   const label = dir === 'hold' ? holdLabel : `${dir === 'up' ? '+' : '−'}${mag}${unit ? ' ' + unit : ''}`;
   return (

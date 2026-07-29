@@ -19,7 +19,10 @@
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
-import { exercisesForMuscle, isSwapOnly, muscleOf, type MuscleGroup } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, type MuscleGroup } from '@/data/exercises';
+// S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
+// this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
+import { canLoad, type LoadProfile } from '@/domain/startingLoad';
 
 /**
  * A muscle's starting weekly-set target (B-2) divided by this → its day-one exercise COUNT (min 1). At
@@ -96,15 +99,51 @@ export function pickExercises(
   count: number,
   leaveIt?: string,
   substitutes: Record<string, string> = {},
+  profile?: LoadProfile,
 ): string[] {
-  const pool = exercisesForMuscle(muscle as MuscleGroup).filter((e) => !isSwapOnly(e.id));
-  const ordered = [...pool].sort((a, b) => (a.tier === 'compound' ? 0 : 1) - (b.tier === 'compound' ? 0 : 1));
-  let ids = ordered.map((e) => e.id);
-  if (leaveIt && ids.includes(leaveIt)) ids = [leaveIt, ...ids.filter((id) => id !== leaveIt)];
-  const picked = ids.slice(0, Math.max(1, count));
+  const all = exercisesForMuscle(muscle as MuscleGroup).filter((e) => !isSwapOnly(e.id));
+  // Lifts whose floor she can actually load lead; the rest stay available behind them, so a muscle
+  // is never emptied by the check — a pool of only-too-heavy lifts still yields its catalogue lead.
+  const fits = all.filter((e) => canLoad(e, profile));
+  const pool = fits.length > 0 ? fits : all;
+  if (pool.length === 0) return [];
+  const wanted = Math.max(1, count);
+
+  // The ANCHOR leads the muscle (S-35: the compound keeps the fullest set scheme; S-71: a leave-it is
+  // guaranteed + first). A pinned leave-it wins the seat; otherwise the leading compound in catalog
+  // order. Catalog order is the stable tie-break throughout (the pool is already in it).
+  // The ANCHOR is the lift the engine will STEER, so it prefers one it can steer. A bodyweight lift
+  // has no load axis at all (S-51 — Loop 1 has nothing to correct), so it never takes the seat over a
+  // loadable compound; behind that seat it stands exactly where the catalogue puts it. This is not a
+  // ranking of exercises — a pull-up is not a lesser lift — it is a statement about which lift the
+  // correction loops can actually act on.
+  const rank = (e: Exercise) => (e.tier === 'compound' ? 0 : 2) + (e.bodyweight ? 1 : 0);
+  const compoundFirst = [...pool].sort((a, b) => rank(a) - rank(b));
+  const anchor = (leaveIt ? pool.find((e) => e.id === leaveIt) : undefined) ?? compoundFirst[0];
+
+  // Each FURTHER slot maximises STIMULUS DIVERSITY against what is already chosen — a different
+  // movement pattern first (the point), a different equipment family second (a byproduct, not chased
+  // for its own sake), and the ISOLATION contrast to the compound anchor last: a compound + a
+  // stretch/isolation beats two overlapping compounds fighting the same failure point (S-77, founder
+  // 2026-07-25). Greedy + deterministic — ties fall to catalog order via the strict `>`.
+  const chosen = [anchor];
+  const remaining = pool.filter((e) => e.id !== anchor.id);
+  while (chosen.length < wanted && remaining.length > 0) {
+    const patterns = new Set(chosen.map((e) => e.pattern));
+    const equips = new Set(chosen.map((e) => e.equipment));
+    let best = remaining[0];
+    let bestScore = -Infinity;
+    for (const c of remaining) {
+      const score = (patterns.has(c.pattern) ? 0 : 4) + (equips.has(c.equipment) ? 0 : 2) + (c.tier === 'isolation' ? 1 : 0);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    chosen.push(best);
+    remaining.splice(remaining.indexOf(best), 1);
+  }
+
   const out: string[] = [];
-  for (const id of picked) {
-    const finalId = resolveChain(id, substitutes);
+  for (const e of chosen) {
+    const finalId = resolveChain(e.id, substitutes);
     if (!out.includes(finalId)) out.push(finalId);
   }
   return out;
@@ -146,12 +185,55 @@ function nameDays(regionDays: ('upper' | 'lower')[]): string[] {
  * supplemental finisher added downstream (addWeeklyCore), never a structural muscle (S-50 volume still
  * flows to it through that path).
  */
+/**
+ * ════ THE ORDER YOU WALK (founder 2026-07-27) ════
+ *
+ * "Don't leave a station until you're done with it — but always a compound of the muscle first, and
+ * don't make the whole workout one station."
+ *
+ * Before this, a day was ordered by muscle alone, so Upper A read: barbell, barbell, CABLE, barbell,
+ * barbell — the athlete crossed the gym twice for one pushdown and came back. Lower A changed
+ * station seven times in eight lifts.
+ *
+ * Two passes, and the training law wins both:
+ *
+ *   1. COMPOUNDS BEFORE ISOLATIONS. Non-negotiable, and it is the ordering every serious programme
+ *      already uses: the heavy work happens on a fresh nervous system, the small work fills in after.
+ *   2. INSIDE each pass, keep a station together. The first lift of a pass is the one catalogue order
+ *      already chose; from there, whenever the next lift could equally be any of several, take the
+ *      one on the equipment already in hand.
+ *
+ * So the order never trades a compound for a shorter walk — it only spends the freedom it already
+ * had. Deterministic: ties fall to the incoming order, which is catalogue order.
+ */
+export function orderWithinDay(ids: string[]): string[] {
+  const compounds = ids.filter((id) => exerciseById(id)?.tier === 'compound');
+  const isolations = ids.filter((id) => exerciseById(id)?.tier !== 'compound');
+
+  const out: string[] = [];
+  // The station carries ACROSS the two passes: the isolations begin wherever the compounds left the
+  // athlete standing, so the last heavy lift and the first light one share a rack whenever they can.
+  const drain = (group: string[]) => {
+    const left = [...group];
+    while (left.length > 0) {
+      const at = out.length > 0 ? exerciseById(out[out.length - 1])?.equipment : undefined;
+      const here = at ? left.findIndex((id) => exerciseById(id)?.equipment === at) : -1;
+      out.push(left.splice(here >= 0 ? here : 0, 1)[0]);
+    }
+  };
+  drain(compounds);
+  drain(isolations);
+  return out;
+}
+
 export function assembleV5DayLists(
   map: BodyMap | undefined,
   days: number,
   leaveItsByMuscle: Record<string, string> = {},
   substitutes: Record<string, string> = {},
   volumeByMuscle: Record<string, number> = {},
+  /** Her sex + bodyweight — read ONLY to ask whether a lift's floor is loadable for her (S-55b). */
+  profile?: LoadProfile,
 ): DayList[] {
   const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
@@ -183,17 +265,29 @@ export function assembleV5DayLists(
         // one (which would steal sets and make realized volume non-monotonic as the target grows).
         const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes).length;
         const dist = distributeMuscleSets(learned, poolSize);
-        const picked = pickExercises(m, dist.length, leaveItsByMuscle[m], substitutes);
+        const picked = pickExercises(m, dist.length, leaveItsByMuscle[m], substitutes, profile);
         picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
         picks.push(...picked);
       } else {
-        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), leaveItsByMuscle[m], substitutes));
+        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), leaveItsByMuscle[m], substitutes, profile));
       }
     }
 
-    // Spread across the region's days: k % len puts one on each day first, then round-robins the rest —
-    // so a day is a coherent session, and none is lopsided. Deterministic.
-    picks.forEach((exId, k) => dayExercises[regionIdxs[k % regionIdxs.length]].push(exId));
+    /* ════ THE SPREAD DEALS COMPOUNDS FIRST (founder 2026-07-27) ════
+     *
+     * `picks` arrives muscle by muscle, each muscle's compound leading. A flat `k % len` therefore
+     * dealt EVERY muscle's leading compound to the same day: Upper A came out four-fifths barbell
+     * and Upper B came out one compound and four isolations — a heavy day and a scraps day, not two
+     * sessions. Nobody chose that; it fell out of the arithmetic.
+     *
+     * Dealing the compounds round-robin FIRST and the isolations round-robin after gives every day
+     * its share of the real work, and breaks the accidental single-equipment session on the way.
+     * Still deterministic, still catalogue-ordered inside each pass.
+     */
+    const compounds = picks.filter((id) => exerciseById(id)?.tier === 'compound');
+    const isolations = picks.filter((id) => exerciseById(id)?.tier !== 'compound');
+    compounds.forEach((exId, k) => dayExercises[regionIdxs[k % regionIdxs.length]].push(exId));
+    isolations.forEach((exId, k) => dayExercises[regionIdxs[k % regionIdxs.length]].push(exId));
   }
 
   // Hole guard: no workout may be EMPTY (a very sparse map at a high frequency — few muscles, many
@@ -208,5 +302,10 @@ export function assembleV5DayLists(
     if (donor && donor.length) dayExercises[i].push(donor[0]);
   }
 
-  return dayExercises.map((exerciseIds, i) => ({ name: names[i], region: regionDays[i], exerciseIds, setCounts }));
+  return dayExercises.map((exerciseIds, i) => ({
+    name: names[i],
+    region: regionDays[i],
+    exerciseIds: orderWithinDay(exerciseIds),
+    setCounts,
+  }));
 }

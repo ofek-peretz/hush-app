@@ -20,8 +20,8 @@ import { i18n } from '@/i18n';
 import { loadSetup } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { WatchSession } from '@/platform/watch/watchBridge';
-import type { WatchLobby, WatchPlanSnapshot } from '@/platform/watch/protocol';
-import { applyWatchSessionRecord } from '@/platform/watch/watchReconcile';
+import { isCardioRecordPayload, type WatchLobby, type WatchPlanSnapshot } from '@/platform/watch/protocol';
+import { applyWatchCardioRecord, applyWatchSessionRecord } from '@/platform/watch/watchReconcile';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
@@ -34,7 +34,9 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
 import { recordStructuralChangeV5, observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
-import { refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
+import { refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
+import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
+import { sessionKcal } from '@/domain/energy';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -183,6 +185,15 @@ export interface CompleteResult {
   summary?: SessionSummary;
   /** The athlete left without logging a single set: NOT a workout — nothing was saved or counted. */
   notStarted?: boolean;
+  /**
+   * THE SIGNATURE MOMENT, handed back to the caller. Loop 1 also publishes this on `correction`
+   * (consumed by the rest card's eased-load pill), but the phone's "Set logged" beat needs it
+   * SYNCHRONOUSLY — at the instant the set writes — to reveal the correction on the logged moment
+   * itself (mock 2.3), before releasing to rest. Present only when the set just logged moved the
+   * next one; null/absent otherwise, and always absent on the set that ends the session (the last
+   * set has no next set to correct).
+   */
+  correction?: LiveCorrection | null;
 }
 
 /** What the SessionFlow renders underneath any overlay. */
@@ -329,6 +340,18 @@ export interface LiveCorrection {
 
 const Ctx = createContext<SessionView | null>(null);
 
+/** Raw context — WEB PREVIEW GALLERY only (see `AppContext` in appStore for the why). */
+export const SessionContext = Ctx;
+
+/** Wall-clock ms from a saved session's start to its last logged set — the same span every other
+ *  surface prices its calories over. */
+function sessionDurationMs(s: Session): number {
+  const start = Date.parse(s.startedAt);
+  let end = start;
+  for (const l of s.sets) if (l.persistedAt) end = Math.max(end, Date.parse(l.persistedAt));
+  return Math.max(0, end - start);
+}
+
 function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
   const find = (exerciseId: string, setIndex: number): SetTarget => {
     const t = targets.find((x) => x.exerciseId === exerciseId && x.setIndex === setIndex);
@@ -406,6 +429,9 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
       globalIndex: st.globalIndex,
       targetWeight: st.target.recommendedWeight,
       targetReps: st.target.recommendedReps,
+      // The rep BAND's ceiling — the wrist draws the same 8–10 rule the phone does (WT2).
+      // The floor is `targetReps` (== repBandLo); only the ceiling needs carrying.
+      repBandHi: st.target.repBandHi,
       reasonType: st.target.reasonType,
       reasonDelta: st.target.reasonDelta,
       swapOptions,
@@ -495,6 +521,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // reconcile whenever the phone comes back, not only around live sessions.
   useEffect(() => {
     return watchTransport.onSessionRecord((raw) => {
+      // ONE durable channel, TWO record types, told apart by the `type` inside the payload — the
+      // wrist's runs ride the same transferUserInfo, the same at-least-once delivery and the same
+      // ack as its workouts (founder 2026-07-28), so nothing new had to be trusted.
+      if (isCardioRecordPayload(raw)) {
+        void applyWatchCardioRecord(raw, {
+          loadCardio: () => db.loadCardio(),
+          appendCardioActivity: (a) => db.appendCardioActivity(a),
+          track: (type, data) => void track(type, data),
+          ack: (id) => watchTransport.ackRecord(id),
+        });
+        return;
+      }
       void applyWatchSessionRecord(raw, {
         loadHistory: () => db.loadHistory(),
         appendCompletedSession: (s) => db.appendCompletedSession(s),
@@ -583,6 +621,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // "+15 sec" from a watch Rest screen — extends the running rest (the phone is the
   // authority; the longer rest re-publishes to every surface).
   const watchAddRestRef = useRef<(seconds: number) => void>(() => {});
+  const watchPainRef = useRef<(area: string, severity: string) => void>(() => {});
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
   // never closes over stale actions. Transport is a no-op until the watchOS target
   // exists — all authority/validation/telemetry runs regardless.
@@ -599,6 +638,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       startWorkout: (workoutId) => watchStartRef.current(workoutId),
       selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
       addRest: (seconds) => watchAddRestRef.current(seconds),
+      // WT14 · What's off. The wrist flags a body area; the phone owns what a pain flag DOES.
+      // This key was MISSING — the bridge's `this.d.reportPain?.(area)` evaluated to undefined and
+      // the athlete's report died in silence, with every other layer of the chain correct.
+      reportPain: (area, severity) => watchPainRef.current(area, severity),
     });
   }
 
@@ -614,6 +657,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       machine,
       // Per-tier: the mirror's REST_INTER duration belongs to the CURRENT exercise.
       restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
+      // WT5 — whether that number is HER median or the tier bootstrap. The wrist says "your pace"
+      // only when it is hers; a claim on a lift she has never rested through would be false.
+      restIsLearned: restIsLearnedFor(plan[machine.setIndex]?.exerciseId),
       restTransitionS: restTransitionSeconds(), // S-17 — her learned transition, one registry
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
@@ -740,7 +786,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // set performed — but the workout STAYS on the week's list, so one exercise out of six never
       // costs the athlete the session.
       // A COMPLETED SESSION is a completed WORKOUT — so only a trained one advances the count.
-      // The count gates the free trial (7 sessions) and calibration: a partial that leaves the
+      // The count gates the free trial (14 sessions) and calibration: a partial that leaves the
       // workout open must not burn a free session, or an athlete who finishes that same workout
       // in a second visit would pay twice for one workout.
       const { unlockedPortrait } = trained
@@ -849,6 +895,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         completedSets: saved.sets.length,
         loggedSets: saved.sets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
         progressedLifts: progressedLiftCount(plan, saved.sets),
+        // ONE NUMBER PER WORKOUT — the phone is the authority here, so the phone's figure crosses
+        // to the wrist and the wrist stops printing its own HealthKit reading beside it.
+        kcal: sessionKcal(saved, sessionDurationMs(saved), app.profile?.weightKg),
         milestone,
       });
       if (completeMirror) watchRef.current?.publish(completeMirror);
@@ -1159,18 +1208,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         //
         // The `else` is not tidiness: without it, a correction on set 2 would still be on screen
         // during the rest after set 3, claiming news about a set that decided nothing.
+        let liveCorrection: LiveCorrection | null = null;
         if (l1.corrected && setLog.actualWeight != null && l1.nextLoad != null && (l1.direction === 'up' || l1.direction === 'down')) {
-          setCorrection({
+          liveCorrection = {
             exerciseId: current.exerciseId,
             direction: l1.direction,
             from: setLog.actualWeight,
             to: l1.nextLoad,
             reps: setLog.actualReps,
             band: [current.target.repBandLo ?? 8, current.target.repBandHi ?? 10],
-          });
-        } else {
-          setCorrection(null);
+          };
         }
+        setCorrection(liveCorrection);
         if (l1.corrected) {
           loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
           void track('loop1_correction', { sessionId: session.id, exerciseId: current.exerciseId, direction: l1.direction, from: setLog.actualWeight, to: l1.nextLoad });
@@ -1187,7 +1236,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (m.phase === 'SESSION_SAVED') {
           return finalize(false);
         }
-        return { ended: false, unlockedPortrait: false };
+        return { ended: false, unlockedPortrait: false, correction: liveCorrection };
         } finally {
           completingRef.current = false;
         }
@@ -1336,6 +1385,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!exerciseId) return;
     if (view.displayPhase === 'REST_TRANSITION') view.swapNextExercise(exerciseId);
     else view.swapCurrentExercise(exerciseId);
+  };
+  // WT14 → the SAME pain report a phone tap makes (§13.2), from the wrist's word. The wrist names a
+  // joint and the map knows only muscles, so `musclesForWristArea` joins the two vocabularies; an
+  // area it does not know rests NOTHING (the engine never rests a muscle she did not name). The
+  // severity is the mildest of the three, because the wrist never asked her (WRIST_REPORT_SEVERITY).
+  watchPainRef.current = (area, severity) => {
+    const sharpness = asPainSeverity(severity);
+    if (!sharpness) return; // she never answered — the engine may not choose a window for her
+    for (const muscle of musclesForWristArea(area)) void app.reportPain(muscle, sharpness);
   };
 
   return <Ctx.Provider value={view}>{children}</Ctx.Provider>;

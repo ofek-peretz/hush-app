@@ -54,8 +54,15 @@ enum Palette {
   static let onAccent = Color(red: 0.075, green: 0.071, blue: 0.063)
   static let up = Color(red: 0.663, green: 0.769, blue: 0.624) // moss on stage #a9c49f (increase)
   static let upWash = Color(.sRGB, red: 0.663, green: 0.769, blue: 0.624, opacity: 0.12) // faint moss veil
-  static let down = Color(red: 0.816, green: 0.502, blue: 0.392) // clay on stage #d08064 (decrease)
-  static let downWash = Color(.sRGB, red: 0.773, green: 0.416, blue: 0.306, opacity: 0.12) // faint clay veil
+  /// A FALL IS NOT A FAILURE — and it is BLUE (founder 2026-07-28, mirrored to the wrist
+  /// 2026-07-29). It was clay #d08064 here long after the phone had moved: next to moss, on a dark
+  /// ground, clay reads as the red half of a red/green pair, i.e. as a mistake. An eased load is
+  /// Loop 1 matching the weight to the body that showed up. Phone token: `down.stage` #7eb2d6.
+  static let down = Color(red: 0.494, green: 0.698, blue: 0.839) // lit blue on stage #7eb2d6 (decrease)
+  static let downWash = Color(.sRGB, red: 0.494, green: 0.698, blue: 0.839, opacity: 0.14) // faint blue veil
+  /// Deeper clay #c56a4e — the ALERT / destructive signal: the filled End-workout button and the
+  /// "something feels off" outline. Distinct from `down` (#d08064), which only marks a load DECREASE.
+  static let clay = Color(red: 0.773, green: 0.416, blue: 0.306)
 }
 
 private enum EditField { case weight, reps }
@@ -70,6 +77,25 @@ private func fmtTime(_ s: Double) -> String {
   // Above the hour the honest mark is h:mm:ss — "90:00" reads as a broken clock.
   if t >= 3600 { return "\(t / 3600):" + String(format: "%02d:%02d", (t % 3600) / 60, t % 60) }
   return "\(t / 60):" + String(format: "%02d", t % 60)
+}
+
+/// Whole minutes from the phone's "m:ss" (or "h:mm:ss") duration label — the WT6 MIN metric shows
+/// "52", not "52:11". The phone owns the only time datum (`timeLabel`); the wrist reads its minutes
+/// off it rather than carrying a second field.
+private func minutesLabel(_ label: String) -> String {
+  let parts = label.split(separator: ":").map { Int($0) ?? 0 }
+  switch parts.count {
+  case 3: return "\(parts[0] * 60 + parts[1])"
+  case 2: return "\(parts[0])"
+  default: return label
+  }
+}
+
+/// Session tonnage (tonnes, 1 dp) from the phone's Σ kg — the WT6 T metric ("11.7"). A dash for a
+/// session that moved no external load (bodyweight only), never a modelled 0.0.
+private func fmtTonnes(_ kg: Double?) -> String {
+  guard let kg, kg > 0 else { return "––" }
+  return String(format: "%.1f", kg / 1000)
 }
 
 /// Compact equipment-native setup line (kg) for the wrist — so the athlete never does mental math
@@ -205,7 +231,7 @@ private struct TopStrip: View {
 /// (secondary but visibly a button); danger = clay (the irreversible act inside the end
 /// guard); ghost = bare.
 struct StageButton: View {
-  enum Kind { case primary, onstage, quiet, danger, ghost }
+  enum Kind { case primary, moss, onstage, quiet, danger, ghost }
   let title: String
   var kind: Kind = .primary
   var height: CGFloat = 44
@@ -225,18 +251,22 @@ struct StageButton: View {
   private var fg: Color {
     switch kind {
     case .primary: return Palette.onAccent
+    case .moss: return Palette.onAccent // dark ink on the moss fill (mock #131210)
     case .onstage: return Palette.stage0
     case .quiet: return Palette.ink0
-    case .danger: return Palette.ink0
+    case .danger: return Palette.onAccent // dark ink on the clay fill (mock #131210)
     case .ghost: return Palette.ink1
     }
   }
   private var bg: Color {
     switch kind {
     case .primary: return Palette.signalFill // the only ochre a letter sits on
+    // The gentle-confirm fill (mock #a9c49f): "Start" (calibration), "Done" (edit), "Resume"
+    // (paused / engine-responds). Distinct from the cream primary that ADVANCES the work.
+    case .moss: return Palette.signal
     case .onstage: return Palette.ink0
     case .quiet: return Palette.stage1
-    case .danger: return Palette.down
+    case .danger: return Palette.clay // the deeper alert clay (mock #c56a4e)
     case .ghost: return .clear
     }
   }
@@ -312,7 +342,9 @@ private struct CorrectionNote: View {
         Text("→").font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink2)
         Text(fmtW(c.to))
           .font(.system(size: 17, weight: .semibold, design: .monospaced)).monospacedDigit()
-          .foregroundStyle(Palette.lift)
+          // The engine's new load, IN THE DIRECTION IT MOVED. It was moss either way — so the wrist
+          // announced an ease in the colour of a raise (founder 2026-07-29, phone parity).
+          .foregroundStyle(up ? Palette.up : Palette.down)
         Text(WatchCopy.kg).font(.system(size: 9, design: .monospaced)).foregroundStyle(Palette.ink2)
       }
       // The reason, under the number it earned — never apart from it (phone parity).
@@ -338,6 +370,24 @@ private struct DrawCheck: View {
   var size: CGFloat = 22
   var body: some View {
     Image(systemName: "checkmark").font(.system(size: size, weight: .bold)).foregroundStyle(Palette.up)
+  }
+}
+
+/// WT6's seal — the tally mark from the mock: a moss horizontal rule with a short upstroke at each
+/// end (the "closed" counting mark). Not a check: a check says "correct"; this says "counted, and
+/// filed." Drawn from three rects so it scales cleanly on either case.
+private struct TallyMark: View {
+  var body: some View {
+    ZStack {
+      Rectangle().fill(Palette.signal).frame(width: 30, height: 1.5) // the rule
+      HStack(spacing: 0) {
+        Rectangle().fill(Palette.signal).frame(width: 1.5, height: 10)
+        Spacer(minLength: 0)
+        Rectangle().fill(Palette.signal).frame(width: 1.5, height: 10)
+      }
+      .frame(width: 30, height: 12)
+    }
+    .frame(width: 30, height: 12)
   }
 }
 
@@ -374,6 +424,10 @@ private struct RestRing: View {
   let diameter: CGFloat
   /// The label under the time while counting (design: "REST" inter-set, "NEXT" on transition).
   var restingLabel: String = "REST"
+  /// The running arc's colour when this rest FOLLOWS a load the engine moved (founder 2026-07-29:
+  /// the ring is blue behind an eased load, on the phone and on the wrist alike). Default = the
+  /// ordinary rest, and the arc keeps the moss accent it has always had.
+  var arc: Color = Palette.signal
 
   /// Active blend after the end moved: fill from `from` starting at `at`.
   @State private var blend: (from: Double, at: Date)? = nil
@@ -393,7 +447,7 @@ private struct RestRing: View {
       ZStack {
         Circle().stroke(Palette.stage2, lineWidth: stroke)
         Circle().trim(from: 0, to: frac)
-          .stroke(Palette.signal, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+          .stroke(arc, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
           .rotationEffect(.degrees(-90))
         VStack(spacing: 1) {
           Text(fmtTime(remaining))
@@ -505,10 +559,7 @@ private struct ControlsScreen: View {
 
   var body: some View {
     if confirmingEnd {
-      EndConfirmScreen(
-        title: WatchCopy.endConfirmTitle, confirmTitle: WatchCopy.endAndSave, lift: lift,
-        onConfirm: onEnd, onKeep: { confirmingEnd = false }
-      )
+      EndConfirmScreen(lift: lift, onConfirm: onEnd, onKeep: { confirmingEnd = false })
       .onChange(of: onPage) { _, on in if !on { confirmingEnd = false } }
     } else {
       VStack(alignment: .leading, spacing: 0) {
@@ -546,25 +597,104 @@ private struct ControlsScreen: View {
   }
 }
 
-/// The gatekeeper before an irreversible end. "Keep going" takes the primary mark and the
-/// position the finger already knows; the end action is a deliberate clay button below it.
+/// WT13c · GLANCE — swipe the OTHER way from the set (founder 2026-07-28: "one side pauses, the
+/// other side glances").
+///
+/// The pager used to have two pages, so the only thing beside the stage was the way to STOP. A
+/// runner's watch answers "how am I doing" without asking anything of them, and this is the wrist's
+/// version: her heart and her burn (the OS supplies both) beside the only two figures about her own
+/// LIFTING — the weight she has actually moved and the sets she has actually logged. Both ride the
+/// mirror as `liveVolumeKg` / `liveSets`; nothing here computes, and nothing here is a verdict.
+///
+/// There is no button. The way out is the swipe she came in on, and the foot of the screen says so.
+private struct GlanceScreen: View {
+  @ObservedObject var metrics: LiveMetrics
+  let workoutName: String?
+  let volumeKg: Double?
+  let sets: Int?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      VStack(alignment: .leading, spacing: 2) {
+        Legend(workoutName.map { "\(WatchCopy.nowLegend) · \($0.uppercased())" } ?? WatchCopy.nowLegend)
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+          Text(elapsedText)
+            .font(.system(size: Fit.s(22), weight: .semibold, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.ink0)
+        }
+      }
+      Spacer(minLength: 4)
+      TimelineView(.periodic(from: .now, by: 1)) { _ in
+        VStack(alignment: .leading, spacing: 7) {
+          HStack(spacing: 6) {
+            Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
+            Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
+          }
+          // Her own work — the half of a glance no wearable gives her, because only Hush knows it.
+          if let kg = volumeKg, let n = sets, n > 0 {
+            HStack(spacing: 5) {
+              Text(fmtKg(kg))
+                .font(.system(size: Fit.s(16), weight: .medium, design: .monospaced)).monospacedDigit()
+                .foregroundStyle(Palette.ink0)
+              Text("\(WatchCopy.metricKgSets) · \(n)")
+                .font(.system(size: 8, design: .monospaced)).tracking(0.4)
+                .foregroundStyle(Palette.ink2)
+            }
+          }
+        }
+      }
+      Spacer(minLength: 4)
+      Text(WatchCopy.backToYourSet)
+        .font(.system(size: 9.5)).foregroundStyle(Palette.ink2)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+    .padding(.horizontal, 10).padding(.bottom, 6)
+    .stageFill()
+  }
+
+  private var elapsedText: String {
+    guard let s = metrics.elapsed() else { return "–:––" }
+    return fmtTime(s)
+  }
+
+  /// Whole kilos with a thousands separator — "3,140". A gram on a glance is noise.
+  private func fmtKg(_ kg: Double) -> String {
+    let f = NumberFormatter()
+    f.numberStyle = .decimal
+    f.maximumFractionDigits = 0
+    return f.string(from: NSNumber(value: kg)) ?? "\(Int(kg))"
+  }
+}
+
+/// WT13b · END? — the gatekeeper before an irreversible end. The mock centres a serif question
+/// and a one-line reassurance ("Saved as-is at this point."), then makes "End workout" the clay
+/// PRIMARY (you already tapped End to arrive here) with "Keep going" the outlined way back.
 private struct EndConfirmScreen: View {
-  let title: String
-  let confirmTitle: String
+  var title: String = WatchCopy.endConfirmTitle
   var lift: (i: Int, n: Int)? = nil
   let onConfirm: () -> Void
   let onKeep: () -> Void
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
+    VStack(spacing: 0) {
       TopStrip(lift: lift)
       Spacer(minLength: 4)
-      Text(title)
-        .font(.system(size: Fit.s(22), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(2).minimumScaleFactor(0.8)
+      VStack(spacing: 6) {
+        Text(title)
+          .font(.system(size: Fit.s(20), design: .serif)).foregroundStyle(Palette.ink0)
+          .multilineTextAlignment(.center).lineSpacing(1)
+          .fixedSize(horizontal: false, vertical: true)
+        Text(WatchCopy.endConfirmSub)
+          .font(.system(size: 10)).foregroundStyle(Palette.ink2)
+          .multilineTextAlignment(.center)
+      }
+      .frame(maxWidth: .infinity)
       Spacer(minLength: 8)
       VStack(spacing: 6) {
-        StageButton(title: WatchCopy.keepGoing, kind: .primary, height: 46, fontSize: 16, action: onKeep)
-        StageButton(title: confirmTitle, kind: .danger, height: 40, fontSize: 14, action: onConfirm)
+        // Clay FILL, stage ink — the irreversible act, now the primary (the guard was the earlier tap).
+        StageButton(title: WatchCopy.endWorkout, kind: .danger, height: 42, fontSize: 15, action: onConfirm)
+        OutlineButton(title: WatchCopy.keepGoing, tint: Palette.ink1,
+                      border: Palette.ink0.opacity(0.2), height: 34, fontSize: 12, action: onKeep)
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
@@ -587,10 +717,16 @@ private struct ExecutionPager<Content: View>: View {
   var lift: (i: Int, n: Int)? = nil
   let onPause: () -> Void
   let onEnd: () -> Void
+  /// WT13c's two live figures about her own lifting, carried from the mirror.
+  var liveVolumeKg: Double? = nil
+  var liveSets: Int? = nil
   @ViewBuilder let content: () -> Content
   @State private var page = 1
 
   var body: some View {
+    // THREE pages, the Apple Workout idiom exactly: stop on one side, glance on the other, and the
+    // work in the middle. It was two — the only thing beside the stage was the way to END, so a
+    // swipe the "wrong" way found nothing at all (founder 2026-07-28).
     TabView(selection: $page) {
       ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPage: page == 0,
                      onPause: onPause, onEnd: onEnd).tag(0)
@@ -599,6 +735,8 @@ private struct ExecutionPager<Content: View>: View {
       content()
         .environment(\.goControls, { withAnimation { page = 0 } })
         .tag(1)
+      GlanceScreen(metrics: metrics, workoutName: workoutName, volumeKg: liveVolumeKg, sets: liveSets)
+        .tag(2)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
   }
@@ -643,7 +781,8 @@ struct WatchRootView: View {
     case let .activeSet(m, draft):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
+                     onPause: model.pause, onEnd: model.endWorkout,
+                     liveVolumeKg: m.liveVolumeKg, liveSets: m.liveSets) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
                         onComplete: model.completeSet,
                         onSwap: { model.swapCurrent($0, replacing: m.exerciseName) },
@@ -653,22 +792,24 @@ struct WatchRootView: View {
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
+                     onPause: model.pause, onEnd: model.endWorkout,
+                     liveVolumeKg: m.liveVolumeKg, liveSets: m.liveSets) {
         InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
       }
     case let .transitionRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: (m.liftIndex ?? 1) + 1, n: m.liftCount ?? 1),
-                     onPause: model.pause, onEnd: model.endWorkout) {
+                     onPause: model.pause, onEnd: model.endWorkout,
+                     liveVolumeKg: m.liveVolumeKg, liveSets: m.liveSets) {
         TransitionRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest,
                              onSwap: { model.swapNext($0, replacing: m.nextExerciseName ?? "") },
                              undo: model.nextUndo,
                              onUndo: model.undoSwap)
       }
     case .paused:
-      PausedScreen(onResume: model.resume, onEnd: model.endWorkout)
+      PausedScreen(onResume: model.resume, onEnd: model.endWorkout, onReportPain: model.reportPain)
     case let .cardio(gait, paused):
-      CardioPager(gait: gait, paused: paused, metrics: model.liveMetrics,
+      CardioPager(gait: gait, paused: paused, metrics: model.liveMetrics, split: model.kmSplit,
                   elapsed: model.cardioElapsed,
                   onPauseToggle: model.toggleCardioPause, onEnd: model.endCardio)
     case let .cardioComplete(summary):
@@ -685,73 +826,172 @@ struct StartScreen: View {
   let onSelect: (String) -> Void
   let onCardio: (String) -> Void
   @State private var showList = false
+  @State private var showCardio = false
   private var resting: Bool { lobby.resting == true }
   /// Behind the paywall: the wrist neither starts a workout nor runs one standalone — the
   /// purchase belongs to the phone, so the stage says so plainly instead of offering a
   /// Begin button that could never work.
   private var gated: Bool { lobby.gated == true }
+  /// WT7 · THE FIRST FOUR — she has never completed a workout. The lobby's ordinary face reports on
+  /// a WEEK and compares to a history, and on day one both are empty, so every figure it would show
+  /// is a claim about nothing. This face says the one true thing instead: what the engine is about
+  /// to do, and what it needs from her to do it.
+  private var firstTime: Bool { lobby.firstWorkout == true && !resting && !gated }
 
   var body: some View {
+    if firstTime { firstWorkoutFace } else { lobbyFace }
+  }
+
+  /// WT7. No name, no lift count, no minutes — none of them mean anything before the first set. The
+  /// serif states the intent ("Let's find your weights."), one quiet line asks for the only thing
+  /// Hush needs (honest effort, because Loop 1 reads her reps from set 1), and Start is the single
+  /// way forward. "Another" and "Cardio" stay away: choosing between workouts she has never done is
+  /// a decision with no information behind it.
+  private var firstWorkoutFace: some View {
     VStack(alignment: .leading, spacing: 0) {
       TopStrip()
-      // The whole text unit sits at the TOP (NEXT WORKOUT ~level with the clock),
-      // so the muscle line no longer hugs the Begin button — a Spacer opens the gap.
+      VStack(alignment: .leading, spacing: 7) {
+        Legend(WatchCopy.firstWorkout)
+        Text(WatchCopy.findYourWeights)
+          .font(.system(size: Fit.s(24), design: .serif)).foregroundStyle(Palette.ink0)
+          .lineSpacing(1).fixedSize(horizontal: false, vertical: true)
+        Text(WatchCopy.liftTillHonest)
+          .font(.system(size: 11)).foregroundStyle(Palette.ink2)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.top, 2)
+      Spacer(minLength: 8)
+      BeginButton(title: WatchCopy.start, action: onBegin)
+    }
+    .padding(.horizontal, 12).padding(.bottom, 8)
+    .stageFill()
+  }
+
+  private var lobbyFace: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      TopStrip()
+      // WT1 · TODAY (mock line 1457): the "UP NEXT" legend, the workout name in the coach's serif,
+      // and a compact "N LIFTS · ~MIN" mono line. (The mock's weekday chip sits where the OS clock
+      // lives — that top-right corner is the platform's, so it is left to the system clock.)
       VStack(alignment: .leading, spacing: 6) {
-        Legend(WatchCopy.nextWorkout)
+        Legend(WatchCopy.upNext)
         Text(resting ? "Recovery" : lobby.workoutName)
-          .font(.system(size: Fit.s(26), weight: .semibold)).foregroundStyle(Palette.ink0).lineLimit(2)
+          .font(.system(size: Fit.s(28), design: .serif)).foregroundStyle(Palette.ink0).lineLimit(2)
         if gated {
           Text(WatchCopy.membershipNeeded).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(3)
         } else if resting {
           Text(WatchCopy.recovery).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(3)
         } else {
-          HStack(spacing: 6) {
-            if let n = lobby.lifts {
-              Text(WatchCopy.lifts(n)).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink1)
-            }
-            if let d = lobby.durationLabel {
-              Text("·").foregroundStyle(Palette.stage2)
-              Text(d).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink1)
-            }
-          }
-          Text(lobby.muscles).font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(2)
+          Text(metaLine)
+            .font(.system(size: 10, weight: .medium, design: .monospaced)).tracking(0.6)
+            .foregroundStyle(Palette.ink1).lineLimit(1).minimumScaleFactor(0.8)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.top, 2)
       Spacer(minLength: 8)
-      // TWO BUTTONS, ONE PAIR (founder 2026-07-12: "shrink Begin's padding and balance it with
-      // Choose workout — right now Choose workout is completely swallowed"). Begin was 50pt and
-      // 18pt type against a 36pt / 14pt tile, which is not a hierarchy, it is one button and a
-      // rumour: on a 41mm case the chooser was pushed off the bottom of the screen entirely.
-      // Begin stays the primary — it is ochre and it is first — but it no longer eats the stage
-      // to say so, and both targets now fit, whole, on the smallest wrist we support.
+      // The mock's button stack: Begin (cream primary) over a split row — "Another" (reshuffle to
+      // the choose-workout list, WT1b) and "Cardio" (run/walk). Open training is never gated.
       VStack(spacing: 6) {
         if !resting && !gated {
-          StageButton(title: WatchCopy.begin, kind: .primary, height: 44, fontSize: 17, action: onBegin)
+          BeginButton(action: onBegin)
         }
-        // Open training (run / walk) is never gated — it is recorded, never coached — so the
-        // chooser stays reachable even behind the paywall.
-        StageButton(title: WatchCopy.chooseWorkout, kind: .quiet, height: 40, fontSize: 15) { showList = true }
+        HStack(spacing: 6) {
+          OutlineButton(title: WatchCopy.another, systemImage: "arrow.left.arrow.right", tint: Palette.ink1, border: Palette.ink0.opacity(0.2)) { showList = true }
+          OutlineButton(title: WatchCopy.cardio, systemImage: "waveform.path.ecg", tint: Palette.signal, border: Palette.signal.opacity(0.4)) { showCardio = true }
+        }
       }
     }
     .padding(.horizontal, 10).padding(.bottom, 8)
     .sheet(isPresented: $showList) {
       ChooseOverlay(
         lobby: lobby,
-        onSelect: { id in onSelect(id); showList = false },
-        onCardio: { gait in onCardio(gait); showList = false }
+        onSelect: { id in onSelect(id); showList = false }
       )
     }
+    .sheet(isPresented: $showCardio) {
+      CardioPicker(onCardio: { gait in onCardio(gait); showCardio = false })
+    }
+  }
+
+  /// "6 LIFTS · ~55 MIN" — the mock's mono meta line (uppercased; the duration keeps its ~).
+  private var metaLine: String {
+    var parts: [String] = []
+    if let n = lobby.lifts { parts.append("\(n) \(WatchCopy.liftsWord)") }
+    if let d = lobby.durationLabel { parts.append(d.uppercased()) }
+    return parts.joined(separator: " · ")
+  }
+}
+
+/// The cream primary "Begin" with a play glyph (mock line 1458).
+private struct BeginButton: View {
+  /// WT7 says "Start" where WT1 says "Begin" — the same act, named for the moment it is in.
+  var title: String = WatchCopy.begin
+  let action: () -> Void
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 6) {
+        Image(systemName: "play.fill").font(.system(size: 12))
+        Text(title).font(.system(size: 15, weight: .semibold))
+      }
+      .frame(maxWidth: .infinity).frame(height: Fit.s(44))
+      .foregroundStyle(Palette.onAccent)
+      .background(Palette.signalFill)
+      .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+/// An outline (stage-ground) button with a leading glyph — the "Another" / "Cardio" split row.
+private struct OutlineButton: View {
+  let title: String
+  var systemImage: String? = nil
+  let tint: Color
+  let border: Color
+  var height: CGFloat = 38
+  var fontSize: CGFloat = 11
+  let action: () -> Void
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 5) {
+        if let systemImage { Image(systemName: systemImage).font(.system(size: 12)) }
+        Text(title).font(.system(size: fontSize, weight: .semibold))
+      }
+      .frame(maxWidth: .infinity).frame(height: Fit.s(height))
+      .foregroundStyle(tint)
+      .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(border, lineWidth: 1))
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+/// CR1 · READY — the "Cardio" sheet: the two honest recordings (run / walk), never coached.
+private struct CardioPicker: View {
+  let onCardio: (String) -> Void
+  var body: some View {
+    List {
+      ForEach(["run", "walk"], id: \.self) { gait in
+        Button { onCardio(gait) } label: {
+          HStack(spacing: 8) {
+            Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
+              .font(.system(size: 15)).foregroundStyle(Palette.signal)
+            Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
+              .font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
+          }
+        }
+        .listRowBackground(RoundedRectangle(cornerRadius: 10).fill(Palette.stage1))
+      }
+    }
+    .listStyle(.carousel)
+    .background(Palette.stage0)
   }
 }
 
 struct ChooseOverlay: View {
   let lobby: WireLobby
   let onSelect: (String) -> Void
-  /// Run / walk on the wrist (founder 2026-07-10): recorded via the OS workout
-  /// runtime straight to Health — never coached, never engine state.
-  let onCardio: (String) -> Void
   var body: some View {
     // Unfinished work leads (founder 2026-07-12): a DONE workout is a record, not an offer —
     // it reads at the tail, after everything still trainable. Order within each group is
@@ -788,22 +1028,6 @@ struct ChooseOverlay: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(w.id == lobby.workoutId && !done ? Palette.signal : .clear, lineWidth: 2))
         )
       }
-      // Open training — the same two honest recordings the phone offers.
-      Section {
-        ForEach(["run", "walk"], id: \.self) { gait in
-          Button { onCardio(gait) } label: {
-            HStack(spacing: 8) {
-              Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
-                .font(.system(size: 15)).foregroundStyle(Palette.signal)
-              Text(gait == "run" ? WatchCopy.run : WatchCopy.walk)
-                .font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
-            }
-          }
-          .listRowBackground(RoundedRectangle(cornerRadius: 10).fill(Palette.stage1))
-        }
-      } header: {
-        Legend(WatchCopy.openTraining, size: 9)
-      }
     }
     .listStyle(.carousel)
     .background(Palette.stage0)
@@ -835,19 +1059,17 @@ struct ActiveSetScreen: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      // No swipe hint while EDITING: the crown owns the screen, and the pager's horizontal
-      // swipe is already suppressed by focus — an affordance that does nothing is a lie.
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: !editing)
-      header
+      // WT2 header: the muscle + set position on the left, set-dots on the right — the two
+      // progress signals the mock carries in one row (the OS clock owns the top-right corner).
+      // In Edit (WT9) the whole header collapses to a single centred "EDIT SET" legend.
+      if editing {
+        Legend(WatchCopy.editSet, size: 10).frame(maxWidth: .infinity).padding(.top, 2)
+      } else {
+        header
+      }
       Spacer(minLength: 2)
       if editing { editor } else { readout }
       Spacer(minLength: 2)
-      // Set progress is EXPLICIT TEXT only (founder: on the wrist, prefer unambiguous clarity over a
-      // decorative indicator; the dots duplicated this exact information and cost space on the
-      // smallest case). "Set n of m" + the top strip's "LIFT i/n" are the two progress signals.
-      if !editing {
-        Text(mirror.setLabel).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
-      }
       footer
     }
     .padding(.horizontal, 8).padding(.bottom, 6)
@@ -866,69 +1088,78 @@ struct ActiveSetScreen: View {
     .onChange(of: field) { _, f in crown = f == .weight ? w : r }
   }
 
+  /// WT2 header (mock line 1476): "CHEST · 2/4" (muscle + set position) leading, the set-dots
+  /// trailing. Per the founder's supreme ruling the mock is authoritative — the exercise name and
+  /// the swap glyph the previous build carried here are not in the WT2 image, so they are dropped.
   private var header: some View {
-    // Muscle group intentionally omitted (founder: drop CHEST/BACK everywhere to
-    // open the small screen) — just the exercise name + the swap affordance.
-    // Swap is ONE TAP (founder 2026-07-10, phone parity): Hush already picked the
-    // best replacement (options[0], phone-ranked) — apply it immediately, no picker.
-    HStack(spacing: 4) {
-      Text(mirror.exerciseName).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(1).minimumScaleFactor(0.75) // long names shrink before truncating
-      if !editing {
-        if undo != nil {
-          // The 6 s after a one-tap swap carry the way back (founder 2026-07-12).
-          SwapUndoChip(action: onUndo)
-        } else if let best = swaps.first {
-          // One tap swaps IMMEDIATELY, so the target must be honest: a full-size
-          // hit area around the small glyph (founder 2026-07-12 — it was 13 pt bare).
-          Button { onSwap(best.id) } label: {
-            Image(systemName: "repeat").font(.system(size: 13))
-              .foregroundStyle(Palette.ink2)
-              .frame(width: 44, height: 28)
-              .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
+    HStack(spacing: 6) {
+      Text(headerLabel)
+        .font(.system(size: 10, weight: .medium, design: .monospaced))
+        .tracking(1.2) // ~.12em at 10 pt
+        .foregroundStyle(Palette.ink2)
+        .lineLimit(1).minimumScaleFactor(0.7)
+      Spacer(minLength: 4)
+      setDots
+    }
+    .padding(.top, 2)
+  }
+
+  /// "CHEST · 2/4" — the primary muscle group + the set's position in the exercise.
+  private var headerLabel: String {
+    let group = (mirror.exerciseGroup ?? "").uppercased()
+    let n = mirror.setNumber ?? 1
+    let m = mirror.setsInExercise ?? 1
+    return group.isEmpty ? "\(n)/\(m)" : "\(group) · \(n)/\(m)"
+  }
+
+  /// Set-dots: a 6 pt dot per set — completed sets filled moss, the current set a moss ring,
+  /// upcoming sets a faint cream ring (mock line 1476).
+  private var setDots: some View {
+    let m = max(mirror.setsInExercise ?? 1, 1)
+    let cur = mirror.setNumber ?? 1
+    return HStack(spacing: 4) {
+      ForEach(1...m, id: \.self) { i in
+        if i < cur {
+          Circle().fill(Palette.signal).frame(width: 6, height: 6)
+        } else if i == cur {
+          Circle().strokeBorder(Palette.signal, lineWidth: 1.4).frame(width: 6, height: 6)
+        } else {
+          Circle().strokeBorder(Palette.ink0.opacity(0.3), lineWidth: 1.4).frame(width: 6, height: 6)
         }
       }
     }
   }
 
-  /// LOADED hierarchy (canonical-first): LOAD (hero) → INSTRUCTION (what to do now) → REPS → Δ.
+  /// WT2 readout (mock line 1477): LOAD (48 pt hero) → "N kg a side" → dashed TAP-TO-EDIT hint →
+  /// the rep band as a moss ruler. Tapping the hero load opens Edit (WT9).
   ///
   /// BODYWEIGHT is the one exercise where the load is NOT the hero (founder 2026-07-11): an
   /// athlete on a pull-up knows they are lifting themselves — shouting "BW" tells them nothing.
   /// The number that carries the work, and the one Hush actually progresses on a bodyweight lift,
   /// is the REP COUNT. So reps take the hero mark and "bodyweight" drops to a quiet legend under
-  /// it. The block keeps the LOADED case's height (minHeight) so the top strip and the exercise
-  /// name never shift between a loaded lift and a bodyweight one.
-  /// The numbers themselves are the most natural way in to Edit (founder 2026-07-12):
-  /// tapping the load focuses the load, tapping the reps focuses the reps. The pencil
-  /// below stays as the discoverable route — same destination.
+  /// it. The block keeps the LOADED case's height (minHeight) so the header above never shifts
+  /// between a loaded lift and a bodyweight one.
   private var readout: some View {
     VStack(spacing: 6) {
       if let wt = shownWeight {
+        // Hero load (mock 48 pt mono) — tapping it is the way into Edit (WT9).
         Button { enterEdit(.weight) } label: {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(fmtW(wt)).font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
-            Text(WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text(fmtW(wt)).font(.system(size: Fit.s(48), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
+            Text(WatchCopy.kg).font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink2)
           }
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        instruction
-        HStack(spacing: 10) {
-          Button { enterEdit(.reps) } label: {
-            Text("× \(shownReps)").font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink1)
-              .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          if (mirror.loadDeltaKg ?? 0) != 0 { LoadDelta(deltaKg: mirror.loadDeltaKg ?? 0, fontSize: 10) }
-        }
+        perSideLine
+        tapToEditPill
+        repRuler
       } else {
+        // Bodyweight: the rep count is the hero (founder 2026-07-11); "Bodyweight" a quiet legend.
         Button { enterEdit(.reps) } label: {
           HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text("\(shownReps)").font(.system(size: Fit.s(42), weight: .semibold, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.ink0)
-            Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text("\(shownReps)").font(.system(size: Fit.s(48), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
+            Text(WatchCopy.reps).font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink2)
           }
           .contentShape(Rectangle())
         }
@@ -936,7 +1167,69 @@ struct ActiveSetScreen: View {
         Legend(WatchCopy.bodyweightQuiet, size: 10)
       }
     }
-    .frame(minHeight: Fit.s(92)) // one rhythm for both cases — the strip above never moves
+    .frame(minHeight: Fit.s(92)) // one rhythm for both cases — the header above never moves
+  }
+
+  /// "7 kg a side" — the per-side plate figure (mock line 1477); the mono figure in cream, the
+  /// preposition in a quieter sans. Only barbell/plate loads have a per-side; nothing otherwise.
+  @ViewBuilder private var perSideLine: some View {
+    if let ps = mirror.loadSetup?.perSide, ps > 0,
+       mirror.loadSetup?.style == "barbell" || mirror.loadSetup?.style == "plate_loaded" {
+      (Text("\(fmtW(ps)) \(WatchCopy.kg)").font(.system(size: 9.5, weight: .medium, design: .monospaced)).foregroundStyle(Palette.ink0)
+        + Text(" " + WatchCopy.aSide).font(.system(size: 9.5)).foregroundStyle(Palette.ink1))
+    }
+  }
+
+  /// The dashed "TAP WEIGHT TO EDIT" pill (mock line 1477) — a hint, not a button; the tap target
+  /// is the hero load above it.
+  private var tapToEditPill: some View {
+    HStack(spacing: 5) {
+      Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(Palette.ink2)
+      Text(WatchCopy.tapWeightToEdit.uppercased())
+        .font(.system(size: 7.5, weight: .medium, design: .monospaced)).tracking(0.9)
+        .foregroundStyle(Palette.ink2)
+    }
+    .padding(.vertical, 3).padding(.horizontal, 9)
+    .overlay(
+      Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
+        .foregroundStyle(Palette.ink0.opacity(0.22))
+    )
+  }
+
+  /// The rep band as a ruler (mock line 1477): a moss bar with two end caps, the floor + ceiling in
+  /// moss mono, "reps" between them. Collapses to a single centered count when there is no band.
+  @ViewBuilder private var repRuler: some View {
+    let lo = mirror.targetReps
+    let hi = mirror.targetRepsHi ?? lo
+    if hi > lo {
+      VStack(spacing: 1) {
+        ZStack {
+          Capsule().fill(Palette.ink0.opacity(0.16)).frame(height: 2)
+          HStack {
+            Capsule().fill(Palette.signal).frame(width: 2, height: 14)
+            Spacer()
+            Capsule().fill(Palette.signal).frame(width: 2, height: 14)
+          }
+          Capsule().fill(Palette.signal).frame(height: 3)
+        }
+        .frame(width: 122)
+        HStack(alignment: .top) {
+          Text("\(lo)").font(.system(size: 15, weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
+          Spacer()
+          Text(WatchCopy.reps).font(.system(size: 8.5)).foregroundStyle(Palette.ink2).padding(.top, 3)
+          Spacer()
+          Text("\(hi)").font(.system(size: 15, weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
+        }
+        .frame(width: 122)
+      }
+      .padding(.top, 4)
+    } else {
+      HStack(alignment: .firstTextBaseline, spacing: 4) {
+        Text("\(lo)").font(.system(size: 15, weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
+        Text(WatchCopy.reps).font(.system(size: 8.5)).foregroundStyle(Palette.ink2)
+      }
+      .padding(.top, 4)
+    }
   }
 
   /// The execution instruction, directly under the load. TO-LOAD = a bright imperative chip; once a
@@ -962,73 +1255,67 @@ struct ActiveSetScreen: View {
     }
   }
 
+  /// WT9 · EDIT SET (mock line 1531): the active value in a bordered pill (46 pt mono hero + unit),
+  /// the moss "TURN CROWN TO SET" instruction, and the OTHER value as a quiet bordered "N reps" pill
+  /// the athlete taps to move the crown onto. Bodyweight edits reps alone (no load pill at all).
   private var editor: some View {
-    VStack(spacing: 8) {
-      // Bodyweight has no load field to adjust, so it carries no load MARK either (founder
-      // 2026-07-11) — just a quiet legend where the kg would be, and the reps take the size.
+    VStack(spacing: 10) {
       if bodyweight {
-        Legend(WatchCopy.bodyweightQuiet, size: 10)
-        Button { field = .reps } label: {
-          HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text("\(Int(r))").font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
-            Text(WatchCopy.reps).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
-          }
-          .foregroundStyle(Palette.ink0)
-          .overlay(alignment: .bottom) { underline(true) }
-        }
-        .buttonStyle(.plain)
+        editPill(active: true, tap: { field = .reps }) { heroValue("\(Int(r))", WatchCopy.reps) }
+        crownHint
+      } else if field == .weight {
+        editPill(active: true, tap: { field = .weight }) { heroValue(fmtW(w), WatchCopy.kg) }
+        crownHint
+        editPill(active: false, tap: { field = .reps }) { quietValue(WatchCopy.repsCount(Int(r))) }
       } else {
-        Button { field = .weight } label: {
-          HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(fmtW(w)).font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
-            Text(" " + WatchCopy.kg).font(.system(size: 14, design: .monospaced)).foregroundStyle(Palette.ink2)
-          }
-          .foregroundStyle(field == .weight ? Palette.ink0 : Palette.ink2)
-          .overlay(alignment: .bottom) { underline(field == .weight) }
-        }
-        .buttonStyle(.plain)
-        Button { field = .reps } label: {
-          Text("× \(Int(r))").font(.system(size: 22, weight: .semibold, design: .monospaced))
-            .foregroundStyle(field == .reps ? Palette.ink0 : Palette.ink2)
-            .overlay(alignment: .bottom) { underline(field == .reps) }
-        }
-        .buttonStyle(.plain)
+        editPill(active: true, tap: { field = .reps }) { heroValue("\(Int(r))", WatchCopy.reps) }
+        crownHint
+        editPill(active: false, tap: { field = .weight }) { quietValue("\(fmtW(w)) \(WatchCopy.kg)") }
       }
-      // No −/+ buttons: the Digital Crown is the adjuster (whole steps), so the
-      // hint spans the full row and reads clearly instead of truncating to "CROWN TO AD…".
-      HStack(spacing: 5) {
-        Image(systemName: "digitalcrown.horizontal.press").font(.system(size: 12))
-        Text(WatchCopy.crownToAdjust).font(.system(size: 12, weight: .medium))
-      }
-      .foregroundStyle(Palette.signal)
-      .frame(maxWidth: .infinity, alignment: .center)
-      .padding(.top, 4)
     }
   }
 
-  private func underline(_ on: Bool) -> some View {
-    Rectangle().fill(on ? Palette.signal : .clear).frame(height: 2).offset(y: 3)
+  /// The bordered rounded pill that holds an edit value (mock line 1531 — border cream .16).
+  private func editPill(active: Bool, tap: @escaping () -> Void, @ViewBuilder _ content: () -> some View) -> some View {
+    Button(action: tap) {
+      content()
+        .padding(.vertical, active ? 5 : 4).padding(.horizontal, active ? 14 : 12)
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Palette.ink0.opacity(0.16), lineWidth: 1))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+  }
+
+  /// The active pill's content: the 46 pt mono hero + its quiet unit (mock line 1531).
+  private func heroValue(_ value: String, _ unit: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 5) {
+      Text(value).font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit()
+        .foregroundStyle(Palette.ink0)
+      Text(unit).font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink2)
+    }
+  }
+
+  /// The quiet secondary pill's content — one mono line in the mock's warm light grey (#c9c4b4).
+  private func quietValue(_ text: String) -> some View {
+    Text(text).font(.system(size: 13, weight: .medium, design: .monospaced))
+      .foregroundStyle(Color(red: 0.788, green: 0.769, blue: 0.706))
+  }
+
+  /// The moss crown instruction (mock line 1531): a refresh glyph + "TURN CROWN TO SET".
+  private var crownHint: some View {
+    HStack(spacing: 5) {
+      Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+      Text(WatchCopy.turnCrownToSet).font(.system(size: 8.5, weight: .medium, design: .monospaced)).tracking(1.2)
+    }
+    .foregroundStyle(Palette.signal)
+    .frame(maxWidth: .infinity, alignment: .center)
   }
 
   private var footer: some View {
-    HStack(spacing: 8) {
-      // A bare glyph that sits ON the stage (no raised tile) — keeps a real tap
-      // target via contentShape, but reads as part of the black, not a button.
-      // While EDITING the glyph disappears: Save alone commits (founder 2026-07-12 —
-      // the ✓ beside Save was the same action twice, pure mis-tap surface).
-      if !editing {
-        Button { enterEdit(.weight) } label: {
-          Image(systemName: "pencil")
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Palette.ink1)
-            .frame(width: 36, height: Fit.s(48)) // matches the Complete button's scaled height
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-      }
-      StageButton(title: editing ? WatchCopy.save : WatchCopy.completeSet, kind: .primary, height: 48, fontSize: 17) {
-        if editing { commit() } else { onComplete() }
-      }
+    // Mock WT2: a single full-width "Complete set" (cream). In Edit (WT9) it becomes a moss "Done"
+    // that commits the set — the gentle-confirm fill, distinct from the cream that advances the work.
+    StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: 44, fontSize: 15) {
+      if editing { commit() } else { onComplete() }
     }
     .padding(.top, 4)
   }
@@ -1105,51 +1392,72 @@ struct InterRestScreen: View {
     // The ring hugs the TOP (founder 2026-07-10: lift the rest clock); the freed room goes to
     // the line under the exercise name, which reads a size up. stageFill() pins the strip.
     VStack(spacing: 0) {
-      TopStrip(lift: (i: mirror.liftIndex ?? 1, n: mirror.liftCount ?? 1), controlsHint: true)
-      // The ring keeps its distance from the chrome — chrome and clock are not the same object,
-      // and on a wrist they must never look like one (founder 2026-07-13). The ring pays for the
-      // gap out of its own diameter (84 → 76 + 6 of air), so the 40 mm height budget SHRINKS by
-      // 2 pt rather than growing: nothing that fitted before can stop fitting now.
-      // When Loop 1 has news, the RING pays for it out of its own diameter (76 → 56) — the same
-      // trade this file already makes for the chrome gap. Two frames of a rest clock are worth
-      // less than the one sentence that explains why the next number moved; and the clock is not
-      // lost, only smaller. On every ordinary rest (the overwhelming majority — S-13 caps a
-      // correction at 2 per exercise) the ring is untouched at its full size.
+      // WT4 · REST (mock line 1496): a centered "LIFT i / n" legend at the top, the ring, then the
+      // up-next CARD (name + set position + the coming load), and the two-button footer.
+      Legend("\(WatchCopy.liftWord) \(mirror.liftIndex ?? 1) / \(mirror.liftCount ?? 1)", size: 9)
+      // WT5 · REST — LEARNED. The seconds on this ring have been HERS since S-17 shipped, and the
+      // wrist never said so. It appears only when the median really is hers: on a lift she has not
+      // yet rested through, the timer runs the tier bootstrap and the claim would be a lie.
+      if mirror.restIsLearned == true {
+        Text(WatchCopy.yourPace)
+          .font(.system(size: 8.5, design: .monospaced)).tracking(0.4)
+          .foregroundStyle(Palette.signal)
+      }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 2)
+      // On a correction rest the ring pays for the note out of its own diameter (76 → 56); every
+      // ordinary rest keeps it full (S-13 caps corrections at 2 per exercise).
       RestRing(
         endsAt: mirror.restEndsAt,
         totalS: mirror.restTotalS ?? 90,
-        diameter: Fit.s(mirror.correction == nil ? 76 : 56)
+        diameter: Fit.s(mirror.correction == nil ? 76 : 56),
+        // …and it RUNS in the correction's direction. The note below already names the move; the
+        // ring is what the wrist actually looks at, so the two must not disagree.
+        arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal
       )
-      .padding(.top, 6)
+      .padding(.top, 4)
       Spacer(minLength: 3)
-      // THE UP-NEXT LAW (founder 2026-07-12, phone and watch alike): between sets, the lift and
-      // the set number. NOTHING ELSE. The load and the reps were on the stage thirty seconds ago
-      // and will be again in thirty more; reprinting them here is noise beside the only number
-      // that matters during a rest, which is the one counting down inside the ring. The bar is
-      // already loaded — there is nothing to instruct.
-      VStack(spacing: 3) {
-        Text(mirror.exerciseName).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
-          .lineLimit(1).minimumScaleFactor(0.75)
-        // THE SET THAT IS COMING — never `setLabel`, which on a rest frame is the set the athlete
-        // has just finished (the phone's machine holds its index until the rest ends). The wrist
-        // was counting the set behind them; nobody caught it because the load printed beside it
-        // was the same either way, and the load is what the eye went to.
-        Text(mirror.nextSetLabel ?? mirror.setLabel)
-          .font(.system(size: 13, design: .monospaced)).foregroundStyle(Palette.ink1)
-          .lineLimit(1).minimumScaleFactor(0.7)
-      }
-      // THE SIGNATURE MOMENT — under the lift it belongs to, because they are the same fact: this
-      // is the lift, and the correction is about its next set. The phone puts it inside the up-next
-      // card for exactly that reason (one fact, one element). The mirror only ever carries a
-      // correction on an inter-set rest, so no lift-guard is needed here — the projection holds it.
+      upNextCard
+      // THE SIGNATURE MOMENT — Loop 1 moved the next set's load; the mock gives it its own screen
+      // (WT3), but the phone/watch runtime shows it inline on the rest it belongs to. Kept so the
+      // product's most distinctive beat is never lost on the wrist.
       if let c = mirror.correction {
-        CorrectionNote(c: c).padding(.top, 6)
+        CorrectionNote(c: c).padding(.top, 5)
       }
       Spacer(minLength: 3)
       RestActions(ready: ready, primaryTitle: ready ? WatchCopy.startNextSet : WatchCopy.skipRest, onReady: onReady, onAdd: onAdd)
     }
     .padding(.horizontal, 10).padding(.bottom, 6)
     .stageFill()
+  }
+
+  /// The up-next card (mock line 1497): a bordered row — the coming set's name + position on the
+  /// left, its load on the right in moss. The set that is COMING (never `setLabel`, which on a
+  /// rest frame is the set just finished — the phone's machine holds its index until the rest ends).
+  private var upNextCard: some View {
+    HStack(spacing: 8) {
+      VStack(alignment: .leading, spacing: 1) {
+        Text("\(WatchCopy.upNext.uppercased()) · \(WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.setsInExercise ?? 1)")
+          .font(.system(size: 7.5, weight: .medium, design: .monospaced)).tracking(0.6)
+          .foregroundStyle(Palette.ink1)
+          .lineLimit(1).minimumScaleFactor(0.7)
+        Text(mirror.exerciseName)
+          .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink0)
+          .lineLimit(1).minimumScaleFactor(0.75)
+      }
+      Spacer(minLength: 4)
+      if let wt = mirror.targetWeight {
+        (Text(fmtW(wt)).font(.system(size: 16, weight: .medium, design: .monospaced))
+          + Text(" " + WatchCopy.kg).font(.system(size: 9, design: .monospaced)))
+          .foregroundStyle(Palette.signal)
+      } else {
+        Text(WatchCopy.bodyweight).font(.system(size: 13, weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal)
+      }
+    }
+    .padding(.vertical, 7).padding(.horizontal, 10)
+    .frame(maxWidth: .infinity)
+    .background(RoundedRectangle(cornerRadius: 13).fill(Palette.ink0.opacity(0.06)))
+    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Palette.ink0.opacity(0.14), lineWidth: 1))
   }
 }
 
@@ -1176,8 +1484,23 @@ struct TransitionRestScreen: View {
       TopStrip(lift: (i: (mirror.liftIndex ?? 1) + 1, n: mirror.liftCount ?? 1), controlsHint: true)
       // Same law as the inter-set ring: the gap is paid out of the diameter (78 → 68 + 6), so this
       // screen — the tightest one in the app — ends up 4 pt SHORTER than it was, never taller.
-      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(68), restingLabel: "NEXT")
+      // WT11 rings read "REST" like WT4 — the transition is carried by the "LIFT i → i+1" legend
+      // and the NEW-LIFT up-next line, not by relabelling the clock.
+      RestRing(endsAt: mirror.restEndsAt, totalS: mirror.restTotalS ?? 120, diameter: Fit.s(68))
         .padding(.top, 6)
+      // WT10 · EXERCISE DONE — "Bench, done." The lift she just CLOSED, named once, above the one
+      // she is walking to. `completedExerciseName` has been on the wire and populated by both the
+      // phone projection and the standalone engine since the wire was written, and no screen has
+      // ever drawn it: the last set of a lift landed and the wrist said nothing about the lift.
+      // It rides HERE, on the transition, because that is the only moment it is true — a lift is
+      // done exactly when the next one is being walked to.
+      if let done = mirror.completedExerciseName, !done.isEmpty {
+        Text(WatchCopy.liftDone(done))
+          .font(.system(size: 11, design: .serif))
+          .foregroundStyle(Palette.ink2)
+          .lineLimit(1).minimumScaleFactor(0.8)
+          .padding(.top, 3)
+      }
       Spacer(minLength: 3)
       VStack(spacing: 2) {
         HStack(spacing: 4) {
@@ -1245,18 +1568,63 @@ struct CardioPager: View {
   let gait: String
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
+  /// CR3 — the split just closed, if one has. Non-nil takes the stage for its own beat.
+  var split: KmSplit? = nil
   /// Pause-aware elapsed seconds — the watch's own clock (HealthKit only supplies HR/kcal/km).
   let elapsed: () -> TimeInterval
   let onPauseToggle: () -> Void
   let onEnd: () -> Void
 
   var body: some View {
-    CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
-                         onPauseToggle: onPauseToggle, onEnd: onEnd)
+    if let s = split {
+      KmLoggedScreen(split: s)
+    } else {
+      CardioControlsScreen(gait: gait, paused: paused, metrics: metrics, elapsed: elapsed,
+                           onPauseToggle: onPauseToggle, onEnd: onEnd)
+    }
   }
 }
 
-/// The cardio screen: the clock, the readout, Pause / Resume and a guarded Finish.
+/// CR3 · KM LOGGED — "every kilometre lands like a logged set."
+///
+/// The km-split HAPTIC has fired since the beat was built and nothing was ever drawn for it: the
+/// wrist buzzed and the athlete had to guess what for. This is the same shape a logged set gets —
+/// the number, the fact, a breath — and it leaves on its own after ~3 s, because a runner does not
+/// tap. "QUICKEST THIS RUN" appears only when it is true of THIS recording; it is a measurement,
+/// never a target and never praise.
+private struct KmLoggedScreen: View {
+  let split: KmSplit
+  var body: some View {
+    VStack(spacing: 0) {
+      TopStrip()
+      Spacer(minLength: 4)
+      VStack(spacing: 7) {
+        Legend(WatchCopy.kilometreSplit(split.km), size: 9)
+        HStack(alignment: .lastTextBaseline, spacing: 3) {
+          Text(fmtTime(split.splitS))
+            .font(.system(size: Fit.s(34), weight: .semibold, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.ink0)
+          Text(WatchCopy.perKm)
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2)
+        }
+        if split.quickest {
+          Text(WatchCopy.quickestThisRun)
+            .font(.system(size: 8.5, design: .monospaced)).tracking(0.5)
+            .foregroundStyle(Palette.signal)
+        }
+      }
+      .frame(maxWidth: .infinity)
+      Spacer(minLength: 6)
+      Text(WatchCopy.loggedBackToRun)
+        .font(.system(size: 8.5, design: .monospaced)).tracking(0.5)
+        .foregroundStyle(Palette.ink2)
+    }
+    .padding(.horizontal, 12).padding(.bottom, 8)
+    .stageFill()
+  }
+}
+
+/// CR2 · LIVE — the cardio stage: the clock, the readout, Pause / Resume and a guarded Finish.
 private struct CardioControlsScreen: View {
   let gait: String
   let paused: Bool
@@ -1312,7 +1680,7 @@ private struct CardioControlsScreen: View {
   }
 }
 
-/// The run/walk completion (founder 2026-07-11: the wrist must close the activity, not just
+/// CR4 · DONE — the run/walk completion (founder 2026-07-11: the wrist must close the activity, not just
 /// vanish back to the lobby). The same honest record the phone shows: time, distance, pace,
 /// kcal — recorded, never graded.
 struct CardioCompleteScreen: View {
@@ -1350,7 +1718,7 @@ struct CardioCompleteScreen: View {
  * workout on the watch EXACTLY like the phone reads it — only the exercises that were performed,
  * with the green check animation").
  *
- * ACT ONE — THE READ-BACK. The lifts the athlete actually trained, walked one at a time, a sage
+ * ACT ONE — WT12 · THE SCAN, the read-back. The lifts the athlete actually trained, walked one at a time, a sage
  * check landing on each with the best set they logged on it beside the name. It is the phone's
  * beat, on a wrist: the machine showing its work. The first cut listed the whole PRESCRIPTION and
  * marked what was missed with a dash — an honest ledger, but a ledger, and it made a workout that
@@ -1366,10 +1734,19 @@ struct CompleteScreen: View {
   /// Active calories for the finished workout, snapshotted from the OS runtime as the complete
   /// frame landed (it clears its live metrics while persisting the HKWorkout). Founder
   /// 2026-07-11: the set COUNT is not interesting at the close — the energy spent is.
+  ///
+  /// The FALLBACK, not the answer. ONE NUMBER PER WORKOUT (founder 2026-07-28): when the phone ran
+  /// the session it computed the figure and sent it on the summary, and the wrist prints THAT — a
+  /// workout reading 412 here and 380 in her Log is the kind of small lie that costs more trust
+  /// than the extra accuracy buys. This reading stands only where the phone sent none: a standalone
+  /// workout, where the wrist IS the authority and its measurement becomes the session's on the
+  /// phone too (it travels home on the record).
   let kcal: Int?
   let onDone: () -> Void
 
   private var lifts: [WireSummaryLift] { mirror.summary?.lifts ?? [] }
+  /// The phone's figure when there is one; the wrist's own reading otherwise.
+  private var shownKcal: Int? { mirror.summary?.kcal ?? kcal }
   /// The mark this workout crossed, if it crossed one — earned on the phone, printed here
   /// (founder 2026-07-13). Nil for the overwhelming majority of workouts, which is what makes
   /// it worth showing at all.
@@ -1471,26 +1848,33 @@ struct CompleteScreen: View {
     withAnimation { reading = false }
   }
 
+  /// WT6 · SESSION EARNED. The tally mark, the quiet serif "That's the work.", and the four-metric
+  /// row (MIN · KCAL · T · UP) the mock centres in the case — no "SAVED" legend, no workout name.
+  /// The one exit still passes through beat 4 when this session crossed a mark.
   private var result: some View {
-    VStack(alignment: .leading, spacing: 0) {
+    VStack(spacing: 0) {
       TopStrip()
       Spacer(minLength: 4)
-      HStack(spacing: 8) { DrawCheck(size: 18); Legend(WatchCopy.saved, size: 11) }
-      Text(WatchCopy.complete(mirror.workoutName ?? ""))
-        .font(.system(size: Fit.s(26), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 10)
-      if let s = mirror.summary {
-        HStack(spacing: 8) {
-          Metric(value: s.timeLabel, label: WatchCopy.metricTime)
-          // Kcal replaces the set count. Absent (HealthKit denied / no data) → an honest dash,
-          // never a modelled number.
-          Metric(value: kcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
-          Metric(value: "\(s.up) ↑", label: WatchCopy.metricUp)
+      VStack(spacing: 12) {
+        TallyMark()
+        Text(WatchCopy.thatsTheWork)
+          .font(.system(size: Fit.s(22), design: .serif))
+          .foregroundStyle(Palette.ink0)
+          .multilineTextAlignment(.center)
+          .lineSpacing(1)
+          .fixedSize(horizontal: false, vertical: true)
+        if let s = mirror.summary {
+          HStack(alignment: .top, spacing: 10) {
+            completeMetric(minutesLabel(s.timeLabel), WatchCopy.metricMinShort, Palette.ink0)
+            // Kcal from the OS runtime; an honest dash when HealthKit gave nothing, never a model.
+            completeMetric(shownKcal.map { "\($0)" } ?? "––", WatchCopy.metricKcalShort, Palette.ink0)
+            completeMetric(fmtTonnes(s.volumeKg), WatchCopy.metricTonnesShort, Palette.ink0)
+            // The one moss figure — lifts the model raised this session.
+            completeMetric("\(s.up)", WatchCopy.metricUpShort, Palette.signal)
+          }
         }
-        .padding(.top, 16)
-        .overlay(alignment: .top) { Rectangle().fill(Palette.stage2).frame(height: 1).offset(y: 8) }
       }
+      .frame(maxWidth: .infinity)
       Spacer(minLength: 8)
       // The way out passes through the mark, exactly as it does on the phone: any exit from the
       // result plays beat 4 once, and only on the session that earned it.
@@ -1503,13 +1887,25 @@ struct CompleteScreen: View {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.7)) { stamped = true }
       }
     }
-    // Deliberately NOT stageFill(): this screen's proportions are approved as they are —
-    // only its middle metric changed (sets → kcal).
     .padding(.horizontal, 12).padding(.bottom, 8)
   }
 
+  /// One column of the WT6 metric row — mono value over a muted mono label. The value colour
+  /// carries the one distinction the mock draws: moss for UP, cream for the rest.
+  private func completeMetric(_ value: String, _ label: String, _ color: Color) -> some View {
+    VStack(spacing: 2) {
+      Text(value)
+        .font(.system(size: Fit.s(15), weight: .medium, design: .monospaced)).monospacedDigit()
+        .foregroundStyle(color)
+        .lineLimit(1).minimumScaleFactor(0.7)
+      Text(label)
+        .font(.system(size: 8, weight: .regular, design: .monospaced)).tracking(0.4)
+        .foregroundStyle(Palette.ink2)
+    }
+  }
+
   /**
-   * BEAT 4 — the one licensed loud moment, on the wrist (founder 2026-07-13).
+   * WT8 · MILESTONE — BEAT 4, the one licensed loud moment on the wrist (founder 2026-07-13).
    *
    * The phone strikes a medallion with an engraved glyph; a 41 mm case has no room for the
    * engraving and no business inventing a second one. So the wrist keeps what the mark IS: the
@@ -1518,44 +1914,43 @@ struct CompleteScreen: View {
    * the ring holds the check instead.
    */
   private func milestoneBeat(_ m: WireMilestone) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
+    VStack(spacing: 0) {
       TopStrip()
-      Legend(WatchCopy.milestone, size: 10).padding(.top, 2)
       Spacer(minLength: 4)
-      HStack {
-        Spacer(minLength: 0)
+      VStack(spacing: 13) {
+        // The mock's seal: a dashed CREAM outer ring around a faint solid inner ring, the engraved
+        // figure + its unit stacked at the centre (a check when the mark is an event, not a number).
         ZStack {
-          Circle().strokeBorder(Palette.signal, lineWidth: 1.5).frame(width: 72, height: 72)
-          VStack(spacing: 0) {
+          Circle().strokeBorder(
+            Palette.ink0.opacity(0.4),
+            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+          ).frame(width: 96, height: 96)
+          Circle().strokeBorder(Palette.ink0.opacity(0.18), lineWidth: 1).frame(width: 74, height: 74)
+          VStack(spacing: 1) {
             if let v = m.value, !v.isEmpty {
               Text(v)
-                .font(.system(size: 22, weight: .semibold, design: .monospaced)).monospacedDigit()
+                .font(.system(size: 30, weight: .medium, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.6)
               if let c = m.caption, !c.isEmpty {
                 Text(c.uppercased())
-                  .font(.system(size: 8, weight: .medium)).tracking(1)
+                  .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1.3)
                   .foregroundStyle(Palette.ink2)
                   .lineLimit(1)
               }
             } else {
-              DrawCheck(size: 22)
+              DrawCheck(size: 26)
             }
           }
           .padding(.horizontal, 8)
         }
-        Spacer(minLength: 0)
+        // The one factual line, in the coach's serif — "Ten workouts.", never "amazing".
+        Text(m.title)
+          .font(.system(size: Fit.s(17), design: .serif)).foregroundStyle(Palette.ink0)
+          .multilineTextAlignment(.center)
+          .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
       }
-      Text(m.title)
-        .font(.system(size: Fit.s(17), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 10)
-      if let sub = m.sub, !sub.isEmpty {
-        Text(sub)
-          .font(.system(size: 12)).foregroundStyle(Palette.ink1)
-          .lineLimit(2).minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true)
-          .padding(.top, 3)
-      }
+      .frame(maxWidth: .infinity)
       Spacer(minLength: 8)
       StageButton(title: WatchCopy.done, kind: .primary, height: 48, fontSize: 16, action: onDone)
     }
@@ -1565,32 +1960,190 @@ struct CompleteScreen: View {
 
 // MARK: 07 · Paused
 
+/// WT13 · PAUSED. A pause glyph ringed in cream, the serif "Paused", and three ways out: Resume
+/// (moss primary), End workout (outlined — arms the WT13b guard), and "Something feels off" (the
+/// clay-outlined report that opens WT14). Ending is still guarded; a sleeve brushing Paused must
+/// never close the workout in one touch.
 struct PausedScreen: View {
   let onResume: () -> Void
   let onEnd: () -> Void
+  /// Returns whether the report actually reached the phone — WT15 is a claim about what the PHONE
+  /// did, so a report that went nowhere must not draw one (see `WatchModel.reportPain`).
+  var onReportPain: (String, String) -> Bool = { _, _ in false }
   @State private var confirmingEnd = false
+  @State private var reportingPain = false
+  /// The muscle she named, held while WT14b asks how sharp it is. Non-nil = the severity step.
+  @State private var painArea: String?
+  /// The muscle whose ease has just been acknowledged (WT15). Non-nil = the acknowledgement.
+  @State private var easedArea: String?
   var body: some View {
     if confirmingEnd {
-      EndConfirmScreen(
-        title: WatchCopy.endConfirmTitle, confirmTitle: WatchCopy.endAndSave,
-        onConfirm: onEnd, onKeep: { confirmingEnd = false }
+      EndConfirmScreen(onConfirm: onEnd, onKeep: { confirmingEnd = false })
+    } else if let eased = easedArea {
+      // WT15 · ENGINE RESPONDS — she named it, and this says what Hush did about it.
+      PainAcknowledgedScreen(muscle: eased, onResume: {
+        easedArea = nil
+        onResume()
+      })
+    } else if let area = painArea {
+      // WT14b · HOW SHARP? — the same three the phone asks. Backing out returns to the areas, so a
+      // mis-tap on a muscle is one tap to undo and never a report she did not mean to file.
+      PainSeverityScreen(
+        muscle: area,
+        onPick: { severity in
+          painArea = nil
+          reportingPain = false
+          // Only the acknowledgement is conditional. The flag was taken either way.
+          if onReportPain(area, severity) { easedArea = area }
+        },
+        onBack: { painArea = nil }
       )
+    } else if reportingPain {
+      PainAreaScreen(onPick: { area in painArea = area },
+                     onBack: { reportingPain = false })
     } else {
       VStack(spacing: 0) {
         TopStrip()
-        Spacer()
-        Legend(WatchCopy.workoutHeld, size: 11)
-        Text(WatchCopy.pausedTitle).font(.system(size: Fit.s(34), weight: .semibold)).foregroundStyle(Palette.ink0).padding(.top, 6)
-        Spacer()
+        Spacer(minLength: 4)
+        VStack(spacing: 9) {
+          ZStack {
+            Circle().strokeBorder(Palette.ink0.opacity(0.3), lineWidth: 1.5).frame(width: 44, height: 44)
+            Image(systemName: "pause.fill").font(.system(size: 16)).foregroundStyle(Palette.ink0)
+          }
+          Text(WatchCopy.pausedTitle)
+            .font(.system(size: Fit.s(18), design: .serif)).foregroundStyle(Palette.ink0)
+        }
+        .frame(maxWidth: .infinity)
+        Spacer(minLength: 8)
         VStack(spacing: 6) {
-          StageButton(title: WatchCopy.resume, kind: .primary, height: 52, fontSize: 18, action: onResume)
-          // Ending is guarded here too (founder 2026-07-12) — Paused is exactly where a
-          // sleeve brushes the screen.
-          StageButton(title: WatchCopy.endWorkout, kind: .quiet, height: 40, fontSize: 14) { confirmingEnd = true }
+          StageButton(title: WatchCopy.resume, kind: .moss, height: 40, fontSize: 14, action: onResume)
+          OutlineButton(title: WatchCopy.endWorkout, systemImage: "stop", tint: Palette.ink1,
+                        border: Palette.ink0.opacity(0.2), height: 34, fontSize: 11.5) { confirmingEnd = true }
+          OutlineButton(title: WatchCopy.somethingOff, tint: Palette.clay,
+                        border: Palette.clay.opacity(0.55), height: 34, fontSize: 11.5) { reportingPain = true }
         }
       }
       .padding(.horizontal, 10).padding(.bottom, 8)
     }
+  }
+}
+
+/// WT14 · WHAT'S OFF. The phone's body map has no home on a 41 mm case, so its regions arrive as a
+/// plain scrolling list ("Shoulder", "Lower back", …). Selecting one reports that area to the phone,
+/// which owns what to do with it (a pain flag is a fact the model acts on, never a diagnosis here).
+private struct PainAreaScreen: View {
+  let onPick: (String) -> Void
+  let onBack: () -> Void
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 6) {
+        Button(action: onBack) {
+          Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
+        }
+        .buttonStyle(.plain)
+        Legend(WatchCopy.whereIsIt, size: 10)
+      }
+      ScrollView {
+        VStack(spacing: 5) {
+          ForEach(WatchCopy.painAreas, id: \.self) { area in
+            Button { onPick(area) } label: {
+              HStack {
+                Text(area).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink0)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.ink2)
+              }
+              .padding(.vertical, 7).padding(.horizontal, 11)
+              .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.ink0.opacity(0.13), lineWidth: 1))
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+          }
+        }
+        .padding(.top, 6)
+      }
+    }
+    .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
+    .stageFill()
+  }
+}
+
+/// WT14b · HOW SHARP? — the second of the two questions the phone asks (§13.2), asked identically
+/// on the wrist. It exists because the FIRST cut of this seam picked the mildest window on her
+/// behalf: the wrist had no room for a follow-up, so the engine chose. The founder's ruling
+/// (2026-07-28) is that it does not choose — she does, here, in three taps' worth of screen.
+///
+/// The only thing the answer buys is how long the muscle rests (3 / 7 / 14 days). No diagnosis, no
+/// scale, no score — three words a person can answer honestly standing at a rack.
+private struct PainSeverityScreen: View {
+  let muscle: String
+  let onPick: (String) -> Void
+  let onBack: () -> Void
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 6) {
+        Button(action: onBack) {
+          Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
+        }
+        .buttonStyle(.plain)
+        Legend(WatchCopy.howSharp, size: 10)
+      }
+      Text(muscle)
+        .font(.system(size: Fit.s(17), design: .serif)).foregroundStyle(Palette.ink0)
+        .lineLimit(1).minimumScaleFactor(0.8)
+        .padding(.top, 3)
+      Spacer(minLength: 4)
+      VStack(spacing: 6) {
+        ForEach(WatchCopy.severityChoices) { choice in
+          Button { onPick(choice.value) } label: {
+            HStack {
+              Text(choice.label).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Palette.ink0)
+              Spacer(minLength: 4)
+              Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.ink2)
+            }
+            .padding(.vertical, 8).padding(.horizontal, 11)
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.clay.opacity(0.45), lineWidth: 1))
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      Spacer(minLength: 4)
+    }
+    .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
+    .stageFill()
+  }
+}
+
+/// WT15 · ENGINE RESPONDS — "you name it; the plan bends around it."
+///
+/// The one beat that closes the loop she opened. It says what Hush DID, in facts: the muscle rests
+/// and its lifts are swapped. It does not name a cause, it does not sympathise, and it does not
+/// claim a number — the phone owns the window's length and the replacement lifts, and both are
+/// already decided by the time this draws. Resume is the only way out, because she is mid-workout.
+private struct PainAcknowledgedScreen: View {
+  let muscle: String
+  let onResume: () -> Void
+  var body: some View {
+    VStack(spacing: 0) {
+      TopStrip()
+      Spacer(minLength: 4)
+      VStack(alignment: .leading, spacing: 8) {
+        Legend(WatchCopy.gotIt, size: 10)
+        Text(WatchCopy.easingToday(muscle))
+          .font(.system(size: Fit.s(19), design: .serif)).foregroundStyle(Palette.ink0)
+          .multilineTextAlignment(.leading).lineSpacing(1)
+          .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 3) {
+          Text(WatchCopy.easedSwapped).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.ink2)
+          Text(WatchCopy.easedRests).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.ink2)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      Spacer(minLength: 8)
+      StageButton(title: WatchCopy.resume, kind: .moss, height: 40, fontSize: 14, action: onResume)
+    }
+    .padding(.horizontal, 12).padding(.bottom, 8)
+    .stageFill()
   }
 }
 

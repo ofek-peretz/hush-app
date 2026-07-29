@@ -246,6 +246,12 @@ final class LocalWorkoutEngine {
     restWork = nil
   }
 
+  /// Active kilocalories the wrist measured for this workout, handed in by the model at the
+  /// whistle (the runtime clears its live metrics as it persists the HKWorkout). ONE NUMBER PER
+  /// WORKOUT: on a standalone session the wrist is the authority, so this becomes the session's
+  /// figure on the phone too, instead of the phone re-estimating beside it.
+  var measuredKcal: Int?
+
   private func finish(early: Bool) {
     finished = true
     cancelRestAdvance()
@@ -259,6 +265,7 @@ final class LocalWorkoutEngine {
       startedAt: state.startedAt,
       endedAt: WatchWire.iso(Date()),
       earlyFinish: early,
+      kcal: measuredKcal,
       sets: state.sets
     )
     // Durability order: the record enters the outbox BEFORE the active session is
@@ -351,6 +358,7 @@ final class LocalWorkoutEngine {
       totalSets: state.steps.count,
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
+      targetRepsHi: cur.targetRepsHi, // the band's ceiling, so the ruler draws standalone too
       restEndsAt: nil,
       restRemainingS: nil,
       restTotalS: nil,
@@ -365,6 +373,15 @@ final class LocalWorkoutEngine {
       liftIndex: lift.index,
       liftCount: lift.count,
       workoutName: state.workoutName,
+      // WT13c · GLANCE — the standalone engine owes the wrist the SAME two live figures the phone
+      // sends, or a phone-absent workout glances at a blank. Same arithmetic as the closing
+      // summary's `volumeKg` (bodyweight contributes 0), read off the sets already logged here.
+      liveVolumeKg: state.sets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) },
+      liveSets: state.sets.count,
+      // WT5 — the plan snapshot already carries HER rest per step (the phone measured it, S-17), so
+      // the wrist really is running her pace here. It says so only when the step names one; the
+      // plan-level fallback is the tier bootstrap and the claim would be false.
+      restIsLearned: cur.restInterS != nil,
       summary: nil,
       swapOptions: nil, // no offline swaps — the phone owns exercise selection
       nextSwapOptions: nil,
@@ -423,10 +440,14 @@ final class LocalWorkoutEngine {
   private func completeFrame() -> WireMirror {
     let cur = state.steps[min(state.currentIndex, state.steps.count - 1)]
     var m = baseMirror(cur: cur, phase: "complete")
+    // External tonnage moved, from the ACTUALS — so a standalone (phone-absent) workout reads
+    // the same WT6 "T" metric a phone-driven one does. Bodyweight sets (weight nil) count 0.
+    let volumeKg = state.sets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) }
     m.summary = WireSummary(
       timeLabel: timeLabel(fromISO: state.startedAt),
       sets: state.sets.count,
       up: progressedLifts(),
+      volumeKg: volumeKg,
       lifts: summaryLifts()
     )
     return m

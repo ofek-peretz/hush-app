@@ -20,6 +20,7 @@ import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
+import { viewOf, ZONES } from '@/components/BodyMapFigure';
 import { initI18n, tg } from '@/i18n';
 import { CANONICAL_MUSCLE_ORDER, EMPHASIS_BUDGET } from '@/engine/v5/constants';
 
@@ -60,8 +61,42 @@ function byLabel(r: ReactTestRenderer, label: string): ReactTestInstance | null 
   return hits.find((n) => typeof n.props.onPress === 'function') ?? hits[0] ?? null;
 }
 
-/** Tap a muscle's stance the way a finger does — through the label VoiceOver reads. */
+/** Every string rendered under one node — the tabs carry their label as a child, not a prop. */
+function instText(n: ReactTestInstance): string {
+  const out: string[] = [];
+  const walk = (x: ReactTestInstance | string): void => {
+    if (typeof x === 'string') return void out.push(x);
+    (x.children ?? []).forEach(walk as never);
+  };
+  walk(n);
+  return out.join(' ');
+}
+
+/** The face of the body a muscle is drawn on, turned to the front of the stage. */
+function face(r: ReactTestRenderer, muscle: string) {
+  const label = tg(viewOf(muscle) === 'back' ? 'ob.mapBack' : 'ob.mapFront');
+  const tab = r.root
+    .findAll((n) => n.props?.accessibilityRole === 'tab' && typeof n.props?.onPress === 'function', { deep: true })
+    .find((n) => instText(n).includes(label));
+  if (tab && !tab.props.accessibilityState?.selected) act(() => tab.props.onPress());
+}
+
+/** Open a muscle's sheet the way a finger does — turn the body, then press its zone. */
+function openZone(r: ReactTestRenderer, muscle: string) {
+  face(r, muscle);
+  const zone = r.root.findAll(
+    (n) => typeof n.props?.accessibilityLabel === 'string'
+      && n.props.accessibilityLabel.startsWith(`${tg(`muscle.${muscle}`)}, `)
+      && typeof n.props?.onPress === 'function',
+    { deep: true },
+  )[0];
+  if (!zone) throw new Error(`no zone for ${muscle}`);
+  if (!zone.props.accessibilityState?.selected) act(() => zone.props.onPress());
+}
+
+/** Set a muscle's stance: open it, then press the rung. The label VoiceOver reads, unchanged. */
 function tap(r: ReactTestRenderer, muscle: string, stance: 'Off' | 'Normal' | 'Emphasis') {
+  openZone(r, muscle);
   const label = `${tg(`muscle.${muscle}`)} — ${tg(`ob.stance${stance}`)}`;
   const node = byLabel(r, label);
   if (!node) throw new Error(`no control for ${label}`);
@@ -92,15 +127,28 @@ function props(over: Record<string, unknown> = {}) {
 }
 
 describe('the map arrives whole — nothing to configure, only things to change', () => {
-  it('lists all ten muscles, grouped the way the assembler groups them', () => {
+  it('draws all ten muscles across the two faces — every one of them reachable and named', () => {
+    // The map is a FIGURE now (v7 4.1), so a muscle's name lives on its zone rather than in a row
+    // of text. What must still hold is the thing the list guaranteed: not one of the engine's ten
+    // muscles is missing, and each can be touched. A muscle drawn on neither face would be a
+    // decision she can never make.
     const { p } = props();
-    const said = texts(mount(<BodyMap {...p} />)).join(' ');
-    for (const m of CANONICAL_MUSCLE_ORDER) expect(said).toContain(tg(`muscle.${m}`));
-    // The regions are not a display invention — they are `regionOf`, the same source the assembler
-    // uses to decide which days exist. A screen that grouped its own way would show one body and
-    // build another.
-    expect(said).toContain(tg('ob.regionUpper').toUpperCase());
-    expect(said).toContain(tg('ob.regionLower').toUpperCase());
+    const r = mount(<BodyMap {...p} />);
+    for (const m of CANONICAL_MUSCLE_ORDER) {
+      face(r, m);
+      const zone = r.root.findAll(
+        (n) => typeof n.props?.accessibilityLabel === 'string'
+          && n.props.accessibilityLabel.startsWith(`${tg(`muscle.${m}`)}, `)
+          && typeof n.props?.onPress === 'function',
+        { deep: true },
+      );
+      expect(zone.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('splits the ten across front and back without dropping or doubling one', () => {
+    const drawn = [...ZONES.front, ...ZONES.back].map((z) => z.muscle);
+    expect([...drawn].sort()).toEqual([...CANONICAL_MUSCLE_ORDER].sort());
   });
 
   it('everything starts ON — an untouched map is buildable and says nothing about itself', () => {

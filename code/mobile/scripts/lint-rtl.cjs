@@ -72,10 +72,35 @@ function unalignedTextStyles(src) {
     const body = open !== -1 && close !== -1 ? src.slice(open + 1, close) : '';
     const line = src.slice(0, idx).split('\n').length;
     const lineText = src.split('\n')[line - 1] ?? '';
-    if (!/\btextAlign\s*:/.test(body) && !lineText.includes('rtl-ok')) hits.push(line);
+    if (!/\btextAlign\s*:/.test(body) && !lineText.includes('rtl-ok') && !isFaceOverride(body)) {
+      hits.push(line);
+    }
     idx = close !== -1 ? close : idx + 11;
   }
   return hits;
+}
+
+/**
+ * A FACE OVERRIDE is not a text style — it is half of one.
+ *
+ * `{ fontFamily: font.sans }` composed onto a base that already declares its alignment carries no
+ * layout of its own; demanding `textAlign` there would write the same value in two places and let
+ * the two drift. And the shape is not incidental: it is the **`monoCanDraw` face swap**, the
+ * mechanism that keeps Hebrew off the mono voice (`monoCarriesNoWords`) — JetBrains Mono has no
+ * Hebrew glyphs, so every figure that can arrive as a WORD swaps to sans on exactly this line. Ten
+ * of this linter's fifteen findings were that swap, in ten files, every one of them correct.
+ *
+ * A lint that cries wolf ten times gets ignored the eleventh, so the rule is NARROWED, not silenced:
+ * only a lone `fontFamily` is exempt. Add any other property — a size, a colour, a position — and it
+ * is a text style again and must declare where its text sits.
+ */
+function isFaceOverride(body) {
+  const props = body
+    .split(/,(?![^[]*\])/) // top-level commas; `fontVariant: ['tabular-nums']` stays intact
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => !p.startsWith('//'));
+  return props.length === 1 && /^fontFamily\s*:/.test(props[0]);
 }
 
 /** Allow a symmetric pair on one line (left & right together = direction-neutral). */

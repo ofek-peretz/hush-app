@@ -35,12 +35,12 @@ export const NO_ENTITLEMENT: Entitlement = {
   expiresAt: null,
 };
 
-/** Free completed sessions before the paywall. The full calibration arc (7
- *  sessions) ends at the Portrait unlock — the athlete trains through the entire
- *  signature moment free, then subscribes to continue. Mirrors CALIBRATION_SESSIONS
- *  (state/machines/athleteMode) by intent, kept as its own constant so the trial
- *  length can be tuned without moving the calibration boundary. */
-export const FREE_SESSION_LIMIT = 7;
+/** Free completed sessions before the paywall (founder 2026-07-24: 14, the v7 "14
+ *  workouts free" headline on the Ready screen). The calibration arc still ends at the
+ *  Portrait unlock; the trial now runs the full fourteen the design promises — I LEARN
+ *  YOU (1–4) then I KNOW YOU (5–14) — before the paywall. Kept as its own constant so the
+ *  trial length can be tuned without moving the calibration boundary. */
+export const FREE_SESSION_LIMIT = 14;
 
 /**
  * The launch gate: is the athlete blocked from STARTING another session?

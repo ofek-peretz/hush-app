@@ -14,6 +14,7 @@ import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { viewOf } from '@/components/BodyMapFigure';
 import { initI18n, tg } from '@/i18n';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
@@ -73,6 +74,13 @@ function mount(el: React.ReactElement): ReactTestRenderer {
 }
 
 type Json = { type: string; props: Record<string, unknown>; children: Json[] | null } | string | null;
+/** The question's headline, with the muscle in HEADLINE CASE — `muscle.*` is written for
+ *  mid-sentence, and this word opens the sentence (WeeklyUpdate.headlineCase). */
+const askTitle = (muscle: string) => {
+  const m = tg(`muscle.${muscle}`);
+  return tg('weekly.askBackTitle', { muscle: m ? m[0].toLocaleUpperCase() + m.slice(1) : m });
+};
+
 function texts(r: ReactTestRenderer): string[] {
   const out: string[] = [];
   const walk = (n: Json | Json[]): void => {
@@ -88,9 +96,45 @@ function byLabel(r: ReactTestRenderer, label: string): ReactTestInstance | null 
   const hits = r.root.findAll((n) => n.props?.accessibilityLabel === label, { deep: true });
   return hits.find((n) => typeof n.props.onPress === 'function') ?? hits[0] ?? null;
 }
+/** Every string rendered under one node — the tabs carry their label as a child, not a prop. */
+function instText(n: ReactTestInstance): string {
+  const out: string[] = [];
+  const walk = (x: ReactTestInstance | string): void => {
+    if (typeof x === 'string') return void out.push(x);
+    (x.children ?? []).forEach(walk as never);
+  };
+  walk(n);
+  return out.join(' ');
+}
+
+/** The face of the body a muscle is drawn on, turned to the front of the stage. */
+function face(r: ReactTestRenderer, muscle: string) {
+  const label = tg(viewOf(muscle) === 'back' ? 'ob.mapBack' : 'ob.mapFront');
+  const tab = r.root
+    .findAll((n) => n.props?.accessibilityRole === 'tab' && typeof n.props?.onPress === 'function', { deep: true })
+    .find((n) => instText(n).includes(label));
+  if (tab && !tab.props.accessibilityState?.selected) act(() => tab.props.onPress());
+}
+
+/** Open a muscle's sheet the way a finger does — turn the body, then press its zone. */
+function openZone(r: ReactTestRenderer, muscle: string) {
+  face(r, muscle);
+  const zone = r.root.findAll(
+    (n) => typeof n.props?.accessibilityLabel === 'string'
+      && n.props.accessibilityLabel.startsWith(`${tg(`muscle.${muscle}`)}, `)
+      && typeof n.props?.onPress === 'function',
+    { deep: true },
+  )[0];
+  if (!zone) throw new Error(`no zone for ${muscle}`);
+  if (!zone.props.accessibilityState?.selected) act(() => zone.props.onPress());
+}
+
+/** Set a muscle's stance: open it, then press the rung. The label VoiceOver reads, unchanged. */
 function tap(r: ReactTestRenderer, muscle: string, stance: 'Off' | 'Normal' | 'Emphasis') {
-  const node = byLabel(r, `${tg(`muscle.${muscle}`)} — ${tg(`ob.stance${stance}`)}`);
-  if (!node) throw new Error(`no control for ${muscle}/${stance}`);
+  openZone(r, muscle);
+  const label = `${tg(`muscle.${muscle}`)} — ${tg(`ob.stance${stance}`)}`;
+  const node = byLabel(r, label);
+  if (!node) throw new Error(`no control for ${label}`);
   act(() => node.props.onPress());
 }
 
@@ -117,7 +161,7 @@ describe('S-56 · an OFF is obeyed in silence — the one question lives at the 
     tap(r, 'Chest', 'Off');
     // The register: "Once — and once only — Hush comes back… at the Saturday mirror." The editor
     // itself never asks; a confirm here would argue with a choice she is making right now.
-    expect(texts(r).join(' ')).not.toContain(tg('weekly.askBackTitle', { muscle: tg('muscle.Chest') }));
+    expect(texts(r).join(' ')).not.toContain(askTitle('Chest'));
     await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
     expect(saved).toHaveLength(1);
     expect((saved[0].bodyMap as Record<string, string>).Chest).toBe('off');
@@ -154,7 +198,7 @@ describe('the map that is saved is the map she drew', () => {
     // `repBandByMuscle` has been read by the engine all along (each exercise resolves its band from
     // its primary muscle). Nothing could WRITE it until this screen existed.
     const r = await open([]);
-    act(() => byLabel(r, tg('ob.mapBandOpen', { muscle: tg('muscle.Shoulders') }))!.props.onPress());
+    openZone(r, 'Shoulders'); // the tapped muscle raises stance AND its ruler
     act(() => byLabel(r, `${tg('muscle.Shoulders')} — 12-15`)!.props.onPress());
     await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
 
@@ -163,8 +207,10 @@ describe('the map that is saved is the map she drew', () => {
 
   it('an OFF muscle has no band to set — it is not trained', async () => {
     const r = await open([]);
-    tap(r, 'Shoulders', 'Off');
-    const door = byLabel(r, tg('ob.mapBandOpen', { muscle: tg('muscle.Shoulders') }));
-    expect(door).toBeNull();
+    tap(r, 'Shoulders', 'Off'); // …and the sheet stays open on it
+    // The ruler is gone: an off muscle lands in no range, so a scale there would decide nothing.
+    expect(byLabel(r, `${tg('muscle.Shoulders')} — 12-15`)).toBeNull();
+    // …while the stance rungs are still there, because turning it back on must stay one tap away.
+    expect(byLabel(r, `${tg('muscle.Shoulders')} — ${tg('ob.stanceNormal')}`)).not.toBeNull();
   });
 });

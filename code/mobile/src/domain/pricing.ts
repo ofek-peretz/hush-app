@@ -68,3 +68,29 @@ export function annualSavingPct(products: readonly SubscriptionProduct[]): numbe
   // Below 5% the tag is noise; a rounding artefact is not a value proposition.
   return pct >= 5 ? pct : null;
 }
+
+/**
+ * The annual plan's price PER MONTH, in the store's own currency and format (v7 4.3).
+ *
+ * The handoff prints the annual card as "₪34.90 /MONTH" with "₪419 billed once a year" beneath it,
+ * and it is right to: the two plans are only comparable once they are in the same unit, and asking
+ * an athlete to divide a year by twelve in their head is asking them to do the one bit of work that
+ * decides the sale.
+ *
+ * The number is REBUILT INTO THE STORE'S OWN LABEL rather than formatted from scratch — the label
+ * already carries the currency symbol, its side, and its spacing for that storefront, and any of the
+ * three guessed here would be wrong somewhere. Null when the amount cannot be read, exactly like
+ * `annualSavingPct`: a price we cannot restate honestly is one we do not restate at all.
+ */
+export function monthlyEquivalentLabel(annualPriceLabel: string): string | null {
+  const amount = parsePriceAmount(annualPriceLabel);
+  if (amount == null) return null;
+
+  const digits = annualPriceLabel.replace(/[^\d.,]/g, '');
+  // Whichever separator appears LAST is the decimal one — the same rule the parser runs on.
+  const decimal = digits.lastIndexOf(',') > digits.lastIndexOf('.') ? ',' : '.';
+  const perMonth = (amount / 12).toFixed(2).replace('.', decimal);
+
+  // Swap the numeral in place, so the symbol keeps its side and its spacing.
+  return annualPriceLabel.replace(/[\d.,]+/, perMonth);
+}

@@ -121,7 +121,9 @@ const styles = StyleSheet.create({
   back: { width: 22, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headLegend: { flex: 1 },
   headSpacer: { width: 22 },
-  scroll: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: 44 },
+  // flexGrow so the closing line can be pushed to the FOOT of the page (the handoff's margin-top:auto)
+  // on a short record, while a long one still scrolls it into place after the splits.
+  scroll: { flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: 44 },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // v7 (2026-07-22): the record's title is the serif — one calm word, "Cardio".
@@ -129,7 +131,9 @@ const styles = StyleSheet.create({
 
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 14 },
   // lineHeight ≥ fontSize (+ includeFontPadding:false) or RN clips the tall mono digit tops.
-  heroNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.data, lineHeight: Math.round(textScale.data * 1.02), includeFontPadding: false, letterSpacing: -2, color: color.textPrimary, textAlign: 'left' },
+  // 64 — the handoff's own size for a RECORD's distance. The 84 of a live stage belongs to a
+  // figure that is still moving; this one is finished, and it sits under a serif title.
+  heroNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale['5xl'], lineHeight: Math.round(textScale['5xl'] * 1.02), includeFontPadding: false, letterSpacing: -1.92, color: color.textPrimary, textAlign: 'left' },
   // "km" is a translated slot (he: "ק״מ") — sans, never mono (mono has no Hebrew glyphs).
   heroUnit: { fontFamily: font.sansMedium, fontSize: textScale.lg, color: color.textMuted, marginStart: 8, marginBottom: 8, textAlign: 'left' },
 
@@ -161,7 +165,7 @@ const styles = StyleSheet.create({
   splitRowLast: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
   splitKm: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
   splitPace: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
-  splitTail: { minWidth: 44, fontFamily: font.sansMedium, fontSize: 9, letterSpacing: trackingPx(9, tracking.legend), textTransform: 'uppercase', color: color.textMuted, textAlign: 'right' },
+  splitTail: { minWidth: 44, fontFamily: font.sansMedium, fontSize: 13, letterSpacing: trackingPx(9, tracking.legend), textTransform: 'uppercase', color: color.textMuted, textAlign: 'right' },
 
-  footer: { marginTop: 32, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  footer: { marginTop: 'auto', paddingTop: 32, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

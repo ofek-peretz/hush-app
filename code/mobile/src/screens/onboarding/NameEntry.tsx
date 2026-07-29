@@ -51,7 +51,7 @@ export function NameEntry({ navigation }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 5 }}
+      progress={{ index: 1, total: 4 }}
       keyboard
       title={t('ob.nameTitle')}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
@@ -73,11 +73,17 @@ export function NameEntry({ navigation }: Props) {
           <Legend>{t('ob.sex')}</Legend>
           <SegmentedControl
             block
+            size="lg"
             options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
             value={sex}
             onChange={pickSex}
           />
-          <Text style={styles.why}>{t('ob.sexWhy')}</Text>
+          {/* ════ THE LINE UNDER SEX IS GONE (founder 2026-07-28) ════
+              It defended a control nobody had objected to yet, and it defended it by pointing at a
+              screen — the BODY MAP — that is two steps AHEAD and has not been seen. A caption that
+              explains a control steals the control's job, and one that forward-references a screen
+              she cannot picture buys nothing at all: the map itself says what it is for, when she
+              gets there, with the muscles in front of her. Two labelled choices need no footnote. */}
         </View>
       </View>
     </OnboardingScaffold>
@@ -85,7 +91,9 @@ export function NameEntry({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  rows: { gap: 26 },
-  col: { gap: 8 },
-  why: { fontFamily: font.sans, fontSize: textScale.xs, lineHeight: 17, color: color.textTertiary, textAlign: 'left' },
+  // One 40px rhythm down the step: title → NAME → SEX (the handoff's body gap).
+  rows: { gap: 40 },
+  col: { gap: 12 },
+  why: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  whyStrong: { fontFamily: font.sansSemibold, color: color.textPrimary, textAlign: 'left' },
 });

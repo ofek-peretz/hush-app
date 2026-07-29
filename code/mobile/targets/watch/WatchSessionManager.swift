@@ -38,14 +38,26 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
   /// a phone-side idempotent apply; skipped when the same record is already
   /// in flight.
   func transferRecord(_ record: WireSessionRecord) {
-    guard WCSession.isSupported() else { return }
     guard let json = WatchWire.encodeRecord(record) else { return }
+    transfer(json, recordId: record.recordId)
+  }
+
+  /// A run/walk the wrist recorded (founder 2026-07-28). The SAME durable channel and the same ack:
+  /// the phone discriminates on the `type` inside the JSON, so cardio needed no second native
+  /// event, no second outstanding-transfer check, and no second acknowledgement path.
+  func transferCardioRecord(_ record: WireCardioRecord) {
+    guard let json = WatchWire.encodeCardioRecord(record) else { return }
+    transfer(json, recordId: record.recordId)
+  }
+
+  private func transfer(_ json: String, recordId: String) {
+    guard WCSession.isSupported() else { return }
     let session = WCSession.default
     let inFlight = session.outstandingUserInfoTransfers.contains {
-      ($0.userInfo["recordId"] as? String) == record.recordId
+      ($0.userInfo["recordId"] as? String) == recordId
     }
     guard !inFlight else { return }
-    session.transferUserInfo(["record": json, "recordId": record.recordId])
+    session.transferUserInfo(["record": json, "recordId": recordId])
   }
 
   private func ingest(_ payload: [String: Any]) {

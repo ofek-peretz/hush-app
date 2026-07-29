@@ -78,6 +78,7 @@ export function Progress({ navigation, route }: Props) {
         loaded={sessions != null}
         units={units}
         onLog={() => navigation.navigate('History')}
+        onLift={(exerciseId) => navigation.navigate('LiftDetail', { exerciseId })}
         onShareWeek={weekCard ? () => navigation.navigate('ShareCardModal', { card: weekCard }) : undefined}
       />
     );

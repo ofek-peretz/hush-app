@@ -26,6 +26,7 @@ import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
 import { undoEngineRotation } from '@/domain/swapLearning';
+import { activeEases, easeFor, effectiveBodyMap, type PainSeverity } from '@/domain/painReport';
 import { muscleOf } from '@/data/exercises';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
@@ -188,6 +189,13 @@ interface AppApi extends AppState {
    *  progression, so the current program is left untouched — they inform the next weekly
    *  regeneration + cold starts. A daysPerWeek change is the exception: the split must match the
    *  chosen frequency, so it rebuilds the week immediately. */
+  /**
+   * v7 §13 — she said a muscle hurts. Rests it for the severity's window and rebuilds the week
+   * around it, then resolves. Adds NO mechanism: the muscle simply goes off until the window
+   * lapses (domain/painReport), and the lift the session was on is swapped through the ordinary
+   * pool by the caller. Returns the ease so the response screen can state it as a fact.
+   */
+  reportPain: (muscle: string, severity: PainSeverity) => Promise<void>;
   updateProfileInfo: (fields: {
     age?: number;
     heightCm?: number;
@@ -235,6 +243,30 @@ interface AppApi extends AppState {
 }
 
 const Ctx = createContext<AppApi | null>(null);
+
+/**
+ * The raw context, exported for the WEB PREVIEW GALLERY only (`App.web.tsx`). The
+ * gallery renders one screen at a time against fixture state; it must never boot the
+ * real provider, which reaches for SQLite / HealthKit / billing. Nothing in the
+ * shipping app imports this — screens use `useApp()`.
+ */
+export const AppContext = Ctx;
+
+/**
+ * THE PROFILE THE PROGRAMME IS BUILT FROM (v7 §13).
+ *
+ * Her body map with every muscle that is currently RESTING switched off — the pain eases composed
+ * over the map, never written into it. This is the only place the two meet, so:
+ *   · her map stays the map she drew, and a lapsed ease needs nothing undone;
+ *   · the engine is handed an ordinary body map and knows nothing about pain.
+ * Every `generateProgram` call goes through here; a call that did not would quietly train a muscle
+ * she just told us hurts.
+ */
+function programProfile(profile: Profile, nowMs = Date.now()): Profile {
+  const eases = activeEases(profile.painEases, nowMs);
+  if (eases.length === 0) return profile;
+  return { ...profile, bodyMap: effectiveBodyMap(profile.bodyMap, eases, nowMs) };
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
@@ -384,6 +416,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
        */
       if (profile) void notifier.scheduleWeeklyUpdate();
       else void notifier.cancelWeeklyProgramReady();
+      // …and sweep any note a PREVIOUS build scheduled and this one no longer sends. Deleting the
+      // code that schedules a repeating push does not cancel the push — it lives in iOS's queue.
+      void notifier.cancelRetiredNotes();
 
       // Finding 5: heal a crashed completion. If a session for a program day is in THIS week's
       // history but the day wasn't flagged done (a kill between the history write and the flag
@@ -558,7 +593,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           /* non-fatal — proceed; the composed week uses the default frequency */
         }
         // Program generated BEFORE Home renders (spec flow §2.1).
-        const program = await live.generateProgram(profile);
+        const program = await live.generateProgram(programProfile(profile));
 
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
@@ -581,10 +616,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
         void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });
-        // Quarterly progress report — a recurring ~3-month note that opens the
-        // peak-weight comparison (founder). Stub is a no-op; native build delivers.
-        void notifier.scheduleQuarterlyReport();
-        // …and the weekly receipt, from the first Saturday on. `true` = this is the ONE call
+        // THE WEEKLY RECEIPT IS THE ONLY RECURRING PUSH (founder 2026-07-29). A quarterly-report
+        // note used to be armed here too; it was not on the founder's list of what may ever fire,
+        // and the screen that announced it no longer promises it. The twelve-week window is still
+        // a place she can walk to on Progress — nothing pushes her there.
+        // The weekly receipt, from the first Saturday on. `true` = this is the ONE call
         // allowed to raise the permission dialog: the athlete has just finished building their
         // program, which is the only honest moment to ask whether Hush may tell them it changed.
         void notifier.scheduleWeeklyUpdate(true);
@@ -686,7 +722,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return; // mid-week: keep the bucket intact (completed flags + athlete edits survive).
         }
         try {
-          const program = await model.generateProgram(state.profile);
+          const program = await model.generateProgram(programProfile(state.profile));
           await db.saveProgram(program);
           await db.saveWeekOpen(weekOpen);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents, weekOpenMs: weekOpen });
@@ -702,6 +738,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const profile: Profile = { ...state.profile, units };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
+      },
+
+      async reportPain(muscle, severity) {
+        if (!state.profile) return;
+        const now = Date.now();
+        // Newest-wins by construction: the old ease is kept only if it is for another muscle, so
+        // reporting the same one again REPLACES its window rather than stacking two.
+        const kept = activeEases(state.profile.painEases, now).filter((e) => e.muscle !== muscle);
+        const profile: Profile = { ...state.profile, painEases: [...kept, easeFor(muscle, severity, now)] };
+        await db.saveProfile(profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile });
+        void track('pain_reported', { muscle, severity });
+        // The muscle is off now, so the week must stop offering it. Best-effort — the ease is
+        // already saved, and it applies at the next regeneration regardless.
+        try {
+          const fresh = await model.generateProgram(programProfile(profile, now));
+          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, now) ?? fresh;
+          await db.saveProgram(program);
+          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        } catch {
+          /* offline — the rest is recorded; the week reshapes at the next regeneration */
+        }
       },
 
       async updateProfileInfo(fields) {
@@ -742,7 +800,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
           }
           try {
-            const fresh = await model.generateProgram(profile);
+            const fresh = await model.generateProgram(programProfile(profile));
             // A MID-WEEK rebuild must not resurrect finished work: the fresh days come back
             // `completed: false`, so re-apply this week's DONE flags from the history (else
             // Home re-offers a workout the athlete already trained).
@@ -802,7 +860,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.savePreferences(next);
         void track('engine_rotation_undone', { exerciseId: anchorExerciseId });
         try {
-          const fresh = await model.generateProgram(state.profile);
+          const fresh = await model.generateProgram(programProfile(state.profile));
           const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
           await db.saveProgram(program);
           dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });

@@ -11,13 +11,22 @@
  */
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import {
+  applyWatchCardioRecord,
   applyWatchSessionRecord,
+  cardioRecordToActivity,
   watchRecordToSession,
   watchSessionId,
   type WatchReconcileDeps,
 } from '@/platform/watch/watchReconcile';
-import { parseSessionRecord, WATCH_PROTOCOL_VERSION } from '@/platform/watch/protocol';
+import {
+  isCardioRecordPayload,
+  parseCardioRecord,
+  parseSessionRecord,
+  WATCH_PROTOCOL_VERSION,
+} from '@/platform/watch/protocol';
 import { WATCH_EVENTS } from '@/platform/events';
+import { cardioPerformed } from '@/domain/cardio';
+import { progressAggregate } from '@/domain/progressAggregate';
 import type { ProgramDay, Session, SetTarget } from '@/data/local/models';
 import { EXERCISES } from '@/data/exercises';
 
@@ -286,5 +295,183 @@ describe('applyWatchSessionRecord', () => {
     await applyWatchSessionRecord(record(), h.deps);
     expect(h.acked).toEqual([]);
     expect(h.outcomes()).toEqual(['rejected']);
+  });
+});
+
+// ═══════════════════ THE WRIST'S RUN, CARRIED HOME (founder 2026-07-28) ═══════════════════
+//
+// A run recorded on the wrist used to write its HKWorkout to Health and stop there, so the
+// kilometres appeared in Apple Health and NOWHERE in Hush — not her Log, not her Progress
+// distance, not her lifetime burn. She had done the work and her own app did not know it.
+//
+// It now rides the SAME durable path as a standalone strength record: one channel, told apart by
+// the `type` inside the payload, at-least-once delivery, idempotent apply, durable ack.
+
+const CARDIO = {
+  v: 1 as const,
+  type: 'cardio_record' as const,
+  recordId: 'c-1',
+  gait: 'run' as const,
+  startedAt: '2026-07-28T06:00:00.000Z',
+  endedAt: '2026-07-28T06:26:14.000Z',
+  durationSec: 1574,
+  distanceKm: 4.2,
+  kcal: 318,
+};
+
+describe('parseCardioRecord — the wrist may send junk; the phone may not throw', () => {
+  it('accepts a valid record, as an object or as the JSON string the transport delivers', () => {
+    expect(parseCardioRecord(CARDIO)).toEqual(CARDIO);
+    expect(parseCardioRecord(JSON.stringify(CARDIO))).toEqual(CARDIO);
+  });
+
+  it('rejects what it cannot trust, and never throws doing it', () => {
+    for (const bad of [
+      null, undefined, 42, 'not json', {},
+      { ...CARDIO, v: 99 }, // a future protocol
+      { ...CARDIO, type: 'session_record' }, // the other kind
+      { ...CARDIO, recordId: '' }, // no identity ⇒ no idempotency
+      { ...CARDIO, gait: 'swim' }, // not a gait Hush records
+      { ...CARDIO, durationSec: 0 }, // a tap, not an activity
+      { ...CARDIO, durationSec: undefined },
+    ]) {
+      expect(() => parseCardioRecord(bad)).not.toThrow();
+      expect(parseCardioRecord(bad)).toBeNull();
+    }
+  });
+
+  it('drops a measurement it cannot read rather than coercing it to zero', () => {
+    // "0 km" and "we could not read the distance" are different claims about her run.
+    const r = parseCardioRecord({ ...CARDIO, distanceKm: Number.NaN, kcal: -5 });
+    expect(r).not.toBeNull();
+    expect(r).not.toHaveProperty('distanceKm');
+    expect(r).not.toHaveProperty('kcal');
+  });
+});
+
+describe('cardioRecordToActivity — only what the wrist honestly measured', () => {
+  it('derives pace instead of carrying it, so the two surfaces cannot disagree', () => {
+    const a = cardioRecordToActivity(CARDIO);
+    expect(a.avgPaceSec).toBe(Math.round(1574 / 4.2));
+    expect(a.durationSec).toBe(1574);
+    expect(a.calories).toBe(318);
+  });
+
+  it('no distance ⇒ no pace, never a division by zero dressed as a number', () => {
+    const a = cardioRecordToActivity({ ...CARDIO, distanceKm: undefined });
+    expect(a.distanceKm).toBe(0);
+    expect(a.avgPaceSec).toBe(0);
+  });
+
+  it('carries no route and no splits — the wrist has neither, and a drawn line she never ran is a lie', () => {
+    const a = cardioRecordToActivity(CARDIO);
+    expect(a.splits).toEqual([]);
+    expect(a.route).toBeUndefined();
+  });
+
+  it('the id is the same watch_<recordId> shape the strength side uses', () => {
+    expect(cardioRecordToActivity(CARDIO).id).toBe('watch_c-1');
+  });
+});
+
+describe('applyWatchCardioRecord — the three rules the strength reconciler follows', () => {
+  const deps = (existing: { id: string }[] = []) => {
+    const appended: unknown[] = [];
+    const acked: string[] = [];
+    const events: { type: string; data?: Record<string, unknown> }[] = [];
+    return {
+      appended, acked, events,
+      d: {
+        loadCardio: async () => existing,
+        appendCardioActivity: async (a: unknown) => void appended.push(a),
+        ack: (id: string) => void acked.push(id),
+        track: (type: string, data?: Record<string, unknown>) => void events.push({ type, data }),
+      },
+    };
+  };
+
+  it('saves the activity and acks it', async () => {
+    const t = deps();
+    await applyWatchCardioRecord(CARDIO, t.d);
+    expect(t.appended).toHaveLength(1);
+    expect(t.acked).toEqual(['c-1']);
+  });
+
+  it('a REPLAY saves nothing and still acks — at-least-once delivery makes replays certain', async () => {
+    const t = deps([{ id: 'watch_c-1' }]);
+    await applyWatchCardioRecord(CARDIO, t.d);
+    expect(t.appended).toHaveLength(0);
+    expect(t.acked).toEqual(['c-1']); // the ack is what clears the wrist's outbox
+    expect(t.events.some((e) => e.data?.outcome === 'duplicate')).toBe(true);
+  });
+
+  it('an UNREADABLE payload is not acked — there is no id to ack', async () => {
+    const t = deps();
+    await applyWatchCardioRecord({ nonsense: true }, t.d);
+    expect(t.appended).toHaveLength(0);
+    expect(t.acked).toEqual([]);
+  });
+
+  it('a failure to PERSIST is not acked, so the wrist re-delivers', async () => {
+    const t = deps();
+    await applyWatchCardioRecord(CARDIO, {
+      ...t.d,
+      appendCardioActivity: async () => { throw new Error('disk full'); },
+    });
+    expect(t.acked).toEqual([]);
+    expect(t.events.some((e) => e.data?.reason === 'apply_failed')).toBe(true);
+  });
+
+  it('never throws, whatever it is handed', async () => {
+    const t = deps();
+    for (const bad of [null, 'x', 7, {}, { type: 'cardio_record' }]) {
+      await expect(applyWatchCardioRecord(bad, t.d)).resolves.toBeUndefined();
+    }
+  });
+});
+
+describe('one channel, two record types — the receiver tells them apart before parsing', () => {
+  it('recognises a cardio payload as an object and as the transport\'s JSON string', () => {
+    expect(isCardioRecordPayload(CARDIO)).toBe(true);
+    expect(isCardioRecordPayload(JSON.stringify(CARDIO))).toBe(true);
+  });
+
+  it('a strength record is NOT cardio — misrouting one would ack it against the wrong queue', () => {
+    expect(isCardioRecordPayload({ v: 1, type: 'session_record', recordId: 's1' })).toBe(false);
+    expect(isCardioRecordPayload(null)).toBe(false);
+    expect(isCardioRecordPayload('not json')).toBe(false);
+  });
+
+  it('a MALFORMED cardio payload is still routed to cardio, and rejected there', () => {
+    // The alternative — falling through to the session reconciler — would ack a cardio record
+    // against the strength queue and lose the run for good.
+    const broken = { ...CARDIO, durationSec: 0 };
+    expect(isCardioRecordPayload(broken)).toBe(true);
+    expect(parseCardioRecord(broken)).toBeNull();
+  });
+});
+
+describe('the last mile — a reconciled wrist run actually SURFACES', () => {
+  // Reconciling into `db` is only half the promise. The kilometres have to reach the surfaces she
+  // looks at, and the wrist's activity has a SHAPE the phone's never has: no route, no splits, and
+  // possibly no heart rate. Every one of those is a place a display could quietly drop it.
+  const activity = () => cardioRecordToActivity(CARDIO);
+
+  it('counts as PERFORMED, so the Log lists it (it has duration even with no GPS)', () => {
+    const a = activity();
+    expect(cardioPerformed(a.durationSec, a.distanceKm)).toBe(true);
+  });
+
+  it('its kilometres and calories reach the all-time aggregate Progress draws', () => {
+    const agg = progressAggregate([], [activity()], '2026-07-01T00:00:00.000Z', 70, Date.parse('2026-07-28T12:00:00Z'));
+    expect(agg.cardioKm).toBe(4.2);
+    expect(agg.kcal).toBe(318);
+  });
+
+  it('an indoor run — no distance at all — still lands, and claims no kilometres it did not cover', () => {
+    const indoor = cardioRecordToActivity({ ...CARDIO, distanceKm: undefined });
+    expect(cardioPerformed(indoor.durationSec, indoor.distanceKm)).toBe(true); // duration carries it
+    const agg = progressAggregate([], [indoor], '2026-07-01T00:00:00.000Z', 70, Date.parse('2026-07-28T12:00:00Z'));
+    expect(agg.cardioKm).toBe(0);
   });
 });

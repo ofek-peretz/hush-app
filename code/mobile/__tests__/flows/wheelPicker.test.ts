@@ -21,7 +21,7 @@
  *  2) the render window always contains the active detent (and its guard band),
  *     with spacers that keep total content width constant.
  */
-import { wheelOffset, wheelIndexFromOffset, wheelWindow, tickKind, anchorGeometry, WHEEL_HEIGHT, TICK_H } from '@/components/ds/WheelPicker';
+import { wheelOffset, wheelIndexFromOffset, wheelWindow } from '@/components/ds/WheelPicker';
 
 const ITEM_W = 60;
 
@@ -133,56 +133,8 @@ describe('wheelWindow — the rendered slice always contains the active detent',
 });
 
 /**
- * THE ENGRAVING (founder 2026-07-12: "the rules work perfectly, but they look plain").
- *
- * A measuring rule has a HIERARCHY of graduations, and that hierarchy is what lets the eye judge
- * distance without reading a digit. It is a rule, not a styling accident, so it is pinned here.
+ * v7 1.4 retired the per-detent engraving (major/whole/half hierarchy + the overshooting index
+ * line) in favour of a CONTINUOUS fixed graduation struck by one moss centre tick — "calmer, more
+ * instrument". The scale grammar those tests pinned (`tickKind`, `anchorGeometry`) no longer
+ * exists on the component; the value engine below is what remains load-bearing, and stays covered.
  */
-describe('tickKind — the rule is cut like a rule', () => {
-  it('every fifth whole unit is a MAJOR graduation — the landmarks the eye counts', () => {
-    for (const v of [0, 5, 10, 80, 85, 100, 250]) {
-      expect({ v, kind: tickKind(v, 1) }).toEqual({ v, kind: 'major' });
-    }
-  });
-
-  it('the whole units between them are quiet', () => {
-    for (const v of [1, 4, 6, 82, 178, 249]) {
-      expect({ v, kind: tickKind(v, 1) }).toEqual({ v, kind: 'whole' });
-    }
-  });
-
-  it('a FRACTION is quieter still — but only on a scale that has fractions', () => {
-    // The 0.5 kg wheel (bodyweight, the in-session load): the halves are the short graduations.
-    expect(tickKind(82.5, 0.5)).toBe('half');
-    expect(tickKind(16.5, 0.5)).toBe('half');
-    // …and its whole units keep their own hierarchy.
-    expect(tickKind(82, 0.5)).toBe('whole');
-    expect(tickKind(85, 0.5)).toBe('major');
-  });
-
-  it('a whole-step scale never produces a half graduation — there is nothing to distinguish', () => {
-    // Age, height, reps, sessions/week. Every detent is a whole unit; a "half" tick would be a lie.
-    for (const v of [14, 28, 90, 120, 178, 220, 2, 6, 50]) {
-      expect(tickKind(v, 1)).not.toBe('half');
-    }
-  });
-
-  it('float drift never turns a whole unit into a fraction (82.0 is not 82.5)', () => {
-    // buildValues rounds to 3dp; these are the values that actually reach tickKind.
-    expect(tickKind(Math.round(82.0 * 1000) / 1000, 0.5)).toBe('whole');
-    expect(tickKind(Math.round(85.0 * 1000) / 1000, 0.5)).toBe('major');
-  });
-});
-
-describe('the anchor still crosses the graduations it indexes', () => {
-  it('the ochre index line spans the tick band, with overshoot, on every wheel size', () => {
-    for (const h of [WHEEL_HEIGHT.md, WHEEL_HEIGHT.lg]) {
-      const geo = anchorGeometry(h);
-      // Taller than the tallest tick (it must overshoot, top and bottom) …
-      expect(geo.height).toBeGreaterThan(TICK_H);
-      // … and it sits INSIDE the control, not off the end of it.
-      expect(geo.bottom).toBeGreaterThanOrEqual(0);
-      expect(geo.bottom + geo.height).toBeLessThanOrEqual(h);
-    }
-  });
-});

@@ -33,6 +33,9 @@ struct ActivityRecord: Record {
   @Field var nextExerciseName: String? = nil
   @Field var nextTargetWeight: Double? = nil
   @Field var nextTargetReps: Int? = nil
+  // v7 6.2 — the set count as NUMBERS, for the dot row beside the load.
+  @Field var setIndex: Int = 1
+  @Field var setCount: Int = 1
 
   // ---- cardio ----
   @Field var gait: String = "run"
@@ -100,7 +103,9 @@ final class HushActivityController {
       isResting: r.isResting,
       nextExerciseName: r.nextExerciseName,
       nextTargetWeight: r.nextTargetWeight,
-      nextTargetReps: r.nextTargetReps
+      nextTargetReps: r.nextTargetReps,
+      setIndex: r.setIndex,
+      setCount: r.setCount
     )
   }
 

@@ -3,8 +3,16 @@
  * (ui_kits/app/Complete.jsx). A three-beat closing on the inverted stage:
  *   1) SESSION SAVED · "{workout} complete."
  *   2) Hush READS the session — each lift checks in (the work becomes evidence)
- *   3) LOGGED · "That's the work." — then WHAT THIS WORKOUT EARNED, then the record
- *      (top set, duration, estimated calories). No confetti, no daily-streak pressure.
+ *   3) WHAT THIS SESSION EARNED (v7 2.5) — "{workout} · SAVED", "That's the work.", the three
+ *      measured facts it cost (minutes · kcal · tonnes moved), and then the LEDGER: one ruled line
+ *      per lift the engine moved, its load's from→to on the end edge and the sentence that earned
+ *      it beneath, in the coach's italic serif. No confetti, no daily-streak pressure.
+ *
+ *      The TOP SET card and the two big stat figures are gone. They were the old mock's answer to
+ *      "what happened?", and they answered it with facts the athlete already knew — she had just
+ *      lifted that set. What she cannot know is what the engine DECIDED because of it, which is the
+ *      one thing this screen exists to say. An empty ledger is still an answer: every lift held at
+ *      what she lifted (S-24), stated in a line rather than left as a blank.
  *
  *      ════ REBUILT 2026-07-17 — this beat used to lie ════
  *      It closed with a calendar icon and "What you lifted this week sets next week's
@@ -38,44 +46,32 @@ import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Metric, Button } from '@/components/ds';
+import { Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
+import { monoCanDraw } from '@/design/monoVoice';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { fixtureModel } from '@/data/api/fixtureModel';
-import type { Explanation } from '@/engine/weeklyView';
+import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
+import { ensureNotificationPermission, markNotificationsAsked, shouldAskForNotifications } from '@/platform/notifications';
 import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { exerciseDisplayName } from '@/data/exercises';
-import { displayWeight, unitLabel } from '@/domain/schedule';
+import { displayWeight } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { recordCardFromHistory } from '@/domain/shareCard';
-import { strengthSessionKcal } from '@/domain/energy';
+import { sessionKcal } from '@/domain/energy';
 import { durationMinutes } from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import type { Session, SetLog } from '@/data/local/models';
-import { space, stage, font, textScale, tracking, trackingPx, up, signal, radius } from '@/design/tokens';
+import type { Explanation } from '@/engine/weeklyView';
+import { space, stage, font, textScale, tracking, trackingPx, up, down } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
-
-const vol = (s: SetLog) => (s.actualWeight ?? 0) * s.actualReps;
-
-/**
- * The better of two sets OF THE SAME LIFT: heavier work wins, and when the work ties — which it
- * always does on a bodyweight lift, where volume is 0 by definition — the longer set wins.
- *
- * Volume alone meant "your best set of pull-ups" was whichever one you happened to do FIRST, no
- * matter what you did afterwards. Deliberately NOT used for the session's TOP SET below, which
- * compares across lifts: there, reps must never let a set of push-ups outrank a heavy squat.
- * (sessionMirror.ts holds the identical comparator — the phone's read-back and the wrist's must
- * never name different sets.)
- */
-const betterSet = (a: SetLog, b: SetLog) => (vol(a) !== vol(b) ? vol(a) > vol(b) : a.actualReps > b.actualReps);
 
 /** The beats of this screen, in the only order they may be walked. */
 export type WellDonePhase = 'saved' | 'result' | 'milestone';
@@ -95,7 +91,114 @@ export function advanceFromSaved(current: WellDonePhase): WellDonePhase {
 interface Lift {
   exerciseId: string;
   name: string;
-  best: SetLog;
+}
+
+/**
+ * THE SCAN'S BREATH — the row being read now, pulsing 1.2s in and out.
+ *
+ * It is the only thing moving on the screen, and it is doing the same job the rest ring's breath
+ * does: saying "still working" without a spinner, which would say "waiting". Off under Reduce Motion.
+ */
+function ScanPulse({ children }: { children: React.ReactNode }) {
+  const reduced = useReducedMotion();
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduced) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.35, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduced, pulse]);
+  return <Animated.View style={{ opacity: pulse }}>{children}</Animated.View>;
+}
+
+/** How many sets of one lift this session logged — the fact each scanned row states. */
+function setsOf(exerciseId: string, session: Session | null): number {
+  return (session?.sets ?? []).filter((s) => s.exerciseId === exerciseId).length;
+}
+
+/** Tonnes moved this session — Σ(weight × reps), in tonnes to one decimal. Bodyweight sets carry
+ *  no declared load, so they add nothing rather than a guessed one. */
+function sessionTonnes(sets: readonly SetLog[]): number {
+  const kg = sets.reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
+  return Math.round(kg / 100) / 10;
+}
+
+/**
+ * LOOP 3'S DECISION — a muscle whose WEEKLY set target moved because of this workout.
+ *
+ * The handoff draws it on 2.5 ("Chest earned a set · 3 → 4") and the screen had no idea it existed.
+ * Worse than absent: a volume entry comes back inside `sessionEarned` like any other change, keyed
+ * by the MUSCLE rather than a lift, so `earnedLines` ran `exerciseDisplayName('Chest')` over it,
+ * found no forward load, and drew it as a lift that HELD at nothing — "Chest · holds " with the
+ * figure blank. The one decision on this screen that is about the shape of the week read as a
+ * rendering fault.
+ *
+ * The figures are not on `Explanation` (it carries the narration, not the counts), so they are read
+ * back off the stamped changeLog — the same log the Saturday mirror reads, through the same app-layer
+ * door LiftDetail uses. Nothing is recomputed and nothing is asked of the engine: the fold has
+ * already run by the time `earned` resolves, and this only reads what it wrote.
+ */
+export interface VolumeMove {
+  muscle: string;
+  setsFrom: number;
+  setsTo: number;
+  /**
+   * WHY the week's shape changed — the engine's own sentence, joined from the same `sessionEarned`
+   * narration that carries every other row's reason. The row shipped with the figures and NO
+   * reason at all, which made it the one decision on the screen that would not say why (founder
+   * 2026-07-29). Null only if the log and the narration ever disagree about what happened.
+   */
+  reason: { key: string; params?: Record<string, string | number> } | null;
+}
+
+/** One line of "what this session earned": the lift, the load it moved from → to, and the
+ *  engine's own sentence for why. */
+export interface EarnedLine {
+  key: string;
+  name: string;
+  from: string | null;
+  to: string | null;
+  /** The engine held this lift at the load she lifted — no arrow, the word and the figure (S-24). */
+  held: boolean;
+  reason: { key: string; params?: Record<string, string | number> };
+}
+
+/**
+ * Join the engine's narration to the figures the same occurrence stamped.
+ *
+ * `Explanation.slotId` names the slot; `sessionForward` is keyed by exerciseId. The overlap is what
+ * can be drawn with a from→to; a decision with no forward entry HELD, which is a real verdict
+ * (S-24) and is drawn as "holds N", never as an empty row.
+ */
+function earnedLines(
+  earned: Explanation[] | null,
+  forward: Record<string, { loadFrom: number | null; loadTo: number | null }> | null,
+  units: 'kg' | 'lb',
+): EarnedLine[] {
+  if (!earned) return [];
+  const fmt = (kg: number | null) => {
+    if (kg == null) return null;
+    const w = displayWeight(kg, units);
+    return w == null ? null : String(+w.toFixed(2));
+  };
+  return earned.map((e) => {
+    const moved = forward?.[e.slotId] ?? null;
+    const from = fmt(moved?.loadFrom ?? null);
+    const to = fmt(moved?.loadTo ?? null);
+    return {
+      key: e.slotId,
+      name: exerciseDisplayName(e.slotId),
+      from,
+      to,
+      held: to == null || to === from,
+      reason: { key: e.text.key, params: e.text.params },
+    };
+  });
 }
 
 export function WellDone({ navigation, route }: Props) {
@@ -117,17 +220,23 @@ export function WellDone({ navigation, route }: Props) {
   const [read, setRead] = useState(0);
   const session = history?.[0] ?? null;
 
-  /**
-   * WHAT THIS WORKOUT EARNED — the whole reason this screen was rebuilt (2026-07-17).
-   *
-   * `null` = the engine has not answered yet (the fold runs here, at the whistle); `[]` = it
-   * answered "nothing changed", which is a real verdict (every lift held, S-24) and is SAID, not
-   * hidden. The two must stay distinguishable or the screen would claim a steady workout while
-   * still waiting.
-   */
-  const [earned, setEarned] = useState<Explanation[] | null>(null);
-
   useFocusedStatusBar('light'); // stage screen: light glyphs, restored to dark on blur
+
+  /**
+   * 8.2 · THE HONEST ASK. "Shown once, right after your first session — never at onboarding,
+   * before value is felt." So it waits for a session that actually happened, asks ONCE ever, and
+   * only opens the system dialog if she says yes. `null` while we are still finding out whether
+   * this is the first; the screen simply does not draw until then.
+   */
+  const [askNotifications, setAskNotifications] = useState(false);
+  useEffect(() => {
+    if (notStarted) return;
+    let active = true;
+    void shouldAskForNotifications().then((yes) => active && setAskNotifications(yes));
+    return () => {
+      active = false;
+    };
+  }, [notStarted]);
 
   useEffect(() => {
     // Nothing was completed → no success moment, no history read.
@@ -144,33 +253,68 @@ export function WellDone({ navigation, route }: Props) {
   }, [notStarted]);
 
   /**
-   * Ask the engine what the workout earned, the moment it ends.
+   * WHAT THE SESSION EARNED (v7 2.5) — the engine's decisions, each with the reason that earned it.
    *
-   * This is the fold — v5 decides at the end of every occurrence (register L7), and until now
-   * nothing asked it to until the NEXT workout opened, which is why this screen used to point at
-   * Saturday: the decision genuinely did not exist yet when it rendered. Keyed to the session's own
-   * `startedAt`, which is the stamp every changeLog entry carries.
+   * `sessionEarned` narrates the loads this occurrence set for next time; `sessionForward` gives
+   * the from→to figures the same decisions moved. Together they are the ruled list this screen
+   * exists for. An EMPTY list is a real answer — every lift held (S-24) — and the screen says so
+   * rather than papering over it with a card of stats.
    *
-   * A failure resolves to `[]` rather than hanging: the athlete has finished training and is owed a
-   * close, and "nothing changed" is the honest thing to say when we cannot prove otherwise (R7).
+   * Read at the whistle, off the model seam. Both members are optional on that seam, so a client
+   * without them simply yields nothing and the list does not draw.
    */
+  const [earned, setEarned] = useState<Explanation[] | null>(null);
+  const [forward, setForward] = useState<Record<string, { loadFrom: number | null; loadTo: number | null }> | null>(null);
   useEffect(() => {
-    if (notStarted) return;
-    // The occurrence's own key, handed over on the summary — NOT re-read from history. Reading it
-    // back meant a failed `loadHistory` left this beat sitting on "setting your next loads"
-    // forever: a spinner that could never resolve, promising work nobody was doing.
-    const at = summary?.startedAtMs;
-    // No stamp = no question. Answer "nothing changed" rather than wait on one never asked.
-    if (at == null || !Number.isFinite(at)) return void setEarned([]);
+    if (notStarted || !summary?.startedAtMs) return;
     let active = true;
-    fixtureModel
-      .sessionEarned?.({ startedAtMs: at })
-      .then((e) => active && setEarned(e))
+    const startedAtMs = summary.startedAtMs;
+    void Promise.resolve(app.model.sessionEarned?.({ startedAtMs }))
+      .then((e) => active && setEarned(e ?? []))
       .catch(() => active && setEarned([]));
+    void Promise.resolve(app.model.sessionForward?.({ startedAtMs }))
+      .then((f) => active && setForward(f ?? {}))
+      .catch(() => active && setForward({}));
     return () => {
       active = false;
     };
-  }, [notStarted, summary?.startedAtMs]);
+  }, [app.model, notStarted, summary?.startedAtMs]);
+
+  /**
+   * …and the volume moves the same occurrence stamped (see `VolumeMove`). Gated on `earned`, because
+   * `sessionEarned` is what runs the fold — reading the log before it has been written would find
+   * this workout's decisions missing and quietly draw nothing.
+   */
+  const [volume, setVolume] = useState<VolumeMove[]>([]);
+  useEffect(() => {
+    if (notStarted || earned === null || !summary?.startedAtMs) return;
+    let active = true;
+    const at = summary.startedAtMs;
+    void db
+      .loadEngineV5()
+      .then((s) => {
+        if (!active) return;
+        setVolume(
+          (s?.changeLog ?? [])
+            .filter((c) => c.at === at && c.kind === 'volume' && c.muscle)
+            .map((c) => {
+              // The narration for the same move — `Explanation.slotId` holds the muscle on a volume
+              // entry, which is exactly what makes the join possible without recomputing anything.
+              const said = earned.find((e) => e.slotId === c.muscle);
+              return {
+                muscle: c.muscle as string,
+                setsFrom: c.setsFrom,
+                setsTo: c.setsTo,
+                reason: said ? { key: said.text.key, params: said.text.params } : null,
+              };
+            }),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [notStarted, earned, summary?.startedAtMs]);
 
   // Milestones crossed by THIS session (the latest in history), most personal
   // first. [0] is the single celebrated mark; the rest go quietly to the gallery.
@@ -204,23 +348,46 @@ export function WellDone({ navigation, route }: Props) {
     return () => clearTimeout(timer);
   }, [phase, reduced, stamp]);
 
-  // Per-lift bests (first-seen order) + the session's top set, from the saved sets.
-  const { lifts, topSet, setsCount } = useMemo(() => {
-    const sets = session?.sets ?? [];
-    const order: string[] = [];
-    const bestByEx = new Map<string, SetLog>();
-    let top: SetLog | null = null;
-    for (const s of sets) {
-      if (!bestByEx.has(s.exerciseId)) order.push(s.exerciseId);
-      const prev = bestByEx.get(s.exerciseId);
-      if (!prev || betterSet(s, prev)) bestByEx.set(s.exerciseId, s);
-      if (!top || vol(s) > vol(top)) top = s; // ACROSS lifts: work only (see betterSet)
+  /**
+   * The session's lifts, in the order they were performed — the list THE SCAN reads down (2.4c).
+   *
+   * It is just the distinct exercises, first-seen order. The per-lift "best set" and the session's
+   * cross-lift top set went with the card that showed them: v7's closing beats state what the
+   * ENGINE decided, not a highlight the athlete already lived through.
+   */
+  /**
+   * EVERY HOOK LIVES ABOVE EVERY EARLY RETURN.
+   *
+   * This screen has four exits (not started · milestone · the scan · the ask) and React counts
+   * hooks per render: a `useMemo` sitting BELOW an exit is skipped on the renders that take it, and
+   * the first render that falls through instead throws "Rendered more hooks than during the
+   * previous render". That is exactly what 2.5 was doing the moment the scan handed over to the
+   * result. Nothing below the first `if` may call a hook.
+   */
+  /** The three facts the session cost, on one mono line: minutes · kcal · tonnes moved. */
+  const tonnes = useMemo(() => sessionTonnes(session?.sets ?? []), [session]);
+  /**
+   * The LIFT decisions, joined to the from→to figures the same occurrence stamped.
+   *
+   * A volume move is narrated in the same list but is not a lift, and it is keyed by its muscle —
+   * so it is lifted out here and drawn as its own row below. Left in, it became a lift with no
+   * forward load, i.e. a hold with a blank number.
+   */
+  const volumeMuscles = useMemo(() => new Set(volume.map((v) => v.muscle)), [volume]);
+  const decisions = useMemo(
+    () => earnedLines(earned && earned.filter((e) => !volumeMuscles.has(e.slotId)), forward, units),
+    [earned, forward, units, volumeMuscles],
+  );
+
+  const lifts = useMemo(() => {
+    const seen = new Set<string>();
+    const order: Lift[] = [];
+    for (const s of session?.sets ?? []) {
+      if (seen.has(s.exerciseId)) continue;
+      seen.add(s.exerciseId);
+      order.push({ exerciseId: s.exerciseId, name: exerciseDisplayName(s.exerciseId) });
     }
-    return {
-      lifts: order.map((id): Lift => ({ exerciseId: id, name: exerciseDisplayName(id), best: bestByEx.get(id)! })),
-      topSet: top,
-      setsCount: sets.length,
-    };
+    return order;
   }, [session]);
 
   // Beat 2 → 3: advance to the result on a fixed ceiling, INDEPENDENT of whether the session
@@ -326,7 +493,6 @@ export function WellDone({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, celebration]);
 
-  const setLabel = (s: SetLog) => `${displayWeight(s.actualWeight, units) ?? t('workout.bodyweight')} × ${s.actualReps}`;
 
   /* ---- Not started (item 3A): nothing was completed — not a workout, nothing saved ---- */
   if (notStarted) {
@@ -368,21 +534,26 @@ export function WellDone({ navigation, route }: Props) {
                 transform: [{ scale: stamp.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) }],
               }}
             >
-              <Text style={styles.milestoneLegend}>{t('milestones.legend').toUpperCase()}</Text>
+              <Legend size={12} track={0.24} align="center" tone="onStage">{t('milestones.legend')}</Legend>
               <View style={styles.milestoneEmblem}>
-                {/* the one licensed loud moment — the medallion gives off heat here, and
-                    nowhere else in the app (founder 2026-07-12) */}
+                {/* the one licensed loud moment — the seal gives off heat here, and nowhere else
+                    in the app (founder 2026-07-12) */}
                 <MilestoneEmblem size={216} onStage pulse value={mc.value} caption={mc.caption} glyph={mc.glyph} />
               </View>
-              <Text style={styles.milestoneTitle} accessibilityRole="header">{mc.title}</Text>
-              {mc.sub ? <Text style={styles.milestoneSub}>{mc.sub}</Text> : null}
-              <Text style={styles.milestoneDate}>{dateLabel}</Text>
+              <View style={styles.milestoneWords}>
+                <Text style={styles.milestoneTitle} accessibilityRole="header">{mc.title}</Text>
+                {mc.sub ? <Text style={styles.milestoneSub}>{mc.sub}</Text> : null}
+                {/* MEASURED · 17 JULY 2026 — the mark is a record, and a record is dated. */}
+                <Legend size={13.5} track={0} weight="regular" align="center" tone="onStage">
+                  {`${t('milestones.measured')} · ${dateLabel}`}
+                </Legend>
+              </View>
             </Animated.View>
           </View>
           <View style={styles.footer}>
             <Button
               variant="onstage"
-              size="lg"
+              size="act"
               block
               label={t('milestones.continue')}
               onPress={() => (pendingExit.current ?? goHome)()}
@@ -393,82 +564,129 @@ export function WellDone({ navigation, route }: Props) {
     );
   }
 
-  /* ---- Beats 1+2: saved, then Hush reads the session into evidence ---- */
+  /* ---- Beat 1+2 · THE SCAN (v7 2.4c) ----
+     One beat, not two. It used to be "SAVED · Upper A complete." and then, underneath, a checklist
+     ticking itself off — the same moment announced twice, the second half explaining the first.
+     v7 keeps only the WORK: Hush reading the session, lift by lift, and saying what it is doing
+     with it. "Saved" is not news; a decision being made from what you just lifted is. */
   if (phase !== 'result') {
-    return (
-      <View style={styles.root}>
-        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-          <Pressable style={styles.savedBody} onPress={skip} accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')}>
-            <View style={styles.savedRow}>
-              <Icon name="check" size={18} color={up.stage} strokeWidth={2.4} />
-              <Text style={styles.savedLegend}>{t('complete.saved')}</Text>
-            </View>
-            <Text style={styles.savedTitle} accessibilityRole="header">
-              {summary?.workoutName
-                ? `${bidi(summary.workoutName)} ${partial ? t('complete.savedWord') : t('complete.completeWord')}`
-                : partial ? t('complete.savedWord') : t('complete.completeWord')}
-            </Text>
-            {/* PARTIAL that did not finish the workout (under half the prescribed sets, founder
-                2026-07-11): the work counts — it is logged and the engine folds it — but the
-                workout is still on this week's list. Say so plainly; never imply it is gone. */}
-            {stillOpen ? <Text style={styles.stillOpen}>{t('complete.stillOpen')}</Text> : null}
+    return <SessionScan lifts={lifts} read={read} setsOf={(id) => setsOf(id, session)} onSkip={skip} />;
+  }
 
-            {lifts.length > 0 ? (
-              <View style={styles.reading}>
-                <View style={styles.readingHead}>
-                  <View style={styles.readingDot} />
-                  <Text style={styles.readingLabel}>{t('complete.reading', { sets: setsCount }).toUpperCase()}</Text>
-                </View>
-                {lifts.map((l, i) => {
-                  const done = i < read;
-                  return (
-                    <View key={l.exerciseId} style={[styles.readRow, i < lifts.length - 1 && styles.readRowBorder, { opacity: done ? 1 : 0.32 }]}>
-                      <View style={[styles.readCheck, done && styles.readCheckDone]}>
-                        {done ? <Icon name="check" size={11} color={stage[0]} strokeWidth={2.6} /> : null}
-                      </View>
-                      <Text style={styles.readName} numberOfLines={1}>{l.name}</Text>
-                      {/* A column of loads is a column of FIGURES — it stays mono and tabular so
-                          the numbers line up down the list. A bodyweight lift has no figure to
-                          align; it has a word, and the word takes the sans voice. */}
-                      <Text style={[styles.readBest, l.best.actualWeight == null && styles.readBestWord]}>
-                        {setLabel(l.best)}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-          </Pressable>
-          {lifts.length > 0 ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')} onPress={skip} style={styles.tapSkipHit}>
-              <Text style={styles.tapSkip}>{t('complete.tapSkip').toUpperCase()}</Text>
-            </Pressable>
-          ) : null}
-        </SafeAreaView>
-      </View>
+  /* ---- Beat 3 · WHAT THIS SESSION EARNED (v7 2.5) ----
+     The whistle's own screen: what was saved, the three facts it cost, and then — ruled, one per
+     line — every load the engine moved because of it, each under the sentence that earned it. */
+  const durationMs = summary?.durationMs ?? 0;
+  // Through the ONE door (domain/energy.sessionKcal): the estimate for a phone-run workout, the
+  // wrist's measurement for one the watch executed standalone. Absent bodyweight ⇒ no number.
+  const kcal = sessionKcal(session ?? {}, durationMs, app.profile?.weightKg);
+  // The two record figures: DURATION and EST. CALORIES. Both are already-measured facts — wall-clock
+  // ms on the summary, and the declared MET formula in `domain/energy`. Nothing here is an engine
+  // SITUATION, so nothing here cites one: a code the register does not declare is a claim of
+  // provenance the product cannot keep (the residue guard exists for exactly this).
+  const durationLabel = String(durationMinutes(durationMs / 1000));
+  // TOP SET card figures (IMG_8260): "34 kg × 8" — the heaviest working set, split so the numerals
+  // stay mono/tabular and the unit word sits small beside them. A bodyweight top set has no weight
+  // figure; it shows "× reps" alone rather than a fabricated load.
+
+  /**
+   * The saved legend names the WORKOUT — "UPPER A · SAVED" (v7 2.5). The single word "LOGGED" said
+   * that something had been saved without ever saying what; the name is the fact, and it is the one
+   * the athlete came out of the session holding.
+   */
+  const savedLegend = summary?.workoutName
+    ? `${summary.workoutName} · ${t('complete.saved')}`
+    : t('complete.logged');
+
+  // 8.2 — the ask stands OVER the completion, once ever, and hands it back on either answer. It is
+  // deliberately after this screen has been earned: the handoff asks for it "right after your first
+  // session", never at onboarding, before value is felt.
+  if (askNotifications) {
+    return (
+      <NotificationAsk
+        onAllow={async () => {
+          await markNotificationsAsked();
+          await ensureNotificationPermission();
+          setAskNotifications(false);
+        }}
+        onDecline={() => {
+          // "Not now" spends nothing: the system prompt is untouched, and we never ask from here
+          // again — iOS gives one, and burning it on someone who just declined loses it for good.
+          void markNotificationsAsked();
+          setAskNotifications(false);
+        }}
+      />
     );
   }
 
-  /* ---- Beat 3: the work, logged. The top set, the time, the cost. ---- */
-  const durationMs = summary?.durationMs ?? 0;
-  // Honest MET estimate (domain/energy) — absent bodyweight ⇒ no number, never a guess.
-  const kcal = strengthSessionKcal(durationMs, app.profile?.weightKg);
-  // TOTAL MOVED — the third stat the handoff strikes beside MIN and KCAL (v7 2.5: "11.7 T MOVED").
-  // Pure arithmetic on the saved sets (weight × reps, summed), expressed in metric tonnes — the
-  // conventional unit for training volume and the product's native measure. A bodyweight-only
-  // session moves no barbell tonnage, so it earns no figure rather than a hollow zero.
-  const tonnesMoved = (() => {
-    const kg = (session?.sets ?? []).reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
-    return kg > 0 ? +(kg / 1000).toFixed(1) : null;
-  })();
+  return (
+    <SessionEarned
+      savedLegend={savedLegend}
+      partial={partial}
+      durationLabel={durationLabel}
+      kcal={kcal}
+      tonnes={tonnes}
+      decisions={decisions}
+      volume={volume}
+      answered={earned !== null}
+      onDone={() => leave(goHome)}
+      onRecord={() => leave(goRecord)}
+      onShare={recordCard ? () => navigation.navigate('ShareCardModal', { card: recordCard }) : undefined}
+    />
+  );
+}
+
+/**
+ * 2.5 · WHAT THIS SESSION EARNED — the closing beat, on its own.
+ *
+ * Split from `WellDone` for the same reason `SessionScan` was (2.4c): inside a real completion this
+ * beat is three seconds behind a timer, a history read and an engine fold, so a harness that mounted
+ * the whole screen watched the SCAN and then a ledger with nothing in it — which is precisely what
+ * the gallery was showing under the id "2.5". Takes only facts; renders exactly what WellDone rendered.
+ */
+export function SessionEarned({
+  savedLegend,
+  partial,
+  durationLabel,
+  kcal,
+  tonnes,
+  decisions,
+  volume,
+  answered,
+  onDone,
+  onRecord,
+  onShare,
+}: {
+  savedLegend: string;
+  /** Ended early with real work logged — the closing sentence says so instead. */
+  partial: boolean;
+  durationLabel: string;
+  kcal: number | null;
+  tonnes: number;
+  decisions: EarnedLine[];
+  volume: VolumeMove[];
+  /** The engine has answered. Only then is an empty ledger a verdict ("everything held") rather
+   *  than a read still in flight, which must draw nothing at all. */
+  answered: boolean;
+  onDone: () => void;
+  onRecord: () => void;
+  /** Offered only when this session set a real record (§9.1) — there is no card for a session that
+   *  set none, and a share button that had nothing true to put on one would be the fabrication the
+   *  whole card module exists to refuse. */
+  onShare?: () => void;
+}) {
+  const { t } = useCopy();
+  /** The word a held lift wears — read once so the face check below is done once. */
+  const holdsWord = t('complete.holds');
+  const nothingDecided = decisions.length === 0 && volume.length === 0;
 
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.savedRow}>
-            <Icon name="checkCheck" size={16} color={up.stage} strokeWidth={2} />
-            <Text style={styles.savedLegend}>{t('complete.logged')}</Text>
+            <Icon name="check" size={15} color={up.stage} strokeWidth={2.4} />
+            <Legend size={11.5} tone="accent">{savedLegend}</Legend>
           </View>
           {/* The big line stands alone (founder 2026-07-12). "I'll account for the shortened
               session in your next recommendation" is a promise the athlete has already been
@@ -477,97 +695,192 @@ export function WellDone({ navigation, route }: Props) {
               turns a closing beat into an explanation. */}
           <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
 
-          {/* ════ WHAT THIS WORKOUT EARNED ════
-              This block replaces a calendar icon and the sentence "What you lifted this week sets
-              next week's loads." That sentence was v4's rule and v5 reverses it: the decision is
-              made when the workout ENDS. The screen deferred to Saturday because, until the fold
-              moved to the whistle, the decision genuinely did not exist yet when it rendered.
-
-              It sits directly under the closing line and ABOVE the record below, because the number
-              Hush just set is the point of the beat and the top set is only evidence.
-
-              Three states, all real: still folding · nothing moved · here is what moved. The middle
-              one is not an empty state — a workout where every lift held (S-24) earned exactly that
-              answer, and R7 says say it rather than invent a change. */}
-          <View style={styles.earned}>
-            <Text style={styles.earnedLegend}>{t('complete.earnedLegend').toUpperCase()}</Text>
-            {earned == null ? (
-              <Text style={styles.earnedSteady}>{t('complete.earnedReading')}</Text>
-            ) : earned.length === 0 ? (
-              <Text style={styles.earnedSteady}>{t('complete.earnedSteady')}</Text>
-            ) : (
-              earned.map((e, i) => (
-                <View key={`${e.slotId}-${i}`} style={styles.earnedRow}>
-                  <View style={styles.earnedTick} />
-                  {/* The engine's own sentence, in Hush's first person — the number and the reason
-                      arrive together, which is the product's whole claim. */}
-                  <Text style={styles.earnedText}>{t(e.text.key, e.text.params)}</Text>
-                </View>
-              ))
-            )}
+          {/* WHAT IT COST — three measured facts on one mono line (v7 2.5). Every one is already
+              recorded: wall-clock minutes, the declared MET estimate, and Σ(weight × reps). */}
+          <View style={styles.factRow}>
+            <Legend size={13.5} track={0} weight="regular" tone="onStage">
+              {`${durationLabel} ${t('common.minShort')}`}
+            </Legend>
+            {kcal != null ? (
+              <Legend size={13.5} track={0} weight="regular" tone="onStage">
+                {`${kcal} ${t('complete.kcal')}`}
+              </Legend>
+            ) : null}
+            {tonnes > 0 ? (
+              <Legend size={13.5} track={0} weight="regular" tone="onStage">
+                {`${tonnes.toFixed(1)} ${t('weekly.tonneUnit')} ${t('complete.movedShort')}`}
+              </Legend>
+            ) : null}
           </View>
 
-          {topSet ? (
-            <View style={styles.topCard}>
-              <Text style={styles.topLegend}>{t('complete.topSet').toUpperCase()}</Text>
-              <View style={styles.topRow}>
-                <Text style={styles.topName} numberOfLines={1}>{exerciseDisplayName(topSet.exerciseId)}</Text>
-                {/* The load is a figure; "bodyweight" is a word — and the mono face cannot draw a
-                    Hebrew word at all. Each takes the voice it belongs to. */}
-                <Text style={[styles.topValue, topSet.actualWeight == null && styles.topValueWord]}>
-                  {displayWeight(topSet.actualWeight, units) ?? t('workout.bodyweight')}
-                  {topSet.actualWeight != null ? <Text style={styles.topUnit}> {unitLabel(units)}</Text> : null}
-                  <Text style={styles.topTimes}> × </Text>
-                  {topSet.actualReps}
-                </Text>
+          {/* THE DECISIONS — one ruled line per lift the engine moved, the load's from→to on the end
+              edge and the sentence that earned it beneath, in the coach's italic serif.
+
+              An EMPTY list is a verdict, not a gap: every lift held at what she lifted (S-24). The
+              screen says that in one line rather than showing nothing and letting the athlete
+              wonder whether the engine ran at all. */}
+          {!nothingDecided ? (
+            <View style={styles.earned}>
+              {decisions.map((d) => (
+                <View key={d.key} style={styles.earnedRow}>
+                  <View style={styles.earnedHead}>
+                    <Text style={styles.earnedName} numberOfLines={1}>{bidi(d.name)}</Text>
+                    {/* The held verdict puts a WORD in a mono slot — which the handoff does, and
+                        which mono can only draw in a Latin script. When it cannot, the whole figure
+                        hands over to sans rather than falling back mid-line (monoCarriesNoWords). */}
+                    <Text style={[styles.earnedFigure, !monoCanDraw(holdsWord) && styles.earnedFigureSans]}>
+                      {d.held ? (
+                        <>
+                          <Text style={styles.earnedHold}>{`${holdsWord} `}</Text>
+                          <Text style={styles.earnedHoldNum}>{d.from ?? d.to ?? ''}</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.earnedFrom}>{d.from ?? ''}</Text>
+                          <Text style={styles.earnedTo}>{`${d.from ? ' → ' : ''}${d.to}`}</Text>
+                        </>
+                      )}
+                    </Text>
+                  </View>
+                  <Text style={styles.earnedReason}>{t(d.reason.key, d.reason.params)}</Text>
+                </View>
+              ))}
+
+              {/* LOOP 3 · THE SHAPE OF THE WEEK. Not a lift and not a load — the figures beside it
+                  are weekly SETS — but it is a DECISION, so it answers "why" like every other row
+                  here (founder 2026-07-29: it shipped with the numbers and nothing else). It sits
+                  last because it is the decision the other rows added up to. */}
+              {volume.map((v) => {
+                const rose = v.setsTo > v.setsFrom;
+                const muscle = t(`muscle.${v.muscle}`);
+                return (
+                  <View key={`vol:${v.muscle}`} style={styles.earnedRow}>
+                    <View style={styles.earnedHead}>
+                      <Text style={styles.earnedName} numberOfLines={1}>
+                        {t(rose ? 'complete.volumeUp' : 'complete.volumeDown', {
+                          // `muscle.*` is authored for mid-sentence (English is singular lowercase),
+                          // so a phrase that OPENS on it capitalises rather than earning a second key.
+                          muscle: muscle.charAt(0).toUpperCase() + muscle.slice(1),
+                        })}
+                      </Text>
+                      <Text style={styles.earnedFigure}>
+                        <Text style={styles.earnedFrom}>{String(v.setsFrom)}</Text>
+                        <Text style={rose ? styles.earnedTo : styles.earnedDown}>{` → ${v.setsTo}`}</Text>
+                      </Text>
+                    </View>
+                    {v.reason ? <Text style={styles.earnedReason}>{t(v.reason.key, v.reason.params)}</Text> : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : answered ? (
+            <View style={styles.earned}>
+              <View style={styles.earnedRow}>
+                <Text style={styles.earnedReason}>{t('complete.everythingHeld')}</Text>
               </View>
             </View>
           ) : null}
-
-          <View style={styles.stats}>
-            <View style={styles.stat}>
-              <Metric onStage value={durationMinutes(durationMs / 1000)} unit={t('common.minShort')} label={t('complete.duration')} size="md" />
-            </View>
-            {kcal != null ? (
-              <View style={styles.stat}>
-                {/* No "≈". The tilde was the one hedging mark in an app that never hedges —
-                    the LABEL carries the honesty ("EST. CALORIES") and the figure stays
-                    clean (founder 2026-07-12). */}
-                <Metric onStage value={kcal} unit={t('complete.kcal')} label={t('complete.caloriesEst')} size="md" />
-              </View>
-            ) : null}
-            {tonnesMoved != null ? (
-              <View style={styles.stat}>
-                <Metric onStage value={tonnesMoved} unit={t('complete.tonneUnit')} label={t('complete.moved')} size="md" />
-              </View>
-            ) : null}
-          </View>
-
         </ScrollView>
 
         <View style={styles.footer}>
-          <Button variant="onstage" size="lg" block label={t('complete.done')} onPress={() => leave(goHome)} />
-          {recordCard ? (
+          {/* IMG_8260: the cream action first, "View session record" as a quiet ghost link beneath it. */}
+          <Button variant="primary" size="lg" block label={t('complete.done')} onPress={onDone} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('complete.viewRecord')}
+            onPress={onRecord}
+            style={({ pressed }) => [styles.recordLink, pressed && styles.ghostPressed]}
+          >
+            <Text style={styles.recordLinkLabel}>{t('complete.viewRecord')}</Text>
+          </Pressable>
+          {onShare ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('share.shareRecord')}
-              onPress={() => navigation.navigate('ShareCardModal', { card: recordCard })}
+              onPress={onShare}
               style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
             >
               <Text style={styles.ghostLabel}>{t('share.shareRecord')}</Text>
             </Pressable>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('complete.viewRecord')}
-            onPress={() => leave(goRecord)}
-            style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
-          >
-            <Text style={styles.ghostLabel}>{t('complete.viewRecord')}</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     </View>
+  );
+}
+
+
+/**
+ * 2.4c · THE SCAN — the closing beat, on its own.
+ *
+ * Extracted so the v7 gallery can hold it still: inside a real completion it is driven by timers
+ * and a history read, and a harness that mounts the whole screen sees it for a moment and then
+ * loses it. Takes only props; renders exactly what WellDone rendered.
+ */
+export function SessionScan({
+  lifts,
+  read,
+  setsOf,
+  onSkip,
+}: {
+  lifts: { exerciseId: string; name: string }[];
+  /** How many lifts have been read so far — the row at this index is the one being read. */
+  read: number;
+  setsOf: (exerciseId: string) => number;
+  onSkip: () => void;
+}) {
+  const { t } = useCopy();
+  return (
+      <View style={styles.root}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+          <Pressable style={styles.scanRoot} onPress={onSkip} accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')}>
+            <View style={styles.scanHead}>
+              <Legend size={12} track={0.22} tone="onStage">{t('complete.scanLegend')}</Legend>
+              <Text style={styles.scanTitle} accessibilityRole="header">{t('complete.scanTitle')}</Text>
+            </View>
+
+            {/* THE LIFTS, READ IN ORDER. Three states, and each is drawn rather than labelled:
+                already read (full presence, its set count stated), being read now (moss, breathing),
+                and not yet reached (the same row at .4 — present, but not yet spoken for). */}
+            <View style={styles.scanList}>
+              {lifts.map((l, i) => {
+                const done = i < read;
+                const reading = i === read;
+                return (
+                  <View
+                    key={l.exerciseId}
+                    style={[
+                      styles.scanRow,
+                      i === lifts.length - 1 && styles.scanRowLast,
+                      !done && !reading && styles.scanRowAhead,
+                    ]}
+                  >
+                    <Text style={styles.scanName} numberOfLines={1}>{bidi(l.name)}</Text>
+                    {reading ? (
+                      <ScanPulse>
+                        <Legend size={12.5} track={0} weight="regular" tone="accent">{t('complete.scanReading')}</Legend>
+                      </ScanPulse>
+                    ) : (
+                      <Legend size={12.5} track={0} weight="regular" tone="onStage">
+                        {t('complete.setsCount', { count: setsOf(l.exerciseId), n: setsOf(l.exerciseId) })}
+                      </Legend>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* What the scan is FOR, with how far through it is. The bar is the read itself — it
+                fills as the lifts are taken in, so it is a report, not a decoration. */}
+            <View style={styles.scanFooter}>
+              <View style={styles.scanTrack}>
+                <View style={[styles.scanFill, { width: `${lifts.length ? Math.round((read / lifts.length) * 100) : 0}%` }]} />
+              </View>
+              <Text style={styles.scanNote}>{t('complete.scanFooter')}</Text>
+            </View>
+          </Pressable>
+        </SafeAreaView>
+      </View>
   );
 }
 
@@ -580,31 +893,35 @@ const styles = StyleSheet.create({
   notStartedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
 
   // beats 1+2
-  savedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  // v7 2.4c · THE SCAN — the head high on the page, the lifts ruled beneath it, the read's own
+  // progress at the foot. One beat, no card, nothing framed.
+  // Kept for the two beats that still open with a legend on a line: NOT STARTED, and the ledger.
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  // LIT moss on the dark stage (v7 "· SAVED" is #A9C49F). `up[0]` is PAPER moss — near-invisible
-  // here; the stage screens were never part of the READOUT ladder inversion.
-  savedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: up.stage, textAlign: 'left' },
-  // v7: the closing line is the coach's serif voice, not a sans headline.
   savedTitle: { fontFamily: font.serif, fontSize: textScale['3xl'], lineHeight: Math.round(textScale['3xl'] * 1.1), letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: stage.ink0, marginTop: 14, textAlign: 'left' },
-  stillOpen: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: stage.ink2, marginTop: 10, textAlign: 'left' },
-  reading: { marginTop: 34 },
-  readingHead: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
-  readingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: stage.ink1 },
-  readingLabel: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
-  readRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
-  readRowBorder: { borderBottomWidth: 1, borderBottomColor: stage[2] },
-  readCheck: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: stage[2] },
-  readCheckDone: { backgroundColor: up.stage, borderColor: up.stage },
-  readName: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, textAlign: 'left' },
-  readBest: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
-  // A MODIFIER composed onto `readBest` (which declares the logical start); it swaps the face when
-  // the best set is bodyweight, i.e. a word rather than a number. Never renders alone.
-  readBestWord: { fontFamily: font.sans }, // rtl-ok
-  // The hint itself is a target too — the whole body Pressable skips, but the label
-  // must honor its own promise (44pt).
-  tapSkipHit: { minHeight: 44, justifyContent: 'center', paddingBottom: 10 },
-  tapSkip: { textAlign: 'center', fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2 },
+
+  scanRoot: { flex: 1 },
+  scanHead: { paddingHorizontal: 30, paddingTop: 90, gap: 8 },
+  scanTitle: { fontFamily: font.serif, fontSize: 36, lineHeight: 40, color: stage.ink0, textAlign: 'left' },
+  scanList: { paddingHorizontal: 30, paddingTop: 26 },
+  scanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 2,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241,238,229,0.12)',
+  },
+  scanRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.12)' },
+  // Not yet read: the row is PRESENT, just not spoken for. It never disappears — the athlete can
+  // see the whole session waiting to be taken in.
+  scanRowAhead: { opacity: 0.4 },
+  scanName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 15.5, color: stage.ink0, textAlign: 'left' },
+  scanFooter: { marginTop: 'auto', alignItems: 'center', gap: 10, paddingHorizontal: 30, paddingBottom: 60 },
+  scanTrack: { width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.12)', overflow: 'hidden' },
+  scanFill: { height: '100%', backgroundColor: up.stage },
+  scanNote: { fontFamily: font.sans, fontSize: 15, color: stage.ink1, textAlign: 'center' },
 
   // beat 3
   resultScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16, flexGrow: 1, justifyContent: 'center' },
@@ -612,51 +929,51 @@ const styles = StyleSheet.create({
   resultTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: stage.ink0, marginTop: 12, textAlign: 'left' },
   copy: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: stage.ink1, marginTop: 10, maxWidth: 320, textAlign: 'left' },
 
-  topCard: { marginTop: 22, padding: 16, borderRadius: radius.lg, backgroundColor: stage[1] },
-  topLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, marginBottom: 10, textAlign: 'left' },
-  topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  topName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), color: stage.ink0, textAlign: 'left' },
-  topValue: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.xl, color: stage.ink0, textAlign: 'left' },
-  // A MODIFIER composed onto `topValue` (which declares the logical start); same rule as
-  // `readBestWord`: it only swaps the face when the value is a word. Never renders alone.
-  topValueWord: { fontFamily: font.sansSemibold, fontSize: textScale.md }, // rtl-ok
-  topUnit: { fontFamily: font.mono, fontSize: 12, color: stage.ink2, textAlign: 'left' },
-  topTimes: { color: stage.ink2 },
+  // v7 2.5 · WHAT IT COST — three measured facts on one mono line under the closing sentence.
+  factRow: { flexDirection: 'row', gap: 22, marginTop: 16 },
 
-  stats: { flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 20, borderTopWidth: 1, borderTopColor: stage[2] },
-  stat: { flex: 1 },
-
-  /* ── What this workout earned. The beat's centre of gravity. ──
-     Raised on the stage (`stage[1]`) rather than ruled off with a border: separation is carried by
-     TONE here, which is the law the light world finally inherited on 2026-07-17. */
-  earned: { marginTop: 22, padding: 16, borderRadius: radius.lg, backgroundColor: stage[1], gap: 12 },
-  earnedLegend: {
-    fontFamily: font.sansMedium,
-    fontSize: textScale['2xs'],
-    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
-    color: stage.ink2,
-    textAlign: 'left',
+  // v7 2.5 · THE DECISIONS — a ruled ledger. Each line opens on a hairline, so the block reads as
+  // a record rather than a stack of cards, and the last line closes it.
+  earned: { marginTop: 22 },
+  earnedRow: {
+    gap: 5,
+    paddingVertical: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241,238,229,0.12)',
   },
-  /* Waiting, and "nothing moved", wear the same quiet voice — both are Hush being honest rather
-     than filling space. */
-  earnedSteady: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink1, lineHeight: 20, textAlign: 'left' },
-  earnedRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  /* The tick is a mark, not a bullet: a short sage rule that says THIS is a thing Hush did. Sage is
-     meaning (a load moved), not decoration — the one kind of colour that survived READOUT. */
-  earnedTick: { width: 2, alignSelf: 'stretch', minHeight: 18, borderRadius: 1, backgroundColor: up.stage },
-  earnedText: { flex: 1, fontFamily: font.sans, fontSize: textScale.base, color: stage.ink0, lineHeight: 21, textAlign: 'left' },
+  earnedHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
+  earnedName: { flexShrink: 1, fontFamily: font.sansSemibold, fontSize: 16, color: stage.ink0, textAlign: 'left' },
+  earnedFigure: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 16, color: stage.ink1, textAlign: 'right' },
+  // The load it came FROM rests in shadow; the load it moved TO stands in moss — the decision is
+  // the only thing on this line the engine actually made.
+  earnedFrom: { color: stage.ink1 }, // rtl-ok: nested in earnedFigure
+  earnedTo: { color: up.stage }, // rtl-ok: nested in earnedFigure
+  // A TRIMMED muscle goes down, and down is blue everywhere in v7 (founder 2026-07-28): red would
+  // read as failure, and losing a set she could not finish is the engine keeping the week honest.
+  earnedDown: { color: down.stage }, // rtl-ok: nested in earnedFigure
+  // A HELD lift (S-24) is a verdict too: the word is a word, so it takes the sans voice, and the
+  // figure beside it stays mono and full cream — nothing moved, and that is stated, not implied.
+  earnedHold: { color: stage.ink0 }, // rtl-ok: nested in earnedFigure
+  // …and the sans sibling the whole figure swaps to when mono cannot draw the word.
+  earnedFigureSans: { fontFamily: font.sans },
+  earnedHoldNum: { color: stage.ink0 }, // rtl-ok: nested in earnedFigure
+  // The reason, in the coach's own italic serif — the sentence that earned the number above it.
+  earnedReason: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 21, color: stage.ink1, textAlign: 'left' },
 
   // beat 4 — the milestone stamp
-  milestoneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  milestoneLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'left' },
-  milestoneEmblem: { marginTop: 36, marginBottom: 36 },
-  // v7: the milestone's fact is stamped in the coach's serif voice.
-  milestoneTitle: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), lineHeight: Math.round(textScale['2xl'] * 1.12), color: stage.ink0, textAlign: 'center' },
-  milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', marginTop: 10, maxWidth: 300 },
-  milestoneDate: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: stage.ink2, marginTop: 18, textAlign: 'left' },
+  // v7 2.6: one 30px rhythm — legend, seal, words — centred with the whole column lifted 20.
+  milestoneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20 },
+  milestoneEmblem: { marginTop: 30, marginBottom: 30 },
+  milestoneWords: { alignItems: 'center', gap: 10 },
+  // The milestone's fact, stamped in the coach's serif voice — 40px, the biggest sentence in the app.
+  milestoneTitle: { fontFamily: font.serif, fontSize: 40, lineHeight: 46, color: stage.ink0, textAlign: 'center' },
+  milestoneSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: stage.ink1, textAlign: 'center', maxWidth: 300 },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: stage[2] },
   ghost: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   ghostPressed: { backgroundColor: stage[1] },
   ghostLabel: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: stage.ink1, textAlign: 'left' },
+  // IMG_8260: "View session record" — a quiet centred ghost link beneath the cream Done action.
+  recordLink: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+  recordLinkLabel: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: stage.ink1, textAlign: 'center' },
 });

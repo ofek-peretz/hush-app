@@ -16,9 +16,11 @@
  * Everything is display arithmetic over the logged history (db.loadHistory / db.loadCardio); no engine
  * type is read. Durations read in MINUTES, never as a clock ("52 min", not "0:52").
  *
- * THE LAW (monoCarriesNoWords): mono carries only figures. Every word-bearing string here — the
- * weekday, the meta line, "N up", "recorded" — is SANS, because in Hebrew those are Hebrew words and
- * the mono face has no Hebrew glyph.
+ * THE LEDGER SPEAKS IN MONO (v7 3.3). The weekday, the meta line, "3 UP", "RECORDED" — the handoff
+ * sets every one of them in IBM Plex Mono, because a ledger's columns are READINGS, not prose, and
+ * they have to align down the page. The Hebrew problem the old sans-everything rule solved is solved
+ * a better way now: `Legend` picks the face from the STRING (`monoVoice`), so an English ledger reads
+ * exactly as the handoff draws it and a Hebrew one falls back to Assistant instead of breaking.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -26,7 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { SegmentedControl } from '@/components/ds';
+import { SegmentedControl, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
@@ -105,7 +107,6 @@ function monthKeyOf(iso: string): string {
 }
 
 export function History({ navigation }: Props) {
-  const { t } = useCopy();
   const app = useApp();
   const [sessions, setSessions] = useState<Session[] | null>(null); // null = loading
   const [cardio, setCardio] = useState<CardioActivity[]>([]);
@@ -124,7 +125,41 @@ export function History({ navigation }: Props) {
     }, []),
   );
 
-  const dayName = (s: Session) => sessionDayName(s, app.program);
+  return (
+    <HistoryView
+      sessions={sessions}
+      cardio={cardio}
+      dayName={(s) => sessionDayName(s, app.program)}
+      onLifts={() => navigation.goBack()}
+      onSession={(id) => navigation.navigate('WorkoutDetail', { sessionId: id })}
+      onCardio={(activity) => navigation.navigate('CardioDetail', { activity })}
+    />
+  );
+}
+
+/**
+ * 3.3 · PROGRESS — LOG, as a pure view.
+ *
+ * Split from the container so the v7 gallery can draw a real ledger: everything here comes from
+ * SQLite, and a harness has none. `sessions === null` is still "loading" — the view holds its shape
+ * rather than flashing an empty state at a ledger that is about to have rows.
+ */
+export function HistoryView({
+  sessions,
+  cardio,
+  dayName,
+  onLifts,
+  onSession,
+  onCardio,
+}: {
+  sessions: Session[] | null;
+  cardio: CardioActivity[];
+  dayName: (s: Session) => string;
+  onLifts: () => void;
+  onSession: (sessionId: string) => void;
+  onCardio: (activity: CardioActivity) => void;
+}) {
+  const { t } = useCopy();
 
   // Only PERFORMED work is a record (founder 2026-07-10): a session with zero completed sets or a
   // cardio false-start never shows here.
@@ -152,13 +187,15 @@ export function History({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
         <SegmentedControl
+          size="pill"
+          style={styles.lens}
           options={[
             { value: 'lifts', label: t('progress.tabLifts') },
             { value: 'log', label: t('progress.tabLog') },
           ]}
           value="log"
           onChange={(v) => {
-            if (v === 'lifts') navigation.goBack();
+            if (v === 'lifts') onLifts();
           }}
         />
       </View>
@@ -178,7 +215,7 @@ export function History({ navigation }: Props) {
             // "18 sessions · 46.8 t moved. Every rep you've done is here." — the figures ride mono
             // inside a sans sentence.
             <Text style={styles.summaryLine}>
-              <Text style={styles.summaryFig}>{totalSessions}</Text> {t('history.logSessions')} ·{' '}
+              <Text style={styles.summaryFig}>{totalSessions}</Text> {t('history.logSessions', { count: totalSessions })} ·{' '}
               <Text style={styles.summaryFig}>{tonnesLabel}</Text> {t('history.tonneUnit')} {t('history.logMoved')}
             </Text>
           ) : null}
@@ -213,14 +250,12 @@ export function History({ navigation }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel={`${name} · ${meta}`}
                   onPress={() =>
-                    isCardio
-                      ? navigation.navigate('CardioDetail', { activity: item })
-                      : navigation.navigate('WorkoutDetail', { sessionId: item.id })
+                    isCardio ? onCardio(item) : onSession(item.id)
                   }
                   style={({ pressed }) => [styles.row, last && styles.rowLast, pressed && styles.rowPressed]}
                 >
                   <View style={styles.dateCol}>
-                    <Text style={styles.dow}>{dowOf(item.startedAt)}</Text>
+                    <Legend size={10.5} track={0}>{dowOf(item.startedAt)}</Legend>
                     <Text style={styles.day}>{dayOf(item.startedAt)}</Text>
                   </View>
 
@@ -238,13 +273,13 @@ export function History({ navigation }: Props) {
                     ) : (
                       <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
                     )}
-                    <Text style={styles.rowMeta} numberOfLines={1}>{meta.toUpperCase()}</Text>
+                    <Legend size={11.5} track={0} weight="regular" style={styles.rowMeta}>{meta}</Legend>
                   </View>
 
                   {isCardio ? (
-                    <Text style={styles.recorded}>{t('history.rowRecorded').toUpperCase()}</Text>
+                    <Legend size={10.5} track={0.06}>{t('history.rowRecorded')}</Legend>
                   ) : raiseN > 0 ? (
-                    <Text style={styles.rowUp}>{t('history.rowRaises', { count: raiseN }).toUpperCase()}</Text>
+                    <Legend size={12.5} track={0} tone="accent">{t('history.rowRaises', { count: raiseN })}</Legend>
                   ) : null}
 
                   <Icon name="chevronRight" size={15} color={color.textTertiary} strokeWidth={1.8} />
@@ -266,11 +301,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: space.gutter,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 30,
+    paddingTop: 20,
+    paddingBottom: 14,
   },
-  title: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
+  lens: { marginTop: 8 },
+  // The same 40px surface title the Lifts lens wears — one Progress, two lenses.
+  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
 
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
   emptyMark: {
@@ -287,38 +324,42 @@ const styles = StyleSheet.create({
   emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
   empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
 
-  list: { paddingHorizontal: space.gutter, paddingBottom: 40 },
+  list: { paddingHorizontal: 30, paddingBottom: 40 },
 
   // One-line summary: a sans sentence with mono figures.
-  summaryLine: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 22, color: color.textSecondary, marginTop: 2, marginBottom: 8, textAlign: 'left' },
-  summaryFig: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], color: color.textPrimary }, // rtl-ok: nested figure span, inherits textAlign from summaryLine
+  summaryLine: { fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textSecondary, marginBottom: 6, textAlign: 'left' },
+  // The figures ride mono INSIDE the sans sentence — a reading quoted in prose.
+  summaryFig: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 13.5, color: color.textPrimary }, // rtl-ok: nested figure span, inherits textAlign from summaryLine
 
   // Month chapter — the coach's serif.
-  monthLabel: { fontFamily: font.serif, fontSize: textScale.xl, color: color.textPrimary, marginTop: 18, paddingBottom: 6, textAlign: 'left' },
+  // The month is a CHAPTER, so it is the coach's serif at 26 — the ledger's only headline.
+  monthLabel: { fontFamily: font.serif, fontSize: 28, lineHeight: 33, color: color.textPrimary, marginTop: 24, paddingBottom: 12, textAlign: 'left' },
 
+  /* THE LOG IS A LIST OF DOORS, NOT A LEDGER (founder 2026-07-28). Every row opens something — a
+     strength row goes to the RECORD (WorkoutDetail), a cardio row to its details (CardioDetail) —
+     and they were set at ledger scale: a 15.5 pt name over a caption, 14 pt of air, on a screen she
+     scrolls with a thumb. Taller rows, a bigger name, and the day's figure large enough to scan a
+     month by. Nothing new is shown; what is here is finally at the size it is read at. */
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    paddingVertical: 14,
+    paddingVertical: 19,
     paddingHorizontal: 2,
     borderTopWidth: 1,
-    borderTopColor: color.border,
+    borderTopColor: 'rgba(241,238,229,0.12)',
   },
   rowLast: { borderBottomWidth: 1, borderBottomColor: color.border },
   rowPressed: { opacity: 0.6 },
 
-  dateCol: { width: 44 },
-  dow: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.textMuted, textAlign: 'left' },
-  day: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
+  dateCol: { width: 50 },
+  day: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 24, color: color.textPrimary, textAlign: 'left' },
 
-  rowMid: { flex: 1, minWidth: 0, gap: 3 },
+  rowMid: { flex: 1, minWidth: 0, gap: 5 },
   cardioTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  rowName: { flexShrink: 1, fontFamily: font.sansSemibold, fontSize: 15.5, color: color.textPrimary, textAlign: 'left' },
+  rowName: { flexShrink: 1, fontFamily: font.sansSemibold, fontSize: 18, color: color.textPrimary, textAlign: 'left' },
   // SANS, not mono: "6 LIFTS · 52 MIN" / "318 KCAL · 141 AVG HR" carry translated words.
-  rowMeta: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: 0.3, color: color.textMuted, textAlign: 'left' },
+  rowMeta: { color: color.textMuted },
 
   // Trailing marks — moss for a raise, muted for a recorded cardio. Both are WORDS → sans.
-  rowUp: { fontFamily: font.sansSemibold, fontSize: textScale.xs, letterSpacing: 0.4, color: signal[0], textAlign: 'right' },
-  recorded: { fontFamily: font.sansMedium, fontSize: 10.5, letterSpacing: trackingPx(10.5, tracking.legend), color: color.textMuted, textAlign: 'right' },
 });

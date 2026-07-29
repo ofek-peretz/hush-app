@@ -22,22 +22,33 @@ const bb: ExerciseMeta = { equipment: 'barbell', bodyweight: false };
 const S = (load: number, reps: number, rest = 90): SetPerf => ({ load, reps, restBeforeS: rest, isApproach: false });
 const rec = (sets: SetPerf[]): SessionRecord => ({ load: sets[0].load!, sets });
 
-/** A clean −1 rep per 2.5 kg ladder at one steady rest: plenty of pairs, one honest slope. */
+/**
+ * A clean −1 rep per 2.5 kg ladder at one steady rest: plenty of pairs, one honest slope.
+ *
+ * SPREAD ACROSS OCCURRENCES (2026-07-27), because that is how the evidence actually accrues and
+ * because the fit now refuses within-occurrence pairs. Inside ONE session the load only moves when
+ * Loop 1 corrects it, and a corrected pair carries the session's accumulated fatigue alongside the
+ * load change — the two are confounded, and in the direction Loop 1 corrects most often (down) the
+ * confound INVERTS the slope. The rungs are the same four; they are simply four days, not four sets.
+ */
 const ladder = (rest = 90): SetPerf[] => [S(60, 12, rest), S(62.5, 11, rest), S(65, 10, rest), S(67.5, 9, rest)];
+
+/** The same ladder as her HISTORY — one rung per occurrence, newest first. */
+const ladderSessions = (rest = 90): SessionRecord[] => ladder(rest).map((set) => rec([set]));
 
 describe('F-13 · Theil–Sen — one named estimator, and a single wild set cannot drag it', () => {
   it('fits her real slope: −1 rep per 2.5 kg rung on a barbell', () => {
-    const perRung = repsPerRung(ladder(), [], bb);
+    const perRung = repsPerRung([], ladderSessions(), bb);
     expect(perRung).toBeCloseTo(1, 5); // one rung (2.5 kg) costs one rep
   });
 
   it('the same input twice gives the same number (I-24 determinism)', () => {
-    expect(repsPerRung(ladder(), [], bb)).toBe(repsPerRung(ladder(), [], bb));
+    expect(repsPerRung([], ladderSessions(), bb)).toBe(repsPerRung([], ladderSessions(), bb));
   });
 
   it('one absurd set does not move the median of the pairwise slopes', () => {
-    const clean = repsPerRung(ladder(), [], bb)!;
-    const withLie = repsPerRung([...ladder(), S(70, 40)], [], bb)!;
+    const clean = repsPerRung([], ladderSessions(), bb)!;
+    const withLie = repsPerRung([], [...ladderSessions(), rec([S(70, 40)])], bb)!;
     expect(Math.abs(withLie - clean)).toBeLessThan(0.5); // the mis-key is outvoted, not obeyed
   });
 });
@@ -45,14 +56,14 @@ describe('F-13 · Theil–Sen — one named estimator, and a single wild set can
 describe('F-11 · the rest band — a set rested very differently is not evidence about this one', () => {
   it('sets straddling the band produce no fit; the same sets inside it do', () => {
     // Alternating 30 s / 300 s rest: every pair is > 45 s apart, so NOTHING is like-for-like.
-    const straddling = [S(60, 12, 30), S(62.5, 11, 300), S(65, 10, 30), S(67.5, 9, 300)];
-    expect(repsPerRung(straddling, [], bb)).toBeNull();
-    expect(repsPerRung(ladder(90), [], bb)).not.toBeNull(); // identical loads/reps, one steady rest
+    const straddling = [S(60, 12, 30), S(62.5, 11, 300), S(65, 10, 30), S(67.5, 9, 300)].map((set) => rec([set]));
+    expect(repsPerRung([], straddling, bb)).toBeNull();
+    expect(repsPerRung([], ladderSessions(90), bb)).not.toBeNull(); // identical loads/reps, one steady rest
   });
 
   it('a difference of exactly the band width still counts — the guard excludes only what exceeds it', () => {
-    const atTheEdge = [S(60, 12, 60), S(62.5, 11, 60 + REST_BAND_WIDTH_S), S(65, 10, 60), S(67.5, 9, 60 + REST_BAND_WIDTH_S)];
-    expect(repsPerRung(atTheEdge, [], bb)).not.toBeNull();
+    const atTheEdge = [S(60, 12, 60), S(62.5, 11, 60 + REST_BAND_WIDTH_S), S(65, 10, 60), S(67.5, 9, 60 + REST_BAND_WIDTH_S)].map((set) => rec([set]));
+    expect(repsPerRung([], atTheEdge, bb)).not.toBeNull();
   });
 
   it('a set whose rest was never recorded is left out of the fit entirely', () => {
@@ -70,7 +81,7 @@ describe('F-12 / B-5 · below the evidence gate there is no slope — one cautio
   });
 
   it('with a fitted slope the move sizes itself to her number, never below one rung', () => {
-    const perRung = repsPerRung(ladder(), [], bb)!;
+    const perRung = repsPerRung([], ladderSessions(), bb)!;
     expect(rungsForHeadroom(3, perRung)).toBe(3); // 3 reps of headroom at 1 rep/rung → 3 rungs
     expect(rungsForHeadroom(0.2, perRung)).toBe(1); // …and never zero
   });
@@ -82,10 +93,27 @@ describe('F-8 · the recency window — old history is not her number today', ()
     // with nothing (same load with itself, F-11-excluded from the ladder) and the ONLY thing that can
     // produce a slope is the ladder — which sits just past the window's edge. If F-8 were ignored, the
     // ladder would be read and a slope returned.
-    const filler: SessionRecord[] = Array.from({ length: RECENCY_WINDOW_SESSIONS }, () => rec([S(60, 10, 300), S(60, 10, 300)]));
-    const stale: SessionRecord[] = [rec(ladder())];
+    const filler: SessionRecord[] = Array.from({ length: RECENCY_WINDOW_SESSIONS }, () => rec([S(60, 10, 300)]));
+    const stale: SessionRecord[] = ladderSessions();
     expect(repsPerRung([], [...filler, ...stale], bb)).toBeNull();
     // Move the same ladder INSIDE the window and the very same data now fits.
-    expect(repsPerRung([], [...filler.slice(0, RECENCY_WINDOW_SESSIONS - 1), ...stale], bb)).not.toBeNull();
+    expect(repsPerRung([], [...filler.slice(0, RECENCY_WINDOW_SESSIONS - stale.length), ...stale], bb)).not.toBeNull();
   });
+});
+
+describe('L3 · a pair must come from two different occurrences', () => {
+  it('a within-session ladder produces NO fit, however clean it looks', () => {
+    // Four rungs inside one session is not four measurements of the load response — it is one
+    // measurement plus the session's own accumulating fatigue, and the two cannot be separated.
+    expect(repsPerRung(ladder(), [], bb)).toBeNull();
+  });
+
+  it('the Loop-1 easing pair — less weight AND fewer reps — is refused outright', () => {
+    // The dangerous shape, isolated: Loop 1 eased her mid-session and fatigue took the reps down
+    // WITH the load, so as a pair it reads as a POSITIVE slope. Unchecked, pairs like this drag the
+    // median toward zero, shrink perRung, and — since a move is headroom ÷ perRung — make every
+    // later correction BIGGER than her real number warrants. It is not down-weighted; it is refused.
+    expect(repsPerRung([S(40, 9), S(37.5, 7)], [], bb)).toBeNull();
+  });
+
 });

@@ -4,7 +4,7 @@
  *   · the record card names the lift, the load, the reps, the step, and the context line;
  *   · the week card names the week, the tonnage, and the calories;
  *   · a bodyweight/first-ever record renders without a delta and never throws.
- * Also a quiet guard on the law: no translated WORD is routed through the mono face.
+ * Also a quiet guard on the law: nothing the mono face cannot DRAW is routed through it.
  */
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
@@ -12,6 +12,7 @@ import { ShareCard } from '@/components/share/ShareCard';
 import type { ShareRecordCard, ShareWeekCard } from '@/domain/shareCard';
 import { initI18n } from '@/i18n';
 import { font } from '@/design/tokens';
+import { monoCanDraw } from '@/design/monoVoice';
 
 beforeAll(async () => {
   await initI18n();
@@ -98,16 +99,26 @@ describe('ShareCard · week', () => {
 });
 
 describe('the mono law', () => {
-  it('routes no translated word through the mono face on either card', () => {
+  /**
+   * WHAT THE LAW ACTUALLY PROTECTS (restated 2026-07-26, v7 handoff).
+   *
+   * This used to read "no LETTER may reach the mono face". That was a proxy, and the v7 handoff
+   * breaks it on purpose: §9.1 sets "A NEW PERSONAL BEST" in IBM Plex Mono 500/.16em, and so does
+   * every all-caps legend in the product. The founder's ruling is that the screens match the
+   * handoff one-to-one, typeface included.
+   *
+   * The DAMAGE the law was written against is untouched, because it was never about letters — it
+   * was about IBM Plex Mono having no Hebrew glyphs, so a translated legend fell back mid-line.
+   * `monoCanDraw` asks that question of the string itself (`design/monoVoice`), and `Legend` swaps
+   * to Assistant the moment the answer is no. So the assertion is now the real one: nothing the
+   * mono face cannot DRAW is ever routed through it.
+   */
+  it('routes nothing the mono face cannot draw through it, in either language', () => {
     for (const card of [record, week] as const) {
       const r = mount(<ShareCard card={card} width={296} />);
       for (const { text, mono } of texts(r)) {
         if (!mono) continue;
-        // A mono string may carry figures, figure punctuation, and the UNIT tokens (kg/lb) — the
-        // one lettered exception the whole app allows in mono. It may never carry a translated WORD
-        // (any other letters, or any Hebrew), which is what the law actually forbids.
-        const withoutUnits = text.replace(/kg|lb/g, '');
-        expect(withoutUnits).not.toMatch(/[A-Za-z֐-׿]/);
+        expect({ text, drawable: monoCanDraw(text) }).toEqual({ text, drawable: true });
       }
     }
   });

@@ -117,11 +117,17 @@ for (const key of enFlat.keys()) {
  * Legitimately Hebrew-only, so exempt from the orphan check:
  *  - `cues.*` — the Hebrew technique-cue library (ratified 2026-07-06); English cues live in
  *    the exercise catalog, not the locale.
- *  - `_female` — the gendered forms Hebrew needs and English does not.
+ *  - `_female` — the gendered forms Hebrew needs and English does not. It may carry a PLURAL
+ *    category behind it (`weekly.intro_female_one`): Hebrew conjugates a sentence that counts
+ *    things, so gender and number arrive together, and i18next resolves `key_context_plural` in
+ *    that order. The rule used to anchor `_female` at the END, which let `_female_two` through by
+ *    accident (it ends `_two`) while `_female_one` and `_female_other` read as orphans — the same
+ *    sentence, in the same locale, split across two verdicts.
  *  - Hebrew's DUAL plural category (`_two`) — i18next resolves it; English has no such form.
  *  - `_comment*` — authoring notes.
  */
-const HE_ONLY = /(^cues\.)|(_female$)|(_two$)|(\._comment)/;
+const PLURAL_CATEGORY = '(_zero|_one|_two|_few|_many|_other)?';
+const HE_ONLY = new RegExp(`(^cues\.)|(_female${PLURAL_CATEGORY}$)|(_two$)|(\._comment)`);
 
 for (const key of heFlat.keys()) {
   if (!enFlat.has(key) && !HE_ONLY.test(key)) {

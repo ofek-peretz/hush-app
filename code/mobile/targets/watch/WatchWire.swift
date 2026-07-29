@@ -53,8 +53,16 @@ struct WireSummary: Codable, Equatable {
   var timeLabel: String
   var sets: Int
   var up: Int
+  /// Total external load moved this session, in KILOGRAMS (the phone's Σ weight × reps). The
+  /// Complete screen renders it as tonnes ("11.7 T"). Optional like every post-v1 field — a phone
+  /// one build behind sends no key and the metric simply reads "––" rather than an invented figure.
+  var volumeKg: Double?
   /// Optional so a phone on an older mirror schema still decodes (the read-back beat simply
   /// does not play, and the summary lands the way it always did).
+  /// The session's calories AS THE PHONE COMPUTED THEM (founder 2026-07-28). The wrist can read
+  /// HealthKit's active energy and the phone cannot, so the two used to print different figures for
+  /// one workout. The authority produces the number; this surface renders it.
+  var kcal: Int?
   var lifts: [WireSummaryLift]?
   /// Present only on the session that crossed it — a mark is celebrated once, on its own workout.
   var milestone: WireMilestone?
@@ -114,9 +122,14 @@ struct WireMirror: Codable, Equatable {
   var totalSets: Int
   var targetWeight: Double?
   var targetReps: Int
+  /// The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same 8–10
+  /// rep-range ruler the phone's stage does (WT2). Nil when the target is a single rep count.
+  var targetRepsHi: Int?
   var restEndsAt: String?
   var restRemainingS: Int?
   var restTotalS: Int?
+  /// WT5 — the running rest is HER measured median on this lift (S-17), not the tier bootstrap.
+  var restIsLearned: Bool?
   var nextExerciseName: String?
   var nextExerciseGroup: String?
   var nextTargetWeight: Double?
@@ -128,6 +141,11 @@ struct WireMirror: Codable, Equatable {
   var nextLoadDeltaKg: Double?
   var liftIndex: Int?
   var liftCount: Int?
+  /// WT13c · GLANCE — her own work so far, live. The summary carries the same pair but only on the
+  /// terminal frame, so a glance mid-session had nothing of HERS to read (heart and burn come from
+  /// the OS; these are the only two figures about her lifting).
+  var liveVolumeKg: Double?
+  var liveSets: Int?
   var workoutName: String?
   var summary: WireSummary?
   var swapOptions: [WireSwapOption]?
@@ -161,6 +179,10 @@ struct WireLobby: Codable, Equatable {
   var lifts: Int?
   var durationLabel: String?
   var resting: Bool?
+  /// WT7 · THE FIRST FOUR — she has never completed a workout. The lobby's ordinary face reports on
+  /// a WEEK and compares to a history; on day one both are empty, so it says what the engine is
+  /// about to DO instead.
+  var firstWorkout: Bool?
   /// Training is behind the paywall (free sessions spent, no membership). The watch then
   /// neither proposes a start nor runs one standalone — the purchase belongs to the phone.
   var gated: Bool?
@@ -199,6 +221,8 @@ struct WirePlanStep: Codable, Equatable {
   var globalIndex: Int
   var targetWeight: Double?
   var targetReps: Int
+  /// The TOP of her band — without it the standalone projector cannot draw the rep ruler.
+  var targetRepsHi: Int?
   var blockId: String?
   /// Advisory load-change reason ("increase" | "decrease") + magnitude (kg).
   var reasonType: String?
@@ -252,15 +276,38 @@ struct WireSessionRecord: Codable, Equatable {
   var startedAt: String
   var endedAt: String
   var earlyFinish: Bool
+  /// Active kilocalories the WRIST measured for a standalone workout — the phone has no such
+  /// sensor, so here the wrist is the authority and its number becomes the session's.
+  var kcal: Int?
   var sets: [WireRecordSet]
 }
 
 /// Watch → phone intent. The phone de-dupes on `intentId` and rejects stale/wrong-
 /// phase/wrong-index intents — so this is a PROPOSAL, never an authoritative action.
+/// A run/walk the WRIST recorded, carried home (founder 2026-07-28). Mirrors
+/// `protocol.WatchCardioRecord` exactly — `watchWireParity` holds the two together.
+///
+/// Four honest facts and nothing else: the wrist has no GPS trace worth carrying (the route is the
+/// phone's) and no split history to replay. Every measurement is optional because the wrist may
+/// genuinely lack it — no heart-rate source, no bodyweight to bill calories against.
+struct WireCardioRecord: Codable, Equatable {
+  var v: Int
+  var type: String
+  var recordId: String
+  var gait: String
+  var startedAt: String
+  var endedAt: String
+  /// The WATCH's own pause-aware clock — never `end − start` (founder 2026-07-11: a pause stops it).
+  var durationSec: Double
+  var distanceKm: Double?
+  var avgHr: Int?
+  var kcal: Int?
+}
+
 struct WireIntent: Codable {
   var v: Int
   // complete_set | end_rest | pause | resume | finish_early | exercise_busy |
-  // select_workout | start_workout | swap_exercise | add_rest
+  // select_workout | start_workout | swap_exercise | add_rest | report_pain
   var type: String
   var intentId: String
   var issuedAt: String
@@ -270,6 +317,12 @@ struct WireIntent: Codable {
   var workoutId: String?
   var exerciseId: String?
   var seconds: Int?
+  /// The body area a `report_pain` intent flags ("Shoulder", "Lower back", …). Nil on every
+  /// other intent. The phone owns what to do with it — the wrist only names where it hurts.
+  /// WT14b — how sharp it is, in HER words. Required by the phone: a report without it is a
+  /// half-finished flow, and the engine may not choose a rest window she did not choose.
+  var severity: String?
+  var area: String?
 }
 
 enum WatchWire {
@@ -284,6 +337,13 @@ enum WatchWire {
   }
 
   static func encodeRecord(_ record: WireSessionRecord) -> String? {
+    guard let data = try? JSONEncoder().encode(record) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  /// The cardio twin. Both ride ONE durable channel and the phone tells them apart by the `type`
+  /// field inside the JSON — no second native event, no second ack path.
+  static func encodeCardioRecord(_ record: WireCardioRecord) -> String? {
     guard let data = try? JSONEncoder().encode(record) else { return nil }
     return String(data: data, encoding: .utf8)
   }

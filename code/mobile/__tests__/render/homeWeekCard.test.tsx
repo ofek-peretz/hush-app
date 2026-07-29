@@ -134,7 +134,6 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     onHistory: () => {},
     onSettings: () => {},
     onProgress: () => {},
-    onCardio: () => {},
     ...over,
   };
 }
@@ -157,7 +156,7 @@ describe('the app says what it does', () => {
    */
   it('the change count rides a moss pill on the title — not a paragraph on the stage', () => {
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
-    expect(said).toContain(tg('home.briefChanges', { count: 3 }).toUpperCase());
+    expect(said).toContain(tg('home.briefChangesShort', { count: 3 }).toUpperCase());
     // the engine's full sentence is NOT printed on Today — it is one tap away, never a wall of text
     expect(said).not.toContain('I raised your Bench Press');
   });
@@ -178,7 +177,7 @@ describe('the app says what it does', () => {
 
   it('states HOW MANY lifts changed — and a steady week shows no pill at all', () => {
     expect(texts(mount(<HomeView {...props({ briefCount: 3 })} />)).join(' ')).toContain(
-      tg('home.briefChanges', { count: 3 }).toUpperCase(),
+      tg('home.briefChangesShort', { count: 3 }).toUpperCase(),
     );
     // Zero changes = no pill, no text. The "no changes" sentence belongs to the WHY surface, not
     // to Today, which would otherwise carry a label explaining that nothing happened.
@@ -250,10 +249,11 @@ describe('the week is on the page, and it is a door', () => {
     expect(said).toContain('Bench Press');
     // v7 splits the figure into two styled spans — the load (moss when changed) and the scheme —
     // so assert the two facts rather than one glued string: the load, and the BAND (not Tlo).
-    expect(said).toContain('80 kg');
-    expect(said).toContain('3 × 8–10');
+    // The plan column carries the load WITHOUT its unit (v7 2.1) — one declared unit, six rows.
+    expect(said).toContain('80');
+    expect(said).toContain('3×8–10');
     // A bodyweight lift states the reps and invents no weight.
-    expect(said).toContain('3 × 10–12');
+    expect(said).toContain('3×10–12');
     expect(said).not.toMatch(/null|undefined|NaN/);
   });
 
@@ -267,7 +267,7 @@ describe('the week is on the page, and it is a door', () => {
         })}
       />,
     );
-    act(() => byLabel(r, 'Bench Press · 80 kg · 3 × 8–10')!.props.onPress());
+    act(() => byLabel(r, 'Bench Press · 80 kg · 3×8–10')!.props.onPress());
     expect(formed).toEqual(['bb_bench_press']);
   });
 
@@ -380,9 +380,12 @@ describe('cardio is its own tab now — it does not rival the one act on Today',
     expect(byLabel(r, tg('cardio.title'))).toBeNull();
   });
 
-  it('returns only on a RECOVERY day, where a run IS the day\'s act', () => {
+  it('does not come back on the RECOVERY day either (founder 2026-07-27)', () => {
+    // It used to return here, on the argument that a run IS the rest day's act. The founder closed
+    // that: cardio has its own seat in the tab bar, so a card on the week's close was the same door
+    // offered twice. The week is done; the tab is where a run lives.
     const r = mount(<HomeView {...props({ resting: true, dayName: null })} />);
-    expect(byLabel(r, tg('cardio.title'))).not.toBeNull();
+    expect(byLabel(r, tg('cardio.title'))).toBeNull();
   });
 });
 

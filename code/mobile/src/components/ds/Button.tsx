@@ -13,16 +13,28 @@ import {
   space,
   font,
   textScale,
-  tracking,
-  trackingPx,
   signal,
-  down,
+  alert,
   paper,
   stage as stageC,
 } from '@/design/tokens';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'onstage' | 'onstageGhost';
-type Size = 'sm' | 'md' | 'lg';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'onstage' | 'onstageGhost' | 'signal';
+/**
+ * Three full-width primaries, and the handoff draws each at its own size:
+ *  - `lg`    — 58 / radius 19 / 600·16 — the page's action (onboarding, paywall, Done).
+ *  - `crossing` — 60 / radius 19 / 600·17, FLAT — the act between two lifts. No shadow: the
+ *              crossing screen has no chrome and no second control with an edge, so nothing has
+ *              to be lifted clear of anything.
+ *  - `act`   — 62 / radius 19 / 600·17 — a stage's CONTINUE (Start next set, Done). It lifts
+ *              too, a shade less: `0 10px 30px rgba(0,0,0,.35)`.
+ *  - `stage` — 64 / radius 20 / 600·18 — the training stage's single act, the heaviest lift in
+ *              the product (`0 12px 34px rgba(0,0,0,.4)`).
+ *  - `card`  — 56 / radius 17 / 600·15.5 — an action INSIDE a card, which must read as smaller
+ *              than the page's own.
+ *  - `whySheet` — 56 / radius 18 / 600·16 — the WHY sheet's "Got it" (v7 2.1b).
+ */
+type Size = 'sm' | 'md' | 'lg' | 'crossing' | 'act' | 'stage' | 'card' | 'whySheet';
 
 interface Props {
   label: string;
@@ -36,9 +48,12 @@ interface Props {
   style?: ViewStyle | ViewStyle[];
 }
 
-const HEIGHT: Record<Size, number> = { sm: control.hSm, md: control.h, lg: control.hLg };
-const FONT: Record<Size, number> = { sm: textScale.sm, md: textScale.base, lg: textScale.md };
-const PADX: Record<Size, number> = { sm: space[3], md: space[5], lg: space[7] };
+const HEIGHT: Record<Size, number> = { sm: control.hSm, md: control.h, lg: control.hLg, crossing: 60, act: 62, stage: 64, card: 56, whySheet: 56 };
+// `lg` is the 58px full-width action the handoff draws eight times over, always at 600/16 —
+// never 17, and never tracked. A button label is a word, not a measurement.
+const FONT: Record<Size, number> = { sm: textScale.sm, md: textScale.base, lg: 16, crossing: 17, act: 17, stage: 18, card: 15.5, whySheet: 16 };
+const PADX: Record<Size, number> = { sm: space[3], md: space[5], lg: space[7], crossing: space[7], act: space[7], stage: space[7], card: space[7], whySheet: space[7] };
+const RADIUS: Record<Size, number> = { sm: radius.md, md: radius.control, lg: radius.button, crossing: radius.button, act: radius.button, stage: radius.xl, card: 17, whySheet: 18 };
 
 export function Button({
   label,
@@ -66,11 +81,9 @@ export function Button({
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        {
-          height: HEIGHT[size],
-          paddingHorizontal: PADX[size],
-          borderRadius: size === 'lg' ? radius.button : size === 'sm' ? radius.md : radius.control,
-        },
+        { height: HEIGHT[size], paddingHorizontal: PADX[size], borderRadius: RADIUS[size], gap: size === 'stage' ? 9 : space[2] },
+        size === 'stage' && styles.stageLift,
+        size === 'act' && styles.actLift,
         FILL[variant].container,
         block && styles.block,
         pressed && !disabled && styles.pressed,
@@ -84,7 +97,7 @@ export function Button({
         numberOfLines={1}
         style={[
           styles.label,
-          { fontSize: FONT[size], color: FILL[variant].fg, letterSpacing: trackingPx(FONT[size], tracking.tight) },
+          { fontSize: FONT[size], color: FILL[variant].fg },
         ]}
       >
         {label}
@@ -106,13 +119,20 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
   ghost: { container: { backgroundColor: 'transparent' }, pressed: { backgroundColor: color.fillSubtle }, fg: color.textPrimary },
   quiet: { container: { backgroundColor: 'transparent' }, pressed: {}, fg: color.textSecondary },
   danger: {
-    // v7 (2026-07-22): clay on the DARK stage — `down[0]` is the paper clay, too dark to read on
-    // the sheet the confirm buttons sit on. `down.stage` is the lit clay the rest of the app uses.
+    // CLAY, and it must not follow the direction token. This read `down.stage`, which was the lit
+    // clay until `down` became the eased-load BLUE — at which point every destructive confirm in
+    // the app quietly turned the colour of a load coming down (founder 2026-07-29). `alert` is the
+    // clay, kept for exactly this and for pain.
     container: { backgroundColor: 'transparent', borderWidth: 1, borderColor: color.borderControl },
-    pressed: { backgroundColor: down.wash, borderColor: down.stage },
-    fg: down.stage,
+    pressed: { backgroundColor: alert.wash, borderColor: alert.stage },
+    fg: alert.stage,
   },
   onstage: { container: { backgroundColor: stageC.ink0 }, pressed: { backgroundColor: paper[0] }, fg: stageC[0] },
+  // MOSS, with ink on it. The page's primary is CREAM everywhere — except where the page already
+  // holds a cream object and a cream act would read as a second slab of the same thing. That is
+  // exactly the paywall (v7 4.3): the annual plan is a paper card, so the act takes the signal.
+  // One screen, by the handoff's own hand — not a second primary.
+  signal: { container: { backgroundColor: signal[0] }, pressed: { opacity: 0.88 }, fg: color.onAccent },
   // Ghost on the inverted stage — light ink on the dark surface (the paper `ghost`
   // fg is near-black and disappears on stage).
   onstageGhost: { container: { backgroundColor: 'transparent' }, pressed: { backgroundColor: stageC[1] }, fg: stageC.ink0 },
@@ -121,6 +141,22 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
 const styles = StyleSheet.create({
   base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space[2], borderWidth: 1, borderColor: 'transparent' },
   block: { alignSelf: 'stretch', width: '100%' },
+  // The one shadow in the product: the training stage's act stands OFF the dark, so a hand finds
+  // it without looking. Everywhere else, v7 elevation is felt in tone, not in a drop.
+  stageLift: {
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 17,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  actLift: {
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
   pressed: { transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.4 },
   label: { fontFamily: font.sansSemibold, textAlign: 'left' },

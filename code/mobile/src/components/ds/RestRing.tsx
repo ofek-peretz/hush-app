@@ -15,7 +15,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
-import { color, font, textScale, stage as stageC } from '@/design/tokens';
+import { color, font, textScale, signal, stage as stageC } from '@/design/tokens';
 import { Legend } from './Legend';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -30,6 +30,12 @@ interface Props {
   /** Final-seconds state (the 7 s Approach window): the readout lifts to the strongest value its
    *  world has, so the closing countdown reads at a glance — the visual twin of the haptic beats. */
   closing?: boolean;
+  /**
+   * The colour of the running arc, when this rest follows a load the engine MOVED (founder
+   * 2026-07-29: the ring is blue behind an eased load, on the phone and on the wrist alike). Absent
+   * = the ordinary rest, and the arc keeps the accent it has always had.
+   */
+  arc?: string;
 }
 
 function fmt(sec: number): string {
@@ -39,21 +45,32 @@ function fmt(sec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage, closing }: Props) {
+export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage, closing, arc }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const target = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
-  const timeSize = size >= 140 ? textScale['2xl'] : size >= 96 ? textScale.lg : textScale.base;
-  const trackColor = onStage ? stageC[2] : color.fillSubtleStrong;
+  // v7 2.4 draws the big rest ring's readout at 58px. Below that the ring is a small inline
+  // instrument (the watch mirror, a compact card) and steps down with its own size.
+  const timeSize = size >= 220 ? 58 : size >= 140 ? textScale['2xl'] : size >= 96 ? textScale.lg : textScale.base;
+  // The unspent arc is a cream veil, not the raised stage tone — a groove, not an object.
+  const trackColor = onStage ? 'rgba(241,238,229,0.12)' : color.fillSubtleStrong;
 
   // Animated fraction of the ring that remains (1 = full, 0 = empty).
   const frac = useSharedValue(target);
   const prevRemaining = useRef(remaining);
+  const prevTotal = useRef(total);
   useEffect(() => {
     const delta = remaining - prevRemaining.current;
+    const freshPeriod = total !== prevTotal.current;
     prevRemaining.current = remaining;
-    if (remaining >= total) {
-      // A fresh, full period — snap to full (no sweep up from the previous ring).
+    prevTotal.current = total;
+    if (freshPeriod) {
+      // A NEW rest — snap to its starting position rather than sweeping up from the last one.
+      //
+      // This used to test `remaining >= total`, which is true of a fresh period but ALSO true of a
+      // +15 pressed near the top of a rest — so the one press the athlete most wants to see land
+      // was the one that teleported instead of filling. The question is "is this a different
+      // period?", and only `total` can answer it.
       frac.value = target;
     } else if (delta <= -2) {
       // A multi-second DROP in one update = a re-sync after the phone was locked /
@@ -79,7 +96,11 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={onStage ? stageC.ink0 : color.textPrimary}
+          // THE RING IS MOSS (v7 2.4). It is the one live, running mark on the stage — a decision
+          // in progress — and the accent is what the product spends on exactly that. When the rest
+          // follows a load the engine moved, the arc takes THAT decision's direction instead: the
+          // athlete is looking at the ring, so the ring is where the news is.
+          stroke={arc ?? (onStage ? signal[0] : color.textPrimary)}
           strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
@@ -89,7 +110,16 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
       </Svg>
       <View style={styles.readout}>
         <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
-        {label ? <Legend tone={onStage ? 'onStage' : 'muted'}>{label}</Legend> : null}
+        {label ? (
+          <Legend
+            size={size >= 220 ? 16 : textScale['2xs']}
+            track={size >= 220 ? 0.34 : undefined}
+            tone={onStage ? 'onStage' : 'muted'}
+            style={size >= 220 ? styles.bigLabel : undefined}
+          >
+            {label}
+          </Legend>
+        ) : null}
       </View>
     </View>
   );
@@ -98,12 +128,14 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
   svg: { transform: [{ rotate: '-90deg' }] },
-  readout: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  readout: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  // The wide-tracked label sits optically centred: `.34em` of trailing space has to be paid back.
+  bigLabel: { color: stageC.ink1, marginStart: 5 },
   time: {
-    fontFamily: font.monoSemibold,
+    fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
     color: color.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -1.16,
     textAlign: 'left',
   },
   // Final seconds (the Approach window). Urgency used to be the ochre; under READOUT the closing

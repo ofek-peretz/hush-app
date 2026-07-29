@@ -18,6 +18,18 @@ import { exerciseCues } from '@/data/exercises';
 import he from '@/i18n/locales/he.json';
 import en from '@/i18n/locales/en.json';
 
+type Tree = Record<string, unknown>;
+/** Every leaf string in a locale tree, as [dotted key, value]. */
+function flatten(tree: Tree, prefix = ''): Array<[string, string]> {
+  return Object.entries(tree).flatMap(([k, v]) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? flatten(v as Tree, `${prefix}${k}.`)
+      : typeof v === 'string'
+        ? [[`${prefix}${k}`, v] as [string, string]]
+        : [],
+  );
+}
+
 beforeAll(async () => {
   await initI18n();
   await i18next.changeLanguage('he');
@@ -99,7 +111,8 @@ describe('the buttons speak to the person who is pressing them', () => {
   it("Hush never makes the athlete its object — 'אותך' appears nowhere", () => {
     for (const g of ['male', 'female'] as const) {
       setGender(g);
-      for (const k of ['ob.bodySub', 'ob.sexWhy', 'ob.trainSub', 'ob.healthSub', 'ob.mapSub']) {
+      // (`ob.sexWhy` is deleted — founder 2026-07-28. The remaining four still address her.)
+      for (const k of ['ob.bodySub', 'ob.trainSub', 'ob.healthSub', 'ob.mapSub']) {
         expect({ key: k, copy: tg(k) }).toEqual({ key: k, copy: expect.not.stringContaining('אותך') });
       }
     }
@@ -214,5 +227,180 @@ describe('the front door speaks to a person whose gender it has not been told', 
     expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
     setGender('female');
     expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
+  });
+});
+
+/**
+ * ════ THE BASE KEY IS THE MASCULINE FORM — MECHANICALLY ════
+ *
+ * i18next resolves `key` for a man and `key_female` for a woman, so the base IS the masculine
+ * copy. Nothing enforced that, and eight base keys had been written in the FEMININE: `comeback.sub`
+ * told a man "תרימי", `progress.dayOneBody` said "כל סט שתסיימי", `pain.whereSub` said "הקישי",
+ * and the win-back notification — the sentence sent to someone who has stopped training — read
+ * "כשתהיי מוכנה". Every man saw feminine Hebrew, and the `_female` mechanism had nothing to select
+ * because the feminine was already sitting in the default.
+ *
+ * The scan is deliberately narrow: only forms whose FEMININE spelling is unambiguous. Hebrew's
+ * 2nd-person PAST is spelled identically for both genders (שהראית, שכיבית), and a feminine
+ * adjective agreeing with a feminine NOUN is correct ("התוכנית שלך מוכנה") — neither is evidence of
+ * anything, and flagging them would make this test noise. What it catches is a verb or adjective
+ * aimed at HER sitting in the copy aimed at HIM.
+ */
+describe('the default copy is the masculine copy', () => {
+  /** Unambiguously feminine 2nd-person forms; prefixes (ש/כש/ו/ל) are normal, so no lookbehind. */
+  const FEMININE_2P = [
+    'תסיימי', 'תרימי', 'שלחי', 'תהיי', 'תבחרי', 'המשיכי', 'התחילי', 'הקישי',
+    'תמשיכי', 'תשלימי', 'בחרי', 'נסי', 'שמרי לך', 'את מתעדת', 'את מרימה', 'את מתחילה',
+  ];
+
+  it('no base key is written in the feminine', () => {
+    const offenders: string[] = [];
+    for (const [key, value] of flatten(he as unknown as Tree)) {
+      if (key.includes('_female')) continue;
+      const found = FEMININE_2P.filter((w) => value.includes(w));
+      if (found.length) offenders.push(`${key} — ${found.join(', ')}`);
+    }
+    expect({ feminineInTheMasculineDefault: offenders }).toEqual({ feminineInTheMasculineDefault: [] });
+  });
+
+  it('every `_female` variant has a base to override, and differs from it', () => {
+    // A variant with no base is unreachable; a variant IDENTICAL to its base is dead weight that
+    // reads as gendered work having been done when none was.
+    const all = new Map(flatten(he as unknown as Tree));
+    const orphans: string[] = [];
+    const identical: string[] = [];
+    for (const [key, value] of all) {
+      if (!key.includes('_female')) continue;
+      const base = key.replace('_female', '');
+      if (!all.has(base)) orphans.push(key);
+      else if (all.get(base) === value) identical.push(key);
+    }
+    expect({ orphans, identical }).toEqual({ orphans: [], identical: [] });
+  });
+
+  it('a nav path names a tab that exists — in the words the tab bar actually uses', () => {
+    // `pain.nothingNew` pointed at "ב‏את › מפת הגוף". The tab is called "אני", so it named a tab
+    // that does not exist — and the "ב" prefix glued to "את" reads as "באת", the past tense of
+    // "to come". A sentence that sends her somewhere has to send her somewhere real.
+    const tabs = Object.values((he as unknown as { nav: Record<string, string> }).nav);
+    for (const [key, value] of flatten(he as unknown as Tree)) {
+      if (!value.includes('›')) continue;
+      const named = value.split('›')[0].trim().split(/\s+/).pop() ?? '';
+      const cleaned = named.replace(/^[ב"']+|["']+$/g, '');
+      expect({ key, tabExists: tabs.some((t) => t === cleaned) }).toEqual({ key, tabExists: true });
+    }
+  });
+});
+
+/**
+ * A VARIANT MAY NOT ASK FOR A VALUE ITS BASE NEVER RECEIVES.
+ *
+ * The two forms of one key are rendered by ONE call site with ONE set of params. So a `_female`
+ * that interpolates `{{count}}` while its base does not is not a translation — it is a second,
+ * unrelated sentence wired to a caller that was never told about it.
+ *
+ * This shipped, in the most-read sentence in the product. The weekly push read, for a man, "קראתי
+ * את מה שהרמת השבוע — השבוע הבא מוכן". Every WOMAN got a different sentence entirely, carrying a
+ * `{{count}}` that `notifications.ts` never passes: **"התוכנית שלך לשבוע מוכנה — ␣␣ אימונים"** — a
+ * hole where the number should be, every week, on the lock screen.
+ */
+describe('a gendered variant is a translation of its base, not a different sentence', () => {
+  const varsOf = (s: string) => new Set([...s.matchAll(/\{\{(\w+)/g)].map((m) => m[1]));
+
+  it('every `_female` interpolates exactly what its base interpolates', () => {
+    const all = new Map(flatten(he as unknown as Tree));
+    const mismatched: string[] = [];
+    for (const [key, value] of all) {
+      if (!key.includes('_female')) continue;
+      const base = all.get(key.replace('_female', ''));
+      if (base === undefined) continue; // the orphan check above owns this case
+      const a = [...varsOf(base)].sort().join(',');
+      const b = [...varsOf(value)].sort().join(',');
+      if (a !== b) mismatched.push(`${key} wants {${b}} — its base gives {${a}}`);
+    }
+    expect({ askingForWhatTheCallerNeverSends: mismatched }).toEqual({ askingForWhatTheCallerNeverSends: [] });
+  });
+});
+
+/**
+ * ════ HUSH SPEAKS AS A COACH OF HER GENDER (founder 2026-07-28) ════
+ *
+ * Hebrew conjugates the FIRST person too, and that half went unnoticed while the second person was
+ * being fixed. `profile.healthNote_female` correctly said "שאת מתעדת" — and in the same breath said
+ * "אני קורא": Hush gendered HER perfectly and stayed a man itself. A woman heard a male coach, in
+ * eleven places, including the sentence Hush opens with.
+ *
+ * The founder's ruling is that she gets a coach of her own gender. So a base carrying a first-person
+ * MASCULINE participle now requires a `_female` that carries the FEMININE one — the same mechanism,
+ * applied to the speaker instead of only the listener.
+ *
+ * Two things this deliberately does not do:
+ *  · it does not touch verbs that agree with a NOUN ("כל סט מלמד אותי", "המשקל שלך קובע") — those
+ *    are correct in both variants and flagging them would make the test noise;
+ *  · it does not require a variant for a participle that is spelled the same in both genders
+ *    (בונה, מראה, רואה — the ל"ה verbs), because there is nothing to vary.
+ */
+describe('Hush speaks in the athlete’s gender, not only about her', () => {
+  /** Hush's own first-person participles, masculine → feminine. */
+  const HUSH_VERB: Record<string, string> = {
+    'נותן': 'נותנת', 'קורא': 'קוראת', 'לומד': 'לומדת', 'מציג': 'מציגה', 'דורס': 'דורסת',
+    'מוביל': 'מובילה', 'מנהל': 'מנהלת', 'קובע': 'קובעת', 'מכיר': 'מכירה', 'דואג': 'דואגת',
+    'מבקש': 'מבקשת', 'יודע': 'יודעת', 'ממשיך': 'ממשיכה', 'כותב': 'כותבת',
+  };
+  /** Only where the subject really is Hush — "אני X" or "ו/ש/כש-אני X", incl. negations. */
+  const firstPersonVerbs = (s: string): string[] =>
+    [...s.matchAll(/(?:^|[\s—–,.!?"'(])(?:[ושכ]{0,2}אני)\s+((?:לא\s+|אף\s+פעם\s+לא\s+|כבר\s+|רק\s+|תמיד\s+|לעולם\s+לא\s+)*)([֐-׿]{3,})/g)]
+      .map((m) => m[2])
+      .filter((v) => v in HUSH_VERB);
+
+  /**
+   * The feminine twin of a key — and on a PLURALISED key the context goes BEFORE the count, not
+   * after it. i18next resolves `key_context_plural` (`firstGym.title_female_one`), so asking for
+   * `firstGym.title_one_female` finds nothing: the law would report a correctly-written sentence
+   * as missing, and — worse — would be satisfied by a key i18next never selects.
+   */
+  const PLURAL = /_(zero|one|two|few|many|other)$/;
+  const femaleOf = (key: string): string => {
+    const suffix = key.match(PLURAL)?.[0];
+    return suffix ? `${key.slice(0, -suffix.length)}_female${suffix}` : `${key}_female`;
+  };
+
+  it('every sentence Hush says about itself has a feminine form', () => {
+    const all = new Map(flatten(he as unknown as Tree));
+    const stillAMan: string[] = [];
+    for (const [key, value] of all) {
+      if (key.includes('_female')) continue;
+      const verbs = firstPersonVerbs(value);
+      if (verbs.length === 0) continue;
+      const variant = all.get(femaleOf(key));
+      if (variant === undefined) { stillAMan.push(`${key} — no _female for ${verbs.join(', ')}`); continue; }
+      const unchanged = verbs.filter((v) => !variant.includes(HUSH_VERB[v]));
+      if (unchanged.length) stillAMan.push(`${femaleOf(key)} still says ${unchanged.join(', ')}`);
+    }
+    expect({ aMaleCoachForAWoman: stillAMan }).toEqual({ aMaleCoachForAWoman: [] });
+  });
+
+  it('gender and count resolve TOGETHER — the first-workout card, both people, every length', () => {
+    // 2.0 counts (`{{count}}`) and conjugates ("אני לומד/לומדת") in one sentence, which is the
+    // combination the naming rule above exists for. Anything unresolved falls back to English,
+    // so an English sentence appearing in a Hebrew card is the failure this catches.
+    const hebrew = /^[^A-Za-z]*$/;
+    for (const [gender, verb] of [['male', 'לומד'], ['female', 'לומדת']] as const) {
+      setGender(gender);
+      for (const count of [1, 2, 3, 4, 6]) {
+        const line = tg('firstGym.title', { count });
+        expect({ gender, count, line: hebrew.test(line) && line.includes(verb) }).toEqual({ gender, count, line: true });
+        // The number itself is only spoken where Hebrew has no word for it — 1 and 2 are written
+        // out ("האימון הזה", "שני האימונים"), so a bare digit there would be the plural missing.
+        expect(tg('firstGym.title', { count }).includes(String(count))).toBe(count > 2);
+      }
+    }
+  });
+
+  it('…and the FRONT DOOR has no gender to speak in, so it speaks in none', () => {
+    // Sign-in precedes NameEntry, where sex is picked and published (`setPendingSex`). Hush's very
+    // first sentence therefore cannot be conjugated at all — it said "אני דואג לכל השאר".
+    const tagline = (he as unknown as { ob: Record<string, string> }).ob.signinTagline;
+    expect(firstPersonVerbs(tagline)).toEqual([]);
   });
 });

@@ -70,6 +70,17 @@ export function refreshLearnedRests(history: Session[]): void {
 }
 
 /**
+ * WT5 · REST — LEARNED. Is the timer running HER number, or the tier bootstrap?
+ *
+ * The seconds have been hers since S-17 shipped; nothing ever SAID so. The wrist's rest screen puts
+ * a quiet "your pace" beside the clock exactly when this is true — never as a decoration, because
+ * on a lift she has not rested through yet the claim would be false.
+ */
+export function restIsLearnedFor(exerciseId: string | null | undefined): boolean {
+  return !!exerciseId && learnedRestByExercise.has(exerciseId);
+}
+
+/**
  * The between-sets rest for an exercise: HER measured median on that lift (S-17) once she has any,
  * else the tier bootstrap. Unknown exercise → compound, the safe long side.
  */
@@ -79,6 +90,27 @@ export function restInterSecondsFor(exerciseId: string | null | undefined): numb
     if (learned != null) return learned;
   }
   return (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
+}
+
+/**
+ * WHAT THE PRESCRIPTION BECOMES IF THIS REST JOINS IT (v7 2.4d).
+ *
+ * The athlete cut a rest short, or stretched it. The screen that says so has to show her the
+ * consequence — the plan moving from what it was to what her pace just made it — and it must be
+ * the SAME number the engine will prescribe, not a rounded impression of it. So this asks the one
+ * median rule (`learnedRestS`) the same question, with her new sample added to the same samples.
+ *
+ * Pure, and deliberately not cached: it answers about a rest that has not been saved yet.
+ */
+export function restWithSample(history: Session[], exerciseId: string, sampleS: number): number | null {
+  const samples: (number | null | undefined)[] = [];
+  for (const s of history) for (const l of s.sets) {
+    if (l.isApproach || l.setIndex === 0 || l.exerciseId !== exerciseId) continue;
+    samples.push(l.restBeforeS);
+  }
+  samples.push(sampleS);
+  const median = learnedRestS(samples);
+  return median == null ? null : Math.round(median);
 }
 
 /** The between-exercises rest: HER pooled transition median once she has one, else the bootstrap. */

@@ -24,7 +24,10 @@
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
         "NSHealthUpdateUsageDescription": "Hush saves your completed strength workouts to Apple Health.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "location"
+        ]
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
@@ -58,7 +61,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Hush uses your location to measure distance and pace for the runs and walks you record."
+          "locationWhenInUsePermission": "Hush uses your location to measure distance and pace for the runs and walks you record.",
+          "locationAlwaysAndWhenInUsePermission": "Hush keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "locationAlwaysPermission": "Hush keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

@@ -1,27 +1,27 @@
 /**
  * WheelPicker — a horizontal, swipe-to-value wheel. Replaces the +/- Stepper everywhere a number is
- * chosen (age, height, weight, sessions/week, the in-workout Edit Result), so reaching a distant
- * value is one swipe, not forty taps.
+ * chosen (bodyweight, sessions/week, the in-workout Edit Result), so reaching a distant value is one
+ * swipe, not forty taps.
  *
- * ── THE RULE (founder 2026-07-12) ────────────────────────────────────────────────────────────
- * It is not a list of numbers floating in a box. It is a MEASURING RULE — a machined scale
- * sliding under a fixed index mark, the way a caliper or a good analogue dial reads:
+ * ── THE v7 RULE (founder handoff 1.4 / 2.2b) ───────────────────────────────────────────────────
+ * The ruler is now drawn as a TRUE ENGRAVED SCALE, "calmer, more instrument":
  *
- *   • Ticks. Every detent carries an engraved tick beneath its numeral: a LONG tick for a whole
- *     unit, a SHORT one for a fraction (16.5 kg). The eye judges distance off the ticks in a
- *     fraction of a second, without reading a single digit.
- *   • The anchor. The centre is not "the number that happens to be middle" — it is an index line
- *     in the strongest ink its world has, overshooting the scale top and bottom, saying
- *     unambiguously: THIS is the value. (It was ochre until 2026-07-17; see `anchorLine`.)
- *   • Fisheye. The centred numeral is the largest and fully inked; its neighbours shrink and fade
- *     (60% → 20%) toward the edges. Focus is atomic; the rest of the axis becomes background
- *     texture instead of competing noise.
- *   • Hit target. The whole control — legend, scale and the air beneath it — takes the swipe. A
- *     sweating hand in a gym should not have to land inside a 44pt-tall box to start scrolling.
+ *   • The numerals SCROLL. Five read at a time — the centred value large and fully inked, its
+ *     neighbours shrinking and dimming toward the edges (30 → 17 → 15). Focus is atomic; the rest
+ *     of the axis becomes background texture rather than competing noise.
+ *   • Beneath them, a CONTINUOUS tick strip — a fine, even graduation that does not move, the way
+ *     the printed scale on a caliper does not move. The chosen value is struck by ONE moss tick at
+ *     dead centre: the single unambiguous statement of "this is the value".
+ *   • No box, no fill. The scale is framed only by a hairline top and bottom and sits directly on
+ *     the stage; the ends dissolve into the ground so the rule reads as a window onto a longer
+ *     track. Nothing glows — the instrument is quiet.
+ *   • Hit target. The whole control takes the swipe — a sweating hand in a gym should not have to
+ *     land inside a 44pt box to start scrolling.
  *
- * The unit sits in its own bordered cell to the side, so the scrolling digits never run under it.
- * The control is an accessible "adjustable" element: VoiceOver reads the label + value and the
- * increment/decrement rotor steps it (parity with the Stepper it replaced).
+ * The unit is carried by the field's LEGEND ("WEIGHT · KG"), so no unit chip runs beside the
+ * digits — every production screen omits it. The `unit` prop is retained only for the a11y value
+ * ("82 kg") and renders a side cell when supplied. The control is an accessible "adjustable"
+ * element: VoiceOver reads the label + value and the increment/decrement rotor steps it.
  *
  * RTL: the wheel is a NUMERIC LTR ISLAND — values ascend left-to-right in every locale
  * (numerals are LTR; this matches rulers, steppers, sliders, and keypads even in Hebrew
@@ -52,8 +52,9 @@ import {
   type NativeScrollEvent,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { color, radius, font, textScale, stage } from '@/design/tokens';
+import Svg, { Defs, LinearGradient, Line, Rect, Stop } from 'react-native-svg';
+import { Icon } from '@/components/Icon';
+import { color, font, textScale, stage } from '@/design/tokens';
 import { selection as selectionHaptic } from '@/platform/haptics';
 
 interface Props {
@@ -67,42 +68,61 @@ interface Props {
   format?: (v: number) => string;
   /** Accessibility label (e.g. "Age", "Actual weight") — the visible field legend, for VoiceOver. */
   label?: string;
-  /** Render on the inverted workout stage — graphite surface + ink, so it never reads as a pasted
-   *  light component (the in-workout Edit Result). */
+  /** Render on the inverted workout stage (the in-workout Edit Result). Kept for the fade colour;
+   *  the whole app is on the dark stage now, so the geometry is identical either way. */
   onStage?: boolean;
+  /** How the track's ends read — see the render for why the edit dial differs from a ruler. */
+  ends?: 'fade' | 'chevron';
   style?: ViewStyle | ViewStyle[];
 }
 
-const ITEM_W = { md: 60, lg: 72 } as const;
+const ITEM_W = { md: 86, lg: 86 } as const;
+
 /**
- * The scale is taller than a plain control: numerals live above, the engraved ticks below.
- * It is also the touch target — a hand in a gym should not have to land inside a 44pt box.
+ * ════ ONE WHEEL, ONE SIZE, EVERYWHERE (founder 2026-07-28) ════
  *
- * But it is NOT free. Body data (onboarding) stacks four of these plus a footer on a screen
- * that must never scroll, so every point here is spent four times over on the smallest phone
- * we support. 56 buys the ruler its numeral row, a legible tick band, and a target 27% larger
- * than the 44pt box it replaced — without eating the step's height budget.
+ * *"Enlarge them, and let that size be uniform for every wheel in the app."*
+ *
+ * There were two: `md` for the onboarding rulers (76 tall, 30 pt numeral) and `lg` for the
+ * in-workout edit dial (88 / 32). Two tables meant two answers to the same question — how big is a
+ * wheel — and the answer drifted the moment either screen was touched. It also made the onboarding
+ * ruler, the FIRST control the athlete ever turns, the smaller of the two.
+ *
+ * Now there is one measurement and both names resolve to it, so a call site cannot pick the wrong
+ * one and there is nothing left to drift. The `size` prop survives only so existing call sites keep
+ * compiling; it selects nothing. `everyWheelIsTheSameWheel` holds this shut.
  */
-export const WHEEL_HEIGHT = { md: 56, lg: 66 } as const;
+export const WHEEL_HEIGHT = { md: 104, lg: 104 } as const;
 
-/* The scale's geometry, in one place — the anchor line is POSITIONED from it rather than
- * eyeballed, so the index mark always crosses the ticks it is indexing. */
-export const NUM_SLOT_H = 26; // the numeral's fixed row (a scaled numeral must not move the ticks)
-export const TICK_H = 9; // a whole-unit tick
-export const ITEM_PAD_B = 6; // air under the ticks
-export const ITEM_H = NUM_SLOT_H + TICK_H + ITEM_PAD_B;
-const OVERSHOOT = 4; // how far the anchor runs past the tick band, top and bottom
+/** The numeral sizes by distance from centre. Past ±2 the numeral is gone — five read at a time,
+ *  the rest is the tick texture. One ladder, both sizes (see WHEEL_HEIGHT). */
+const NUM_SIZE = { md: [42, 22, 18], lg: [42, 22, 18] } as const;
+/**
+ * The TONE ladder by distance, per size — and the two are deliberately different.
+ *
+ * On the onboarding rulers (md) the whole axis is browsable, so the far pair stays legible. On the
+ * in-workout edit dial (lg) the far pair recedes almost into the ground: under a bar the only
+ * number that matters is the one struck at centre, and the neighbours are there to say which way
+ * the track runs, not to be read.
+ */
+const NUM_TONE = {
+  md: ['#948c77', '#8b8474'],
+  lg: ['#8b8474', '#57534a'],
+} as const;
+// (The TONE ladder stays per-context — how far the neighbours recede is about the room the wheel is
+// turned in, not about its size. Under a bar only the struck number matters; in onboarding the
+// whole axis is being browsed.)
+/** How many detents each side of centre still render a numeral (five total). */
+const SHOW_SPAN = 2;
+/** The height reserved for the scrolling numeral row (so the biggest numeral never clips). */
+const NUM_ROW_H = { md: 54, lg: 54 } as const;
 
-/** The index line's height and its offset from the control's bottom edge, derived from
- *  the scale above. Pure + exported so the "the anchor crosses the ticks" invariant is tested,
- *  not assumed. */
-export function anchorGeometry(controlH: number): { height: number; bottom: number } {
-  const contentTop = (controlH - ITEM_H) / 2; // the row is vertically centred in the control
-  const tickBottom = contentTop + ITEM_H - ITEM_PAD_B;
-  return { height: TICK_H + OVERSHOOT * 2, bottom: controlH - (tickBottom + OVERSHOOT) };
-}
+/** The engraved tick strip beneath the numerals — a fixed, even graduation. */
+const TICK_STRIP_W = 230;
+const TICK_STRIP_H = 16;
+const TICK_GAP = 12.5; // px between fine graduations (v7)
 
-/** Rendered cells each side of the window anchor. 56 × 60px ≈ 8 screen-widths of
+/** Rendered cells each side of the window anchor. 56 × 64px ≈ 8 screen-widths of
  *  populated track per side — beyond what one fling covers before the next window
  *  update lands (the anchor re-centers on every scroll tick past the guard). */
 const WINDOW = 56;
@@ -111,9 +131,6 @@ const WINDOW_GUARD = 24;
 /** Minimum spacing between detent ticks — the fling can cross detents far faster than a
  *  haptic should fire (see onScroll). */
 const HAPTIC_MIN_MS = 45;
-/** How many detents from the centre still render a numeral. Past this the scale is ticks only —
- *  texture, not text (the "atomic focus" rule). */
-const FADE_SPAN = 3;
 
 /** Build the value track min..max inclusive (rounded to kill float drift). */
 function buildValues(min: number, max: number, step: number): number[] {
@@ -150,54 +167,17 @@ export function wheelWindow(anchor: number, count: number, win: number = WINDOW)
   return { start: Math.max(0, anchor - win), end: Math.min(count, anchor + win + 1) };
 }
 
-/**
- * The fisheye: a detent's scale + opacity as a function of its distance from the centre.
- * The centre is full size and fully inked; each step out shrinks and fades, and past
- * FADE_SPAN the numeral is gone entirely (its tick remains). Pure + exported for coverage —
- * this curve IS the "atomic focus" behaviour, so it is worth pinning.
- */
-export function wheelFocus(distance: number): { scale: number; opacity: number } {
-  const d = Math.abs(distance);
-  if (d === 0) return { scale: 1, opacity: 1 };
-  if (d > FADE_SPAN) return { scale: 0.7, opacity: 0 };
-  // 1 → 0.60, 2 → 0.36, 3 → 0.20 (a decaying fade, not a linear ramp)
-  const opacity = [1, 0.6, 0.36, 0.2][d];
-  const scale = 1 - d * 0.1; // 0.9 · 0.8 · 0.7
-  return { scale, opacity };
-}
-
-/** Is this detent a whole unit (long tick) or a fraction (short tick)? */
-function isWholeUnit(v: number): boolean {
-  return Math.abs(v - Math.round(v)) < 1e-6;
-}
-
-/**
- * THE ENGRAVING (founder 2026-07-12: "the rules work perfectly, but they look plain").
- *
- * A real measuring rule does not draw every graduation the same. It has a HIERARCHY, and that
- * hierarchy is what lets a machinist read a caliper without reading a single digit:
- *   • major  — every fifth whole unit: full height, inked. These are the landmarks the eye counts.
- *   • whole  — a whole unit: two thirds height, quiet.
- *   • half   — a fraction (16.5 kg): a third, quieter still.
- * Pure + exported so the scale's grammar is a tested fact, not a styling accident.
- */
-export type TickKind = 'major' | 'whole' | 'half';
-
-export function tickKind(v: number, step: number): TickKind {
-  if (step < 1 && !isWholeUnit(v)) return 'half';
-  return Math.abs(v) % 5 < 1e-6 ? 'major' : 'whole';
-}
-
-export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, style }: Props) {
+export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, ends = 'fade', style }: Props) {
   const itemW = ITEM_W[size];
   const h = WHEEL_HEIGHT[size];
+  const numSize = NUM_SIZE[size];
+  const numTone = NUM_TONE[size];
+  const numRowH = NUM_ROW_H[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
   const lastHapticRef = useRef(0);
-  /** A finger is on the rule right now — the instrument lights up (see `wrapLive`). */
-  const [live, setLive] = useState(false);
 
   const clampIndex = useCallback(
     (i: number) => Math.min(values.length - 1, Math.max(0, i)),
@@ -259,7 +239,6 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const idx = clampIndex(wheelIndexFromOffset(e.nativeEvent.contentOffset.x, itemW));
       lastIndexRef.current = idx;
-      setLive(false);
       const v = values[idx];
       if (v !== value) onChange(v);
     },
@@ -291,24 +270,12 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
 
   const valueText = `${format ? format(value) : String(value)}${unit ? ` ${unit}` : ''}`;
   const win = wheelWindow(anchor, values.length);
-  const numRest = onStage ? stage.ink0 : color.textPrimary;
-  const anchorGeo = anchorGeometry(h);
-  /** What the scale is standing on RIGHT NOW — the edge fades have to dissolve into it. */
-  const surfaceNow = onStage ? stage[1] : live ? color.lift : color.surface;
+  /** The stage ground the scale stands on — the edge fades dissolve into it. */
+  const surfaceNow = onStage ? stage[1] : stage[0];
 
   return (
     <View
-      style={[
-        styles.wrap,
-        onStage && styles.wrapStage,
-        // THE INSTRUMENT LIGHTS UP under the finger (founder 2026-07-12): the ochre that
-        // marks the value also rings the rule while it is being read. It is the same signal
-        // saying the same thing — "this is live" — and it is the whole difference between a
-        // control that feels machined and one that feels like a box with numbers in it.
-        live && (onStage ? styles.wrapLiveStage : styles.wrapLive),
-        { height: h },
-        style,
-      ]}
+      style={[styles.wrap, { height: h }, style]}
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
@@ -316,96 +283,90 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={onAccessibilityAction}
     >
-      <View style={styles.scrollArea} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {width > 0 ? (
-          <ScrollView
-            ref={listRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            // Fling physics (founder 2026-07-10): a flick must GLIDE — reaching a value
-            // 20+ detents away is one light swipe, not ten. `disableIntervalMomentum`
-            // (which killed every fling at the very next detent) is deliberately absent,
-            // and deceleration is "normal" so momentum carries across long tracks;
-            // snapToInterval still lands the settle exactly on a detent.
-            snapToInterval={itemW}
-            decelerationRate="normal"
-            style={styles.scroller}
-            contentContainerStyle={{ paddingHorizontal: sidePad }}
-            // Re-assert the centered value once the track is measured — the imperative
-            // scroll needs real content dimensions to land a far target.
-            onContentSizeChange={positionToValue}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            onScrollBeginDrag={() => setLive(true)}
-            onMomentumScrollEnd={onSettle}
-            onScrollEndDrag={onSettle}
-            importantForAccessibility="no-hide-descendants"
-          >
-            {/* Exact-width spacers keep content size identical to a full track. */}
-            <View style={{ width: win.start * itemW }} />
-            {values.slice(win.start, win.end).map((item, k) => {
-              const index = win.start + k;
-              const dist = index - activeIndex;
-              const { scale, opacity } = wheelFocus(dist);
-              const kind = tickKind(item, step);
-              const active = dist === 0;
-              return (
-                <View key={item} style={[styles.item, { width: itemW }]}>
-                  {/* the numeral — fisheye scaled + faded; gone entirely past the span */}
-                  <View style={styles.numSlot}>
-                    {opacity > 0 ? (
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.num,
-                          size === 'lg' && styles.numLg,
-                          {
-                            color: active ? (onStage ? stage.ink0 : color.textPrimary) : numRest,
-                            opacity,
-                            transform: [{ scale }],
-                          },
-                          active && styles.numActive,
-                        ]}
-                      >
-                        {format ? format(item) : String(item)}
-                      </Text>
-                    ) : null}
+      <View style={styles.scale} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        {/* The numerals — a scrolling readout, five at a time. */}
+        <View style={[styles.numRow, { height: numRowH }]}>
+          {width > 0 ? (
+            <ScrollView
+              ref={listRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              // Fling physics (founder 2026-07-10): a flick must GLIDE — reaching a value
+              // 20+ detents away is one light swipe, not ten. `disableIntervalMomentum`
+              // (which killed every fling at the very next detent) is deliberately absent,
+              // and deceleration is "normal" so momentum carries across long tracks;
+              // snapToInterval still lands the settle exactly on a detent.
+              snapToInterval={itemW}
+              decelerationRate="normal"
+              style={styles.scroller}
+              contentContainerStyle={[styles.scrollContent, { paddingHorizontal: sidePad }]}
+              // Re-assert the centered value once the track is measured — the imperative
+              // scroll needs real content dimensions to land a far target.
+              onContentSizeChange={positionToValue}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={onSettle}
+              onScrollEndDrag={onSettle}
+              importantForAccessibility="no-hide-descendants"
+            >
+              {/* Exact-width spacers keep content size identical to a full track. */}
+              <View style={{ width: win.start * itemW }} />
+              {values.slice(win.start, win.end).map((item, k) => {
+                const index = win.start + k;
+                const dist = Math.abs(index - activeIndex);
+                if (dist > SHOW_SPAN) return <View key={item} style={{ width: itemW }} />;
+                const active = dist === 0;
+                return (
+                  <View key={item} style={[styles.item, { width: itemW }]}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.num,
+                        {
+                          fontSize: numSize[dist],
+                          fontFamily: active ? font.monoSemibold : font.mono, // rtl-ok — `styles.num` centres it; this only swaps the face
+                          // Three distances, three tones — see NUM_TONE for why the ladder differs
+                          // between an onboarding ruler and the in-workout edit dial.
+                          color: active ? color.textPrimary : numTone[dist === 1 ? 0 : 1],
+                        },
+                      ]}
+                    >
+                      {format ? format(item) : String(item)}
+                    </Text>
                   </View>
-                  {/* the engraved scale — major / whole / half (see tickKind) */}
-                  <View
-                    style={[
-                      styles.scaleTick,
-                      kind === 'major' ? styles.tickMajor : kind === 'whole' ? styles.tickWhole : styles.tickHalf,
-                      onStage && styles.scaleTickStage,
-                      active && styles.scaleTickHidden, // the anchor draws this detent itself
-                    ]}
-                  />
-                </View>
-              );
-            })}
-            <View style={{ width: (values.length - win.end) * itemW }} />
-          </ScrollView>
-        ) : null}
-        {/* The rule's BASELINE — the hairline every graduation stands on. Without it the ticks
-            are a row of floating dashes; with it they are a scale. */}
-        <View pointerEvents="none" style={[styles.baseline, onStage && styles.baselineStage, { bottom: anchorGeo.bottom + OVERSHOOT }]} />
-        {/* The scale runs off both ends rather than stopping at a wall: the numerals dissolve
-            into the surface, so the rule reads as a window onto a longer track. */}
-        <EdgeFade side="start" color={surfaceNow} />
-        <EdgeFade side="end" color={surfaceNow} />
-        {/* THE ANCHOR — an ochre index line THROUGH the scale, overshooting the tick band top
-            and bottom. Not a pair of decorative ticks: the one unambiguous statement of
-            "this is the value". Its geometry is derived from the scale (anchorGeometry), so it
-            can never drift off the ticks it indexes. */}
-        <View pointerEvents="none" style={styles.anchor}>
-          <View style={[styles.anchorLine, onStage && styles.anchorLineStage, { height: anchorGeo.height, marginBottom: anchorGeo.bottom }]} />
+                );
+              })}
+              <View style={{ width: (values.length - win.end) * itemW }} />
+            </ScrollView>
+          ) : null}
         </View>
+
+        {/* The engraved tick strip — a fixed, even graduation, struck at centre by one moss tick. */}
+        <TickStrip />
+
+        {/* THE ENDS SAY WHAT THEY ARE. On a ruler they dissolve into the stage — a window onto a
+            longer track. On the edit dial (2.2b) they carry a chevron each way instead: mid-workout
+            the athlete has not browsed this axis before and needs telling that it moves at all. */}
+        {ends === 'fade' ? (
+          <>
+            <EdgeFade side="start" color={surfaceNow} />
+            <EdgeFade side="end" color={surfaceNow} />
+          </>
+        ) : (
+          <>
+            <View pointerEvents="none" style={[styles.endChevron, styles.endChevronStart]}>
+              <Icon name="chevronLeft" size={16} color={color.textMuted} strokeWidth={2} noMirror />
+            </View>
+            <View pointerEvents="none" style={[styles.endChevron, styles.endChevronEnd]}>
+              <Icon name="chevronRight" size={16} color={color.textMuted} strokeWidth={2} noMirror />
+            </View>
+          </>
+        )}
       </View>
+
       {unit ? (
-        // The unit cell shares the rule's surface — including while it is lit, or it would sit as
-        // a cream tab welded onto an ochre instrument.
-        <View style={[styles.unitBox, onStage && styles.unitBoxStage, live && !onStage && styles.unitBoxLive]}>
-          <Text style={[styles.unit, onStage && styles.unitStage]}>{unit}</Text>
+        <View style={styles.unitBox}>
+          <Text style={styles.unit}>{unit}</Text>
         </View>
       ) : null}
     </View>
@@ -413,14 +374,31 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
 }
 
 /**
- * A soft dissolve at one end of the scale — the surface colour fading to nothing over 34px.
+ * The engraved scale beneath the numerals — a continuous fine graduation that does NOT move
+ * (a printed scale doesn't slide; the reading does), struck at dead centre by a single moss
+ * tick: the one unambiguous "this is your number".
+ */
+function TickStrip() {
+  const half = TICK_STRIP_W / 2;
+  const ticks: number[] = [];
+  for (let x = 0; x <= TICK_STRIP_W + 0.01; x += TICK_GAP) ticks.push(Math.round(x * 10) / 10);
+  return (
+    <View pointerEvents="none" style={styles.tickStrip}>
+      <Svg width={TICK_STRIP_W} height={TICK_STRIP_H}>
+        {ticks.map((x) => (
+          <Line key={x} x1={x} y1={7} x2={x} y2={TICK_STRIP_H} stroke="rgba(241,238,229,0.28)" strokeWidth={1} />
+        ))}
+        <Line x1={half} y1={0} x2={half} y2={TICK_STRIP_H} stroke={color.accent} strokeWidth={1.5} strokeLinecap="round" />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * A soft dissolve at one end of the scale — the stage colour fading to nothing over 44px (v7).
  *
- * `color` is the colour of the surface the scale is ACTUALLY on right now, which changes: the
- * rule tints ochre under the finger. A fade hardcoded to the resting surface would paint a cream
- * smudge over the tint at the exact moment the athlete is looking at it (i.e. mid-scroll).
- *
- * The gradient id is per-INSTANCE (`useId`). Three of these mount side by side on Body data, and
- * a shared `url(#…)` reference is precisely the kind of thing that resolves to the wrong brush.
+ * The gradient id is per-INSTANCE (`useId`). Several of these mount side by side, and a shared
+ * `url(#…)` reference is precisely the kind of thing that resolves to the wrong brush.
  */
 function EdgeFade({ side, color: c }: { side: 'start' | 'end'; color: string }) {
   // React's useId returns a value wrapped in COLONS (":r3:"). A colon is not legal in an SVG
@@ -442,7 +420,7 @@ function EdgeFade({ side, color: c }: { side: 'start' | 'end'; color: string }) 
   );
 }
 
-const FADE_W = 34;
+const FADE_W = 44;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -451,75 +429,40 @@ const styles = StyleSheet.create({
     // LTR island — the numeric wheel never mirrors (see header). A no-op in the LTR
     // build; under forceRTL it keeps digits ascending L→R and the offset math intact.
     direction: 'ltr',
-    borderWidth: 1,
+    // v7 1.4: NO box — the scale is framed by a hairline top and bottom, on the bare stage.
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: color.borderControl,
-    borderRadius: radius.md,
-    backgroundColor: color.surface,
     overflow: 'hidden',
   },
-  // The digits live here and are clipped to this box, so they never slide under the unit cell.
-  scrollArea: { flex: 1, justifyContent: 'center', overflow: 'hidden' },
-  // The scroller itself is pinned LTR too, so its native layoutDirection (and with it
-  // the contentOffset coordinate space) never mirrors under forceRTL.
+  // The numerals + the tick strip stack, centred in the framed height with air between.
+  scale: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, overflow: 'hidden' },
+  // The scrolling numeral row.
+  numRow: { alignSelf: 'stretch', justifyContent: 'center', overflow: 'hidden' },
   scroller: { direction: 'ltr' },
-  item: { height: ITEM_H, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: ITEM_PAD_B },
-  // Fixed-height slot so a scaled numeral never shifts the ticks beneath it.
-  numSlot: { height: NUM_SLOT_H, alignItems: 'center', justifyContent: 'center' },
+  scrollContent: { alignItems: 'flex-end' },
+  item: { alignItems: 'center', justifyContent: 'flex-end' },
   num: {
-    fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: textScale.md,
     includeFontPadding: false,
-    textAlign: 'left',
+    textAlign: 'center',
+    lineHeight: undefined,
   },
-  numLg: { fontSize: textScale.lg },
-  // The centred value carries the weight — it is a reading, not a list item.
-  numActive: { fontFamily: font.monoSemibold, textAlign: 'left' },
 
-  // the engraved scale — three graduations, the way a real rule is cut
-  scaleTick: { width: 1, borderRadius: 0.5, backgroundColor: color.borderControl },
-  tickMajor: { height: TICK_H, width: 1.5, backgroundColor: color.textTertiary },
-  tickWhole: { height: TICK_H * 0.62 },
-  tickHalf: { height: TICK_H * 0.34, opacity: 0.6 },
-  scaleTickStage: { backgroundColor: stage[2] },
-  scaleTickHidden: { opacity: 0 },
+  // The fixed engraved graduation, centred under the numerals.
+  tickStrip: { width: TICK_STRIP_W, height: TICK_STRIP_H, alignItems: 'center', justifyContent: 'center' },
+  // The edit dial's end marks — 8 in from each edge, vertically centred, never in the way.
+  endChevron: { position: 'absolute', top: '50%', marginTop: -8 },
+  endChevronStart: { left: 8 },
+  endChevronEnd: { right: 8 },
 
-  // the hairline the graduations stand on
-  baseline: { position: 'absolute', start: 0, end: 0, height: StyleSheet.hairlineWidth, backgroundColor: color.borderControl },
-  baselineStage: { backgroundColor: stage[2] },
-
-  // the ends dissolve into the surface
+  // the ends dissolve into the stage
   fade: { position: 'absolute', top: 0, bottom: 0, width: FADE_W },
   fadeStart: { start: 0 },
   fadeEnd: { end: 0 },
 
-  // The index line (height + offset come from anchorGeometry).
-  //
-  // This was the ochre; in v5 it went cream, because the wordmark itself might not survive
-  // (2026-07-17) and nothing load-bearing could depend on a brand HUE. v7 changes the premise,
-  // not the principle: MOSS is no longer a brand mark, it is the app's SOLE semantic signal —
-  // the rise, the live timer, the rep-range band all speak in it. So the line is re-hued to
-  // moss, matching the handoff, which strikes the chosen value with a single moss tick on every
-  // wheel (1.4 the onboarding rulers, 2.2b the in-workout edit). The line is still the most
-  // load-bearing mark in the product — it is what says *this is your number* — and it now gets
-  // the one accent the whole app reserves for meaning. Both worlds sit on the dark stage.
-  anchor: { position: 'absolute', alignSelf: 'center', top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center' },
-  anchorLine: { width: 2, borderRadius: 1, backgroundColor: color.accent },
-  anchorLineStage: { backgroundColor: color.accent },
-
-  // The unit sits in its own bordered cell, separate from the scrolling digits.
-  unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border, backgroundColor: color.surface },
+  // Retained only for the tests / any caller that passes a `unit`; production carries the
+  // unit in the field legend and omits it, so this cell never renders there.
+  unitBox: { paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderStartWidth: 1, borderStartColor: color.border },
   unit: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
-  // UNDER THE FINGER, THE RULE LIFTS. The instrument lighting up used to be an ochre
-  // tint; now it is the law itself — the thing being touched moves toward the light,
-  // away from the ground. On the dark stage the lift is a BRIGHTER translucent-cream
-  // raise (not full paper: cream numerals must stay legible on it), ringed in cream.
-  wrapLive: { borderColor: color.borderStrong, backgroundColor: color.surface3 },
-  wrapLiveStage: { borderColor: stage.ink0, backgroundColor: stage[1] },
-
-  // Inverted "stage" treatment — graphite surface + ink.
-  wrapStage: { borderColor: stage[2], backgroundColor: stage[1] },
-  unitBoxLive: { backgroundColor: color.surface3, borderStartColor: color.border },
-  unitBoxStage: { borderStartColor: stage[2], backgroundColor: stage[1] },
-  unitStage: { color: stage.ink2 },
 });

@@ -9,8 +9,8 @@
  */
 
 import type { Band, ExerciseMeta } from './types';
-import { moveRungs, snapDown, isBigJump } from './grid';
-import { rungsForHeadroom } from './repsPerRung';
+import { moveRungs, snapDown } from './grid';
+import { rungsForHeadroom, rungOutOfReach } from './repsPerRung';
 
 const MAX_CORRECTIONS = 2; // S-13
 
@@ -60,7 +60,7 @@ export function correctInSession(inp: Loop1Input): Loop1Result {
     // would simply re-open the oscillation Loop 2 now refuses; the register is explicit that ONE
     // measured fact governs the problem, and a law that holds on one path and not its neighbour is
     // how every defect in this engine's audit got in.
-    if (perRung != null && isBigJump(currentLoad, meta.equipment, meta.observedLoads) && repsJustDone - perRung < band.lo) {
+    if (rungOutOfReach(currentLoad, band, perRung, meta, repsJustDone)) {
       return none;
     }
     // S-11 / S-14: above Thi → the load is too light; raise it (as many rungs as the overshoot is worth).

@@ -30,9 +30,19 @@ describe('Loop 1 · perRungForV5 — her fitted reps-per-rung from history (F-13
 
   it('a real slope once she has spread of loads at like-for-like rest (heavier costs reps)', () => {
     // Same rest (90s), reps fall as load rises → a positive reps-per-rung.
+    //
+    // FOUR occurrences, not two. L3 now requires a fit pair to be two different occurrences AND the
+    // same place in the exercise (set 1 against set 1) — the fatigue between set 1 and set 2 is a
+    // confound the rest band never covered, and it is signed, so it biased the slope toward zero and
+    // made every Loop 1 correction bigger than her own number warranted. Under that rule two
+    // occurrences of two sets yield two pairs, and F-12 asks for four, so the fixture is widened to
+    // the history a real athlete actually has by the time the slope matters. The law is unchanged:
+    // fewer pairs than F-12 → null → B-5's one cautious rung, which is the safe direction.
     const history = [
-      session('2026-07-01T10:00:00Z', [set('bb_bench_press', 55, 12), set('bb_bench_press', 60, 10)]),
-      session('2026-07-03T10:00:00Z', [set('bb_bench_press', 65, 8), set('bb_bench_press', 70, 6)]),
+      session('2026-07-01T10:00:00Z', [set('bb_bench_press', 55, 12), set('bb_bench_press', 57.5, 11)]),
+      session('2026-07-03T10:00:00Z', [set('bb_bench_press', 60, 10), set('bb_bench_press', 62.5, 9)]),
+      session('2026-07-06T10:00:00Z', [set('bb_bench_press', 65, 8), set('bb_bench_press', 67.5, 7)]),
+      session('2026-07-08T10:00:00Z', [set('bb_bench_press', 70, 6), set('bb_bench_press', 72.5, 5)]),
     ];
     const pr = perRungForV5('bb_bench_press', history);
     expect(pr).not.toBeNull();

@@ -25,22 +25,24 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { IconButton, Legend, Button, Metric } from '@/components/ds';
-import { WhyTriple, type WhyKind } from '@/components/WhyTriple';
+import { Legend } from '@/components/ds';
+import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
+import { changedLiftCase } from '@/domain/changedLiftCase';
+import { currentLocale } from '@/i18n';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
-import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView, type WeeklyPlanLift } from '@/domain/weeklyUpdate';
+import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView } from '@/domain/weeklyUpdate';
 import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { allTimePeakProgress, type QuarterlyProgressEntry } from '@/domain/progressReport';
+import { allTimePeakProgress, standingRecord, type QuarterlyProgressEntry, type StandingRecord } from '@/domain/progressReport';
 import { currentWeekOpen } from '@/domain/weekCadence';
-import { strengthSessionKcal } from '@/domain/energy';
+import { sessionKcal } from '@/domain/energy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { bidi } from '@/i18n/bidi';
 import type { Session, Units } from '@/data/local/models';
-import { color, space, font, textScale, tracking, trackingPx, up, down, signal, radius } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, up, down, signal, radius, directionTone, type LoadDirection } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WeeklyUpdate'>;
@@ -65,13 +67,45 @@ const sessionDurationMs = (s: Session): number => {
   return Math.max(0, end - start);
 };
 
-export function WeeklyUpdate({ navigation }: Props) {
+/** A `muscle.*` word at the head of a sentence. See the note at its call site. */
+const headlineCase = (s: string) => (s ? s[0].toLocaleUpperCase() + s.slice(1) : s);
+
+export function WeeklyUpdate({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const name = app.profile?.name;
   const units = app.profile?.units ?? 'kg';
   const [view, setView] = useState<WeeklyPlanView | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /** The letter shows the four biggest moves; this is the athlete asking for the rest. */
+  const [showAll, setShowAll] = useState(false);
+  /**
+   * Her completed sessions — the evidence a WHY pill needs to draw a lift's full case (2.1b).
+   * The letter already reads history for the steady week's proof; this is the same read.
+   */
+  const [history, setHistory] = useState<Session[]>([]);
+  /** The harness's own sessions, when it brought some — see `previewPlan` in navigation.ts. */
+  const previewHistory = route?.params?.previewPlan?.history;
+  useEffect(() => {
+    if (previewHistory) {
+      setHistory(previewHistory);
+      return;
+    }
+    let alive = true;
+    void db.loadHistory().then((h) => {
+      if (alive) setHistory(h);
+    }).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [previewHistory]);
+  /** The lift whose case is open, if any — keyed by the row, not the slot, so a volume row
+   *  (which has no case) can share the same open-state. */
+  const openCase = React.useMemo(() => {
+    if (!openId) return null;
+    const lift = (view?.workouts ?? []).flatMap((w) => w.lifts).find((l) => l.change?.snapshot.slotId === openId);
+    return lift ? changedLiftCase(lift, history, units) : null;
+  }, [openId, view, history, units]);
   const [loaded, setLoaded] = useState(false);
 
   /**
@@ -91,6 +125,16 @@ export function WeeklyUpdate({ navigation }: Props) {
    * already run — costs a no-op.
    */
   useEffect(() => {
+    // The harness has handed us the week the engine would have decided (see `previewPlan` in
+    // navigation.ts). Nothing is rolled, folded or read; everything below this line is the screen
+    // doing its own job on real data.
+    const preview = route?.params?.previewPlan;
+    if (preview) {
+      setView(preview.plan);
+      setBand(preview.band);
+      setLoaded(true);
+      return;
+    }
     let active = true;
     void (async () => {
       // 1 · the calendar roll (a new bucket, if Saturday 20:30 has passed since the last one)
@@ -138,14 +182,20 @@ export function WeeklyUpdate({ navigation }: Props) {
    * the opposite of the truth: a steady week means the plan is already right. So the screen fills
    * with the athlete's own history — the lifts that have travelled furthest since Hush met them.
    * Loaded only when there is nothing to report (the common case still costs no disk read).
+   *
+   * …and with THE STANDING RECORD beside them (founder 2026-07-28: "0 changes reads robotic —
+   * use that moment to show what the whole use of the app has come to"). The travelled lifts prove
+   * the engine works; the standing totals prove the WEEKS have added up. Same three facts as the
+   * week's own band directly above, at the scale of everything she has ever logged — the contrast
+   * is the point, and every figure is read off her own sets.
    */
   const [evidence, setEvidence] = useState<QuarterlyProgressEntry[] | null>(null);
+  const [standing, setStanding] = useState<StandingRecord | null>(null);
   const steady = loaded && (view?.changedCount ?? 0) === 0;
   useEffect(() => {
     if (!steady) return;
     let active = true;
-    void db
-      .loadHistory()
+    void Promise.resolve(previewHistory ?? db.loadHistory())
       .then((h: Session[]) => {
         if (!active) return;
         const top = allTimePeakProgress(h, Date.now())
@@ -153,12 +203,13 @@ export function WeeklyUpdate({ navigation }: Props) {
           .sort((a, b) => b.deltaKg - a.deltaKg)
           .slice(0, 3);
         setEvidence(top);
+        setStanding(standingRecord(h));
       })
       .catch(() => active && setEvidence([]));
     return () => {
       active = false;
     };
-  }, [steady]);
+  }, [steady, previewHistory]);
 
   /**
    * S-56 — THE ONE QUESTION THE MIRROR MAY ASK. "A muscle is switched off after she has trained it.
@@ -167,8 +218,9 @@ export function WeeklyUpdate({ navigation }: Props) {
    * counted in days." The candidate is a FACT (off on the map + a logged set exists + never asked);
    * either answer marks it asked forever. The map editor itself obeys an OFF in silence (L8).
    */
-  const [askBack, setAskBack] = useState<string | null>(null);
+  const [askBack, setAskBack] = useState<string | null>(route?.params?.previewAskBack ?? null);
   useEffect(() => {
+    if (route?.params?.previewAskBack) return; // the harness is holding the question open
     let active = true;
     void (async () => {
       try {
@@ -216,6 +268,7 @@ export function WeeklyUpdate({ navigation }: Props) {
    */
   const [band, setBand] = useState<WeekBand | null>(null);
   useEffect(() => {
+    if (route?.params?.previewPlan) return; // the harness supplied the band with the week
     let active = true;
     void (async () => {
       try {
@@ -238,7 +291,7 @@ export function WeeklyUpdate({ navigation }: Props) {
         let kcalSeen = false;
         for (const s of inWeek) {
           for (const set of s.sets ?? []) kg += (set.actualWeight ?? 0) * set.actualReps;
-          const k = strengthSessionKcal(sessionDurationMs(s), app.profile?.weightKg);
+          const k = sessionKcal(s, sessionDurationMs(s), app.profile?.weightKg);
           if (k != null) {
             kcal += k;
             kcalSeen = true;
@@ -260,103 +313,211 @@ export function WeeklyUpdate({ navigation }: Props) {
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
     : '';
 
+  /**
+   * THE FOUR THAT MATTER MOST (v7 3.1).
+   *
+   * A week can carry twelve changes. Printing all of them turns a letter into a spreadsheet, and
+   * the athlete stops reading at four anyway. So the letter states the COUNT and then shows the
+   * four largest moves; everything else is one press away. Ordered by how far the load actually
+   * travelled — the biggest decision is the one worth reading first.
+   */
+  const allChanges = React.useMemo(() => {
+    const lifts = (view?.workouts ?? []).flatMap((w) => w.lifts.filter((l) => l.change));
+    const rows: LetterRow[] = lifts.map((l) => {
+      const c = l.change!.snapshot;
+      return {
+        key: c.slotId,
+        name: exerciseDisplayName(l.exerciseId),
+        from: fmtLoad(c.loadFrom, units) ?? '',
+        to: fmtLoad(c.loadTo, units) ?? '',
+        suffix: '',
+        /**
+         * THE SAME THREE-WAY ANSWER TODAY GIVES (founder 2026-07-29's law).
+         *
+         * This was a BOOLEAN — `rose`, i.e. "up or not-up" — and not-up was drawn as a fall. So the
+         * one narrated HOLD the engine makes (S-28, the rung out of reach, stamped with equal
+         * from/to loads) came out BLUE in the letter and CREAM on Today, for the same decision, on
+         * the same day. A two-way answer cannot carry a three-way law.
+         */
+        dir: liftDirection(c.loadFrom, c.loadTo),
+        magnitude: Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)),
+        slotId: c.slotId,
+        line: null,
+      };
+    });
+    // A volume move is news of the same kind and reads as one more row — "Chest, volume  3 → 4 sets".
+    for (const v of view?.volume ?? []) {
+      rows.push({
+        key: `vol:${v.muscle}`,
+        name: t('weekly.volumeRowName', { muscle: t(`muscle.${v.muscle}`) }),
+        from: String(v.setsFrom),
+        to: String(v.setsTo),
+        suffix: t('weekly.setsUnit'),
+        dir: v.setsTo > v.setsFrom ? 'up' : ('down' as LoadDirection),
+        magnitude: Math.abs(v.setsTo - v.setsFrom),
+        slotId: null,
+        line: t(v.explanation.text.key, v.explanation.text.params ?? {}),
+      });
+    }
+    return rows.sort((a, b) => b.magnitude - a.magnitude);
+  }, [view, units, t]);
+  const shown = showAll ? allChanges : allChanges.slice(0, LETTER_ROWS);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      {/* The date, centred, with the way out on the end edge — a 36px disc, the same chrome shape
+          the training stage uses. */}
       <View style={styles.header}>
         <View style={styles.headSpacer} />
-        <Text style={styles.when}>{whenLabel}</Text>
-        <IconButton accessibilityLabel={t('common.close')} onPress={close}>
-          <Icon name="close" size={20} color={color.textPrimary} strokeWidth={2} />
-        </IconButton>
+        <Legend size={11.5} align="center" style={styles.when}>{whenLabel}</Legend>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+          onPress={close}
+          hitSlop={8}
+          style={({ pressed }) => [styles.closeDisc, pressed && styles.pressedDim]}
+        >
+          <Icon name="close" size={18} color={color.textPrimary} strokeWidth={2} />
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Legend style={styles.eyebrow}>{steady ? t('weekly.evidenceLegend') : t('weekly.eyebrow')}</Legend>
-        {/* A letter opens with the name of the person it is written to (founder 2026-07-13). */}
-        {name ? <Text style={styles.vocative}>{t('common.vocative', { name: bidi(name) })}</Text> : null}
-        <Text style={styles.title}>{view ? t('weekly.weekTitle', { n: view.weekIndex + 1 }) : t('weekly.title')}</Text>
+        <View style={styles.headBlock}>
+          <Legend size={11} track={0.22}>
+            {askBack ? t('weekly.askLegend') : steady ? t('weekly.evidenceLegend') : t('weekly.eyebrow')}
+          </Legend>
+          {/* A week with a question in it steps its headline DOWN (40, not 56): the biggest thing
+              on the page has to be the question, and two things cannot both be biggest. */}
+          <Text style={[styles.title, askBack && styles.titleAsking]} accessibilityRole="header">
+            {view ? t('weekly.weekTitle', { n: view.weekIndex + 1 }) : t('weekly.title')}
+          </Text>
+        </View>
 
-        {/* THE WEEK'S FACTS (v7 3.1) — the band that follows the headline: workouts / tonnage / kcal.
-            Mono figures via Metric (the law: mono carries no words, so each label rides in sans). */}
-        {band && (band.planned > 0 || band.done > 0) ? (
+        {/* THE WEEK'S FACTS — workouts / tonnage / kcal, ruled above and below. */}
+        {!askBack && band && (band.planned > 0 || band.done > 0) ? (
           <View style={styles.statBand}>
-            <Metric onStage size="sm" value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
-            <Metric onStage size="sm" value={band.tonnes} unit={t('weekly.tonneUnit')} label={t('weekly.statMoved')} />
-            {band.kcal != null ? (
-              <Metric onStage size="sm" value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} />
-            ) : null}
+            <LetterFact value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
+            <LetterFact value={`${band.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
+            {band.kcal != null ? <LetterFact value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} /> : null}
           </View>
         ) : null}
 
-        <Text style={styles.intro}>
-          {steady ? t('weekly.evidenceIntro') : t('weekly.intro', { count: changedCount })}
-        </Text>
+        {/* The one sentence that frames what follows. With a question up, it frames the QUESTION —
+            and it promises, before she reads it, that this is the only time she will see it.
+
+            IT SAYS NOTHING UNTIL THE LETTER HAS READ. `changedCount` falls back to 0 while the roll
+            and the fold are still running, and this line printed that fallback as a fact: "I read
+            last week's sessions and changed 0 lifts. Tap any of them to see why" — a count Hush had
+            not counted, a claim to have read what it had not read, and an instruction to tap rows
+            that were not there. A letter that fails to load then keeps that sentence forever. The
+            genuinely steady week never reaches it: `steady` is a LOADED zero, and it has the
+            evidence page. */}
+        {askBack || loaded ? (
+          <Text style={[styles.intro, askBack && styles.introAsking]}>
+            {askBack
+              ? t('weekly.askIntro')
+              : steady
+                ? t('weekly.evidenceIntro')
+                : allChanges.length > LETTER_ROWS
+                  ? t('weekly.introTop', { count: allChanges.length, shown: LETTER_ROWS })
+                  : t('weekly.intro', { count: changedCount })}
+          </Text>
+        ) : null}
 
         {/* ── S-56 · the one question the mirror may ask (asked once per muscle, ever) ── */}
         {askBack ? (
-          <View style={styles.askBack}>
-            <Text style={styles.askBackTitle}>{t('weekly.askBackTitle', { muscle: t(`muscle.${askBack}`) })}</Text>
-            <Text style={styles.askBackBody}>{t('weekly.askBackBody')}</Text>
-            <View style={styles.askBackActions}>
-              <Button variant="secondary" size="md" label={t('weekly.askBackNo')} onPress={() => void answerAskBack(false)} />
-              <Button variant="primary" size="md" label={t('weekly.askBackYes')} onPress={() => void answerAskBack(true)} />
+          <>
+            {/* THE ONE QUESTION (v7 3.1b). It gets a moss rim and a moss wash — the only card in
+                the product drawn in the accent — because it is the only place the engine ever asks
+                the athlete for anything, and it will not ask again. */}
+            <View style={styles.askCard}>
+              <View style={styles.askHead}>
+                <View style={styles.askDot} />
+                <Legend size={10.5} tone="accent">{t('weekly.askSince')}</Legend>
+              </View>
+              <Text style={styles.askTitle} accessibilityRole="header">
+                {/* `muscle.*` is written for mid-sentence (English keeps it singular and
+                    lowercase), and this is the sentence's FIRST word — so it takes headline case.
+                    A no-op in a script without case. */}
+                {t('weekly.askBackTitle', { muscle: headlineCase(t(`muscle.${askBack}`)) })}
+              </Text>
+              <Text style={styles.askBody}>{t('weekly.askBackBody')}</Text>
+              {/* Stacked, full width, and the moss one first: bringing a muscle back is the answer
+                  that costs her nothing, and the one the card exists to make easy. */}
+              <View style={styles.askActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('weekly.askBackYes')}
+                  onPress={() => void answerAskBack(true)}
+                  style={({ pressed }) => [styles.askYes, pressed && styles.pressedDim]}
+                >
+                  <Text style={styles.askYesLabel}>{t('weekly.askBackYes')}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('weekly.askBackNo')}
+                  onPress={() => void answerAskBack(false)}
+                  style={({ pressed }) => [styles.askNo, pressed && styles.pressedDim]}
+                >
+                  <Text style={styles.askNoLabel}>{t('weekly.askBackNo')}</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+            {/* The law, said out loud: it never holds up her week, and it is never asked twice. */}
+            <Text style={styles.askNote}>{t('weekly.askNote')}</Text>
+          </>
         ) : null}
 
-        {/* ── the week where something changed: ONLY what changed ── */}
-        {!steady
-          ? view?.workouts.map((w) => {
-              // A workout with nothing changed in it is not news, and does not appear.
-              const changed = w.lifts.filter((l) => l.change);
-              if (changed.length === 0) return null;
+        {/* THE CHANGES — one flat ruled list, largest move first.
+            Not grouped by workout any more: the athlete is reading what CHANGED, and which day it
+            falls on is not what makes a change worth reading. Each row's WHY opens the reason
+            sheet — the same one a changed lift opens from Today, so the product explains itself in
+            one voice from both doors. */}
+        {!steady && !askBack
+          ? shown.map((row, i) => {
+              const open = openId === (row.slotId ?? row.key);
               return (
-                <View key={w.dayId} style={styles.workout}>
-                  <View style={styles.workoutHead}>
-                    <Text style={styles.workoutName}>{w.name}</Text>
-                    <Text style={styles.workoutGroups}>{w.groups.join(' · ').toUpperCase()}</Text>
+                <View key={row.key} style={[styles.row, i === shown.length - 1 && styles.rowLast]}>
+                  <View style={styles.rowTop}>
+                    <Text style={styles.rowName} numberOfLines={1}>{bidi(row.name)}</Text>
+                    <View style={styles.rowRight}>
+                      <Text style={styles.rowMove} numberOfLines={1}>
+                        <Text style={styles.rowFrom}>{`${row.from} `}</Text>
+                        <Text style={{ color: directionTone(row.dir) }}>
+                          {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
+                        </Text>
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('weekly.whyLink')}
+                        onPress={() => setOpenId((cur) => (cur === (row.slotId ?? row.key) ? null : (row.slotId ?? row.key)))}
+                        hitSlop={6}
+                        style={({ pressed }) => [styles.whyPill, pressed && styles.pressedDim]}
+                      >
+                        <Legend size={10.5} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
+                      </Pressable>
+                    </View>
                   </View>
-                  {changed.map((lift, i) => (
-                    <LiftRow
-                      key={`${w.dayId}:${i}`}
-                      lift={lift}
-                      open={openId === lift.change!.snapshot.slotId}
-                      onToggle={() => {
-                        const id = lift.change!.snapshot.slotId;
-                        setOpenId((cur) => (cur === id ? null : id));
-                        if (openId !== id)
-                          void track('weekly_update_why_opened', { pattern: lift.change!.explanation.pattern });
-                      }}
-                    />
-                  ))}
+                  {open && row.line ? <Text style={styles.rowLine}>{row.line}</Text> : null}
                 </View>
               );
             })
           : null}
 
-        {/* ── Loop 3 · volume moves — muscle-level news that belongs to no single lift row ── */}
-        {!steady && view?.volume?.length ? (
-          <View style={styles.volumeBlock}>
-            {view.volume.map((v) => (
-              <View key={v.muscle} style={styles.volumeRow}>
-                <View style={styles.volumeTop}>
-                  <Text style={styles.volumeMuscle}>{t(`muscle.${v.muscle}`)}</Text>
-                  <View style={styles.evidenceMoveRow}>
-                    <Text style={[styles.volumeMove, { color: v.setsTo > v.setsFrom ? up.stage : down.stage }]}>
-                      {`${v.setsFrom} → ${v.setsTo}`}
-                    </Text>
-                    <Text style={styles.evidenceUnit}>{t('weekly.setsUnit')}</Text>
-                  </View>
-                </View>
-                {/* The why, in place — a volume move is one sentence, not a foldout. */}
-                <Text style={styles.volumeWhy}>{t(v.explanation.text.key, v.explanation.text.params ?? {})}</Text>
-              </View>
-            ))}
+        {/* ── the steady week: what the weeks have added up to (see the header) ──
+            It sits above the travelled lifts because it is the wider fact: the lifts say the engine
+            is working, these say she has been. Drawn only once there is a workout to count — a
+            band of three zeroes on her first Saturday would be the emptiness this exists to fix. */}
+        {steady && standing && standing.workouts > 0 ? (
+          <View style={styles.standing}>
+            <Legend size={10.5} track={0.2}>{t('weekly.standingLegend')}</Legend>
+            <View style={styles.statBand}>
+              <LetterFact value={String(standing.workouts)} label={t('weekly.statWorkouts')} />
+              <LetterFact value={`${standing.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
+              <LetterFact value={String(standing.sets)} label={t('weekly.statSets')} />
+            </View>
           </View>
         ) : null}
-
-        {/* The plan is bigger than the news. One line, so the athlete knows the rest is intact. */}
-        {!steady && changedCount > 0 ? <Text style={styles.unchanged}>{t('weekly.unchangedNote')}</Text> : null}
 
         {/* ── the steady week: the proof (see the header) ── */}
         {steady && evidence ? (
@@ -389,149 +550,109 @@ export function WeeklyUpdate({ navigation }: Props) {
             <Text style={styles.evidenceClose}>{t('weekly.evidenceEmpty')}</Text>
           )
         ) : null}
-
-        {/* THE SIGN-OFF (v7 2026-07-22). This screen is framed as a letter throughout — it opens
-            with the athlete's name; it closes the way a letter closes, in the coach's own hand. */}
-        {loaded ? <Text style={styles.signature}>{t('weekly.signature')}</Text> : null}
       </ScrollView>
 
+      {/* THE CASE — the same sheet a changed lift opens from Today, reached from the letter's own
+          WHY. One argument, one drawing, whichever door the athlete came through. */}
+      {openCase ? (
+        <View style={StyleSheet.absoluteFill}>
+          <WhyChangedSheet {...whyProps(openCase, t, currentLocale())} onClose={() => setOpenId(null)} />
+        </View>
+      ) : null}
+
+      {/* The rest of the changes are one press away, and then the letter closes in the coach's own
+          hand. No "Done": the × at the top is the way out, and a letter does not need a button to
+          say it is finished. */}
       <View style={styles.footer}>
-        <Button variant="primary" size="lg" block label={t('weekly.done')} onPress={close} />
+        {!steady && !askBack && !showAll && allChanges.length > LETTER_ROWS ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('weekly.viewAll', { count: allChanges.length })}
+            onPress={() => setShowAll(true)}
+            style={({ pressed }) => [styles.viewAll, pressed && styles.pressedDim]}
+          >
+            <Text style={styles.viewAllLabel}>{t('weekly.viewAll', { count: allChanges.length })}</Text>
+          </Pressable>
+        ) : null}
+        {loaded ? <Text style={styles.signature}>{t('weekly.signature')}</Text> : null}
       </View>
     </SafeAreaView>
   );
 }
 
-function LiftRow({ lift, open, onToggle }: { lift: WeeklyPlanLift; open: boolean; onToggle: () => void }) {
-  const { t } = useCopy();
-  const units = useApp().profile?.units ?? 'kg';
-  const unit = unitLabel(units);
-  const ch = lift.change?.snapshot;
-  const expl = lift.change?.explanation;
-  const hasWhy = !!lift.change;
-  const swapped = ch?.swapped ?? false;
-  const loadChanged = !!ch && ch.loadFrom !== ch.loadTo && !swapped;
-  const setsChanged = !!ch && ch.setsFrom !== ch.setsTo;
-  const rangeChanged = !!ch && (ch.rangeFrom[0] !== ch.rangeTo[0] || ch.rangeFrom[1] !== ch.rangeTo[1]);
-  const prominent = loadChanged || setsChanged || rangeChanged || swapped;
-  const tone: WhyKind = swapped ? 'swap' : loadChanged ? (ch!.loadTo! >= (ch!.loadFrom ?? -Infinity) ? 'up' : 'down') : 'neutral';
-  const loadColor = tone === 'up' ? up.stage : tone === 'down' ? down.stage : color.textPrimary;
+/**
+ * A load move's direction, from the stamped snapshot alone — the SAME derivation Home uses, so the
+ * two doors into a decision can never disagree about which way it went. A structural change has no
+ * load it came from: that is a new lift arriving, and it lights like one.
+ */
+function liftDirection(from: number | null, to: number | null): LoadDirection {
+  if (from == null || to == null) return 'up';
+  return to < from ? 'down' : to > from ? 'up' : 'hold';
+}
 
-  const toLoad = ch ? ch.loadTo : lift.loadKg;
-  const sets = ch ? ch.setsTo : lift.sets;
-  const range = ch ? ch.rangeTo : lift.repRange;
+/** How many changes the letter shows before it offers the rest. */
+const LETTER_ROWS = 4;
 
-  // The right-hand load cluster (load + optional chevron).
-  const loadCluster = (
-    <View style={styles.loadCluster}>
-      {swapped ? (
-        <Text style={styles.loadSwap}>
-          {fmtLoad(toLoad, units)}<Text style={styles.kg}> {unit}</Text>
-        </Text>
-      ) : loadChanged ? (
-        <Text style={styles.loadLine}>
-          <Text style={styles.loadFrom}>{fmtLoad(ch!.loadFrom, units)} </Text>
-          <Text style={styles.arrow}>→ </Text>
-          <Text style={[styles.loadTo, { color: loadColor }]}>{fmtLoad(toLoad, units)}</Text>
-          <Text style={styles.kg}> {unit}</Text>
-        </Text>
-      ) : (
-        <Text style={styles.loadPlain}>
-          {fmtLoad(toLoad, units)}<Text style={styles.kg}> {unit}</Text>
-        </Text>
-      )}
-      {hasWhy ? <Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} color={color.textTertiary} strokeWidth={2} /> : null}
-    </View>
-  );
+/** One row of the letter: a lift (or a muscle's volume) and the move the engine made. */
+interface LetterRow {
+  key: string;
+  name: string;
+  from: string;
+  to: string;
+  /** "sets" on a volume row; empty on a load row, where the unit is implied by the column. */
+  suffix: string;
+  /** Which way it moved — the app-wide three, never a boolean (see `allChanges`). */
+  dir: LoadDirection;
+  magnitude: number;
+  /** The slot whose reason sheet the WHY pill opens. Null on a volume row — a muscle is not a slot. */
+  slotId: string | null;
+  /**
+   * A volume move's reason, already spoken. It has no case to open — there is no band and no pair
+   * of sessions behind "chest earned a set", only the sentence — so its WHY unfolds in place.
+   */
+  line: string | null;
+}
 
+/** One fact of the week's band — the figure in mono over its mono legend. */
+function LetterFact({ value, label }: { value: string; label: string }) {
   return (
-    <Pressable onPress={hasWhy ? onToggle : undefined} style={styles.lift} accessibilityRole={hasWhy ? 'button' : undefined}>
-      <View style={styles.liftTop}>
-        <Text style={[styles.liftName, prominent && styles.liftNameStrong]} numberOfLines={1}>
-          {lift.name}
-        </Text>
-        {swapped ? (
-          <View style={styles.swapBadge}>
-            <Icon name="repeat" size={12} color={color.accentText} strokeWidth={2} />
-            <Text style={styles.swapBadgeText}>{t('weekly.swapped').toUpperCase()}</Text>
-          </View>
-        ) : (
-          loadCluster
-        )}
-      </View>
-
-      {prominent ? (
-        <View style={styles.liftSecond}>
-          {swapped ? (
-            <Text style={styles.newExercise}>{t('weekly.newExercise')}</Text>
-          ) : (
-            <Text style={styles.sub}>
-              {setsChanged ? (
-                <>
-                  <Text style={styles.subFrom}>{ch!.setsFrom} </Text>
-                  <Text style={styles.subArrow}>→ </Text>
-                  <Text style={styles.subStrong}>{sets} </Text>
-                </>
-              ) : (
-                <Text>{sets} </Text>
-              )}
-              <Text>{t('weekly.setsUnit')}</Text>
-              {range ? (
-                <>
-                  <Text style={styles.subDot}> · </Text>
-                  {rangeChanged ? (
-                    <>
-                      <Text style={styles.subFrom}>{rangeStr(ch!.rangeFrom)} </Text>
-                      <Text style={styles.subArrow}>→ </Text>
-                      <Text style={styles.subStrong}>{rangeStr(range)} </Text>
-                    </>
-                  ) : (
-                    <Text>{rangeStr(range)} </Text>
-                  )}
-                  <Text>{t('weekly.repsUnit')}</Text>
-                </>
-              ) : null}
-            </Text>
-          )}
-          {swapped ? loadCluster : null}
-        </View>
-      ) : null}
-
-      {/* THE WORD "WHY" (founder 2026-07-13). The explanation was always one tap away and nothing
-          said so — a chevron is a shape, not a promise. Now the row states what pressing it gives. */}
-      {hasWhy ? (
-        <View style={styles.whyRow}>
-          <Text style={styles.whyLink}>{t('weekly.whyLink')}</Text>
-        </View>
-      ) : null}
-
-      {open && expl ? (
-        <View style={styles.whyWrap}>
-          <WhyTriple
-            saw={t(expl.observation.key, expl.observation.params ?? {})}
-            means={t(expl.conclusion.key, expl.conclusion.params ?? {})}
-            did={t(expl.action.key, expl.action.params ?? {})}
-            kind={tone}
-          />
-        </View>
-      ) : null}
-    </Pressable>
+    <View style={styles.fact}>
+      <Text style={styles.factValue}>{value}</Text>
+      <Legend size={10} track={0.14}>{label}</Legend>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 4, minHeight: 44 },
-  headSpacer: { width: 40 },
-  when: { flex: 1, textAlign: 'center', fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, letterSpacing: 0.2 },
+  // v7 3.1: the date centred between a spacer and a 36px close disc — the same chrome shape
+  // the training stage uses, so a way out looks the same everywhere.
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 26, paddingTop: 18 },
+  closeDisc: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: color.fillSubtleStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressedDim: { opacity: 0.62 },
+  headSpacer: { width: 36 },
+  when: { flex: 1 },
 
-  scroll: { paddingHorizontal: space.gutter, paddingBottom: 20 },
+  // The letter's own gutter is 34 — wider than the app's, because prose wants a narrower column.
+  scroll: { flexGrow: 1, paddingHorizontal: 34, paddingTop: 20, paddingBottom: 20 },
+  headBlock: { gap: 2 },
   eyebrow: { marginTop: 12, marginBottom: 10 },
   vocative: { fontFamily: font.sans, fontSize: textScale.lg, color: color.textSecondary, textAlign: 'left', marginBottom: 2 },
   // v7 (2026-07-22): the letter's headline is the COACH's voice — the serif ("Week six."), not UI
   // chrome. It opens the mirror, so it carries the size of a statement.
-  title: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), color: color.textPrimary, lineHeight: 46, textAlign: 'left' },
-  intro: { marginTop: 12, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, maxWidth: 340, textAlign: 'left' },
+  // "Week six." — 56px, the largest headline in the product. A letter opens by naming itself.
+  title: { fontFamily: font.serif, fontSize: 56, lineHeight: 59, color: color.textPrimary, textAlign: 'left' },
+  titleAsking: { fontSize: 40, lineHeight: 42 }, // rtl-ok: merged onto title, which sets textAlign
+  // The framing sentence is the COACH speaking, so it is the serif — not UI sans.
+  intro: { marginTop: 16, fontFamily: font.serif, fontSize: 17, lineHeight: 26, color: color.textPrimary, textAlign: 'left' },
+  introAsking: { marginTop: 14, fontSize: 16, lineHeight: 24, color: color.textSecondary }, // rtl-ok: merged onto intro
 
   // The week's facts (v7 3.1) — three mono figures bound top and bottom by a hairline, sitting
   // directly beneath the headline before the letter's prose begins.
@@ -541,14 +662,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 14,
     borderTopWidth: 1,
+    borderTopColor: 'rgba(241,238,229,0.14)',
     borderBottomWidth: 1,
-    borderColor: color.borderStrong,
+    borderBottomColor: 'rgba(241,238,229,0.14)',
   },
 
-  workout: { marginTop: 24 },
-  workoutHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: color.borderStrong },
-  workoutName: { fontFamily: font.sansSemibold, fontSize: textScale.md, letterSpacing: trackingPx(textScale.md, tracking.tight), color: color.textPrimary, textAlign: 'left' },
-  workoutGroups: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.textTertiary, textAlign: 'left' },
+  // …and the same band again at the scale of everything she has logged, on a steady week. Its own
+  // legend, because two identical bands with nothing to tell them apart would read as a repeat.
+  standing: { marginTop: 26, gap: 2 },
 
   lift: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: color.border },
   liftTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -580,22 +701,68 @@ const styles = StyleSheet.create({
   whyWrap: { marginTop: 14, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 18, backgroundColor: color.surface3, borderRadius: radius.lg },
 
   // the rest of the plan stands — said once, at the end
-  unchanged: { marginTop: 20, fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, textAlign: 'left' },
+  /* ── The changes: one ruled list, largest move first. ── */
+  row: {
+    paddingVertical: 16,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241,238,229,0.14)',
+  },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  // A volume move's reason, unfolded in place — one sentence, in the coach's voice.
+  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
+  rowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.14)' },
+  rowName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 16, color: color.textPrimary, textAlign: 'left' },
+  rowRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowMove: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, textAlign: 'right' },
+  // Where it came FROM rests in shadow; where it went stands in the accent — and a load coming
+  // DOWN is drawn in exactly the same moss as one going up. It is the engine matching what she
+  // demonstrated, not a setback, and the letter never colours it like one.
+  rowFrom: { color: color.textSecondary }, // rtl-ok: nested in rowMove
+
+  // WHY is a door, so it is drawn as one — a hairline pill, not an underlined word.
+  whyPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },
+  /* ── The week's facts. ── */
+  fact: { gap: 2 },
+  factValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 22, color: color.textPrimary, textAlign: 'left' },
+  /* ── The rest of the changes, then the hand. ── */
+  viewAll: {
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.3)',
+  },
+  viewAllLabel: { fontFamily: font.sansSemibold, fontSize: 14.5, color: color.textPrimary, textAlign: 'center' },
 
   // Loop 3 — a volume move is a muscle's news, so it gets a muscle row, not a fake lift row.
-  volumeBlock: { marginTop: 24 },
-  volumeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  volumeRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: color.border },
-  volumeMuscle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
-  volumeMove: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale.md, textAlign: 'left' },
-  volumeWhy: { marginTop: 6, fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
 
   // S-56 — the one question the mirror may ask. A quiet card, not a modal: the letter is hers to
   // read, and the question waits inside it rather than standing in front of it (L9).
-  askBack: { marginTop: 20, padding: 16, backgroundColor: color.surface3, borderRadius: radius.lg, gap: 8 },
-  askBackTitle: { fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
-  askBackBody: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
-  askBackActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space[2], marginTop: 6 },
+  /* ── 3.1b · THE ONE QUESTION ── */
+  askCard: {
+    marginTop: 26,
+    paddingVertical: 24,
+    paddingHorizontal: 22,
+    gap: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(169,196,159,0.28)',
+    backgroundColor: 'rgba(169,196,159,0.06)',
+  },
+  askHead: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  askDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: signal[0] },
+  // The question is the coach speaking, so it is the serif — and it is the biggest thing here.
+  askTitle: { fontFamily: font.serif, fontSize: 27, lineHeight: 31, color: color.textPrimary, textAlign: 'left' },
+  askBody: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  askActions: { gap: 10, marginTop: 4 },
+  // The one MOSS-FILLED button in the product: this is the answer that gives something back.
+  askYes: { height: 52, borderRadius: 15, backgroundColor: signal[0], alignItems: 'center', justifyContent: 'center' },
+  askYesLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: '#141310', textAlign: 'center' },
+  askNo: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(241,238,229,0.24)', alignItems: 'center', justifyContent: 'center' },
+  askNoLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: color.textPrimary, textAlign: 'center' },
+  askNote: { marginTop: 18, fontFamily: font.sans, fontSize: 15, lineHeight: 18, color: color.textMuted, textAlign: 'left' },
 
   // the steady week: the athlete's own history, as proof
   evidence: { marginTop: 24 },
@@ -616,7 +783,8 @@ const styles = StyleSheet.create({
   evidenceClose: { marginTop: 22, fontFamily: font.sans, fontSize: textScale.md, lineHeight: 25, color: color.textSecondary, textAlign: 'left' },
 
   // The coach's hand — the serif, closing the letter. Quiet, set apart from the last line above it.
-  signature: { marginTop: 28, fontFamily: font.serif, fontSize: textScale.lg, color: color.textSecondary, textAlign: 'left' },
+  signature: { fontFamily: font.serif, fontSize: 21, color: color.textPrimary, textAlign: 'left' },
 
-  footer: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: color.border },
+  // No rule above it and no filled button in it: the letter ends, it does not get dismissed.
+  footer: { paddingHorizontal: 34, paddingBottom: 36, gap: 14 },
 });

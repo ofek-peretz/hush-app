@@ -1,78 +1,80 @@
 /**
- * Live cardio tracker — the sample source for the Open-training (run / walk) flow.
+ * Live cardio tracker — the screen's window onto the run.
  *
  * REAL SENSORS (replaces the simulated generator that shipped through Build #22 and
  * fabricated distance/pace/HR while the phone sat on a table):
- *   • distance / pace — expo-location GPS (`watchPositionAsync`, BestForNavigation),
- *     with honest gating: a fix only counts when its horizontal accuracy is tight,
- *     and distance only accrues while the device is actually MOVING (Doppler speed
- *     over a walking threshold, displacement under a sanity cap). A stationary
- *     indoor session reads 0.00 km, no pace, ~0 kcal — by construction.
- *   • calories — distance-based estimate from the athlete's bodyweight (≈1.03 kcal/kg
- *     per km running, ≈0.55 walking — the standard net-cost approximations). No
- *     distance ⇒ no calories. Absent bodyweight ⇒ omitted entirely (kcal = 0).
- *   • heart rate — NO phone-side source exists, so `hr` is null and the UI shows a
- *     dash. (A live HR feed needs the watch app / an HKWorkoutSession — that is the
- *     next native step, not something to fake here.)
+ *   • distance / pace — expo-location GPS, with honest gating: a fix only counts when its
+ *     horizontal accuracy is tight, and distance only accrues while the device is actually
+ *     MOVING (Doppler speed over a walking threshold, displacement under a sanity cap). A
+ *     stationary indoor session reads 0.00 km, no pace, ~0 kcal — by construction.
+ *   • calories — distance-based estimate from the athlete's bodyweight (≈1.03 kcal/kg per km
+ *     running, ≈0.55 walking — the standard net-cost approximations). No distance ⇒ no calories.
+ *     Absent bodyweight ⇒ omitted entirely (kcal = 0).
+ *   • heart rate — READ FROM HEALTHKIT (founder 2026-07-29), which is where an Apple Watch writes
+ *     it. Polled every few seconds and shown only while the newest sample is still FRESH
+ *     (`domain/heartRate`): a watch batches its writes, so "the latest sample" is regularly minutes
+ *     old, and a stale pulse under a live clock is the same lie as a pace on a table. No watch, no
+ *     grant, or nothing recent ⇒ a dash, which is the honest answer most of the time.
  *
- * Elapsed time is wall-clock (accumulated across pause/resume), never interval
- * ticks — JS timers suspend in the background and silently under-count.
+ * ════ WHAT THIS FILE IS NOW ════
  *
- * The GPS lock state is part of the sample (`gps`) so the screen can say
- * "acquiring" / "location off" instead of rendering confident zeros.
+ * It is a VIEW, not the run. The run lives in `cardioRun` (module-level, so a background wake can
+ * write to it with no React tree), the fixes arrive through two paths that both feed it, and this
+ * hook only starts them, stops them, and publishes a snapshot once a second.
  *
- * Foreground-only for now: without the background-location task entitlement iOS
- * suspends position updates when the app leaves the foreground. The screen keeps
- * itself awake during an activity; true background tracking is a follow-up build.
+ *   FOREGROUND — `watchPositionAsync`, while the screen is up.
+ *   BACKGROUND — `cardioTask`, a TaskManager task, for the phone in a pocket (founder 2026-07-29).
+ *
+ * Both are held for exactly as long as there is a run, and both are released the moment there is
+ * not. Running them together is deliberate: iOS hands the foreground watcher a tighter cadence,
+ * and `ingestFix` is idempotent about ORDER, not about identity — a fix delivered twice is a
+ * zero-length segment, which the gates already discard (`MIN_SEGMENT_M`).
+ *
+ * Elapsed time is wall-clock (accumulated across pause/resume), never interval ticks — JS timers
+ * suspend in the background and silently under-count.
+ *
+ * The GPS lock state is part of the sample (`gps`) so the screen can say "acquiring" / "location
+ * off" instead of rendering confident zeros.
  */
 import { useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
-import type { CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
+import type { CardioGait } from '@/data/local/models';
 import {
-  MAX_ACCURACY_M,
-  MIN_SPEED_MS,
-  haversineM,
-  kcalForKm,
-  movementCredit,
-  segmentCounts,
-} from './cardioMath';
+  beginRun,
+  endRun,
+  heartRateReadings,
+  ingestFix,
+  setGait,
+  setGps,
+  setHeartRate,
+  setPaused,
+  setWeight,
+  snapshot,
+  ZERO,
+  type CardioSample,
+  type GpsState,
+} from './cardioRun';
+import { startCardioLocationTask, stopCardioLocationTask } from './cardioTask';
+import { health } from '@/platform/health';
+import { liveHeartRate } from '@/domain/heartRate';
+
+/**
+ * How often Health is asked for a new beat. Five seconds: a watch writes at most every few seconds
+ * while it is tracking, and asking faster only spends battery re-reading the same sample. The
+ * freshness gate (`domain/heartRate`) is what decides whether the answer is worth drawing, so a
+ * slower poll costs precision, never truth.
+ */
+const HR_POLL_MS = 5_000;
 
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
 export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, movementCredit, segmentCounts } from './cardioMath';
-
-export type GpsState = 'idle' | 'acquiring' | 'ready' | 'denied' | 'unavailable';
-
-export interface CardioSample {
-  elapsedSec: number;
-  distanceKm: number;
-  /** Live pace over recent movement, sec/km; 0 (⇒ "--:--") when not moving or no lock. */
-  paceSec: number;
-  /** bpm — null: no heart-rate source on the phone (never fabricated). */
-  hr: number | null;
-  calories: number; // kcal, distance-based; 0 until real distance exists
-  splits: CardioSplit[];
-  gps: GpsState;
-  /**
-   * The path actually travelled (founder 2026-07-12) — every counted fix, in order, so the
-   * summary can draw the route the athlete ran. Only fixes that PASSED the accuracy +
-   * movement gates are kept, so the trace is the same honest data the distance is: a
-   * stationary session records no path at all, rather than a jitter cloud around a bench.
-   */
-  route: CardioPoint[];
-}
-
-const ZERO: CardioSample = { elapsedSec: 0, distanceKm: 0, paceSec: 0, hr: null, calories: 0, splits: [], gps: 'idle', route: [] };
-
-interface Fix {
-  lat: number;
-  lon: number;
-  tsMs: number;
-}
+export type { CardioSample, GpsState } from './cardioRun';
+export { heartRateReadings } from './cardioRun';
 
 /**
- * Live cardio sample for an activity. `active` spans the whole activity (GPS stays
- * warm across pauses); `paused` gates accumulation. `liveGait` can change
- * mid-activity (the athlete toggles run/walk); calories and split attribution follow it.
+ * Live cardio sample for an activity. `active` spans the whole activity (GPS stays warm across
+ * pauses); `paused` gates accumulation. `liveGait` can change mid-activity (the athlete toggles
+ * run/walk); calories and split attribution follow it.
  */
 export function useCardioTracker(
   active: boolean,
@@ -81,175 +83,112 @@ export function useCardioTracker(
   weightKg?: number | null,
 ): CardioSample {
   const [sample, setSample] = useState<CardioSample>(ZERO);
-  const gaitRef = useRef(liveGait);
-  gaitRef.current = liveGait;
-  const weightRef = useRef(weightKg);
-  weightRef.current = weightKg;
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  const startedRef = useRef(false);
 
-  // Mutable accumulator (refs so the GPS callback and the clock read/write the
-  // latest without re-subscribing).
-  const acc = useRef({
-    activeMs: 0, // accumulated while running
-    resumedAtMs: 0, // wall-clock instant of the last resume (0 = not running)
-    distM: 0,
-    cal: 0,
-    paceSec: 0,
-    splits: [] as CardioSplit[],
-    lastKm: 0,
-    splitStartSec: 0,
-    lastFix: null as Fix | null,
-    gps: 'idle' as GpsState,
-    route: [] as CardioPoint[],
-    // The movement proof (see cardioMath): where the activity started, how far the athlete has
-    // actually got from it, how many consecutive fixes have looked like real movement — and
-    // whether the activity has already proven itself (once proven, it stays proven).
-    origin: null as Fix | null,
-    departedM: 0,
-    movingRun: 0,
-    proven: false,
-  });
-
-  const elapsedSecNow = () => {
-    const s = acc.current;
-    const runMs = s.resumedAtMs > 0 ? Date.now() - s.resumedAtMs : 0;
-    return Math.round((s.activeMs + runMs) / 1000);
-  };
-
-  const publish = () => {
-    const s = acc.current;
-    setSample({
-      elapsedSec: elapsedSecNow(),
-      distanceKm: s.distM / 1000,
-      paceSec: s.paceSec,
-      hr: null,
-      calories: s.cal,
-      splits: s.splits,
-      gps: s.gps,
-      route: s.route,
-    });
-  };
-
-  // ── Wall-clock elapsed: accumulate across pause/resume; tick the UI once a second.
+  // The gait and the weight are facts about the run, not about this component — they go straight
+  // through to the run so a BACKGROUND fix prices its calories the same way a foreground one does.
   useEffect(() => {
-    const s = acc.current;
-    const running = active && !paused;
-    if (running) {
-      s.resumedAtMs = Date.now();
-      const id = setInterval(publish, 1000);
-      publish();
-      return () => {
-        clearInterval(id);
-        s.activeMs += Date.now() - s.resumedAtMs;
-        s.resumedAtMs = 0;
-        // A pause breaks the GPS segment — no distance is credited across it, and the
-        // movement has to prove itself again on resume (a paused athlete is a still one).
-        s.lastFix = null;
-        s.movingRun = 0;
-        s.paceSec = 0;
-        publish();
-      };
-    }
+    setGait(liveGait);
+  }, [liveGait]);
+  useEffect(() => {
+    setWeight(weightKg);
+  }, [weightKg]);
+
+  // ── The activity's own lifetime: one run, one background task, released together.
+  useEffect(() => {
+    if (!active) return;
+    beginRun(liveGait, weightKg);
+    startedRef.current = true;
+    setSample(snapshot());
+    return () => {
+      startedRef.current = false;
+      void stopCardioLocationTask();
+      endRun();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    setPaused(paused);
   }, [active, paused]);
 
-  // ── GPS: one subscription for the whole activity (kept warm across pauses).
+  // ── HEART RATE, from the watch by way of Health. Polled for the whole activity — including
+  //    while PAUSED, because a pulse during a pause is still her pulse and the row should not go
+  //    dark just because she stopped at a crossing.
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    const read = () => {
+      void health
+        .latestHeartRate()
+        .then((sample) => {
+          if (alive) setHeartRate(liveHeartRate(sample, Date.now()));
+        })
+        .catch(() => {
+          if (alive) setHeartRate(null);
+        });
+    };
+    read();
+    const id = setInterval(read, HR_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [active]);
+
+  // ── Publish once a second while the screen is up. Nothing here accumulates: it reads.
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setSample(snapshot()), 1000);
+    setSample(snapshot());
+    return () => clearInterval(id);
+  }, [active, paused]);
+
+  // ── GPS: the permissions, the foreground watcher, and the background task.
   useEffect(() => {
     if (!active) return;
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
-    const s = acc.current;
-    s.gps = 'acquiring';
-    publish();
+    setGps('acquiring');
 
     (async () => {
       try {
         const perm = await Location.requestForegroundPermissionsAsync();
         if (cancelled) return;
         if (!perm.granted) {
-          s.gps = 'denied';
-          publish();
+          setGps('denied');
+          setSample(snapshot());
           return;
         }
+        /**
+         * ════ A RUN HAPPENS WITH THE PHONE IN A POCKET (founder 2026-07-29) ════
+         *
+         * Asked AFTER the foreground grant, and only as a run is STARTING: a background-location
+         * prompt at launch, for an app she has not yet run with, is the kind of ask that gets
+         * refused once and then forever. A refusal is not a failure — she keeps exactly the
+         * behaviour she has today, and the run records perfectly while the screen is on. So this
+         * gates nothing; it only ever adds.
+         */
+        const bg = await Location.requestBackgroundPermissionsAsync().catch(() => null);
+        if (cancelled) return;
+        if (bg?.granted) void startCardioLocationTask();
+
         sub = await Location.watchPositionAsync(
-          // (expo-location's foreground `watchPositionAsync` does not expose CLActivityType —
-          // it is a background-task option only — so the movement proof is entirely ours.)
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
-          (loc) => {
-            const { latitude, longitude, accuracy, speed } = loc.coords;
-            const tsMs = loc.timestamp;
-            const goodFix = accuracy != null && accuracy <= MAX_ACCURACY_M;
-            if (goodFix && s.gps !== 'ready') s.gps = 'ready';
-            if (pausedRef.current || !goodFix) {
-              if (!goodFix) {
-                s.lastFix = null; // a poor fix breaks the segment
-                s.movingRun = 0; // …and the movement has to prove itself again
-              }
-              return;
-            }
-            const prev = s.lastFix;
-            s.lastFix = { lat: latitude, lon: longitude, tsMs };
-            // The origin is the first fix good enough to trust. Everything the athlete has to
-            // beat — the departure test — is measured from here.
-            if (!s.origin) s.origin = { lat: latitude, lon: longitude, tsMs };
-            s.departedM = haversineM(s.origin.lat, s.origin.lon, latitude, longitude);
-            if (!prev) return;
-
-            const dtS = (tsMs - prev.tsMs) / 1000;
-            const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
-            const plausible = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
-            // A plausible segment still has to PROVE itself: movement that holds across
-            // consecutive fixes, from a phone that has gone further than its own error bar. This
-            // is what a chair cannot fake (founder 2026-07-12 — see cardioMath). The proof is
-            // made once per activity, not once per stride.
-            const credit = movementCredit(plausible, {
-              movingRun: s.movingRun,
-              departedM: s.departedM,
-              accuracyM: accuracy,
-              proven: s.proven,
-            });
-            s.movingRun = credit.movingRun;
-            s.proven = credit.proven;
-
-            // Pace shows recent MOVEMENT, never elapsed/position artifacts: a light EMA over
-            // Doppler speed while moving; blank the moment movement stops. It follows the same
-            // proof as the distance — a pace with no credited distance behind it is the exact
-            // "5:39 /km on a table" lie this whole file exists to prevent.
-            if (credit.counts && speed != null && speed >= MIN_SPEED_MS) {
-              const inst = 1000 / speed; // sec/km
-              s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : Math.round(inst);
-            } else if (!plausible) {
-              s.paceSec = 0;
-            }
-            if (!credit.counts) return;
-
-            const g = gaitRef.current;
-            // The trace records only fixes that COUNTED — the same gate as the distance, so the
-            // drawn route can never disagree with the kilometres beside it. The first point of a
-            // segment is seeded too, so a resumed leg starts where the athlete stands.
-            //
-            // PUSHED, not re-spread: an hour's run is ~3,600 fixes, and rebuilding the array on
-            // every one is quadratic. The array identity is deliberately stable — nothing renders
-            // the route live, so a new reference each second would only churn.
-            if (s.route.length === 0) s.route.push({ lat: prev.lat, lon: prev.lon });
-            s.route.push({ lat: latitude, lon: longitude });
-            s.distM += segM;
-            s.cal += kcalForKm(segM / 1000, g, weightRef.current);
-            const kmDone = Math.floor(s.distM / 1000);
-            if (kmDone > s.lastKm) {
-              s.lastKm = kmDone;
-              const nowSec = elapsedSecNow();
-              const sec = nowSec - s.splitStartSec;
-              s.splitStartSec = nowSec;
-              s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: g }];
-            }
-          },
+          (loc) =>
+            ingestFix({
+              lat: loc.coords.latitude,
+              lon: loc.coords.longitude,
+              tsMs: loc.timestamp,
+              accuracyM: loc.coords.accuracy ?? null,
+              speedMs: loc.coords.speed ?? null,
+            }),
         );
       } catch {
         if (!cancelled) {
-          s.gps = 'unavailable';
-          publish();
+          setGps('unavailable');
+          setSample(snapshot());
         }
       }
     })();
@@ -263,4 +202,3 @@ export function useCardioTracker(
 
   return sample;
 }
-

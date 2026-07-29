@@ -4,7 +4,7 @@
  * (founder 2026-07-09) — that first load is the starting point (baseline, delta 0);
  * gains are measured against it from the second day on.
  */
-import { allTimePeakProgress, ALL_TIME_MIN_WEEKS } from '@/domain/progressReport';
+import { allTimePeakProgress, standingRecord, ALL_TIME_MIN_WEEKS } from '@/domain/progressReport';
 import type { Session, SetLog } from '@/data/local/models';
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -118,5 +118,42 @@ describe('allTimePeakProgress', () => {
     const out = allTimePeakProgress(sessions, base + 2 * WEEK);
     expect(out.filter((e) => e.exerciseId === 'dip')).toHaveLength(1);
     expect(out[0].mode).toBeUndefined(); // the load entry tells the story
+  });
+});
+
+/**
+ * THE STANDING RECORD — the Saturday letter's answer to a week the engine changed nothing
+ * (founder 2026-07-28). It is the only figure on that page that is about the WHOLE use of the
+ * app rather than one week, so it has to be complete and it has to be conservative.
+ */
+describe('standingRecord', () => {
+  test('nothing logged is not a record of zero workouts — it is no record at all', () => {
+    expect(standingRecord([])).toEqual({ workouts: 0, tonnes: 0, sets: 0 });
+  });
+
+  test('counts every set and every kilo, over every session', () => {
+    const s = standingRecord([
+      session('s1', base, [set('squat', 60, base), set('squat', 60, base)]),
+      session('s2', base + WEEK, [set('bench', 40, base + WEEK)]),
+    ]);
+    // 8 reps a set: (60×8)×2 + 40×8 = 1280 kg
+    expect(s).toEqual({ workouts: 2, tonnes: 1.3, sets: 3 });
+  });
+
+  test('a session left half-done is not a workout — but its sets are still on record', () => {
+    const half = { ...session('s2', base + WEEK, [set('bench', 40, base + WEEK)]), trained: false };
+    const s = standingRecord([session('s1', base, [set('squat', 60, base)]), half]);
+    expect(s.workouts).toBe(1);
+    expect(s.sets).toBe(2);
+  });
+
+  test('a session with nothing logged never happened', () => {
+    expect(standingRecord([session('s1', base, [])])).toEqual({ workouts: 0, tonnes: 0, sets: 0 });
+  });
+
+  test('a bodyweight set adds a set and no tonnage — never a guessed load', () => {
+    const bw = { ...set('pullup', 0, base), actualWeight: null, recommendedWeight: null };
+    const s = standingRecord([session('s1', base, [bw])]);
+    expect(s).toEqual({ workouts: 1, tonnes: 0, sets: 1 });
   });
 });
