@@ -3,6 +3,23 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+/**
+ * expo-video is native, and importing it under jest throws before a single test runs
+ * ("Cannot read properties of undefined (reading 'prototype')"). It is pulled in by
+ * ExerciseVideoPlayer → FormMedia → ExerciseDemo → SessionFlow, which is why no test had ever
+ * been able to mount the workout screen — the one screen the athlete spends the whole session on.
+ * The player is a silent looping clip with no controls and nothing to assert, so the mock is a
+ * stub: the surrounding chrome, the stage and every control are real.
+ */
+jest.mock('expo-video', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    useVideoPlayer: () => ({ loop: false, muted: false, play: () => {}, pause: () => {}, release: () => {} }),
+    VideoView: (props) => React.createElement(View, props),
+  };
+});
+
 // expo-notifications is native — no-op mock for tests. requestPermissions
 // resolves "not granted" so scheduling is skipped (mirrors a denied device).
 jest.mock('expo-notifications', () => ({

@@ -233,7 +233,17 @@ export function SessionFlow({ navigation, route }: Props) {
   }, [session.paused]);
 
   function openPause() {
-    session.pause(); // the effect above raises the sheet — one path, phone or wrist
+    session.pause(); // the effect above raises the stage — one path, phone or wrist
+    /*
+     * …AND ASSERT IT HERE TOO, because the effect above is edge-triggered and this button is not.
+     *
+     * `PAUSE` on an already-PAUSED machine returns the SAME state object (sessionState.ts), so
+     * `session.paused` does not change, so the effect does not re-run. Any moment the overlay is
+     * closed while the session is still frozen therefore left this button doing literally nothing
+     * for the rest of the workout — no error, no feedback, just a dead control (founder, build 36).
+     * Asserting the stage from the press makes Pause self-healing whatever put the two out of step.
+     */
+    setOverlay((o) => (o === 'endConfirm' ? o : 'pause'));
   }
   function resume() {
     session.resume();
@@ -534,7 +544,13 @@ export function SessionFlow({ navigation, route }: Props) {
               : () => {
                   // Reported on a PAUSED session on purpose: it stays paused behind the report, so
                   // accepting the swap returns to a session that never went anywhere.
-                  setOverlay('none');
+                  //
+                  // THE STAGE STAYS UP BEHIND THE REPORT. It used to be closed here, and since the
+                  // session remains frozen the edge-triggered effect above never raised it again:
+                  // Back from the report landed on the LIVE set over a paused workout, and Pause
+                  // was dead from then on (founder, build 36). PainWhere is pushed over this
+                  // screen, so leaving the stage up costs nothing — and Back reveals exactly the
+                  // screen she left, which is what Back means.
                   navigation.navigate('PainWhere', { exerciseId: session.currentExerciseId ?? undefined });
                 }
           }
