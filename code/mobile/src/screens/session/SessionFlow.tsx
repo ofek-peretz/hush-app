@@ -119,10 +119,32 @@ export function SessionFlow({ navigation, route }: Props) {
    * — showing it WHILE a swap notice was up would end the swap notice (a new toast retires the old
    * one), handing the footer back underneath a card that is still on screen. One door in, one law.
    */
+  const noticeSeq = useRef(0);
   const notify = useCallback(
     (message: string, actions?: ToastAction[]) => {
+      /*
+       * ONLY THE LIVING NOTICE MAY HAND THE FOOTER BACK (founder, build 36 — C.12).
+       *
+       * `toast.show` retires whatever is on screen and fires ITS `onHide` synchronously, so a
+       * second notice queued `setNotice(true)` and then, in the same tick, the FIRST notice's
+       * `setNotice(false)` — and false won. From the second notice onward the footer came back
+       * underneath a toast that was still up: the founder photographed "Another option" and "Undo"
+       * sitting across the +15 sec control on a transition rest.
+       *
+       * It bit exactly once because it needs a REPLACEMENT: the first swap was fine, and tapping
+       * "Another option" (or swapping twice) broke it. Toast.tsx already guards this same hazard on
+       * its animation path with a nonce — and says so in a comment — but the `show()` path had
+       * nothing. This is that guard, on the owner's side: a stale `onHide` cannot clear a claim it
+       * no longer owns.
+       */
+      const seq = ++noticeSeq.current;
       setNotice(true);
-      toast.show(message, { actions, onHide: () => setNotice(false) });
+      toast.show(message, {
+        actions,
+        onHide: () => {
+          if (noticeSeq.current === seq) setNotice(false);
+        },
+      });
     },
     [toast],
   );
