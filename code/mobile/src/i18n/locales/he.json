@@ -180,8 +180,7 @@
     "kilometres": "קילומטרים",
     "recordFooter": "מתועד, ללא הנחיה. שום דבר כאן לא נוגע במוט.",
     "kmMomentLabel": "קילומטר {{km}} · פיצול",
-    "kmMomentQuickest": "המהיר ביותר בריצה זו",
-    "kmMomentBack": "נרשם · חזרה לריצה בעוד {{n}}"
+    "kmMomentQuickest": "המהיר ביותר בריצה זו"
   },
   "ob": {
     "continue": "המשך",
@@ -325,7 +324,6 @@
     "liftCrossing": "תרגיל {{from}} ← {{to}}",
     "setFinal": "סט {{n}} · אחרון",
     "loggedNextLift": "נרשם · התרגיל הבא בדרך",
-    "setBeginsIn": "סט {{n}} מתחיל בעוד {{s}}",
     "restLearned": "מנוחה · נלמדה",
     "yourPace": "הקצב שלך",
     "upNextNewLift": "הבא בתור · תרגיל חדש",
@@ -362,8 +360,6 @@
     "correctedDown": "עשית {{reps}}. הטווח שלך מתחיל ב־{{edge}}, אז הורדתי משקל.",
     "landedBelow": "סט {{n}} נחת מתחת לטווח שלך",
     "landedAbove": "סט {{n}} נחת מעל הטווח שלך",
-    "loggedRestBeginsIn": "נרשם · המנוחה מתחילה בעוד {{n}}",
-    "restBeginsIn": "המנוחה מתחילה בעוד {{n}}",
     "easedForYou": "הוקל עבורך",
     "raisedForYou": "הועלה עבורך",
     "reasonUp": "עברת את הטווח שלך",

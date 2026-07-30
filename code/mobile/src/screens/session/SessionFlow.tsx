@@ -1453,7 +1453,6 @@ function RestLearned({ took, was, now, nextSet }: { took: number; was: number; n
           </View>
         ) : null}
       </View>
-      <HandOver label={t('workout.setBeginsIn', { n: nextSet, s: 3 })} />
     </>
   );
 }
@@ -1494,32 +1493,10 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
 
         <Legend size={14} track={0.14} tone="accent">{t('workout.loggedNextLift')}</Legend>
       </View>
-      <HandOver label={t('workout.restBeginsIn', { n: 3 })} />
     </>
   );
 }
 
-/**
- * THE HAND-OVER — a line and a filling rule, at the foot of a beat that ends by itself.
- *
- * It is not a progress bar for a task: it is the product saying how long it intends to hold the
- * screen. The athlete never has to press anything to leave a beat, and never has to wonder whether
- * it is stuck.
- */
-function HandOver({ label, tone }: { label: string; tone?: string }) {
-  return (
-    <View style={styles.handOver}>
-      <Legend size={12.5} track={0.16} tone="onStage">{label}</Legend>
-      <View style={styles.handOverTrack}>
-        {/* The bar under a CORRECTION carries that correction's direction. It was moss whatever the
-            beat above it said, so the one moving thing on the screen contradicted the number it was
-            handing over from (founder 2026-07-29). A plain logged set has no direction, and keeps
-            the moss. */}
-        <View style={[styles.handOverFill, tone ? { backgroundColor: tone } : null]} />
-      </View>
-    </View>
-  );
-}
 
 /* ------------------------------------------------------ The correction reveal (2.3) */
 /**
@@ -1586,9 +1563,6 @@ function CorrectionBeat({
         <Text style={[styles.corrBeatTo, { color: tone, textShadowColor: tone }]}>{to}</Text>
         <Text style={styles.corrBeatUnit}>{unitLabel(units)}</Text>
       </Animated.View>
-      {/* Both beats hand over the same way, so they use the same hand-over (see `HandOver`) — this
-          one in the direction the load just moved. */}
-      <HandOver label={t('workout.loggedRestBeginsIn', { n: 3 })} tone={tone} />
     </View>
   );
 }
@@ -2253,9 +2227,6 @@ const styles = StyleSheet.create({
   donePip: { width: 34, height: 10, borderRadius: 5, backgroundColor: up.stage },
 
   /* ── THE HAND-OVER — how long the beat intends to hold the screen. ── */
-  handOver: { alignItems: 'center', gap: 9, paddingHorizontal: space.gutter, paddingBottom: 44 },
-  handOverTrack: { width: 130, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)', overflow: 'hidden' },
-  handOverFill: { width: '62%', height: '100%', backgroundColor: up.stage },
 
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
   setOf: { marginTop: 30, color: stage.ink1 },

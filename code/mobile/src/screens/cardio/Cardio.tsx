@@ -67,9 +67,7 @@ export function Cardio({ navigation }: Props) {
   // 3.4b · KILOMETRE LOGGED — the split that just landed rises alone in the light, then the run
   // resumes on its own. A moment, mirrored to the watch; the tracking underneath never pauses.
   const [kmMoment, setKmMoment] = useState<CardioSplit | null>(null);
-  const [backIn, setBackIn] = useState(3);
   const shownSplitsRef = useRef(0);
-  const backBar = useRef(new Animated.Value(0)).current;
   const startedAtRef = useRef<string>('');
   // Stamp the start the moment the stage mounts (the countdown is already running).
   useEffect(() => {
@@ -141,20 +139,15 @@ export function Cardio({ navigation }: Props) {
     setKmMoment(splits[splits.length - 1]);
   }, [phase, splits]);
 
-  // The moment breathes on its own: a 3-second "back to run" countdown with a filling bar, then it
-  // clears itself — no tap. Mirrors the set-logged moment's timing and dismissal.
+  // The moment breathes on its own and clears itself — no tap. It used to COUNT ITSELF DOWN in
+  // words under a filling bar; the founder had both taken off every workout surface (A.11 / C.14),
+  // so the timing survives and the narration of it does not. The split is on the glass for three
+  // seconds, then the run is back.
   useEffect(() => {
     if (!kmMoment) return;
-    setBackIn(3);
-    backBar.setValue(0);
-    Animated.timing(backBar, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: false }).start();
-    const tick = setInterval(() => setBackIn((n) => Math.max(0, n - 1)), 1000);
     const done = setTimeout(() => setKmMoment(null), 3150);
-    return () => {
-      clearInterval(tick);
-      clearTimeout(done);
-    };
-  }, [kmMoment, backBar]);
+    return () => clearTimeout(done);
+  }, [kmMoment]);
 
   const finish = () => {
     // NOT PERFORMED (founder 2026-07-10): finishing with no real activity records nothing.
@@ -215,8 +208,6 @@ export function Cardio({ navigation }: Props) {
       paused={paused}
       confirmEnd={confirmEnd}
       kmMoment={kmMoment}
-      backIn={backIn}
-      backBar={backBar}
       onPause={() => setPaused(true)}
       onResume={() => {
         setConfirmEnd(false);
@@ -247,8 +238,6 @@ export function CardioLiveView(props: {
   paused: boolean;
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
-  backIn: number;
-  backBar: Animated.Value;
   onPause: () => void;
   onResume: () => void;
   onAskEnd: () => void;
@@ -257,7 +246,7 @@ export function CardioLiveView(props: {
 }) {
   const { t } = useCopy();
   const metresUnit = t('cardio.metresUnit');
-  const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment, backIn, backBar } = props;
+  const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment } = props;
   const metresTotal = distanceKm * 1000;
   const metresIntoKm = metresTotal % 1000; // 0–1000 within the current kilometre
   const dotFrac = Math.max(0, Math.min(1, metresIntoKm / 1000));
@@ -363,7 +352,7 @@ export function CardioLiveView(props: {
         ) : null}
 
         {/* 3.4b · KILOMETRE LOGGED — fires over the run each km, clears itself. */}
-        {kmMoment ? <KmMoment split={kmMoment} splits={splits} backIn={backIn} progress={backBar} /> : null}
+        {kmMoment ? <KmMoment split={kmMoment} splits={splits} /> : null}
       </SafeAreaView>
     </View>
   );
@@ -371,7 +360,7 @@ export function CardioLiveView(props: {
 
 /* ===================== KILOMETRE LOGGED (moment) — 3.4b ===================== */
 /** EXPORTED for the gallery (3.4b): it already takes only props. */
-export function KmMoment({ split, splits, backIn, progress }: { split: CardioSplit; splits: CardioSplit[]; backIn: number; progress: Animated.Value }) {
+export function KmMoment({ split, splits }: { split: CardioSplit; splits: CardioSplit[] }) {
   const { t } = useCopy();
   const perKm = t('cardio.perKm');
   const paces = splits.map((s) => s.paceSec);
@@ -381,7 +370,6 @@ export function KmMoment({ split, splits, backIn, progress }: { split: CardioSpl
   // Place the split against the run average — faster (lower pace) sits left of centre, slower right.
   const dev = avg > 0 ? Math.max(-0.4, Math.min(0.4, (split.paceSec - avg) / avg)) : 0;
   const dotFrac = 0.5 + dev;
-  const barW = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
   return (
     <View style={styles.kmMoment}>
       <View style={styles.liveTop}>
@@ -412,13 +400,6 @@ export function KmMoment({ split, splits, backIn, progress }: { split: CardioSpl
             <Legend size={11.5} track={0.12} tone="accent">{t('cardio.kmMomentQuickest')}</Legend>
           </View>
         ) : null}
-      </View>
-
-      <View style={styles.kmFooter}>
-        <Legend size={12.5} tone="onStage">{t('cardio.kmMomentBack', { n: backIn })}</Legend>
-        <View style={styles.kmBarTrack}>
-          <Animated.View style={[styles.kmBarFill, { width: barW }]} />
-        </View>
       </View>
     </View>
   );
@@ -649,9 +630,6 @@ const styles = StyleSheet.create({
   },
   kmSplitUnit: { fontFamily: font.mono, fontSize: 20, color: stageC.ink1, textAlign: 'left' },
   kmQuickest: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  kmFooter: { paddingHorizontal: 26, paddingBottom: 30, alignItems: 'center', gap: 9 },
-  kmBarTrack: { width: 130, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)', overflow: 'hidden' },
-  kmBarFill: { height: '100%', backgroundColor: signal[0] },
   // The sans sibling every mono UNIT slot hands over to when the locale spells it in Hebrew.
   unitWord: { fontFamily: font.sans },
 });

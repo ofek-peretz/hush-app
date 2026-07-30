@@ -895,8 +895,6 @@ export const GALLERY: GalleryEntry[] = [
         paused={false}
         confirmEnd={false}
         kmMoment={null}
-        backIn={0}
-        backBar={new Animated.Value(0)}
         onPause={noop}
         onResume={noop}
         onAskEnd={noop}
@@ -909,7 +907,7 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.4b', label: 'Kilometre logged', status: 'live', render: () => (
     <InApp>
       <View style={styles.kmStage}>
-        <KmMoment split={runSplits[3]} splits={runSplits} backIn={3} progress={new Animated.Value(0.4)} />
+        <KmMoment split={runSplits[3]} splits={runSplits} />
       </View>
     </InApp>
   ) },

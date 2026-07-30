@@ -162,8 +162,7 @@
     "kilometres": "Kilometres",
     "recordFooter": "Recorded, not coached. Nothing here touches the bar.",
     "kmMomentLabel": "Kilometre {{km}} · Split",
-    "kmMomentQuickest": "Your quickest this run",
-    "kmMomentBack": "Logged · back to run in {{n}}"
+    "kmMomentQuickest": "Your quickest this run"
   },
   "ob": {
     "continue": "Continue",
@@ -290,7 +289,6 @@
     "liftCrossing": "Lift {{from}} → {{to}}",
     "setFinal": "Set {{n}} · final",
     "loggedNextLift": "Logged · next lift coming up",
-    "setBeginsIn": "Set {{n}} begins in {{s}}",
     "restLearned": "Rest · learned",
     "yourPace": "Your pace",
     "upNextNewLift": "Up next · new lift",
@@ -323,8 +321,6 @@
     "correctedDown": "You did {{reps}}. Your range starts at {{edge}}, so I took weight off.",
     "landedBelow": "Set {{n}} landed below your band",
     "landedAbove": "Set {{n}} landed above your band",
-    "loggedRestBeginsIn": "Logged · rest begins in {{n}}",
-    "restBeginsIn": "Rest begins in {{n}}",
     "easedForYou": "Eased for you",
     "raisedForYou": "Raised for you",
     "reasonUp": "You cleared your range",
