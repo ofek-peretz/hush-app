@@ -331,17 +331,9 @@
     "reasonDown": "Matched to your clean sets",
     "reasonHold": "In your range",
     "editTitle": "Edit set",
-    "editSetLabel": "Set {{n}}",
     "editPlanned": "planned {{n}}",
     "editBand": "your band · {{lo}}–{{hi}}",
     "editSave": "Save set",
-    "editConseq": "{{summary}} — {{verdict}}",
-    "editSummaryReps": "{{reps}} reps",
-    "editVerdictEase": "below band, I'll ease the next set",
-    "editVerdictAdd": "above band, I'll add for the next set",
-    "editVerdictHold": "in your band",
-    "editVerdictBelow": "below your band",
-    "editVerdictAbove": "above your band",
     "bw": "BW"
   },
   "finishSheet": {

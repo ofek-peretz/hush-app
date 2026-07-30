@@ -370,18 +370,10 @@
     "reasonDown": "הותאם לסטים הנקיים שלך",
     "reasonHold": "בתוך הטווח שלך",
     "editTitle": "עריכת סט",
-    "editSetLabel": "סט {{n}}",
     "editPlanned": "מתוכנן {{n}}",
     "editBand": "הטווח שלך · {{lo}}–{{hi}}",
     "editSave": "שמור סט",
     "editSave_female": "שמרי סט",
-    "editConseq": "{{summary}} — {{verdict}}",
-    "editSummaryReps": "{{reps}} חזרות",
-    "editVerdictEase": "מתחת לטווח, אקל על הסט הבא",
-    "editVerdictAdd": "מעל הטווח, אוסיף לסט הבא",
-    "editVerdictHold": "בטווח שלך",
-    "editVerdictBelow": "מתחת לטווח שלך",
-    "editVerdictAbove": "מעל הטווח שלך",
     "bw": "BW"
   },
   "finishSheet": {

@@ -1012,7 +1012,7 @@ function ActiveSet({
   // body — it opens a dedicated editor: the engraved dials, "What did you actually do?", and the
   // consequence line that reads the numbers back against the band. `editing` is the door; EditSet
   // is the room. Everything below renders only when the door is shut.
-  if (editing) return <EditSet units={units} onDone={onToggleEdit} />;
+  if (editing) return <EditSet units={units} onDone={onToggleEdit} onSave={onComplete} />;
   const exName = ex?.name ?? exerciseDisplayName(session.currentExerciseId);
   const group = ex?.muscle ?? '';
   const total = session.exerciseProgress?.total ?? 1;
@@ -1240,7 +1240,25 @@ function ActiveSet({
  * the "next set" clause on the last set (which never corrects). The load Loop 1 will actually land
  * is computed at Complete Set, on the grid; this screen does not pre-empt it.
  */
-function EditSet({ units, onDone }: { units: 'kg' | 'lb'; onDone: () => void }) {
+/**
+ * 2.2b · EDIT SET.
+ *
+ * ════ SAVE SAVES THE SET (founder, build 36 — A.10) ════
+ *
+ * "When the athlete edits and presses confirm it should CONFIRM — not send them back to the set
+ * screen." It used to only close: the dials write the step's target live as she drags, so the
+ * button had nothing left to do and handed her back to press Complete Set. Two presses for one
+ * act, and a button that read "Save set" while saving nothing.
+ *
+ * `onSave` is the set screen's own `onCompleteSet` — the same single entry point the Complete Set
+ * button uses, not a parallel path. So the edited set gets the whole real beat: the one light tap,
+ * the "Set logged" capture, the correction reveal when this set moved the next one, the
+ * storage-failure notice, and the navigation to Well Done when it is the last set.
+ *
+ * The BACK chevron keeps `onDone` — closing without logging is still there, and it is the only way
+ * out that does not record. That is the founder's requirement too: the row goes, the door stays.
+ */
+function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => void; onSave: () => void }) {
   const { t } = useCopy();
   const session = useSession();
   const ex = session.currentExercise;
@@ -1272,33 +1290,20 @@ function EditSet({ units, onDone }: { units: 'kg' | 'lb'; onDone: () => void }) 
   };
   const setReps = (v: number) => session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
 
-  // The header + dial legends carry WORDS in a mono voice (the mock draws them in Plex Mono). Mono
-  // must never render a literal t() (monoCarriesNoWords) — so each is baked into a variable first
-  // and the <Text> body is that variable, exactly as StageBar does with `ordinal`.
-  const headerTitle = `${exName} · ${t('workout.editSetLabel', { n: setN })}`.toUpperCase();
+  // The dial legends carry WORDS in a mono voice (the mock draws them in Plex Mono). Mono must never
+  // render a literal t() (monoCarriesNoWords) — so each is baked into a variable first and the
+  // <Text> body is that variable, exactly as StageBar does with `ordinal`.
   const weightLegend = `${t('editResult.weight')} · ${unitLabel(units)}`.toUpperCase();
   const repsLegend = t('editResult.repsLabel').toUpperCase();
 
-  const hasNext = setN < setM;
-  const below = repsVal < bandLo;
-  const above = repsVal > bandHi;
-  const summary = isBodyweight
-    ? t('workout.editSummaryReps', { reps: repsVal })
-    : `${displayWeight(target.recommendedWeight, units)} ${unitLabel(units)} × ${repsVal}`;
-  const verdictKey = below
-    ? hasNext
-      ? 'workout.editVerdictEase'
-      : 'workout.editVerdictBelow'
-    : above
-      ? hasNext
-        ? 'workout.editVerdictAdd'
-        : 'workout.editVerdictAbove'
-      : 'workout.editVerdictHold';
-  const consequence = t('workout.editConseq', { summary, verdict: t(verdictKey) });
-
   return (
     <View style={styles.editScreen}>
-      {/* HEADER — back chevron, the lift + set (mono), the running clock. */}
+      {/* HEADER — the door and the clock, and nothing between them (founder, build 36 — C.6).
+          It used to carry "BARBELL BENCH PRESS · SET 1 OF 4" between the two, and on a real phone
+          the clock ran straight into it: "‹ BARBELL BENCH PRESS · SET…13:20". The label was the
+          collision AND it was already redundant — she arrived here by tapping that very lift's
+          weight one screen ago, and the title below says what this screen is. So the clock sits
+          where it sits on the workout screen, the back door stays, and the middle is quiet. */}
       <View style={styles.editHeader}>
         <Pressable
           accessibilityRole="button"
@@ -1309,8 +1314,9 @@ function EditSet({ units, onDone }: { units: 'kg' | 'lb'; onDone: () => void }) 
         >
           <Icon name="chevronLeft" size={22} color={stage.ink0} strokeWidth={1.8} />
         </Pressable>
-        <Text style={styles.editHeaderTitle} numberOfLines={1}>{headerTitle}</Text>
-        {session.startedAtMs != null ? <ElapsedClock from={session.startedAtMs} /> : <View style={styles.editHeaderGap} />}
+        {session.startedAtMs != null ? <ElapsedClock from={session.startedAtMs} /> : null}
+        {/* Balances the chevron so the clock is centred, exactly as the stage bar centres it. */}
+        <View style={styles.editHeaderGap} />
       </View>
 
       <View style={styles.editBody}>
@@ -1339,8 +1345,11 @@ function EditSet({ units, onDone }: { units: 'kg' | 'lb'; onDone: () => void }) 
         </View>
       </View>
 
-      {/* SAVE — CREAM, the one true action (the values are already written; this closes back to the
-          set screen, where Complete Set logs them). Below it, the consequence, read back. */}
+      {/* SAVE — CREAM, and it now does what it says: logs the set (A.10, see the note above).
+          The consequence line that used to sit under it is gone (founder, build 36 — C.7). It read
+          the numbers back — "36.5 kg × 8 — in your band" — which is the two dials directly above it
+          said a second time, in smaller type. The dials are the statement; a caption under a control
+          that speaks for itself steals its job (the let-the-control-speak law). */}
       <View style={styles.editFooter}>
         <Button
           variant="primary"
@@ -1348,9 +1357,8 @@ function EditSet({ units, onDone }: { units: 'kg' | 'lb'; onDone: () => void }) 
           block
           label={t('workout.editSave')}
           leading={<Icon name="check" size={17} color={stage[0]} strokeWidth={2.4} />}
-          onPress={onDone}
+          onPress={onSave}
         />
-        <Text style={styles.editConseq}>{consequence}</Text>
       </View>
     </View>
   );
@@ -2182,8 +2190,10 @@ const styles = StyleSheet.create({
   // EDIT SET — the dedicated editor (mock 2.2b).
   editScreen: { flex: 1 },
   editHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 16 },
-  editHeaderTitle: { flex: 1, fontFamily: font.monoMedium, fontSize: 15, letterSpacing: trackingPx(12, 0.14), color: stage.ink1, textAlign: 'center' },
-  editHeaderGap: { width: 40 },
+  // Balances the back chevron so `space-between` lands the clock dead centre. It must equal the
+  // chevron's drawn width (22), not merely approximate it — at 40 the clock sat 18px off, which is
+  // visible on a row this sparse and is the same centring complaint the founder raised on 2.2.
+  editHeaderGap: { width: 22 },
   editBody: { flex: 1, paddingHorizontal: 28, paddingTop: 30 },
   editTitle: { fontFamily: font.serif, fontSize: 38, lineHeight: 42, color: stage.ink0, textAlign: 'left' },
   /* ════ THE SAME PLACEMENT 1.4 USES (founder 2026-07-29) ════
@@ -2198,7 +2208,6 @@ const styles = StyleSheet.create({
   editDialLegend: { fontFamily: font.monoMedium, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), color: stage.ink0, textAlign: 'left' },
   editDialSub: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   editFooter: { marginTop: 'auto', paddingHorizontal: 26, paddingBottom: 34, gap: 12 },
-  editConseq: { fontFamily: font.sans, fontSize: 15, color: stage.ink2, textAlign: 'center' },
 
   /* ── 2.4d · REST — LEARNED. A double ring holding the pace she took, and the plan moving. ── */
   paceBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingHorizontal: 40, marginTop: -20 },
