@@ -1,5 +1,41 @@
 # FOUNDER QA — BUILD 36 (2026-07-29)
 
+> ## ▶ WHERE TO PICK THIS UP
+> **Branch `feat/engine-progression-overhaul`, last commit `9f93cf4`, pushed. Tree clean.**
+>
+> **13 items closed** — A.7 · A.10 · A.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 ·
+> C.14, plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed).
+>
+> **NEXT, in this order:**
+> 1. **A.5 · A.12 · A.15 · A.16** — all four are the TODAY screen (`screens/home/HomeView.tsx`).
+>    One screen, one commit. This is where I stopped, mid-read of `HomeView`.
+>    *A.5* units missing beside each lift's load (the row builder is `planShape` / the scheme
+>    string at ~line 535). *A.12* chip tap flickers. *A.15* long lift name ellipsises.
+>    *A.16* a completed workout's chip stays white and reads like one still to do.
+> 2. **B.6 · B.7 · B.8** — the cardio screens (`screens/cardio/Cardio.tsx`), Hebrew + type size.
+> 3. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
+>    (use the presence flag from `platform/watch/watchPresence`, already built).
+> 4. **C.20** — the Live Activity is too small beside Spotify's.
+> 5. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
+>
+> **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
+> A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
+>
+> **DEFERRED, needs the founder:** A.6 + C.16 are one design proposal for the set stage — he
+> explicitly invited a proposal on the lift/set chrome. C.11's second half (the handoff's
+> exercise-choice screen) is still his call. C.10 (what "learned rest" means) is copy + design.
+>
+> **HOW I WORK THESE:** read the code before assuming; drive the screen in the gallery
+> (`preview_start {name:'hush-web-alt'}` → `http://localhost:8083#<id>`); write the test FIRST or
+> immediately after and **verify it fails against the old code** — three of these tests passed
+> against the bug on their first draft and had to be rewritten. Gate before every commit:
+> `npx tsc --noEmit` · `npx jest` · `npm run lint:copy` · `npm run lint:rtl` ·
+> `npx expo export --platform ios`. Run everything from `code/mobile`.
+>
+> ⚠️ **Never `git checkout` a file to undo a scratch edit** — it reverts uncommitted real work too.
+> It bit me twice. Copy to the scratchpad and copy back instead.
+
+
 The founder's own device pass on TestFlight build 36. **Every item he raised is here, verbatim in
 intent, nothing merged away and nothing dropped.** Status column is the only thing that changes.
 
@@ -11,8 +47,8 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 | # | Item | Status |
 |---|---|---|
-| P0.1 | Enumerate **every** programme the engine can generate — each sessions-per-week × sex × body-map default — and put them on a screen he can read. | open |
-| P0.2 | Compare each one against the most established, widely-used programme in the world for that session count and sex. | open |
+| P0.1 | Enumerate **every** programme the engine can generate — each sessions-per-week × sex × body-map default — and put them on a screen he can read. | **done** |
+| P0.2 | Compare each one against the most established, widely-used programme in the world for that session count and sex. | **done** |
 | P0.3 | **A 3-lift / ~25 min workout is not a workout.** Every session must land 45–60 min. (Screenshot 4: "Lower B · 3 LIFTS · ~25 MIN" was the 4th session of the week.) | open |
 | P0.4 | **A 50 kg woman training 3×/week got a programme with duplicated/twin days.** He questions the whole split. Must be explained or fixed. | open |
 | P0.5 | Verify the engine really does learn the loads (he is not convinced): "המנוע גם ככה לומד את המשקלים (אני מקווה ותבדוק את זה בכל מקרה)". | open |
@@ -35,11 +71,11 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | A.4 | Share screen: **no way back to Today — no back control.** And restyle it in the manner of the personal-record share card; the current white treatment is ugly. | open |
 | A.5 | **Today: the unit is missing** beside each exercise's weight. | open |
 | A.6 | THE SET screen: the figure **37 is clipped**; the clock and `LIFT n/m` are **not centred**. His proposal: drop the Swap button under the video to free the room, then lower `LIFT` slightly (a little clearance from the clock). **Also:** gyms stock 2.5 kg jumps — why prescribe 8.5/side? At least on the first workout, maximise plate-accuracy and the athlete's opening load. **And:** find a more elegant way to carry the lift number and the set count than TEXT that steals focus — circles? He explicitly invites a proposal. | open |
-| A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | open |
+| A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | **done** |
 | A.8 | Today: the **two-people icon is swallowed** by the background — effectively invisible. | open |
 | A.9 | Tab bar: **tapping fires a haptic — remove it.** Transitions are not fully smooth; there is a small flicker. | open |
-| A.10 | When the athlete **edits and confirms, it must confirm** — not bounce back to the set screen. | open |
-| A.11 | **Remove the "next screen in 3 seconds" line AND its progress bar from every workout screen.** | open |
+| A.10 | When the athlete **edits and confirms, it must confirm** — not bounce back to the set screen. | **done** |
+| A.11 | **Remove the "next screen in 3 seconds" line AND its progress bar from every workout screen.** | **done** |
 | A.12 | Today: **tapping the chips flickers.** | open |
 | A.13 | Delete-account and Sign-out screens **look faded when pressed.** | open |
 | A.14 | **"Share your plan" must leave the YOU tab** and live behind the two-people icon on Today — that icon is where everything person-to-person belongs. **Plus:** tapping "Hush Pro" opens the Paywall looking exactly as if all 14 workouts were spent. It must adapt to the athlete's actual workout number, and it must persuade — people may want to subscribe BEFORE the 14 run out, and it should say the trial converts to paid. He is open to another idea. | open |
@@ -71,19 +107,19 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | # | Screen | Item | Status |
 |---|---|---|---|
 | C.1 | 1.3 Connect health | The screen **flickers for a millisecond** when the toggle is pressed. | open |
-| C.2 | 1.4 About you | The wheel **truncates its own number** ("82…"). Same wheel, same bug, in **Edit result**. | open |
-| C.3 | 1.4 About you | The areas **around** the wheel also drag it — she must press exactly on the number to drive it. | open |
-| C.4 | 2.0 First-four card | On the very first workout the card renders **misaligned / clipped** — "צריך לסדר את הבאג הזה". | open |
+| C.2 | 1.4 About you | The wheel **truncates its own number** ("82…"). Same wheel, same bug, in **Edit result**. | **done** |
+| C.3 | 1.4 About you | The areas **around** the wheel also drag it — she must press exactly on the number to drive it. | **done** |
+| C.4 | 2.0 First-four card | On the very first workout the card renders **misaligned / clipped** — "צריך לסדר את הבאג הזה". | **done** |
 | C.5 | 13.1 Pause + End sheet | **The screen is faded.** | open |
-| C.6 | 2.2b Edit set | The top row (back · lift name · SET… · clock) **collides** — the clock overlaps the label. He wants **that whole row deleted**, keeping only the clock where it naturally sits on the workout screen, and keeping the back control. | open |
-| C.7 | 2.2b Edit set | **Remove the caption under "Save set"** ("36.5 kg × 8 — in your band"). | open |
-| C.8 | 2.2b Edit set | **Enlarge the weight and reps figures.** | open |
-| C.9 | 2.2 The set | A **decimal load overflows the screen** ("36.5" ran past the edge, and "8.25 kg a side" was clipped). | open |
+| C.6 | 2.2b Edit set | The top row (back · lift name · SET… · clock) **collides** — the clock overlaps the label. He wants **that whole row deleted**, keeping only the clock where it naturally sits on the workout screen, and keeping the back control. | **done** |
+| C.7 | 2.2b Edit set | **Remove the caption under "Save set"** ("36.5 kg × 8 — in your band"). | **done** |
+| C.8 | 2.2b Edit set | **Enlarge the weight and reps figures.** | **done** |
+| C.9 | 2.2 The set | A **decimal load overflows the screen** ("36.5" ran past the edge, and "8.25 kg a side" was clipped). | **done** |
 | C.10 | 2.4d Rest · learned | **What "learned rest" means is not clear at all.** What actually happens when rests are shortened? And **adding +15 s shows nothing**, so the learning looks one-directional. | open |
 | C.11 | 2.4b Transition rest | Swap appears **both** at the bottom AND the top exercise changes. He is considering **forcing the HTML's exercise-choice screen** instead. | open |
-| C.12 | 2.4b Transition rest | The undo toast **overlaps the "+15 sec" control.** | open |
-| C.13 | 2.3 Logged | "SET 2 OF 4 LOGGED · 14 kg × 8 · Set recorded." is **left over from the previous app.** Either restyle it to show entering the band / rising / falling out of it, **or simply delete the screen** — the next one already appears. | open |
-| C.14 | 2.3 Correction | **Remove the "REST BEGINS IN 3" line and its bar.** (Same as A.11.) | open |
+| C.12 | 2.4b Transition rest | The undo toast **overlaps the "+15 sec" control.** | **done** |
+| C.13 | 2.3 Logged | "SET 2 OF 4 LOGGED · 14 kg × 8 · Set recorded." is **left over from the previous app.** Either restyle it to show entering the band / rising / falling out of it, **or simply delete the screen** — the next one already appears. | **done** |
+| C.14 | 2.3 Correction | **Remove the "REST BEGINS IN 3" line and its bar.** (Same as A.11.) | **done** |
 | C.15 | 2.5 Session earned | The engine **added a set to three different exercises** in one session. Not necessarily wrong — he wants to understand **why**. | open |
 | C.16 | 2.3b Final set | "LIFT 6/6 · SET 3 · FINAL · LOGGED · NEXT LIFT COMING UP" — **the screen does not look good enough.** | open |
 | C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | open |
