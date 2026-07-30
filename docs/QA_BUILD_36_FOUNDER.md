@@ -3,9 +3,9 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `66b9690`, pushed. Tree clean.**
 >
-> **17 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · C.2 · C.3 · C.4 · C.6 · C.7 ·
-> C.8 · C.9 · C.12 · C.13 · C.14, plus the P0 programme audit (delivered as an artifact, defect NOT
-> yet fixed).
+> **20 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
+> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14, plus the P0 programme audit (delivered as
+> an artifact, defect NOT yet fixed).
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -22,12 +22,31 @@
 > wrist (`HUSH_V7_ALL_DARK.html:1647`). New gallery entry **2.1a "Today — driven"**: 2.1 is a static
 > `HomeView` with `onChooseWorkout={noop}` and could not produce a single one of these four states.
 >
+> **THE CARDIO BATCH (B.6 · B.7 · B.8) IS CLOSED.** *B.6* — the legend was ASSEMBLED IN JSX,
+> `{run} · {starting}` with a hard-coded separator, so Hebrew could neither reorder it nor
+> conjugate it; both of his faults had that one cause. One key per locale now. *B.7* — the small
+> type was **not drift**: it was a faithful 1:1 of the canonical handoff, which was drawn in
+> ENGLISH, where those slots hold Latin capitals at heavy tracking. Hebrew has no uppercase, so it
+> got the small size and none of what makes it legible. There is a floor now (`RUN_SMALL_PT`), and
+> a law that walks every state of the run. *B.8* — one key, `finish_female`, covering the pause
+> control and the confirmation behind it.
+>
+> ⚠️ **Two things I widened beyond his words, both reversible in one line:**
+> (1) the DONE stage's readout labels moved with the live ones — they are the same three facts one
+> screen apart and a mismatch would read as a bug; (2) `PausedStage`'s legend went 11 → 12.5, which
+> the **lifting** session's pause screen shares. Its own header says it is one pause screen for the
+> whole product, so it could not be legible on one surface and not the other.
+>
+> **Three new gallery entries** — 3.4d (the 3·2·1 countdown, where B.6 lived), 3.4e (paused) and
+> 3.4f (the end sheet, where B.8's second half lived). None of the three could be reached before.
+> **And the harness has a VOICE BAR now** (EN / עברית · he-him / she-her, under the frame): his
+> whole B list is headed "Hebrew, female voice" and the gallery could speak neither.
+>
 > **NEXT, in this order:**
-> 1. **B.6 · B.7 · B.8** — the cardio screens (`screens/cardio/Cardio.tsx`), Hebrew + type size.
-> 2. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
+> 1. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
 >    (use the presence flag from `platform/watch/watchPresence`, already built).
-> 3. **C.20** — the Live Activity is too small beside Spotify's.
-> 4. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
+> 2. **C.20** — the Live Activity is too small beside Spotify's.
+> 3. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -104,9 +123,9 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | B.3 | ABOUT YOU: the bottom line should read "אני בונה את תוכנית האימון שלך סביב זה" (**and the English equivalent**). And for a woman it must be **"עלייך", not "עליך"**. | open |
 | B.4 | The 14-free-workouts screen at the end of onboarding **looks superb**, but the smallest text is still too small. | open |
 | B.5 | Today: the **day name is in English**. He proposes "פלג גוף עליון" / "פלג גוף תחתון" / "פול באדי" instead of Upper A — and the same question for exercise names. **He asks for my opinion.** Right now Hebrew and English are mixed on one screen and it reads broken. **Edge case (both languages):** with many exercises the Begin button — and the free-workouts line — fall below the fold; it scrolls, but the athlete may simply not find Start. | open |
-| B.6 | Cardio START reads "ריצה • מתחיל" — wrong order, and wrong gender. Swap the words and make it **"מתחילה"** for a woman. | open |
-| B.7 | Cardio live screen: the type is **tiny** — "0 מטר", the kilometre label, and the word "קרדיו" at the top. Enlarge all of it; there is plenty of room. | open |
-| B.8 | Finish-run screen: **"סיימי ושמרי"**, not "סיים ושמור" — including inside the confirmation that follows. | open |
+| B.6 | Cardio START reads "ריצה • מתחיל" — wrong order, and wrong gender. Swap the words and make it **"מתחילה"** for a woman. | **done** |
+| B.7 | Cardio live screen: the type is **tiny** — "0 מטר", the kilometre label, and the word "קרדיו" at the top. Enlarge all of it; there is plenty of room. | **done** |
+| B.8 | Finish-run screen: **"סיימי ושמרי"**, not "סיים ושמור" — including inside the confirmation that follows. | **done** |
 | B.9 | YOU screen: **"חברה מאז"**, not "חבר מאז". Separate the word "חשבון" from the Apple Health text — they read as one subject. Plan-sharing moves to the two-people icon (see A.14). And **"טווחי החזרות נוסעים" is not Hebrew** — it makes no sense. | open |
 | B.10 | Paywall: **the athlete's name must sit in the top lines** — "ליאור,⏎היה תענוג להתאמן איתך". **"חסכי"**, not "חסוך". In Israel the price must be in **shekels** — verify it really is. **And:** someone who reaches this screen has spent all 14 workouts and knows exactly what we are worth — he wants the three explanatory lines replaced with something better, and asks what I think. | open |
 | B.11 | Plan-share screen: **"שתפי את תוכנית האימון שלך"**. | open |

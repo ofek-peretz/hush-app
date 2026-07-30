@@ -159,24 +159,7 @@ export function Cardio({ navigation }: Props) {
     setPhase('complete');
   };
 
-  if (phase === 'countdown') {
-    return (
-      <View style={styles.stage}>
-        <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
-          <View style={styles.countdownWrap}>
-            <Text style={styles.startingLegend}>
-              {t('cardio.run').toUpperCase()} · {t('cardio.starting').toUpperCase()}
-            </Text>
-            {/* 3 · 2 · 1 are FIGURES (mono, tabular); "GO" is a WORD (sans) — the mono font cannot
-                even draw it in Hebrew. Same size, same weight, each in the voice it belongs to. */}
-            <Text style={[styles.countNum, count <= 0 && styles.countGo]}>
-              {count <= 0 ? t('cardio.go') : count}
-            </Text>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
+  if (phase === 'countdown') return <CardioCountdown count={count} />;
 
   if (phase === 'complete') {
     return (
@@ -221,6 +204,40 @@ export function Cardio({ navigation }: Props) {
 }
 
 /**
+ * 3 · 2 · 1 · GO — the countdown, as a pure view.
+ *
+ * EXTRACTED from the container (founder B.6). It was eight lines of JSX inside `Cardio`, reachable
+ * only by mounting the real stage with a real GPS tracker — so the gallery had no entry for it and
+ * no test had ever seen it. That is exactly where B.6 was hiding: the legend read "ריצה · מתחיל",
+ * the wrong word order AND the masculine form for every woman, and nothing in the build could look
+ * at it. Same split, and the same reason, as `CardioLiveView` below.
+ */
+export function CardioCountdown({ count }: { count: number }) {
+  const { t } = useCopy();
+  return (
+    <View style={styles.stage}>
+      <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
+        <View style={styles.countdownWrap}>
+          {/* ════ ONE KEY, NOT TWO WORDS GLUED IN JSX (founder B.6) ════
+              The legend was ASSEMBLED HERE — `{run} · {starting}`, with a hard-coded separator —
+              so Hebrew could neither put its own words in its own order nor conjugate the verb.
+              Both of his faults have that one cause: a sentence built in code is a sentence with
+              one language's grammar baked into it. It is one key now and each locale writes its
+              own — English keeps "RUN · STARTING", Hebrew leads with the verb and takes its
+              feminine form from the same i18next context every other line in the app uses. */}
+          <Text style={styles.startingLegend}>{t('cardio.startingLegend').toUpperCase()}</Text>
+          {/* 3 · 2 · 1 are FIGURES (mono, tabular); "GO" is a WORD (sans) — the mono font cannot
+              even draw it in Hebrew. Same size, same weight, each in the voice it belongs to. */}
+          <Text style={[styles.countNum, count <= 0 && styles.countGo]}>
+            {count <= 0 ? t('cardio.go') : count}
+          </Text>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+/**
  * 3.4 · CARDIO — LIVE, as a pure view.
  *
  * Split from the container for the same reason Home/HomeView and LiftDetail are: the stage's whole
@@ -258,7 +275,7 @@ export function CardioLiveView(props: {
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
         {/* "CARDIO" — a legend, a word: sans. */}
         <View style={styles.liveTop}>
-          <Legend size={12} tone="onStage">{t('cardio.liveLegend')}</Legend>
+          <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
         </View>
 
         <View style={styles.liveBody}>
@@ -268,8 +285,8 @@ export function CardioLiveView(props: {
           {/* the 1,000 m band — the dot travels the current kilometre, metres riding under it. */}
           <View style={styles.band}>
             <View style={styles.bandLabels}>
-              <Legend size={10} track={0}>0</Legend>
-              <Legend size={10} track={0}>{t('cardio.bandEnd')}</Legend>
+              <Legend size={RUN_SMALL_PT} track={0}>0</Legend>
+              <Legend size={RUN_SMALL_PT} track={0}>{t('cardio.bandEnd')}</Legend>
             </View>
             <View style={styles.bandLine} />
             <View style={styles.bandCapL} />
@@ -301,7 +318,7 @@ export function CardioLiveView(props: {
           {lastSplit ? (
             <View style={styles.splitPill}>
               <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
-              <Legend size={12} track={0.04} tone="accent">
+              <Legend size={RUN_SMALL_PT} track={0.04} tone="accent">
                 {t('cardio.splitLogged', { km: lastSplit.km, pace: fmtPace(lastSplit.paceSec) })}
               </Legend>
             </View>
@@ -373,7 +390,7 @@ export function KmMoment({ split, splits }: { split: CardioSplit; splits: Cardio
   return (
     <View style={styles.kmMoment}>
       <View style={styles.liveTop}>
-        <Legend size={12} tone="onStage">{t('cardio.liveLegend')}</Legend>
+        <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
       </View>
 
       <View style={styles.kmBody}>
@@ -385,7 +402,7 @@ export function KmMoment({ split, splits }: { split: CardioSplit; splits: Cardio
             <View style={[styles.kmBandCap, { left: '76%' }]} />
             <View style={[styles.kmBandDot, { left: `${dotFrac * 100}%` }]} />
           </View>
-          <Legend size={11} tone="onStage">{t('cardio.kmMomentLabel', { km: split.km })}</Legend>
+          <Legend size={RUN_SMALL_PT} tone="onStage">{t('cardio.kmMomentLabel', { km: split.km })}</Legend>
         </View>
 
         {/* the split — figures alone in the light: mono. */}
@@ -397,7 +414,7 @@ export function KmMoment({ split, splits }: { split: CardioSplit; splits: Cardio
         {quickest ? (
           <View style={styles.kmQuickest}>
             <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
-            <Legend size={11.5} track={0.12} tone="accent">{t('cardio.kmMomentQuickest')}</Legend>
+            <Legend size={RUN_SMALL_PT} track={0.12} tone="accent">{t('cardio.kmMomentQuickest')}</Legend>
           </View>
         ) : null}
       </View>
@@ -463,7 +480,7 @@ export function CardioComplete(props: {
         <View style={styles.doneBody}>
           <View style={styles.savedRow}>
             <Icon name="checkCheck" size={15} color={signal[0]} strokeWidth={2.4} />
-            <Legend size={11.5} tone="accent">{t('cardio.savedLegend')}</Legend>
+            <Legend size={RUN_SMALL_PT} tone="accent">{t('cardio.savedLegend')}</Legend>
           </View>
           <Text style={styles.savedTitle}>{t('cardio.savedTitle')}</Text>
 
@@ -495,7 +512,7 @@ function LiveStat({ value, label, icon }: { value: string | number; label: strin
         {icon ? <Icon name={icon} size={18} color={signal[0]} strokeWidth={2} /> : null}
         <Text style={styles.liveStatVal}>{value}</Text>
       </View>
-      <Legend size={10.5} track={0.14} tone="onStage">{label}</Legend>
+      <Legend size={READOUT_LABEL_PT} track={0.14} tone="onStage">{label}</Legend>
     </View>
   );
 }
@@ -507,7 +524,7 @@ function DoneStat({ value, label, icon }: { value: string | number; label: strin
         {icon ? <Icon name={icon} size={16} color={signal[0]} strokeWidth={2} /> : null}
         <Text style={styles.doneStatVal}>{value}</Text>
       </View>
-      <Legend size={10.5} track={0.14} tone="onStage">{label}</Legend>
+      <Legend size={READOUT_LABEL_PT} track={0.14} tone="onStage">{label}</Legend>
     </View>
   );
 }
@@ -515,6 +532,38 @@ function DoneStat({ value, label, icon }: { value: string | number; label: strin
 const MOSS_WASH = 'rgba(169,196,159,0.12)';
 const MOSS_BORDER = 'rgba(169,196,159,0.3)';
 const LINE = 'rgba(241,238,229,0.16)';
+
+/* ════ THE RUN'S SMALL TYPE (founder B.7) ════
+ *
+ * "The type is tiny — '0 מטר', the kilometre label, and the word 'קרדיו' at the top. Enlarge all
+ * of it; there is plenty of room."
+ *
+ * These were NOT drift: the built screen was a faithful 1:1 of the canonical handoff, which sets
+ * the legend at 12, the band labels at 10, the metres at 21 and the readout labels at 10.5. He is
+ * overriding his own design file, and the reason it survived design review and failed on a device
+ * is worth writing down: **the handoff was drawn in English.** "CARDIO", "0", "1,000 M", "KM",
+ * "HR", "KCAL" are Latin CAPITALS at heavy tracking — the small-caps trick that makes a 10 px
+ * label read as deliberate rather than merely small. Hebrew has no uppercase, so "קרדיו", "ק״מ",
+ * "דופק" and "קק״ל" get none of that; they are just tiny words. Nothing else on this screen is
+ * competing for the space — the hero clock is 84 px and the body is centred with 30 px gaps.
+ *
+ * Declared as constants because two components draw the same readout (LiveStat on the run, DoneStat
+ * on the saved stage) and the run's own legend appears twice (live, and the kilometre moment). One
+ * of those drifting away from the others is precisely how a screen ends up half-fixed.
+ */
+/** "CARDIO" — the legend over the run, and over the kilometre moment. */
+const RUN_LEGEND_PT = 15;
+/**
+ * THE FLOOR for every other word on a cardio stage — the 1,000 m band's end labels, the split
+ * pill, the kilometre moment's label and its "quickest" tag, and the saved stage's legend.
+ *
+ * It is a FLOOR, not a size for one element, because "the type is tiny" was never about three
+ * particular labels. He named the three he happened to be looking at; the rest of the surface was
+ * set the same way and would have failed the same reading. `nothingOnTheRunIsTooSmall` holds it.
+ */
+const RUN_SMALL_PT = 12.5;
+/** KM · HR · KCAL under their figures — live, and on the saved stage, which must agree with it. */
+const READOUT_LABEL_PT = 13;
 
 const styles = StyleSheet.create({
   // stage (shared)
@@ -553,9 +602,9 @@ const styles = StyleSheet.create({
   bandCapR: { position: 'absolute', right: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
   bandFill: { position: 'absolute', left: 0, top: 29, height: 3, borderRadius: 2, backgroundColor: signal[0] },
   bandDot: { position: 'absolute', top: 24, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetres: { position: 'absolute', top: 44, marginLeft: -22, flexDirection: 'row', alignItems: 'baseline', width: 60, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 21, color: signal[0], textAlign: 'left' },
-  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 21, color: signal[0], textAlign: 'left' },
+  bandMetres: { position: 'absolute', top: 44, marginLeft: -36, flexDirection: 'row', alignItems: 'baseline', width: 88, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 25, color: signal[0], textAlign: 'left' },
+  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 25, color: signal[0], textAlign: 'left' },
 
   gpsSlot: { height: 20, justifyContent: 'center' },
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },

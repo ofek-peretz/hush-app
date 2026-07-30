@@ -23,7 +23,8 @@ import { useFonts } from 'expo-font';
 import { Assistant_400Regular, Assistant_500Medium, Assistant_600SemiBold, Assistant_700Bold } from '@expo-google-fonts/assistant';
 import { FrankRuhlLibre_400Regular, FrankRuhlLibre_500Medium, FrankRuhlLibre_700Bold } from '@expo-google-fonts/frank-ruhl-libre';
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono';
-import { initI18n } from '@/i18n';
+import { initI18n, setLocale, currentLocale } from '@/i18n';
+import { setGender, getGender, type Gender } from '@/i18n/gender';
 import { color, font } from '@/design/tokens';
 import { installGlobalFontDefault } from '@/design/typography';
 import { GALLERY, DEFAULT_SCREEN, type GalleryEntry } from '@/screens/dev/gallery';
@@ -45,6 +46,49 @@ function useHash(): string {
   return hash;
 }
 
+/**
+ * THE VOICE CONTROL — language + grammatical person, beside the frame.
+ *
+ * The founder's whole B list is headed "HEBREW, FEMALE VOICE", and until now the harness could
+ * speak neither: it booted whatever locale the browser resolved to and left the gender store at
+ * its default (masculine), because the gallery mounts fixture contexts rather than the app store
+ * that calls `setGender`. So B.6 — a countdown legend in the wrong Hebrew order, addressing every
+ * woman as a man — sat on a screen nobody could read in the voice it was wrong in.
+ *
+ * Language reloads: RTL is a layout flip (`I18nManager.forceRTL`) that only applies on a fresh
+ * mount. Person does not — the gender store re-renders every `useCopy` caller on the spot, which
+ * is the same thing that happens when the athlete picks on the name screen.
+ */
+const VOICE_KEY = 'hush.gallery.voice';
+
+function VoiceBar() {
+  const [person, setPerson] = useState<Gender>(getGender());
+  const locale = currentLocale();
+  const pick = (g: Gender) => {
+    setGender(g);
+    setPerson(g);
+    try {
+      window.localStorage.setItem(VOICE_KEY, g);
+    } catch {
+      /* the bar still works for this page */
+    }
+  };
+  const Chip = ({ on, label, onPress }: { on: boolean; label: string; onPress: () => void }) => (
+    <Pressable onPress={onPress} style={[styles.voiceChip, on && styles.voiceChipOn]}>
+      <Text style={[styles.voiceChipText, on && styles.voiceChipTextOn]}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <View style={styles.voiceBar}>
+      <Chip on={locale === 'en'} label="EN" onPress={() => void setLocale('en').then(() => window.location.reload())} />
+      <Chip on={locale === 'he'} label="עברית" onPress={() => void setLocale('he').then(() => window.location.reload())} />
+      <View style={styles.voiceGap} />
+      <Chip on={person === 'male'} label="he/him" onPress={() => pick('male')} />
+      <Chip on={person === 'female'} label="she/her" onPress={() => pick('female')} />
+    </View>
+  );
+}
+
 export default function App() {
   const [ready, setReady] = useState(false);
   const hash = useHash();
@@ -62,6 +106,13 @@ export default function App() {
   });
 
   useEffect(() => {
+    // The person the bar was last left on — restored before the first sentence is rendered, so a
+    // reload for the language flip does not quietly drop back into the masculine.
+    try {
+      if (window.localStorage.getItem(VOICE_KEY) === 'female') setGender('female');
+    } catch {
+      /* default (masculine) stands */
+    }
     initI18n().then(() => setReady(true));
   }, []);
 
@@ -88,6 +139,7 @@ export default function App() {
             </NavigationContainer>
           </Boundary>
         </View>
+        <VoiceBar />
       </View>
     </SafeAreaProvider>
   );
@@ -187,6 +239,12 @@ const styles = StyleSheet.create({
   // The frame is EXACTLY the handoff's phone so a screenshot overlays its PNG.
   frame: { width: FRAME_W, height: FRAME_H, overflow: 'hidden', backgroundColor: color.bgBase },
   scene: { backgroundColor: color.bgBase },
+  voiceBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 4 },
+  voiceGap: { width: 14 },
+  voiceChip: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(241,238,229,0.18)' },
+  voiceChipOn: { backgroundColor: color.paper, borderColor: color.paper },
+  voiceChipText: { fontFamily: font.mono, fontSize: 11, color: color.textMuted },
+  voiceChipTextOn: { color: color.onPaper },
   index: { padding: 22, paddingBottom: 48 },
   indexTitle: { fontFamily: font.serif, fontSize: 30, color: color.textPrimary },
   indexNote: { fontFamily: font.mono, fontSize: 10.5, color: color.textMuted, marginTop: 8 },

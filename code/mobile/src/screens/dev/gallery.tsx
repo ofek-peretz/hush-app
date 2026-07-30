@@ -28,7 +28,7 @@ import { ProgressLifts } from '@/screens/progress/ProgressLifts';
 import { LiftDetailView } from '@/screens/progress/LiftDetail';
 import { CardioReady } from '@/screens/cardio/CardioReady';
 import { CardioDetail } from '@/screens/cardio/CardioDetail';
-import { CardioLiveView, CardioComplete, KmMoment } from '@/screens/cardio/Cardio';
+import { CardioLiveView, CardioComplete, CardioCountdown, KmMoment } from '@/screens/cardio/Cardio';
 import { HistoryView } from '@/screens/history/History';
 import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
@@ -1005,6 +1005,52 @@ export const GALLERY: GalleryEntry[] = [
         gps="ready"
         paused={false}
         confirmEnd={false}
+        kmMoment={null}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  // The screen B.6 lives on. It had no entry because the countdown was buried in the container —
+  // so the legend read "ריצה · מתחיל" (wrong order, masculine to every woman) where nothing could
+  // look at it. Switch the gallery to Hebrew to read it in the person it is actually spoken in.
+  { id: '3.4d', label: 'Cardio — 3·2·1', status: 'live', note: 'the countdown legend — B.6', render: () => <InApp><CardioCountdown count={2} /></InApp> },
+  // B.8's two doors. 3.4 mounts the run UNPAUSED, so neither the pause stage's end control nor
+  // the confirmation behind it could be read — and "סיים ושמור" (masculine) was on both.
+  { id: '3.4e', label: 'Cardio — paused', status: 'live', note: 'the finish control — B.8', render: () => (
+    <InApp>
+      <CardioLiveView
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.62}
+        hr={141}
+        calories={318}
+        splits={runSplits}
+        gps="ready"
+        paused
+        confirmEnd={false}
+        kmMoment={null}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  { id: '3.4f', label: 'Cardio — end sheet', status: 'live', note: 'the confirmation behind the finish — B.8', render: () => (
+    <InApp>
+      <CardioLiveView
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.62}
+        hr={141}
+        calories={318}
+        splits={runSplits}
+        gps="ready"
+        paused
+        confirmEnd
         kmMoment={null}
         onPause={noop}
         onResume={noop}

@@ -58,7 +58,14 @@ export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPa
             <View style={styles.markBar} />
           </View>
 
-          <Legend size={11} track={0.16} align="center">
+          {/* 12.5, not 11 (founder B.7). His complaint was about the run, but this stage is
+              reached FROM the run and carries the same kind of word — and the reason 11 read as
+              deliberate in the design file is that the file was drawn in English, where this slot
+              holds LATIN CAPITALS at heavy tracking. Hebrew has no uppercase, so "מושהה · ריצה"
+              got the small size and none of what makes it legible. The lifting session raises the
+              same stage, so it moves with it: one pause screen for the whole product (its own
+              header says so) cannot be legible on one surface and not the other. */}
+          <Legend size={12.5} track={0.16} align="center">
             {subject ? `${t('pauseSheet.legend')} · ${subject}` : t('pauseSheet.legend')}
           </Legend>
 
