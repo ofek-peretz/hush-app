@@ -1,7 +1,7 @@
 # FOUNDER QA — BUILD 36 (2026-07-29)
 
 > ## ▶ WHERE TO PICK THIS UP
-> **Branch `feat/engine-progression-overhaul`, last commit `c4241de`, pushed. Tree clean.**
+> **Branch `feat/engine-progression-overhaul`, last commit `8758436`, pushed. Tree clean.**
 >
 > **27 items closed** — A.4 · A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.1 · B.2 · B.6 ·
 > B.7 · B.8 · B.9 · B.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 ·
