@@ -1180,7 +1180,7 @@ export const GALLERY: GalleryEntry[] = [
   { id: '11.2', label: 'Shared session · your turn', status: 'todo', note: 'needs a live link between two phones' },
   { id: '11.3', label: 'The partner, seen', status: 'todo', note: 'needs a server to carry a feed' },
   { id: '11.4', label: 'Share your plan', status: 'live', note: 'the card IS the payload — no weight is in it', render: () => (
-    <InApp><SharePlanView splitName="Upper / Lower" plan={sharedFixture} onSend={noop} onPreview={noop} /></InApp>
+    <InApp><SharePlanView splitName="Upper / Lower" plan={sharedFixture} onSend={noop} onPreview={noop} onBack={noop} /></InApp>
   ) },
   { id: '11.5', label: 'Plan, received', status: 'live', render: () => (
     <InApp><PlanReceivedView splitName="Upper / Lower" plan={sharedFixture} onAdopt={noop} onDecline={noop} /></InApp>

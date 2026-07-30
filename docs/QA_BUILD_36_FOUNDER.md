@@ -3,9 +3,10 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `c4241de`, pushed. Tree clean.**
 >
-> **26 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.1 · B.2 · B.6 · B.7 ·
-> B.8 · B.9 · B.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 · C.20,
-> plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed). **B.5 is half done.**
+> **27 items closed** — A.4 · A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.1 · B.2 · B.6 ·
+> B.7 · B.8 · B.9 · B.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 ·
+> C.20, plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed). **B.5 is
+> half done.**
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -102,8 +103,22 @@
 > the headline size is a v7 decision and the name is not. Say which and it is an afternoon: the
 > stored name stays the stable structure-derived key, and only the DISPLAY translates.
 >
-> **NEXT after that:** A.1 · A.4 · A.8 · A.13 · C.1 · C.5 · C.15 · C.18 · P0b.1, and the P0
-> programme defect.
+> **A.4 IS CLOSED.** The back control names its DESTINATION — the word the tab bar itself uses
+> (`nav.today`) — because on a screen opened from a door on Today, a bare chevron saying "back" is
+> a guess. And the card is built the way the record poster is: the stage gradient poured into the
+> frame, the wordmark carried whole, the split name in the coach's serif, and the days tag a moss
+> WASH instead of a solid pill that was shouting over the payload it labels. ⚠️ **I could not find
+> any white treatment on that screen** — it has been `stage[0]` since Rev 15 and never held
+> `color.paper`, so what you saw may have been the OS share sheet or the PlanReceived screen. Worth
+> a second look on the next build.
+>
+> ⚠️ **`svgBackgroundsAreSizedOneWay` caught my gradient before it reached a device** — I had
+> written `<Svg style={absoluteFill} width="100%">`, the exact shape that drew the first-four
+> card's gradient offset on your first workout (C.4). Then it caught my COMMENT explaining the
+> fix, because it read the source as prose; it strips comments now, and still catches the real
+> thing (verified both ways).
+>
+> **NEXT:** A.1 · A.8 · A.13 · C.1 · C.5 · C.15 · C.18 · P0b.1, and the P0 programme defect.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -155,7 +170,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | A.1 | Can the keyboard be dark? (screenshot 1 — a white system keyboard under the all-dark stage) | open |
 | A.2 | The **Map screen appears in onboarding — remove it.** | open |
 | A.3 | "Show my program" → Today: a momentary **screen flicker** before the transition. | open |
-| A.4 | Share screen: **no way back to Today — no back control.** And restyle it in the manner of the personal-record share card; the current white treatment is ugly. | open |
+| A.4 | Share screen: **no way back to Today — no back control.** And restyle it in the manner of the personal-record share card; the current white treatment is ugly. | **done** |
 | A.5 | **Today: the unit is missing** beside each exercise's weight. | **done** |
 | A.6 | THE SET screen: the figure **37 is clipped**; the clock and `LIFT n/m` are **not centred**. His proposal: drop the Swap button under the video to free the room, then lower `LIFT` slightly (a little clearance from the clock). **Also:** gyms stock 2.5 kg jumps — why prescribe 8.5/side? At least on the first workout, maximise plate-accuracy and the athlete's opening load. **And:** find a more elegant way to carry the lift number and the set count than TEXT that steals focus — circles? He explicitly invites a proposal. | open |
 | A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | **done** |

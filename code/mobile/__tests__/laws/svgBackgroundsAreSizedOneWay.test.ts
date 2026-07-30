@@ -30,11 +30,26 @@ import { globSync } from 'glob';
 
 const SRC = join(__dirname, '../../src');
 
+/**
+ * Comments blanked, line count preserved.
+ *
+ * ⚠️ THIS LAW USED TO READ ITS OWN DOCUMENTATION AND FAIL. The natural thing to write at a call
+ * site that gets this right is a comment explaining what the WRONG shape looks like — and the
+ * moment anyone did, the literal `<Svg style={absoluteFill} width="100%">` in that prose was
+ * indistinguishable from the offence. A law you cannot describe without breaking is a law the next
+ * person quietly deletes. Newlines survive so the reported line numbers still point at real code.
+ */
+function withoutComments(text: string): string {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+}
+
 /** Every `<Svg …>` opening tag in the source, with its file and line. */
 function svgTags(): { file: string; line: number; tag: string }[] {
   const out: { file: string; line: number; tag: string }[] = [];
   for (const f of globSync('**/*.tsx', { cwd: SRC, absolute: true })) {
-    const text = readFileSync(f, 'utf8');
+    const text = withoutComments(readFileSync(f, 'utf8'));
     for (const m of text.matchAll(/<Svg\b[^>]*>/g)) {
       out.push({
         file: f.replace(/\\/g, '/').split('/src/')[1],

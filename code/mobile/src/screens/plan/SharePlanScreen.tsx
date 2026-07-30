@@ -44,6 +44,9 @@ export function SharePlanScreen({ navigation }: Props) {
     <SharePlanView
       plan={plan}
       splitName={splitName || t('planShare.legend')}
+      // A.4 — this route is pushed from the two-figure door on Today, so `goBack` IS Today. The
+      // control names that destination rather than the gesture.
+      onBack={() => navigation.goBack()}
       onSend={() => {
         void track('plan_shared', { days: plan.days.length });
         void shareText(planLink(encodePlan(plan)));
