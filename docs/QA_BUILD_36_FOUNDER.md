@@ -3,9 +3,9 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `b11b181`, pushed. Tree clean.**
 >
-> **21 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
-> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19, plus the P0 programme audit
-> (delivered as an artifact, defect NOT yet fixed).
+> **22 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
+> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 · C.20, plus the P0 programme
+> audit (delivered as an artifact, defect NOT yet fixed).
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -54,9 +54,26 @@
 > The saved stage asks the other honest question (`avgHr != null`). New entry **3.4g** — 3.4 mounts
 > a paired athlete, so the screen he was actually looking at had none.
 >
-> **NEXT, in this order:**
-> 1. **C.20** — the Live Activity is too small beside Spotify's.
-> 2. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
+> **C.20 IS BUILT — BUT NOBODY HAS SEEN IT.** Windows compiles no Swift; the widget's first honest
+> picture is a device build. Two things it turned out to be:
+> **(1) "Make calories legible" was not about type size — the calories were GONE.** The card had one
+> 13 pt line that chose between the last split and the pace/kcal/bpm run-on. `lastSplitKm` comes off
+> `splits[splits.length - 1]` and a split list never shrinks, so from the moment the first kilometre
+> closed that line took the split branch and never came back: **no calories and no heart rate for
+> every kilometre after the first, on every run.** The card is a table now, not a sentence — the
+> split has its own slot, and each measured fact has a 19 pt figure over its own label.
+> **(2) Why it was short beside Spotify's: the canonical 6.2 card's third row is a 46 pt "Log set"
+> ACTION row.** We do not draw it — §8.5 is read-only and **the buttons are your open call**. So our
+> card was the handoff's composition minus ~60 pt. That height now goes to the data, not to controls.
+> Guarded by `__tests__/laws/theLockCardStatesEveryFact.test.ts` (a source reader — it cannot see
+> what the card looks like, only that no branch can switch a measured fact off).
+>
+> ❓**ONE FOR YOU:** I left the **STRENGTH** lock card alone. It is short for the same reason — it is
+> also the canonical minus its button row — but the height it is missing IS the button row, and
+> redesigning its composition would pre-empt the decision you reserved. Say the word and it gets the
+> same treatment.
+>
+> **NEXT:** the Hebrew batch — B.1–B.3, B.5, B.9, B.11.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -165,7 +182,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | open |
 | C.18 | 3.2b Lift detail | **No graph** when you open a lift. | open |
 | C.19 | 3.4 Cardio live | **Not what the HTML draws.** There is a **line across the middle** connected to nothing — remove it. And for someone with **no Apple Watch, HR must not appear** — tie it to the same flag as the watch presence. | **done** |
-| C.20 | 6.2 Live Activity | Our lock-screen activity is **small next to Spotify's.** Make it the same size, lay the data out better, and make calories legible. | open |
+| C.20 | 6.2 Live Activity | Our lock-screen activity is **small next to Spotify's.** Make it the same size, lay the data out better, and make calories legible. | **done — needs a device build to SEE** |
 
 ---
 

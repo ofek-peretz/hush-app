@@ -427,56 +427,119 @@ private struct CardioStat: View {
   }
 }
 
-// Lock Screen / banner presentation.
+/// The lock card's stat figure size. A file-level constant so the view, its stat cell and the
+/// source law that guards `caloriesAreLegible` all read the same number.
+private let CARDIO_LOCK_STAT_FIGURE: CGFloat = 19
+
+/// One measured fact on the lock card: a mono figure over its own sans label.
+///
+/// Deliberately NOT `CardioStat` (the island's, at 15/10 on one baseline). The island has a strip
+/// to work in; the card has a whole row, and the founder's C.20 is precisely that the card was
+/// using it like a strip.
+private struct CardioLockStat: View {
+  let value: String
+  let label: String
+  var body: some View {
+    VStack(spacing: 3) {
+      Text(value)
+        .font(.system(size: CARDIO_LOCK_STAT_FIGURE, design: .monospaced)).monospacedDigit()
+        .foregroundColor(HX.ink0)
+        .lineLimit(1)
+      Text(label.uppercased())
+        .font(.system(size: 10, weight: .medium))
+        .tracking(1.1)
+        .foregroundColor(HX.ink2)
+        .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity)
+  }
+}
+
+// Lock Screen / banner presentation (6.2).
+//
+// ════ C.20 — "small next to Spotify's; lay the data out better; make calories legible" ════
+//
+// WHY IT WAS SMALL. The canonical 6.2 card is three rows, and the third is a 46 pt ACTION row
+// ("Log set"). We do not draw it — §8.5 ratifies this activity as READ-ONLY, and the buttons are
+// the founder's own open decision. So the card was the handoff's composition minus roughly sixty
+// points of height, which is exactly the gap he saw beside Spotify. That height is reclaimed here
+// for the DATA rather than for controls: nothing about the read-only contract changes.
+//
+// WHY THE CALORIES WERE NOT MERELY SMALL — THEY WERE GONE. The old card had one 13 pt muted line
+// that chose between the last split AND the pace/kcal/bpm run-on. `lastSplitKm` is set from
+// `splits[splits.length - 1]`, and a split list never shrinks — so from the moment the first
+// kilometre closed, that line took the split branch and NEVER CAME BACK. Calories and heart rate
+// were absent for every kilometre after the first, on every run. "Make calories legible" was a
+// bigger finding than it reads.
+//
+// SO THE CARD IS A TABLE, NOT A SENTENCE, and it is the same instrument as the in-app live stage:
+//
+//   ▐▬▌ RUN · LIVE                              KM 4 · 6:19        ← what this is; the last split
+//   26:14                                          4.62 km        ← the two facts a glance is for
+//   ────────────────────────────────────────────────────────
+//        5:41              318              141                   ← measured, each with its label
+//        /KM               KCAL             BPM
+//
+// One composition for every state. PAUSED used to swap in a different card entirely (a big word
+// and a sentence) and threw the athlete's own numbers away to say so; now the legend says it, the
+// clock greys and freezes, and her distance and her calories stay exactly where she left them.
 private struct CardioLockView: View {
   let state: HushCardioAttributes.ContentState
 
+  /// What this is, and nothing else — the split has its own slot now. Saying "km 4 split" here AND
+  /// printing the split on the same row would be the card stuttering (one fact, one element).
   private var legendText: String {
     let gait = state.gait == "run" ? "Run" : "Walk"
-    if state.paused { return "\(gait) · paused" }
-    if let km = state.lastSplitKm { return "\(gait) · km \(km) split" }
-    return "\(gait) · live"
+    return state.paused ? "\(gait) · paused" : "\(gait) · live"
+  }
+
+  /// The last closed kilometre and what it took — moss when it is the quickest of the run.
+  private var splitTag: String? {
+    guard let km = state.lastSplitKm, let pace = state.lastSplitPaceSec else { return nil }
+    return "km \(km) · \(fmtPace(pace))"
   }
 
   var body: some View {
-    HStack(spacing: 14) {
-      VStack(alignment: .leading, spacing: 3) {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(spacing: 9) {
+        RangeMark(width: 18, height: 9)
         legend(legendText)
-        if state.paused {
-          // Manual pause — state the fact; resuming happens in the app, not by moving.
-          Text("Paused")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(HX.accent)
-          Text(String(format: "%.2f km · the clock is stopped", state.distanceKm))
-            .font(.system(size: 13))
-            .foregroundColor(HX.ink2)
-        } else {
-          HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(String(format: "%.2f", state.distanceKm))
-              .font(.system(size: 28, weight: .semibold, design: .monospaced))
-              .monospacedDigit()
-              .foregroundColor(HX.ink0)
-            Text("km").font(.system(size: 13)).foregroundColor(HX.ink2)
-          }
-          Text(splitOrStatsLine)
-            .font(.system(size: 13))
-            .foregroundColor(HX.ink2)
+        Spacer(minLength: 8)
+        if let tag = splitTag {
+          Text(tag.uppercased())
+            .font(.system(size: 10, weight: .medium))
+            .tracking(1.1)
+            .foregroundColor(state.lastSplitFastest ? HX.accent : HX.ink2)
             .lineLimit(1)
         }
       }
-      Spacer(minLength: 8)
-      CardioElapsedText(state: state, size: 24)
-    }
-  }
 
-  private var splitOrStatsLine: String {
-    if let km = state.lastSplitKm, let pace = state.lastSplitPaceSec {
-      let tag = state.lastSplitFastest ? " · fastest yet" : ""
-      return "Km \(km) · \(fmtPace(pace)) /km\(tag)"
+      // The clock is the hero of a run on every other surface Hush draws — the live stage sets it
+      // at 84 against a distance that rides the band. The card used to invert that (distance 28,
+      // clock 24 in the corner); it agrees with the app now.
+      HStack(alignment: .firstTextBaseline, spacing: 12) {
+        CardioElapsedText(state: state, size: 36)
+        Spacer(minLength: 8)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+          Text(String(format: "%.2f", state.distanceKm))
+            .font(.system(size: 24, weight: .semibold, design: .monospaced))
+            .monospacedDigit()
+            .foregroundColor(HX.ink0)
+          Text("km").font(.system(size: 12)).foregroundColor(HX.ink2)
+        }
+      }
+
+      Rectangle().fill(HX.ink0.opacity(0.10)).frame(height: 1)
+
+      HStack(spacing: 0) {
+        CardioLockStat(value: fmtPace(state.paceSec), label: "/km")
+        CardioLockStat(value: "\(state.calories)", label: "kcal")
+        // hr == 0 means no heart-rate source — the column is dropped, never shown as "0 bpm".
+        // Same law as the in-app row (C.19): no instrument, no readout.
+        if state.hr > 0 {
+          CardioLockStat(value: "\(state.hr)", label: "bpm")
+        }
+      }
     }
-    // hr == 0 means no heart-rate source — omitted, never shown as "0 bpm".
-    var line = "\(fmtPace(state.paceSec)) /km · \(state.calories) kcal"
-    if state.hr > 0 { line += " · \(state.hr) bpm" }
-    return line
   }
 }

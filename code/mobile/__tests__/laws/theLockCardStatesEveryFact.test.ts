@@ -1,0 +1,143 @@
+/**
+ * THE LOCK CARD STATES EVERY FACT IT MEASURES — founder C.20, and nothing here compiles Swift.
+ *
+ * ── The bug this exists to prevent ────────────────────────────────────────────────────────────
+ * "Our lock-screen activity is small next to Spotify's. Make it the same size, lay the data out
+ * better, and make calories legible."
+ *
+ * The last clause was the big one, and it was not about type size. The card carried ONE 13 pt
+ * muted line that chose between two things:
+ *
+ *     if let km = state.lastSplitKm, let pace = state.lastSplitPaceSec { …the split… }
+ *     var line = "\(fmtPace(state.paceSec)) /km · \(state.calories) kcal"      // ← the other branch
+ *
+ * `lastSplitKm` comes off `splits[splits.length - 1]`, and a split list never shrinks. So from the
+ * moment the athlete's FIRST kilometre closed, that line took the split branch and never came
+ * back: calories and heart rate were absent from the lock screen for every kilometre after the
+ * first, on every run anyone has ever taken. The founder read it as illegible. It was missing.
+ *
+ * ── Scope, honestly ───────────────────────────────────────────────────────────────────────────
+ * This is a source reader, not a renderer. It cannot see what the card LOOKS like — no Swift
+ * compiles on this machine, and the widget's first honest picture is a paid EAS build on a device.
+ * What it can close completely is the class of defect above: a measured fact that some other piece
+ * of state can switch off. So it asserts that each fact the card exists to state is drawn
+ * UNCONDITIONALLY, and that the figures carrying them are not set at caption size.
+ */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const WIDGET = join(__dirname, '../../targets/widget/HushLiveActivityWidget.swift');
+const source = readFileSync(WIDGET, 'utf8');
+
+/**
+ * The body of a `struct <name>: View { … }`, by brace matching. Reading the whole file would let a
+ * fact drawn in the Dynamic Island stand in for one missing from the card — which is exactly the
+ * confusion that let this ship: the ISLAND states calories, and always did.
+ */
+function structBody(name: string): string {
+  const start = source.indexOf(`struct ${name}: View {`);
+  if (start < 0) throw new Error(`${name} is gone from the widget — if it was renamed, rename it here too`);
+  let depth = 0;
+  for (let i = source.indexOf('{', start); i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}' && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`unbalanced braces in ${name}`);
+}
+
+const card = structBody('CardioLockView');
+
+describe('the cardio lock card', () => {
+  /**
+   * The three measured facts. DISTANCE and the clock are the glance; PACE, CALORIES and heart rate
+   * are what the run earned. A card that drops one because a kilometre happened to close is not a
+   * smaller card, it is a wrong one.
+   */
+  it('states the distance, the pace and the calories', () => {
+    expect(card).toContain('state.distanceKm');
+    expect(card).toContain('state.paceSec');
+    expect(card).toContain('state.calories');
+  });
+
+  /**
+   * THE LAW. `state.calories` may not sit inside a conditional — that is precisely what happened.
+   * Heart rate is the one legitimate exception and it is checked separately below: `hr == 0` means
+   * NO SOURCE, so hiding it is honesty, not loss (the same rule the in-app row follows, C.19).
+   */
+  it('and no branch can switch the calories off', () => {
+    const lines = card.split('\n');
+    const at = lines.findIndex((l) => l.includes('state.calories'));
+    expect(at).toBeGreaterThan(-1);
+
+    // Walk back to the enclosing block and prove nothing on the way opened a conditional.
+    let depth = 0;
+    for (let i = at; i >= 0; i--) {
+      const line = lines[i];
+      depth += (line.match(/\}/g) ?? []).length - (line.match(/\{/g) ?? []).length;
+      if (depth < 0) break; // we have stepped out into the enclosing block — clear
+      if (/^\s*(if|guard|else|switch)\b/.test(line) && i !== at) {
+        throw new Error(`the calories are drawn inside a conditional: "${line.trim()}"`);
+      }
+    }
+  });
+
+  it('the split is stated in its OWN slot, never in place of another fact', () => {
+    // `lastSplitKm` may gate the split tag — and only the split tag. If a measured fact appears
+    // anywhere near it, it is choosing between them again. The window is deliberately wide: at ±4
+    // this assertion passed against the original bug by a single line, which is not a test.
+    const lines = card.split('\n');
+    const splitLines = lines.map((l, i) => [l, i] as const).filter(([l]) => l.includes('lastSplitKm'));
+    expect(splitLines.length).toBeGreaterThan(0);
+    for (const [, i] of splitLines) {
+      const near = lines.slice(Math.max(0, i - 8), i + 9).join('\n');
+      expect(near).not.toContain('state.calories');
+      expect(near).not.toContain('state.paceSec');
+    }
+  });
+
+  /**
+   * "Make calories legible." The figure carries the number; the label beside it is a caption. The
+   * old card set the whole thing — number and all — at 13 inside a sentence.
+   */
+  it('the measured figures are set as figures, not as caption text', () => {
+    const size = /CARDIO_LOCK_STAT_FIGURE: CGFloat = ([\d.]+)/.exec(source);
+    expect(size).not.toBeNull();
+    expect(Number(size![1])).toBeGreaterThanOrEqual(18);
+    // …and the stat cell is the thing that reads it, so the constant cannot drift out of use.
+    expect(source).toContain('size: CARDIO_LOCK_STAT_FIGURE');
+  });
+
+  /**
+   * PAUSED IS A LEGEND, NOT A DIFFERENT CARD. It used to swap in a big word and a sentence, which
+   * threw away the athlete's own numbers in order to tell her she had stopped. She can see that
+   * she stopped.
+   */
+  it('keeps one composition — a pause does not delete what she has run', () => {
+    const at = card.indexOf('state.paused');
+    expect(at).toBeGreaterThan(-1);
+    // The only thing `paused` decides on this card is the legend's wording.
+    expect(card.slice(at, at + 160)).toMatch(/paused["']?\s*:|paused \?/);
+    // The clock's own muting lives in CardioElapsedText, shared with the island — not re-decided here.
+    expect(card).not.toContain('the clock is stopped');
+  });
+
+  /** hr == 0 is "no source" — the one fact allowed to be conditional, for the C.19 reason. */
+  it('drops heart rate only when there is no source for it', () => {
+    expect(card).toMatch(/if state\.hr > 0/);
+  });
+});
+
+describe('the read-only contract is untouched', () => {
+  /**
+   * §8.5 ratifies this activity as READ-ONLY, and the Live Activity BUTTONS are the founder's own
+   * open decision ("do not build and do not re-raise"). The canonical 6.2 card's third row IS a
+   * 46 pt action row — which is most of why ours reads short beside Spotify's. Reclaiming that
+   * height for DATA is the whole of C.20; reclaiming it for controls would be answering a question
+   * that is not mine.
+   */
+  it('no button, intent or tap target has appeared on either card', () => {
+    for (const forbidden of ['Button(', 'AppIntent', 'LiveActivityIntent', 'onTapGesture']) {
+      expect(source).not.toContain(forbidden);
+    }
+  });
+});
