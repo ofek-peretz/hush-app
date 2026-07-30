@@ -3,16 +3,27 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `524d31d`, pushed. Tree clean.**
 >
-> **13 items closed** — A.7 · A.10 · A.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 ·
-> C.14, plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed).
+> **17 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · C.2 · C.3 · C.4 · C.6 · C.7 ·
+> C.8 · C.9 · C.12 · C.13 · C.14, plus the P0 programme audit (delivered as an artifact, defect NOT
+> yet fixed).
+>
+> **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
+> *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
+> overruled it and he is right: every row already ends in a scheme, so the number was never alone in
+> a bare column. *A.12* — **the chips were not flickering; the six rows under them were.** `plan` was
+> null until the engine's `sessionTargets` promise landed, so every tap collapsed the list into an
+> empty 168 px box and grew it back, walking Begin up and down the page. A lift's name and set count
+> are facts of the programme DAY and are known synchronously; only the figures wait now
+> (`screens/home/homePlan.ts`). *A.15* — the name wraps instead of clamping, **and** the figure's
+> meta went back to the canonical 13.5 pt: at 17 pt it took 158 of the row's 330 px and forced a
+> THIRD line. *A.16* — `current` was applied after `done` in the style array, so a finished workout
+> tapped to re-read put on the cream queued pill. Done outranks it now, and finished workouts fall
+> to the end of the strip, struck through — which is what the canonical handoff already does on the
+> wrist (`HUSH_V7_ALL_DARK.html:1647`). New gallery entry **2.1a "Today — driven"**: 2.1 is a static
+> `HomeView` with `onChooseWorkout={noop}` and could not produce a single one of these four states.
 >
 > **NEXT, in this order:**
-> 1. **A.5 · A.12 · A.15 · A.16** — all four are the TODAY screen (`screens/home/HomeView.tsx`).
->    One screen, one commit. This is where I stopped, mid-read of `HomeView`.
->    *A.5* units missing beside each lift's load (the row builder is `planShape` / the scheme
->    string at ~line 535). *A.12* chip tap flickers. *A.15* long lift name ellipsises.
->    *A.16* a completed workout's chip stays white and reads like one still to do.
-> 2. **B.6 · B.7 · B.8** — the cardio screens (`screens/cardio/Cardio.tsx`), Hebrew + type size.
+> 1. **B.6 · B.7 · B.8** — the cardio screens (`screens/cardio/Cardio.tsx`), Hebrew + type size.
 > 3. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
 >    (use the presence flag from `platform/watch/watchPresence`, already built).
 > 4. **C.20** — the Live Activity is too small beside Spotify's.
@@ -69,18 +80,18 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | A.2 | The **Map screen appears in onboarding — remove it.** | open |
 | A.3 | "Show my program" → Today: a momentary **screen flicker** before the transition. | open |
 | A.4 | Share screen: **no way back to Today — no back control.** And restyle it in the manner of the personal-record share card; the current white treatment is ugly. | open |
-| A.5 | **Today: the unit is missing** beside each exercise's weight. | open |
+| A.5 | **Today: the unit is missing** beside each exercise's weight. | **done** |
 | A.6 | THE SET screen: the figure **37 is clipped**; the clock and `LIFT n/m` are **not centred**. His proposal: drop the Swap button under the video to free the room, then lower `LIFT` slightly (a little clearance from the clock). **Also:** gyms stock 2.5 kg jumps — why prescribe 8.5/side? At least on the first workout, maximise plate-accuracy and the athlete's opening load. **And:** find a more elegant way to carry the lift number and the set count than TEXT that steals focus — circles? He explicitly invites a proposal. | open |
 | A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | **done** |
 | A.8 | Today: the **two-people icon is swallowed** by the background — effectively invisible. | open |
 | A.9 | Tab bar: **tapping fires a haptic — remove it.** Transitions are not fully smooth; there is a small flicker. | open |
 | A.10 | When the athlete **edits and confirms, it must confirm** — not bounce back to the set screen. | **done** |
 | A.11 | **Remove the "next screen in 3 seconds" line AND its progress bar from every workout screen.** | **done** |
-| A.12 | Today: **tapping the chips flickers.** | open |
+| A.12 | Today: **tapping the chips flickers.** | **done** |
 | A.13 | Delete-account and Sign-out screens **look faded when pressed.** | open |
 | A.14 | **"Share your plan" must leave the YOU tab** and live behind the two-people icon on Today — that icon is where everything person-to-person belongs. **Plus:** tapping "Hush Pro" opens the Paywall looking exactly as if all 14 workouts were spent. It must adapt to the athlete's actual workout number, and it must persuade — people may want to subscribe BEFORE the 14 run out, and it should say the trial converts to paid. He is open to another idea. | open |
-| A.15 | Today: a **long exercise name truncates with an ellipsis** — needs a real solution. | open |
-| A.16 | Today: a **completed workout's chip stays white**, reads like another workout still to do. And a completed workout may not belong in the row of pending ones at all — do something that reads as progress/achievement. | open |
+| A.15 | Today: a **long exercise name truncates with an ellipsis** — needs a real solution. | **done** |
+| A.16 | Today: a **completed workout's chip stays white**, reads like another workout still to do. And a completed workout may not belong in the row of pending ones at all — do something that reads as progress/achievement. | **done** |
 
 ---
 

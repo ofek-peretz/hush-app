@@ -79,6 +79,17 @@ export interface HomePlanLift {
   band: [number, number];
   /** Which way the engine moved this lift's load this week; absent = it did not touch it. */
   changed?: LoadDirection;
+  /**
+   * THE FIGURE HAS NOT LANDED YET (founder A.12 — "tapping the chips flickers").
+   *
+   * A row's NAME and set count are facts of the programme day, known the instant a chip is tapped;
+   * only the load and the band are read from the engine, and that read is a promise. The list used
+   * to wait for the whole thing — so every chip tap collapsed six rows into an empty 168 px box and
+   * grew them back, which is the flicker. Now the rows stand immediately and only the figure waits.
+   * `load: null` already means BODYWEIGHT, so a pending row needs its own flag: a blank column is
+   * not a claim that the lift carries no weight.
+   */
+  pending?: boolean;
 }
 
 export interface HomeViewProps {
@@ -354,7 +365,9 @@ export function HomeView(props: HomeViewProps) {
                     <Pressable
                       key={`${lift.exerciseId}_${i}`}
                       accessibilityRole="button"
-                      accessibilityLabel={`${lift.name} · ${planFigureLabel(lift, props.units)}`}
+                      accessibilityLabel={
+                        lift.pending ? lift.name : `${lift.name} · ${planFigureLabel(lift, props.units)}`
+                      }
                       accessibilityHint={t('workout.form')}
                       onPress={() => props.onForm(lift.exerciseId)}
                       style={({ pressed }) => [
@@ -367,18 +380,27 @@ export function HomeView(props: HomeViewProps) {
                     >
                       <View style={styles.planLeft}>
                         <Icon name="playCircle" size={15} color={color.textMuted} strokeWidth={1.5} />
-                        <Text style={styles.planName} numberOfLines={1}>{bidi(lift.name)}</Text>
+                        {/* THE NAME WRAPS, IT DOES NOT TRUNCATE (founder A.15). It was clamped to
+                            one line, so "Overhead Triceps Extension" arrived as "Overhead Triceps
+                            Ex…" — and an ellipsis on the first screen of the day hides the one word
+                            that distinguishes two lifts of the same family. A second line costs
+                            nothing here: the row already stands 54 px tall. */}
+                        <Text style={styles.planName}>{bidi(lift.name)}</Text>
                       </View>
-                      {/* A CHANGED load stands lit IN ITS OWN DIRECTION and carries its scheme in
-                          shadow; an unchanged row is one quiet tone end to end. */}
-                      <Text style={styles.planFigure} numberOfLines={1}>
-                        <Text style={[lift.changed ? styles.figureChanged : styles.figureQuiet, lift.changed ? { color: directionTone(lift.changed) } : null]}>
-                          {figureLoad(lift, props.units)}
+                      {/* A CHANGED load stands lit IN ITS OWN DIRECTION and carries its unit and
+                          scheme in shadow; an unchanged row is one quiet tone end to end.
+                          A PENDING row draws no figure at all — see `pending`. */}
+                      {lift.pending ? null : (
+                        <Text style={styles.planFigure} numberOfLines={1}>
+                          <Text style={[lift.changed ? styles.figureChanged : styles.figureQuiet, lift.changed ? { color: directionTone(lift.changed) } : null]}>
+                            {figureLoad(lift, props.units)}
+                          </Text>
+                          <Text style={[styles.figureMeta, styles.figureUnit]}>{figureUnit(lift, props.units)}</Text>
+                          <Text style={[styles.figureMeta, lift.changed ? styles.figureScheme : styles.figureQuiet]}>
+                            {figureScheme(lift)}
+                          </Text>
                         </Text>
-                        <Text style={lift.changed ? styles.figureScheme : styles.figureQuiet}>
-                          {figureScheme(lift)}
-                        </Text>
-                      </Text>
+                      )}
                     </Pressable>
                   ))}
                 </View>
@@ -397,9 +419,10 @@ export function HomeView(props: HomeViewProps) {
               ) : null}
 
               {/* THE CHOOSER — the week's workouts as a horizontal scroller. The queued one is cream
-                  (standing in the light); a done one wears the moss check; the rest rest in shadow.
-                  One act: a tap selects, and the plan above repaints. A done workout can be read but
-                  not started again; an interrupted session freezes the row (the CTA disagrees). */}
+                  (standing in the light); a done one is struck through and stands aside; the rest
+                  rest in shadow. One act: a tap selects, and the plan above repaints. A done workout
+                  can be read but not started again; an interrupted session freezes the row (the CTA
+                  disagrees). */}
               {props.workouts.length ? (
                 <View style={styles.chipStrip}>
                 <ScrollView
@@ -408,7 +431,7 @@ export function HomeView(props: HomeViewProps) {
                   contentContainerStyle={styles.chips}
                   accessibilityLabel={t('home.weekChips')}
                 >
-                  {props.workouts.map((w) => {
+                  {whatIsLeftFirst(props.workouts).map((w) => {
                     const isDone = !!w.done;
                     const current = props.dayId != null ? w.id === props.dayId : w.name === props.dayName;
                     const inert = !!props.resumable;
@@ -426,8 +449,16 @@ export function HomeView(props: HomeViewProps) {
                         }}
                         style={({ pressed }) => [
                           styles.chip,
+                          // ════ DONE OUTRANKS QUEUED (founder A.16) ════
+                          // `current` used to be applied LAST, so a finished workout the athlete
+                          // tapped to re-read put on the cream queued pill — "a completed workout's
+                          // chip stays white, reads like another workout still to do". A record
+                          // cannot wear the skin of an offer, whatever else is true of it. Selection
+                          // on a done chip is said with a moss ring instead: it is still the thing
+                          // the plan below belongs to, and it is still finished.
+                          !isDone && current && styles.chipCurrent,
                           isDone && styles.chipDone,
-                          current && styles.chipCurrent,
+                          isDone && current && styles.chipDoneCurrent,
                           pressed && styles.pressedDim,
                         ]}
                       >
@@ -435,8 +466,8 @@ export function HomeView(props: HomeViewProps) {
                         <Text
                           style={[
                             styles.chipText,
+                            !isDone && current && styles.chipTextCurrent,
                             isDone && styles.chipTextDone,
-                            current && styles.chipTextCurrent,
                           ]}
                           numberOfLines={1}
                         >
@@ -521,15 +552,42 @@ function RangeMark() {
 
 /**
  * The load, formatted for display — "41", "" for bodyweight.
- *
- * NO UNIT HERE (v7 2.1). The plan is a COLUMN of loads in one declared unit; repeating "kg" on
- * every row turns a scannable column into six sentences. The unit is stated where the working
- * number is — the set screen — and nowhere it can be inferred.
  */
 function figureLoad(lift: HomePlanLift, units: 'kg' | 'lb'): string {
   if (lift.load == null) return '';
   const w = displayWeight(lift.load, units);
   return w == null ? '' : String(+w.toFixed(2));
+}
+
+/**
+ * The unit, in shadow beside the load — " kg" / " lb", and nothing at all for a bodyweight lift.
+ *
+ * ════ THE UNIT IS BACK (founder A.16→A.5, 2026-07-29: "the unit is missing") ════
+ * v7 2.1 took it off on the argument that the plan is a COLUMN of loads in one declared unit, so
+ * repeating "kg" six times turns a scannable column into six sentences. The founder overturned
+ * that on the device, and he is right for a reason the argument missed: this is the FIRST screen
+ * of the day, and every row already ends in a scheme ("· 4×8–10"), so the number was never alone
+ * in a bare column — it was a bare number inside a sentence. It is set in the muted tone the
+ * scheme wears, so the LOAD is still the only lit thing in the figure.
+ */
+function figureUnit(lift: HomePlanLift, units: 'kg' | 'lb'): string {
+  return lift.load == null ? '' : ` ${unitLabel(units)}`;
+}
+
+/**
+ * The week's workouts with WHAT IS LEFT FIRST — finished ones fall to the end of the strip
+ * (founder A.16: "a completed workout may not belong in the row of pending ones at all").
+ *
+ * This is not an invention: the canonical v7 handoff already does exactly this on the wrist, where
+ * the done workout is struck through, dimmed, and pushed to the foot of the list with
+ * `margin-top:auto`. Today is the screen that answers "what is up next", so the row it offers has
+ * to lead with what is still to do; the record follows, and reads as a record.
+ *
+ * Order is otherwise preserved (a stable partition) — the week has a shape, and Upper A · Lower A ·
+ * Upper B · Lower B is part of it.
+ */
+function whatIsLeftFirst(workouts: HomeWorkoutOption[]): HomeWorkoutOption[] {
+  return [...workouts.filter((w) => !w.done), ...workouts.filter((w) => w.done)];
 }
 
 /** The scheme, tight and with an EN-dash range: " · 4×8–10" (leading separator when a load precedes). */
@@ -539,11 +597,10 @@ function figureScheme(lift: HomePlanLift): string {
   return lift.load == null ? scheme : ` · ${scheme}`;
 }
 
-/** The whole right-hand figure, for accessibility labels — which DO name the unit, since a
- *  screen reader has no column to infer it from. */
+/** The whole right-hand figure, as one string, for the row's accessibility label. */
 function planFigureLabel(lift: HomePlanLift, units: 'kg' | 'lb'): string {
   const load = figureLoad(lift, units);
-  return load ? `${load} ${unitLabel(units)}${figureScheme(lift)}` : figureScheme(lift);
+  return load ? `${load}${figureUnit(lift, units)}${figureScheme(lift)}` : figureScheme(lift);
 }
 
 /** The short weekday label for the day strip's column i (0 = Sunday), in the active locale. */
@@ -641,9 +698,21 @@ const styles = StyleSheet.create({
   // The FIGURE is never squeezed: it is the fact the row exists for. The name shrinks and
   // truncates around it (handoff: the load span is `flex:none; white-space:nowrap`).
   planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
+  // A.15 — no `numberOfLines` on the name: it WRAPS. `lineHeight` is set so a two-line name reads
+  // as one label rather than two rows of text.
+  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.md, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
   planFigure: { flexGrow: 0, flexShrink: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, textAlign: 'right' },
   figureQuiet: { color: color.textSecondary, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
+  // ── the figure's META: the unit and the scheme ──
+  // The LOAD keeps the founder's 2026-07-28 enlargement (17 pt — "she reads it to decide whether to
+  // go to the gym"). Its meta does not: the canonical handoff sets the whole figure at 13.5, and
+  // once the unit joined the row (A.5) a 17 pt scheme was taking half the row's width from the
+  // NAME, which is what pushed a long name onto a third line (A.15). Small meta is also the
+  // hierarchy this row is supposed to have — one lit fact, everything else in shadow.
+  figureMeta: { fontSize: 13.5 },
+  // The unit is a caption on the number, never part of the fact the engine decided — so it wears
+  // the muted tone whether or not the load moved.
+  figureUnit: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   // The face only — the COLOUR is `directionTone(lift.changed)` at the call site, so this row can
   // never hold an opinion about direction that the rest of the app does not share.
   figureChanged: { fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
@@ -670,10 +739,16 @@ const styles = StyleSheet.create({
   },
   // queued = cream, standing in the light (paper pill, dark ink)
   chipCurrent: { backgroundColor: color.paper, borderColor: color.paper },
-  // done = moss
-  chipDone: { backgroundColor: color.upWash, borderColor: color.up },
+  // ── done = a RECORD, and it steps back (founder A.16; canonical v7 handoff, the wrist's week
+  //    list). It used to be a filled moss pill, which is a lit state — the loudest thing in the
+  //    strip was the one workout that could not be started. Now: no fill, the faintest hairline,
+  //    dimmed, struck through, with the moss check carrying the whole verdict.
+  chipDone: { backgroundColor: 'transparent', borderColor: color.border, opacity: 0.6 },
+  // …and when the athlete taps it to re-read its plan, it comes back up to full and takes a moss
+  // ring. Selected, still finished — never the cream pill of something still to do.
+  chipDoneCurrent: { opacity: 1, borderColor: color.up },
   chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
-  chipTextDone: { color: color.textPrimary },
+  chipTextDone: { color: color.textMuted, textDecorationLine: 'line-through' }, // rtl-ok: merged onto chipText, which sets textAlign
   chipTextCurrent: { fontFamily: font.sansSemibold, color: color.onPaper }, // rtl-ok: merged onto chipText, which sets textAlign
 
   // ── the act ──

@@ -20,7 +20,7 @@ import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
-import { HomeView } from '@/screens/home/HomeView';
+import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -685,6 +685,106 @@ const weekDoneView = (
   />
 );
 
+/**
+ * 2.1a · TODAY, DRIVEN — the entry the founder's build-36 items needed and 2.1 could not give.
+ *
+ * 2.1 is a static `HomeView` with `onChooseWorkout={noop}`, so it can show one selection and one
+ * plan and nothing else. Four of his findings live in states it cannot produce:
+ *
+ *   A.12  the chip tap FLICKERS      — needs a real tap, and a plan read that takes a moment
+ *   A.16  a done chip stays white    — needs a DONE workout that is also the selection
+ *   A.15  a long name ellipsises     — needs the catalog's longest name in the list
+ *   A.5   the unit is missing        — visible anywhere, but it belongs beside the other three
+ *
+ * So this one holds its own selection, owns a real (delayed) plan read exactly like Home.tsx does,
+ * and seeds a finished workout. Tap the chips: the rows must hold their places while the figures
+ * arrive, and "Push A" must never come back as the cream pill.
+ */
+function TodayDriven() {
+  const [chosen, setChosen] = React.useState('d1');
+  const [rows, setRows] = React.useState<HomePlanLift[] | null>(null);
+
+  const workouts = [
+    { id: 'd0', name: 'Push A', muscles: '', done: true },
+    { id: 'd1', name: 'Pull A', muscles: '' },
+    { id: 'd2', name: 'Legs A', muscles: '' },
+    { id: 'd3', name: 'Push B', muscles: '' },
+    { id: 'd4', name: 'Pull B', muscles: '', done: true },
+  ];
+
+  // The day's slots — names and set counts, known synchronously (this is the whole point of A.12).
+  const slots: Record<string, { exerciseId: string; name: string; sets: number; load: number | null }[]> = {
+    d0: [
+      { exerciseId: 'bench', name: 'Barbell Bench Press', sets: 4, load: 41 },
+      { exerciseId: 'ohp', name: 'Machine Shoulder Press', sets: 4, load: 22.5 },
+      { exerciseId: 'tri', name: 'Overhead Triceps Extension', sets: 3, load: 27.5 },
+    ],
+    d1: [
+      { exerciseId: 'row', name: 'Barbell Row', sets: 4, load: 47.5 },
+      // A.15's own case: the catalog's longest name, in the narrowest column it ever gets.
+      { exerciseId: 'rdl', name: 'Dumbbell Romanian Deadlift', sets: 4, load: 32.5 },
+      { exerciseId: 'pull', name: 'Pull-Up', sets: 3, load: null },
+      { exerciseId: 'curl', name: 'Barbell Curl', sets: 3, load: 25 },
+    ],
+    d2: [
+      { exerciseId: 'squat', name: 'Barbell Back Squat', sets: 4, load: 62.5 },
+      { exerciseId: 'legcurl', name: 'Seated Leg Curl', sets: 3, load: 36.5 },
+    ],
+    d3: [{ exerciseId: 'incline', name: 'Incline Dumbbell Press', sets: 4, load: 24 }],
+    d4: [{ exerciseId: 'latpull', name: 'Lat Pulldown', sets: 4, load: 45 }],
+  };
+
+  // The engine read, as it really behaves: a promise, one tick out. This is what used to blank the
+  // list — keep the delay, so the entry can still SHOW the state the fix has to survive.
+  React.useEffect(() => {
+    setRows(slots[chosen].map((s) => ({ ...s, load: null, band: [8, 8] as [number, number], pending: true })));
+    const id = setTimeout(
+      () =>
+        setRows(
+          slots[chosen].map((s, i) => ({
+            exerciseId: s.exerciseId,
+            name: s.name,
+            load: s.load,
+            sets: s.sets,
+            band: [8, 10] as [number, number],
+            changed: i === 0 ? ('up' as const) : i === 1 ? ('down' as const) : undefined,
+          })),
+        ),
+      450,
+    );
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen]);
+
+  const name = workouts.find((w) => w.id === chosen)!.name;
+  return (
+    <HomeView
+      resting={false}
+      name="Erez"
+      dayName={name}
+      dayId={chosen}
+      muscles=""
+      trainedThisWeek={2}
+      startError={false}
+      weekNumber={11}
+      units="kg"
+      planMinutes={52}
+      plan={rows}
+      dayDone={!!workouts.find((w) => w.id === chosen)!.done}
+      workouts={workouts}
+      brief={null}
+      briefCount={3}
+      briefUnseen
+      trialLeft={9}
+      onForm={noop}
+      onStart={noop}
+      onChooseWorkout={setChosen}
+      onWeeklyUpdate={noop}
+      onShare={noop}
+    />
+  );
+}
+
 /* ============================================================================
  * The gallery.
  * ==========================================================================*/
@@ -760,6 +860,7 @@ export const GALLERY: GalleryEntry[] = [
   // learning length (the handoff's own four) rather than reading a programme it does not have.
   { id: '2.0', label: 'First workout — the first four', status: 'live', note: 'shown over 2.2', render: () => mount(SessionFlow, { previewFirstGym: 4 }) },
   { id: '2.1', label: 'Today', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView}</UnderTabs></InApp> },
+  { id: '2.1a', label: 'Today — driven', status: 'live', note: 'tap the chips: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done chip', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
   { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
   { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },

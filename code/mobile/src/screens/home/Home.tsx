@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import { HomeView } from '@/screens/home/HomeView';
+import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
@@ -147,25 +148,9 @@ export function Home({ navigation, route }: Props) {
     };
   }, [app.model, app.modeState.completedSessions, dayIdForPlan]);
 
-  const plan = React.useMemo(() => {
-    if (!day || planTargets == null) return null;
-    return day.slots.map((slot) => {
-      const first = planTargets.find((x) => x.exerciseId === slot.exerciseId && x.setIndex === 0);
-      // HER BAND, from the engine's own immutable pair. `recommendedReps` is Tlo — the FLOOR — and
-      // an athlete's edit overwrites it mid-session, so it is the wrong field to read a prescription
-      // from twice over. `repBandLo`/`repBandHi` are held for exactly this (models.ts).
-      const lo = first?.repBandLo ?? first?.recommendedReps ?? 8;
-      const hi = first?.repBandHi ?? lo;
-      return {
-        exerciseId: slot.exerciseId,
-        name: exerciseDisplayName(slot.exerciseId),
-        load: first?.recommendedWeight ?? null,
-        sets: slot.setCount,
-        band: [lo, hi] as [number, number],
-        changed: changedDir[slot.exerciseId],
-      };
-    });
-  }, [day, planTargets, changedDir]);
+  // THE LIST DOES NOT STAND DOWN WHEN THE SELECTION CHANGES (A.12) — see `homePlan.ts` for the
+  // whole argument. The rows are the day's; only their figures are the engine's, and only those wait.
+  const plan = React.useMemo(() => homePlanRows(day, planTargets, changedDir), [day, planTargets, changedDir]);
 
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
@@ -645,7 +630,8 @@ export function Home({ navigation, route }: Props) {
       <WelcomeBackView
         daysAway={comeback.daysAway}
         unit={unitLabel(app.profile?.units ?? 'kg')}
-        lifts={(plan ?? []).slice(0, 2).map((l) => ({
+        // Only SETTLED rows: a pending row's load is null, and null means bodyweight here.
+        lifts={(settledPlanRows(plan) ?? []).slice(0, 2).map((l) => ({
           exerciseId: l.exerciseId,
           name: l.name,
           load: l.load == null ? null : displayWeight(l.load, app.profile?.units ?? 'kg') ?? null,

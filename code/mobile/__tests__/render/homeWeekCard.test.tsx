@@ -247,9 +247,8 @@ describe('the week is on the page, and it is a door', () => {
     );
     const said = texts(r).join(' ');
     expect(said).toContain('Bench Press');
-    // v7 splits the figure into two styled spans — the load (moss when changed) and the scheme —
-    // so assert the two facts rather than one glued string: the load, and the BAND (not Tlo).
-    // The plan column carries the load WITHOUT its unit (v7 2.1) — one declared unit, six rows.
+    // v7 splits the figure into styled spans — the load (moss when changed), its unit, and the
+    // scheme — so assert the facts rather than one glued string: the load, and the BAND (not Tlo).
     expect(said).toContain('80');
     expect(said).toContain('3×8–10');
     // A bodyweight lift states the reps and invents no weight.
@@ -269,6 +268,109 @@ describe('the week is on the page, and it is a door', () => {
     );
     act(() => byLabel(r, 'Bench Press · 80 kg · 3×8–10')!.props.onPress());
     expect(formed).toEqual(['bb_bench_press']);
+  });
+
+  /**
+   * ════ THE UNIT IS BESIDE THE LOAD (founder A.5, build 36: "the unit is missing") ════
+   *
+   * v7 2.1 removed it deliberately — the plan is a column of loads in one declared unit, and six
+   * "kg"s turn a scannable column into six sentences. He overturned that on the device. The row
+   * already ends in a scheme ("· 3×8–10"), so the number was never standing alone in a bare column;
+   * it was a bare number inside a sentence, and a weight without a unit is not a weight.
+   */
+  it('every load on Today names its unit — and a bodyweight lift names none', () => {
+    const kg = texts(
+      mount(
+        <HomeView
+          {...props({
+            plan: [
+              { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] },
+              { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, band: [10, 12] as [number, number] },
+            ],
+          })}
+        />,
+      ),
+    ).join('|');
+    expect(kg).toContain(' kg');
+    // Exactly one — the loaded lift's. A bodyweight row invents no unit for a weight it has not got.
+    expect(kg.match(/ kg/g)).toHaveLength(1);
+
+    // …and it follows HER setting, not the stored kg.
+    const lb = texts(
+      mount(
+        <HomeView
+          {...props({
+            units: 'lb',
+            plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
+          })}
+        />,
+      ),
+    ).join('|');
+    expect(lb).toContain(' lb');
+    expect(lb).not.toContain(' kg');
+  });
+
+  /**
+   * ════ A LIFT'S NAME IS NEVER CLIPPED (founder A.15: "a long exercise name truncates with an
+   * ellipsis — needs a real solution") ════
+   *
+   * The real solution is that it wraps. The name was clamped to one line, so the catalog's longest
+   * ("Overhead Triceps Extension") arrived as "Overhead Triceps Ex…" — and the tail is exactly the
+   * word that separates two lifts of the same family. The FIGURE stays on one line: it is the fact
+   * the row exists for and it must never wrap away from its own load.
+   */
+  it('a long lift name wraps — nothing on the plan is clamped to one line', () => {
+    const r = mount(
+      <HomeView
+        {...props({
+          plan: [
+            { exerciseId: 'oh_tri_ext', name: 'Overhead Triceps Extension', load: 27.5, sets: 3, band: [10, 12] as [number, number] },
+          ],
+        })}
+      />,
+    );
+    const said = texts(r).join(' ');
+    expect(said).toContain('Overhead Triceps Extension'); // whole, in the tree
+    // …and the node carrying it is unclamped, which is the only thing that decides whether RN
+    // ellipsises it. (A one-line clamp is invisible to a text assertion — the string is still there.)
+    // (the name is BiDi-isolated, so match on containment, not equality)
+    const name = r.root.findAll((n) =>
+      n.children.some((c) => typeof c === 'string' && c.includes('Overhead Triceps Extension')),
+    );
+    expect(name.length).toBeGreaterThan(0);
+    expect(name.every((n) => n.props.numberOfLines == null)).toBe(true);
+  });
+
+  /**
+   * …and the other half of A.15, which is what actually decides how often it has to wrap: the
+   * figure's META MAY NOT COMPETE WITH ITS LOAD for the row's width. The load carries the founder's
+   * 2026-07-28 enlargement (17 pt); the unit and the scheme are captions on it and stay at the
+   * canonical 13.5. Set at the same size, the figure took 158 of the row's 330 px and pushed
+   * "Dumbbell Romanian Deadlift" onto a THIRD line. This is a measurement jest cannot make, so the
+   * law is held where it is decided — in the type sizes.
+   */
+  it('the unit and the scheme are set smaller than the load they annotate', () => {
+    const r = mount(
+      <HomeView
+        {...props({
+          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
+        })}
+      />,
+    );
+    const size = (fragment: string): number => {
+      const node = r.root.findAll((n) => n.children.some((c) => typeof c === 'string' && c.includes(fragment)))[0];
+      const s = node.props.style;
+      const flat = Array.isArray(s) ? Object.assign({}, ...s.flat(Infinity).filter(Boolean)) : s;
+      // The load's own span carries no size — it inherits the figure's. Walk up for it.
+      if (flat?.fontSize) return flat.fontSize;
+      const parent = r.root.findAll((n) => n.findAll((c) => c === node).length > 0 && n.props.style);
+      const pf = parent.map((p) => (Array.isArray(p.props.style) ? Object.assign({}, ...p.props.style.flat(Infinity).filter(Boolean)) : p.props.style));
+      return pf.map((x) => x?.fontSize).filter(Boolean).pop() as number;
+    };
+    const load = size('80');
+    expect(load).toBe(17); // the founder's enlargement, unchanged
+    expect(size('kg')).toBeLessThan(load);
+    expect(size('3×8–10')).toBeLessThan(load);
   });
 
   /**
@@ -369,6 +471,101 @@ describe('the week is on the page, and it is a door', () => {
     const queuedChip = colors(byLabel(r, 'Pull A')!);
     expect(queuedChip).toContain(color.paper);
     expect(queuedChip).not.toContain(color.up); // no moss on the queued chip at all
+  });
+
+  /**
+   * ════ DONE OUTRANKS QUEUED (founder A.16: "a completed workout's chip stays white, reads like
+   * another workout still to do") ════
+   *
+   * The two states were both real and the styles were simply applied in the wrong order — `current`
+   * last, so it won. A finished workout can be SELECTED (tapping it re-reads its plan, founder
+   * 2026-07-17), and the moment it was, it put on the cream pill of something still to do. The check
+   * icon was left arguing against the whole rest of the chip.
+   *
+   * The law is not about which style object wins. It is that a record may never wear the skin of an
+   * offer — whatever else is true of it.
+   */
+  it('a DONE workout that is also the selection never wears the queued paper pill', () => {
+    const r = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
+    const chip = byLabel(r, 'Push A')!;
+    expect(chip.props.accessibilityState?.selected).toBe(true); // it IS the selection…
+    expect(colors(chip)).not.toContain(color.paper); // …and it is still, unmistakably, done
+    expect(colors(chip)).toContain(color.up);
+  });
+
+  it('a done chip is struck through — the mark and the type agree', () => {
+    const r = mount(<HomeView {...props()} />);
+    const struck = (label: string) =>
+      r.root
+        .findAll((n) => n.props?.accessibilityLabel === label)
+        .some((n) =>
+          n.findAll((c) => {
+            const s = c.props.style;
+            const flat = Array.isArray(s) ? Object.assign({}, ...s.filter(Boolean)) : s;
+            return flat?.textDecorationLine === 'line-through';
+          }).length > 0,
+        );
+    expect(struck('Push A')).toBe(true); // done
+    expect(struck('Legs A')).toBe(false); // still to do
+  });
+
+  /**
+   * "A completed workout may not belong in the row of pending ones at all" (founder A.16). It
+   * doesn't: it falls to the end. Today answers "what is up next", so the strip has to LEAD with
+   * what is left. This is the canonical v7 handoff's own move — on the wrist the done workout is
+   * struck through and pushed to the foot of the list with `margin-top:auto`.
+   */
+  it('the strip leads with what is LEFT — finished workouts fall to the end', () => {
+    const r = mount(
+      <HomeView
+        {...props({
+          workouts: [
+            { id: 'day_1', name: 'Push A', muscles: '', done: true },
+            { id: 'day_2', name: 'Pull A', muscles: '' },
+            { id: 'day_3', name: 'Legs A', muscles: '', done: true },
+            { id: 'day_4', name: 'Push B', muscles: '' },
+          ],
+        })}
+      />,
+    );
+    const order = r.root
+      .findAll((n) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props.onPress === 'function')
+      .map((n) => n.props.accessibilityLabel as string)
+      .filter((l) => ['Push A', 'Pull A', 'Legs A', 'Push B'].includes(l));
+    expect(order).toEqual(['Pull A', 'Push B', 'Push A', 'Legs A']);
+  });
+});
+
+/**
+ * THE LIST HOLDS ITS PLACE WHILE THE FIGURES ARRIVE (founder A.12 — "tapping the chips flickers").
+ * The container's half of this law lives in `__tests__/domain/homePlan.test.ts`; this is the view's:
+ * a pending row is a real row with a real name, and it draws NO figure — a blank column must never
+ * be read as a lift that carries no weight.
+ */
+describe('a chip tap repaints the plan without emptying it', () => {
+  const PENDING = [
+    { exerciseId: 'bb_bench_press', name: 'Bench Press', load: null, sets: 4, band: [8, 8] as [number, number], pending: true },
+    { exerciseId: 'bb_row', name: 'Barbell Row', load: null, sets: 4, band: [8, 8] as [number, number], pending: true },
+  ];
+
+  it('pending rows still name their lifts', () => {
+    const said = texts(mount(<HomeView {...props({ plan: PENDING })} />)).join(' ');
+    expect(said).toContain('Bench Press');
+    expect(said).toContain('Barbell Row');
+  });
+
+  it('…and state no load, no unit and no scheme until the engine has answered', () => {
+    const said = texts(mount(<HomeView {...props({ plan: PENDING })} />)).join('|');
+    expect(said).not.toContain('4×8');
+    expect(said).not.toContain(' kg');
+    expect(said).not.toMatch(/null|undefined|NaN/);
+  });
+
+  it('a pending row is still a door to the form clip', () => {
+    const formed: string[] = [];
+    const r = mount(<HomeView {...props({ plan: PENDING, onForm: (id: string) => void formed.push(id) })} />);
+    act(() => byLabel(r, 'Bench Press')!.props.onPress());
+    expect(formed).toEqual(['bb_bench_press']);
   });
 });
 
