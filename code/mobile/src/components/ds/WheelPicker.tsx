@@ -76,7 +76,19 @@ interface Props {
   style?: ViewStyle | ViewStyle[];
 }
 
-const ITEM_W = { md: 86, lg: 86 } as const;
+/**
+ * The detent pitch — and the width of the cell a numeral is centred in.
+ *
+ * 86 until build 36, where the founder photographed the onboarding ruler rendering "82…": at 42px
+ * mono a four-glyph value ("82.5") measures ~100pt, and a `numberOfLines={1}` Text in an 86pt cell
+ * ellipsises. 96 gives the enlarged numeral (below) room for five glyphs — "137.5" is the widest
+ * load the engine prescribes — without its edge reaching the dimmed neighbour beside it.
+ *
+ * The cost, stated: about four numerals are legible at once on a 390pt control rather than the
+ * header's "five at a time". The alternative was a smaller numeral, which is the opposite of what
+ * the founder asked for twice (2026-07-28, and C.8).
+ */
+const ITEM_W = { md: 96, lg: 96 } as const;
 
 /**
  * ════ ONE WHEEL, ONE SIZE, EVERYWHERE (founder 2026-07-28) ════
@@ -92,11 +104,11 @@ const ITEM_W = { md: 86, lg: 86 } as const;
  * one and there is nothing left to drift. The `size` prop survives only so existing call sites keep
  * compiling; it selects nothing. `everyWheelIsTheSameWheel` holds this shut.
  */
-export const WHEEL_HEIGHT = { md: 104, lg: 104 } as const;
+export const WHEEL_HEIGHT = { md: 112, lg: 112 } as const;
 
 /** The numeral sizes by distance from centre. Past ±2 the numeral is gone — five read at a time,
  *  the rest is the tick texture. One ladder, both sizes (see WHEEL_HEIGHT). */
-const NUM_SIZE = { md: [42, 22, 18], lg: [42, 22, 18] } as const;
+const NUM_SIZE = { md: [48, 24, 18], lg: [48, 24, 18] } as const;
 /**
  * The TONE ladder by distance, per size — and the two are deliberately different.
  *
@@ -114,12 +126,17 @@ const NUM_TONE = {
 // whole axis is being browsed.)
 /** How many detents each side of centre still render a numeral (five total). */
 const SHOW_SPAN = 2;
-/** The height reserved for the scrolling numeral row (so the biggest numeral never clips). */
-const NUM_ROW_H = { md: 54, lg: 54 } as const;
+/** The measured width of the active numeral's own box — six glyphs of mono at the active size, so
+ *  nothing the engine can prescribe is ever ellipsised. See `styles.numCell`. */
+const NUM_CELL_W = 176;
 
 /** The engraved tick strip beneath the numerals — a fixed, even graduation. */
 const TICK_STRIP_W = 230;
 const TICK_STRIP_H = 16;
+/** How far the graduation sits off the bottom hairline — the old flow layout's own breathing room
+ *  (frame 112 − numerals 62 − gap 8 − strip 16, halved), kept exactly so nothing visibly moved when
+ *  the strip left the flow and went behind the touch surface (C.3). */
+const TICK_INSET = 13;
 const TICK_GAP = 12.5; // px between fine graduations (v7)
 
 /** Rendered cells each side of the window anchor. 56 × 64px ≈ 8 screen-widths of
@@ -172,7 +189,6 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const h = WHEEL_HEIGHT[size];
   const numSize = NUM_SIZE[size];
   const numTone = NUM_TONE[size];
-  const numRowH = NUM_ROW_H[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
@@ -285,7 +301,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
     >
       <View style={styles.scale} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {/* The numerals — a scrolling readout, five at a time. */}
-        <View style={[styles.numRow, { height: numRowH }]}>
+        <View style={styles.numRow}>
           {width > 0 ? (
             <ScrollView
               ref={listRef}
@@ -318,10 +334,19 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
                 const active = dist === 0;
                 return (
                   <View key={item} style={[styles.item, { width: itemW }]}>
+                    {/* THE NUMERAL IS NEVER ELLIPSISED (founder, build 36 — C.2).
+                        The cell is `itemW` because that is the detent pitch; the numeral inside it
+                        is not. Constrained to the cell, a `numberOfLines={1}` Text truncated the
+                        moment the value grew past three glyphs — the founder photographed the
+                        onboarding ruler reading "82…" where the value was 82.5. `numCell` is wider
+                        than the cell and centred on it by negative margins, so the glyphs get their
+                        natural width while the geometry, the snapping and the offset maths keep
+                        working in `itemW` exactly as before. */}
                     <Text
                       numberOfLines={1}
                       style={[
                         styles.num,
+                        styles.numCell,
                         {
                           fontSize: numSize[dist],
                           fontFamily: active ? font.monoSemibold : font.mono, // rtl-ok — `styles.num` centres it; this only swaps the face
@@ -341,8 +366,12 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
           ) : null}
         </View>
 
-        {/* The engraved tick strip — a fixed, even graduation, struck at centre by one moss tick. */}
-        <TickStrip />
+        {/* The engraved tick strip — a fixed, even graduation, struck at centre by one moss tick.
+            It is drawn BEHIND the scroller and takes no touches, so the ruler-looking part of the
+            control now turns the wheel instead of swallowing the gesture (C.3). */}
+        <View pointerEvents="none" style={styles.ticksLayer}>
+          <TickStrip />
+        </View>
 
         {/* THE ENDS SAY WHAT THEY ARE. On a ruler they dissolve into the stage — a window onto a
             longer track. On the edit dial (2.2b) they carry a chevron each way instead: mid-workout
@@ -437,11 +466,34 @@ const styles = StyleSheet.create({
   },
   // The numerals + the tick strip stack, centred in the framed height with air between.
   scale: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, overflow: 'hidden' },
-  // The scrolling numeral row.
-  numRow: { alignSelf: 'stretch', justifyContent: 'center', overflow: 'hidden' },
+  /**
+   * THE WHOLE CONTROL TAKES THE SWIPE (founder, build 36 — C.3).
+   *
+   * The header has always claimed it — "a sweating hand in a gym should not have to land inside a
+   * 44pt box to start scrolling" — and it was not true: the ScrollView lived inside this row and the
+   * row was a fixed 54 tall, so the engraved tick strip beneath it, which is the part that LOOKS like
+   * a ruler, was dead to touch. The founder had to press the numeral itself to turn the wheel.
+   *
+   * The row now stretches over the framed height and the scroller fills it; the tick strip is drawn
+   * UNDER it, out of the touch path. The numerals keep their own row height for layout, so nothing
+   * about the readout moves — only the surface that answers a finger.
+   */
+  numRow: { alignSelf: 'stretch', flex: 1, justifyContent: 'center', overflow: 'hidden' },
+  /** The graduation, held at the foot of the frame and OUT of the touch path (see `numRow`). */
+  ticksLayer: { position: 'absolute', left: 0, right: 0, bottom: TICK_INSET, alignItems: 'center' },
   scroller: { direction: 'ltr' },
-  scrollContent: { alignItems: 'flex-end' },
+  // The numerals rest where the flow layout used to put them — clear of the graduation and the gap
+  // that separated the two — now that the scroller owns the full frame height for touch (C.3).
+  scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP_H + 8 },
   item: { alignItems: 'center', justifyContent: 'flex-end' },
+  /**
+   * The box the numeral is actually measured in — wider than its cell, centred on it by symmetric
+   * negative margins (C.2). Sized for SIX glyphs at the active size so nothing the engine can
+   * prescribe truncates; the widest real value is five ("137.5"). The overhang lands in the dimmed
+   * neighbour's cell, not on its glyphs: at distance 1 the numeral is 24px, so its own text starts
+   * further out than this box reaches.
+   */
+  numCell: { width: NUM_CELL_W, marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2 },
   num: {
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
