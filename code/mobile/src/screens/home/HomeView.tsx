@@ -227,7 +227,7 @@ export function HomeView(props: HomeViewProps) {
               onPress={props.onShare}
               style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
             >
-              <Icon name="twoPeople" size={22} color={signal[0]} strokeWidth={1.8} />
+              <Icon name="twoPeople" size={21} color={signal[0]} strokeWidth={2.1} />
             </Pressable>
           ) : null}
         </View>
@@ -652,9 +652,23 @@ const styles = StyleSheet.create({
   markTick: { position: 'absolute', top: 0, width: 1.5, height: 11, backgroundColor: color.textPrimary },
   markTickStart: { start: 0 },
   markTickEnd: { end: 0 },
-  // The share door: the same 34 px touch circle the avatar held, without its fill — the glyph is
-  // the mark, and a ring around it would compete with the range-mark across from it.
-  shareDoor: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  // ════ THE SHARE DOOR IS A CONTROL, SO IT LOOKS LIKE ONE (founder A.8) ════
+  // "The two-people icon is swallowed by the background — effectively invisible."
+  //
+  // It was NOT the colour: the glyph is lit moss on a near-black stage, which is about as much
+  // contrast as this palette has. It was that a 1.8-weight outline floating in a bare corner with
+  // no surface under it does not register as a THING TO PRESS — the eye reads it as decoration
+  // beside the wordmark and moves on. The fill it used to have was removed on the argument that a
+  // ring would compete with the range-mark opposite; a WASH does not compete, it just gives the
+  // glyph a body. The stroke goes up with it, because a hairline is what got swallowed.
+  shareDoor: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: color.fillSubtleStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: {
     width: 36,
     height: 36,

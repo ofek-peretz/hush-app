@@ -53,10 +53,26 @@ const DISMISS_VELOCITY = 800;
  * does the one job that matters (it kills the background as a competitor for attention),
  * costs nothing to render, and cannot crash. Do not reopen this.
  *
- * 0.7, up from 0.55: at 0.55 the screen behind stayed legible enough to read, which is
- * exactly the focus the sheet exists to take away.
+ * ════ 0.7 WAS TUNED AGAINST A LIGHT APP (founder C.5) ════
+ *
+ * "13.1 Pause + End sheet — the screen is faded."
+ *
+ * It was, and 0.7 is why. That number was chosen on 2026-07-12 with the reasoning "at 0.55 the
+ * screen behind stayed legible enough to read" — TRUE, and the right call, when the thing behind
+ * a sheet was the light-instrument's paper. v7 turned every surface into the near-black stage and
+ * this constant was never revisited: 70% black over `#131210` lands on about `#050504`, so the
+ * paused stage does not recede behind the sheet, it goes OUT. Cream copy at 30% on near-black is
+ * not a background — it is a screen that looks like it lost power.
+ *
+ * A scrim's job is to say "this is behind now". On a stage that is already the darkest thing in
+ * the product there is almost nothing to suppress, and 0.45 says it completely while leaving the
+ * pause screen visibly still there — which is the whole point of 13.1: the session is standing
+ * still, not gone.
+ *
+ * ⚠️ The 2026-07-12 ruling that is CLOSED is FLAT-VS-BLUR, above. This is the opacity, and it is
+ * a different question — one the palette itself changed the answer to.
  */
-export const SCRIM_OPACITY = 0.7;
+export const SCRIM_OPACITY = 0.45;
 
 interface Props {
   onClose: () => void;

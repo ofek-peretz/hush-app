@@ -35,6 +35,12 @@ export function TextField({ label, block, style, onFocus, onBlur, ...input }: Pr
             setFocused(false);
             onBlur?.(e);
           }}
+          // ════ THE KEYBOARD IS PART OF THE SCREEN (founder A.1) ════
+          // iOS defaults a keyboard to LIGHT, so the one place the athlete types raised a white
+          // slab under an all-dark stage — the single brightest thing in the product, and not
+          // ours. This is the ONLY TextInput in the app, so one word fixes it everywhere and
+          // cannot drift: there is nowhere else for it to drift to.
+          keyboardAppearance="dark"
           placeholderTextColor={color.textTertiary}
           // v7 1.2: the caret is moss — selectionColor carries it on iOS, cursorColor on Android.
           selectionColor={color.accent}

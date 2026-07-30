@@ -28,7 +28,7 @@
  * would promise a decision that does not exist. It is a ruled row: a glyph, a sentence, no
  * affordance, visibly not the object above it.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
@@ -49,7 +49,21 @@ export function ConnectHealth({ navigation, route }: Props) {
   const { t } = useCopy();
   const sex = route.params?.sex;
   const [connected, setConnected] = useState(false);
-  const [asking, setAsking] = useState(false);
+  /**
+   * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
+   *
+   * This was `useState`, and every press SET IT TRUE AND THEN FALSE — two renders — while the
+   * value was wired to `disabled` on the card, on Continue and on Skip. So the whole screen's
+   * chrome stepped into its disabled state and straight back out. On the common path it never
+   * even waits: iOS shows the HealthKit sheet at most ONCE per app, so after the first answer
+   * `requestAuthorization` resolves immediately and the round trip is a frame or two. That is
+   * the millisecond he saw.
+   *
+   * The flag's only real job is re-entrancy — one press must not start two permission flows —
+   * and a ref does that without a render. Nothing on the screen needs to look different for a
+   * round trip that either returns instantly or is covered by a system sheet anyway.
+   */
+  const asking = useRef(false);
 
   /**
    * The wrist, if there is one. Read ONCE — a watch is not paired during the four seconds this
@@ -70,8 +84,8 @@ export function ConnectHealth({ navigation, route }: Props) {
       setConnected(false);
       return;
     }
-    if (asking) return;
-    setAsking(true);
+    if (asking.current) return;
+    asking.current = true;
     try {
       const granted = await health.requestPermission();
       recordPermissionOutcome(granted, (type, data) => void track(type, data));
@@ -84,7 +98,7 @@ export function ConnectHealth({ navigation, route }: Props) {
     } finally {
       // ALWAYS: a throw here used to leave `asking` true, which disabled the only button on
       // the screen. Onboarding must never be a dead end.
-      setAsking(false);
+      asking.current = false;
     }
   }
 
@@ -114,14 +128,12 @@ export function ConnectHealth({ navigation, route }: Props) {
             block
             label={t('ob.continue')}
             onPress={() => proceed(connected)}
-            disabled={asking}
           />
           {/* The quiet second exit — leaves Health off, moves on. A ghost, not a button. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('ob.healthSkip')}
             onPress={() => proceed(false)}
-            disabled={asking}
             hitSlop={8}
           >
             <Text style={styles.skip}>{t('ob.healthSkip')}</Text>
@@ -135,7 +147,6 @@ export function ConnectHealth({ navigation, route }: Props) {
         accessibilityState={{ checked: connected }}
         accessibilityLabel={t('ob.healthCardTitle')}
         onPress={() => void toggle()}
-        disabled={asking}
         style={({ pressed }) => [styles.card, connected && styles.cardOn, pressed && styles.cardPressed]}
       >
         {/* v7: the ACTIVITY waveform, always moss — health is a signal the app shows, not a

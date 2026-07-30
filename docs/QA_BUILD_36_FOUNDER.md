@@ -3,10 +3,10 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `8758436`, pushed. Tree clean.**
 >
-> **27 items closed** — A.4 · A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.1 · B.2 · B.6 ·
-> B.7 · B.8 · B.9 · B.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 ·
-> C.20, plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed). **B.5 is
-> half done.**
+> **32 items closed** — A.1 · A.4 · A.5 · A.7 · A.8 · A.10 · A.11 · A.12 · A.13 · A.15 · A.16 ·
+> B.1 · B.2 · B.6 · B.7 · B.8 · B.9 · B.11 · C.1 · C.2 · C.3 · C.4 · C.5 · C.6 · C.7 · C.8 · C.9 ·
+> C.12 · C.13 · C.14 · C.19 · C.20, plus the P0 programme audit (delivered as an artifact, defect
+> NOT yet fixed). **B.5 is half done.**
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -118,7 +118,27 @@
 > fix, because it read the source as prose; it strips comments now, and still catches the real
 > thing (verified both ways).
 >
-> **NEXT:** A.1 · A.8 · A.13 · C.1 · C.5 · C.15 · C.18 · P0b.1, and the P0 programme defect.
+> **A.1 · A.8 · A.13 · C.1 · C.5 ARE CLOSED**, and they turned out to be one story: values chosen
+> when this was a LIGHT instrument, carried unchanged onto v7's dark stage.
+> *A.1* — iOS defaults a keyboard to light. There is exactly ONE `TextInput` in the app, so one
+> word fixes it everywhere and cannot drift. *A.8* — not the colour (lit moss on near-black is all
+> the contrast this palette has); a hairline glyph with **no surface under it** does not read as a
+> thing to press. It has the wash back. *A.13* — six hand-rolled `opacity: pressed ? 0.5` fades,
+> and **a word at half strength reads as disabled, not as pressed**. The product had already
+> settled this: `press.opacity` is 1 and every `Button` answers a press by changing its FILL. A new
+> law closed the class — **and immediately found two more the sweep had missed, both in the design
+> system: `ListRow` at 0.55, and the MOSS button at 0.88 — which is the Resume button on the pause
+> screen.** *C.1* — the toggle flipped a `useState` wired to `disabled` on three controls, so a
+> round trip that resolves in a frame stepped the whole screen through its disabled state and back.
+> It is a ref now; nothing re-renders. *C.5* — the scrim is **0.7, and that number was tuned against
+> paper.** 70% black over `#131210` lands near `#050504`: the pause screen does not recede, it goes
+> out. 0.45 says "this is behind now" and leaves 13.1 visibly standing still, which is its point.
+>
+> ⚠️ **I reopened a 2026-07-12 number.** What that ruling CLOSED is flat-vs-blur, and that stands
+> untouched. The opacity was a separate paragraph, argued from "at 0.55 the screen behind stayed
+> legible" — true of the light instrument, and the palette changed the answer.
+>
+> **NEXT:** C.15 · C.18 · P0b.1, and the P0 programme defect.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -167,19 +187,19 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 | # | Item | Status |
 |---|---|---|
-| A.1 | Can the keyboard be dark? (screenshot 1 — a white system keyboard under the all-dark stage) | open |
+| A.1 | Can the keyboard be dark? (screenshot 1 — a white system keyboard under the all-dark stage) | **done** |
 | A.2 | The **Map screen appears in onboarding — remove it.** | open |
 | A.3 | "Show my program" → Today: a momentary **screen flicker** before the transition. | open |
 | A.4 | Share screen: **no way back to Today — no back control.** And restyle it in the manner of the personal-record share card; the current white treatment is ugly. | **done** |
 | A.5 | **Today: the unit is missing** beside each exercise's weight. | **done** |
 | A.6 | THE SET screen: the figure **37 is clipped**; the clock and `LIFT n/m` are **not centred**. His proposal: drop the Swap button under the video to free the room, then lower `LIFT` slightly (a little clearance from the clock). **Also:** gyms stock 2.5 kg jumps — why prescribe 8.5/side? At least on the first workout, maximise plate-accuracy and the athlete's opening load. **And:** find a more elegant way to carry the lift number and the set count than TEXT that steals focus — circles? He explicitly invites a proposal. | open |
 | A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | **done** |
-| A.8 | Today: the **two-people icon is swallowed** by the background — effectively invisible. | open |
+| A.8 | Today: the **two-people icon is swallowed** by the background — effectively invisible. | **done** |
 | A.9 | Tab bar: **tapping fires a haptic — remove it.** Transitions are not fully smooth; there is a small flicker. | open |
 | A.10 | When the athlete **edits and confirms, it must confirm** — not bounce back to the set screen. | **done** |
 | A.11 | **Remove the "next screen in 3 seconds" line AND its progress bar from every workout screen.** | **done** |
 | A.12 | Today: **tapping the chips flickers.** | **done** |
-| A.13 | Delete-account and Sign-out screens **look faded when pressed.** | open |
+| A.13 | Delete-account and Sign-out screens **look faded when pressed.** | **done** |
 | A.14 | **"Share your plan" must leave the YOU tab** and live behind the two-people icon on Today — that icon is where everything person-to-person belongs. **Plus:** tapping "Hush Pro" opens the Paywall looking exactly as if all 14 workouts were spent. It must adapt to the athlete's actual workout number, and it must persuade — people may want to subscribe BEFORE the 14 run out, and it should say the trial converts to paid. He is open to another idea. | open |
 | A.15 | Today: a **long exercise name truncates with an ellipsis** — needs a real solution. | **done** |
 | A.16 | Today: a **completed workout's chip stays white**, reads like another workout still to do. And a completed workout may not belong in the row of pending ones at all — do something that reads as progress/achievement. | **done** |
@@ -208,11 +228,11 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 | # | Screen | Item | Status |
 |---|---|---|---|
-| C.1 | 1.3 Connect health | The screen **flickers for a millisecond** when the toggle is pressed. | open |
+| C.1 | 1.3 Connect health | The screen **flickers for a millisecond** when the toggle is pressed. | **done** |
 | C.2 | 1.4 About you | The wheel **truncates its own number** ("82…"). Same wheel, same bug, in **Edit result**. | **done** |
 | C.3 | 1.4 About you | The areas **around** the wheel also drag it — she must press exactly on the number to drive it. | **done** |
 | C.4 | 2.0 First-four card | On the very first workout the card renders **misaligned / clipped** — "צריך לסדר את הבאג הזה". | **done** |
-| C.5 | 13.1 Pause + End sheet | **The screen is faded.** | open |
+| C.5 | 13.1 Pause + End sheet | **The screen is faded.** | **done** |
 | C.6 | 2.2b Edit set | The top row (back · lift name · SET… · clock) **collides** — the clock overlaps the label. He wants **that whole row deleted**, keeping only the clock where it naturally sits on the workout screen, and keeping the back control. | **done** |
 | C.7 | 2.2b Edit set | **Remove the caption under "Save set"** ("36.5 kg × 8 — in your band"). | **done** |
 | C.8 | 2.2b Edit set | **Enlarge the weight and reps figures.** | **done** |

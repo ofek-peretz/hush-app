@@ -350,7 +350,8 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(241,238,229,0.12)',
   },
   rowLast: { borderBottomWidth: 1, borderBottomColor: color.border },
-  rowPressed: { opacity: 0.6 },
+  // A.13 — a press washes the surface; it never dims the row's own words.
+  rowPressed: { backgroundColor: color.fillSubtle },
 
   dateCol: { width: 50 },
   day: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 24, color: color.textPrimary, textAlign: 'left' },

@@ -333,7 +333,8 @@ const styles = StyleSheet.create({
   planStage: { backgroundColor: 'rgba(241,238,229,0.06)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },
   // Paper is already the loudest thing here, so only the DARK card needs a chosen state to show.
   planStageOn: { borderColor: color.textPrimary },
-  planPressed: { opacity: 0.9 },
+  // A.13 — the same law, and here it was doing nothing anyway: 0.9 is invisible.
+  planPressed: { backgroundColor: color.fillSubtle },
 
   planLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 13, minWidth: 0 },
   planText: { flex: 1, minWidth: 0, gap: 2 },

@@ -132,7 +132,7 @@ const FILL: Record<Variant, { container: ViewStyle; pressed: ViewStyle; fg: stri
   // holds a cream object and a cream act would read as a second slab of the same thing. That is
   // exactly the paywall (v7 4.3): the annual plan is a paper card, so the act takes the signal.
   // One screen, by the handoff's own hand — not a second primary.
-  signal: { container: { backgroundColor: signal[0] }, pressed: { opacity: 0.88 }, fg: color.onAccent },
+  signal: { container: { backgroundColor: signal[0] }, pressed: { backgroundColor: signal.mossPressed }, fg: color.onAccent },
   // Ghost on the inverted stage — light ink on the dark surface (the paper `ghost`
   // fg is near-black and disappears on stage).
   onstageGhost: { container: { backgroundColor: 'transparent' }, pressed: { backgroundColor: stageC[1] }, fg: stageC.ink0 },

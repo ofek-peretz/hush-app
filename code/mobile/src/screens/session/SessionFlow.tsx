@@ -2117,7 +2117,8 @@ const styles = StyleSheet.create({
   group: { marginBottom: 11 },
   exName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
-  loadBtnPressed: { opacity: 0.55 },
+  // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
+  loadBtnPressed: { backgroundColor: color.fillSubtleStrong },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
   // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,
   // cream); the "a side / per hand" suffix is a word (sans, quiet). It rode inline beside the hero

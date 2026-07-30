@@ -297,7 +297,7 @@ export function ProfileSheet({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('profile.signOut')}
             onPress={confirmSignOut}
-            style={({ pressed }) => [styles.exit, { opacity: pressed ? 0.5 : 1 }]}
+            style={({ pressed }) => [styles.exit, pressed && styles.exitPressed]}
           >
             <Text style={styles.exitLabel}>{t('profile.signOut')}</Text>
           </Pressable>
@@ -305,7 +305,7 @@ export function ProfileSheet({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('profile.deleteAccount')}
             onPress={confirmDelete}
-            style={({ pressed }) => [styles.exit, { opacity: pressed ? 0.5 : 1 }]}
+            style={({ pressed }) => [styles.exit, pressed && styles.exitPressed]}
           >
             <Text style={[styles.exitLabel, styles.exitDanger]}>{t('profile.deleteAccount')}</Text>
           </Pressable>
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   sectionAfterNote: { marginTop: 22, paddingTop: 20, borderTopWidth: 1, borderTopColor: color.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
-  rowPressed: { opacity: 0.6 },
+  rowPressed: { backgroundColor: color.fillSubtle },
   rowText: { flex: 1, minWidth: 0 },
   rowLabel: { fontFamily: font.sans, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
   // Deleting an account is not a load coming down — it takes the CLAY (see `alert` in tokens).
@@ -445,7 +445,19 @@ const styles = StyleSheet.create({
 
   // Text-only exits — still a full 44pt target, just no visual weight.
   actions: { marginTop: 32, gap: 2 },
-  exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  /* ════ A PRESS CHANGES THE SURFACE; IT DOES NOT FADE THE CONTENT (founder A.13) ════
+   *
+   * "Delete-account and Sign-out screens look faded when pressed."
+   *
+   * They did: both carried a hand-rolled `opacity: pressed ? 0.5 : 1`, so touching either dimmed
+   * the WORDS — and a word at half strength does not read as "pressed", it reads as broken or
+   * disabled. The product already settled this and these sites had simply never been brought in
+   * line: `press` declares `opacity: 1`, and every `Button` variant answers a press by changing
+   * its FILL (`signal.fillPressed`, `fillSubtle`, …). A wash appears UNDER the control; the
+   * control itself never dims. So that is what these do now.
+   */
+  exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+  exitPressed: { backgroundColor: color.fillSubtle },
   exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
   exitDanger: { color: alert.stage },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },

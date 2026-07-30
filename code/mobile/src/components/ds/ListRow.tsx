@@ -102,7 +102,8 @@ const styles = StyleSheet.create({
   },
   inset: { paddingHorizontal: 16 },
   last: { borderBottomWidth: 0 },
-  pressed: { opacity: 0.55 },
+  // A.13 — a wash under the row, never a fade of the row: at 0.55 a pressed row is a DISABLED row.
+  pressed: { backgroundColor: color.fillSubtle },
   lead: { flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   idx: {
     width: 28,

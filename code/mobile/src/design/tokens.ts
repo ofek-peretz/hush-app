@@ -119,6 +119,10 @@ export const signal = {
   ink: '#a9c49f',
   fill: '#f1eee5', // the PRIMARY BUTTON ground is CREAM now (cream on dark)
   fillPressed: '#e3ded0',
+  // A.13 — the moss button's pressed ground. The same relationship cream has to its own pressed
+  // step (one notch down, same hue), because a press changes the SURFACE. The `signal` variant
+  // used to answer a press with `opacity: 0.88`, which dimmed the button AND the dark ink on it.
+  mossPressed: '#9bb492',
 } as const;
 
 /**
