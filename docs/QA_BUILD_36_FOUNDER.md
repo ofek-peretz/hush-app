@@ -24,10 +24,10 @@
 >
 > **NEXT, in this order:**
 > 1. **B.6 · B.7 · B.8** — the cardio screens (`screens/cardio/Cardio.tsx`), Hebrew + type size.
-> 3. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
+> 2. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
 >    (use the presence flag from `platform/watch/watchPresence`, already built).
-> 4. **C.20** — the Live Activity is too small beside Spotify's.
-> 5. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
+> 3. **C.20** — the Live Activity is too small beside Spotify's.
+> 4. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
