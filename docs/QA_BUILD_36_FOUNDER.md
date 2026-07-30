@@ -3,9 +3,9 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `d74f933`, pushed. Tree clean.**
 >
-> **20 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
-> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14, plus the P0 programme audit (delivered as
-> an artifact, defect NOT yet fixed).
+> **21 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
+> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19, plus the P0 programme audit
+> (delivered as an artifact, defect NOT yet fixed).
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -42,11 +42,21 @@
 > **And the harness has a VOICE BAR now** (EN / עברית · he-him / she-her, under the frame): his
 > whole B list is headed "Hebrew, female voice" and the gallery could speak neither.
 >
+> **C.19 IS CLOSED.** The "line across the middle connected to nothing" was **not the line** — the
+> rule above the km/hr/kcal row is in the canonical file, at the top of the stat table. What was
+> wrong was what stood above it: the GPS status sat in a FIXED 20 px slot ("no jump"), and with a
+> lock — the ordinary case — that slot drew nothing, so between the body's two 30 px gaps the rule
+> had EIGHTY pixels of void over it. The canonical body is three children on a 32 px rhythm; this
+> had four. The band was also ~15 px low inside its own box (its labels were tucked inside instead
+> of sitting above it); it is at the handoff's exact offsets now, verified in the browser. The HR
+> half is `showsHeartRate(hr, watchPaired)` — a paired wrist OR a reading already arriving, because
+> `watchPresence` is explicit that `known: false` means "we could not find out", never "no watch".
+> The saved stage asks the other honest question (`avgHr != null`). New entry **3.4g** — 3.4 mounts
+> a paired athlete, so the screen he was actually looking at had none.
+>
 > **NEXT, in this order:**
-> 1. **C.19** — cardio live: the stray middle line, and HR must not show without a paired watch
->    (use the presence flag from `platform/watch/watchPresence`, already built).
-> 2. **C.20** — the Live Activity is too small beside Spotify's.
-> 3. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
+> 1. **C.20** — the Live Activity is too small beside Spotify's.
+> 2. **The Hebrew batch** B.1–B.3, B.5, B.9, B.11.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -154,7 +164,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | C.16 | 2.3b Final set | "LIFT 6/6 · SET 3 · FINAL · LOGGED · NEXT LIFT COMING UP" — **the screen does not look good enough.** | open |
 | C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | open |
 | C.18 | 3.2b Lift detail | **No graph** when you open a lift. | open |
-| C.19 | 3.4 Cardio live | **Not what the HTML draws.** There is a **line across the middle** connected to nothing — remove it. And for someone with **no Apple Watch, HR must not appear** — tie it to the same flag as the watch presence. | open |
+| C.19 | 3.4 Cardio live | **Not what the HTML draws.** There is a **line across the middle** connected to nothing — remove it. And for someone with **no Apple Watch, HR must not appear** — tie it to the same flag as the watch presence. | **done** |
 | C.20 | 6.2 Live Activity | Our lock-screen activity is **small next to Spotify's.** Make it the same size, lay the data out better, and make calories legible. | open |
 
 ---

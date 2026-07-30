@@ -94,6 +94,7 @@ const liveProps = {
   calories: 318,
   splits: [],
   gps: 'ready' as const,
+  watchPaired: true,
   paused: false,
   confirmEnd: false,
   kmMoment: null,

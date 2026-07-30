@@ -38,6 +38,7 @@ import { useCardioTracker, fmtClock, fmtPace, type GpsState } from '@/platform/c
 import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
+import { readWatchPresence } from '@/platform/watch/watchPresence';
 import type { CardioActivity, CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
 import * as haptics from '@/platform/haptics';
 import { color, font, textScale, radius, stage as stageC, signal, tracking, trackingPx } from '@/design/tokens';
@@ -62,6 +63,10 @@ export function Cardio({ navigation }: Props) {
   // Open tracking only (v7): gait is fixed to a run; no picker, no in-run toggle.
   const live: CardioGait = 'run';
   const [count, setCount] = useState(3);
+  // C.19 — whether anything on her wrist could measure a heartbeat. Read once: a watch is not
+  // paired or unpaired mid-run, and `readWatchPresence` degrades to "we could not find out"
+  // everywhere but a native build (never to "no watch").
+  const watchPaired = useRef(readWatchPresence().paired).current;
   const [paused, setPaused] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   // 3.4b · KILOMETRE LOGGED — the split that just landed rises alone in the light, then the run
@@ -185,6 +190,7 @@ export function Cardio({ navigation }: Props) {
       elapsedSec={elapsedSec}
       distanceKm={distanceKm}
       hr={hr}
+      watchPaired={watchPaired}
       calories={calories}
       splits={splits}
       gps={gps}
@@ -201,6 +207,28 @@ export function Cardio({ navigation }: Props) {
       onFinish={finish}
     />
   );
+}
+
+/**
+ * ════ IS THERE ANYTHING THAT COULD MEASURE HER HEART? (founder C.19) ════
+ *
+ * "For someone with no Apple Watch, HR must not appear — tie it to the same flag as the watch
+ * presence." The row used to draw the heart unconditionally and fall back to an em-dash, so every
+ * athlete without a watch got a permanent empty seat labelled דופק: a measurement announced, and
+ * then declined, on every run they will ever take.
+ *
+ * Two facts decide it, and the OR between them matters:
+ *   · `paired` — a wrist that can stream a reading. The seat is real even before the first beat
+ *     arrives, so a paired athlete sees "—" for a second, not a slot appearing under her thumb.
+ *   · `hr != null` — a reading is ALREADY arriving. Whatever WCSession thinks, something is
+ *     measuring, and `watchPresence` is explicit that `known: false` means "we could not find
+ *     out", never "no watch". A live number outranks a flag that admits it does not know.
+ *
+ * Neither → nothing is drawn. That is the general law, of which his ask is the case: Hush does not
+ * name a measurement it has no instrument for.
+ */
+export function showsHeartRate(hr: number | null, watchPaired: boolean): boolean {
+  return hr != null || watchPaired;
 }
 
 /**
@@ -252,6 +280,9 @@ export function CardioLiveView(props: {
   calories: number;
   splits: CardioSplit[];
   gps: GpsState;
+  /** A watch is paired to this iPhone (`platform/watch/watchPresence`). Gates the HEART readout —
+   *  see `showsHeartRate`. The container reads it; the view only obeys it. */
+  watchPaired: boolean;
   paused: boolean;
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
@@ -264,6 +295,13 @@ export function CardioLiveView(props: {
   const { t } = useCopy();
   const metresUnit = t('cardio.metresUnit');
   const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment } = props;
+  // One line, or none at all — see the block where it is drawn.
+  const gpsNote =
+    gps === 'acquiring'
+      ? t('cardio.gpsAcquiring')
+      : gps === 'denied' || gps === 'unavailable'
+        ? t('cardio.gpsOff')
+        : null;
   const metresTotal = distanceKm * 1000;
   const metresIntoKm = metresTotal % 1000; // 0–1000 within the current kilometre
   const dotFrac = Math.max(0, Math.min(1, metresIntoKm / 1000));
@@ -299,16 +337,29 @@ export function CardioLiveView(props: {
             </View>
           </View>
 
-          {/* GPS truth line — never confident zeros while there is no lock. Fixed height, no jump. */}
-          <View style={styles.gpsSlot}>
-            {gps === 'acquiring' ? <Text style={styles.gpsStatus}>{t('cardio.gpsAcquiring')}</Text> : null}
-            {gps === 'denied' || gps === 'unavailable' ? <Text style={styles.gpsStatus}>{t('cardio.gpsOff')}</Text> : null}
-          </View>
+          {/* ════ THE GPS LINE SPEAKS ONLY WHEN IT HAS SOMETHING TO SAY (founder C.19) ════
+              It used to sit in a FIXED 20 px slot — "no jump" — which sounded careful and was the
+              bug: with a lock (the normal case, and the one on his phone) the slot drew nothing,
+              and between the body's two 30 px gaps it left an EIGHTY-pixel void above the stat
+              row's hairline. That is his "line across the middle connected to nothing": the rule
+              was fine, it had simply been abandoned by everything above it. The canonical stage
+              has three children and a 32 px rhythm; this had four. Now it has three, and the rule
+              sits 30 px under the band where the handoff draws it.
+
+              The jump the slot was avoiding barely exists: GPS warms up DURING the 3·2·1, so a
+              lock is usually there before this screen is, and a denied/unavailable phone shows the
+              line for the whole run without ever moving. */}
+          {gpsNote ? <Text style={styles.gpsStatus}>{gpsNote}</Text> : null}
 
           {/* one readable row: kilometre · heart · burn */}
           <View style={styles.liveRow}>
             <LiveStat value={kmDone} label={t('cardio.km')} />
-            <LiveStat value={hr != null ? Math.round(hr) : '—'} label={t('cardio.hrShort')} icon="heart" />
+            {/* ════ NO INSTRUMENT, NO READOUT (founder C.19) ════
+                It always drew, showing "—" to every athlete without an Apple Watch — a permanent
+                empty seat for a measurement their phone cannot take. It is gone for them now. */}
+            {showsHeartRate(hr, props.watchPaired) ? (
+              <LiveStat value={hr != null ? Math.round(hr) : '—'} label={t('cardio.hrShort')} icon="heart" />
+            ) : null}
             <LiveStat value={Math.round(calories)} label={t('cardio.kcal')} icon="flame" />
           </View>
         </View>
@@ -492,7 +543,10 @@ export function CardioComplete(props: {
           <View style={styles.doneRow}>
             <DoneStat value={fmtClock(elapsedSec)} label={t('cardio.timeShort')} />
             <DoneStat value={Math.round(props.calories)} label={t('cardio.kcal')} icon="flame" />
-            <DoneStat value={avgHr != null ? Math.round(avgHr) : '—'} label={t('cardio.avgHrShort')} icon="heart" />
+            {/* Same law as the live row, asked of the right fact: the LIVE stage asks whether an
+                instrument exists, a SAVED run asks whether a measurement was taken. A run with no
+                average heart rate is not a run with a blank one. */}
+            {avgHr != null ? <DoneStat value={Math.round(avgHr)} label={t('cardio.avgHrShort')} icon="heart" /> : null}
           </View>
         </View>
 
@@ -595,18 +649,20 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
 
-  band: { width: '100%', maxWidth: 310, height: 64, marginTop: 4 },
-  bandLabels: { position: 'absolute', left: 0, right: 0, top: -2, flexDirection: 'row', justifyContent: 'space-between' },
-  bandLine: { position: 'absolute', left: 0, right: 0, top: 30, height: 1, backgroundColor: LINE },
-  bandCapL: { position: 'absolute', left: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
-  bandCapR: { position: 'absolute', right: 0, top: 22, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
-  bandFill: { position: 'absolute', left: 0, top: 29, height: 3, borderRadius: 2, backgroundColor: signal[0] },
-  bandDot: { position: 'absolute', top: 24, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetres: { position: 'absolute', top: 44, marginLeft: -36, flexDirection: 'row', alignItems: 'baseline', width: 88, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  // ── the 1,000 m band, at the canonical handoff's own offsets (C.19: "not what the HTML draws")
+  //    The labels belong ABOVE the box (top:-16), not tucked inside it — having them inside is what
+  //    pushed every internal down ~15 px and left the metres readout hanging off the bottom edge.
+  band: { width: '100%', maxWidth: 310, height: 64, marginTop: 10 },
+  bandLabels: { position: 'absolute', left: 0, right: 0, top: -16, flexDirection: 'row', justifyContent: 'space-between' },
+  bandLine: { position: 'absolute', left: 0, right: 0, top: 14.5, height: 1, backgroundColor: LINE },
+  bandCapL: { position: 'absolute', left: 0, top: 6, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
+  bandCapR: { position: 'absolute', right: 0, top: 6, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
+  bandFill: { position: 'absolute', left: 0, top: 13.5, height: 3, borderRadius: 2, backgroundColor: signal[0] },
+  bandDot: { position: 'absolute', top: 8, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  bandMetres: { position: 'absolute', top: 34, marginLeft: -36, flexDirection: 'row', alignItems: 'baseline', width: 88, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
   bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 25, color: signal[0], textAlign: 'left' },
   bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 25, color: signal[0], textAlign: 'left' },
 
-  gpsSlot: { height: 20, justifyContent: 'center' },
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
 
   liveRow: { flexDirection: 'row', width: '100%', maxWidth: 340, justifyContent: 'space-evenly', borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 26 },

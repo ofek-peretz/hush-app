@@ -1003,6 +1003,7 @@ export const GALLERY: GalleryEntry[] = [
         calories={318}
         splits={runSplits}
         gps="ready"
+        watchPaired
         paused={false}
         confirmEnd={false}
         kmMoment={null}
@@ -1029,6 +1030,7 @@ export const GALLERY: GalleryEntry[] = [
         calories={318}
         splits={runSplits}
         gps="ready"
+        watchPaired
         paused
         confirmEnd={false}
         kmMoment={null}
@@ -1049,8 +1051,33 @@ export const GALLERY: GalleryEntry[] = [
         calories={318}
         splits={runSplits}
         gps="ready"
+        watchPaired
         paused
         confirmEnd
+        kmMoment={null}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  // C.19's own case. 3.4 mounts a PAIRED athlete, so the heart draws — and the screen he was
+  // looking at (no watch, an em-dash sitting in a seat labelled דופק on every run she will ever
+  // take) had no entry at all.
+  { id: '3.4g', label: 'Cardio — live, no watch', status: 'live', note: 'no heart readout at all — C.19', render: () => (
+    <InApp>
+      <CardioLiveView
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.62}
+        hr={null}
+        calories={318}
+        splits={runSplits}
+        gps="ready"
+        watchPaired={false}
+        paused={false}
+        confirmEnd={false}
         kmMoment={null}
         onPause={noop}
         onResume={noop}
