@@ -1,7 +1,7 @@
 # FOUNDER QA — BUILD 36 (2026-07-29)
 
 > ## ▶ WHERE TO PICK THIS UP
-> **Branch `feat/engine-progression-overhaul`, last commit `9f93cf4`, pushed. Tree clean.**
+> **Branch `feat/engine-progression-overhaul`, last commit `524d31d`, pushed. Tree clean.**
 >
 > **13 items closed** — A.7 · A.10 · A.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 ·
 > C.14, plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed).
