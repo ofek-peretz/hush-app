@@ -33,7 +33,7 @@ import { inWorkoutLadder } from '@/domain/replacement';
 import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
-import { loadSetup, type LoadSetup } from '@/domain/loadPresentation';
+import { heroFontSize, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import { restWithSample } from '@/domain/restPrescription';
@@ -1109,16 +1109,31 @@ function ActiveSet({
                   <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
                 </>
               ) : (
-                <View style={styles.heroRow}>
-                  <Text style={styles.hero} accessibilityLabel={`${heroValue} ${unitLabel(units)}`}>{heroValue}</Text>
-                  <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+                <>
+                  <View style={styles.heroRow}>
+                    {/* The figure takes the size it can HAVE, not a size it was promised — see
+                        `heroFontSize`. 5 to 99.5 kg is untouched at the designed 118. */}
+                    <Text
+                      style={[styles.hero, { fontSize: heroFontSize(String(heroValue)) }]}
+                      accessibilityLabel={`${heroValue} ${unitLabel(units)}`}
+                    >
+                      {heroValue}
+                    </Text>
+                    <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+                  </View>
+                  {/* THE ANNEX SITS UNDER THE FIGURE, NOT BESIDE IT (founder, build 36 — C.9).
+                      Inline, it was pushed off the screen by every load that was not a two-digit
+                      whole number: "8.25 kg a sid". Under the figure it always fits, it reads the
+                      same at 7.5 kg and at 137.5, and the hero keeps its full designed size instead
+                      of shrinking to make room for a secondary fact — which serves "the one thing
+                      standing fully in the light" better than the inline row ever did. */}
                   {annex ? (
                     <Text style={styles.heroAnnex}>
                       <Text style={styles.heroAnnexValue}>{annex.value}</Text>
                       {` ${annex.suffix}`}
                     </Text>
                   ) : null}
-                </View>
+                </>
               )}
               {/* THE EDIT DOOR (mock 2.2, lines 388–391): a dashed pill under the hero — a pencil
                   and a quiet caption that name the number's one hidden move. The pencil rides
@@ -2071,10 +2086,11 @@ const styles = StyleSheet.create({
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   loadBtnPressed: { opacity: 0.55 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  // The equipment-native figure inline beside the hero (mock 2.2): "7 kg a side". The number is a
-  // measurement (mono, cream); the "a side / per hand" suffix is a word (sans, quiet). Baseline-set
-  // to sit with the unit chip.
-  heroAnnex: { fontFamily: font.sans, fontSize: 19, color: stage.ink1, marginStart: 10, marginBottom: 16, textAlign: 'left' },
+  // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,
+  // cream); the "a side / per hand" suffix is a word (sans, quiet). It rode inline beside the hero
+  // until build 36, where every load past two whole digits pushed it off the screen — see the note
+  // at the markup, and `heroFontSize` for the measurements.
+  heroAnnex: { fontFamily: font.sans, fontSize: 19, color: stage.ink1, marginTop: 6, textAlign: 'center' },
   // A figure inside the hero's annex row, which centres its children — declared so the number
   // never lands on the physical left in Hebrew.
   heroAnnexValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 21, color: stage.ink0, textAlign: 'center' },

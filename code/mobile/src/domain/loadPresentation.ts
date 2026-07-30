@@ -99,3 +99,40 @@ export function loadSetup(exerciseId: string | null | undefined, displayValue: n
       return { style, headline: displayValue, fixedBar: displayValue };
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+ * HOW BIG THE HERO CAN BE (founder, build 36 — C.9)
+ *
+ * The lit figure on the set stage was a fixed 118px, and the stage gives it 333pt of width on a
+ * 393pt phone. Measured in the app's own IBM Plex Mono at that size and tracking:
+ *
+ *     "37" → 130pt   ·   "100" / "7.5" → 196pt   ·   "36.5" → 261pt   ·   "102.5" → 326pt
+ *
+ * So the figure alone fits, but the `kg` chip (≈45pt) beside it does not once the figure reaches
+ * three glyphs — and the per-side annex ("8.25 kg a side", ≈120pt) put every load except a
+ * two-digit whole number past the edge. The founder photographed "36.5" with its last digit on the
+ * screen edge and "8.25 kg a sid" cut off. It was never a decimal bug: **100 kg overflowed too.**
+ *
+ * `tabular-nums` is why a decimal costs so much — the point occupies a full digit cell, which is
+ * exactly why "7.5" measures the same as "100".
+ *
+ * Pure and measured here rather than left to `adjustsFontSizeToFit`, which only shrinks against a
+ * BOUNDED width — and the hero's row is content-sized, so it would have done nothing at all.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The stage's lit figure at its full, designed size (v7 2.2). */
+export const HERO_FONT_SIZE = 118;
+
+/**
+ * The size the lit figure may take for `figure`, so it and its unit always sit inside the stage.
+ * Steps rather than a continuous scale: a figure that resized by a few px per rung would breathe
+ * differently every session, and the athlete would read the SIZE as meaning something. Two, three
+ * and four glyphs keep the full 118 — which is every load from 5 to 99.5 kg, and the reason the
+ * common case is untouched. Only five glyphs (102.5, 137.5) step down, and only as far as they must.
+ */
+export function heroFontSize(figure: string): number {
+  const glyphs = figure.length; // tabular-nums: '.' occupies a digit cell, so it counts as one
+  if (glyphs <= 4) return HERO_FONT_SIZE;
+  if (glyphs === 5) return 96;
+  return 80; // 1000+ / 4 decimals — not reachable today, but never clipped either
+}

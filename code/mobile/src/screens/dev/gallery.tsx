@@ -765,6 +765,15 @@ export const GALLERY: GalleryEntry[] = [
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
   { id: '2.1e', label: "When the day won't fit", status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
   { id: '2.2', label: 'The set', status: 'live', render: () => mount(SessionFlow) },
+  /* THE CASE THAT WAS INVISIBLE. Every fixture here held a two-digit whole load, so nobody could
+     see that a decimal — or plain 100 kg — pushed the figure and its per-side annex off the screen
+     (founder, build 36 · C.9). A widest-load entry is now standing furniture: 137.5 on a barbell is
+     the widest figure the engine can prescribe together with the widest annex it can carry. */
+  { id: '2.2d', label: 'The set — the widest load', status: 'live', note: 'a decimal load + a decimal per-side annex: the C.9 overflow', render: () =>
+    mount(SessionFlow, undefined, {
+      ...(sessionFixture as unknown as Record<string, unknown>),
+      currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 137.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+    } as unknown as React.ContextType<typeof SessionContext>) },
   { id: '2.2b', label: 'Edit set', status: 'live', note: 'tap the weight on 2.2', render: () => mount(SessionFlow) },
   { id: '2.2c', label: 'Form', status: 'live', note: 'the clip itself needs a device build; the cues and chrome are real', render: () => (
     <InApp>
