@@ -797,6 +797,16 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
+  /* THE BEAT THAT NOBODY COULD SEE. 2.3 above mounts `Logged` WITH a correction, so only the
+     correction form was ever on this page — the plain "Set recorded" form had no entry at all, and
+     survived a whole rebuild unlooked-at until the founder met it on a device (C.13). It no longer
+     runs after an ordinary set; it is still what the phone shows for a set logged on the WRIST,
+     which is the one place the athlete pressed nothing on this device. Standing furniture now. */
+  { id: '2.3c', label: 'The wrist’s set, read back', status: 'live', note: 'the plain capture beat — only the watch raises it now', render: () => (
+    <InApp>
+      <Logged units="kg" confirm={{ weight: 14, reps: 8, n: 2, m: 4 }} />
+    </InApp>
+  ) },
   { id: '2.3b', label: 'Last set — exercise done', status: 'live', note: 'press Complete set', render: () => mount(SessionFlow, undefined, lastSetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },

@@ -85,6 +85,29 @@ export function SessionFlow({ navigation, route }: Props) {
   // logged set moved the next load, it turns the "Set logged" beat into the correction reveal for
   // an extra beat before rest. Null on an ordinary set.
   const [beatCorrection, setBeatCorrection] = useState<LiveCorrection | null>(null);
+
+  /**
+   * ════ AN ORDINARY SET GETS NO CEREMONY (founder, build 36 — C.13) ════
+   *
+   * The capture beat used to hold the stage for every logged set to say "✓ SET 2 OF 4 LOGGED /
+   * 14 kg × 8 / Set recorded." — a leftover from the previous app. It restated the set she had just
+   * performed and then handed over to rest, which is where she was going anyway. *"Just remove this
+   * screen, because the one that comes after it is the one that matters — whether she landed inside
+   * or outside her band."*
+   *
+   * So the beat now speaks only when it HAS something:
+   *   · a CORRECTION — the set moved the next load. The most distinctive thing the product does.
+   *   · the LAST SET of a lift — finishing a lift is a thing that happened; finishing a set is a
+   *     thing that keeps happening.
+   * Anything else goes straight to rest.
+   *
+   * Worth stating plainly, because it is the consequence: a set that lands INSIDE the band produces
+   * no correction (`sessionStore` builds one only when Loop 1 actually moved the load), so nothing
+   * follows it at all. That is the intent — silence is the product agreeing with her.
+   */
+  const beatSpeaks =
+    confirm != null && (beatCorrection != null || (confirm.n >= confirm.m && confirm.m > 1));
+
   const [editing, setEditing] = useState(false);
   /**
    * THE SET THE WRIST LOGGED IS LOGGED ON THE PHONE TOO (founder 2026-07-13: "I complete a set on
@@ -360,7 +383,13 @@ export function SessionFlow({ navigation, route }: Props) {
       // ALWAYS (the non-correction path): the stage must return to the athlete, saved or not.
       confirmRunning.current = false;
       setConfirm(null);
-    }, CONFIRM_DWELL_MS);
+      /*
+       * The dwell exists to let a beat LAND. With nothing to show (C.13) there is nothing to land,
+       * so an ordinary set does not wait 1.4 s to reach its rest — it just reaches it. The last set
+       * of a lift still holds, because `ExerciseDone` is drawn immediately; a CORRECTION is not
+       * known until `completeSet` resolves, and it opens its own hold when it arrives.
+       */
+    }, confirm.n >= confirm.m && confirm.m > 1 ? CONFIRM_DWELL_MS : 0);
     return () => {
       clearTimeout(id);
       if (holdId) clearTimeout(holdId);
@@ -509,8 +538,8 @@ export function SessionFlow({ navigation, route }: Props) {
         )}
         {paceBeat ? (
           <RestLearned took={paceBeat.took} was={paceBeat.was} now={paceBeat.now} nextSet={session.nextSetLabel?.n ?? 1} />
-        ) : confirm ? (
-          <Logged units={units} confirm={confirm} correction={beatCorrection} />
+        ) : beatSpeaks ? (
+          <Logged units={units} confirm={confirm!} correction={beatCorrection} />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
           <ActiveSet
             units={units}
