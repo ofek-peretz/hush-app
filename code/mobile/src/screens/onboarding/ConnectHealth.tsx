@@ -145,7 +145,11 @@ export function ConnectHealth({ navigation, route }: Props) {
         </View>
         <View style={styles.info}>
           <Text style={styles.title}>{t('ob.healthCardTitle')}</Text>
-          {/* The fine print is a mono legend — what flows, and in caps that it never decides. */}
+          {/* ════ THE CARD SAYS WHETHER IT IS ON. THE ROWS SAY WHAT IT GIVES (founder B.2) ════
+              This line used to be "HR · KCAL · KM — DISPLAY ONLY": three measurements crammed into
+              one mono legend as abbreviations, which is the smallest, least legible way to state
+              the only reason to turn the switch on. It is the card's STATE now, and the three
+              measurements have a row each under it. */}
           <Legend size={12.5} track={0} weight="regular" tone="onStage" style={styles.sub}>
             {connected ? t('ob.healthCardOn') : t('ob.healthCardSub')}
           </Legend>
@@ -158,6 +162,23 @@ export function ConnectHealth({ navigation, route }: Props) {
           <Switch size="lg" checked={connected} onChange={() => void toggle()} accessibilityLabel={t('ob.healthCardTitle')} />
         </View>
       </Pressable>
+
+      {/* ════ WHAT SHE ACTUALLY GETS, ONE LINE EACH (founder B.2) ════
+          "In BOTH languages this screen should convey that she gets the most accurate measurements
+          for her training, shown handsomely: one line calories · one line heart rate · one line
+          kilometre (cardio)."
+
+          These are not a marketing list — they are exactly the three HealthKit types the app asks
+          read access to (`healthKitGate`: HeartRate · ActiveEnergyBurned · DistanceWalkingRunning)
+          and nothing else. Each row names the measurement and what having it makes true, which is
+          the promise; the helper line under them still carries the limit, because the ratified law
+          is that Health NEVER decides a weight. Both halves belong on this screen: the reason to
+          say yes, and the reason it is safe to. */}
+      <View style={styles.reads}>
+        <HealthRead icon="heart" name={t('ob.healthHr')} sub={t('ob.healthHrSub')} />
+        <HealthRead icon="flame" name={t('ob.healthKcal')} sub={t('ob.healthKcalSub')} />
+        <HealthRead icon="footprints" name={t('ob.healthKm')} sub={t('ob.healthKmSub')} last />
+      </View>
 
       {/* v7 helper line — the law in words, under the card, sans. */}
       <Text style={styles.helper}>{t('ob.healthHelper')}</Text>
@@ -181,6 +202,22 @@ export function ConnectHealth({ navigation, route }: Props) {
   );
 }
 
+/**
+ * One measurement Health hands over: a moss glyph, its name, and what having it makes true.
+ * Ruled between rows so the three read as a list of facts rather than a paragraph in columns.
+ */
+function HealthRead({ icon, name, sub, last }: { icon: 'heart' | 'flame' | 'footprints'; name: string; sub: string; last?: boolean }) {
+  return (
+    <View style={[styles.read, !last && styles.readRuled]}>
+      <Icon name={icon} size={17} color={color.accent} strokeWidth={1.8} />
+      <View style={styles.readText}>
+        <Text style={styles.readName}>{name}</Text>
+        <Text style={styles.readSub}>{sub}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
@@ -199,8 +236,15 @@ const styles = StyleSheet.create({
   info: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.sansSemibold, fontSize: 16, color: color.textPrimary, textAlign: 'left' },
   sub: { color: color.textSecondary, marginTop: 3 },
-  // The law in words, under the card.
-  helper: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, marginTop: 18, textAlign: 'left' },
+  // The three measurements — a block of rows, not a paragraph.
+  reads: { marginTop: 18 },
+  read: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 11 },
+  readRuled: { borderBottomWidth: 1, borderBottomColor: color.border },
+  readText: { flex: 1, minWidth: 0, gap: 1 },
+  readName: { fontFamily: font.sansSemibold, fontSize: 15, color: color.textPrimary, textAlign: 'left' },
+  readSub: { fontFamily: font.sans, fontSize: 13, color: color.textMuted, textAlign: 'left' },
+  // The law in words, under the three rows.
+  helper: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, marginTop: 16, textAlign: 'left' },
   // The wrist row — ruled off the helper above it, so it reads as a separate FACT rather than a
   // second sentence about Health. A hairline is the lightest thing that can say "and also".
   wrist: {

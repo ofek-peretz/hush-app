@@ -264,7 +264,14 @@ export function ProfileSheet({ navigation }: Props) {
         />
         <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
 
-        <Legend style={styles.sectionLegend}>{t('profile.account')}</Legend>
+        {/* ════ "חשבון" WAS READING AS THE LAST WORD OF THE HEALTH NOTE (founder B.9) ════
+            Every other section legend on this page follows a ROW — a bordered control with a
+            visible bottom edge — so 20 px of air is plenty to separate them. This one follows a
+            free-standing PARAGRAPH, which has no edge of its own, and at the same 20 px the word
+            "Account" simply became the paragraph's final line. The section that follows a
+            paragraph needs a rule, not more air: an edge is what the rows were giving the others
+            for free. */}
+        <Legend style={[styles.sectionLegend, styles.sectionAfterNote]}>{t('profile.account')}</Legend>
         {/* ONE edit entry (founder 2026-07-10): body data + training frequency. The old second
             "Experience" row opened the same screen and experience is now derived, not edited. */}
         <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
@@ -273,9 +280,12 @@ export function ProfileSheet({ navigation }: Props) {
             whole programme (register Part 3), and it is the only place the per-muscle rep band is
             ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
             same screen twice — this opens something else entirely. */}
-        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} />
-        {/* §11.4 — the ONE door to sharing a plan. Structure only: her weights never travel. */}
-        <Row label={t('planShare.legend')} sub={t('planShare.structureTail')} onPress={() => navigation.navigate('SharePlan')} last />
+        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} last />
+        {/* ════ PLAN-SHARING LEFT THIS TAB (founder A.14 / B.9) ════
+            "That icon is where everything person-to-person belongs." The two-figure door on Today
+            opens the same screen and is the door he chose; a second entrance buried in a settings
+            list is the same act offered twice, and it is the one the athlete would never find.
+            The route is untouched — only this row is gone. */}
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
@@ -388,6 +398,8 @@ const styles = StyleSheet.create({
   identitySub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   sectionLegend: { marginTop: 20, marginBottom: 2 },
+  // B.9 — a legend that follows a paragraph gets the edge the rows give the others.
+  sectionAfterNote: { marginTop: 22, paddingTop: 20, borderTopWidth: 1, borderTopColor: color.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: color.border },
   rowPressed: { opacity: 0.6 },

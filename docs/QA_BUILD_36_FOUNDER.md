@@ -3,9 +3,9 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `d3635cc`, pushed. Tree clean.**
 >
-> **22 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.6 · B.7 · B.8 · C.2 ·
-> C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 · C.20, plus the P0 programme
-> audit (delivered as an artifact, defect NOT yet fixed).
+> **26 items closed** — A.5 · A.7 · A.10 · A.11 · A.12 · A.15 · A.16 · B.1 · B.2 · B.6 · B.7 ·
+> B.8 · B.9 · B.11 · C.2 · C.3 · C.4 · C.6 · C.7 · C.8 · C.9 · C.12 · C.13 · C.14 · C.19 · C.20,
+> plus the P0 programme audit (delivered as an artifact, defect NOT yet fixed). **B.5 is half done.**
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -73,7 +73,37 @@
 > redesigning its composition would pre-empt the decision you reserved. Say the word and it gets the
 > same treatment.
 >
-> **NEXT:** the Hebrew batch — B.1–B.3, B.5, B.9, B.11.
+> **THE HEBREW BATCH IS CLOSED BUT FOR ONE QUESTION.** *B.1* — unvowelled, "השאר" reads as the
+> imperative "stay" before it reads as the noun "the rest"; "כל השאר" can only be the noun. *B.2* —
+> `ob.healthHelper` addressed a man twice and had no feminine form; and the three measurements are
+> three ROWS now, not "HR · KCAL · KM" crammed into one mono legend. They are exactly the three
+> HealthKit types the app asks read access to — nothing invented. *B.9* — `memberSince_female`; the
+> "חשבון" legend gets a RULE (every other section follows a bordered row, which supplies an edge for
+> free — this one follows a bare paragraph, so at the same 20 px the word became the paragraph's
+> last line); the plan-share row is gone from YOU; and "טווחי החזרות נוסעים" is now "כלולים".
+> *B.11* — his exact sentence. *B.5's edge case* — **the act is pinned below the scroller now**, so
+> Begin is on the glass whether the day holds two lifts or eight.
+>
+> ⚠️ `gender.test.ts` REFUSED my first draft of B.9's line: it scans for feminine markers as
+> SUBSTRINGS, and "שלחי" lives inside "נשלחים". The linter was wrong about the word and right about
+> the class, so the line was rephrased rather than the law loosened.
+>
+> ❓**B.5's REAL QUESTION IS STILL YOURS** — you asked for my opinion, so here it is, with the
+> constraint I found:
+> **Translate the DAY names; keep the EXERCISE names in English.** A day name ("Upper A") is a label
+> we invented, so it is ours to say in Hebrew. An exercise name is the trade's proper noun — it is
+> what the gym, the plate chart, every other app and every video calls it, and a Hebrew rendering of
+> "Barbell Bench Press" is a translation nobody uses. That is also already the ratified rule
+> (2026-06-30: exercise names English + BiDi isolate, muscle groups Hebrew), and it is why the
+> screen reads broken today: the day name is the ONE English thing on it that did not have to be.
+> **The constraint:** Today sets that name as a 54 px serif headline on ONE line. "פלג גוף עליון A"
+> will not fit and will ellipsise. So it is a choice between a shorter Hebrew name and a smaller
+> headline. My recommendation is the shorter name — **"עליון A" / "תחתון A" / "פול באדי"** — because
+> the headline size is a v7 decision and the name is not. Say which and it is an afternoon: the
+> stored name stays the stable structure-derived key, and only the DISPLAY translates.
+>
+> **NEXT after that:** A.1 · A.4 · A.8 · A.13 · C.1 · C.5 · C.15 · C.18 · P0b.1, and the P0
+> programme defect.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -145,17 +175,17 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 | # | Item | Status |
 |---|---|---|
-| B.1 | First screen: "רק להתאמן. השאר עליי." does not sound good in Hebrew. | open |
-| B.2 | Connect-health: a sentence under the Apple Health toggle is in **masculine**. And in BOTH languages this screen should convey that she gets the most accurate measurements for her training, shown handsomely: one line calories · one line heart rate · one line kilometre (cardio). | open |
+| B.1 | First screen: "רק להתאמן. השאר עליי." does not sound good in Hebrew. | **done** |
+| B.2 | Connect-health: a sentence under the Apple Health toggle is in **masculine**. And in BOTH languages this screen should convey that she gets the most accurate measurements for her training, shown handsomely: one line calories · one line heart rate · one line kilometre (cardio). | **done** |
 | B.3 | ABOUT YOU: the bottom line should read "אני בונה את תוכנית האימון שלך סביב זה" (**and the English equivalent**). And for a woman it must be **"עלייך", not "עליך"**. | open |
 | B.4 | The 14-free-workouts screen at the end of onboarding **looks superb**, but the smallest text is still too small. | open |
-| B.5 | Today: the **day name is in English**. He proposes "פלג גוף עליון" / "פלג גוף תחתון" / "פול באדי" instead of Upper A — and the same question for exercise names. **He asks for my opinion.** Right now Hebrew and English are mixed on one screen and it reads broken. **Edge case (both languages):** with many exercises the Begin button — and the free-workouts line — fall below the fold; it scrolls, but the athlete may simply not find Start. | open |
+| B.5 | Today: the **day name is in English**. He proposes "פלג גוף עליון" / "פלג גוף תחתון" / "פול באדי" instead of Upper A — and the same question for exercise names. **He asks for my opinion.** Right now Hebrew and English are mixed on one screen and it reads broken. **Edge case (both languages):** with many exercises the Begin button — and the free-workouts line — fall below the fold; it scrolls, but the athlete may simply not find Start. | **half done — the scroll fix is in; the NAMING is a question for him (below)** |
 | B.6 | Cardio START reads "ריצה • מתחיל" — wrong order, and wrong gender. Swap the words and make it **"מתחילה"** for a woman. | **done** |
 | B.7 | Cardio live screen: the type is **tiny** — "0 מטר", the kilometre label, and the word "קרדיו" at the top. Enlarge all of it; there is plenty of room. | **done** |
 | B.8 | Finish-run screen: **"סיימי ושמרי"**, not "סיים ושמור" — including inside the confirmation that follows. | **done** |
-| B.9 | YOU screen: **"חברה מאז"**, not "חבר מאז". Separate the word "חשבון" from the Apple Health text — they read as one subject. Plan-sharing moves to the two-people icon (see A.14). And **"טווחי החזרות נוסעים" is not Hebrew** — it makes no sense. | open |
+| B.9 | YOU screen: **"חברה מאז"**, not "חבר מאז". Separate the word "חשבון" from the Apple Health text — they read as one subject. Plan-sharing moves to the two-people icon (see A.14). And **"טווחי החזרות נוסעים" is not Hebrew** — it makes no sense. | **done** |
 | B.10 | Paywall: **the athlete's name must sit in the top lines** — "ליאור,⏎היה תענוג להתאמן איתך". **"חסכי"**, not "חסוך". In Israel the price must be in **shekels** — verify it really is. **And:** someone who reaches this screen has spent all 14 workouts and knows exactly what we are worth — he wants the three explanatory lines replaced with something better, and asks what I think. | open |
-| B.11 | Plan-share screen: **"שתפי את תוכנית האימון שלך"**. | open |
+| B.11 | Plan-share screen: **"שתפי את תוכנית האימון שלך"**. | **done** |
 
 ---
 

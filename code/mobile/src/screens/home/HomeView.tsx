@@ -495,42 +495,55 @@ export function HomeView(props: HomeViewProps) {
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
-              <View style={styles.cta}>
-                {props.resumable ? (
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    block
-                    label={t('home.continueWorkout', { name: bidi(props.resumable.workoutName) })}
-                    onPress={props.onResume}
-                    leading={<Icon name="play" size={16} color={color.onAccent} />}
-                  />
-                ) : props.dayDone ? (
-                  <View style={styles.doneRow}>
-                    <Icon name="check" size={16} color={color.up} strokeWidth={2.4} />
-                    <Text style={styles.doneText}>{t('program.doneThisWeek')}</Text>
-                  </View>
-                ) : props.dayName ? (
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    block
-                    label={t('home.begin', { name: bidi(props.dayName) })}
-                    onPress={props.onStart}
-                    leading={<Icon name="play" size={16} color={color.onAccent} />}
-                  />
-                ) : null}
-
-                {/* the trial — one quiet mono line under the act, gone when the trial is */}
-                {props.trialLeft != null && props.trialLeft > 0 && !props.dayDone ? (
-                  <Legend size={10.5} track={0.1} align="center" style={styles.trialLine}>
-                    {t('home.trialLeft', { count: props.trialLeft })}
-                  </Legend>
-                ) : null}
-              </View>
             </View>
           )}
         </ScrollView>
+        {/* ════ THE ONE ACT IS NEVER BELOW THE FOLD (founder B.5) ════
+            "With many exercises the Begin button — and the free-workouts line — fall below the
+            fold; it scrolls, but the athlete may simply not find Start."
+
+            It used to live INSIDE the scroller, pushed to the bottom with `marginTop: 'auto'` —
+            which put it at the foot of the CONTENT, not the foot of the SCREEN. On a four-lift day
+            those are the same place, so it looked right; on an eight-lift day the only thing the
+            screen exists to offer was a scroll away, under a list she had already read. Pinned
+            here it is identical on a short page and present on every long one. Nothing else moved:
+            it keeps its own 26 px gutter, which is what the negative margin inside the 30 px
+            column was reproducing. Recovery has no act, so it draws nothing at all. */}
+        {props.resting ? null : (
+          <View style={styles.cta}>
+              {props.resumable ? (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  block
+                  label={t('home.continueWorkout', { name: bidi(props.resumable.workoutName) })}
+                  onPress={props.onResume}
+                  leading={<Icon name="play" size={16} color={color.onAccent} />}
+                />
+              ) : props.dayDone ? (
+                <View style={styles.doneRow}>
+                  <Icon name="check" size={16} color={color.up} strokeWidth={2.4} />
+                  <Text style={styles.doneText}>{t('program.doneThisWeek')}</Text>
+                </View>
+              ) : props.dayName ? (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  block
+                  label={t('home.begin', { name: bidi(props.dayName) })}
+                  onPress={props.onStart}
+                  leading={<Icon name="play" size={16} color={color.onAccent} />}
+                />
+              ) : null}
+
+              {/* the trial — one quiet mono line under the act, gone when the trial is */}
+              {props.trialLeft != null && props.trialLeft > 0 && !props.dayDone ? (
+                <Legend size={10.5} track={0.1} align="center" style={styles.trialLine}>
+                  {t('home.trialLeft', { count: props.trialLeft })}
+                </Legend>
+              ) : null}
+          </View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -656,7 +669,7 @@ const styles = StyleSheet.create({
   // flexGrow so the ACT can sit at the foot of a short page (the handoff's `margin-top:auto`)
   // while a long one still scrolls.
   scroll: { flexGrow: 1, paddingHorizontal: 30, paddingTop: 22, paddingBottom: 8 },
-  block: { flexGrow: 1, gap: 13 },
+  block: { gap: 13 },
   pressedDim: { opacity: 0.62 },
 
   // ── the title row ──
@@ -755,7 +768,9 @@ const styles = StyleSheet.create({
   error: { marginTop: 4 },
   // The act drops to the 26px gutter the whole product's primary buttons sit at, and negative
   // margin walks it back out of the page's 30px column so the two agree.
-  cta: { marginTop: 'auto', marginHorizontal: -4, paddingTop: 24, gap: 12 },
+  // Pinned under the scroller (B.5). The 26 px gutter every primary button in the product
+  // sits at — reached directly now rather than by walking back out of the page's 30.
+  cta: { paddingHorizontal: 26, paddingTop: 18, paddingBottom: 6, gap: 12 },
   trialLine: { marginTop: 4 },
 
   // ── recovery (v7 3.5 "THE WEEK IS DONE") ──
