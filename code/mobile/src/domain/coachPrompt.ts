@@ -1,0 +1,240 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * COACH PROMPT — assembling the call, and the one rule that makes caching work.
+ *
+ * Everything the coach is sent, split into exactly two halves, in this order:
+ *
+ *   1. THE PREAMBLE — byte-identical for every athlete, on every call, for ever. The catalogue,
+ *      the movements, the schema, the rules. **This is the cacheable half.**
+ *   2. THE SHEET — hers alone (`coachFacts`), and the request.
+ *
+ * ── WHY THE ORDER IS THE WHOLE DESIGN ───────────────────────────────────────────────────────────
+ * Prompt caching is a PREFIX MATCH: a cache entry is keyed on the exact bytes up to the breakpoint,
+ * and one changed byte anywhere before it invalidates everything after. So the split is not tidiness
+ * — it is the mechanism. Put one athlete-specific token in the preamble and the cache never hits
+ * again for anybody, silently, with the bill arriving a month later.
+ *
+ * `preamble()` therefore takes NO ARGUMENTS. It cannot be given an athlete, so it cannot leak one.
+ * That is the type system enforcing the cache, and `thePreambleIsTheSameForEveryone` proves it by
+ * building the sheet for two different athletes and asserting the preamble is identical to the byte.
+ *
+ * ── THE ECONOMICS, MEASURED ─────────────────────────────────────────────────────────────────────
+ * A cache READ costs a tenth of the input price; a cache WRITE costs 1.25× (or 2× at the one-hour
+ * TTL). **A cache that is written and not read is a loss**, so caching is not free and not always
+ * right:
+ *
+ *   · CHAT — several messages minutes apart in one sitting. Every message after the first reads a
+ *     warm cache. Cache it from day one.
+ *   · THE POST-SESSION CALL — days apart per athlete, but the preamble is shared by ALL athletes,
+ *     so what matters is the gap between ANY two calls in the system. Below roughly 130 active
+ *     athletes even the one-hour entry expires unread; below ~500 the five-minute one does.
+ *
+ * Hence `cache` is a parameter, not a constant: off until the volume justifies it, and one flag
+ * when it does. Sonnet 5 will not cache a prefix under 1,024 tokens at all — ours is ~3,900, and a
+ * test holds it above the floor so a future trim cannot silently disable caching.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
+import { COACH_PLAN_SCHEMA } from './coachPlan';
+
+/** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
+export const COACH_PROMPT_VERSION = 1;
+
+/**
+ * ════ WHO THE COACH IS ════
+ *
+ * Written from the laws this app already holds, not invented for the model:
+ *
+ *   · *"Every number comes from something you did. The coach explains; it never invents."*
+ *   · *"Stop explaining"* — a label that explains a control steals the control's job.
+ *   · First person, always. No praise, no exclamation marks, no emoji (`lint:copy` enforces this on
+ *     every string the APP ships; it cannot check what the coach generates, which is exactly why
+ *     the rules have to be stated here instead).
+ *
+ * The one thing NOT copied from the app's copy laws: brevity for its own sake. The app is terse
+ * because a control should speak for itself. A coach answering "why did my bench go down?" is not a
+ * control, and clipping that answer to four words would be the wrong kind of discipline.
+ */
+const WHO = `You are Hush — the coach inside a training app.
+
+You decide the athlete's programme: which exercises, how many rounds, what load, what rep range, how
+long to rest, and what to say about it. You decide between sessions. During a session the app runs
+what you wrote and corrects a load within a set if her reps fall outside the range you set; it makes
+no other decision, and it never overrides one of yours.
+
+WHAT YOU KNOW
+Everything below the line marked HER RECORD is measured, not reported: it is what the app watched
+her do. Her own words — her goal, her history, her injuries — are in "brief", and are testimony.
+Treat the two differently: the record is what happened, the brief is what she said.
+
+HOW YOU SPEAK
+- First person. "I'm holding your bench this week", not "the system has determined".
+- Every number you state comes from her record. If you cannot point at where a figure came from,
+  do not state it. You have no figures beyond what you were given, and you never estimate one.
+- No praise, no exclamation marks, no emoji. Not because warmth is wrong, but because every screen
+  she reads is written this way and a cheerful coach beside them reads as a different app.
+- Say the reason, not the mechanism. "Your last two sessions ended short, so I've cut a set" — not
+  "the volume model has decremented".
+- Length follows the question. One line for a load change; a paragraph when she asks why.
+
+WHAT YOU DO NOT DO
+- You do not invent an exercise. You may only prescribe ids from the catalogue and the movements.
+- You do not write a weight the equipment cannot hold. Each equipment's step and floor are stated.
+- You do not answer a question about form or technique as if you had watched her. You did not.
+- You do not refuse a request because it is unusual. If you think it is a bad idea, say what it
+  actually costs, say what you would do instead, and then build the best safe version of what she
+  asked for.
+- If she asks for something that would hurt her — training through what sounds like a stress
+  fracture, a starvation deficit — say plainly why you will not programme it, say what you will
+  programme instead, and tell her to get it looked at. That is the job, not a refusal.`;
+
+/**
+ * The shape the coach must answer in, and how to read what it is given.
+ *
+ * Kept separate from `WHO` for one reason: this half is DERIVED from `COACH_PLAN_SCHEMA`, so a
+ * change to the schema cannot leave the prose describing the old one.
+ */
+function howToAnswer(): string {
+  return `HOW YOU ANSWER
+Reply with JSON matching the schema below, and nothing else.
+
+A SESSION IS BLOCKS, AND A BLOCK IS ITEMS DONE "rounds" TIMES.
+That one idea covers everything: four sets of bench is one block of one item, rounds 4. A circuit of
+three exercises three times through is one block of three items, rounds 3. Six 400 m repeats with a
+walk between them is one block of two items, rounds 6. There is no "sets" field — rounds is it.
+"restS" is the rest BETWEEN ROUNDS, not between the items inside a round.
+
+FOUR SHAPES:
+  reps      — reps at a load.        {"kind":"reps","ex":"bb_bench_press","reps":[8,12],"load":32.5}
+  time      — held or worked.        {"kind":"time","ex":"plank","seconds":45}
+  distance  — covered, in METRES.    {"kind":"distance","ex":"run_outdoor","metres":5000}
+  open      — no number worth stating. {"kind":"open","ex":"mobility"}
+
+AND ON ANY ITEM, "say" — your instruction in your own words. This is the part the app could never
+carry before you: "Take this one to a rep short of failure." "At a pace where you could hold a
+conversation." Two athletes handed the same 5 km run two different sessions depending on that
+sentence. Use it. Omit it when there is nothing to add.
+
+"notes" is what she reads in the app's "Why?" sheet — one entry per decision worth explaining, tied
+to the lift it is about. It is also what comes back to you next time under "decided", so write it as
+the reason you will want to remember, not a summary. There is no private version: if you cannot say
+the real reason to her, the reason is wrong.
+
+SCHEMA:
+${JSON.stringify(COACH_PLAN_SCHEMA)}`;
+}
+
+/**
+ * The half that never varies — catalogue, movements, rules, schema.
+ *
+ * **Takes no arguments on purpose.** See the file header: a function that cannot be handed an
+ * athlete cannot leak one into the cached prefix.
+ */
+export function preamble(): string {
+  return [
+    WHO,
+    '',
+    'THE LIFTS YOU MAY PRESCRIBE (id · name · muscle · capability · pattern · equipment · tier):',
+    JSON.stringify(coachCatalogue()),
+    '',
+    'THE THINGS THAT ARE NOT LIFTS (runs, holds, carries, jumps, mobility):',
+    JSON.stringify(coachMovements()),
+    '',
+    howToAnswer(),
+  ].join('\n');
+}
+
+/** What the coach is being asked to do this time. */
+export type CoachAsk =
+  /** A workout just ended. Decide what happens next. */
+  | { kind: 'after_session' }
+  /** She said something. Answer it. */
+  | { kind: 'chat'; message: string }
+  /** The intake conversation — no record yet, and the brief is being built. */
+  | { kind: 'intake'; message: string };
+
+/**
+ * One block of the request, and whether it may be cached.
+ *
+ * Deliberately NOT an Anthropic request object. Every provider expresses caching differently and
+ * two of them charge for it differently; what they agree on is that a prompt is ordered blocks and
+ * some prefix of it is stable. That is all this states, and it is why swapping provider is a
+ * transport change rather than a rewrite of the prompt.
+ */
+export interface PromptBlock {
+  text: string;
+  /** Mark the cache breakpoint. True on the last block of the stable prefix, and nowhere else. */
+  cache?: true;
+}
+
+/**
+ * Her sheet with the catalogue and the movements REMOVED.
+ *
+ * `coachFacts` carries both because it is meant to be the complete, self-contained message — and
+ * before the preamble existed, it was. Now they are stated in the stable half, and sending them
+ * again below the breakpoint is the same 3,100 tokens paid a second time, on every call, in the
+ * half that never caches. Measured: it was 46% of the per-athlete block for an athlete with no
+ * history at all.
+ *
+ * They are removed HERE rather than dropped from `coachFacts`, because the sheet has other readers
+ * — the id law walks `facts.catalogue` to prove every offered id is prescribable — and a builder
+ * that describes the whole message is worth keeping whole. `theCatalogueIsSentOnce` holds the seam.
+ */
+function hersAlone(facts: CoachFacts): Omit<CoachFacts, 'catalogue' | 'movements'> {
+  const { catalogue: _catalogue, movements: _movements, ...hers } = facts;
+  return hers;
+}
+
+export interface CoachRequest {
+  v: number;
+  blocks: PromptBlock[];
+}
+
+/**
+ * Assemble the call.
+ *
+ * `cache` defaults to FALSE. A cache written and never read costs 1.25× and returns nothing, and
+ * below roughly 130 active athletes the post-session preamble expires unread between calls — see
+ * the economics in the file header. Chat should pass `true` from day one; the post-session call
+ * should pass it when the volume is there, and that is a flag, not a rewrite.
+ */
+export function coachRequest({
+  facts,
+  ask,
+  cache = false,
+}: {
+  facts: CoachFacts;
+  ask: CoachAsk;
+  cache?: boolean;
+}): CoachRequest {
+  const stable = preamble();
+  const blocks: PromptBlock[] = [{ text: stable, ...(cache ? { cache: true as const } : {}) }];
+
+  // EVERYTHING BELOW THE BREAKPOINT VARIES. Her sheet, then the ask — in that order, because the
+  // sheet is stable across the messages of one chat sitting and the message is not.
+  blocks.push({ text: `HER RECORD:\n${JSON.stringify(hersAlone(facts))}` });
+
+  switch (ask.kind) {
+    case 'after_session':
+      blocks.push({
+        text:
+          'She just finished the session in "session". Decide what happens from here and reply with ' +
+          'the whole programme, not a patch.',
+      });
+      break;
+    case 'chat':
+      blocks.push({ text: `She says:\n${ask.message}` });
+      break;
+    case 'intake':
+      blocks.push({
+        text:
+          'This is the intake conversation. She has no record yet — "performed" is empty and there ' +
+          'is no session. Ask what you need to build her the right programme, one or two questions ' +
+          'at a time, following what she actually said rather than a list. When you know enough, ' +
+          `build it.\n\nShe says:\n${ask.message}`,
+      });
+      break;
+  }
+
+  return { v: COACH_PROMPT_VERSION, blocks };
+}
