@@ -88,7 +88,7 @@ async function buildAthlete(): Promise<Built> {
       const sets: SetLog[] = [];
       const session: Session = {
         id: `s${w}_${day.id}`, programDayId: day.id, programDayName: day.name,
-        startedAt: new Date(t).toISOString(), state: 'completed', earlyFinish: false, sets, trained: true,
+        startedAt: new Date(t).toISOString(), state: 'SAVED', earlyFinish: false, sets, trained: true,
       };
       const history = await db.loadHistory();
       const corrections: Record<string, number> = {};

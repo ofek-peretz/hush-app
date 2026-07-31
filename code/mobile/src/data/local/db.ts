@@ -25,6 +25,7 @@ import type { Entitlement } from '@/domain/entitlement';
 // Type-only for the decision shape; `appendDecisions` is the pure accumulator that owns the cap.
 import { appendDecisions, type CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan } from '@/domain/coachPlan';
+import type { CoachUpdate } from '@/platform/coach/afterSession';
 
 /**
  * How much of the conversation is kept.
@@ -80,6 +81,9 @@ const K = {
   coachLog: 'hush.coach.log',
   /* The programme the coach decided, stored AS THE COACH WROTE IT — see `saveCoachPlan`. */
   coachPlan: 'hush.coach.plan',
+  /* The last post-session attempt and how it went. The app must be able to SAY that an update is
+   * waiting; the one thing worse than it not arriving is not knowing that it did not. */
+  coachUpdate: 'hush.coach.update',
   schemaVersion: 'hush.schema.version',
 
   /* ── ONCE-PER-ATHLETE FLAGS ──────────────────────────────────────────────────────────────────
@@ -325,6 +329,11 @@ export const db = {
    * session into runnable steps without losing anything on the way.
    */
   saveCoachPlan: (p: CoachPlan) => setJSON(K.coachPlan, p),
+
+  /* ── How the last post-session call went ───────────────────────────────────────────────────── */
+
+  loadCoachUpdate: () => getJSON<CoachUpdate>(K.coachUpdate),
+  saveCoachUpdate: (u: CoachUpdate) => setJSON(K.coachUpdate, u),
 
   /* ── The coach's own decisions, coming back ────────────────────────────────────────────────── */
 

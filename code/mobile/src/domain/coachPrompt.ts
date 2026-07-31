@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 2;
+export const COACH_PROMPT_VERSION = 3;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -101,10 +101,16 @@ Reply with JSON matching the schema below, and nothing else.
 "say" IS ALWAYS REQUIRED. It is what she reads — your actual reply to her, in your own voice. Every
 turn has one, whether or not you changed anything.
 
-"sessions" IS OPTIONAL, AND MOST TURNS DO NOT HAVE ONE. Attach it only when this turn decides her
-programme: after a session, or when the intake conversation is finished and you are ready to build.
-Answering a question does not need a programme attached, and re-sending an unchanged one is how she
-ends up thinking something changed. When you do attach it, attach the WHOLE thing, not a patch.
+WHETHER "sessions" IS REQUIRED DEPENDS ON WHAT YOU ARE ASKED, AND THE ASK BELOW SAYS WHICH.
+When it is required, the programme you attach IS what she trains next — attach the whole thing even
+if most of it is unchanged, never a patch, and never nothing. When it is optional, attach it only if
+this turn actually changes her programme; answering a question does not need one, and re-sending an
+unchanged programme is how she ends up thinking something changed.
+
+WHAT YOU MAY NEVER DO IS SAY YOU CHANGED SOMETHING AND NOT ATTACH IT. "I have raised your bench to
+32.5" with no "sessions" is a promise the app cannot keep: she reads that sentence, trains the old
+load, and the app has lied to her on your behalf. If you describe a change, the change is in
+"sessions" in the same reply.
 
 A SESSION IS BLOCKS, AND A BLOCK IS ITEMS DONE "rounds" TIMES.
 That one idea covers everything: four sets of bench is one block of one item, rounds 4. A circuit of
@@ -254,8 +260,11 @@ export function coachRequest({
     case 'after_session':
       blocks.push({
         text:
-          'She just finished the session in "session". Decide what happens from here: say what you ' +
-          'changed and why in "say", and attach the whole programme in "sessions" — not a patch.',
+          'She just finished the session in "session". Decide what happens from here.\n\n' +
+          '"sessions" IS REQUIRED ON THIS TURN. What you attach is what she trains next, so attach ' +
+          'the whole programme even where nothing changed — an unchanged week still has to be sent, ' +
+          'because there is nothing else that says what she does. Say what changed and why in "say", ' +
+          'and put every reason worth remembering in "notes".',
       });
       break;
     case 'chat':

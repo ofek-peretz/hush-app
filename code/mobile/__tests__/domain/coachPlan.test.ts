@@ -35,7 +35,7 @@ function set(exerciseId: string, i: number, w: number, r: number): SetLog {
 
 const history: Session[] = [{
   id: 's1', programDayId: 'd1', programDayName: 'Upper A',
-  startedAt: '2026-07-26T17:00:00.000Z', state: 'completed', earlyFinish: false, trained: true,
+  startedAt: '2026-07-26T17:00:00.000Z', state: 'SAVED', earlyFinish: false, trained: true,
   sets: [set('bb_bench_press', 0, 30, 12), set('bb_bench_press', 1, 30, 10)],
 }];
 

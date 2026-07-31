@@ -213,7 +213,7 @@ describe('the sheet carries it, and carries absence as absence', () => {
   const program: Program = { id: 'p', frequency: 4, days: [] };
   const session: Session = {
     id: 's1', programDayId: 'd1', startedAt: '2026-07-26T17:00:00.000Z',
-    state: 'completed', earlyFinish: false, trained: true,
+    state: 'SAVED', earlyFinish: false, trained: true,
     sets: [
       { exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 30, recommendedReps: 8,
         actualWeight: 30, actualReps: 12, edited: false, persistedAt: '2026-07-26T17:00:00.000Z' },

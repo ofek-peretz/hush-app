@@ -45,7 +45,7 @@ function session(startedAt: string, benchKg: number): Session {
     programDayId: 'd1',
     programDayName: 'Upper A',
     startedAt,
-    state: 'completed',
+    state: 'SAVED',
     earlyFinish: false,
     trained: true,
     sets: [

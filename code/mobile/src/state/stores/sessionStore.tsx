@@ -15,6 +15,7 @@ import { db } from '@/data/local/db';
 import { recordEffort } from '@/domain/effort';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { runSteps } from '@/domain/planRun';
+import { askAfterSession } from '@/platform/coach/afterSession';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -896,6 +897,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Home advances to the next unfinished workout (Rest once all are done).
         await app.markWorkoutCompleted(session.programDayId);
       }
+      /*
+       * ════ AND THE COACH IS ASKED WHAT HAPPENS NEXT ════
+       *
+       * The sentence the product is built around: the workout ended, everything measured about it
+       * goes to the coach, and the coach decides the next programme.
+       *
+       * `void` is the whole design. She has finished and left; the call can take a minute and must
+       * not hold Well Done, the watch frame, or anything below this line. The session is already in
+       * history — a finished workout is finished whatever happens out there. `askAfterSession`
+       * never rejects, records its own outcome, and never retries: no connection means nothing is
+       * decided, the app says so, and the update waits.
+       */
+      void askAfterSession(saved);
+
       void track('session_finished', {
         sessionId: saved.id,
         programDayId: session.programDayId,

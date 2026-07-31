@@ -14,7 +14,7 @@ import { View, StyleSheet, Animated, ScrollView } from 'react-native';
 import { AppContext } from '@/state/stores/appStore';
 import { SessionContext } from '@/state/stores/sessionStore';
 import { HushTabBar } from '@/app/HushTabBar';
-import { ToastProvider } from '@/components/ds';
+import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
@@ -27,6 +27,8 @@ import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
 import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
+import { askAfterSession } from '@/platform/coach/afterSession';
+import type { Session } from '@/data/local/models';
 import { db } from '@/data/local/db';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
@@ -273,6 +275,58 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
  *
  * It reads what `db.recordCoachAnswer` wrote, so it is also the proof that the seam ran.
  */
+/**
+ * THE POST-SESSION CALL, drivable.
+ *
+ * This is the call the whole product is built around, and until now it could only happen by
+ * finishing a real workout on a real phone — which is to say it could not be looked at. A press
+ * here sends a finished session to the live coach and shows exactly what came back, including the
+ * failure states, which are the ones nobody ever sees before they ship.
+ *
+ * The session below is a real one: she was told 8 and did 12, twice, at the same load. That is the
+ * simplest case where a coach must do something, so a reply that changes nothing is a finding.
+ */
+function AfterSessionProbe() {
+  const [state, setState] = React.useState<string>('idle');
+
+  const run = async () => {
+    setState('asking…');
+    await db.saveProfile({ sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false });
+    const set = (i: number) => ({
+      exerciseId: 'bb_bench_press', setIndex: i, recommendedWeight: 30, recommendedReps: 8,
+      actualWeight: 30, actualReps: 12, edited: false, restBeforeS: 120,
+      persistedAt: new Date(Date.UTC(2026, 7, 1, 17, i * 4)).toISOString(),
+    });
+    const finished: Session = {
+      id: `probe-${Date.now()}`, programDayId: 'd1', programDayName: 'Upper A',
+      startedAt: '2026-08-01T17:00:00.000Z', state: 'SAVED', earlyFinish: false, trained: true,
+      sets: [set(0), set(1), set(2)],
+    };
+    const update = await askAfterSession(finished);
+    const plan = await db.loadCoachPlan();
+    setState(
+      [`outcome: ${update.outcome}${update.trouble ? ` (${update.trouble})` : ''}`,
+       update.say ? `
+
+“${update.say}”` : '',
+       plan ? `
+
+stored: ${plan.sessions.length} sessions · ${plan.notes?.length ?? 0} reasons` : '',
+      ].join(''),
+    );
+  };
+
+  return (
+    <View style={{ padding: 16, gap: 14 }}>
+      <Button label="Finish a workout and ask the coach" onPress={() => { void run(); }} />
+      <Text style={{ color: cream[1], fontSize: 13 }}>{state}</Text>
+      <Text style={{ color: cream[2], fontSize: 11 }}>
+        Told 8, did 12, three sets at 30 kg. A reply that changes nothing here is a finding.
+      </Text>
+    </View>
+  );
+}
+
 function StoredCoachWeek() {
   const [plan, setPlan] = React.useState<CoachPlan | null | undefined>(undefined);
   React.useEffect(() => { void db.loadCoachPlan().then(setPlan); }, []);
@@ -1147,6 +1201,13 @@ export const GALLERY: GalleryEntry[] = [
     <InApp>
       <OnStage>
         <StoredCoachWeek />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '0.1d', label: 'The coach — after a workout', status: 'live', note: 'the call the product is built around; press it and see what the live coach decides', render: () => (
+    <InApp>
+      <OnStage>
+        <AfterSessionProbe />
       </OnStage>
     </InApp>
   ) },

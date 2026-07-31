@@ -32,7 +32,7 @@ const items: ItemResult[] = [
 
 const session: Session = {
   id: 's1', programDayId: 'd1', startedAt: '2026-07-31T17:00:00.000Z',
-  state: 'completed', earlyFinish: false, trained: true,
+  state: 'SAVED', earlyFinish: false, trained: true,
   // Only the REPS item has a `SetLog`. This is the invariant, written down.
   sets: [{
     exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 30, recommendedReps: 8,
