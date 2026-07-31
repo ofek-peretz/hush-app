@@ -293,8 +293,6 @@
     "reasonDecrease": "Down {{delta}} today. Three hard sessions in a row — this is the smart move.",
     "exerciseCount": "Lift {{n}} / {{N}}",
     "liftCrossing": "Lift {{from}} → {{to}}",
-    "setFinal": "Set {{n}} · final",
-    "loggedNextLift": "Logged · next lift coming up",
     "restLearned": "Rest · learned",
     "yourPace": "Your pace",
     "upNextNewLift": "Up next · new lift",
@@ -336,7 +334,11 @@
     "editPlanned": "planned {{n}}",
     "editBand": "your band · {{lo}}–{{hi}}",
     "editSave": "Save set",
-    "bw": "BW"
+    "bw": "BW",
+    "effortAsk": "How did that go?",
+    "effortHadMore": "I had more",
+    "effortAboutRight": "About right",
+    "effortNothingLeft": "Nothing left"
   },
   "finishSheet": {
     "legend": "End workout",

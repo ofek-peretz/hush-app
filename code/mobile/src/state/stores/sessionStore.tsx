@@ -7,11 +7,12 @@
  * defaults. "Ready" (endRest) is the only rest agency.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
+import type { EffortLevel, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, muscleOf, type Exercise } from '@/data/exercises';
 import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
+import { recordEffort } from '@/domain/effort';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -110,6 +111,7 @@ type Action =
   | { type: 'START'; plan: Step[]; session: Session; machine: SessionMachine; targets?: SetTarget[] }
   | { type: 'LOG'; setLog: SetLog; session: Session; machine: SessionMachine }
   | { type: 'MACHINE'; machine: SessionMachine }
+  | { type: 'EFFORT'; session: Session }
   | { type: 'SWAP_PLAN'; plan: Step[] }
   | { type: 'END' };
 
@@ -121,6 +123,10 @@ function reducer(s: InternalState, a: Action): InternalState {
       return { ...s, session: a.session, machine: a.machine };
     case 'MACHINE':
       return { ...s, machine: a.machine };
+    case 'EFFORT':
+      // Her answer changes the RECORD and nothing else — no phase moves, no target changes. The
+      // beat that asked has its own release; this must not be able to steer the workout.
+      return { ...s, session: a.session };
     case 'SWAP_PLAN':
       return { ...s, plan: a.plan };
     case 'END':
@@ -266,6 +272,15 @@ export interface SessionView {
    *  to the watch + Live Activity; the phone's own rest UI also reflects it. */
   extendRest: (seconds: number) => void;
   pause: () => void;
+  /**
+   * Her answer to "how did that go?" for the exercise that just ended (`EffortLevel`).
+   *
+   * Idempotent per exercise: a second answer REPLACES the first rather than appending, so a
+   * re-entered beat (a resumed session, a double tap) cannot log the same lift twice. Writes the
+   * record and returns; it never moves the workout on — the beat that asked owns its own release,
+   * because a control that both answers and advances is a control that cannot be corrected.
+   */
+  reportEffort: (exerciseId: string, level: EffortLevel) => void;
   resume: () => void;
   finishEarly: () => Promise<CompleteResult>;
   /** Mid-session "choose another": swap the UPCOMING exercise in place (situational,
@@ -1266,6 +1281,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         restExtraSecondsRef.current += seconds;
         void track('rest_extended', { sessionId: sessionRef.current?.id, seconds });
         setRestNonce((n) => n + 1); // re-run the mirror effect → republish the longer rest
+      },
+      reportEffort(exerciseId: string, level: EffortLevel) {
+        const session = sessionRef.current;
+        if (!session) return;
+        const updated: Session = {
+          ...session,
+          effort: recordEffort(session.effort, exerciseId, level, new Date().toISOString()),
+        };
+        sessionRef.current = updated;
+        // Persisted at once, like a set: an app killed between here and the finish must not lose
+        // the answer, and the crash-salvage path reads the active session, not this state.
+        void db.saveActiveSession(updated);
+        dispatch({ type: 'EFFORT', session: updated });
+        void track('effort_reported', { sessionId: session.id, exerciseId, level });
       },
       pause() {
         pauseStartedAtRef.current = Date.now();

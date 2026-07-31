@@ -331,8 +331,6 @@
     "reasonDecrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה.",
     "exerciseCount": "תרגיל {{n}} / {{N}}",
     "liftCrossing": "תרגיל {{from}} ← {{to}}",
-    "setFinal": "סט {{n}} · אחרון",
-    "loggedNextLift": "נרשם · התרגיל הבא בדרך",
     "restLearned": "מנוחה · נלמדה",
     "yourPace": "הקצב שלך",
     "upNextNewLift": "הבא בתור · תרגיל חדש",
@@ -379,7 +377,11 @@
     "editBand": "הטווח שלך · {{lo}}–{{hi}}",
     "editSave": "שמור סט",
     "editSave_female": "שמרי סט",
-    "bw": "BW"
+    "bw": "BW",
+    "effortAsk": "איך זה הלך?",
+    "effortHadMore": "היה לי עוד",
+    "effortAboutRight": "בדיוק מתאים",
+    "effortNothingLeft": "לא נשאר כלום"
   },
   "finishSheet": {
     "legend": "סיום אימון",

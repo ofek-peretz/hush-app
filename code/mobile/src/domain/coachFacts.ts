@@ -46,7 +46,7 @@
  * not touch the network, and knows nothing about any model or provider.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import type { Profile, Session, SetLog, Program } from '@/data/local/models';
+import type { EffortReport, Profile, Session, SetLog, Program } from '@/data/local/models';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
 
@@ -79,6 +79,14 @@ export interface FactLift {
   askedReps: number;
   askedSets: number;
   sets: FactSet[];
+  /**
+   * How hard she said it was — `EffortLevel`, in her own answer.
+   *
+   * ABSENT means she was not asked or did not answer, and absent must stay absent: filling it in
+   * from the reps would be the coach reading its own inference back as her testimony. Unknown is an
+   * honest value; a manufactured one is not.
+   */
+  effort?: string;
 }
 
 /** What she has ever actually lifted on one exercise — the substrate for pricing a new one. */
@@ -199,7 +207,7 @@ function sessionMinutes(s: Session): number | null {
   return Math.round(span / 60000);
 }
 
-function liftOf(exerciseId: string, sets: SetLog[]): FactLift | null {
+function liftOf(exerciseId: string, sets: SetLog[], effort?: EffortReport[]): FactLift | null {
   const ex = byId.get(exerciseId);
   if (!ex) return null; // a lift no longer in the catalogue: it cannot be reasoned about, so it is
   //                       not stated. Never invent a name for an id we cannot resolve.
@@ -216,6 +224,9 @@ function liftOf(exerciseId: string, sets: SetLog[]): FactLift | null {
     askedLoad: first?.recommendedWeight ?? null,
     askedReps: first?.recommendedReps ?? 0,
     askedSets: ordered.length,
+    ...(effort?.find((e) => e.exerciseId === exerciseId)
+      ? { effort: effort.find((e) => e.exerciseId === exerciseId)!.level }
+      : {}),
     sets: ordered.map((x) => ({
       w: x.actualWeight,
       r: x.actualReps,
@@ -239,7 +250,7 @@ function liftsOf(s: Session): FactLift[] {
   }
   const out: FactLift[] = [];
   for (const id of order) {
-    const lift = liftOf(id, grouped.get(id)!);
+    const lift = liftOf(id, grouped.get(id)!, s.effort);
     if (lift) out.push(lift);
   }
   return out;

@@ -35,7 +35,7 @@ import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
-import type { Session } from '@/data/local/models';
+import type { EffortLevel, Session } from '@/data/local/models';
 import { restWithSample } from '@/domain/restPrescription';
 import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
@@ -54,6 +54,22 @@ const PACE_BEAT_MS = 2600;
 // correction reveal (mock 2.3) — the old load struck, the eased/raised one standing in its place —
 // before it releases to rest. Long enough to read the change, short enough to stay "one breath".
 const CORRECTION_DWELL_MS = 2200;
+/**
+ * ════ THE LIFT-DONE BEAT IS WHERE THE QUESTION LIVES (2026-07-31) ════
+ *
+ * The coach's most valuable missing input is how hard it was, and the cheapest place to ask is the
+ * beat that already holds the whole stage to say nothing (the founder's own note: this screen "does
+ * not look good enough"). It cost 1.4 s of the athlete's workout and told her the lift she had just
+ * finished was finished.
+ *
+ * **Answering is the FAST WAY OUT.** A tap releases the beat immediately, so the athlete who answers
+ * reaches her rest sooner than the one who does not — the question is never a toll. This window is
+ * only the ceiling for someone who ignores it, and it is deliberately short for that reason.
+ *
+ * Crucially it opens AFTER the set is written, not before: the dwell used to sit in front of
+ * `completeSet`, and stretching that would have left a logged set unsaved for the whole window.
+ */
+const EFFORT_WINDOW_MS = 6000;
 /** Once-per-install key for the "We're learning your gym" first-workout note. */
 const FIRST_GYM_KEY = 'first_workout_modal';
 
@@ -322,6 +338,9 @@ export function SessionFlow({ navigation, route }: Props) {
       tgt.recommendedWeight != null &&
       originalWeightRef.current != null &&
       tgt.recommendedWeight !== originalWeightRef.current;
+    // Which lift this set belongs to, read BEFORE it is logged — `completeSet` moves the cursor on,
+    // and the question that follows must be filed against the lift she just did.
+    exerciseAtLogRef.current = session.currentExerciseId ?? null;
     setConfirm({
       weight: tgt.recommendedWeight,
       reps: tgt.recommendedReps,
@@ -329,6 +348,31 @@ export function SessionFlow({ navigation, route }: Props) {
       m: session.setLabel?.m ?? 1,
     });
   }
+  /**
+   * The lift whose "how did that go?" is open, or null.
+   *
+   * Captured at the moment the last set writes, NOT read live: by the time she answers, the session
+   * has already advanced its cursor to the next lift, and reading `currentExerciseId` there would
+   * file her answer against a lift she has not started.
+   */
+  const [askEffortFor, setAskEffortFor] = useState<string | null>(null);
+  const exerciseAtLogRef = useRef<string | null>(null);
+  const effortHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Release the beat — with her answer if she gave one, without it if the window simply ran out. */
+  const closeEffort = useCallback(
+    (level: EffortLevel | null) => {
+      if (effortHoldRef.current) { clearTimeout(effortHoldRef.current); effortHoldRef.current = null; }
+      setAskEffortFor((exId) => {
+        if (level && exId) session.reportEffort(exId, level);
+        return null;
+      });
+      confirmRunning.current = false;
+      setConfirm(null);
+    },
+    [session],
+  );
+
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
     confirmRunning.current = true;
@@ -370,6 +414,22 @@ export function SessionFlow({ navigation, route }: Props) {
             setConfirm(null);
           }, CORRECTION_DWELL_MS);
           return; // the hold timer owns the release
+        }
+        /*
+         * THE LIFT IS SPENT — SO ASK HOW IT WENT (2026-07-31, `EFFORT_WINDOW_MS`).
+         *
+         * Only on the beat that ends a LIFT, and never on the one that ends the WORKOUT: there the
+         * `endResult` effect is already navigating to Well Done, and a question racing a navigation
+         * is a question nobody can answer. (The last lift of a session is therefore never asked —
+         * a real gap, and the finish screen is where it belongs.)
+         *
+         * The set is on disk by now: this hold sits AFTER `completeSet`, so the window costs the
+         * record nothing even if the app dies inside it.
+         */
+        if (!r.ended && confirm.n >= confirm.m && confirm.m > 1 && exerciseAtLogRef.current) {
+          setAskEffortFor(exerciseAtLogRef.current);
+          effortHoldRef.current = setTimeout(() => closeEffort(null), EFFORT_WINDOW_MS);
+          return; // the question owns the release
         }
         // When r.ended, the `endResult` effect navigates to Well Done (one path for phone + watch).
       } catch {
@@ -539,7 +599,12 @@ export function SessionFlow({ navigation, route }: Props) {
         {paceBeat ? (
           <RestLearned took={paceBeat.took} was={paceBeat.was} now={paceBeat.now} nextSet={session.nextSetLabel?.n ?? 1} />
         ) : beatSpeaks ? (
-          <Logged units={units} confirm={confirm!} correction={beatCorrection} />
+          <Logged
+            units={units}
+            confirm={confirm!}
+            correction={beatCorrection}
+            onAnswer={(level) => closeEffort(level)}
+          />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
           <ActiveSet
             units={units}
@@ -1422,11 +1487,14 @@ export function Logged({
   units,
   confirm,
   correction,
+  onAnswer,
 }: {
   units: 'kg' | 'lb';
   confirm: Confirm;
   /** When present, the capture beat IS the correction reveal (mock 2.3). */
   correction?: LiveCorrection | null;
+  /** Her answer on the beat that closes a lift. Absent in the gallery, where the beat is a still. */
+  onAnswer?: (level: EffortLevel) => void;
 }) {
   const { t } = useCopy();
   const w = displayWeight(confirm.weight, units);
@@ -1434,7 +1502,7 @@ export function Logged({
   // happened; finishing a set is a thing that keeps happening. So the final set gets the whole
   // beat: the set tracker completed, the band with the dot arrived, and what is coming next.
   if (!correction && confirm.n >= confirm.m && confirm.m > 1) {
-    return <ExerciseDone confirm={confirm} />;
+    return <ExerciseDone confirm={confirm} onAnswer={onAnswer ?? (() => {})} />;
   }
   // THE SIGNATURE MOMENT, on the logged moment itself (mock 2.3): the set she just did moved the
   // next load, so the capture turns into the change — the old load struck through, the eased/raised
@@ -1510,41 +1578,74 @@ function RestLearned({ took, was, now, nextSet }: { took: number; was: number; n
 
 /* ------------------------------------------------- The last set of a lift (2.3b) */
 /**
- * EXERCISE DONE (v7 2.3b) — the beat that closes a lift.
+ * ════ EXERCISE DONE (v7 2.3b) — the beat that closes a lift, and asks the one question ════
  *
- * Three marks and no words about them: the SET TRACKER with every pip filled (this lift is spent),
- * the BAND with the dot landed inside it (the last set counted), and one moss line naming what is
- * coming. Then it hands over on its own — "REST BEGINS IN 3" under a filling rule, because there
- * is nothing to decide here and a button would only ask the athlete to agree that they finished.
+ * It used to carry three small marks in a void — a legend, a band, a row of pips — and hold the
+ * whole stage for 1.4 s to tell the athlete that the lift she had just finished was finished. The
+ * founder's note on it was "does not look good enough", and he was right about the symptom; the
+ * cause was that the beat had nothing to say.
+ *
+ * Now it has the only thing the record was missing. A load and a rep count cannot tell a grind from
+ * a stroll, and those two need opposite decisions next week (`EffortLevel`). So the moment the lift
+ * ends — the one moment she actually knows the answer, before the next lift overwrites the feeling
+ * — the stage asks, and the whole stage is the question.
+ *
+ * **The pips stay, and they earn it here**: every one filled is the reason the question is being
+ * asked at all. They were rejected UNDER THE REP BAND on the live set screen for a good reason
+ * ("this stage already spends its moss on the rep band, and a row of pips put a second graphic
+ * where the eye wanted a fact") — that reason is about the set stage, which has a fact to protect.
+ * This beat has none, and the mark is its subject.
+ *
+ * **No skip control.** A fourth button would put "no answer" on the same footing as an answer and
+ * invite the fastest tap; the window simply ends instead. Answering is the fast way out (a tap
+ * releases at once), so the question can never read as a toll.
  */
-function ExerciseDone({ confirm }: { confirm: Confirm }) {
+function ExerciseDone({ confirm, onAnswer }: { confirm: Confirm; onAnswer: (level: EffortLevel) => void }) {
   const { t } = useCopy();
   return (
     <>
       <View style={styles.beatHead}>
-        <Legend size={15} track={0.16} tone="onStage">{t('workout.setFinal', { n: confirm.n })}</Legend>
-      </View>
-      <View style={styles.beatBody}>
-        {/* The band, with the set landed inside it — the same drawing the set screen carries,
-            resolved. */}
-        <View style={styles.doneBand}>
-          <View style={styles.doneBandRule} />
-          <View style={styles.doneBandSpan} />
-          <View style={[styles.doneBandTick, styles.doneBandTickL]} />
-          <View style={[styles.doneBandTick, styles.doneBandTickR]} />
-          <View style={styles.doneBandDot} />
-        </View>
-
-        {/* Every pip filled: the lift is spent. */}
+        {/* Every pip filled: the lift is spent. The subject of the question below it. */}
         <View style={styles.donePips}>
           {Array.from({ length: confirm.m }).map((_, i) => (
             <View key={i} style={styles.donePip} />
           ))}
         </View>
-
-        <Legend size={14} track={0.14} tone="accent">{t('workout.loggedNextLift')}</Legend>
+      </View>
+      <View style={styles.effortBody}>
+        {/* The question is the hero — in the coach's serif, because this is Hush speaking to her
+            rather than an instrument reading out a number. */}
+        <Text style={styles.effortAsk} accessibilityRole="header">
+          {t('workout.effortAsk')}
+        </Text>
+        <View style={styles.effortChoices}>
+          <EffortChoice label={t('workout.effortHadMore')} onPress={() => onAnswer('had_more')} />
+          <EffortChoice label={t('workout.effortAboutRight')} onPress={() => onAnswer('about_right')} />
+          <EffortChoice label={t('workout.effortNothingLeft')} onPress={() => onAnswer('nothing_left')} />
+        </View>
       </View>
     </>
+  );
+}
+
+/**
+ * One answer. Full width, equal weight, in her own words.
+ *
+ * Deliberately NOT ranked by colour or size: the direction law (down = blue, hold = cream, raise =
+ * moss) speaks about what the ENGINE did to a load. Painting "nothing left" red would tell her one
+ * honest answer is the wrong answer, and she would stop giving it — which costs the coach the exact
+ * signal the question exists to collect.
+ */
+function EffortChoice({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.effortChoice, pressed && styles.effortChoicePressed]}
+    >
+      <Text style={styles.effortChoiceLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -2276,6 +2377,30 @@ const styles = StyleSheet.create({
   /* ── 2.3b · EXERCISE DONE — a beat, centred, that hands over by itself. ── */
   beatHead: { alignItems: 'center', paddingTop: 28 },
   beatBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28, marginTop: -24 },
+  // ── THE QUESTION THAT CLOSES A LIFT ──────────────────────────────────────────────────────────
+  effortBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 34, paddingHorizontal: 28 },
+  // The serif, because this is Hush asking rather than an instrument reporting. `lineHeight` above
+  // the size, per `noGlyphIsClipped` — RN shears a descender to its line box.
+  effortAsk: {
+    fontFamily: font.serif,
+    fontSize: 30,
+    lineHeight: 38,
+    color: stage.ink0,
+    textAlign: 'center',
+  },
+  effortChoices: { alignSelf: 'stretch', gap: 10 },
+  // Three identical targets. Equal weight is the point — see `EffortChoice`.
+  effortChoice: {
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  effortChoicePressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
+  effortChoiceLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'center' },
+
   // The band, resolved: the span lit, the dot landed inside it.
   doneBand: { width: 280, height: 24 },
   doneBandRule: { position: 'absolute', left: 0, right: 0, top: 11.5, height: 1.5, backgroundColor: 'rgba(241,238,229,0.20)' },

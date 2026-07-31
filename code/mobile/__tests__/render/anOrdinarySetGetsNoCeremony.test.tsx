@@ -176,11 +176,16 @@ describe('an ordinary set gets no ceremony', () => {
     expect(read).not.toMatch(/SET 2 OF 4 LOGGED/i);
   });
 
-  it('the LAST set of a lift still gets its beat — finishing a lift is a thing that happened', async () => {
+  it('the LAST set of a lift asks how it went — the beat that had nothing to say now has the one thing', async () => {
     const r = draw(makeSession(4, 4, NO_CORRECTION));
     pressCompleteSet(r);
     // The beat draws it uppercased, so compare on the words rather than the casing.
-    expect(textOf(r).toUpperCase()).toContain(tg('workout.loggedNextLift').toUpperCase());
+    const read = textOf(r).toUpperCase();
+    expect(read).toContain(tg('workout.effortAsk').toUpperCase());
+    // All three answers, every time — a scale with a missing rung is not a scale.
+    for (const key of ['workout.effortHadMore', 'workout.effortAboutRight', 'workout.effortNothingLeft']) {
+      expect({ key, shown: read.includes(tg(key).toUpperCase()) }).toEqual({ key, shown: true });
+    }
   });
 
   it('a CORRECTION still takes the whole beat — the set moved the next load', async () => {

@@ -43,7 +43,7 @@ import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
 import { PainResponse } from '@/screens/pain/PainResponse';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
-import { exerciseCues } from '@/data/exercises';
+import { exerciseCues, EXERCISES } from '@/data/exercises';
 import { tg } from '@/i18n';
 import { WhyChangedSheet, type WhyChangedProps } from '@/components/WhyChangedSheet';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
@@ -115,7 +115,10 @@ const sessionFixture = {
   phase: 'SET_PRESENTED',
   displayPhase: 'SET_PRESENTED',
   paused: false,
-  currentExercise: { id: 'bb_bench_press', name: 'Bench Press', muscle: 'Chest', equipment: 'barbell' },
+  // The REAL catalogue entry, not a hand-written partial. The partial was missing `cues`, so the
+  // Technique sheet on this page had nothing to show — and missing `capability`/`pattern`, which is
+  // what the swap pool reads. A harness that lies about its data cannot test the screens that read it.
+  currentExercise: EXERCISES.find((e) => e.id === 'bb_bench_press')!,
   currentExerciseId: 'bb_bench_press',
   sessionExerciseIds: ['bb_bench_press'],
   currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
@@ -137,13 +140,27 @@ const sessionFixture = {
   start: asyncNoop,
   loadResumable: async () => null,
   resumeSaved: async () => false,
-  completeSet: asyncNoop,
+  /*
+   * A REAL RESULT, not `asyncNoop` (2026-07-31).
+   *
+   * It returned `undefined`, so the screen's `r.correction` threw the instant a set was logged and
+   * the catch fired the "this set was not saved" notice — on EVERY SessionFlow entry on this page,
+   * for as long as the harness has existed. It went unnoticed because the beat that followed drew
+   * during the dwell BEFORE the throw, so the page still looked right.
+   *
+   * It stopped looking right the moment a beat needed the result: the question that closes a lift
+   * (2.3b) opens only after `completeSet` resolves — deliberately, so the set is on disk first —
+   * and against a throwing fixture it could never open at all. The harness could not drive the very
+   * state it exists to show. Same shape as C.9, C.13 and A.6.
+   */
+  completeSet: async () => ({ ended: false, unlockedPortrait: false, correction: null }),
+  reportEffort: noop,
   editCurrentSet: noop,
   endRest: noop,
   extendRest: noop,
   pause: noop,
   resume: noop,
-  finishEarly: asyncNoop,
+  finishEarly: async () => ({ ended: true, unlockedPortrait: false, correction: null }),
   swapNextExercise: noop,
   swapCurrentExercise: noop,
   markEquipmentOccupied: noop,
@@ -151,7 +168,21 @@ const sessionFixture = {
   setWatchHomeActions: noop,
   clearEndResult: noop,
   clearCorrection: noop,
-} as unknown as React.ContextType<typeof SessionContext>;
+  /*
+   * TYPE-CHECKED, not cast (2026-07-31).
+   *
+   * This was `as unknown as ContextType<…>` — an escape hatch that silenced the compiler about
+   * every key the fixture did NOT have. It cost exactly what that always costs: the question that
+   * closes a lift shipped, the harness had no `reportEffort`, and pressing an answer on 2.3b threw
+   * `session.reportEffort is not a function` — a crash TypeScript already knew about and had been
+   * told to ignore. The jest test could not catch it either, because a test supplies its own mock.
+   *
+   * `satisfies` keeps the literal's own narrow types while making the compiler check the shape, so
+   * the NEXT action added to the session's API fails the build here instead of on a founder's
+   * device. Same failure as the wrist's pain report dying in a delegate literal with no
+   * `reportPain` key: a contract nobody was checking.
+   */
+} satisfies React.ContextType<typeof SessionContext>;
 
 /** 2.4 · REST — the same lift, 2:27 left, with Loop 1's eased load waiting on the next set. */
 const restFixture = {
@@ -919,7 +950,7 @@ export const GALLERY: GalleryEntry[] = [
       <Logged units="kg" confirm={{ weight: 14, reps: 8, n: 2, m: 4 }} />
     </InApp>
   ) },
-  { id: '2.3b', label: 'Last set — exercise done', status: 'live', note: 'press Complete set', render: () => mount(SessionFlow, undefined, lastSetFixture) },
+  { id: '2.3b', label: 'Last set — how did that go?', status: 'live', note: 'press Complete set, then answer — the beat holds 6s for her', render: () => mount(SessionFlow, undefined, lastSetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
   { id: '2.4c', label: 'The scan', status: 'live', note: 'held mid-read — lift 3 of 6', render: () => (

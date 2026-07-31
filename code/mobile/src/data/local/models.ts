@@ -243,6 +243,36 @@ export interface SessionSummary {
   trained?: boolean;
 }
 
+/**
+ * ════ HOW HARD IT WAS (2026-07-31) ════
+ *
+ * The one thing the record never held, and the one the coach needs most.
+ *
+ * A load and a rep count do not say whether the third set was a grind or a stroll. Two athletes
+ * both finish 4x10 at 40 kg; one walks away with five reps still in the tank, the other barely
+ * survived the last two. **They need opposite decisions next week**, and nothing in the record
+ * could tell them apart — so the answer was a guess, and a guess is the thing this product forbids.
+ *
+ * Three levels, not ten. A scale finer than the athlete's own certainty invents precision: nobody
+ * standing over a bar with their heart at 160 can honestly separate a 7 from an 8. These three are
+ * the distinctions she can actually make, and they are the three that change what happens next.
+ *
+ * Asked ONCE PER EXERCISE, never per set — per set it is a toll on every rep of every workout, and
+ * the answer barely moves between the sets of one lift.
+ */
+export type EffortLevel =
+  | 'had_more' // she left reps in the tank
+  | 'about_right' // hard, and she finished it
+  | 'nothing_left'; // the last reps were everything she had
+
+/** Her answer for one exercise in one session. Absent = she was not asked, or did not answer. */
+export interface EffortReport {
+  exerciseId: string;
+  level: EffortLevel;
+  /** ISO. She answers at the moment the lift ends, so this is also when it was true. */
+  at: string;
+}
+
 export interface Session {
   id: string;
   programDayId: string;
@@ -276,6 +306,13 @@ export interface Session {
   // ended early (spec §4.10, §2.10). `annotationCapability` carries the load noun.
   annotation?: HistoryAnnotation;
   annotationCapability?: Capability;
+  /**
+   * How hard each exercise was, in her own answer — see `EffortLevel`.
+   *
+   * One entry per exercise she answered for; an exercise she skipped simply has none. Never
+   * inferred from the reps: an unanswered lift is unknown, and unknown is an honest value.
+   */
+  effort?: EffortReport[];
 }
 
 /** Portrait snapshot stored at each program construction (spec §8.4). */
