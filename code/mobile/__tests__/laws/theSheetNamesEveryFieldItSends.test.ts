@@ -91,6 +91,22 @@ describe('the sheet names every field it sends', () => {
     expect(json).toContain('"daysPerWeek":3');
   });
 
+  it('passes the coach’s own brief back untouched, and omits it when there is none', () => {
+    const profile = {
+      sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy', daysPerWeek: 4, healthConnected: false,
+    } as unknown as Profile;
+    const program: Program = { id: 'p', frequency: 4, days: [] };
+    const brief = 'Plays 5-a-side Thursdays. Right hamstring tweaked twice, both times sprinting cold.';
+
+    const withBrief = coachFacts({ profile, brief, program, history: [] });
+    // Byte for byte: nothing summarises the summariser, and nothing parses it either.
+    expect(withBrief.athlete.brief).toBe(brief);
+
+    // Absent, not empty. An athlete who has not been through the intake has no brief; an empty
+    // string would read to the coach as "I asked her and she said nothing".
+    expect('brief' in coachFacts({ profile, program, history: [] }).athlete).toBe(false);
+  });
+
   it('reaches the network through nothing — the builder is pure', () => {
     const src = code(fs.readFileSync(FILE, 'utf8'));
     for (const forbidden of ['fetch(', 'httpClient', 'axios', 'from \'@/data/local/db\'', 'AsyncStorage']) {

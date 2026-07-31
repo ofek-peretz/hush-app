@@ -188,6 +188,17 @@ export interface CoachFacts {
     emphasis?: Record<string, string>;
     /** Muscles resting because she reported they hurt, with the day each comes back (ms). */
     resting?: { muscle: string; severity: string; untilMs: number }[];
+    /**
+     * The coach's OWN account of who this athlete is, from the intake conversation
+     * (`domain/athleteBrief`) — her goal in her words, her history, her injuries, what she refuses.
+     *
+     * Passed straight back, unparsed. It is the only field in this sheet the app did not derive
+     * from something it measured, and that is precisely its value: everything else here is what she
+     * DID, and this is what she SAID. Without it every call after the first has forgotten why the
+     * programme looks the way it does, and a coach that has forgotten the goal is a random-plan
+     * generator with good manners.
+     */
+    brief?: string;
   };
   /** The workout that just happened. Absent when the sheet is built for any other reason. */
   session?: {
@@ -430,6 +441,8 @@ export function coachEquipment(): Record<string, FactEquipment> {
 
 export interface CoachFactsInput {
   profile: Profile;
+  /** The coach's own summary from the intake conversation — see `CoachFacts.athlete.brief`. */
+  brief?: string;
   program: Program | null;
   /** Every session in the record, newest first. */
   history: Session[];
@@ -443,7 +456,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, program, history, justFinished }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, program, history, justFinished }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -456,6 +469,7 @@ export function coachFacts({ profile, program, history, justFinished }: CoachFac
       ...(profile.repBand ? { band: profile.repBand } : {}),
       ...(profile.repBandByMuscle ? { bandByMuscle: stringMap(profile.repBandByMuscle) } : {}),
       ...(profile.bodyMap ? { emphasis: stringMap(profile.bodyMap) } : {}),
+          ...(brief ? { brief } : {}),
       ...(profile.painEases?.length
         ? {
             resting: profile.painEases.map((p) => ({
