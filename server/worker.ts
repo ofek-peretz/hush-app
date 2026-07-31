@@ -304,6 +304,27 @@ export default {
        */
       const detail = await upstream.text().catch(() => '');
       console.log(`gemini ${upstream.status} :: ${detail.slice(0, 800)}`);
+
+      /*
+       * ONE NARROW EXCEPTION, AND ONLY FOR 404.
+       *
+       * The rule above stands: Google's error body is not relayed, because it quotes the REQUEST
+       * back and the request is an athlete's record. A 404 is the one status where the message is
+       * about the URL rather than the payload — "models/X is not found for API version v1beta" —
+       * so it names our own configuration and nothing of hers. Relaying just that one string turns
+       * a deploy-per-guess into a single answer.
+       *
+       * `message` only, never the whole body, and never for any other status.
+       */
+      if (upstream.status === 404) {
+        let why = '';
+        try {
+          why = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
+        } catch {
+          why = '';
+        }
+        return json({ error: 'upstream_error', status: 404, why: why.slice(0, 300), url }, 502);
+      }
       return json({ error: 'upstream_error', status: upstream.status }, 502);
     }
 
