@@ -338,7 +338,11 @@
     "effortAsk": "How did that go?",
     "effortHadMore": "I had more",
     "effortAboutRight": "About right",
-    "effortNothingLeft": "Nothing left"
+    "effortNothingLeft": "Nothing left",
+    "itemStart": "Start",
+    "itemStop": "Stop",
+    "itemDone": "Done",
+    "itemCarrying": "Carrying {{load}} kg"
   },
   "finishSheet": {
     "legend": "End workout",

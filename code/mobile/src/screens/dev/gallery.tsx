@@ -21,6 +21,7 @@ import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
+import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -234,6 +235,11 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
     },
     route: { key: 'k', name: 'n', params },
   };
+}
+
+/** The stage's own ground — `SessionFlow.root`. A stage component drawn on white is not the screen. */
+function OnStage({ children }: { children: React.ReactNode }) {
+  return <View style={{ flex: 1, backgroundColor: stage[0] }}>{children}</View>;
 }
 
 function InApp({ children, session = sessionFixture }: { children: React.ReactNode; session?: React.ContextType<typeof SessionContext> }) {
@@ -951,6 +957,44 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '2.3b', label: 'Last set — how did that go?', status: 'live', note: 'press Complete set, then answer — the beat holds 6s for her', render: () => mount(SessionFlow, undefined, lastSetFixture) },
+  /* ═══ THE THREE SHAPES THE STAGE COULD NOT RUN (2026-07-31) ═══
+     `coachPlan` can write a marathon week, a circuit and a footballer's session. These are where
+     the athlete meets the parts of them that are not "a weight for a number of reps". Each one is
+     driveable here for the reason every gap in this file has taught: a state no fixture produces is
+     a state nobody looks at. */
+  { id: '2.2f', label: 'A held duration', status: 'live', note: 'press Start — it counts down; Stop ends it with what she actually held', render: () => (
+    <InApp>
+      <OnStage>
+        <TimeStage
+          name="Plank"
+          item={{ kind: 'time', ex: 'plank', seconds: 45, say: 'Ribs down, breathe. Stop when the hips drop, not before.' }}
+          onDone={noop}
+        />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '2.2g', label: 'A distance to cover', status: 'live', note: 'a loaded carry — no GPS, she does it and says so', render: () => (
+    <InApp>
+      <OnStage>
+        <DistanceStage
+          name="Farmer’s Carry"
+          item={{ kind: 'distance', ex: 'farmer_carry', metres: 40, load: 24, say: 'Tall and slow. Put them down before your grip goes.' }}
+          onDone={noop}
+        />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '2.2h', label: 'Open — no number worth stating', status: 'live', note: 'the instruction IS the item', render: () => (
+    <InApp>
+      <OnStage>
+        <OpenStage
+          name="Mobility"
+          item={{ kind: 'open', ex: 'mobility', say: 'Whatever your hips need today. Five minutes, no counting.' }}
+          onDone={noop}
+        />
+      </OnStage>
+    </InApp>
+  ) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
   { id: '2.4c', label: 'The scan', status: 'live', note: 'held mid-read — lift 3 of 6', render: () => (

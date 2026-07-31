@@ -381,7 +381,11 @@
     "effortAsk": "איך זה הלך?",
     "effortHadMore": "היה לי עוד",
     "effortAboutRight": "בדיוק מתאים",
-    "effortNothingLeft": "לא נשאר כלום"
+    "effortNothingLeft": "לא נשאר כלום",
+    "itemStart": "התחל",
+    "itemStop": "עצור",
+    "itemDone": "סיימתי",
+    "itemCarrying": "נושאת {{load}} ק\"ג"
   },
   "finishSheet": {
     "legend": "סיום אימון",
