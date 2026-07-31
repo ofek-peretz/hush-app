@@ -13,6 +13,8 @@ import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import { recordEffort } from '@/domain/effort';
+import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
+import { runSteps } from '@/domain/planRun';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -58,7 +60,30 @@ export interface Step {
   globalIndex: number;
   exerciseSetIndex: number; // 0-based within the exercise
   totalSetsInExercise: number;
-  target: SetTarget;
+  /**
+   * The rep prescription — a weight for a number of reps.
+   *
+   * **Optional, because not every step is one.** A 45-second plank, a 400 m repeat and five minutes
+   * of mobility have no weight and no reps, and the previous shape required both. Filling them with
+   * zeros so a plank fits the old field is the lie `ItemResult` exists to prevent, and it would be
+   * the same lie one layer up.
+   *
+   * ABSENT means there is no rep prescription, and every reader must say what it does about that
+   * rather than read a fabricated zero. The compiler found all 34 of them.
+   */
+  target?: SetTarget;
+  /**
+   * What the coach actually wrote for this step, when the plan came from a coach plan
+   * (`domain/planRun`). Absent on a plan built the old way from a `ProgramDay`.
+   *
+   * This is the discriminator the screen switches on: a step with a non-`reps` item goes to
+   * `ItemStage`, and one without an item at all is the reps path exactly as it has always been.
+   */
+  item?: PlannedItem;
+  /** Where the coach put it — block, round and position, for "lap 3 of 6" and for the record. */
+  where?: { block: number; round: number; position: number };
+  /** Seconds the coach prescribed AFTER this step. Absent = the old per-exercise rest rules stand. */
+  restAfterS?: number;
   lastSetOfExercise: boolean;
   lastSetOfSession: boolean;
   edited?: boolean; // the athlete adjusted this set via Edit Result (logged as an override)
@@ -179,7 +204,13 @@ export function retargetPlanForSwap(
     targets.find((t) => t.exerciseId === newId && t.setIndex === setIndex);
   return plan.map((st) =>
     st.exerciseId === oldId && st.globalIndex >= startIdx
-      ? { ...st, exerciseId: newId, target: targetFor(st.exerciseSetIndex) ?? { ...st.target, exerciseId: newId } }
+      ? {
+          ...st,
+          exerciseId: newId,
+          // A step with no rep prescription has none to carry across either — a swapped plank is
+          // still a plank, and inventing a target here would put a weight on it.
+          ...(st.target ? { target: targetFor(st.exerciseSetIndex) ?? { ...st.target, exerciseId: newId } } : {}),
+        }
       : st,
   );
 }
@@ -394,6 +425,55 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
 }
 
 /**
+ * ════ A COACH'S SESSION, AS THE MACHINE RUNS IT ════
+ *
+ * The second builder. `buildPlan` above turns a `ProgramDay` + `SetTarget[]` into steps — the shape
+ * the engine's generator produces, and the one every TestFlight workout runs today. This turns what
+ * the COACH wrote into the same `Step[]`, so the machine, the rest timer, the crash salvage, the
+ * watch mirror and the record all keep working without knowing which builder made the plan.
+ *
+ * The expansion itself is not repeated here: `domain/planRun` owns it, because rounds are where a
+ * circuit and a straight block stop looking alike and there must be exactly one place that knows.
+ *
+ * A `reps` item gets a real `SetTarget` and is indistinguishable from a step the old builder made —
+ * that is the point, and it is why the reps path needs no new code at all. Every other shape gets
+ * NO target, which is what makes it visible as something else all the way down: the wrist does not
+ * mirror it as a set, Loop 1 steps over it, `completeSet` refuses it, and the stage sends it to
+ * `ItemStage` instead.
+ */
+export function buildPlanFromCoach(session: PlannedSession): Step[] {
+  const steps = runSteps(session);
+  return steps.map((st, i) => {
+    const lastOfExercise = i === steps.length - 1 || steps[i + 1].item.ex !== st.item.ex;
+    return {
+      exerciseId: st.item.ex,
+      globalIndex: i,
+      // Kept in the vocabulary the rest of the machine already speaks: for a straight block these
+      // ARE the sets of the exercise; for a circuit they are its laps, which is the same count.
+      exerciseSetIndex: st.round - 1,
+      totalSetsInExercise: st.rounds,
+      ...(st.item.kind === 'reps'
+        ? {
+            target: {
+              exerciseId: st.item.ex,
+              setIndex: st.round - 1,
+              recommendedWeight: st.item.load,
+              recommendedReps: st.item.reps[0],
+              repBandLo: st.item.reps[0],
+              repBandHi: st.item.reps[1],
+            } satisfies SetTarget,
+          }
+        : {}),
+      item: st.item,
+      where: { block: st.block, round: st.round, position: st.position },
+      restAfterS: st.restAfterS,
+      lastSetOfExercise: lastOfExercise,
+      lastSetOfSession: st.last,
+    };
+  });
+}
+
+/**
  * Is this lift ALREADY in the session? The last line of defence before a swap is applied, on both
  * surfaces (a phone tap and a watch intent land here).
  *
@@ -424,7 +504,7 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
   // a Barbell Back Squat. Both surfaces now ask the SAME function, and the exclusion is not an
   // optional argument anybody can forget.
   const sessionExerciseIds = [...new Set(plan.map((st) => st.exerciseId))];
-  return plan.map((st) => {
+  return plan.flatMap((st) => {
     const ex = exerciseById(st.exerciseId);
     // WHEN the verb is offered is a law, not a local opinion — `isSwapMoment` owns it, and the
     // phone's stage asks the same function. This used to be a bare `=== 0` here and a different
@@ -435,6 +515,9 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
             .slice(0, 2)
             .map((e) => ({ id: e.id, name: e.name }))
         : [];
+    // The wrist draws a weight and a rep band (WT2). A step with no rep prescription has neither,
+    // and publishing zeros would put "0 kg x 0" on her wrist — so it is not mirrored as a set.
+    if (!st.target) return [];
     const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
     return {
       exerciseName: ex?.name ?? '',
@@ -475,8 +558,9 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
 function isToLoad(plan: Step[], setIndex: number, sets: SetLog[]): boolean {
   const cur = plan[setIndex];
   if (!cur) return false;
-  const curLoad = cur.target.recommendedWeight;
-  if (curLoad == null) return false; // bodyweight — no loading action
+  // No rep prescription → nothing to set on a machine. A plank has no load to walk over and set.
+  const curLoad = cur.target?.recommendedWeight;
+  if (curLoad == null) return false; // bodyweight, or not a loaded step at all
   let loaded: number | null | undefined;
   for (const s of sets) if (s.exerciseId === cur.exerciseId) loaded = s.actualWeight;
   if (loaded === undefined) return true; // no set of this exercise logged yet → must load
@@ -489,7 +573,7 @@ function progressedLiftCount(plan: Step[], sets: SetLog[]): number {
   const trained = new Set(sets.map((s) => s.exerciseId));
   return new Set(
     plan
-      .filter((s) => s.target.reasonType === 'increase' && trained.has(s.exerciseId))
+      .filter((s) => s.target?.reasonType === 'increase' && trained.has(s.exerciseId))
       .map((s) => s.exerciseId),
   ).size;
 }
@@ -781,7 +865,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
       // Owner-voice annotation only when Hush acted or the athlete ended early
       // (§4.10). Early-finish takes precedence; otherwise an increase this session.
-      const increasedStep = plan.find((s) => s.target.reasonType === 'increase');
+      const increasedStep = plan.find((s) => s.target?.reasonType === 'increase');
       const saved: Session = {
         ...session,
         state: 'SAVED',
@@ -946,7 +1030,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
       // Closing summary for the Complete screen (computed from the saved session + plan).
       const progressed = new Set(
-        plan.filter((s) => s.target.reasonType === 'increase').map((s) => s.exerciseId),
+        plan.filter((s) => s.target?.reasonType === 'increase').map((s) => s.exerciseId),
       ).size;
       const summary: SessionSummary = {
         workoutName: saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? '',
@@ -1143,6 +1227,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           return { ended: false, unlockedPortrait: false };
         }
         completingRef.current = true;
+        /*
+         * `completeSet` logs a SET — a weight for a number of reps. A step with no rep prescription
+         * is not one, and it does not come through here: `ItemStage` owns the shapes that are held,
+         * covered or simply done, and they write an `ItemResult` instead. This is the guard that
+         * says so, rather than a `?.` that would quietly write a set of `undefined` reps.
+         */
+        if (!current.target) {
+          completingRef.current = false;
+          return { ended: false, unlockedPortrait: false };
+        }
         try {
         const setLog: SetLog = {
           exerciseId: current.exerciseId,
@@ -1340,8 +1434,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (!cur) return;
         // Update only the current step's target + flag it edited. No log, no advance —
         // Active Set re-renders with the new values; Complete Set logs them (as edited).
+        // Editing a set means editing a weight and a rep count. A step that has neither is not
+        // editable through this door, and it has no wheel on screen to open it with.
+        if (!cur.target) return;
         const newPlan = plan.map((st, i) =>
-          i === idx
+          i === idx && st.target
             ? { ...st, edited: true, target: { ...st.target, recommendedWeight: weight, recommendedReps: reps } }
             : st,
         );
@@ -1368,7 +1465,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SWAP_PLAN', plan: newPlan });
         // Backend records the busy event + reorders the (planned) session blocks (best-effort;
         // the local plan reorder above already moved it for this live session).
-        if (cur.target.blockId) {
+        if (cur.target?.blockId) {
           void app.model.markEquipmentOccupied({ blockId: cur.target.blockId }).catch(() => {});
         }
       },

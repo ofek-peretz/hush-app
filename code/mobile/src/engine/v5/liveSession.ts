@@ -32,7 +32,15 @@ export function metaFor(exerciseId: string, observedLoads?: number[]): ExerciseM
 export interface LiveStep {
   exerciseId: string;
   globalIndex: number;
-  target: { recommendedWeight: number | null; recommendedReps: number; repBandLo?: number; repBandHi?: number; perRung?: number };
+  /**
+   * The rep prescription, or ABSENT on a step that has none.
+   *
+   * Loop 1 corrects a LOAD from a rep count, so it has nothing to say about a plank, a 400 m repeat
+   * or five minutes of mobility — and a session can now contain all three between two sets of the
+   * same lift. Such a step is stepped over: it is not corrected, and it does not break the chain of
+   * a load being carried forward across the sets that surround it.
+   */
+  target?: { recommendedWeight: number | null; recommendedReps: number; repBandLo?: number; repBandHi?: number; perRung?: number };
 }
 
 export interface Loop1Applied<T extends LiveStep> {
@@ -57,7 +65,9 @@ export function carryWeightForward<T extends LiveStep>(plan: T[], completedGloba
   if (!cur) return plan;
   let changed = false;
   const out = plan.map((s) => {
-    if (s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId && s.target.recommendedWeight !== weight) {
+    // A step with no rep prescription has no load to carry — it is stepped over, and the chain
+    // continues to the next set of the same lift beyond it.
+    if (s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId && s.target && s.target.recommendedWeight !== weight) {
       changed = true;
       return { ...s, target: { ...s.target, recommendedWeight: weight } } as T;
     }
@@ -93,6 +103,9 @@ export function applyLoop1<T extends LiveStep>(
   const next = plan.find((s) => s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId);
   if (!next) return noop; // last set of this exercise — nothing ahead to correct (S-13)
 
+  // Loop 1 corrects a LOAD from a rep count. A step with no rep prescription has neither, so there
+  // is nothing to correct and nothing to say about it.
+  if (!cur.target) return noop;
   const meta = metaFor(cur.exerciseId, observedLoads);
   // Tlo comes from the IMMUTABLE band floor, never `recommendedReps`: the edit wheel overwrites the
   // latter with her performed reps, which would make every set sit "in band" and freeze the load
