@@ -100,3 +100,12 @@ logs*.txt
 # A 68 MB design archive — its contents already live unpacked in _v7_handoff/.
 # Kept on disk, out of history (a blob this size is permanent and GitHub warns above 50 MB).
 docs/canonical/*.zip
+
+# ── NO KEY EVER REACHES THIS REPO (2026-07-31) ──────────────────────────────────
+# The Gemini key lives in Cloudflare's secret store and nowhere else. These are the
+# files that hold one by convention, and the mistake is made exactly once.
+.dev.vars
+.dev.vars.*
+.wrangler/
+server/**/.env
+**/wrangler-*.log
