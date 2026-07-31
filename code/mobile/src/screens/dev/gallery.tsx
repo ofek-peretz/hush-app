@@ -22,6 +22,7 @@ import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
+import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -235,6 +236,41 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
     },
     route: { key: 'k', name: 'n', params },
   };
+}
+
+/**
+ * A coach that answers from a script.
+ *
+ * The gallery has no server, and a chat screen with a dead Send button shows nothing about the one
+ * thing that matters — what it feels like to send something and wait. So this drives the real
+ * component with a canned reply on a real delay: the composing state is genuine, the scroll is
+ * genuine, only the answer is written in advance.
+ */
+function ScriptedCoachChat() {
+  const [turns, setTurns] = React.useState<CoachTurn[]>([]);
+  const [busy, setBusy] = React.useState(false);
+  const n = React.useRef(0);
+  const REPLIES = [
+    'Good — that gives me the shape of it. How many days a week can you actually train, and roughly how long do you have each time?',
+    'Right. And has anything been bothering you — anything that hurts, or that you have been working around?',
+    'That is enough to start. I will build you the first week and we will correct it from what you actually do.',
+  ];
+  return (
+    <CoachChat
+      turns={turns}
+      busy={busy}
+      opening="What are you training for?"
+      onSend={(text) => {
+        setTurns((t) => [...t, { id: `a${t.length}`, by: 'athlete', text }]);
+        setBusy(true);
+        setTimeout(() => {
+          setBusy(false);
+          const reply = REPLIES[Math.min(n.current++, REPLIES.length - 1)];
+          setTurns((t) => [...t, { id: `c${t.length}`, by: 'coach', text: reply }]);
+        }, 1400);
+      }}
+    />
+  );
 }
 
 /** The stage's own ground — `SessionFlow.root`. A stage component drawn on white is not the screen. */
@@ -962,6 +998,33 @@ export const GALLERY: GalleryEntry[] = [
      the athlete meets the parts of them that are not "a weight for a number of reps". Each one is
      driveable here for the reason every gap in this file has taught: a state no fixture produces is
      a state nobody looks at. */
+  /* ═══ THE COACH CHAT — the intake, and every conversation after it ═══
+     One screen for both: intake is this with an empty record, three months later it is this with a
+     full one. Scripted here so it is drivable before a server exists — type and send and the
+     scripted reply arrives, exactly as the real one will. Plain on purpose; the founder is
+     redesigning it in Claude Design. */
+  { id: '0.1', label: 'The coach — intake', status: 'live', note: 'type and send: a scripted reply lands after a beat', render: () => (
+    <InApp>
+      <OnStage>
+        <ScriptedCoachChat />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '0.1b', label: 'The coach — a message that did not land', status: 'live', note: 'sent, unanswered, and failed — the three states side by side', render: () => (
+    <InApp>
+      <OnStage>
+        <CoachChat
+          onSend={noop}
+          turns={[
+            { id: '1', by: 'coach', text: 'How did the long run go?' },
+            { id: '2', by: 'athlete', text: 'Eighteen kilometres, felt good.' },
+            { id: '3', by: 'athlete', text: 'Slight twinge in the right hamstring at 14.', pending: true },
+            { id: '4', by: 'athlete', text: 'Should I still do Thursday?', failed: true },
+          ]}
+        />
+      </OnStage>
+    </InApp>
+  ) },
   { id: '2.2f', label: 'A held duration', status: 'live', note: 'press Start — it counts down; Stop ends it with what she actually held', render: () => (
     <InApp>
       <OnStage>

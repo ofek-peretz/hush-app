@@ -1062,5 +1062,11 @@
     "yoursSub": "I'll seed from your sex and bodyweight, then correct from your first working set.",
     "adopt": "Make it mine",
     "decline": "Not now"
+  },
+  "coach": {
+    "placeholder": "Write a message",
+    "send": "Send",
+    "thinking": "Thinking",
+    "notSent": "Not sent"
   }
 }
