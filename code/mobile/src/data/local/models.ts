@@ -273,6 +273,88 @@ export interface EffortReport {
   at: string;
 }
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * WHAT SHE ACTUALLY DID — the record, in every shape the coach can prescribe.
+ *
+ * `SetLog` can only describe a weight for a number of reps. It REQUIRES `actualReps` and carries
+ * `actualWeight`, so **a 45-second plank cannot be written down at all** — and neither can a 400 m
+ * repeat, a 40 m carry, or five minutes of mobility. The stage learned to run those; this is where
+ * they land. Without it the new shapes are a demo.
+ *
+ * ── WHY THIS SITS BESIDE `sets` AND NOT INSTEAD OF IT (yet) ─────────────────────────────────────
+ * `session.sets` is read in 126 places across 20 files, including the WATCH PROTOCOL and the Live
+ * Activity — Swift, which cannot be compiled on the machine this is written on. A hard cutover
+ * would be a change I could not verify, on the two surfaces where a silent break is invisible until
+ * a device runs it.
+ *
+ * So `items` is the canonical record from here on, and a REPS item is written to both while the
+ * consumers move across. That is a strangler, not a compromise, and it has a stated end:
+ *
+ *   > **`sets` dies when the session machine stops taking `SetTarget[]`** — the same change that
+ *   > deletes the programme generator, and the same one that needs the transport. One migration,
+ *   > not two.
+ *
+ * Until then the invariant is simple and testable: every reps item has a matching `SetLog`, and no
+ * other shape appears in `sets` at all — a plank must never be written as zero reps at zero kg,
+ * which is the lie this whole type exists to avoid.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+/** Where in the session an item sat — the coach's blocks and rounds, as she met them. */
+interface ItemResultBase {
+  /** A catalogue lift id or a movement id. */
+  ex: string;
+  /** 1-based, from `domain/planRun`: which block, which round of it, which position in the round. */
+  block: number;
+  round: number;
+  position: number;
+  /** Seconds rested immediately BEFORE this item (L3). Absent = unknown, never read as 0. */
+  restBeforeS?: number;
+  /** ISO instant it was written. */
+  at: string;
+  /** She skipped it. A skipped item is a fact about the session, not an absence from it. */
+  skipped?: true;
+}
+
+/** A weight for a number of reps — the shape the app has always had. */
+export interface RepsResult extends ItemResultBase {
+  kind: 'reps';
+  /** What she lifted. null = bodyweight. */
+  load: number | null;
+  reps: number;
+  /** She corrected it by hand rather than taking what was proposed. */
+  edited?: boolean;
+}
+
+/** Held or worked for a duration. `seconds` is what she ACTUALLY held — see `TimeStage`. */
+export interface TimeResult extends ItemResultBase {
+  kind: 'time';
+  seconds: number;
+  /** What was asked for, so the gap between the ask and the result is readable. */
+  askedSeconds: number;
+  load?: number | null;
+}
+
+/** Covered. Metres always — one unit in the record, converted only for display. */
+export interface DistanceResult extends ItemResultBase {
+  kind: 'distance';
+  metres: number;
+  askedMetres: number;
+  /** How long it took, when anything measured it. */
+  seconds?: number;
+  load?: number | null;
+  /** A GPS activity holds the pace, the splits, the heart rate and the route — never copied here. */
+  activityId?: string;
+}
+
+/** No number worth stating. It happened, or it did not. */
+export interface OpenResult extends ItemResultBase {
+  kind: 'open';
+}
+
+export type ItemResult = RepsResult | TimeResult | DistanceResult | OpenResult;
+
 export interface Session {
   id: string;
   programDayId: string;
@@ -313,6 +395,13 @@ export interface Session {
    * inferred from the reps: an unanswered lift is unknown, and unknown is an honest value.
    */
   effort?: EffortReport[];
+  /**
+   * Everything she did, in every shape — see `ItemResult`.
+   *
+   * The canonical record. `sets` is the legacy rep-only view kept in step until the session machine
+   * moves off `SetTarget[]`; absent on every session written before this existed.
+   */
+  items?: ItemResult[];
 }
 
 /** Portrait snapshot stored at each program construction (spec §8.4). */

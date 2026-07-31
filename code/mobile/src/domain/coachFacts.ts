@@ -46,7 +46,7 @@
  * not touch the network, and knows nothing about any model or provider.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import type { EffortReport, Profile, Session, SetLog, Program } from '@/data/local/models';
+import type { EffortReport, ItemResult, Profile, Session, SetLog, Program } from '@/data/local/models';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
@@ -88,6 +88,33 @@ export interface FactLift {
    * honest value; a manufactured one is not.
    */
   effort?: string;
+}
+
+/**
+ * One thing she did, in whatever shape it was — the shape-agnostic half of the session.
+ *
+ * `lifts` below describes reps-at-a-load and cannot describe a plank or a 400 m repeat. Rather than
+ * teach it four shapes, the sheet states the work TWICE from one source: `lifts` for the rep work
+ * (which the coach reasons about with bands and rungs), and `work` for everything, in the coach's
+ * own vocabulary. A session with no rep work has an empty `lifts` and a full `work`, and a marathon
+ * week is finally describable back to the coach that wrote it.
+ */
+export interface FactWork {
+  kind: string;
+  ex: string;
+  name: string;
+  block: number;
+  round: number;
+  position: number;
+  /** Whatever this shape measures — reps, seconds, metres. Absent on `open`. */
+  did?: number;
+  /** What was asked for, when the shape has an ask. The gap is the signal. */
+  asked?: number;
+  load?: number | null;
+  restBeforeS?: number;
+  /** How long it took, when anything measured it (a timed distance). */
+  seconds?: number;
+  skipped?: true;
 }
 
 /** What she has ever actually lifted on one exercise — the substrate for pricing a new one. */
@@ -172,6 +199,8 @@ export interface CoachFacts {
     trained: boolean;
     endedEarly: boolean;
     lifts: FactLift[];
+    /** Every item in every shape — see `FactWork`. Absent on a session recorded before it existed. */
+    work?: FactWork[];
   };
   performed: FactPerformed[];
   equipment: Record<string, FactEquipment>;
@@ -254,6 +283,42 @@ function liftOf(exerciseId: string, sets: SetLog[], effort?: EffortReport[]): Fa
       ...(x.edited ? { edited: true as const } : {}),
     })),
   };
+}
+
+/**
+ * Every item, flattened into one vocabulary the coach can read whatever the shape.
+ *
+ * `did`/`asked` collapse reps, seconds and metres onto one pair of fields deliberately: the coach
+ * knows from `kind` what the number counts, and four parallel field names would be four things to
+ * get wrong in a prompt. `open` has neither, because there was never a number.
+ */
+function workOf(items: ItemResult[]): FactWork[] {
+  return items.map((i) => {
+    const where = { kind: i.kind, ex: i.ex, name: nameOf(i.ex), block: i.block, round: i.round, position: i.position };
+    const common = {
+      ...(i.restBeforeS != null ? { restBeforeS: i.restBeforeS } : {}),
+      ...(i.skipped ? { skipped: true as const } : {}),
+    };
+    switch (i.kind) {
+      case 'reps':
+        return { ...where, ...common, did: i.reps, ...(i.load !== undefined ? { load: i.load } : {}) };
+      case 'time':
+        return { ...where, ...common, did: i.seconds, asked: i.askedSeconds, ...(i.load != null ? { load: i.load } : {}) };
+      case 'distance':
+        return {
+          ...where, ...common, did: i.metres, asked: i.askedMetres,
+          ...(i.seconds != null ? { seconds: i.seconds } : {}),
+          ...(i.load != null ? { load: i.load } : {}),
+        };
+      default:
+        return { ...where, ...common };
+    }
+  });
+}
+
+/** Display name for a lift or a movement id, or the id itself when neither knows it. */
+function nameOf(id: string): string {
+  return byId.get(id)?.name ?? MOVEMENTS.find((m) => m.id === id)?.name ?? id;
 }
 
 /** The lifts of one session, in the order she met them. */
@@ -410,6 +475,7 @@ export function coachFacts({ profile, program, history, justFinished }: CoachFac
             trained: finished.trained !== false,
             endedEarly: finished.earlyFinish,
             lifts: liftsOf(finished),
+            ...(finished.items?.length ? { work: workOf(finished.items) } : {}),
           },
         }
       : {}),
