@@ -167,7 +167,34 @@
 > the weekly letter. English gained too: the muscle keys are authored lowercase for mid-sentence,
 > so it no longer capitalises one there.
 >
-> **NEXT:** the P0 programme defect — the only substantive item left.
+> **P0.3 IS HALF SOLVED, AND PARKED ON PURPOSE** — branch
+> `wip/p0-weekly-volume-follows-frequency` (`721e17a`, pushed). **It is not mergeable: one law fails,
+> and that law is right.**
+>
+> **The defect.** B-2's base was a flat **10** — the same weekly volume whether you train twice a week
+> or six times. The register never ruled that; it never asked. The mechanism sits one step lower than
+> it looks: that number becomes an exercise COUNT, so a flat base meant **~20 exercises for the whole
+> week**, dealt across however many days you train. Ten a day at two days; three a day at six.
+>
+> **Measured, before → after, across all ten builds:** sessions under 45 min **30/40 → 13/40** · the
+> shortest session **12 min → 36 min** · the six-day week **156 → 282 min** · the two-day week
+> unchanged at 120. Two things it forced, both real: emphasis had to become a RATIO (a flat +6 on a
+> scaling base means less and less the more you train), and `startingWeeklySets` throws on a bad
+> `days` — three test call sites had silently kept the old arity and were producing NaN programmes,
+> because `__tests__` is not typechecked.
+>
+> ⚠️ **THE BLOCKER, and it is a genuine find.** `10 weeks · woman 52 kg · 4 days · leaves no lift dead
+> on the floor of its equipment` now fails. More volume gives her a THIRD hamstring lift, and her
+> pool's third is the barbell RDL. `canLoad` admits it — her modelled load lands at about the 20 kg
+> bar, so "at or above the floor" passes — and she is then pinned there for four occurrences with
+> her reps never reaching the band. **The selector needs a MARGIN, not "at or above the floor": a
+> lift may only be chosen when there is room left to EASE.** That touches a ratified law (S-55b) and
+> the rotation resolver shares the same function, so it is deliberate work, not a bolt-on. Do that,
+> re-run the audit, land both — and only then unskip `everyProgramme`'s two assertions.
+>
+> **P0.4 is untouched and separate.** 3×/week still gives Upper A + Upper B + Lower A, because the
+> engine knows ONLY upper/lower. The canonical three-day answer is full body, which it cannot
+> express at all — that is a new split type, not a tuning.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
