@@ -49,7 +49,16 @@ export interface Env {
  * Named here rather than taken from the request on purpose — see the header. Changing the model is
  * an edit and a deploy, which is exactly the friction it should have.
  */
-const MODEL = 'gemini-2.5-flash-lite';
+/*
+ * Chosen from the model list this key actually returns, not from a price page. The first attempt
+ * used `gemini-2.5-flash-lite` — which IS in the list and still answered `generateContent` with a
+ * 404, so the id was never the whole story. `gemini-3.5-flash-lite` is two generations newer and
+ * the current cheap tier.
+ *
+ * ⚠️ Its price has not been checked. Verify before this carries real volume; it is one line and a
+ * deploy to change.
+ */
+const MODEL = 'gemini-3.5-flash-lite';
 const MAX_OUTPUT_TOKENS = 8192;
 /** Google's own upper bound on how long we will wait before calling it a failed call. */
 const TIMEOUT_MS = 90_000;
@@ -285,7 +294,16 @@ export default {
        * error path happens to write to. The status is enough to act on; the detail belongs in the
        * Worker's own tail (`npx wrangler tail`), which only the owner can read.
        */
-      console.log(`gemini ${upstream.status}`);
+      /*
+       * The body goes to the TAIL, never to the caller.
+       *
+       * `npx wrangler tail` is the owner's own console, so the detail — including anything Google
+       * quotes back from the request — stays where only he can read it. Returning it to the app
+       * would put an athlete's record into whatever log the error path happens to write to, which
+       * is the distinction this whole branch exists to hold.
+       */
+      const detail = await upstream.text().catch(() => '');
+      console.log(`gemini ${upstream.status} :: ${detail.slice(0, 800)}`);
       return json({ error: 'upstream_error', status: upstream.status }, 502);
     }
 
