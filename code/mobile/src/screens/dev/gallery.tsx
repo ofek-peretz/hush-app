@@ -870,6 +870,17 @@ export const GALLERY: GalleryEntry[] = [
      see that a decimal — or plain 100 kg — pushed the figure and its per-side annex off the screen
      (founder, build 36 · C.9). A widest-load entry is now standing furniture: 137.5 on a barbell is
      the widest figure the engine can prescribe together with the widest annex it can carry. */
+  /* THE SWAP MOMENT — the first set of a lift, where the chrome carries THREE discs (pause left,
+     swap + form right). It is the only state in which the stage bar's sides are uneven, and it is
+     the state the founder photographed for A.6; every other 2.2 fixture sits on set 2, where the
+     swap is gone and the bar self-corrects. Nothing could see it. */
+  { id: '2.2e', label: 'The set — first set (swap offered)', status: 'live', note: 'three chrome discs: the only state where the bar’s sides differ', render: () =>
+    mount(SessionFlow, undefined, {
+      ...(sessionFixture as unknown as Record<string, unknown>),
+      setLabel: { n: 1, m: 4 },
+      nextSetLabel: { n: 2, m: 4 },
+      currentTarget: { exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+    } as unknown as React.ContextType<typeof SessionContext>) },
   { id: '2.2d', label: 'The set — the widest load', status: 'live', note: 'a decimal load + a decimal per-side annex: the C.9 overflow', render: () =>
     mount(SessionFlow, undefined, {
       ...(sessionFixture as unknown as Record<string, unknown>),

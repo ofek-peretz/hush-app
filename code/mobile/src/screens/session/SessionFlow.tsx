@@ -2083,7 +2083,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stageDiscPressed: { backgroundColor: 'rgba(241,238,229,0.14)' },
-  stageBarSide: { flexDirection: 'row', gap: 8 },
+  /**
+   * THE SIDES RESERVE EQUAL ROOM, SO THE CENTRE IS ACTUALLY CENTRED (founder, build 36 — A.6).
+   *
+   * `stageBar` is `space-between` over three children, which centres the middle one only when the
+   * outer two are the same width — and they are not. The left holds ONE disc (pause, 38); the right
+   * holds up to TWO (swap + form, 38 + 8 + 38 = 84). On the FIRST set of a lift, where the swap is
+   * offered, the clock and the lift ordinal therefore sat 23 px left of centre. That is the screen
+   * he photographed, and it self-corrected on set 2 when the swap disappeared — which is why it
+   * read as "sometimes off" rather than as a bug.
+   *
+   * `flex: 1` on both sides makes them split the leftover evenly whatever they hold, so the centre
+   * group lands on the axis for one disc, two, or none.
+   */
+  stageBarSide: { flex: 1, flexDirection: 'row', gap: 8 },
   stageBarRight: { justifyContent: 'flex-end' },
   stageBarCenter: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
   // The ordinal — the one thing in the bar that is READ, so it is sized to be read.
