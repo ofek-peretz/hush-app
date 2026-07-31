@@ -1,12 +1,25 @@
 # FOUNDER QA — BUILD 36 (2026-07-29)
 
 > ## ▶ WHERE TO PICK THIS UP
-> **Branch `feat/engine-progression-overhaul`, last commit `9aebe24`, pushed. Tree clean.**
+> **Branch `feat/engine-progression-overhaul`, pushed. Tree clean.**
+>
+> ### ⛔ READ THIS FIRST — a ruling landed 2026-07-30 and it ends a whole line of work
+> **"The engine decides DURING the workout only, on the basis of what it sees, and that is it.
+> Everything outside the workout is the AI's decision."** — founder, final.
+>
+> **P0 is DESCOPED.** Do not fix the programme generator, the 45–60 minute budget, the upper/lower
+> split, the twins, or the volume model. The engine stops composing programmes and stops drawing
+> conclusions after a session; it keeps Loop 1 (above band → up, below → down), the rest timer,
+> `normalizeLoad`, and **the record**. `loop2`/`loop3` stay only as the no-network floor.
+> Full ruling: [[ai-layer-decision-2026-07-30]].
+>
+> ⚠️ **He said this twice before it was heard, and two sessions went into the descoped defect.**
+> When he says something is the AI's job, stop improving the deterministic version of it.
 >
 > **35 items closed** — P0b.1 · A.1 · A.4 · A.5 · A.7 · A.8 · A.10 · A.11 · A.12 · A.13 · A.15 ·
 > A.16 · B.1 · B.2 · B.6 · B.7 · B.8 · B.9 · B.11 · C.1 · C.2 · C.3 · C.4 · C.5 · C.6 · C.7 · C.8 ·
 > C.9 · C.12 · C.13 · C.14 · C.15 · C.18 · C.19 · C.20, plus the P0 programme audit (delivered as
-> an artifact, defect NOT yet fixed). **B.5 is half done.**
+> an artifact; its defect is now DESCOPED, see above). **B.5 is half done.**
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -221,15 +234,24 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 ---
 
-## P0 — THE PROGRAMME AUDIT (his stated first priority)
+## P0 — DESCOPED BY A RULING (2026-07-30)
+
+> ### ⛔ THE ENGINE NO LONGER DECIDES ANYTHING OUTSIDE THE WORKOUT
+> **Founder, final:** *"The engine decides during the workout only, on the basis of what it sees,
+> and that is it. Everything outside the workout is the AI's decision."*
+>
+> Every P0 item below was about the ENGINE choosing programme shape and volume. **It no longer
+> chooses either.** Do not fix the generator, the minute budget, the upper/lower split or the
+> volume model. See [[ai-layer-decision-2026-07-30]] — the ruling supersedes the "engine owns the
+> workout and everything derived from it" wording that preceded it.
 
 | # | Item | Status |
 |---|---|---|
-| P0.1 | Enumerate **every** programme the engine can generate — each sessions-per-week × sex × body-map default — and put them on a screen he can read. | **done** |
-| P0.2 | Compare each one against the most established, widely-used programme in the world for that session count and sex. | **done** |
-| P0.3 | **A 3-lift / ~25 min workout is not a workout.** Every session must land 45–60 min. (Screenshot 4: "Lower B · 3 LIFTS · ~25 MIN" was the 4th session of the week.) | open |
-| P0.4 | **A 50 kg woman training 3×/week got a programme with duplicated/twin days.** He questions the whole split. Must be explained or fixed. | open |
-| P0.5 | Verify the engine really does learn the loads (he is not convinced): "המנוע גם ככה לומד את המשקלים (אני מקווה ותבדוק את זה בכל מקרה)". | open |
+| P0.1 | Enumerate every programme the engine can generate and put them on a screen he can read. | **done** |
+| P0.2 | Compare each against the best-known programme for that session count and sex. | **done** |
+| P0.3 | Every session must land 45–60 min. | **descoped → becomes a VALIDATOR bound.** Not a generator fix. The AI proposes the session; the engine rejects one that does not fit her time budget. The assertions already exist, `it.skip`ped, in `__tests__/audit/everyProgramme.test.ts`. |
+| P0.4 | The twins / the upper-vs-lower split. | **descoped.** The split was an artifact of muscle count (5 upper vs 4 lower). The AI composes now; the engine does not apportion days at all. |
+| P0.5 | Verify the engine really learns the loads. | **narrowed to Loop 1 only** — the in-session correction (above band → up, below → down) is the one progression decision the engine keeps. Its BETWEEN-session progression is moot. Still worth verifying, because Loop 1 stays forever. |
 
 ## P0b — UNITS BY LOCATION
 
