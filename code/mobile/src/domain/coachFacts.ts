@@ -49,6 +49,7 @@
 import type { EffortReport, ItemResult, Profile, Session, SetLog, Program } from '@/data/local/models';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
+import { recentDecisions, type CoachDecision } from './coachLog';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
 
 /** Bumped when the shape changes, so a stored or in-flight sheet is never read as the wrong shape. */
@@ -200,6 +201,16 @@ export interface CoachFacts {
      */
     brief?: string;
   };
+  /**
+   * What the coach has already decided, and why — newest first (`domain/coachLog`).
+   *
+   * The return path. Everything else in this sheet is what HAPPENED; this is what the coach itself
+   * said about it last time. Without it, a decision in month three can contradict a decision in
+   * month one — not because the coach is inconsistent, but because it has no memory of deciding.
+   *
+   * It is the same sentence the athlete reads in the "Why?" sheet. There is no private version.
+   */
+  decided?: CoachDecision[];
   /** The workout that just happened. Absent when the sheet is built for any other reason. */
   session?: {
     at: string;
@@ -443,6 +454,8 @@ export interface CoachFactsInput {
   profile: Profile;
   /** The coach's own summary from the intake conversation — see `CoachFacts.athlete.brief`. */
   brief?: string;
+  /** Its own past decisions, oldest first as stored — see `CoachFacts.decided`. */
+  decided?: CoachDecision[];
   program: Program | null;
   /** Every session in the record, newest first. */
   history: Session[];
@@ -456,7 +469,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, program, history, justFinished }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, program, history, justFinished }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -493,6 +506,7 @@ export function coachFacts({ profile, brief, program, history, justFinished }: C
           },
         }
       : {}),
+    ...(decided?.length ? { decided: recentDecisions(decided) } : {}),
     performed: performedFrom(history),
     equipment: coachEquipment(),
     catalogue: coachCatalogue(),
