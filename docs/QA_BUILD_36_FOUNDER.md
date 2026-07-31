@@ -10,7 +10,13 @@
 > **P0 is DESCOPED.** Do not fix the programme generator, the 45–60 minute budget, the upper/lower
 > split, the twins, or the volume model. The engine stops composing programmes and stops drawing
 > conclusions after a session; it keeps Loop 1 (above band → up, below → down), the rest timer,
-> `normalizeLoad`, and **the record**. `loop2`/`loop3` stay only as the no-network floor.
+> `normalizeLoad`, and **the record**.
+>
+> **AND THERE IS NO DETERMINISTIC FALLBACK.** I proposed keeping `loop2`/`loop3` as a no-network
+> floor; he overruled it. A second decider is the thing being removed. **No connection → nothing is
+> decided, the app says so, the update waits.** Offline she still trains: the programme stands, the
+> loads are on it, Loop 1 still corrects her inside the session, the timer runs, the record is
+> written. Never implement "no network → no workout".
 > Full ruling: [[ai-layer-decision-2026-07-30]].
 >
 > ⚠️ **He said this twice before it was heard, and two sessions went into the descoped defect.**
