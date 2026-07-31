@@ -198,13 +198,12 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
             { id: makeId(), by: 'coach', text: parsed.answer.say },
           ]);
           /*
-           * THE RETURN PATH. Every reason the coach gave is written where the NEXT call will read
-           * it back — `coachFacts.decided`. Not a subsystem; a direction. Written before the
-           * caller is told, so a caller that navigates away on receipt cannot outrun it.
+           * THE DECISION LANDS, through the one seam that both callers share (`recordCoachAnswer`).
+           * The programme is stored and every reason is written where the NEXT call reads it back
+           * as `coachFacts.decided` — the return path. Done before the caller is told, so a caller
+           * that navigates away on receipt cannot outrun it.
            */
-          if (parsed.answer.plan?.notes?.length) {
-            void db.appendCoachDecisions(parsed.answer.plan.notes, new Date().toISOString());
-          }
+          void db.recordCoachAnswer(parsed.answer, new Date().toISOString());
           onAnswer?.(parsed.answer, { model: reply.model, usage: reply.usage });
         })
         .finally(() => {

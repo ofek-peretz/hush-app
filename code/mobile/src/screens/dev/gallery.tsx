@@ -10,7 +10,7 @@
  * (`screenshots/screens/<id>.png`), because that PNG is the acceptance test.
  */
 import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, ScrollView } from 'react-native';
 import { AppContext } from '@/state/stores/appStore';
 import { SessionContext } from '@/state/stores/sessionStore';
 import { HushTabBar } from '@/app/HushTabBar';
@@ -26,6 +26,7 @@ import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
 import type { CoachDecision } from '@/domain/coachLog';
+import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import { db } from '@/data/local/db';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
@@ -262,6 +263,75 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
  * With no token in `.env` it shows exactly what a misconfigured build shows: her message, marked as
  * not sent. That IS the state worth looking at, and it is honest rather than a mock of honesty.
  */
+/**
+ * THE WEEK THE COACH ACTUALLY BUILT, read back from storage.
+ *
+ * Plain on purpose — the founder is designing these screens in Claude Design, and a decorated
+ * placeholder is harder to replace than an undecorated one. What this is for is the question no
+ * test can answer: **is the programme any good?** A count on the chat screen proves it parsed. This
+ * shows the week, in the coach's own vocabulary, so a human can disagree with it.
+ *
+ * It reads what `db.recordCoachAnswer` wrote, so it is also the proof that the seam ran.
+ */
+function StoredCoachWeek() {
+  const [plan, setPlan] = React.useState<CoachPlan | null | undefined>(undefined);
+  React.useEffect(() => { void db.loadCoachPlan().then(setPlan); }, []);
+
+  const label = (i: PlannedItem): string => {
+    if (i.kind === 'reps') return `${i.reps[0]}–${i.reps[1]} reps${i.load != null ? ` @ ${i.load} kg` : ''}`;
+    if (i.kind === 'time') return `${i.seconds}s${i.load != null ? ` @ ${i.load} kg` : ''}`;
+    if (i.kind === 'distance') return `${i.metres} m`;
+    return '—';
+  };
+
+  if (plan === undefined) return <Text style={sw.dim}>reading…</Text>;
+  if (!plan) return <Text style={sw.dim}>Nothing stored yet. Have a conversation in 0.1a first.</Text>;
+
+  return (
+    <ScrollView contentContainerStyle={sw.page}>
+      {plan.sessions.map((session, si) => (
+        <View key={si} style={sw.session}>
+          <Text style={sw.name}>{session.day ? `${session.day} · ` : ''}{session.name}</Text>
+          {session.blocks.map((b, bi) => (
+            <View key={bi} style={sw.block}>
+              <Text style={sw.rounds}>
+                {b.rounds}× {b.restS != null ? `· ${b.restS}s between` : ''}
+              </Text>
+              {b.items.map((item, ii) => (
+                <View key={ii}>
+                  <Text style={sw.item}>{item.ex} — {label(item)}</Text>
+                  {/* The instruction. It has no field anywhere in the old `Slot`, which is exactly
+                      why the plan is stored whole rather than converted. */}
+                  {item.say ? <Text style={sw.say}>“{item.say}”</Text> : null}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      ))}
+      {plan.notes?.length ? (
+        <View style={sw.session}>
+          <Text style={sw.name}>Why</Text>
+          {plan.notes.map((n, i) => (
+            <Text key={i} style={sw.say}>{n.ex ? `${n.ex}: ` : ''}{n.say}</Text>
+          ))}
+        </View>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+const sw = StyleSheet.create({
+  page: { padding: 16, gap: 18 },
+  session: { gap: 8 },
+  name: { color: cream[0], fontSize: 15, fontWeight: '600' },
+  block: { gap: 2, paddingStart: 10 },
+  rounds: { color: cream[2], fontSize: 11 },
+  item: { color: cream[1], fontSize: 13 },
+  say: { color: cream[2], fontSize: 12, fontStyle: 'italic' },
+  dim: { color: cream[2], fontSize: 13, padding: 16 },
+});
+
 function LiveCoachChat() {
   // The coach's own past decisions, read back so they travel with the next call. Without this the
   // log is written and never read, which is the whole mechanism missing its return half.
@@ -1070,6 +1140,13 @@ export const GALLERY: GalleryEntry[] = [
     <InApp>
       <OnStage>
         <LiveCoachChat />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '0.1c', label: 'The coach — the week it built', status: 'live', note: 'reads back what the live conversation stored; the only place to judge whether the plan is good', render: () => (
+    <InApp>
+      <OnStage>
+        <StoredCoachWeek />
       </OnStage>
     </InApp>
   ) },

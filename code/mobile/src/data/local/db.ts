@@ -24,6 +24,7 @@ import type { HealthState } from '@/platform/health/healthModel';
 import type { Entitlement } from '@/domain/entitlement';
 // Type-only for the decision shape; `appendDecisions` is the pure accumulator that owns the cap.
 import { appendDecisions, type CoachDecision } from '@/domain/coachLog';
+import type { CoachPlan } from '@/domain/coachPlan';
 
 /**
  * How much of the conversation is kept.
@@ -77,6 +78,8 @@ const K = {
    * not. Both are the athlete's, and both go in a wipe. */
   coachThread: 'hush.coach.thread',
   coachLog: 'hush.coach.log',
+  /* The programme the coach decided, stored AS THE COACH WROTE IT — see `saveCoachPlan`. */
+  coachPlan: 'hush.coach.plan',
   schemaVersion: 'hush.schema.version',
 
   /* ── ONCE-PER-ATHLETE FLAGS ──────────────────────────────────────────────────────────────────
@@ -305,6 +308,24 @@ export const db = {
   },
   clearCoachThread: () => AsyncStorage.removeItem(K.coachThread),
 
+  /* ── The programme the coach decided ───────────────────────────────────────────────────────── */
+
+  loadCoachPlan: () => getJSON<CoachPlan>(K.coachPlan),
+  /**
+   * Stored in the coach's own vocabulary, NOT converted into `Program`.
+   *
+   * The obvious move is to translate it into the shape the screens already read. It is also the one
+   * the founder ruled against: `Slot` is `{ capability, exerciseId, setCount }` and nothing else, so
+   * a 5 km run has no home in it, a 45-second plank has no home in it, and `say` — the coach's
+   * execution instruction, the thing the app could never carry before — is dropped on the floor.
+   * A conversion that silently deletes three of the four shapes is not a conversion; it is the old
+   * engine's assumptions winning an argument that was already settled.
+   *
+   * So the plan is the record, whole, and the surfaces read IT. `buildPlanFromCoach` turns one
+   * session into runnable steps without losing anything on the way.
+   */
+  saveCoachPlan: (p: CoachPlan) => setJSON(K.coachPlan, p),
+
   /* ── The coach's own decisions, coming back ────────────────────────────────────────────────── */
 
   async loadCoachLog(): Promise<CoachDecision[]> {
@@ -320,6 +341,23 @@ export const db = {
   async appendCoachDecisions(notes: { ex?: string; say: string }[] | undefined, at: string): Promise<void> {
     const next = appendDecisions(await this.loadCoachLog(), notes, at);
     await setJSON(K.coachLog, next);
+  },
+
+  /**
+   * ════ ONE ANSWER LANDS IN ONE PLACE ════
+   *
+   * The single seam where a coach's reply becomes the app's state, and it exists because there are
+   * TWO callers that must not drift: the chat (a turn that decided something) and the post-session
+   * call (which never goes near a conversation). Two call sites doing "save the plan, then append
+   * the reasons" in their own order is how one of them ends up doing only half of it.
+   *
+   * The plan is written BEFORE the log. If only one of the two survives a crash, the programme she
+   * is about to train matters more than the record of why.
+   */
+  async recordCoachAnswer(answer: { plan: CoachPlan | null }, at: string): Promise<void> {
+    if (!answer.plan) return; // A turn that only spoke decided nothing. Nothing to record.
+    await this.saveCoachPlan(answer.plan);
+    await this.appendCoachDecisions(answer.plan.notes, at);
   },
 
   // ---- Cardio activities (Open training: recorded, never coached; newest first) ----
