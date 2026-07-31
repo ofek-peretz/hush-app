@@ -19,6 +19,7 @@ import { useCoach, type UseCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
 import type { CoachAnswer } from '@/domain/coachPlan';
 import type { Profile, Program, Session } from '@/data/local/models';
+import { db } from '@/data/local/db';
 
 jest.mock('@/platform/coach/coachClient', () => ({
   askCoach: jest.fn(),
@@ -89,7 +90,13 @@ function mount(opts: Partial<Parameters<typeof useCoach>[0]> = {}) {
   };
 }
 
-beforeEach(() => askCoach.mockReset());
+beforeEach(async () => {
+  askCoach.mockReset();
+  // The thread is PERSISTED now, and AsyncStorage's mock is one store for the whole file. Without
+  // this each test inherits the last one's conversation — which is itself the proof that the
+  // persistence works, and a reason every test below must start from an empty one.
+  await db.clearCoachThread();
+});
 
 describe('an ordinary exchange', () => {
   it('shows her message before anything has been sent, then the answer beside it', async () => {
@@ -237,5 +244,86 @@ describe('two messages in flight', () => {
     expect(c.busy).toBe(true);
     await act(async () => { release(words('done')); });
     expect(c.busy).toBe(false);
+  });
+});
+
+describe('it survives the app dying', () => {
+  /*
+   * The intake is a long conversation, and a hook that keeps its state in `useState` and nothing
+   * else loses all of it the moment the app is backgrounded and killed. Being asked everything
+   * again is the worst thing this screen could do to someone.
+   */
+  it('reads the conversation back on a fresh mount', async () => {
+    askCoach.mockResolvedValue(words('How many days a week can you train?'));
+    const first = mount();
+    await first.send('I want to get stronger');
+    first.unmount();
+
+    const second = mount();
+    // Hydration is a read, so let it land.
+    await act(async () => { await Promise.resolve(); });
+    expect(second.turns.map((t) => [t.by, t.text])).toEqual([
+      ['athlete', 'I want to get stronger'],
+      ['coach', 'How many days a week can you train?'],
+    ]);
+  });
+
+  it('restores a message that failed, because that is a fact, not a phase', async () => {
+    askCoach.mockResolvedValue({ ok: false, reason: 'offline' });
+    const first = mount();
+    await first.send('my knee hurts');
+    first.unmount();
+
+    const second = mount();
+    await act(async () => { await Promise.resolve(); });
+    expect(second.turns[0]).toMatchObject({ text: 'my knee hurts', failed: true });
+    // `pending` is a phase. Restoring one would show her a message for ever about to be sent.
+    expect(second.turns[0].pending).toBeUndefined();
+  });
+
+  it('never lets a slow read overwrite what she has already typed', async () => {
+    // The app is usable before the read lands. A hydration that arrives late must be DISCARDED —
+    // the live conversation wins over the stored one, or her message vanishes as she watches.
+    askCoach.mockResolvedValue(words('answered'));
+    const first = mount();
+    await first.send('stored message');
+    first.unmount();
+
+    const second = mount();
+    await second.send('what she just typed');
+    await act(async () => { await Promise.resolve(); });
+    expect(second.turns.map((t) => t.text)).toEqual(['what she just typed', 'answered']);
+  });
+
+  it('writes the coach reasons where the NEXT call reads them back', async () => {
+    // The return path: the reason given is the reason remembered. This is what stops month three
+    // contradicting month one, and it is the whole of the mechanism.
+    askCoach.mockResolvedValue({
+      ok: true,
+      text: JSON.stringify({
+        say: 'Holding your bench.',
+        sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }],
+        notes: [{ ex: 'bb_bench_press', say: 'Your last two sessions ended short, so I am holding it.' }],
+      }),
+      model: 'm', usage: null,
+    });
+    const c = mount();
+    await c.send('what now?');
+    await act(async () => { await Promise.resolve(); });
+
+    const log = await db.loadCoachLog();
+    expect(log.map((d) => [d.ex, d.say])).toEqual([
+      ['bb_bench_press', 'Your last two sessions ended short, so I am holding it.'],
+    ]);
+  });
+
+  it('writes nothing to the log for a turn that only spoke', async () => {
+    // A conversation is not a decision. A log full of chat is a log nobody can read a history out of.
+    askCoach.mockResolvedValue(words('It went down because your last two sets stopped at 8.'));
+    const before = (await db.loadCoachLog()).length;
+    const c = mount();
+    await c.send('why?');
+    await act(async () => { await Promise.resolve(); });
+    expect((await db.loadCoachLog()).length).toBe(before);
   });
 });

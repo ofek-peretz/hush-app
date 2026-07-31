@@ -25,6 +25,8 @@ import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
+import type { CoachDecision } from '@/domain/coachLog';
+import { db } from '@/data/local/db';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -261,13 +263,18 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
  * not sent. That IS the state worth looking at, and it is honest rather than a mock of honesty.
  */
 function LiveCoachChat() {
+  // The coach's own past decisions, read back so they travel with the next call. Without this the
+  // log is written and never read, which is the whole mechanism missing its return half.
+  const [decided, setDecided] = React.useState<CoachDecision[]>([]);
+  React.useEffect(() => { void db.loadCoachLog().then(setDecided); }, []);
   const facts = React.useMemo(
     () => coachFacts({
       profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
       program: { id: 'p', frequency: 4, days: [] },
       history: [],
+      decided,
     }),
-    [],
+    [decided],
   );
   const [note, setNote] = React.useState<string | null>(null);
   const coach = useCoach({

@@ -22,6 +22,28 @@ import type { HealthState } from '@/platform/health/healthModel';
 // Type-only — the cached entitlement (StoreKit is the source of truth; this is the
 // local mirror used for instant offline gating at boot).
 import type { Entitlement } from '@/domain/entitlement';
+// Type-only for the decision shape; `appendDecisions` is the pure accumulator that owns the cap.
+import { appendDecisions, type CoachDecision } from '@/domain/coachLog';
+
+/**
+ * How much of the conversation is kept.
+ *
+ * It travels back to the coach on every call, so an uncapped transcript is a bill that grows for
+ * ever on an athlete who has been here two years. Twenty exchanges covers an entire intake and any
+ * conversation anyone actually has in one sitting; past that, what keeps the coach consistent is
+ * the DECISION log, not the transcript — see `domain/coachLog`.
+ */
+export const COACH_THREAD_CAP = 40;
+
+/** One thing said, as stored. Deliberately not the screen's `CoachTurn`: the view's transient
+ *  marks (`pending`) mean nothing after a restart, and persisting them would restore a message as
+ *  eternally in-flight. `failed` DOES survive — it is a fact about the message, not a phase. */
+export interface PersistedCoachTurn {
+  id: string;
+  by: 'athlete' | 'coach';
+  text: string;
+  failed?: boolean;
+}
 
 const K = {
   profile: 'hush.profile',
@@ -41,6 +63,20 @@ const K = {
   engineV5: 'hush.engine.v5', // Hush v5 exercise-keyed progression state (see engine/v5)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
+
+  /* ── THE COACH'S TWO MEMORIES ────────────────────────────────────────────────────────────────
+   * They are separate because they are forgotten at different rates and for different reasons.
+   *
+   * `coachThread` is the CONVERSATION — what was said, in order. It exists so that closing the app
+   * halfway through the intake does not mean starting the intake again, which is the single worst
+   * thing this screen could do to someone. Capped: it travels back on every call, so it is paid
+   * for on every call, and beyond a point a transcript is not what makes the coach consistent.
+   *
+   * `coachLog` is WHAT WAS DECIDED, and why, in the coach's own words. That is what makes it
+   * consistent across months — see `domain/coachLog`. The transcript ages out; the decisions do
+   * not. Both are the athlete's, and both go in a wipe. */
+  coachThread: 'hush.coach.thread',
+  coachLog: 'hush.coach.log',
   schemaVersion: 'hush.schema.version',
 
   /* ── ONCE-PER-ATHLETE FLAGS ──────────────────────────────────────────────────────────────────
@@ -250,6 +286,40 @@ export const db = {
     const all = await this.loadHistory();
     all.unshift(s);
     await setJSON(K.history, all);
+  },
+
+  /* ── The coach's conversation ──────────────────────────────────────────────────────────────── */
+
+  loadCoachThread: () => getJSON<PersistedCoachTurn[]>(K.coachThread),
+  /**
+   * Write the thread, keeping the most recent `COACH_THREAD_CAP` turns.
+   *
+   * Capped at the WRITE rather than at the send, so what is stored is what is sent — a thread that
+   * kept everything and sent a window would show her a conversation the coach cannot see, and the
+   * first time it answered as though it had forgotten something visible on screen would be
+   * impossible to explain.
+   */
+  saveCoachThread(turns: PersistedCoachTurn[]): Promise<void> {
+    const kept = turns.length > COACH_THREAD_CAP ? turns.slice(turns.length - COACH_THREAD_CAP) : turns;
+    return setJSON(K.coachThread, kept);
+  },
+  clearCoachThread: () => AsyncStorage.removeItem(K.coachThread),
+
+  /* ── The coach's own decisions, coming back ────────────────────────────────────────────────── */
+
+  async loadCoachLog(): Promise<CoachDecision[]> {
+    return (await getJSON<CoachDecision[]>(K.coachLog)) ?? [];
+  },
+  /**
+   * Append this plan's reasons to the log.
+   *
+   * Mirrors `appendCompletedSession`: the caller hands over what happened, the repo owns the
+   * accumulation and the cap. It lives here rather than in the chat hook because the post-session
+   * call produces decisions too and never goes near a conversation.
+   */
+  async appendCoachDecisions(notes: { ex?: string; say: string }[] | undefined, at: string): Promise<void> {
+    const next = appendDecisions(await this.loadCoachLog(), notes, at);
+    await setJSON(K.coachLog, next);
   },
 
   // ---- Cardio activities (Open training: recorded, never coached; newest first) ----

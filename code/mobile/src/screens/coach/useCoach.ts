@@ -27,9 +27,20 @@
  * The model holds nothing between calls. Every turn she has said and every turn it has said travels
  * with each request, below the cache breakpoint — see `coachPrompt`. Including the failed ones: she
  * said them, and they never reached anybody.
+ *
+ * ── 5. AND IT SURVIVES THE APP DYING ────────────────────────────────────────────────────────────
+ * The thread is persisted after every change. The intake is a long conversation and losing it means
+ * being asked everything again — the single worst thing this screen could do to someone, and the
+ * default behaviour of a hook that keeps its state in `useState` and nothing else.
+ *
+ * The DECISIONS are written separately, to `coachLog`, and that is the return path the founder
+ * identified: the reason the coach gave comes back to the coach next time, which is what stops
+ * month three contradicting month one. The transcript ages out under a cap; the decisions do not.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { db, type PersistedCoachTurn } from '@/data/local/db';
 
 import type { CoachFacts } from '@/domain/coachFacts';
 import { COACH_PLAN_SCHEMA, parseCoachPlan, type CoachAnswer, type UnreadableReason } from '@/domain/coachPlan';
@@ -93,6 +104,8 @@ const makeId = () => `t${(nextId += 1)}`;
 export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions): UseCoach {
   const [turns, setTurns] = useState<CoachTurn[]>([]);
   const [inFlight, setInFlight] = useState(0);
+  /** Hydration has finished. Until it has, nothing may be written — see the effect below. */
+  const hydrated = useRef(false);
 
   /*
    * The sequence number lives in a ref, not in state.
@@ -108,6 +121,34 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
   const write = useCallback((next: (prev: CoachTurn[]) => CoachTurn[]) => {
     thread.current = next(thread.current);
     setTurns(thread.current);
+    // `pending` is deliberately not stored: it is a phase, and restoring one would show her a
+    // message that is for ever about to be sent. `failed` is a fact and does survive.
+    void db.saveCoachThread(
+      thread.current.map(({ id, by, text, failed }) => ({ id, by, text, ...(failed ? { failed: true as const } : {}) })),
+    );
+  }, []);
+
+  /*
+   * Read the conversation back at mount, once.
+   *
+   * The guard matters more than it looks. Without it a slow read can land AFTER she has already
+   * typed something — the app was responsive, she used it, and the stored thread would overwrite
+   * what she just said. So a hydration that arrives late is DISCARDED rather than applied: the
+   * live conversation always wins over the stored one.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void db.loadCoachThread().then((stored) => {
+      if (cancelled || hydrated.current || thread.current.length > 0) return;
+      hydrated.current = true;
+      if (!stored?.length) return;
+      thread.current = stored.map((s: PersistedCoachTurn) => ({ id: s.id, by: s.by, text: s.text, ...(s.failed ? { failed: true } : {}) }));
+      setTurns(thread.current);
+      // Ids came from a previous run's counter. Restart above them or the next turn collides with
+      // a restored one, and React reuses the wrong row.
+      nextId = Math.max(nextId, stored.length);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const send = useCallback(
@@ -156,6 +197,14 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
             ...prev.map((tn) => (tn.id === id ? { ...tn, pending: false } : tn)),
             { id: makeId(), by: 'coach', text: parsed.answer.say },
           ]);
+          /*
+           * THE RETURN PATH. Every reason the coach gave is written where the NEXT call will read
+           * it back — `coachFacts.decided`. Not a subsystem; a direction. Written before the
+           * caller is told, so a caller that navigates away on receipt cannot outrun it.
+           */
+          if (parsed.answer.plan?.notes?.length) {
+            void db.appendCoachDecisions(parsed.answer.plan.notes, new Date().toISOString());
+          }
           onAnswer?.(parsed.answer, { model: reply.model, usage: reply.usage });
         })
         .finally(() => {
