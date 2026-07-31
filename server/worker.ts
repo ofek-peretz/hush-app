@@ -153,7 +153,36 @@ export default {
 
     // A GET returns a liveness answer and NOTHING else — no version, no model name, no config. An
     // endpoint that describes itself to a stranger is an endpoint that has told them what to try.
-    if (request.method === 'GET') return json({ ok: true });
+    if (request.method === 'GET' && new URL(request.url).pathname !== '/models') return json({ ok: true });
+
+    /*
+     * TEMPORARY — REMOVE WITH THE 401 DIAGNOSTIC.
+     *
+     * `GET /models`, behind the same token. A wrong model id comes back from Google as a bare 404
+     * that names nothing, and the published marketing name is not always the API id. Asking the key
+     * itself which models it can reach is the only authoritative answer, and it beats guessing
+     * through deploys. Model names are not secret; the token still gates the route so it is not a
+     * free directory for anyone who finds the host.
+     */
+    if (request.method === 'GET') {
+      const sent = (request.headers.get('x-hush-token') ?? '').trim();
+      if (!sameSecret(sent, (env.HUSH_TOKEN ?? '').trim())) return json({ error: 'unauthorized' }, 401);
+      const list = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+        headers: { 'x-goog-api-key': env.GEMINI_API_KEY },
+      });
+      if (!list.ok) return json({ error: 'list_failed', status: list.status }, 502);
+      const data = (await list.json()) as {
+        models?: { name?: string; supportedGenerationMethods?: string[] }[];
+      };
+      return json({
+        // Only the ones that can actually answer a generateContent call — the list also carries
+        // embedding and tuning endpoints, which are not what we are looking for.
+        models: (data.models ?? [])
+          .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m) => m.name)
+          .filter(Boolean),
+      });
+    }
     if (request.method !== 'POST') return json({ error: 'method' }, 405);
 
     if (!env.GEMINI_API_KEY || !env.HUSH_TOKEN) {
