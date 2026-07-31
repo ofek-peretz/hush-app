@@ -734,6 +734,7 @@
     "changeWord_volume": "שיניתי כמה סטים השריר הזה נושא.",
     "changesEmpty": "עוד לא הזזתי את התרגיל הזה.",
     "liftEmpty": "עוד לא נמדד כלום בתרגיל הזה.",
+    "climbNeedsTwo": "העלייה מתחילה ביום השני שלך.",
     "pointLabel": "{{date}} — {{value}} {{unit}}",
     "youAreHere": "כאן את נמצאת",
     "dayOneTitle": "הסיפור שלך מתחיל אחרי האימון הראשון.",

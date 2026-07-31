@@ -675,6 +675,7 @@
     "changeWord_volume": "I changed how many sets this muscle carries.",
     "changesEmpty": "I have not moved this lift yet.",
     "liftEmpty": "Nothing measured on this lift yet.",
+    "climbNeedsTwo": "The climb starts on your second day.",
     "pointLabel": "{{date}} — {{value}} {{unit}}",
     "youAreHere": "You are here",
     "dayOneTitle": "Your story starts after workout one.",

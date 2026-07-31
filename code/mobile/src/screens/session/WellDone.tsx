@@ -768,7 +768,15 @@ export function SessionEarned({
                         <Text style={rose ? styles.earnedTo : styles.earnedDown}>{` → ${v.setsTo}`}</Text>
                       </Text>
                     </View>
-                    {v.reason ? <Text style={styles.earnedReason}>{t(v.reason.key, v.reason.params)}</Text> : null}
+                    {/* ════ THE REASON SPEAKS HEBREW TOO (found driving C.15) ════
+                        The engine stamps `muscle` as the RAW name — deliberately, because it is
+                        pure and the lift names in this copy are English. The row's TITLE has
+                        always translated it; the sentence under it did not, so a Hebrew athlete
+                        read "העבודה על chest מתקדמת". The muscle is already resolved two lines
+                        up for the title — the sentence gets the same word. */}
+                    {v.reason ? (
+                      <Text style={styles.earnedReason}>{t(v.reason.key, { ...v.reason.params, muscle })}</Text>
+                    ) : null}
                   </View>
                 );
               })}

@@ -23,6 +23,8 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Legend, WheelPicker, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { getGender } from '@/i18n/gender';
+import * as Localization from 'expo-localization';
+import { unitsForDevice } from '@/domain/unitsForDevice';
 import { track } from '@/platform/telemetry';
 import { color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -49,7 +51,12 @@ export function ManualInfo({ navigation, route }: Props) {
         // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
         goal: 'build_muscle',
         daysPerWeek: days,
-        units: 'kg',
+        // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
+        // This was `'kg'` for everybody, so every American athlete was told her bodyweight in
+        // kilos and then had to go and find a switch. `unitsForDevice` reads the measurement
+        // system SHE set when she set the phone up, and falls back to its region — see the domain
+        // file for why that order, and why `uk` means kilos in a gym.
+        units: unitsForDevice(Localization.getLocales()[0]),
         healthConnected,
         sex,
         weightKg: weight,

@@ -223,8 +223,16 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         ) : null}
       </View>
 
-      {/* THE CLIMB — every training day a target the finger can reach */}
-      {climb.points.length > 0 ? (
+      {/* ════ THE CLIMB — AND WHAT STANDS THERE BEFORE THERE IS ONE (founder C.18) ════
+          "No graph when you open a lift."
+          There was one, technically: at a single training day `Climb` draws a lone dot in the
+          middle of a 138 px box — no line, no fill, no shape. A dot in a void is not a graph, and
+          it does not tell her the honest thing, which is that ONE DAY IS NOT A CLIMB YET. Two
+          points are the minimum that can rise. So the graph draws from the second day and the
+          first one gets a sentence in the same slot: the page keeps its shape, and instead of
+          looking broken it says what it is waiting for. (Her CURRENT figure is beside the title
+          throughout — the number she has is never withheld, only the shape it has not made yet.) */}
+      {climb.points.length > 1 ? (
         <View style={styles.graph}>
           {graphW > 0 ? (
             <Climb
@@ -242,6 +250,10 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
               }
             />
           ) : null}
+        </View>
+      ) : climb.points.length === 1 ? (
+        <View style={styles.graphWaiting}>
+          <Text style={styles.climbWaiting}>{t('progress.climbNeedsTwo')}</Text>
         </View>
       ) : null}
 
@@ -453,6 +465,10 @@ const styles = StyleSheet.create({
 
   // A fixed HEIGHT so the page does not jump on the first layout pass, before the width is known.
   graph: { marginHorizontal: 30, marginTop: 14, height: 138 },
+  // C.18 — the climb's own slot, holding the reason it is not drawn yet. Same box, so the page
+  // below it does not move when the second day arrives and the graph takes the space over.
+  graphWaiting: { marginHorizontal: 30, marginTop: 14, height: 138, justifyContent: 'center' },
+  climbWaiting: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 16, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
 
   body: { flex: 1, minHeight: 0, paddingHorizontal: 30, paddingTop: 12 },
 

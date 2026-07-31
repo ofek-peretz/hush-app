@@ -3,10 +3,10 @@
 > ## ▶ WHERE TO PICK THIS UP
 > **Branch `feat/engine-progression-overhaul`, last commit `e98c668`, pushed. Tree clean.**
 >
-> **32 items closed** — A.1 · A.4 · A.5 · A.7 · A.8 · A.10 · A.11 · A.12 · A.13 · A.15 · A.16 ·
-> B.1 · B.2 · B.6 · B.7 · B.8 · B.9 · B.11 · C.1 · C.2 · C.3 · C.4 · C.5 · C.6 · C.7 · C.8 · C.9 ·
-> C.12 · C.13 · C.14 · C.19 · C.20, plus the P0 programme audit (delivered as an artifact, defect
-> NOT yet fixed). **B.5 is half done.**
+> **35 items closed** — P0b.1 · A.1 · A.4 · A.5 · A.7 · A.8 · A.10 · A.11 · A.12 · A.13 · A.15 ·
+> A.16 · B.1 · B.2 · B.6 · B.7 · B.8 · B.9 · B.11 · C.1 · C.2 · C.3 · C.4 · C.5 · C.6 · C.7 · C.8 ·
+> C.9 · C.12 · C.13 · C.14 · C.15 · C.18 · C.19 · C.20, plus the P0 programme audit (delivered as
+> an artifact, defect NOT yet fixed). **B.5 is half done.**
 >
 > **THE TODAY BATCH (A.5 · A.12 · A.15 · A.16) IS CLOSED.** What each one actually was:
 > *A.5* — the unit was removed on purpose by v7 2.1 ("a column of loads in one declared unit"). He
@@ -138,7 +138,36 @@
 > untouched. The opacity was a separate paragraph, argued from "at 0.55 the screen behind stayed
 > legible" — true of the light instrument, and the palette changed the answer.
 >
-> **NEXT:** C.15 · C.18 · P0b.1, and the P0 programme defect.
+> **C.18 · P0b.1 · C.15 ARE DONE.**
+> *C.18* — there WAS a graph: at a single training day `Climb` draws a lone dot in the middle of a
+> 138 px box. A dot in a void is not a graph, and it withheld the honest thing — one day is not a
+> climb. Two points are the fewest that can rise, so the graph draws from the second day and the
+> first gets a sentence in the same slot. Her CURRENT figure stays beside the title throughout.
+> New entries **3.2c** (one day) and **3.2d** (never trained) — 3.2b hands the screen EIGHT days,
+> so neither state anyone actually opens it on had an entry.
+> *P0b.1* — onboarding wrote `units: 'kg'` for everybody. It reads `measurementSystem` now — the
+> setting SHE chose when she set the phone up — falling back to the region. **That is what makes the
+> control's disappearance honest rather than a removal: it moves to where iOS already keeps it.**
+> `uk` resolves to KILOS on purpose: Britain weighs people in stones and its gyms in kilograms.
+> WARNING: **I left the Units row in the YOU tab.** Removing it strands every existing athlete whose
+> stored value disagrees with their region, with no way back. Say the word and it goes.
+>
+> **C.15 — THE ANSWER.** Loop 3 decides **per MUSCLE, never per exercise** (S-32). Complete every
+> set for a muscle AND have one of its lifts advance, and that muscle earns +1 — which lands on one
+> exercise inside it. An upper day trains three or four muscles, so three of them clearing that bar
+> is **three separate decisions, not one decision applied three times.** The bar is deliberately
+> high: not finishing then holds; finishing but nothing advanced holds (S-32b, "more volume breaking
+> a stall is a theory"); and the whole thing is capped by your time budget. Three at once means
+> three muscles each had a genuinely good session. **2.5 has said exactly this per muscle since
+> Rev 15 (`4361c6e`, 2026-07-29) — the same day your pass is dated, so the build you read predates
+> it.** New entry **2.5b** shows that screen with three muscles earning at once.
+> WARNING: **driving it found a real bug in the answer itself** — the engine stamps the muscle raw
+> (English, correctly: it is pure), the row's TITLE translated it and the sentence underneath did
+> not, so a Hebrew athlete read the muscle in English inside a Hebrew sentence. Fixed on 2.5 and in
+> the weekly letter. English gained too: the muscle keys are authored lowercase for mid-sentence,
+> so it no longer capitalises one there.
+>
+> **NEXT:** the P0 programme defect — the only substantive item left.
 >
 > **DO NOT TOUCH** — these die or change under the AI move (see [[where-we-are-now]]):
 > A.2, A.3, A.9, B.3, B.4, B.10, C.17, and the A.14 paywall half.
@@ -179,7 +208,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 
 | # | Item | Status |
 |---|---|---|
-| P0b.1 | Detect the athlete's region and choose lb vs kg from it, so the units SETTING can disappear entirely. | open |
+| P0b.1 | Detect the athlete's region and choose lb vs kg from it, so the units SETTING can disappear entirely. | **done** |
 
 ---
 
@@ -242,10 +271,10 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | C.12 | 2.4b Transition rest | The undo toast **overlaps the "+15 sec" control.** | **done** |
 | C.13 | 2.3 Logged | "SET 2 OF 4 LOGGED · 14 kg × 8 · Set recorded." is **left over from the previous app.** Either restyle it to show entering the band / rising / falling out of it, **or simply delete the screen** — the next one already appears. | **done** |
 | C.14 | 2.3 Correction | **Remove the "REST BEGINS IN 3" line and its bar.** (Same as A.11.) | **done** |
-| C.15 | 2.5 Session earned | The engine **added a set to three different exercises** in one session. Not necessarily wrong — he wants to understand **why**. | open |
+| C.15 | 2.5 Session earned | The engine **added a set to three different exercises** in one session. Not necessarily wrong — he wants to understand **why**. | **answered — see the banner; a Hebrew bug in the answer is fixed** |
 | C.16 | 2.3b Final set | "LIFT 6/6 · SET 3 · FINAL · LOGGED · NEXT LIFT COMING UP" — **the screen does not look good enough.** | open |
 | C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | open |
-| C.18 | 3.2b Lift detail | **No graph** when you open a lift. | open |
+| C.18 | 3.2b Lift detail | **No graph** when you open a lift. | **done** |
 | C.19 | 3.4 Cardio live | **Not what the HTML draws.** There is a **line across the middle** connected to nothing — remove it. And for someone with **no Apple Watch, HR must not appear** — tie it to the same flag as the watch presence. | **done** |
 | C.20 | 6.2 Live Activity | Our lock-screen activity is **small next to Spotify's.** Make it the same size, lay the data out better, and make calories legible. | **done — needs a device build to SEE** |
 

@@ -356,7 +356,9 @@ export function WeeklyUpdate({ navigation, route }: Props) {
         dir: v.setsTo > v.setsFrom ? 'up' : ('down' as LoadDirection),
         magnitude: Math.abs(v.setsTo - v.setsFrom),
         slotId: null,
-        line: t(v.explanation.text.key, v.explanation.text.params ?? {}),
+        // The muscle is stamped raw by the engine (it is pure); the letter says it in her
+        // language, exactly as the row's own name does above.
+        line: t(v.explanation.text.key, { ...(v.explanation.text.params ?? {}), muscle: t(`muscle.${v.muscle}`) }),
       });
     }
     return rows.sort((a, b) => b.magnitude - a.magnitude);

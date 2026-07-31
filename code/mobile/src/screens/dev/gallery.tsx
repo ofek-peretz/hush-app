@@ -932,6 +932,42 @@ export const GALLERY: GalleryEntry[] = [
   // Mounting the whole of WellDone showed the SCAN for 3.4 s and then an empty ledger — the harness
   // has no history and no engine, so the one thing 2.5 exists to say could not be seen at all. The
   // beat is a view now, and this is the handoff's own Upper A: three decided lifts and Loop 3's set.
+  // ════ C.15's OWN STATE ════
+  // "The engine added a set to three different exercises in one session — I want to understand why."
+  // Loop 3 decides per MUSCLE (S-32), not per exercise: complete every set for a muscle AND have
+  // one of its lifts advance, and that muscle earns +1 — which lands on one exercise inside it. An
+  // upper day trains three or four muscles, so three of them clearing that bar is three separate
+  // decisions, not one decision applied three times. 2.5 has said so per muscle since Rev 15
+  // (2026-07-29 — the same day his pass is dated, so the build he read predates it). This is what
+  // that screen looks like when three muscles earn at once.
+  { id: '2.5b', label: 'Session earned — three muscles', status: 'live', note: 'C.15: three MUSCLES earned, not three exercises', render: () => (
+    <InApp>
+      <SessionEarned
+        savedLegend="Upper A · Saved"
+        partial={false}
+        durationLabel="58"
+        kcal={468}
+        tonnes={13.2}
+        answered
+        decisions={[
+          { key: 'bb_bench_press', name: 'Barbell Bench Press', from: '34', to: '36', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Bench Press', delta: 2 } } },
+          { key: 'bb_row', name: 'Barbell Row', from: '44', to: '46', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Row', delta: 2 } } },
+          { key: 'bb_overhead_press', name: 'Overhead Press', from: '21', to: '22.5', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Overhead Press', delta: 1.5 } } },
+        ]}
+        volume={[
+          { muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } },
+          { muscle: 'Back', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'back' } } },
+          { muscle: 'Shoulders', setsFrom: 2, setsTo: 3, reason: { key: 'explain.volumeUp.text', params: { muscle: 'shoulders' } } },
+        ]}
+        onDone={noop}
+        onRecord={noop}
+        onShare={noop}
+      />
+    </InApp>
+  ) },
   { id: '2.5', label: 'What this session earned', status: 'live', render: () => (
     <InApp>
       <SessionEarned
@@ -966,6 +1002,37 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.1c', label: 'The Saturday letter — a steady week', status: 'live', note: 'nothing changed; the standing record answers', render: () => mount(WeeklyUpdate, { previewPlan: steadyWeek }) },
   { id: '3.2', label: 'Progress — lifts', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressView}</UnderTabs></InApp> },
   { id: '3.2b', label: 'Lift detail', status: 'live', note: 'tap a point on the climb', render: () => <InApp>{liftDetailView}</InApp> },
+  // C.18's own states. 3.2b hands the screen EIGHT training days, so the two an athlete actually
+  // opens it on first — one day, and none — had no entry at all. One day is where "no graph" came
+  // from: `Climb` drew a lone dot in a 138 px box.
+  { id: '3.2c', label: 'Lift detail — one day', status: 'live', note: 'the climb has not started yet — C.18', render: () => (
+    <InApp>
+      <LiftDetailView
+        exerciseId="bb_row"
+        units="kg"
+        loaded
+        band={[8, 10]}
+        onBack={noop}
+        climb={{ mode: 'load', firstAtMs: daysAgo(0), current: 34, best: 34, points: [{ atMs: Date.now(), value: 34, dayBest: 34, sessionId: 's1' }] }}
+        moments={[]}
+        changes={[]}
+      />
+    </InApp>
+  ) },
+  { id: '3.2d', label: 'Lift detail — never trained', status: 'live', render: () => (
+    <InApp>
+      <LiftDetailView
+        exerciseId="bb_row"
+        units="kg"
+        loaded
+        band={[8, 10]}
+        onBack={noop}
+        climb={{ mode: 'load', firstAtMs: null, current: 0, best: 0, points: [] }}
+        moments={[]}
+        changes={[]}
+      />
+    </InApp>
+  ) },
   { id: '3.3', label: 'Progress — log', status: 'live', render: () => (
     <InApp>
       <UnderTabs active={2}>

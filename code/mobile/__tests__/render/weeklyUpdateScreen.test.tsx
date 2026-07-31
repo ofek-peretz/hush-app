@@ -182,9 +182,16 @@ describe('S-45 · a Loop 3 volume move is muscle news, and the letter shows it',
     expect(said).toContain('9');
     expect(said).toContain(`→ 10 ${tg('weekly.setsUnit')}`);
     // The reason UNFOLDS: a muscle has no case sheet to open, so its WHY is a sentence in place.
-    expect(said).not.toContain(tg('explain.volumeUp.text', { muscle: 'Chest' }));
+    //
+    // It is resolved with the TRANSLATED muscle, not the engine's raw stamp. The engine is pure
+    // and hands over the English name; the row's title has always translated it and the sentence
+    // beneath it did not, so a Hebrew athlete read "העבודה על chest מתקדמת" (found while answering
+    // C.15). English gained from the same fix: `muscle.*` is authored lowercase for mid-sentence,
+    // so the line now reads "Your chest work is progressing" instead of capitalising it.
+    const why = tg('explain.volumeUp.text', { muscle: tg('muscle.Chest') });
+    expect(said).not.toContain(why);
     await act(async () => byLabel(r, tg('weekly.whyLink'))!.props.onPress());
-    expect(texts(r).join(' ')).toContain(tg('explain.volumeUp.text', { muscle: 'Chest' }));
+    expect(texts(r).join(' ')).toContain(why);
     // A volume-only week is NOT a "steady" week — the evidence screen must not appear.
     expect(texts(r).join(' ')).not.toContain(tg('weekly.evidenceIntro'));
   });
