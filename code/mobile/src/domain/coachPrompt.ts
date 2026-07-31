@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 1;
+export const COACH_PROMPT_VERSION = 2;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -98,6 +98,14 @@ function howToAnswer(): string {
   return `HOW YOU ANSWER
 Reply with JSON matching the schema below, and nothing else.
 
+"say" IS ALWAYS REQUIRED. It is what she reads — your actual reply to her, in your own voice. Every
+turn has one, whether or not you changed anything.
+
+"sessions" IS OPTIONAL, AND MOST TURNS DO NOT HAVE ONE. Attach it only when this turn decides her
+programme: after a session, or when the intake conversation is finished and you are ready to build.
+Answering a question does not need a programme attached, and re-sending an unchanged one is how she
+ends up thinking something changed. When you do attach it, attach the WHOLE thing, not a patch.
+
 A SESSION IS BLOCKS, AND A BLOCK IS ITEMS DONE "rounds" TIMES.
 That one idea covers everything: four sets of bench is one block of one item, rounds 4. A circuit of
 three exercises three times through is one block of three items, rounds 3. Six 400 m repeats with a
@@ -144,14 +152,42 @@ export function preamble(): string {
   ].join('\n');
 }
 
+/**
+ * One thing that was said, by one of the two of them.
+ *
+ * The conversation is sent back in full on every turn, because the model holds nothing between
+ * calls. This was missing for a build and the intake was quietly impossible without it: the coach is
+ * told to "ask one or two questions at a time, and build it when you know enough", which it cannot
+ * do if every call arrives with no memory of what it already asked. It would open with the same
+ * first question for ever.
+ */
+export interface CoachSaid {
+  from: 'her' | 'coach';
+  text: string;
+}
+
 /** What the coach is being asked to do this time. */
 export type CoachAsk =
   /** A workout just ended. Decide what happens next. */
   | { kind: 'after_session' }
-  /** She said something. Answer it. */
-  | { kind: 'chat'; message: string }
+  /** She said something. Answer it. The whole conversation so far, hers last. */
+  | { kind: 'chat'; turns: CoachSaid[] }
   /** The intake conversation — no record yet, and the brief is being built. */
-  | { kind: 'intake'; message: string };
+  | { kind: 'intake'; turns: CoachSaid[] };
+
+/**
+ * The conversation, as text.
+ *
+ * Written out rather than sent as a provider's `messages` array on purpose: every provider spells
+ * multi-turn differently, and `PromptBlock` exists precisely so the prompt does not know which one
+ * it is talking to. It also keeps the whole conversation in ONE block below the cache breakpoint,
+ * where it belongs — a turn appended to a cached prefix would cold-cache every athlete.
+ */
+function conversation(turns: CoachSaid[]): string {
+  return turns
+    .map((s) => `${s.from === 'her' ? 'SHE' : 'YOU'}: ${s.text}`)
+    .join('\n');
+}
 
 /**
  * One block of the request, and whether it may be cached.
@@ -218,20 +254,29 @@ export function coachRequest({
     case 'after_session':
       blocks.push({
         text:
-          'She just finished the session in "session". Decide what happens from here and reply with ' +
-          'the whole programme, not a patch.',
+          'She just finished the session in "session". Decide what happens from here: say what you ' +
+          'changed and why in "say", and attach the whole programme in "sessions" — not a patch.',
       });
       break;
     case 'chat':
-      blocks.push({ text: `She says:\n${ask.message}` });
+      blocks.push({
+        text:
+          'THE CONVERSATION SO FAR — her last line is what you are answering:\n' +
+          `${conversation(ask.turns)}\n\n` +
+          'Answer her. Attach "sessions" only if this turn actually changes her programme; most ' +
+          'do not, and a question answered is a complete reply.',
+      });
       break;
     case 'intake':
       blocks.push({
         text:
           'This is the intake conversation. She has no record yet — "performed" is empty and there ' +
           'is no session. Ask what you need to build her the right programme, one or two questions ' +
-          'at a time, following what she actually said rather than a list. When you know enough, ' +
-          `build it.\n\nShe says:\n${ask.message}`,
+          'at a time, following what she actually said rather than a list. Do not re-ask what she ' +
+          'has already told you below. When you know enough, build it — say so in "say" and attach ' +
+          'the whole programme in "sessions" in the same reply.\n\n' +
+          'THE CONVERSATION SO FAR — her last line is what you are answering:\n' +
+          conversation(ask.turns),
       });
       break;
   }

@@ -23,6 +23,8 @@ import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
+import { useCoach } from '@/screens/coach/useCoach';
+import { coachFacts } from '@/domain/coachFacts';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -51,7 +53,7 @@ import { WhyChangedSheet, type WhyChangedProps } from '@/components/WhyChangedSh
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { Legend } from '@/components/ds';
 import { Text } from 'react-native';
-import { font, stage } from '@/design/tokens';
+import { cream, font, stage } from '@/design/tokens';
 
 /**
  * How a handoff screen stands, from this harness's point of view.
@@ -246,6 +248,42 @@ function nav(params: Record<string, unknown> = {}): Record<string, unknown> {
  * component with a canned reply on a real delay: the composing state is genuine, the scroll is
  * genuine, only the answer is written in advance.
  */
+/**
+ * THE REAL ONE. Same screen, wired to `useCoach`, talking to the deployed Worker.
+ *
+ * The scripted entry above answers the question "what does waiting feel like". This one answers the
+ * only question that matters after that: does it work. It is here because of the lesson this project
+ * keeps re-learning — **the gallery cannot see what it cannot drive.** A chat that has only ever
+ * spoken to a `setTimeout` has never been seen to fail, and every interesting state of this screen
+ * is a failure state.
+ *
+ * With no token in `.env` it shows exactly what a misconfigured build shows: her message, marked as
+ * not sent. That IS the state worth looking at, and it is honest rather than a mock of honesty.
+ */
+function LiveCoachChat() {
+  const facts = React.useMemo(
+    () => coachFacts({
+      profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
+      program: { id: 'p', frequency: 4, days: [] },
+      history: [],
+    }),
+    [],
+  );
+  const [note, setNote] = React.useState<string | null>(null);
+  const coach = useCoach({
+    facts,
+    mode: 'intake',
+    onAnswer: (a) => setNote(a.plan ? `a programme arrived: ${a.plan.sessions.length} sessions` : null),
+    onTrouble: (t) => setNote(`no answer — ${t}`),
+  });
+  return (
+    <>
+      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} opening="What are you training for?" />
+      {note ? <Text style={{ color: cream[2], fontSize: 11, padding: 8 }}>{note}</Text> : null}
+    </>
+  );
+}
+
 function ScriptedCoachChat() {
   const [turns, setTurns] = React.useState<CoachTurn[]>([]);
   const [busy, setBusy] = React.useState(false);
@@ -1007,6 +1045,13 @@ export const GALLERY: GalleryEntry[] = [
     <InApp>
       <OnStage>
         <ScriptedCoachChat />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '0.1a', label: 'The coach — LIVE', status: 'live', note: 'talks to the real Worker; with no token it shows the not-sent state honestly', render: () => (
+    <InApp>
+      <OnStage>
+        <LiveCoachChat />
       </OnStage>
     </InApp>
   ) },

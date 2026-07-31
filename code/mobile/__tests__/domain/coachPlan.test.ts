@@ -21,8 +21,8 @@ import type { Profile, Program, Session, SetLog } from '@/data/local/models';
  */
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy',
-  daysPerWeek: 4, repBand: '8-12', healthConnected: false,
+  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  daysPerWeek: 4, repBand: '8-10', healthConnected: false,
 };
 
 function set(exerciseId: string, i: number, w: number, r: number): SetLog {
@@ -42,12 +42,16 @@ const history: Session[] = [{
 const program: Program = { id: 'p', frequency: 4, days: [] };
 const facts = coachFacts({ profile, program, history, justFinished: history[0] });
 
-const wrap = (sessions: unknown) => JSON.stringify({ v: COACH_PLAN_VERSION, sessions });
+// Every reply says something — see `CoachAnswer`. These fixtures are about the PROGRAMME, so the
+// sentence is a constant here; the turns that only speak are their own describe block below.
+const wrap = (sessions: unknown) =>
+  JSON.stringify({ v: COACH_PLAN_VERSION, say: 'Here is your week.', sessions });
 
 function read(raw: unknown) {
   const r = parseCoachPlan(raw, facts);
   if (!r.ok) throw new Error(`expected a readable plan, got ${r.reason}${r.at ? ` at ${r.at}` : ''}`);
-  return r;
+  if (!r.answer.plan) throw new Error('expected a programme, got words only');
+  return { ...r, plan: r.answer.plan, say: r.answer.say };
 }
 
 function unreadable(raw: unknown): UnreadableReason {
@@ -228,6 +232,7 @@ describe('no answer arrived — the update waits, nothing is written', () => {
   it('keeps every note it can read, and never loses a decision over prose', () => {
     const raw = JSON.stringify({
       v: COACH_PLAN_VERSION,
+      say: 'One change this week.',
       sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [item] }] }],
       notes: [
         { ex: 'bb_bench_press', say: 'You cleared 12 at 30, so we go up.' },
@@ -280,5 +285,48 @@ describe('the schema is what makes a small model succeed', () => {
     expect(json).not.toContain('run_outdoor');
     // Small enough to sit beside the sheet on every call without being noticed.
     expect(Math.round(json.length / 3.5)).toBeLessThan(500);
+  });
+});
+
+describe('a turn speaks, and only some turns decide', () => {
+  /*
+   * The gap this closes: for one build the schema REQUIRED `sessions`, which made every possible
+   * turn one of two broken things. Ask "why did my bench go down?" and the coach had to emit a whole
+   * programme to answer a question. Drop the schema so it could answer in prose, and the intake
+   * conversation could never build the programme it was told to build. Neither is a coach.
+   */
+
+  it('reads a reply with no programme as an ANSWER, not as a failure', () => {
+    const r = parseCoachPlan(
+      JSON.stringify({ v: COACH_PLAN_VERSION, say: 'It went down because your last two sets stopped at 8.' }),
+      facts,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.answer.plan).toBeNull();
+    expect(r.answer.say).toBe('It went down because your last two sets stopped at 8.');
+  });
+
+  it('carries the sentence alongside the programme when a turn does both', () => {
+    // The intake's last turn is exactly this: words that say it is ready, and the programme with them.
+    const r = read(wrap([{ name: 'Upper A', blocks: [{ rounds: 3, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 30 }] }] }]));
+    expect(r.say).toBe('Here is your week.');
+    expect(r.plan.sessions.length).toBe(1);
+  });
+
+  it('refuses a programme that arrives with nothing said', () => {
+    // A plan with no sentence attached is the thing this app exists to not be — see the WHY law.
+    expect(unreadable(JSON.stringify({
+      v: COACH_PLAN_VERSION,
+      sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }],
+    }))).toBe('nothing_said');
+    expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, say: '   ' }))).toBe('nothing_said');
+  });
+
+  it('tells an ABSENT programme apart from an EMPTY one', () => {
+    // Absent means it only spoke. Empty means it set out to decide and produced nothing, and a
+    // programme of zero sessions is worse than telling her the update is waiting.
+    expect(parseCoachPlan(JSON.stringify({ v: COACH_PLAN_VERSION, say: 'ok' }), facts).ok).toBe(true);
+    expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, say: 'ok', sessions: [] }))).toBe('no_sessions');
   });
 });

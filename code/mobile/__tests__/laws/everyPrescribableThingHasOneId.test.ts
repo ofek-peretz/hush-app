@@ -22,7 +22,7 @@ import type { Profile, Program } from '@/data/local/models';
  */
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy', daysPerWeek: 4, healthConnected: false,
+  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
 };
 const program: Program = { id: 'p', frequency: 4, days: [] };
 
@@ -56,6 +56,7 @@ describe('every prescribable thing has exactly one id', () => {
       const r = parseCoachPlan(
         JSON.stringify({
           v: COACH_PLAN_VERSION,
+          say: 'x',
           sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind, ex: id, reps: [8, 12], load: null }] }] }],
         }),
         facts,

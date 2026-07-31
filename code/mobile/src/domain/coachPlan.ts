@@ -145,6 +145,31 @@ export interface CoachPlan {
   notes?: { ex?: string; say: string }[];
 }
 
+/**
+ * ════ ONE TURN OF THE COACH — WHAT IT SAID, AND WHAT IT DECIDED ════
+ *
+ * Every turn says something. Some turns also decide.
+ *
+ * That split is the whole reason this type exists, and it was missing for one build. The schema used
+ * to REQUIRE `sessions`, which made every possible turn one of two broken things: ask "why did my
+ * bench go down?" and the coach must emit an entire programme to answer a question; or drop the
+ * schema for chat and the intake conversation can never build the programme it was just instructed
+ * to build. Neither is a coach. **A real coaching turn is words, and sometimes a decision with them.**
+ *
+ * It also collapses the call types into ONE schema. Chat, intake and the post-session call now send
+ * a byte-identical preamble, so they share a cache entry instead of holding three — see
+ * `coachPrompt`'s economics.
+ */
+export interface CoachAnswer {
+  /**
+   * What she reads. **Always present.** A turn with nothing to say is not a turn, and a programme
+   * that arrives with no sentence attached is the thing this app exists to not be.
+   */
+  say: string;
+  /** The programme, whole, when this turn decided one. `null` when the coach only spoke. */
+  plan: CoachPlan | null;
+}
+
 /* ─────────────────────────────────────────────────────────────── The schema handed to the model */
 
 const ITEM_SCHEMA = {
@@ -179,9 +204,12 @@ const ITEM_SCHEMA = {
 export const COACH_PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['v', 'sessions'],
+  // `say` is required and `sessions` is NOT. Every turn speaks; only some decide. Requiring
+  // `sessions` forced a whole programme out of "why did my bench go down?" — see `CoachAnswer`.
+  required: ['v', 'say'],
   properties: {
     v: { type: 'integer' },
+    say: { type: 'string' },
     sessions: {
       type: 'array',
       items: {
@@ -233,6 +261,10 @@ export type UnreadableReason =
   | 'not_json'
   | 'not_an_object'
   | 'wrong_version'
+  /** Nothing was said. A programme with no sentence attached is not an answer we will show her. */
+  | 'nothing_said'
+  /** `sessions` was PRESENT and empty — the coach tried to decide and produced nothing. Absent is
+   *  not this: absent means it only spoke, which is a legitimate turn. */
   | 'no_sessions'
   | 'session_malformed'
   | 'no_blocks'
@@ -244,7 +276,7 @@ export type UnreadableReason =
   | 'not_a_number';
 
 export type ParsedPlan =
-  | { ok: true; plan: CoachPlan; /** Loads the typist moved onto a real rung, for telemetry. */ snapped: number }
+  | { ok: true; answer: CoachAnswer; /** Loads the typist moved onto a real rung, for telemetry. */ snapped: number }
   | { ok: false; reason: UnreadableReason; at?: string };
 
 const liftById = new Map<string, Exercise>(EXERCISES.map((e) => [e.id, e]));
@@ -273,6 +305,20 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   }
   if (!isObj(root)) return { ok: false, reason: 'not_an_object' };
   if (root.v !== COACH_PLAN_VERSION) return { ok: false, reason: 'wrong_version' };
+
+  const say = typeof root.say === 'string' ? root.say.trim() : '';
+  if (say.length === 0) return { ok: false, reason: 'nothing_said' };
+
+  /*
+   * NO `sessions` IS AN ANSWER, NOT A FAILURE — but an EMPTY `sessions` is a failure.
+   *
+   * Absent means the coach only spoke, which is most turns: a question answered, a clarification
+   * asked during intake. Present-and-empty means it set out to decide and produced nothing, and
+   * handing her a programme of zero sessions is worse than telling her the update is waiting.
+   */
+  if (root.sessions === undefined || root.sessions === null) {
+    return { ok: true, answer: { say, plan: null }, snapped: 0 };
+  }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
   }
@@ -379,7 +425,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
 
   return {
     ok: true,
-    plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
+    answer: { say, plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) } },
     snapped,
   };
 }

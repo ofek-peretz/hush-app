@@ -208,7 +208,7 @@ describe('the record keeps one answer per lift', () => {
 
 describe('the sheet carries it, and carries absence as absence', () => {
   const profile: Profile = {
-    sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy', daysPerWeek: 4, healthConnected: false,
+    sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
   };
   const program: Program = { id: 'p', frequency: 4, days: [] };
   const session: Session = {

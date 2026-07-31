@@ -67,7 +67,7 @@ describe('the sheet names every field it sends', () => {
       sex: 'male',
       weightKg: 80,
       units: 'kg',
-      goal: 'hypertrophy',
+      goal: 'build_muscle',
       daysPerWeek: 3,
       healthConnected: true,
       name: 'Ofek Peretz',
@@ -93,7 +93,7 @@ describe('the sheet names every field it sends', () => {
 
   it('passes the coach’s own brief back untouched, and omits it when there is none', () => {
     const profile = {
-      sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy', daysPerWeek: 4, healthConnected: false,
+      sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
     } as unknown as Profile;
     const program: Program = { id: 'p', frequency: 4, days: [] };
     const brief = 'Plays 5-a-side Thursdays. Right hamstring tweaked twice, both times sprinting cold.';

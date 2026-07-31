@@ -20,8 +20,8 @@ import type { Profile, Program, Session, SetLog } from '@/data/local/models';
  */
 
 const dana: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'hypertrophy',
-  daysPerWeek: 4, repBand: '8-12', workoutMinutes: 55, healthConnected: false, name: 'Dana Levi',
+  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  daysPerWeek: 4, repBand: '8-10', workoutMinutes: 55, healthConnected: false, name: 'Dana Levi',
 };
 const yossi: Profile = {
   sex: 'male', weightKg: 95, units: 'lb', goal: 'get_stronger',
@@ -56,7 +56,7 @@ const forDana = () =>
 const forYossi = () =>
   coachRequest({
     facts: coachFacts({ profile: yossi, program: null, history: [] }),
-    ask: { kind: 'chat', message: 'Can I swap the squat for a leg press this week?' },
+    ask: { kind: 'chat', turns: [{ from: 'her', text: 'Can I swap the squat for a leg press this week?' }] },
     cache: true,
   });
 
@@ -117,7 +117,7 @@ describe('everything that varies is below the breakpoint', () => {
   it('tells the intake that there is no record yet, rather than sending an empty one silently', () => {
     const r = coachRequest({
       facts: coachFacts({ profile: dana, program: null, history: [] }),
-      ask: { kind: 'intake', message: 'I want to be able to run a half marathon.' },
+      ask: { kind: 'intake', turns: [{ from: 'her', text: 'I want to be able to run a half marathon.' }] },
     });
     const last = r.blocks.at(-1)!.text;
     expect(last).toContain('intake');
