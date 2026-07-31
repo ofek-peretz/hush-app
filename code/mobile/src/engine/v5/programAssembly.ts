@@ -235,7 +235,7 @@ export function assembleV5DayLists(
   /** Her sex + bodyweight — read ONLY to ask whether a lift's floor is loadable for her (S-55b). */
   profile?: LoadProfile,
 ): DayList[] {
-  const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER); // off muscles absent (S-2)
+  const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER, days); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
   const trainable = Object.keys(targets);
   if (trainable.length === 0 || days <= 0) return []; // S-3

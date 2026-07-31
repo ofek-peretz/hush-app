@@ -85,10 +85,18 @@ describe('S-56 · ask-back fires only for a muscle she actually TRAINED (a chang
   });
 });
 
+/**
+ * ⚠️ `weeklyTargets` TAKES `days` NOW (founder P0.3 — B-2 scales with how often she trains), and
+ * these three call sites were passing the old arity. `__tests__` is not covered by `tsconfig.json`
+ * (it includes `src/**` only), so nothing typechecked them: `days` arrived `undefined`, every
+ * target came out NaN, and the split assertions failed with `NaN` and `0` rather than with anything
+ * that named the cause. The engine now refuses a non-finite `days` outright — see
+ * `startingWeeklySets` — so this cannot degrade silently again.
+ */
 describe('the programme SHAPE is an output of volume — emphasis drives the split, no shelf', () => {
   it('mark Glutes + Quads on a 3-day week → two lower days fall out automatically', () => {
     const map: BodyMap = { Glutes: 'emphasis', Quads: 'emphasis' };
-    const targets = weeklyTargets(map, ALL);
+    const targets = weeklyTargets(map, ALL, 3);
     const vol = regionVolume(targets);
     expect(vol.lower).toBeGreaterThan(0);
     const days = assignRegionDays(targets, 3);
@@ -96,14 +104,14 @@ describe('the programme SHAPE is an output of volume — emphasis drives the spl
     expect(days.filter((d) => d === 'lower').length).toBeGreaterThanOrEqual(2);
   });
   it('a balanced map splits days without favouring either region unfairly', () => {
-    const targets = weeklyTargets({}, ALL);
+    const targets = weeklyTargets({}, ALL, 4);
     const days = assignRegionDays(targets, 4);
     expect(days.filter((d) => d === 'lower').length).toBeGreaterThanOrEqual(1);
     expect(days.filter((d) => d === 'upper').length).toBeGreaterThanOrEqual(1);
   });
   it('turning legs off → no lower days', () => {
     const legsOff: BodyMap = { Quads: 'off', Hamstrings: 'off', Glutes: 'off', Calves: 'off' };
-    const days = assignRegionDays(weeklyTargets(legsOff, ALL), 4);
+    const days = assignRegionDays(weeklyTargets(legsOff, ALL, 4), 4);
     expect(days.every((d) => d === 'upper')).toBe(true);
   });
   it('regionOf classifies muscles', () => {

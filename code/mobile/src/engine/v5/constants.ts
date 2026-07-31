@@ -82,11 +82,58 @@ export const CANONICAL_MUSCLE_ORDER: readonly string[] = [
 // constant, one home — it is gone.
 
 /**
- * B-2 — starting weekly sets per muscle, before earned/cut volume (Loop 3) takes over. `base` for a
- * normal muscle; an emphasised muscle starts with `base + emphasisBonus` (its first claim on volume,
- * S-4). Both are overwritten within a few weeks by S-32/S-34.
+ * B-2 — starting weekly sets per muscle, before earned/cut volume (Loop 3) takes over. An emphasised
+ * muscle starts with `+ emphasisBonus` (its first claim on volume, S-4). Both are overwritten within
+ * a few weeks by S-32/S-34.
+ *
+ * ════ B-2 IS PER WEEK, AND A WEEK IS NOT ONE LENGTH (founder P0.3) ════
+ *
+ * `base` was a flat 10 — the same weekly volume whether she trains twice a week or six times. The
+ * register never ruled that; it simply never asked. What it produced is his first-priority defect:
+ * the week's work is a FIXED POT, so the more often she trains the thinner every session is sliced.
+ * Measured across every programme the engine can generate, THIRTY OF FORTY SESSIONS came out under
+ * 45 minutes, bottoming at a two-lift, twelve-minute "workout" for a woman training six times a
+ * week — who is, of anybody, the athlete asking for the most work.
+ *
+ * The mechanism is a step further down than it looks: `exerciseCountFor` turns this number into an
+ * exercise COUNT, so a flat base meant a fixed ~20 exercises for the whole week, dealt across
+ * however many days she trains. Ten a day at two days; three a day at six.
+ *
+ * So it scales with frequency — which is also what the training literature says, that more sessions
+ * is what BUYS more weekly volume.
  */
-export const STARTING_WEEKLY_SETS = { base: 10, emphasisBonus: 6 } as const;
+/**
+ * `emphasisFactor` is a RATIO, not a fixed bonus, and that is forced by the same change: the old
+ * `+6` on a base of 10 was "an emphasised muscle gets 60 % more". Left flat while the base scales
+ * with frequency, +6 on a base of 20 is only 30 % — so marking a muscle would have meant less and
+ * less the more often she trains, and the split laws that read emphasis (a lower-body emphasis must
+ * pull a day across) started to fail. 1.6 keeps the original relationship at every frequency.
+ */
+export const STARTING_WEEKLY_SETS = { anchor: 5, perSession: 2.5, emphasisFactor: 1.6 } as const;
+
+/**
+ * B-2's base for an athlete who trains `days` times a week.
+ *
+ * ⚠️ IT IS DELIBERATELY GENEROUS, and that asymmetry is why the shape holds: this number becomes an
+ * exercise COUNT, and the day's TIME CAP then trims whatever will not fit her declared minutes. So
+ * aiming high costs nothing — the cap absorbs it — while aiming low STARVES, and nothing downstream
+ * can put a missing exercise back. Every 24-minute session was this number being too small.
+ *
+ * The `anchor` is what a two-day week needs before frequency adds anything: on `perSession` alone
+ * the target falls under `DAY_ONE_EX_DIVISOR`'s rounding step and the week collapses to ONE exercise
+ * per muscle — which is how a fix aimed at the six-day athlete broke the two-day one on the first
+ * attempt. Both numbers are tuned against `__tests__/audit/everyProgramme.test.ts`, which walks every
+ * frequency × sex and holds the founder's 45–60 minute bar.
+ */
+export function startingWeeklySets(days: number): number {
+  // ⚠️ THROWS rather than coercing. `__tests__` is not covered by `tsconfig.json`, so three test
+  // call sites went on passing the old arity after `weeklyTargets` grew this argument: `days` came
+  // through `undefined`, every weekly target became NaN, and the failures that followed named the
+  // split rather than the cause. A programme built on NaN must never be a thing that merely looks
+  // odd — the engine says what is wrong, at the point it is wrong.
+  if (!Number.isFinite(days)) throw new Error(`startingWeeklySets: days must be a number, got ${days}`);
+  return Math.round(STARTING_WEEKLY_SETS.anchor + STARTING_WEEKLY_SETS.perSession * Math.max(1, days));
+}
 
 /** Which region a muscle group belongs to — drives session shape (the assembler groups by region so
  *  a day is a coherent session). Structure is an OUTPUT of volume, never an input (register Part 3). */

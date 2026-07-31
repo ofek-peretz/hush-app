@@ -173,9 +173,15 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
     const normal = assembleV5DayLists({ Chest: 'normal' }, 4);
     const emphasised = assembleV5DayLists({ Chest: 'emphasis' }, 4);
     const chestCount = (days: { exerciseIds: string[] }[]) => allExercises(days).filter((id) => muscleOf(id) === 'Chest').length;
+    // THE LAW is the comparison — emphasis buys exercises. It has not moved.
     expect(chestCount(emphasised)).toBeGreaterThan(chestCount(normal));
-    expect(chestCount(emphasised)).toBe(3); // 16 / 5 → 3
-    expect(chestCount(normal)).toBe(2); // 10 / 5 → 2
+    // The two figures below are the day-one ARITHMETIC, and they moved with B-2 (founder P0.3):
+    // the base is no longer a flat 10 for every athlete, it follows how often she trains. At four
+    // days it is 15, so a normal muscle gets round(15/5) = 3 exercises and an emphasised one
+    // round(15 × 1.6 / 5) = 5. They were 2 and 3 when a two-day week and a six-day week were
+    // handed the same weekly volume — which is the defect that change exists to remove.
+    expect(chestCount(emphasised)).toBe(5);
+    expect(chestCount(normal)).toBe(3);
   });
 
   it('structure follows volume — emphasise the lower body and more lower days fall out', () => {

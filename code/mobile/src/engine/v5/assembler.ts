@@ -11,7 +11,7 @@
  * Pure. Deterministic.
  */
 
-import { STARTING_WEEKLY_SETS, MUSCLE_REGION } from './constants';
+import { STARTING_WEEKLY_SETS, startingWeeklySets, MUSCLE_REGION } from './constants';
 import { stanceOf, trainableMuscles, emphasisMuscles, type BodyMap } from './bodyMap';
 
 /** Region of a muscle (upper/lower); unknown → upper (safe default, never its own day). */
@@ -24,10 +24,16 @@ export function regionOf(muscle: string): 'upper' | 'lower' {
  * start with the bonus (their first claim on volume, S-4). Earned/cut volume (Loop 3) overwrites
  * these within a few weeks — this is only the day-one shape.
  */
-export function weeklyTargets(map: BodyMap | undefined, allMuscles: readonly string[]): Record<string, number> {
+export function weeklyTargets(
+  map: BodyMap | undefined,
+  allMuscles: readonly string[],
+  days: number,
+): Record<string, number> {
+  // P0.3 — the week's volume follows how often she trains. See `startingWeeklySets`.
+  const base = startingWeeklySets(days);
   const out: Record<string, number> = {};
   for (const m of trainableMuscles(map, allMuscles)) {
-    out[m] = STARTING_WEEKLY_SETS.base + (stanceOf(map, m) === 'emphasis' ? STARTING_WEEKLY_SETS.emphasisBonus : 0);
+    out[m] = stanceOf(map, m) === 'emphasis' ? Math.round(base * STARTING_WEEKLY_SETS.emphasisFactor) : base;
   }
   return out;
 }
