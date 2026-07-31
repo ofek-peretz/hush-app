@@ -160,7 +160,16 @@ export default {
       // Misconfigured rather than unauthorised — and said without naming which secret is missing.
       return json({ error: 'unconfigured' }, 500);
     }
-    if (!sameSecret(request.headers.get('x-hush-token') ?? '', env.HUSH_TOKEN)) {
+    /*
+     * BOTH SIDES TRIMMED.
+     *
+     * A secret set through a shell pipe arrives with the shell's trailing newline attached, and on
+     * Windows that is two characters. The length check below then fails and the answer is a flat
+     * 401 with nothing to distinguish it from a genuinely wrong token — which is exactly the hour
+     * this cost on the first real deploy. Trailing whitespace in a credential is always an accident
+     * of how it was typed, never part of the value.
+     */
+    if (!sameSecret((request.headers.get('x-hush-token') ?? '').trim(), (env.HUSH_TOKEN ?? '').trim())) {
       return json({ error: 'unauthorized' }, 401);
     }
 
