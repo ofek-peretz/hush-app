@@ -19,6 +19,12 @@
 > written. Never implement "no network → no workout".
 > Full ruling: [[ai-layer-decision-2026-07-30]].
 >
+> ⏸️ **AND NONE OF IT IS BUILT YET, BY HIS CHOICE.** He is staying in TestFlight until the product
+> satisfies him — app, engine and AI together. **The server, the key, the pricing and Apple's Small
+> Business Program are all deferred.** Do not chase them. **The provider is not decided either**:
+> Gemini is the first candidate to trial on cost, so the AI seam must be model-agnostic from line
+> one, and `coachValidate` must count rejections BY MODEL so the choice is measured on his data.
+>
 > ⚠️ **He said this twice before it was heard, and two sessions went into the descoped defect.**
 > When he says something is the AI's job, stop improving the deterministic version of it.
 >
