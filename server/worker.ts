@@ -50,15 +50,33 @@ export interface Env {
  * an edit and a deploy, which is exactly the friction it should have.
  */
 /*
- * Chosen from the model list this key actually returns, not from a price page. The first attempt
- * used `gemini-2.5-flash-lite` — which IS in the list and still answered `generateContent` with a
- * 404, so the id was never the whole story. `gemini-3.5-flash-lite` is two generations newer and
- * the current cheap tier.
+ * `gemini-3.5-flash`, and the price that chose it.
  *
- * ⚠️ Its price has not been checked. Verify before this carries real volume; it is one line and a
- * deploy to change.
+ * Google's own price page serves this table with two currencies mixed into one row set — some
+ * figures in USD, some in shekels — so it was decoded before anything was decided. Where the page
+ * says `ש"ח` the number is USD x 4; two independent rows confirm it (2.5-flash reads "10.00 ש"ח"
+ * against a real $2.50, 2.5-flash-lite reads "1.6 ש"ח" against a real $0.40). Real prices per
+ * million tokens, and what one athlete costs for a year of 156 sessions:
+ *
+ *     2.5-flash-lite     $0.10 / $0.40      $0.15/yr
+ *     3.1-flash-lite     $0.25 / $1.50      $0.48/yr
+ *     3.5-flash-lite     $0.30 / $2.50      $0.71/yr
+ *     3.5-flash          $1.50 / $9.00      $2.89/yr      <- this one
+ *     3.1-pro-preview    $2.00 / $12.00     $3.85/yr
+ *
+ * Against $99.99 a year that is 2.9%, and the gap between the cheapest and this is $2.74 a year per
+ * athlete. The ruling already on the record is that the post-session call is not where you save:
+ * it is the only decision the product sells. So the smartest GA model, not the cheapest.
+ *
+ * Not Pro, even though it is affordable: `preview` means Google may retire it and its rate limits
+ * are stricter, and this product has no second decider to fall back on when the model disappears.
+ *
+ * ⚠️ THINKING TOKENS ARE BILLED AS OUTPUT on the 3.x family, and 3.x thinks by default. The $2.89
+ * assumes ~1,200 output tokens; heavy thinking could multiply it. Not guessed at here — `usage`
+ * comes back with `thoughtsTokenCount` on every call, so the real figure is a measurement away.
+ * MAX_OUTPUT_TOKENS is the ceiling on the damage meanwhile: 8192 tokens is $0.074, worst case.
  */
-const MODEL = 'gemini-3.5-flash-lite';
+const MODEL = 'gemini-3.5-flash';
 const MAX_OUTPUT_TOKENS = 8192;
 /** Google's own upper bound on how long we will wait before calling it a failed call. */
 const TIMEOUT_MS = 90_000;
@@ -162,36 +180,7 @@ export default {
 
     // A GET returns a liveness answer and NOTHING else — no version, no model name, no config. An
     // endpoint that describes itself to a stranger is an endpoint that has told them what to try.
-    if (request.method === 'GET' && new URL(request.url).pathname !== '/models') return json({ ok: true });
-
-    /*
-     * TEMPORARY — REMOVE WITH THE 401 DIAGNOSTIC.
-     *
-     * `GET /models`, behind the same token. A wrong model id comes back from Google as a bare 404
-     * that names nothing, and the published marketing name is not always the API id. Asking the key
-     * itself which models it can reach is the only authoritative answer, and it beats guessing
-     * through deploys. Model names are not secret; the token still gates the route so it is not a
-     * free directory for anyone who finds the host.
-     */
-    if (request.method === 'GET') {
-      const sent = (request.headers.get('x-hush-token') ?? '').trim();
-      if (!sameSecret(sent, (env.HUSH_TOKEN ?? '').trim())) return json({ error: 'unauthorized' }, 401);
-      const list = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
-        headers: { 'x-goog-api-key': env.GEMINI_API_KEY },
-      });
-      if (!list.ok) return json({ error: 'list_failed', status: list.status }, 502);
-      const data = (await list.json()) as {
-        models?: { name?: string; supportedGenerationMethods?: string[] }[];
-      };
-      return json({
-        // Only the ones that can actually answer a generateContent call — the list also carries
-        // embedding and tuning endpoints, which are not what we are looking for.
-        models: (data.models ?? [])
-          .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m) => m.name)
-          .filter(Boolean),
-      });
-    }
+    if (request.method === 'GET') return json({ ok: true });
     if (request.method !== 'POST') return json({ error: 'method' }, 405);
 
     if (!env.GEMINI_API_KEY || !env.HUSH_TOKEN) {
@@ -209,25 +198,7 @@ export default {
      */
     const sent = (request.headers.get('x-hush-token') ?? '').trim();
     const stored = (env.HUSH_TOKEN ?? '').trim();
-    if (!sameSecret(sent, stored)) {
-      /*
-       * TEMPORARY — REMOVE ONCE THE FIRST CALL SUCCEEDS.
-       *
-       * A bare 401 cannot tell "no header arrived" from "two different values" from "the same value
-       * with a stray character", and guessing between them cost an hour. These are LENGTHS and a
-       * single equality bit — no character of either secret is returned, and a length tells an
-       * attacker nothing they could not learn by counting their own failed attempts.
-       */
-      return json({
-        error: 'unauthorized',
-        diag: {
-          sentLength: sent.length,
-          storedLength: stored.length,
-          sameLength: sent.length === stored.length,
-          headerArrived: request.headers.get('x-hush-token') !== null,
-        },
-      }, 401);
-    }
+    if (!sameSecret(sent, stored)) return json({ error: 'unauthorized' }, 401);
 
     let call: CoachCall;
     try {
@@ -266,6 +237,17 @@ export default {
       },
     };
 
+    /*
+     * A 404 HERE IS NOT ALWAYS A WRONG MODEL ID — and an hour went into learning that.
+     *
+     * On a freshly enabled project, `GET /v1beta/models` answers immediately while
+     * `:generateContent` still 404s: Google enables the read path and the billed path on different
+     * clocks. The first live call failed this way against TWO different model ids, both of which the
+     * key's own model list contained. The fix was neither id. It was waiting.
+     *
+     * So if this 404s right after a new key: change nothing, wait, call again. Guessing a third id
+     * costs a deploy and proves nothing.
+     */
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
     let upstream: Response;
     try {
