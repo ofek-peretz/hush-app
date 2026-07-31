@@ -50,33 +50,45 @@ export interface Env {
  * an edit and a deploy, which is exactly the friction it should have.
  */
 /*
- * `gemini-3.5-flash`, and the price that chose it.
+ * `gemini-3.6-flash`, and the two readings it took to get here.
  *
- * Google's own price page serves this table with two currencies mixed into one row set — some
- * figures in USD, some in shekels — so it was decoded before anything was decided. Where the page
- * says `ש"ח` the number is USD x 4; two independent rows confirm it (2.5-flash reads "10.00 ש"ח"
- * against a real $2.50, 2.5-flash-lite reads "1.6 ש"ח" against a real $0.40). Real prices per
- * million tokens, and what one athlete costs for a year of 156 sessions:
+ * ⚠️ FIRST: GOOGLE'S PRICE PAGE MIXES TWO CURRENCIES INSIDE ONE ROW SET. The Hebrew page prints
+ * some figures in USD and some in shekels — `ש"ח` means USD x 4. Verified against the English page
+ * line by line (3.6 output reads "30 ₪" / $7.50; 3.5 reads "36 ש"ח" / $9.00; 2.5-flash-lite reads
+ * "1.6 ש"ח" / $0.40). Read the English page. A 4x error on OUTPUT price picks the wrong model.
+ *
+ * Real prices per million tokens, and one athlete's year at 156 sessions (5,138 in, ~1,200 out):
  *
  *     2.5-flash-lite     $0.10 / $0.40      $0.15/yr
  *     3.1-flash-lite     $0.25 / $1.50      $0.48/yr
  *     3.5-flash-lite     $0.30 / $2.50      $0.71/yr
- *     3.5-flash          $1.50 / $9.00      $2.89/yr      <- this one
+ *     3.6-flash          $1.50 / $7.50      $2.61/yr      <- this one
+ *     3.5-flash          $1.50 / $9.00      $2.89/yr
  *     3.1-pro-preview    $2.00 / $12.00     $3.85/yr
  *
- * Against $99.99 a year that is 2.9%, and the gap between the cheapest and this is $2.74 a year per
- * athlete. The ruling already on the record is that the post-session call is not where you save:
- * it is the only decision the product sells. So the smartest GA model, not the cheapest.
+ * WHY NOT THE CHEAP TIER: the whole gap between the cheapest model and this one is $2.46 a year per
+ * athlete, against $99.99 of revenue. The ruling on the record is that the post-session call is the
+ * only decision the product sells and is not where you save.
  *
- * Not Pro, even though it is affordable: `preview` means Google may retire it and its rate limits
- * are stricter, and this product has no second decider to fall back on when the model disappears.
+ * WHY 3.6 AND NOT 3.5, WHICH GOOGLE'S OWN LIST CALLS "most intelligent": the version numbers are
+ * not a capability ranking and this took measuring. Artificial Analysis scores them IDENTICALLY
+ * (index 50 each). 3.5 leads on HLE, broad knowledge, 41% to 38%. 3.6 leads on knowledge work
+ * (GDPval 1421 vs 1349) and on every agentic and tool benchmark, runs about twice as fast, and
+ * spends FEWER output tokens for the same task — so the real saving is larger than the 17% headline.
+ * A tie on intelligence, a win on everything operational. And speed is not only money here: intake
+ * is a live conversation and it produces the brief everything else rests on.
  *
- * ⚠️ THINKING TOKENS ARE BILLED AS OUTPUT on the 3.x family, and 3.x thinks by default. The $2.89
- * assumes ~1,200 output tokens; heavy thinking could multiply it. Not guessed at here — `usage`
- * comes back with `thoughtsTokenCount` on every call, so the real figure is a measurement away.
- * MAX_OUTPUT_TOKENS is the ceiling on the damage meanwhile: 8192 tokens is $0.074, worst case.
+ * NOT Pro, though it is affordable: `preview` means Google may retire it and its rate limits are
+ * stricter, and this product has no second decider to fall back on when a model disappears.
+ *
+ * ⚠️ THINKING TOKENS ARE BILLED AS OUTPUT and 3.x thinks by default, so $2.61 is a FLOOR. Not
+ * guessed at — `usage.thoughtsTokenCount` returns on every call, which makes it a measurement
+ * rather than an argument. MAX_OUTPUT_TOKENS caps the worst case at $0.061 meanwhile.
+ *
+ * None of this is settled by argument. Unreadable-response counts per model on real athlete data
+ * are the honest comparison, and switching is this line plus a deploy.
  */
-const MODEL = 'gemini-3.5-flash';
+const MODEL = 'gemini-3.6-flash';
 const MAX_OUTPUT_TOKENS = 8192;
 /** Google's own upper bound on how long we will wait before calling it a failed call. */
 const TIMEOUT_MS = 90_000;
