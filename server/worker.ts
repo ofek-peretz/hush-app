@@ -169,8 +169,26 @@ export default {
      * this cost on the first real deploy. Trailing whitespace in a credential is always an accident
      * of how it was typed, never part of the value.
      */
-    if (!sameSecret((request.headers.get('x-hush-token') ?? '').trim(), (env.HUSH_TOKEN ?? '').trim())) {
-      return json({ error: 'unauthorized' }, 401);
+    const sent = (request.headers.get('x-hush-token') ?? '').trim();
+    const stored = (env.HUSH_TOKEN ?? '').trim();
+    if (!sameSecret(sent, stored)) {
+      /*
+       * TEMPORARY — REMOVE ONCE THE FIRST CALL SUCCEEDS.
+       *
+       * A bare 401 cannot tell "no header arrived" from "two different values" from "the same value
+       * with a stray character", and guessing between them cost an hour. These are LENGTHS and a
+       * single equality bit — no character of either secret is returned, and a length tells an
+       * attacker nothing they could not learn by counting their own failed attempts.
+       */
+      return json({
+        error: 'unauthorized',
+        diag: {
+          sentLength: sent.length,
+          storedLength: stored.length,
+          sameLength: sent.length === stored.length,
+          headerArrived: request.headers.get('x-hush-token') !== null,
+        },
+      }, 401);
     }
 
     let call: CoachCall;
