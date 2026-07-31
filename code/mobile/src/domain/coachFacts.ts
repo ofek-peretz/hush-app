@@ -48,6 +48,7 @@
  */
 import type { EffortReport, Profile, Session, SetLog, Program } from '@/data/local/models';
 import { EXERCISES, type Exercise } from '@/data/exercises';
+import { MOVEMENTS } from '@/data/movements';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
 
 /** Bumped when the shape changes, so a stored or in-flight sheet is never read as the wrong shape. */
@@ -127,6 +128,17 @@ export interface FactCatalogueEntry {
   bw?: true;
 }
 
+/** A non-lift the coach may prescribe, with the shapes that usually suit it. */
+export interface FactMovement {
+  id: string;
+  name: string;
+  measures: string[];
+  /** She can be holding weight while doing it. */
+  loadable?: true;
+  /** Outdoors and GPS-tracked — distance and pace come from the phone, not from her report. */
+  gps?: true;
+}
+
 /** The programme as it stands right now, before the coach changes anything. */
 export interface FactProgrammeDay {
   name: string;
@@ -164,6 +176,14 @@ export interface CoachFacts {
   performed: FactPerformed[];
   equipment: Record<string, FactEquipment>;
   catalogue: FactCatalogueEntry[];
+  /**
+   * The things that are not lifts — a run, a plank, a carry, a skipping rope.
+   *
+   * Kept beside the catalogue rather than inside it for the reason `data/movements` gives: a run
+   * has no capability class and no muscle worth naming, and dressing it as a lift would let the
+   * swap pool offer it as a substitute for a squat. Two lists, both honest, one prompt.
+   */
+  movements: FactMovement[];
   programme: FactProgrammeDay[];
 }
 
@@ -323,6 +343,17 @@ export function coachCatalogue(): FactCatalogueEntry[] {
   }));
 }
 
+/** Everything that is not a lift, in the same lean form as the catalogue. Also cacheable. */
+export function coachMovements(): FactMovement[] {
+  return MOVEMENTS.map((m) => ({
+    id: m.id,
+    name: m.name,
+    measures: [...m.measures],
+    ...(m.loadable ? { loadable: true as const } : {}),
+    ...(m.gps ? { gps: true as const } : {}),
+  }));
+}
+
 /** The grain of every equipment class, from the engine's own constants — never a second copy. */
 export function coachEquipment(): Record<string, FactEquipment> {
   const out: Record<string, FactEquipment> = {};
@@ -385,6 +416,7 @@ export function coachFacts({ profile, program, history, justFinished }: CoachFac
     performed: performedFrom(history),
     equipment: coachEquipment(),
     catalogue: coachCatalogue(),
+    movements: coachMovements(),
     programme: (program?.days ?? [])
       .filter((d) => !d.isRest)
       .map((d) => ({

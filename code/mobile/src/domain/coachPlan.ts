@@ -2,118 +2,206 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  * COACH PLAN — what the coach writes back, and the parse that turns it into something the app runs.
  *
- * `coachFacts` is the message out. This is the message in. Between them there is one decider, and it
- * is not this file: **nothing here forms an opinion about whether a decision is a good one.** A plan
- * that says "drop her to two sets" is executed. A plan that says "raise the bench 5 kg" is executed.
- * The engine has no veto and this file gives it none.
+ * `coachFacts` is the message out. This is the message in. Between them there is ONE decider, and
+ * it is not this file: **nothing here forms an opinion about whether a decision is a good one.** A
+ * plan that says "drop her to two sets" is executed. A plan that says "raise the bench 5 kg" is
+ * executed. The engine has no veto and this file gives it none.
  *
- * What this file does is narrower and duller, and it is the founder's own point:
+ * ── THE REWRITE, AND WHY (founder, 2026-07-31) ══════════════════════════════════════════════════
+ * Version 1 of this schema said: days → lifts → { exercise, sets, rep band, load, rest }. It was
+ * written a day after the product widened to **every goal, cardio included**, and it could not
+ * express a single line of a marathon plan. "Tuesday, easy 5 km" has no field. "6 × 400 m at 5 k
+ * pace, 90 seconds walk" has no field. No load, no sets, no reps.
  *
- *   > *"It's exactly as if I did a workout, sent you all the data, and said — now decide."*
+ * The founder's diagnosis was exact:
  *
- * When a person answers that, the answer arrives as sentences and somebody still has to write it on
- * the programme. That is this file. It reads the answer, and if the answer never arrived — the
- * connection dropped, the JSON stopped mid-object, a field came back as a word where a number
- * belongs — it says so, and nothing is written. **That is not a rejection of a decision. It is the
- * detection that no decision was received**, and it lands on the rule that already exists: no
- * connection → nothing is decided, the app says so, the update waits.
+ *   > *"Don't let the current screens influence you. Imagine this chat window went into the app and
+ *   > someone asked you to manage their training — you'd behave normally, exactly like a chat, only
+ *   > you also get their data after every workout. That's it."*
  *
- * ── THE SCHEMA IS THE POINT ─────────────────────────────────────────────────────────────────────
- * The founder's load-bearing insight about cost:
+ * So the question this file answers is: **what vocabulary does a session need so that anything a
+ * coach could say in a chat can be rendered and run?** Four shapes, and two things on top.
  *
- *   > *"If we make sure the architecture is completely precise, it will do this very well too."*
+ * ── A SET, A LAP AND A CIRCUIT ROUND ARE THE SAME THING ─────────────────────────────────────────
+ * The unifying move, and the reason there is no `sets` field anywhere below. A block is a group of
+ * items done `rounds` times:
  *
- * A tight schema makes the model do LESS work. It is not inventing a structure, it is filling named
- * fields. That is what lets a small, cheap model succeed at this, and it is why `COACH_PLAN_SCHEMA`
- * is a real JSON Schema rather than a description in prose — every provider we might use takes one
- * (Anthropic's structured outputs, OpenAI's response_format, Gemini's responseSchema), so the same
- * object constrains whichever model we run.
+ *   · 4 sets of bench          → one block, `rounds: 4`, one item
+ *   · a 3-exercise circuit × 3 → one block, `rounds: 3`, three items
+ *   · 6 × 400 m with a walk    → one block, `rounds: 6`, two items
+ *
+ * One structure, three things the old schema needed three ideas for — and "sets" stops being a
+ * concept that only strength training has.
+ *
+ * ── THE FOUR SHAPES ─────────────────────────────────────────────────────────────────────────────
+ *   `reps`      — reps, optionally at a load.        10 at 40 kg
+ *   `time`      — a duration, optionally at a load.  a 45 s plank, 20 min on the bike
+ *   `distance`  — a distance, optionally at a load.  5 km, a 40 m farmer's carry
+ *   `open`      — no number worth stating.           mobility, skill work, a warm-up
+ *
+ * And on EVERY item, the thing the app could never carry before: **`say` — the execution
+ * instruction, in the coach's own words.** "Take this one to a rep short of failure." "At a pace
+ * where you could hold a conversation." A prescription used to be able to state how MUCH and never
+ * how. That gap is why the record was ambiguous, and it is what the founder identified: an
+ * instruction given up front is worth more than a measurement taken afterwards.
  *
  * ── THE ONE THING THAT IS NOT A DECISION ────────────────────────────────────────────────────────
- * Loads pass through `normalizeLoad`, the same function every load in this app passes through. The
- * coach is TOLD each equipment's grain in the sheet, so a well-behaved plan already sits on a real
- * rung and this changes nothing at all — it is a typist, not an editor. It exists for the case where
- * a number arrives at 32.4 kg on a machine whose pins move in 5s: writing 32.4 on her screen is not
- * respecting the decision, it is printing a weight that does not exist.
+ * Loads on LIFTS pass through `normalizeLoad`, the same function every load in this app passes
+ * through, using her performed rungs. The coach is told each equipment's grain in the sheet, so a
+ * well-behaved plan is identical in and out and `snapped` stays 0 — it is a typist, not an editor.
+ * It exists for 32.4 kg on a machine whose pins move in 5s.
+ *
+ * A load on a MOVEMENT is left exactly as written: we do not know what she is carrying, and
+ * snapping to a grid we do not have would be inventing one.
  *
  * Pure and I/O-free. Knows nothing about any model, provider or transport.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import { EXERCISES, type Exercise } from '@/data/exercises';
+import { MOVEMENTS, type Movement } from '@/data/movements';
 import { normalizeLoad } from '@/engine/loadMath';
 import type { CoachFacts } from './coachFacts';
 
-/** Bumped when the shape changes, so a plan written against an older shape is never misread. */
-export const COACH_PLAN_VERSION = 1;
+/**
+ * Bumped from 1 when the shape widened past lifts. Version 1 could not describe a run and never
+ * reached a single athlete — there was no transport when it existed — so nothing migrates.
+ */
+export const COACH_PLAN_VERSION = 2;
 
-/** One lift on the programme, as the coach set it. */
-export interface PlannedLift {
-  /** A catalogue id. An id that does not resolve makes the plan unreadable, not merely wrong. */
+export type Weekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+const WEEKDAYS: readonly string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+/** What every item carries, whatever its shape. */
+interface ItemBase {
+  /** A catalogue lift id or a movement id. Anything else makes the plan unreadable. */
   ex: string;
-  sets: number;
-  /** The rep band, [floor, ceiling] — what Loop 1 reads inside the session. */
-  band: [number, number];
-  /** The load to open at. `null` = bodyweight, which is the only case with no number. */
-  load: number | null;
-  /** Prescribed rest between sets, in seconds. */
-  restS: number;
+  /**
+   * The execution instruction, in the coach's words, or absent.
+   *
+   * Never generated here and never checked here — the voice laws bind what the app STATES as its
+   * own decision, and this is the coach speaking. A parser that edited a coach's sentence would be
+   * a second author.
+   */
+  say?: string;
 }
 
-export interface PlannedDay {
+/** Reps, optionally at a load. `[8, 12]` is a band; `[5, 5]` is a fixed count. */
+export interface RepsItem extends ItemBase {
+  kind: 'reps';
+  reps: [number, number];
+  load: number | null;
+}
+/** Held or worked for a duration. */
+export interface TimeItem extends ItemBase {
+  kind: 'time';
+  seconds: number;
+  load?: number | null;
+}
+/** Covered. Metres, always — one unit in the record, converted for display. */
+export interface DistanceItem extends ItemBase {
+  kind: 'distance';
+  metres: number;
+  load?: number | null;
+}
+/** No number worth stating. */
+export interface OpenItem extends ItemBase {
+  kind: 'open';
+}
+
+export type PlannedItem = RepsItem | TimeItem | DistanceItem | OpenItem;
+
+/** A group of items done `rounds` times — a set, a lap and a circuit round are one idea. */
+export interface PlannedBlock {
+  rounds: number;
+  /** Rest BETWEEN rounds, in seconds. Absent = the coach did not prescribe one. */
+  restS?: number;
+  /** Rest after the block ends, before the next one. */
+  restAfterS?: number;
+  items: PlannedItem[];
+}
+
+export interface PlannedSession {
   name: string;
-  lifts: PlannedLift[];
+  /**
+   * The day it belongs on, or absent.
+   *
+   * A hypertrophy programme does not care which day is which — the athlete trains four times a week
+   * in whatever order suits her. A marathon plan cares enormously: the long run is on Sunday
+   * because the week is built around it. Optional, so neither has to pretend to be the other.
+   */
+  day?: Weekday;
+  blocks: PlannedBlock[];
 }
 
 export interface CoachPlan {
   v: number;
-  /** The programme in full, not a patch. A patch has to be merged, and a merge is a second opinion
-   *  about what the coach meant. Stating it whole costs a few hundred output tokens and removes the
-   *  entire class of question. */
-  days: PlannedDay[];
   /**
-   * What the coach says to the athlete about what it did, tied to the lift it is about.
-   *
-   * Ruling A.1 binds the CONTENT — every number cited comes from the sheet, the coach never invents
-   * a figure — but that is a property of the prompt and of what she can tap through to, not
-   * something a parser can check. Nothing here inspects the words.
+   * The programme in full, not a patch. A patch has to be merged, and a merge is a second opinion
+   * about what the coach meant. Stating it whole costs a few hundred output tokens and removes the
+   * entire class of question.
    */
+  sessions: PlannedSession[];
+  /** What the coach says to the athlete about what it did, tied to the lift it is about. */
   notes?: { ex?: string; say: string }[];
 }
 
+/* ─────────────────────────────────────────────────────────────── The schema handed to the model */
+
+const ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['kind', 'ex'],
+  properties: {
+    kind: { type: 'string', enum: ['reps', 'time', 'distance', 'open'] },
+    ex: { type: 'string' },
+    say: { type: 'string' },
+    reps: { type: 'array', items: { type: 'integer' }, minItems: 2, maxItems: 2 },
+    load: { type: ['number', 'null'] },
+    seconds: { type: 'integer' },
+    metres: { type: 'integer' },
+  },
+} as const;
+
 /**
- * The JSON Schema handed to whichever provider we run.
+ * The JSON Schema handed to whichever provider we run — Anthropic structured outputs, OpenAI
+ * response_format and Gemini responseSchema all take this same object.
  *
- * Deliberately does NOT enumerate the 68 catalogue ids: they are already in the prompt, listing them
+ * Deliberately does NOT enumerate the catalogue ids: they are already in the prompt, listing them
  * again would double the schema's tokens on every call, and an unresolvable id is caught at parse
  * with a better message than a schema violation gives. `additionalProperties: false` throughout —
  * a model that invents a field is a model whose output we cannot reason about.
+ *
+ * The per-shape fields (`reps`, `seconds`, `metres`) are declared but not conditionally required:
+ * JSON Schema can express "if kind is reps then reps is required" only through `allOf`/`if`, which
+ * several providers' strict modes reject outright. The parse enforces it instead, and the parse is
+ * the authority either way.
  */
 export const COACH_PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['v', 'days'],
+  required: ['v', 'sessions'],
   properties: {
     v: { type: 'integer' },
-    days: {
+    sessions: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'lifts'],
+        required: ['name', 'blocks'],
         properties: {
           name: { type: 'string' },
-          lifts: {
+          day: { type: 'string', enum: WEEKDAYS },
+          blocks: {
             type: 'array',
             items: {
               type: 'object',
               additionalProperties: false,
-              required: ['ex', 'sets', 'band', 'load', 'restS'],
+              required: ['rounds', 'items'],
               properties: {
-                ex: { type: 'string' },
-                sets: { type: 'integer' },
-                band: { type: 'array', items: { type: 'integer' }, minItems: 2, maxItems: 2 },
-                load: { type: ['number', 'null'] },
+                rounds: { type: 'integer' },
                 restS: { type: 'integer' },
+                restAfterS: { type: 'integer' },
+                items: { type: 'array', items: ITEM_SCHEMA },
               },
             },
           },
@@ -132,6 +220,8 @@ export const COACH_PLAN_SCHEMA = {
   },
 } as const;
 
+/* ────────────────────────────────────────────────────────────────────────────────── The parse */
+
 /**
  * Why a response could not be read as a decision.
  *
@@ -143,10 +233,13 @@ export type UnreadableReason =
   | 'not_json'
   | 'not_an_object'
   | 'wrong_version'
-  | 'no_days'
-  | 'day_malformed'
-  | 'no_lifts'
-  | 'lift_malformed'
+  | 'no_sessions'
+  | 'session_malformed'
+  | 'no_blocks'
+  | 'block_malformed'
+  | 'no_items'
+  | 'item_malformed'
+  | 'unknown_kind'
   | 'unknown_exercise'
   | 'not_a_number';
 
@@ -154,15 +247,18 @@ export type ParsedPlan =
   | { ok: true; plan: CoachPlan; /** Loads the typist moved onto a real rung, for telemetry. */ snapped: number }
   | { ok: false; reason: UnreadableReason; at?: string };
 
-const byId = new Map<string, Exercise>(EXERCISES.map((e) => [e.id, e]));
+const liftById = new Map<string, Exercise>(EXERCISES.map((e) => [e.id, e]));
+const moveById = new Map<string, Movement>(MOVEMENTS.map((m) => [m.id, m]));
 
-const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const isInt = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isInt = (v: unknown): v is number => isNum(v) && Number.isInteger(v);
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  v != null && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * Read a response as a plan, or say why it could not be read.
  *
- * `facts` is optional and is used for one thing only: her performed rungs, so `normalizeLoad` snaps
+ * `facts` is optional and is used for one thing only: her performed rungs, so a lift's load snaps
  * within the ladder she has actually used (F-2) rather than a generic increment. Without it the
  * snap still works, it is just coarser.
  */
@@ -175,72 +271,115 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       return { ok: false, reason: 'not_json' };
     }
   }
-  if (root == null || typeof root !== 'object' || Array.isArray(root)) {
-    return { ok: false, reason: 'not_an_object' };
+  if (!isObj(root)) return { ok: false, reason: 'not_an_object' };
+  if (root.v !== COACH_PLAN_VERSION) return { ok: false, reason: 'wrong_version' };
+  if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
+    return { ok: false, reason: 'no_sessions' };
   }
-  const obj = root as Record<string, unknown>;
-  if (obj.v !== COACH_PLAN_VERSION) return { ok: false, reason: 'wrong_version' };
-  if (!Array.isArray(obj.days) || obj.days.length === 0) return { ok: false, reason: 'no_days' };
 
   // Her real ladder per lift, so a snap lands on a rung she has actually used.
   const rungs = new Map<string, number[]>();
   for (const p of facts?.performed ?? []) rungs.set(p.ex, p.rungs);
 
   let snapped = 0;
-  const days: PlannedDay[] = [];
-  for (const d of obj.days) {
-    if (d == null || typeof d !== 'object' || Array.isArray(d)) return { ok: false, reason: 'day_malformed' };
-    const day = d as Record<string, unknown>;
-    if (typeof day.name !== 'string' || day.name.length === 0) return { ok: false, reason: 'day_malformed' };
-    if (!Array.isArray(day.lifts) || day.lifts.length === 0) {
-      return { ok: false, reason: 'no_lifts', at: day.name };
-    }
-    const lifts: PlannedLift[] = [];
-    for (const l of day.lifts) {
-      if (l == null || typeof l !== 'object' || Array.isArray(l)) {
-        return { ok: false, reason: 'lift_malformed', at: day.name };
-      }
-      const lift = l as Record<string, unknown>;
-      if (typeof lift.ex !== 'string') return { ok: false, reason: 'lift_malformed', at: day.name };
-      const ex = byId.get(lift.ex);
-      // An id we cannot resolve is not a lift we can put in front of her, and we will not guess
-      // which one was meant — a near-miss on an id is how an athlete gets handed the wrong movement.
-      if (!ex) return { ok: false, reason: 'unknown_exercise', at: lift.ex };
-      if (!isInt(lift.sets) || !isInt(lift.restS)) return { ok: false, reason: 'not_a_number', at: lift.ex };
-      if (!Array.isArray(lift.band) || lift.band.length !== 2 || !lift.band.every(isInt)) {
-        return { ok: false, reason: 'not_a_number', at: lift.ex };
-      }
-      const [lo, hi] = lift.band as number[];
-      if (lift.load !== null && !isFiniteNumber(lift.load)) {
-        return { ok: false, reason: 'not_a_number', at: lift.ex };
-      }
 
-      let load: number | null = lift.load as number | null;
-      if (load != null) {
-        // THE TYPIST. Identical in and out whenever the coach used the grain it was given.
-        const onRung = normalizeLoad(load, ex.equipment, rungs.get(ex.id));
-        if (onRung !== load) snapped += 1;
-        load = onRung;
+  /** One item, or the reason it could not be read. Returns a discriminated result, never throws. */
+  function readItem(raw: unknown): { ok: true; item: PlannedItem } | { ok: false; reason: UnreadableReason; at?: string } {
+    if (!isObj(raw)) return { ok: false, reason: 'item_malformed' };
+    if (typeof raw.ex !== 'string') return { ok: false, reason: 'item_malformed' };
+    const lift = liftById.get(raw.ex);
+    const move = moveById.get(raw.ex);
+    // An id we cannot resolve is not something we can put in front of her, and we will not guess
+    // which one was meant — a near-miss on an id is how an athlete gets handed the wrong movement.
+    if (!lift && !move) return { ok: false, reason: 'unknown_exercise', at: raw.ex };
+
+    const say = typeof raw.say === 'string' && raw.say.length > 0 ? { say: raw.say } : {};
+
+    /** The typist. A LIFT lands on a rung; a movement's load is left as written (see the header). */
+    const settle = (load: number | null | undefined): number | null | undefined => {
+      if (load == null || !lift) return load;
+      const onRung = normalizeLoad(load, lift.equipment, rungs.get(lift.id));
+      if (onRung !== load) snapped += 1;
+      return onRung;
+    };
+
+    switch (raw.kind) {
+      case 'reps': {
+        if (!Array.isArray(raw.reps) || raw.reps.length !== 2 || !raw.reps.every(isInt)) {
+          return { ok: false, reason: 'not_a_number', at: raw.ex };
+        }
+        if (raw.load !== null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        const [lo, hi] = raw.reps as number[];
+        return { ok: true, item: { kind: 'reps', ex: raw.ex, reps: [lo, hi], load: settle(raw.load) ?? null, ...say } };
       }
-      lifts.push({ ex: ex.id, sets: lift.sets, band: [lo, hi], load, restS: lift.restS });
+      case 'time': {
+        if (!isInt(raw.seconds)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        const load = settle(raw.load as number | null | undefined);
+        return { ok: true, item: { kind: 'time', ex: raw.ex, seconds: raw.seconds, ...(load != null ? { load } : {}), ...say } };
+      }
+      case 'distance': {
+        if (!isInt(raw.metres)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        const load = settle(raw.load as number | null | undefined);
+        return { ok: true, item: { kind: 'distance', ex: raw.ex, metres: raw.metres, ...(load != null ? { load } : {}), ...say } };
+      }
+      case 'open':
+        return { ok: true, item: { kind: 'open', ex: raw.ex, ...say } };
+      default:
+        return { ok: false, reason: 'unknown_kind', at: String(raw.kind ?? '') };
     }
-    days.push({ name: day.name, lifts });
   }
 
-  const notes: CoachPlan['notes'] = [];
-  if (Array.isArray(obj.notes)) {
-    for (const n of obj.notes) {
-      if (n == null || typeof n !== 'object') continue; // a malformed NOTE loses a sentence, not a
-      //                                                   decision — never fail a plan over prose
-      const note = n as Record<string, unknown>;
-      if (typeof note.say !== 'string' || note.say.length === 0) continue;
-      notes.push({ ...(typeof note.ex === 'string' ? { ex: note.ex } : {}), say: note.say });
+  const sessions: PlannedSession[] = [];
+  for (const s of root.sessions) {
+    if (!isObj(s)) return { ok: false, reason: 'session_malformed' };
+    if (typeof s.name !== 'string' || s.name.length === 0) return { ok: false, reason: 'session_malformed' };
+    if (s.day != null && !WEEKDAYS.includes(s.day as string)) {
+      return { ok: false, reason: 'session_malformed', at: s.name };
+    }
+    if (!Array.isArray(s.blocks) || s.blocks.length === 0) {
+      return { ok: false, reason: 'no_blocks', at: s.name };
+    }
+
+    const blocks: PlannedBlock[] = [];
+    for (const b of s.blocks) {
+      if (!isObj(b)) return { ok: false, reason: 'block_malformed', at: s.name };
+      if (!isInt(b.rounds) || b.rounds < 1) return { ok: false, reason: 'not_a_number', at: s.name };
+      if (b.restS != null && !isInt(b.restS)) return { ok: false, reason: 'not_a_number', at: s.name };
+      if (b.restAfterS != null && !isInt(b.restAfterS)) return { ok: false, reason: 'not_a_number', at: s.name };
+      if (!Array.isArray(b.items) || b.items.length === 0) {
+        return { ok: false, reason: 'no_items', at: s.name };
+      }
+      const items: PlannedItem[] = [];
+      for (const raw of b.items) {
+        const read = readItem(raw);
+        if (!read.ok) return read;
+        items.push(read.item);
+      }
+      blocks.push({
+        rounds: b.rounds,
+        ...(b.restS != null ? { restS: b.restS } : {}),
+        ...(b.restAfterS != null ? { restAfterS: b.restAfterS } : {}),
+        items,
+      });
+    }
+    sessions.push({ name: s.name, ...(s.day ? { day: s.day as Weekday } : {}), blocks });
+  }
+
+  const notes: NonNullable<CoachPlan['notes']> = [];
+  if (Array.isArray(root.notes)) {
+    for (const n of root.notes) {
+      // A malformed NOTE loses a sentence, not a decision — never fail a plan over prose.
+      if (!isObj(n)) continue;
+      if (typeof n.say !== 'string' || n.say.length === 0) continue;
+      notes.push({ ...(typeof n.ex === 'string' ? { ex: n.ex } : {}), say: n.say });
     }
   }
 
   return {
     ok: true,
-    plan: { v: COACH_PLAN_VERSION, days, ...(notes.length ? { notes } : {}) },
+    plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
     snapped,
   };
 }

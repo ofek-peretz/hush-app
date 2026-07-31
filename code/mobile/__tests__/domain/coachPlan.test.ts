@@ -11,13 +11,13 @@ import type { Profile, Program, Session, SetLog } from '@/data/local/models';
 /**
  * The parse has exactly one job and one non-job.
  *
- *   JOB:     turn a received answer into something the app can write on the programme, or say that
- *            no answer was received.
- *   NON-JOB: judging the answer. A plan this file dislikes is still executed. There is one decider
- *            and it is not this file.
+ *   JOB:     turn a received answer into something the app can run, or say no answer was received.
+ *   NON-JOB: judging the answer. A plan this file dislikes is executed. One decider, not this file.
  *
- * So the tests below never assert "a bad plan is rejected" — they assert that a plan the ENGINE
- * would once have overruled goes straight through.
+ * But the FIRST question is not about the parse at all. It is whether the vocabulary can carry what
+ * a coach would actually say — and version 1 of this schema could not express a single line of a
+ * marathon plan. So the suite opens by writing the real plans out, in full, and reading them back.
+ * A schema is not proved by its edge cases; it is proved by the ordinary thing it exists to say.
  */
 
 const profile: Profile = {
@@ -42,11 +42,13 @@ const history: Session[] = [{
 const program: Program = { id: 'p', frequency: 4, days: [] };
 const facts = coachFacts({ profile, program, history, justFinished: history[0] });
 
-const lift = (over: Record<string, unknown> = {}) => ({
-  ex: 'bb_bench_press', sets: 4, band: [8, 12], load: 32.5, restS: 120, ...over,
-});
-const plan = (over: Record<string, unknown> = {}) =>
-  JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'Upper A', lifts: [lift()] }], ...over });
+const wrap = (sessions: unknown) => JSON.stringify({ v: COACH_PLAN_VERSION, sessions });
+
+function read(raw: unknown) {
+  const r = parseCoachPlan(raw, facts);
+  if (!r.ok) throw new Error(`expected a readable plan, got ${r.reason}${r.at ? ` at ${r.at}` : ''}`);
+  return r;
+}
 
 function unreadable(raw: unknown): UnreadableReason {
   const r = parseCoachPlan(raw, facts);
@@ -54,165 +56,229 @@ function unreadable(raw: unknown): UnreadableReason {
   return r.reason;
 }
 
-describe('coach plan — reading the answer', () => {
-  it('reads a well-formed plan and changes nothing about it', () => {
-    const r = parseCoachPlan(plan(), facts);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.plan.days).toEqual([
-      { name: 'Upper A', lifts: [{ ex: 'bb_bench_press', sets: 4, band: [8, 12], load: 32.5, restS: 120 }] },
+describe('the vocabulary carries what a coach would actually say', () => {
+  it('writes a marathon week — the plan version 1 could not express at all', () => {
+    // Every line here was impossible before: no load, no sets, no reps, and the day of the week
+    // matters because the whole week is built around the long run.
+    const plan = read(wrap([
+      { name: 'Easy 5k', day: 'tue', blocks: [
+        { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 5000,
+          say: 'At a pace where you could hold a conversation.' }] },
+      ] },
+      { name: 'Intervals', day: 'thu', blocks: [
+        { rounds: 1, items: [{ kind: 'time', ex: 'warm_up', seconds: 600 }] },
+        { rounds: 6, restS: 90, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 400,
+          say: 'Hard, but the sixth should look like the first.' }] },
+        { rounds: 1, items: [{ kind: 'time', ex: 'cool_down', seconds: 600 }] },
+      ] },
+      { name: 'Long run', day: 'sun', blocks: [
+        { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 18000,
+          say: 'Slower than feels right. This one is about time on your feet.' }] },
+      ] },
+    ])).plan;
+
+    expect(plan.sessions.map((s) => [s.day, s.name])).toEqual([
+      ['tue', 'Easy 5k'], ['thu', 'Intervals'], ['sun', 'Long run'],
     ]);
-    expect(r.snapped).toBe(0); // the coach used the grain it was given; the typist did nothing
+    // The interval block: six rounds of one 400, ninety seconds between. Rounds carry it, not a
+    // bespoke "interval" shape.
+    const intervals = plan.sessions[1].blocks[1];
+    expect({ rounds: intervals.rounds, restS: intervals.restS }).toEqual({ rounds: 6, restS: 90 });
+    // The instruction survived — this is the thing the app could never carry.
+    const long = plan.sessions[2].blocks[0].items[0];
+    expect(long.say).toContain('time on your feet');
+  });
+
+  it('writes an ordinary hypertrophy day, where a SET is just a round', () => {
+    const plan = read(wrap([
+      { name: 'Upper A', blocks: [
+        { rounds: 4, restS: 120, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 32.5,
+          say: 'Last one to a rep short of failure; stop the others two short.' }] },
+        { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'bb_row', reps: [8, 12], load: 40 }] },
+        { rounds: 3, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
+      ] },
+    ])).plan;
+
+    const [bench, row, plank] = plan.sessions[0].blocks;
+    expect(bench.rounds).toBe(4); // "4 sets" — no `sets` field exists anywhere
+    expect(bench.items[0]).toMatchObject({ kind: 'reps', reps: [8, 12], load: 32.5 });
+    expect(row.rounds).toBe(3);
+    expect(plank.items[0]).toMatchObject({ kind: 'time', seconds: 45 });
+    // A day with no `day` is a day the athlete slots wherever she likes — a gym week does not care.
+    expect(plan.sessions[0].day).toBeUndefined();
+  });
+
+  it('writes a circuit — three exercises, three times through, one block', () => {
+    const plan = read(wrap([
+      { name: 'Conditioning', blocks: [
+        { rounds: 3, restS: 120, items: [
+          { kind: 'reps', ex: 'goblet_squat', reps: [12, 12], load: 16 },
+          { kind: 'distance', ex: 'farmer_carry', metres: 40, load: 24 },
+          { kind: 'time', ex: 'jump_rope', seconds: 60 },
+        ] },
+      ] },
+    ])).plan;
+    const circuit = plan.sessions[0].blocks[0];
+    expect(circuit.rounds).toBe(3);
+    expect(circuit.items.map((i) => i.kind)).toEqual(['reps', 'distance', 'time']);
+    // `[12, 12]` is a fixed count, not a band — one shape covers both.
+    expect(circuit.items[0]).toMatchObject({ reps: [12, 12] });
+  });
+
+  it('writes a footballer\'s session — sprints, jumps and lifts in one place', () => {
+    const plan = read(wrap([
+      { name: 'Speed + lower', day: 'wed', blocks: [
+        { rounds: 1, items: [{ kind: 'open', ex: 'mobility', say: 'Whatever your hips need today.' }] },
+        { rounds: 6, restS: 180, items: [{ kind: 'distance', ex: 'sprint', metres: 30,
+          say: 'Full effort. If the sixth is slower than the first, stop at five.' }] },
+        { rounds: 4, restS: 120, items: [{ kind: 'reps', ex: 'box_jump', reps: [3, 3], load: null }] },
+        { rounds: 3, restS: 150, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [5, 5], load: 60 }] },
+      ] },
+    ])).plan;
+    expect(plan.sessions[0].blocks.map((b) => b.items[0].kind)).toEqual(['open', 'distance', 'reps', 'reps']);
+    // An `open` item carries no number at all, and that is a complete instruction.
+    expect(plan.sessions[0].blocks[0].items[0]).toEqual({
+      kind: 'open', ex: 'mobility', say: 'Whatever your hips need today.',
+    });
   });
 
   it('executes a decision the engine would once have overruled — there is one decider', () => {
     // Every one of these was a rule the old engine enforced: SETS_MIN was 3, Loop 3 owned volume,
-    // and a load could only move by one rung. All of it goes through now, unchanged.
-    const bold = JSON.stringify({
-      v: COACH_PLAN_VERSION,
-      days: [{ name: 'Upper A', lifts: [
-        { ex: 'bb_bench_press', sets: 1, band: [3, 5], load: 60, restS: 300 },
-        { ex: 'bb_row', sets: 9, band: [20, 30], load: 20, restS: 30 },
-      ] }],
-    });
-    const r = parseCoachPlan(bold, facts);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.plan.days[0].lifts.map((l) => [l.sets, l.band, l.load])).toEqual([
-      [1, [3, 5], 60],
-      [9, [20, 30], 20],
+    // a load could only move by one rung. All of it goes through now, unchanged.
+    const plan = read(wrap([
+      { name: 'Whatever the coach decided', blocks: [
+        { rounds: 1, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [3, 5], load: 60 }] },
+        { rounds: 9, restS: 30, items: [{ kind: 'reps', ex: 'bb_row', reps: [20, 30], load: 20 }] },
+      ] },
+    ])).plan;
+    expect(plan.sessions[0].blocks.map((b) => [b.rounds, b.items[0]])).toEqual([
+      [1, { kind: 'reps', ex: 'bb_bench_press', reps: [3, 5], load: 60 }],
+      [9, { kind: 'reps', ex: 'bb_row', reps: [20, 30], load: 20 }],
     ]);
   });
+});
 
-  it('keeps the notes it can read and never loses a decision over prose', () => {
-    const withNotes = plan({
+describe('the typist — a weight that does not exist is not printed', () => {
+  const one = (item: unknown) => wrap([{ name: 'D', blocks: [{ rounds: 1, items: [item] }] }]);
+
+  it('lands a machine load on a real pin, and counts that it had to', () => {
+    const r = read(one({ kind: 'reps', ex: 'machine_chest_press', reps: [8, 12], load: 32.4 }));
+    const item = r.plan.sessions[0].blocks[0].items[0] as { load: number };
+    expect(Math.abs(item.load % STARTING_INCREMENT.machine)).toBeLessThan(1e-9);
+    expect(r.snapped).toBe(1); // a per-model quality signal: how often it ignored the grain it was told
+  });
+
+  it('changes nothing when the coach used the grain it was given', () => {
+    const r = read(one({ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 32.5 }));
+    expect((r.plan.sessions[0].blocks[0].items[0] as { load: number }).load).toBe(32.5);
+    expect(r.snapped).toBe(0);
+  });
+
+  it('never puts a barbell under the bar', () => {
+    const r = read(one({ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 4 }));
+    expect((r.plan.sessions[0].blocks[0].items[0] as { load: number }).load).toBe(20);
+  });
+
+  it('leaves a MOVEMENT load exactly as written — we do not know what she is carrying', () => {
+    const r = read(one({ kind: 'distance', ex: 'farmer_carry', metres: 40, load: 23.5 }));
+    expect((r.plan.sessions[0].blocks[0].items[0] as { load: number }).load).toBe(23.5);
+    expect(r.snapped).toBe(0); // snapping to a grid we do not have would be inventing one
+  });
+
+  it('leaves a bodyweight item with no number at all', () => {
+    const r = read(one({ kind: 'reps', ex: 'pull_up', reps: [5, 8], load: null }));
+    expect((r.plan.sessions[0].blocks[0].items[0] as { load: number | null }).load).toBeNull();
+    expect(r.snapped).toBe(0);
+  });
+});
+
+describe('no answer arrived — the update waits, nothing is written', () => {
+  const item = { kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 30 };
+  const one = (over: Record<string, unknown>) =>
+    wrap([{ name: 'D', blocks: [{ rounds: 1, items: [{ ...item, ...over }] }] }]);
+
+  it('names why, in a value that can be counted per model', () => {
+    expect(unreadable('{"v":2,"sessions":[')).toBe('not_json'); // the connection dropped mid-object
+    expect(unreadable('[]')).toBe('not_an_object');
+    expect(unreadable(JSON.stringify({ v: 1, sessions: [] }))).toBe('wrong_version'); // v1 is gone
+    expect(unreadable(wrap([]))).toBe('no_sessions');
+    expect(unreadable(wrap([{ name: 'D', blocks: [] }]))).toBe('no_blocks');
+    expect(unreadable(wrap([{ name: 'D', blocks: [{ rounds: 1, items: [] }] }]))).toBe('no_items');
+    expect(unreadable(wrap([{ name: 'D', blocks: [{ rounds: 0, items: [item] }] }]))).toBe('not_a_number');
+    expect(unreadable(wrap([{ blocks: [{ rounds: 1, items: [item] }] }]))).toBe('session_malformed');
+    expect(unreadable(wrap([{ name: 'D', day: 'someday', blocks: [{ rounds: 1, items: [item] }] }])))
+      .toBe('session_malformed');
+    expect(unreadable(one({ ex: 'no_such_thing' }))).toBe('unknown_exercise');
+    expect(unreadable(one({ kind: 'vibes' }))).toBe('unknown_kind');
+    expect(unreadable(one({ reps: [8] }))).toBe('not_a_number');
+    expect(unreadable(one({ load: 'heavy' }))).toBe('not_a_number');
+    expect(unreadable(one({ kind: 'time', seconds: 'a while' }))).toBe('not_a_number');
+    expect(unreadable(one({ kind: 'distance', metres: null }))).toBe('not_a_number');
+  });
+
+  it('refuses to guess which lift a near-miss id meant', () => {
+    // 'bb_bench' is one character from a real id. Guessing is how an athlete is handed the wrong
+    // movement at a weight chosen for a different one.
+    const r = parseCoachPlan(one({ ex: 'bb_bench' }), facts);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect({ reason: r.reason, at: r.at }).toEqual({ reason: 'unknown_exercise', at: 'bb_bench' });
+  });
+
+  it('keeps every note it can read, and never loses a decision over prose', () => {
+    const raw = JSON.stringify({
+      v: COACH_PLAN_VERSION,
+      sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [item] }] }],
       notes: [
         { ex: 'bb_bench_press', say: 'You cleared 12 at 30, so we go up.' },
         { say: 'No exercise attached, still a sentence.' },
-        { ex: 'bb_row' }, // no `say` — a lost sentence
+        { ex: 'bb_row' },        // no `say` — a lost sentence
         'not even an object',
       ],
     });
-    const r = parseCoachPlan(withNotes, facts);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    const r = read(raw);
     expect(r.plan.notes).toEqual([
       { ex: 'bb_bench_press', say: 'You cleared 12 at 30, so we go up.' },
       { say: 'No exercise attached, still a sentence.' },
     ]);
-    expect(r.plan.days.length).toBe(1); // the decision survived the broken note
+    expect(r.plan.sessions.length).toBe(1); // the decision survived the broken note
   });
 
-  describe('the typist — a weight that does not exist is not printed', () => {
-    it('lands a machine load on a real pin', () => {
-      const r = parseCoachPlan(
-        JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'D', lifts: [
-          { ex: 'machine_chest_press', sets: 4, band: [8, 12], load: 32.4, restS: 120 },
-        ] }] }),
-        facts,
-      );
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      const load = r.plan.days[0].lifts[0].load!;
-      expect(Math.abs(load % STARTING_INCREMENT.machine)).toBeLessThan(1e-9);
-      expect(r.snapped).toBe(1); // counted, so we can see how often a model needs the typist
-    });
+  it('reads a plan with no facts to hand, just more coarsely', () => {
+    expect(parseCoachPlan(one({}))?.ok).toBe(true);
+  });
+});
 
-    it('never puts a barbell under the bar', () => {
-      const r = parseCoachPlan(
-        JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'D', lifts: [
-          { ex: 'bb_bench_press', sets: 3, band: [8, 12], load: 4, restS: 120 },
-        ] }] }),
-        facts,
-      );
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      expect(r.plan.days[0].lifts[0].load).toBe(20);
-    });
-
-    it('leaves a bodyweight lift with no number at all', () => {
-      const r = parseCoachPlan(
-        JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'D', lifts: [
-          { ex: 'pull_up', sets: 3, band: [5, 8], load: null, restS: 120 },
-        ] }] }),
-        facts,
-      );
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      expect(r.plan.days[0].lifts[0].load).toBeNull();
-      expect(r.snapped).toBe(0);
-    });
+describe('the schema is what makes a small model succeed', () => {
+  it('closes every object, so an invented field is a violation and not a surprise', () => {
+    const closed: string[] = [];
+    const open: string[] = [];
+    const walk = (node: unknown, path: string) => {
+      if (node == null || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
+      if (n.type === 'object') (n.additionalProperties === false ? closed : open).push(path);
+      for (const key of Object.keys(n)) walk(n[key], `${path}.${key}`);
+    };
+    walk(COACH_PLAN_SCHEMA, '$');
+    expect(open).toEqual([]);
+    expect(closed.length).toBeGreaterThan(3);
   });
 
-  describe('no answer arrived — the update waits, nothing is written', () => {
-    it('names why, in a value that can be counted per model', () => {
-      expect(unreadable('{"v":1,"days":[')).toBe('not_json');           // the connection dropped
-      expect(unreadable('[]')).toBe('not_an_object');
-      expect(unreadable(JSON.stringify({ v: 99, days: [] }))).toBe('wrong_version');
-      expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, days: [] }))).toBe('no_days');
-      expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'D', lifts: [] }] })))
-        .toBe('no_lifts');
-      expect(unreadable(plan({ days: [{ name: 'D', lifts: [lift({ ex: 'no_such_lift' })] }] })))
-        .toBe('unknown_exercise');
-      expect(unreadable(plan({ days: [{ name: 'D', lifts: [lift({ sets: 'four' })] }] })))
-        .toBe('not_a_number');
-      expect(unreadable(plan({ days: [{ name: 'D', lifts: [lift({ band: [8] })] }] })))
-        .toBe('not_a_number');
-      expect(unreadable(plan({ days: [{ name: 'D', lifts: [lift({ load: 'heavy' })] }] })))
-        .toBe('not_a_number');
-    });
-
-    it('refuses to guess which lift a near-miss id meant', () => {
-      // 'bb_bench' is one character from a real id. Guessing is how an athlete is handed the wrong
-      // movement at a weight chosen for a different one.
-      const r = parseCoachPlan(plan({ days: [{ name: 'D', lifts: [lift({ ex: 'bb_bench' })] }] }), facts);
-      expect(r.ok).toBe(false);
-      if (r.ok) return;
-      expect({ reason: r.reason, at: r.at }).toEqual({ reason: 'unknown_exercise', at: 'bb_bench' });
-    });
-
-    it('reads a plan with no facts to hand, just more coarsely', () => {
-      const r = parseCoachPlan(plan()); // no sheet — her learned ladder is unavailable
-      expect(r.ok).toBe(true);
-    });
+  it('names every shape the parse accepts, and no shape it does not', () => {
+    const kinds = COACH_PLAN_SCHEMA.properties.sessions.items.properties.blocks.items
+      .properties.items.items.properties.kind.enum;
+    expect([...kinds].sort()).toEqual(['distance', 'open', 'reps', 'time']);
+    // And a kind outside that list must be unreadable, or the schema claims a constraint the code
+    // does not hold.
+    expect(unreadable(wrap([{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'tempo', ex: 'plank' }] }] }])))
+      .toBe('unknown_kind');
   });
 
-  describe('the schema is what makes a small model succeed', () => {
-    it('closes every object, so an invented field is a schema violation and not a surprise', () => {
-      const closed: string[] = [];
-      const open: string[] = [];
-      const walk = (node: unknown, path: string) => {
-        if (node == null || typeof node !== 'object') return;
-        const n = node as Record<string, unknown>;
-        if (n.type === 'object') (n.additionalProperties === false ? closed : open).push(path);
-        for (const key of Object.keys(n)) walk(n[key], `${path}.${key}`);
-      };
-      walk(COACH_PLAN_SCHEMA, '$');
-      expect(open).toEqual([]);
-      expect(closed.length).toBeGreaterThan(3);
-    });
-
-    it('requires every field the parse requires — the model is told, not tested', () => {
-      const liftSchema = COACH_PLAN_SCHEMA.properties.days.items.properties.lifts.items;
-      expect([...liftSchema.required].sort()).toEqual(['band', 'ex', 'load', 'restS', 'sets']);
-      // A plan missing any required field must be unreadable, or the schema is claiming a
-      // constraint the code does not hold.
-      for (const field of liftSchema.required) {
-        const partial: Record<string, unknown> = lift();
-        delete partial[field];
-        const r = parseCoachPlan(
-          JSON.stringify({ v: COACH_PLAN_VERSION, days: [{ name: 'D', lifts: [partial] }] }),
-          facts,
-        );
-        expect({ field, ok: r.ok }).toEqual({ field, ok: false });
-      }
-    });
-
-    it('does not enumerate the catalogue — it is already in the prompt once', () => {
-      const json = JSON.stringify(COACH_PLAN_SCHEMA);
-      expect(json).not.toContain('bb_bench_press');
-      // Small enough to sit beside the sheet on every call without being noticed.
-      expect(Math.round(json.length / 3.5)).toBeLessThan(400);
-    });
+  it('does not enumerate the catalogue — it is already in the prompt once', () => {
+    const json = JSON.stringify(COACH_PLAN_SCHEMA);
+    expect(json).not.toContain('bb_bench_press');
+    expect(json).not.toContain('run_outdoor');
+    // Small enough to sit beside the sheet on every call without being noticed.
+    expect(Math.round(json.length / 3.5)).toBeLessThan(500);
   });
 });
