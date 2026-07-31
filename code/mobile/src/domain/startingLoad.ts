@@ -15,6 +15,7 @@
 import type { Profile, Experience, Capability } from '@/data/local/models';
 import { BAR_KG } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
+import { STARTING_INCREMENT } from '@/engine/v5/constants';
 import type { Exercise } from '@/data/exercises';
 
 /**
@@ -116,14 +117,49 @@ export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
   return want >= loadFloor(ex.equipment);
 }
 
+/**
+ * ════ THE OPENING LOAD IS ONE SHE CAN ACTUALLY BUILD (founder, build 36 — A.6) ════
+ *
+ * *"Gyms stock 2.5 kg jumps — why prescribe 8.5 a side? At least on the first workout, maximise
+ * plate accuracy and the athlete's opening load."*
+ *
+ * He is right and the bug was here. This function rounded the modelled load to **1 kg whatever the
+ * equipment was**, so a barbell opened at 37 kg — 8.5 kg a side, which is 5 + 2.5 + 1, and there is
+ * no 1 kg plate. `loadPresentation.exactPlates` then found no stack that summed to 8.5 and printed
+ * the bare figure, so her first instruction of her first session was a number she could not load.
+ *
+ * The app already knew the right grain: `STARTING_INCREMENT` says a barbell moves in 2.5 kg (1.25 a
+ * side, the smallest plate in `GEAR`) and a machine the same. The seed simply was not asking. It
+ * asks now, and it counts FROM THE FLOOR — a barbell's rungs are 20 / 22.5 / 25, not 0 / 2.5 / 5,
+ * because the bar is where the ladder starts.
+ *
+ * The 1 kg comment above was not wrong, it was answering a different question. That ruling was
+ * about how FINELY the engine may progress a load it already owns (80 → 81 beats 80 → 82.5), and
+ * `nextRung` still does exactly that inside her learned grid. This is the cold start, where there
+ * is no grid and the only ladder is the one the room stocks.
+ *
+ * It rounds to NEAREST rather than down — 37 → 37.5, not 35 — because he asked for the opening load
+ * to be maximised, and because the engine's down-only law (`snapDown`) governs decisions it makes
+ * ABOUT a performance. This is the seed before any performance exists.
+ *
+ * A dumbbell is untouched on purpose: its increment is 1.0, so every integer is already a rung. Real
+ * racks step in 2s and often skip, but that is a per-gym inventory question and inventing a ladder
+ * here would be the engine guessing — which it does not do. Flagged for the founder, not assumed.
+ */
+function snapToStock(kg: number, ex: Exercise): number {
+  const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
+  if (inc <= 0) return kg; // bodyweight — no load axis to land on
+  const floor = ex.equipment === 'barbell' ? BAR_KG : 0;
+  const rungs = Math.max(0, Math.round((kg - floor) / inc));
+  return floor + rungs * inc;
+}
+
 export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {
   const modelled = modelledLoadKg(ex, profile);
   if (modelled == null) return null;
   let kg = modelled;
-  // Round to a loadable increment.
-  // Founder: 1 kg steps everywhere (finer + more accurate than 2.5 — 80 → 81, not 82.5).
   const step = 1;
-  kg = Math.round(kg / step) * step;
+  kg = snapToStock(Math.round(kg / step) * step, ex);
   // NO BARBELL LIFT IS LIGHTER THAN THE BAR. This clause used to read `&& ex.tier === 'compound'`,
   // which asked the wrong question: the bar weighs 20 kg whatever the lift is doing. The two
   // barbell ISOLATION lifts in the catalogue — `bb_curl` and `skullcrusher`, both baseKg 20 — fell

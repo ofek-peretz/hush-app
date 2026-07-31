@@ -136,3 +136,32 @@ export function heroFontSize(figure: string): number {
   if (glyphs === 5) return 96;
   return 80; // 1000+ / 4 decimals — not reachable today, but never clipped either
 }
+
+/**
+ * ════ THE LINE BOX HOLDS THE WHOLE DIGIT (founder, build 36 — A.6) ════
+ *
+ * "37 is clipped." It was, and not horizontally — the stage's style carried `fontSize: 118` over
+ * `lineHeight: 106`, and RN clips a glyph to its line box (web only spills, which is why every
+ * gallery pass missed it). Measured in the browser: the box was 106 px and the glyphs needed 129.
+ *
+ * The style's own comment stated the rule — "lineHeight must be ≥ fontSize or RN clips the tall
+ * mono digit tops" — and the style underneath it broke the rule. The 118 was raised from an
+ * earlier size and the leading was left behind. So the leading is no longer a number anyone can
+ * forget to update: it is DERIVED, here, from whatever size `heroFontSize` chose, and pinned by
+ * `noGlyphIsClipped`, which fails the build on any style in the app whose lineHeight sits under
+ * its fontSize.
+ *
+ * The tracking is derived for the same reason: -5.6 was -.0475em of 118 and would have read as a
+ * different design at 96 and at 80.
+ */
+const HERO_LEADING = 1.1; // 129/118 measured, rounded up to a clean ratio
+const HERO_TRACKING = -0.0475; // the design's -5.6 at 118
+
+export function heroType(figure: string): { fontSize: number; lineHeight: number; letterSpacing: number } {
+  const fontSize = heroFontSize(figure);
+  return {
+    fontSize,
+    lineHeight: Math.ceil(fontSize * HERO_LEADING),
+    letterSpacing: Math.round(fontSize * HERO_TRACKING * 10) / 10,
+  };
+}

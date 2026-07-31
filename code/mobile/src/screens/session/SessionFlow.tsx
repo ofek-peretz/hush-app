@@ -33,7 +33,7 @@ import { inWorkoutLadder } from '@/domain/replacement';
 import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
-import { heroFontSize, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
+import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';
 import { restWithSample } from '@/domain/restPrescription';
@@ -1165,7 +1165,7 @@ function ActiveSet({
                     {/* The figure takes the size it can HAVE, not a size it was promised — see
                         `heroFontSize`. 5 to 99.5 kg is untouched at the designed 118. */}
                     <Text
-                      style={[styles.hero, { fontSize: heroFontSize(String(heroValue)) }]}
+                      style={[styles.hero, heroType(String(heroValue))]}
                       accessibilityLabel={`${heroValue} ${unitLabel(units)}`}
                     >
                       {heroValue}
@@ -2196,16 +2196,13 @@ const styles = StyleSheet.create({
   addFifteenPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
   crossingFooter: { paddingHorizontal: space.gutter, paddingBottom: 44, gap: 12 },
   addFifteenLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: stage.ink0, textAlign: 'center' },
-  // lineHeight must be ≥ fontSize or RN clips the tall mono digit tops (the web
-  // design's 0.9 is safe there but not in RN). Slight headroom keeps glyphs whole.
+  // Size, leading and tracking all come from `heroType` at the markup — they move together with
+  // the glyph count, and the leading must never fall under the size or RN clips the digit tops.
   // THE LIT HERO (v7 2.2): 132px mono at -.05em in the BRIGHT cream, with a wide soft glow. It is
   // the one thing on the stage standing fully in the light — everything else rests in shadow.
   hero: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 118,
-    lineHeight: 106,
-    letterSpacing: -5.6,
     color: '#f6f3ea',
     includeFontPadding: false,
     textAlign: 'left',
