@@ -92,6 +92,12 @@ function mirrorIn(phase: SessionMirror['phase']): SessionMirror {
     completedExerciseName: null, canMarkBusy: true,
     loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
     workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [],
+    // Added when typechecking reached the tests: this literal had drifted nine fields behind the
+    // mirror it claims to be, so every intent below was being routed against a frame the phone
+    // stopped publishing.
+    exerciseGroup: 'Chest', setNumber: 1, setsInExercise: 3, nextSetLabel: 'Set 2 of 3',
+    nextSetNumber: 2, nextSetsInExercise: 3, targetRepsHi: 12, restTotalS: 120,
+    liveVolumeKg: 0, liveSets: 0,
   };
 }
 

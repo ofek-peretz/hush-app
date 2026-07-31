@@ -67,7 +67,7 @@ describe('F-11 · the rest band — a set rested very differently is not evidenc
   });
 
   it('a set whose rest was never recorded is left out of the fit entirely', () => {
-    const unknownRest: SetPerf[] = [{ load: 60, reps: 12, restBeforeS: null, isApproach: false }, { load: 62.5, reps: 11, restBeforeS: null, isApproach: false }];
+    const unknownRest: SetPerf[] = [{ load: 60, reps: 12, restBeforeS: undefined, isApproach: false }, { load: 62.5, reps: 11, restBeforeS: undefined, isApproach: false }];
     expect(repsPerRung(unknownRest, [], bb)).toBeNull();
   });
 });

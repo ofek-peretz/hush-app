@@ -201,7 +201,8 @@ function over(fg: string, ground: string): string {
   if (!m) return fg;
   const [r, g, b, a = '1'] = m[1].split(',').map((s) => parseFloat(s.trim()));
   const gc = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16));
-  const mix = [r, g, b].map((c, i) => Math.round(c * a + gc[i] * (1 - a)));
+  const alpha = Number(a);
+  const mix = [r, g, b].map((c, i) => Math.round(c * alpha + gc[i] * (1 - alpha)));
   return '#' + mix.map((c) => c.toString(16).padStart(2, '0')).join('');
 }
 

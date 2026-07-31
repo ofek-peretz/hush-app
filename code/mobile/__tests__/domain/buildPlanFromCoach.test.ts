@@ -1,5 +1,5 @@
 import { buildPlanFromCoach, type Step } from '@/state/stores/sessionStore';
-import type { PlannedSession } from '@/domain/coachPlan';
+import type { PlannedSession, PlannedItem } from '@/domain/coachPlan';
 
 /**
  * ════ A COACH'S SESSION, AS THE MACHINE RUNS IT ════
@@ -14,7 +14,8 @@ import type { PlannedSession } from '@/domain/coachPlan';
  * zeros would have made every one of those quietly wrong instead.
  */
 
-const bench = (load: number | null = 40) => ({ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load } as const);
+const bench = (load: number | null = 40) =>
+  ({ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load } satisfies PlannedItem);
 
 describe('a straight block is indistinguishable from the old builder', () => {
   const session: PlannedSession = {

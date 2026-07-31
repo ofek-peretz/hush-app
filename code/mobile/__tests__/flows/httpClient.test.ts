@@ -16,7 +16,7 @@ describe('401 signals revocation (founder decision)', () => {
   it('notifies the unauthorized handler on any 401 from an authed request', async () => {
     const onUnauthorized = jest.fn();
     setUnauthorizedHandler(onUnauthorized);
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
     await expect(new HttpModelClient().getProfile()).rejects.toMatchObject({ kind: 'unauthorized', status: 401 });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     setUnauthorizedHandler(null);
@@ -25,14 +25,14 @@ describe('401 signals revocation (founder decision)', () => {
   it('classifies a 5xx as a (transient) server error and does NOT revoke', async () => {
     const onUnauthorized = jest.fn();
     setUnauthorizedHandler(onUnauthorized);
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }));
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }));
     await expect(new HttpModelClient().getProfile()).rejects.toMatchObject({ kind: 'server' });
     expect(onUnauthorized).not.toHaveBeenCalled();
     setUnauthorizedHandler(null);
   });
 
   it('classifies a 422 as a (permanent) validation error', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 422, json: async () => ({}) }));
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 422, json: async () => ({}) }));
     await expect(new HttpModelClient().getProfile()).rejects.toMatchObject({ kind: 'validation' });
   });
 });
@@ -51,7 +51,7 @@ const SESSION = {
 };
 
 function mockFetchOnce(json: unknown, ok = true, status = 200) {
-  (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok, status, json: async () => json }));
+  (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok, status, json: async () => json }));
 }
 
 // The weekly payload: a bucket of N workouts (no calendar). Workout A is still planned;
@@ -68,7 +68,7 @@ const WEEK = {
 describe('generateProgram consumes the WEEKLY model (/weeks)', () => {
   it('reads /weeks/current and maps workouts[] → the week bucket (names, completion, ordering key)', async () => {
     const urls: { url: string; method: string }[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
       urls.push({ url, method: init.method });
       if (url.endsWith('/weeks/current')) return { ok: true, status: 200, json: async () => WEEK };
       return { ok: true, status: 200, json: async () => ({}) };
@@ -88,7 +88,7 @@ describe('generateProgram consumes the WEEKLY model (/weeks)', () => {
 
   it('composes the week (POST /weeks) only when none exists yet', async () => {
     const urls: { url: string; method: string }[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
       urls.push({ url, method: init.method });
       if (url.endsWith('/weeks/current')) return { ok: true, status: 200, json: async () => ({ week: null, reason: 'no_week_yet' }) };
       if (url.endsWith('/weeks')) return { ok: true, status: 200, json: async () => WEEK };
@@ -103,7 +103,7 @@ describe('generateProgram consumes the WEEKLY model (/weeks)', () => {
 describe('sessionTargets maps blocks to per-set targets', () => {
   it('reads the CHOSEN workout by id (GET /sessions/{id}) and expands target_sets + block ids', async () => {
     const urls: string[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
       urls.push(url);
       return { ok: true, status: 200, json: async () => SESSION.today };
     });
@@ -121,7 +121,7 @@ describe('sessionTargets maps blocks to per-set targets', () => {
 describe('recordSession reports each set then completes', () => {
   it('posts /sets per set with the backend block id, then /complete', async () => {
     const calls: { url: string; body: Record<string, unknown> }[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { body: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { body: string }) => {
       calls.push({ url, body: JSON.parse(init.body) });
       return { ok: true, status: 200, json: async () => ({}) };
     });
@@ -140,7 +140,7 @@ describe('recordSession reports each set then completes', () => {
 
   it('skips sets with no backend block id (cannot be reported)', async () => {
     const calls: string[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
       calls.push(url);
       return { ok: true, status: 200, json: async () => ({}) };
     });
@@ -156,21 +156,21 @@ describe('recordSession reports each set then completes', () => {
 
 describe('getProfile validates the invite + maps backend identity', () => {
   it('maps GET /profile fields (sex/age/bodyweight)', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
       expect(url).toContain('/profile');
-      return { ok: true, status: 200, json: async () => ({ sex: 'male', age: 31, bodyweight_kg: 82.5, experience: 'intermediate' }) };
+      return { ok: true, status: 200, json: async () => ({ sex: 'male', age: 31, bodyweight_kg: 82.5 }) };
     });
     const p = await new HttpModelClient().getProfile();
-    expect(p).toMatchObject({ sex: 'male', age: 31, bodyweightKg: 82.5, experience: 'intermediate' });
+    expect(p).toMatchObject({ sex: 'male', age: 31, bodyweightKg: 82.5 });
   });
 
   it('a bad/expired invite (401) throws unauthorized (caller reverts + shows the error line)', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }));
     await expect(new HttpModelClient().getProfile()).rejects.toMatchObject({ kind: 'unauthorized' });
   });
 
   it('maps /strategy.sessions_completed (calibration source of truth)', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ weekly_frequency: 4, sessions_completed: 9 }) }));
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ weekly_frequency: 4, sessions_completed: 9 }) }));
     expect(await new HttpModelClient().sessionsCompleted()).toBe(9);
   });
 });
@@ -178,7 +178,7 @@ describe('getProfile validates the invite + maps backend identity', () => {
 describe('equipment occupied + weekly rest (Program Ownership / Weekly Container)', () => {
   it('eraseAccount POSTs to /me/erase (in-app Delete Account → server erasure)', async () => {
     const calls: { url: string; method: string }[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
       calls.push({ url, method: init.method });
       return { ok: true, status: 200, json: async () => ({ athlete_id: 'a', method: 'logical_anonymization' }) };
     });
@@ -188,7 +188,7 @@ describe('equipment occupied + weekly rest (Program Ownership / Weekly Container
 
   it('markEquipmentOccupied POSTs to /blocks/{id}/unavailable', async () => {
     const calls: { url: string; method: string }[] = [];
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
       calls.push({ url, method: init.method });
       return { ok: true, status: 200, json: async () => ({}) };
     });
@@ -199,7 +199,7 @@ describe('equipment occupied + weekly rest (Program Ownership / Weekly Container
 
 describe('portraitSnapshot maps /capabilities to a snapshot (relative bars, Decision 2)', () => {
   it('returns raw score + confidence; still-learning derived from confidence<30', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => ({
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({
       ok: true,
       status: 200,
       json: async () => ({

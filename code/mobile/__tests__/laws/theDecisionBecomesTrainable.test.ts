@@ -69,7 +69,7 @@ describe('the decision reaches the athlete', () => {
     expect(steps[0].item).toMatchObject({ kind: 'distance', ex: 'run_outdoor', metres: 400 });
     // Only the reps shape carries a target — the rest of the machine reads `target` to drive a
     // load, and a run has no load to drive.
-    expect(steps.filter((s) => s.target).every((s) => s.item.kind === 'reps')).toBe(true);
+    expect(steps.filter((s) => s.target).every((s) => s.item?.kind === 'reps')).toBe(true);
     const squat = steps.find((s) => s.exerciseId === 'bb_back_squat')!;
     expect(squat.target).toMatchObject({ recommendedWeight: 40, repBandLo: 8, repBandHi: 12 });
   });

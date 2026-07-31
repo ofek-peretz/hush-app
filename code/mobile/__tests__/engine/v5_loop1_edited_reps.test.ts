@@ -26,19 +26,19 @@ describe('Loop 1 reads the declared band, not the edited actual reps', () => {
     const r = applyLoop1(editedPlan(30), 0, 34, 30, 0);
     expect(r.corrected).toBe(true);
     expect(r.direction).toBe('up');
-    expect(r.plan[1].target.recommendedWeight!).toBeGreaterThan(34);
+    expect(r.plan[1].target!.recommendedWeight!).toBeGreaterThan(34);
   });
 
   it('2 reps (edited) at band [8,10] → the remaining sets go DOWN', () => {
     const r = applyLoop1(editedPlan(2), 0, 34, 2, 0);
     expect(r.corrected).toBe(true);
     expect(r.direction).toBe('down');
-    expect(r.plan[1].target.recommendedWeight!).toBeLessThan(34);
+    expect(r.plan[1].target!.recommendedWeight!).toBeLessThan(34);
   });
 
   it('a set inside the declared band still leaves the plan untouched', () => {
     const r = applyLoop1(editedPlan(9), 0, 34, 9, 0);
     expect(r.corrected).toBe(false);
-    expect(r.plan[1].target.recommendedWeight).toBe(34);
+    expect(r.plan[1].target!.recommendedWeight).toBe(34);
   });
 });

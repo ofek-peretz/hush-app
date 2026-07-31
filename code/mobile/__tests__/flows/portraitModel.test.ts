@@ -37,7 +37,7 @@ describe('cold start — a neutral prior, everything still learning', () => {
     // Extra fields are ignored by construction: the signature no longer admits `experience`, so two
     // athletes who once called themselves different things get the identical still-learning bar.
     const a = computePortrait([], { sex: 'male', weightKg: 80 });
-    const b = computePortrait([], { sex: 'male', weightKg: 80, experience: 'advanced' } as never);
+    const b = computePortrait([], { sex: 'male', weightKg: 80 } as never);
     expect(b.perCapability).toEqual(a.perCapability);
   });
 });

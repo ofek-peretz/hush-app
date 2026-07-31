@@ -52,7 +52,8 @@ function draw(size: 'md' | 'lg', value = 137.5): ReactTestRenderer {
 }
 
 /** Flatten whatever style shape a node carries into one object. */
-const flat = (s: unknown) => StyleSheet.flatten(s as never) ?? {};
+const flat = (s: unknown): Record<string, unknown> =>
+  (StyleSheet.flatten(s as never) ?? {}) as Record<string, unknown>;
 
 describe('one wheel, one size, everywhere', () => {
   it('md and lg resolve to the SAME height — the 2026-07-28 ruling, now actually enforced', () => {

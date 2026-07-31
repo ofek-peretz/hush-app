@@ -165,8 +165,8 @@ describe('club family', () => {
  * at, snapped to round plates; the LIFTS that carry clubs lean lower-body for women.
  */
 describe('club ladders are cut from the onboarding answers', () => {
-  const woman: MilestoneProfile = { sex: 'female', weightKg: 60, experience: 'beginner', age: 30 };
-  const man: MilestoneProfile = { sex: 'male', weightKg: 82, experience: 'intermediate', age: 30 };
+  const woman: MilestoneProfile = { sex: 'female', weightKg: 60 };
+  const man: MilestoneProfile = { sex: 'male', weightKg: 82 };
 
   it("a woman's clubs are four-fifths lower body, and a man's include the hip thrust", () => {
     expect(Object.keys(clubLadders(woman)).sort()).toEqual(

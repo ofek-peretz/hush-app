@@ -166,8 +166,7 @@ describe('undoEngineRotation — the explicit "leave it"', () => {
   it('writes exactly what two silent swap-backs write — one "no", one outcome', () => {
     // The K=2 path: the fold clears the substitute, and `learnedLeaveIts` reads that as resistance.
     const before = prefs();
-    const afterFold = { ...before.substitutes };
-    delete afterFold.bb_bench_press;
+    const { bb_bench_press: _dropped, ...afterFold } = before.substitutes;
     expect(learnedLeaveIts(before.substitutes, afterFold, before.engineRotated)).toEqual(['bb_bench_press']);
     // …and the button reaches the same place, in one tap.
     const viaButton = undoEngineRotation(prefs(), 'bb_bench_press', muscle);

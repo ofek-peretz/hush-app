@@ -114,7 +114,7 @@ async function train(p: Person): Promise<Record<string, Occurrence[]>> {
     const trained = new Set<string>();
     for (const day of program.days) {
       if (day.isRest || day.slots.length === 0) continue;
-      const targets = await fixtureModel.sessionTargets({ programDayId: day.id });
+      const targets = await fixtureModel.sessionTargets({ programDayId: day.id, completedSessions: 0 });
       let plan = day.slots
         .flatMap((slot) =>
           Array.from({ length: slot.setCount }, (_, s) => ({
@@ -159,7 +159,7 @@ async function train(p: Person): Promise<Record<string, Occurrence[]>> {
       }
 
       await db.appendCompletedSession(session);
-      await fixtureModel.sessionEarned({ startedAtMs: Date.parse(session.startedAt) }); // folds the occurrence
+      await fixtureModel.sessionEarned!({ startedAtMs: Date.parse(session.startedAt) }); // folds the occurrence
 
       for (const slot of day.slots) {
         const ex = exerciseById(slot.exerciseId)!;

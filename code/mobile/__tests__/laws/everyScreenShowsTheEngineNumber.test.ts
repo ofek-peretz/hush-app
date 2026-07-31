@@ -115,7 +115,7 @@ async function buildAthlete(): Promise<Built> {
         plan = l1.plan as never;
       }
       await db.appendCompletedSession(session);
-      await fixtureModel.sessionEarned({ startedAtMs: Date.parse(session.startedAt) });
+      await fixtureModel.sessionEarned!({ startedAtMs: Date.parse(session.startedAt) });
       sessionStarts.push(Date.parse(session.startedAt));
       for (const s of day.slots) trained.add(s.exerciseId);
       t += 2 * 86400000;

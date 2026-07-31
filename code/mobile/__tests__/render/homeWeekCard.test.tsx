@@ -131,9 +131,6 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
-    onHistory: () => {},
-    onSettings: () => {},
-    onProgress: () => {},
     ...over,
   };
 }
@@ -195,15 +192,20 @@ describe('the week is on the page, and it is a door', () => {
 
   it('a chip QUEUES that workout — choosing never leaves Home (the sheet is gone)', () => {
     const chosen: string[] = [];
-    const opened: string[] = [];
     const r = mount(
-      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+      <HomeView {...props({ onChooseWorkout: (id: string) => void chosen.push(id) })} />,
     );
     act(() => {
       byLabel(r, 'Legs A')!.props.onPress(); // not the queued one → it becomes the queued one
     });
     expect(chosen).toEqual(['day_3']);
-    expect(opened).toEqual([]); // …and nothing was pushed on top of Home
+    /*
+     * "…and nothing was pushed on top of Home" used to be asserted here through an `onOpenWorkout`
+     * prop. That prop was deleted with the second act (S-73) and the assertion had been VACUOUS
+     * ever since — a handler nothing calls can never be called. It is a compile error to pass it
+     * now that the tests are typechecked, which is a stronger guarantee than the assertion ever
+     * was: the component has no door to push through, so there is nothing to catch at runtime.
+     */
   });
 
   /**
@@ -218,14 +220,12 @@ describe('the week is on the page, and it is a door', () => {
    */
   it('the QUEUED chip does not hide a second act — it just queues', () => {
     const chosen: string[] = [];
-    const opened: string[] = [];
     const r = mount(
-      <HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id), onOpenWorkout: (id) => void opened.push(id) })} />,
+      <HomeView {...props({ onChooseWorkout: (id: string) => void chosen.push(id) })} />,
     );
     act(() => {
       byLabel(r, 'Pull A')!.props.onPress(); // Pull A === dayName, i.e. already queued
     });
-    expect(opened).toEqual([]);
   });
 
   /**
@@ -415,7 +415,6 @@ describe('the week is on the page, and it is a door', () => {
       { id: 'day_2', name: 'Upper', muscles: 'Back' },
     ];
     const chosen: string[] = [];
-    const opened: string[] = [];
     const r = mount(
       <HomeView
         {...props({
@@ -423,14 +422,12 @@ describe('the week is on the page, and it is a door', () => {
           dayName: 'Upper',
           dayId: 'day_1',
           onChooseWorkout: (id) => void chosen.push(id),
-          onOpenWorkout: (id) => void opened.push(id),
         })}
       />,
     );
     const chips = r.root.findAll((n) => n.props?.accessibilityLabel === 'Upper' && typeof n.props.onPress === 'function');
     act(() => chips[1].props.onPress()); // the one that is NOT queued
     expect(chosen).toEqual(['day_2']);
-    expect(opened).toEqual([]);
     // The law is the SELECTED state: matching on the name would light both twins as queued. It is
     // read from the id, so exactly one is.
     expect(chips.filter((c) => c.props.accessibilityState?.selected)).toHaveLength(1);

@@ -49,8 +49,8 @@ describe('B-1 · the cold start reads her sex and her bodyweight, and nothing el
 
   it('a self-reported EXPERIENCE cannot change a single starting load', () => {
     for (const ex of loaded) {
-      const beginner = startingWeight(ex, { sex: 'female', weightKg: 60, experience: 'beginner' } as never);
-      const advanced = startingWeight(ex, { sex: 'female', weightKg: 60, experience: 'advanced' } as never);
+      const beginner = startingWeight(ex, { sex: 'female', weightKg: 60 } as never);
+      const advanced = startingWeight(ex, { sex: 'female', weightKg: 60 } as never);
       expect({ id: ex.id, kg: advanced }).toEqual({ id: ex.id, kg: beginner });
     }
   });

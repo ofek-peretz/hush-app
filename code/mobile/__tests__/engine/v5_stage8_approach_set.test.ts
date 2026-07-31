@@ -46,8 +46,8 @@ describe('Stage 8 · the approach set is excluded from the fold', () => {
     // The working load stands, from the very first set — no light measurement, no jump (founder ruling).
     expect(t.weight).toBe(80);
     // The field is gone entirely.
-    expect((t as Record<string, unknown>).isApproach).toBeUndefined();
-    expect((t as Record<string, unknown>).approachWeight).toBeUndefined();
+    expect((t as unknown as Record<string, unknown>).isApproach).toBeUndefined();
+    expect((t as unknown as Record<string, unknown>).approachWeight).toBeUndefined();
   });
 
   it('a legacy week with ONLY an approach set banks no decision (nothing but a measurement happened)', async () => {

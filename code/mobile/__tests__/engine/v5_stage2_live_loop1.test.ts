@@ -13,11 +13,11 @@ describe('S-11 · a set above Thi raises the load for the REST of the exercise, 
     const r = applyLoop1(plan(), 0, 80, 15, 0);
     expect(r.corrected).toBe(true);
     expect(r.direction).toBe('up');
-    expect(r.plan[1].target.recommendedWeight).toBeGreaterThan(80);
+    expect(r.plan[1].target!.recommendedWeight).toBeGreaterThan(80);
     // carry-forward: the correction is not just the next set, it holds for every remaining set.
-    expect(r.plan[2].target.recommendedWeight).toBe(r.plan[1].target.recommendedWeight);
+    expect(r.plan[2].target!.recommendedWeight).toBe(r.plan[1].target!.recommendedWeight);
     // the completed set's own record is untouched.
-    expect(r.plan[0].target.recommendedWeight).toBe(80);
+    expect(r.plan[0].target!.recommendedWeight).toBe(80);
   });
 });
 
@@ -26,13 +26,13 @@ describe('S-12 · a set below Tlo drops the load for the rest of the exercise, l
     const r = applyLoop1(plan(), 0, 80, 6, 0);
     expect(r.corrected).toBe(true);
     expect(r.direction).toBe('down');
-    expect(r.plan[1].target.recommendedWeight!).toBeLessThan(80);
+    expect(r.plan[1].target!.recommendedWeight!).toBeLessThan(80);
   });
   it('a set inside the band leaves the plan untouched', () => {
     const r = applyLoop1(plan(), 0, 80, 10, 0);
     expect(r.corrected).toBe(false);
     expect(r.plan).toBe(plan.length ? r.plan : r.plan); // identity preserved on no-op
-    expect(r.plan[1].target.recommendedWeight).toBe(80);
+    expect(r.plan[1].target!.recommendedWeight).toBe(80);
   });
 });
 
@@ -52,7 +52,7 @@ describe('S-51 · a bodyweight lift is never load-corrected live', () => {
     const bw = plan(12, null, 'push_up');
     const r = applyLoop1(bw, 0, null, 25, 0);
     expect(r.corrected).toBe(false);
-    expect(r.plan[1].target.recommendedWeight).toBeNull();
+    expect(r.plan[1].target!.recommendedWeight).toBeNull();
   });
 });
 

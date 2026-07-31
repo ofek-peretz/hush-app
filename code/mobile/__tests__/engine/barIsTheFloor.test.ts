@@ -28,7 +28,7 @@ import { loadSetup } from '@/domain/loadPresentation';
 import { EXERCISES, exerciseById } from '@/data/exercises';
 
 const beginner = (sex: 'male' | 'female') =>
-  ({ sex, weightKg: 75, experience: 'beginner', age: 28 }) as const;
+  ({ sex, weightKg: 75, age: 28 }) as const;
 
 describe('the bar is the floor', () => {
   it('every BARBELL lift in the catalogue starts at or above the bar — isolation included', () => {

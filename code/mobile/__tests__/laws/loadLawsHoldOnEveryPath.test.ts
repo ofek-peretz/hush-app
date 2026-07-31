@@ -39,7 +39,7 @@ import { STARTING_INCREMENT } from '@/engine/v5/constants';
 import { correctInSession } from '@/engine/v5/loop1';
 import { decideExercise } from '@/engine/v5/loop2';
 import type { Band, ExerciseMeta, ExerciseState, SessionRecord } from '@/engine/v5/types';
-import type { Profile } from '@/data/local/models';
+import type { Profile, Session } from '@/data/local/models';
 
 const BAND: Band = { lo: 8, hi: 10 };
 
@@ -186,29 +186,35 @@ describe('LAW · S-55 — every path that computes a load respects the physical 
       name: 'domain/startingLoad.startingWeight — day one',
       emit: (ex) => {
         const out: number[] = [];
+        /*
+         * There used to be an `experience` loop here — beginner / intermediate / advanced — and the
+         * field has not existed on this type since the founder excluded the experience axis. It was
+         * passed and ignored, so this ran the SAME case three times while reporting three-way
+         * coverage. Removed rather than replaced: the app has no such input to sweep.
+         */
         for (const sex of ['male', 'female'] as const)
-          for (const experience of ['beginner', 'intermediate', 'advanced'] as const)
-            for (const weightKg of [45, 75, 120])
-              for (const age of [16, 30, 75]) {
-                const kg = startingWeight(ex, { sex, weightKg, experience, age });
-                if (kg != null) out.push(kg);
-              }
+          for (const weightKg of [45, 75, 120])
+            {
+              const kg = startingWeight(ex, { sex, weightKg });
+              if (kg != null) out.push(kg);
+            }
         return out;
       },
     },
     {
       name: 'fixtureModel.smartSeed — the cross-exercise transfer (B-1/S-9)',
       emit: (ex) => {
-        const profile: Pick<Profile, 'sex' | 'weightKg' | 'experience' | 'age'> = {
-          sex: 'female', weightKg: 45, experience: 'beginner', age: 70, // the lightest athlete we serve
+        const profile: Pick<Profile, 'sex' | 'weightKg'> = {
+          sex: 'female', weightKg: 45, // the lightest athlete we serve
         };
         const out: number[] = [];
         const seed = smartSeed(ex.id, profile, []);
         if (seed != null) out.push(seed);
         // …and seeded from a very light performed history on the same lift (the transfer's low end).
-        const history = [{
+        const history: Session[] = [{
           id: 's', programDayId: 'd', startedAt: '2026-07-01T10:00:00Z',
-          sets: [{ exerciseId: ex.id, setIndex: 0, recommendedWeight: 5, recommendedReps: 8, actualWeight: 5, actualReps: 1, persistedAt: '2026-07-01T10:00:00Z' }],
+          state: 'SAVED', earlyFinish: false,
+          sets: [{ exerciseId: ex.id, setIndex: 0, recommendedWeight: 5, recommendedReps: 8, actualWeight: 5, actualReps: 1, edited: false, restBeforeS: 120, persistedAt: '2026-07-01T10:00:00Z' }],
         }];
         const transferred = smartSeed(ex.id, profile, history);
         if (transferred != null) out.push(transferred);
@@ -236,7 +242,7 @@ describe('LAW · S-55 — every path that computes a load respects the physical 
     expect(prevRung(BAR_KG + 2.5, 'barbell')).toBe(BAR_KG);
     expect(normalizeLoad(1, 'barbell')).toBe(BAR_KG);
     expect(loadFloor('barbell')).toBe(BAR_KG);
-    expect(startingWeight(exerciseById('bb_curl')!, { sex: 'female', weightKg: 45, experience: 'beginner' })).toBeGreaterThanOrEqual(BAR_KG);
+    expect(startingWeight(exerciseById('bb_curl')!, { sex: 'female', weightKg: 45 })).toBeGreaterThanOrEqual(BAR_KG);
   });
 });
 

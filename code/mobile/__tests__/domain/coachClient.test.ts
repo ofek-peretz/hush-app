@@ -27,7 +27,7 @@ const request = { v: 1, blocks: [{ text: 'PREAMBLE', cache: true as const }, { t
 /** A fetch that answers once, and records what it was asked. */
 function fetchOnce(reply: Partial<Response> & { json?: () => Promise<unknown> }) {
   const spy = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), ...reply });
-  (globalThis as { fetch: unknown }).fetch = spy;
+  (globalThis as unknown as { fetch: unknown }).fetch = spy;
   return spy;
 }
 
@@ -99,7 +99,7 @@ describe('every failure is the same failure', () => {
 
   it('reads a dead network as offline', async () => {
     const { askCoach } = load();
-    (globalThis as { fetch: unknown }).fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
+    (globalThis as unknown as { fetch: unknown }).fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
     expect(await askCoach(request)).toEqual({ ok: false, reason: 'offline' });
   });
 
@@ -108,7 +108,7 @@ describe('every failure is the same failure', () => {
     // model that thought for too long.
     const { askCoach } = load();
     const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
-    (globalThis as { fetch: unknown }).fetch = jest.fn().mockRejectedValue(abort);
+    (globalThis as unknown as { fetch: unknown }).fetch = jest.fn().mockRejectedValue(abort);
     expect(await askCoach(request)).toEqual({ ok: false, reason: 'timed_out' });
   });
 

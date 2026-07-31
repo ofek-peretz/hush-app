@@ -21,7 +21,7 @@ const STEPS: MirrorStep[] = [
 const NOW = Date.parse('2026-06-15T12:00:00.000Z');
 
 function machine(over: Partial<SessionMachine>): SessionMachine {
-  return { phase: 'SET_PRESENTED', resumePhase: null, setIndex: 0, isLastSetOfSession: false, earlyFinish: false, ...over };
+  return { phase: 'SET_PRESENTED', resumePhase: null, setIndex: 0, isLastSetOfSession: false, earlyFinish: false, ...over } as SessionMachine;
 }
 
 function project(over: Partial<MirrorInputs>) {
@@ -44,41 +44,41 @@ describe('projectSessionMirror', () => {
 
   it('projects an active set with its target (watch renders this subset)', () => {
     const m = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!;
-    expect(m.phase).toBe('active_set');
-    expect(m.exerciseName).toBe('Bench Press');
-    expect(m.setLabel).toBe('Set 1 of 2');
-    expect(m.globalIndex).toBe(0);
-    expect(m.totalSets).toBe(3);
-    expect(m.targetWeight).toBe(60);
-    expect(m.restEndsAt).toBeNull();
+    expect(m!.phase).toBe('active_set');
+    expect(m!.exerciseName).toBe('Bench Press');
+    expect(m!.setLabel).toBe('Set 1 of 2');
+    expect(m!.globalIndex).toBe(0);
+    expect(m!.totalSets).toBe(3);
+    expect(m!.targetWeight).toBe(60);
+    expect(m!.restEndsAt).toBeNull();
   });
 
   it('projects an inter-set rest with a drift-proof absolute end instant', () => {
     const startedAt = NOW - 30_000; // rest began 30s ago
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: startedAt })!;
-    expect(m.phase).toBe('rest_inter');
-    expect(m.restEndsAt).toBe(new Date(startedAt + 90_000).toISOString());
-    expect(m.restRemainingS).toBe(60); // 90 - 30 elapsed
+    expect(m!.phase).toBe('rest_inter');
+    expect(m!.restEndsAt).toBe(new Date(startedAt + 90_000).toISOString());
+    expect(m!.restRemainingS).toBe(60); // 90 - 30 elapsed
   });
 
   it('projects a transition rest with the next exercise preview', () => {
     const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), restStartedAtMs: NOW })!;
-    expect(m.phase).toBe('rest_transition');
-    expect(m.restRemainingS).toBe(120);
-    expect(m.nextExerciseName).toBe('Squat');
+    expect(m!.phase).toBe('rest_transition');
+    expect(m!.restRemainingS).toBe(120);
+    expect(m!.nextExerciseName).toBe('Squat');
   });
 
   it('freezes the timer under pause (no live countdown)', () => {
     const m = project({ machine: machine({ phase: 'PAUSED', resumePhase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW })!;
-    expect(m.phase).toBe('paused');
-    expect(m.restEndsAt).toBeNull();
-    expect(m.restRemainingS).toBeNull();
+    expect(m!.phase).toBe('paused');
+    expect(m!.restEndsAt).toBeNull();
+    expect(m!.restRemainingS).toBeNull();
   });
 
   it('projects a terminal complete frame (watch shows Workout Complete)', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
-    expect(m.phase).toBe('complete');
-    expect(m.restEndsAt).toBeNull();
+    expect(m!.phase).toBe('complete');
+    expect(m!.restEndsAt).toBeNull();
   });
 
   /**
@@ -98,35 +98,35 @@ describe('projectSessionMirror', () => {
   it('during a REST, the mirror names the set that is COMING — not the one just finished', () => {
     // Set 1 of 2 on the bench is done; the athlete is resting before set 2.
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW - 10_000 })!;
-    expect(m.phase).toBe('rest_inter');
+    expect(m!.phase).toBe('rest_inter');
     // What is behind them:
-    expect(m.setLabel).toBe('Set 1 of 2');
-    expect(m.setNumber).toBe(1);
+    expect(m!.setLabel).toBe('Set 1 of 2');
+    expect(m!.setNumber).toBe(1);
     // …and what is in front of them, which is the only thing a rest screen may show.
-    expect(m.nextSetLabel).toBe('Set 2 of 2');
-    expect(m.nextSetNumber).toBe(2);
-    expect(m.nextSetsInExercise).toBe(2);
+    expect(m!.nextSetLabel).toBe('Set 2 of 2');
+    expect(m!.nextSetNumber).toBe(2);
+    expect(m!.nextSetsInExercise).toBe(2);
   });
 
   it('a TRANSITION rest names the first set of the exercise the athlete is walking to', () => {
     // The last bench set is done; next is the squat.
     const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), restStartedAtMs: NOW - 10_000 })!;
-    expect(m.phase).toBe('rest_transition');
-    expect(m.nextExerciseName).toBe('Squat');
-    expect(m.nextSetLabel).toBe('Set 1 of 1');
-    expect(m.nextSetNumber).toBe(1);
+    expect(m!.phase).toBe('rest_transition');
+    expect(m!.nextExerciseName).toBe('Squat');
+    expect(m!.nextSetLabel).toBe('Set 1 of 1');
+    expect(m!.nextSetNumber).toBe(1);
   });
 
   it('an ACTIVE set has no "next" to name — the set on the stage IS the set', () => {
     const m = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!;
-    expect(m.nextSetLabel).toBeNull();
-    expect(m.nextSetNumber).toBe(0);
+    expect(m!.nextSetLabel).toBeNull();
+    expect(m!.nextSetNumber).toBe(0);
   });
 
   it('the LAST set of the session rests against nothing — no phantom next set', () => {
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: STEPS.length - 1 }), restStartedAtMs: NOW })!;
-    expect(m.nextSetLabel).toBeNull();
-    expect(m.nextSetNumber).toBe(0);
+    expect(m!.nextSetLabel).toBeNull();
+    expect(m!.nextSetNumber).toBe(0);
   });
 
   /**
@@ -147,7 +147,7 @@ describe('projectSessionMirror', () => {
 
   it('a workout that crossed nothing sends no mark (the medallion is rare, or it is nothing)', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
-    expect(m.summary!.milestone).toBeNull();
+    expect(m!.summary!.milestone).toBeNull();
   });
 
   it('Complete summary reports the ACTUAL logged sets + trained lifts, not the plan total', () => {
@@ -158,7 +158,7 @@ describe('projectSessionMirror', () => {
       completedSets: 2,
       progressedLifts: 1,
     })!;
-    expect(m.summary).toMatchObject({ timeLabel: '2:11', sets: 2, up: 1 });
+    expect(m!.summary).toMatchObject({ timeLabel: '2:11', sets: 2, up: 1 });
   });
 
   it('the read-back the wrist plays is the PERFORMED lifts, and only those (founder 2026-07-13)', () => {
@@ -175,9 +175,9 @@ describe('projectSessionMirror', () => {
         { weight: 62.5, reps: 6 }, // 375 — the best set, by volume (the phone's own rule)
       ],
     })!;
-    expect(m.summary!.lifts.map((l) => l.name)).toEqual(['Bench Press']);
+    expect(m!.summary!.lifts.map((l) => l.name)).toEqual(['Bench Press']);
     // The best set, formatted the way the phone prints it beside the check.
-    expect(m.summary!.lifts[0].best).toBe('62.5 × 6');
+    expect(m!.summary!.lifts[0].best).toBe('62.5 × 6');
   });
 
   it('the read-back reports what was LIFTED, not what was prescribed', () => {
@@ -192,7 +192,7 @@ describe('projectSessionMirror', () => {
         { weight: null, reps: 12 }, // the Squat, logged as bodyweight
       ],
     })!;
-    expect(m.summary!.lifts).toEqual([
+    expect(m!.summary!.lifts).toEqual([
       { name: 'Bench Press', best: '60 × 5', done: true },
       { name: 'Squat', best: 'BW × 12', done: true },
     ]);
@@ -200,7 +200,7 @@ describe('projectSessionMirror', () => {
 
   it('with no logged sets supplied, the prescription stands in (pure-projection back-compat)', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
-    expect(m.summary!.lifts).toEqual([
+    expect(m!.summary!.lifts).toEqual([
       { name: 'Bench Press', best: '60 × 5', done: true },
       { name: 'Squat', best: '100 × 5', done: true },
     ]);
@@ -223,7 +223,7 @@ describe('projectSessionMirror', () => {
         { weight: null, reps: 11 }, // the longer set — this is the one read back
       ],
     })!;
-    expect(m.summary!.lifts[0].best).toBe('BW × 11');
+    expect(m!.summary!.lifts[0].best).toBe('BW × 11');
   });
 
   it('keeps the deprecated `done` on the wire — an older watch binary decodes it or drops the frame', () => {
@@ -234,12 +234,12 @@ describe('projectSessionMirror', () => {
       completedSets: 1, // one of Bench's two sets — performed, but NOT finished
       loggedSets: [{ weight: 60, reps: 5 }],
     })!;
-    expect(m.summary!.lifts).toEqual([{ name: 'Bench Press', best: '60 × 5', done: false }]);
+    expect(m!.summary!.lifts).toEqual([{ name: 'Bench Press', best: '60 × 5', done: false }]);
   });
 
   it('Complete summary falls back to the planned total when no live count is supplied', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
-    expect(m.summary!.sets).toBe(3); // STEPS.length — pure-projection back-compat
+    expect(m!.summary!.sets).toBe(3); // STEPS.length — pure-projection back-compat
   });
 
   it('carries TO-LOAD only on the live set (instruction-first), never on the complete frame', () => {
@@ -263,22 +263,22 @@ describe('projectSessionMirror', () => {
 
   it('names the just-finished exercise on a transition rest (Exercise Complete)', () => {
     const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), restStartedAtMs: NOW })!;
-    expect(m.completedExerciseName).toBe('Bench Press');
-    expect(m.nextExerciseName).toBe('Squat');
-    expect(m.nextTargetWeight).toBe(100);
-    expect(m.nextTargetReps).toBe(5);
+    expect(m!.completedExerciseName).toBe('Bench Press');
+    expect(m!.nextExerciseName).toBe('Squat');
+    expect(m!.nextTargetWeight).toBe(100);
+    expect(m!.nextTargetReps).toBe(5);
   });
 
   it('does not name a completed exercise during an inter-set rest', () => {
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 0 }), restStartedAtMs: NOW })!;
-    expect(m.completedExerciseName).toBeNull();
+    expect(m!.completedExerciseName).toBeNull();
   });
 });
 
 describe('mirror wire serialization', () => {
   it('round-trips a mirror through the wire form', () => {
     const m = project({})!;
-    const back = mirrorFromWire(mirrorToWire(m));
+    const back = mirrorFromWire(mirrorToWire(m!));
     expect(back).toEqual(m);
   });
 
@@ -305,19 +305,19 @@ describe('the signature moment reaches the wrist', () => {
 
   it('carries the correction through the rest that follows the set that earned it', () => {
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }), correction: CORR });
-    expect(m.correction).toEqual(CORR);
+    expect(m!.correction).toEqual(CORR);
   });
 
   it('says nothing on the ACTIVE set — the load in front of her IS the corrected one', () => {
     // Announcing it there would narrate the present, not the change. The moment belongs to the rest
     // between the set that earned it and the set that spends it.
     const m = project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 1 }), correction: CORR });
-    expect(m.correction).toBeNull();
+    expect(m!.correction).toBeNull();
   });
 
   it('is null on a rest that earned nothing — a held load is not news', () => {
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }) });
-    expect(m.correction).toBeNull();
+    expect(m!.correction).toBeNull();
   });
 
   it('says nothing on a TRANSITION rest — the correction belongs to the lift that earned it', () => {
@@ -331,7 +331,7 @@ describe('the signature moment reaches the wrist', () => {
     // away: SessionFlow guards it as `correction.exerciseId === nextExerciseId`, and the wrist has
     // no exerciseId on the wire to guard with at all.
     const m = project({ machine: machine({ phase: 'REST_TRANSITION', setIndex: 1 }), correction: CORR });
-    expect(m.correction).toBeNull();
+    expect(m!.correction).toBeNull();
   });
 
   it('survives the wire — an old watch drops the line, never the frame', () => {
@@ -339,7 +339,7 @@ describe('the signature moment reaches the wrist', () => {
     // this phone will spend a while talking to the previous watch binary (see MirrorSummaryLift.done
     // for the last time that bit us). A version-skewed wrist must still show the right next load.
     const m = project({ machine: machine({ phase: 'REST_INTER', setIndex: 1 }), correction: CORR });
-    const back = mirrorFromWire(mirrorToWire(m));
+    const back = mirrorFromWire(mirrorToWire(m!));
     expect(back?.correction).toEqual(CORR);
   });
 });

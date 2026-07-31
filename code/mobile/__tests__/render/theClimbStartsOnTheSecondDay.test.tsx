@@ -144,6 +144,8 @@ describe('the reason a muscle earned a set is spoken in her language', () => {
       savedLegend="Upper A · Saved"
       partial={false}
       durationLabel="58"
+      kcal={412}
+      tonnes={4.8}
       answered
       decisions={[]}
       volume={[

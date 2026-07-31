@@ -17,19 +17,19 @@ describe('live Loop 1 uses the learned grid', () => {
   it('with NO grid → steps by the default increment (16 → 17, which may not exist)', () => {
     const r = applyLoop1(plan(), 0, 16, 15, 0); // above band → raise
     expect(r.corrected).toBe(true);
-    expect(r.plan[1].target.recommendedWeight).toBe(17);
+    expect(r.plan[1].target!.recommendedWeight).toBe(17);
   });
 
   it('with her real grid [14,16,18,20] → snaps to the real next rung (16 → 18)', () => {
     const r = applyLoop1(plan(), 0, 16, 15, 0, [14, 16, 18, 20]);
     expect(r.corrected).toBe(true);
-    expect(r.plan[1].target.recommendedWeight).toBe(18); // the weight that actually exists, not 17
+    expect(r.plan[1].target!.recommendedWeight).toBe(18); // the weight that actually exists, not 17
   });
 
   it('dropping snaps to the real rung below (16 → 14, not 15)', () => {
     const r = applyLoop1(plan(), 0, 16, 3, 0, [14, 16, 18, 20]); // below band → drop
     expect(r.corrected).toBe(true);
     expect(r.direction).toBe('down');
-    expect(r.plan[1].target.recommendedWeight).toBe(14);
+    expect(r.plan[1].target!.recommendedWeight).toBe(14);
   });
 });

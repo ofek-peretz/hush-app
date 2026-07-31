@@ -1,5 +1,5 @@
 import { runSteps, plannedRestS } from '@/domain/planRun';
-import type { PlannedSession } from '@/domain/coachPlan';
+import type { PlannedSession, PlannedItem } from '@/domain/coachPlan';
 
 /**
  * Rounds are where a circuit and a straight block stop looking alike, and getting it wrong is
@@ -8,7 +8,7 @@ import type { PlannedSession } from '@/domain/coachPlan';
  */
 
 const reps = (ex: string, load: number | null = 40) =>
-  ({ kind: 'reps', ex, reps: [8, 12], load } as const);
+  ({ kind: 'reps', ex, reps: [8, 12], load } satisfies PlannedItem);
 
 describe('a straight block — four sets of one lift', () => {
   const session: PlannedSession = {

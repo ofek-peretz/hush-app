@@ -43,7 +43,7 @@ describe('telemetry buffering', () => {
 describe('telemetry flush', () => {
   it('ships the buffer to /telemetry and clears it on success', async () => {
     let posted: unknown = null;
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { body: string }) => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { body: string }) => {
       if (url.endsWith('/telemetry')) posted = JSON.parse(init.body);
       return { ok: true, status: 200, json: async () => ({ accepted: 1 }) };
     });
@@ -54,7 +54,7 @@ describe('telemetry flush', () => {
   });
 
   it('keeps the buffer when the sink is unreachable', async () => {
-    (global as { fetch: jest.Mock }).fetch = jest.fn(async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => {
       throw new Error('offline');
     });
     await track('crash', { message: 'x' });

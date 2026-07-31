@@ -53,10 +53,13 @@ const ESTIMATORS: { name: string; empty: () => number | null; single: () => numb
   },
   {
     name: 'theilSenSlope',
-    empty: () => theilSenSlope([]),
-    single: () => theilSenSlope([{ x: 1, y: 2 }]),
+    // `minPairs` was omitted at all three call sites, so `slopes.length < undefined` was always
+    // false and the guard it exists to test was never reached. 1 is the smallest honest value:
+    // one usable pair.
+    empty: () => theilSenSlope([], 1),
+    single: () => theilSenSlope([{ x: 1, y: 2 }], 1),
     // Every x identical — every pair is a vertical line, and a slope through one is not a number.
-    degenerate: () => theilSenSlope([{ x: 1, y: 2 }, { x: 1, y: 5 }, { x: 1, y: 9 }]),
+    degenerate: () => theilSenSlope([{ x: 1, y: 2 }, { x: 1, y: 5 }, { x: 1, y: 9 }], 1),
   },
   {
     name: 'repsPerRung',

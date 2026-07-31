@@ -16,16 +16,16 @@ const plan = (weight = 34): LiveStep[] =>
 describe('carryWeightForward', () => {
   it('edit DOWN (30 kg loaded) sticks to every remaining set', () => {
     const out = carryWeightForward(plan(34), 0, 30);
-    expect(out[1].target.recommendedWeight).toBe(30);
-    expect(out[2].target.recommendedWeight).toBe(30);
-    expect(out[3].target.recommendedWeight).toBe(30);
-    expect(out[0].target.recommendedWeight).toBe(34); // the completed set's own record is untouched
+    expect(out[1].target!.recommendedWeight).toBe(30);
+    expect(out[2].target!.recommendedWeight).toBe(30);
+    expect(out[3].target!.recommendedWeight).toBe(30);
+    expect(out[0].target!.recommendedWeight).toBe(34); // the completed set's own record is untouched
   });
 
   it('edit UP (40 kg loaded) sticks to every remaining set', () => {
     const out = carryWeightForward(plan(34), 0, 40);
-    expect(out[1].target.recommendedWeight).toBe(40);
-    expect(out[3].target.recommendedWeight).toBe(40);
+    expect(out[1].target!.recommendedWeight).toBe(40);
+    expect(out[3].target!.recommendedWeight).toBe(40);
   });
 
   it('completing at exactly the prescription is a true no-op (same reference)', () => {
@@ -46,8 +46,8 @@ describe('carryWeightForward', () => {
       { exerciseId: 'lat_pulldown', globalIndex: 2, target: { recommendedWeight: 50, recommendedReps: 8, repBandLo: 8, repBandHi: 10 } },
     ];
     const out = carryWeightForward(mixed, 0, 30);
-    expect(out[1].target.recommendedWeight).toBe(30);
-    expect(out[2].target.recommendedWeight).toBe(50); // the other exercise is untouched
+    expect(out[1].target!.recommendedWeight).toBe(30);
+    expect(out[2].target!.recommendedWeight).toBe(50); // the other exercise is untouched
   });
 });
 
@@ -56,7 +56,7 @@ describe('carry-forward composed with Loop 1 (the store order: carry, then corre
     const carried = carryWeightForward(plan(34), 0, 30);
     const l1 = applyLoop1(carried, 0, 30, 9, 0); // 9 is inside [8,10]
     expect(l1.corrected).toBe(false);
-    expect(l1.plan[1].target.recommendedWeight).toBe(30);
+    expect(l1.plan[1].target!.recommendedWeight).toBe(30);
   });
 
   it('edit DOWN + reps ABOVE band → Loop 1 raises FROM the edited weight, not the prescription', () => {
@@ -64,8 +64,8 @@ describe('carry-forward composed with Loop 1 (the store order: carry, then corre
     const l1 = applyLoop1(carried, 0, 30, 15, 0); // too light at 30
     expect(l1.corrected).toBe(true);
     expect(l1.direction).toBe('up');
-    expect(l1.plan[1].target.recommendedWeight!).toBeGreaterThan(30);
-    expect(l1.plan[1].target.recommendedWeight!).toBeLessThan(34); // rose from 30, nowhere near the old 34
+    expect(l1.plan[1].target!.recommendedWeight!).toBeGreaterThan(30);
+    expect(l1.plan[1].target!.recommendedWeight!).toBeLessThan(34); // rose from 30, nowhere near the old 34
   });
 
   it('edit UP + reps BELOW band → Loop 1 drops FROM the edited weight', () => {
@@ -73,7 +73,7 @@ describe('carry-forward composed with Loop 1 (the store order: carry, then corre
     const l1 = applyLoop1(carried, 0, 40, 5, 0); // too heavy at 40
     expect(l1.corrected).toBe(true);
     expect(l1.direction).toBe('down');
-    expect(l1.plan[1].target.recommendedWeight!).toBeLessThan(40);
-    expect(l1.plan[1].target.recommendedWeight!).toBeGreaterThan(34); // dropped from 40, still above the old 34
+    expect(l1.plan[1].target!.recommendedWeight!).toBeLessThan(40);
+    expect(l1.plan[1].target!.recommendedWeight!).toBeGreaterThan(34); // dropped from 40, still above the old 34
   });
 });

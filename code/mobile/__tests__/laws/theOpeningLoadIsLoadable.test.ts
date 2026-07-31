@@ -24,22 +24,37 @@ const SEXES = ['male', 'female'] as const;
 describe('the opening load is one she can actually build', () => {
   it('lands on a real plate stack for every barred lift, every sex, every bodyweight', () => {
     const unbuildable: string[] = [];
+    let examined = 0;
     for (const ex of EXERCISES) {
       for (const sex of SEXES) {
         for (const weightKg of BODYWEIGHTS) {
           const kg = startingWeight(ex, { sex, weightKg });
           if (kg == null) continue;
-          const setup = loadSetup(ex, kg, 'kg');
+          // ⚠️ This passed the whole `Exercise` where `loadSetup` takes an exerciseId STRING. The
+          // style then resolved to nothing, every iteration hit the `continue` below, and this law
+          // asserted precisely nothing for as long as it has existed. Typechecking the tests found
+          // it; no amount of watching it go green ever could.
+          const setup = loadSetup(ex.id, kg, 'kg');
           // Only the styles that ask the athlete to BUILD a load out of plates are bound by this.
           // A pin stack or a fixed dumbbell is chosen off a rack, not assembled.
+          if (setup == null) continue; // bodyweight — nothing to build
           if (setup.style !== 'barbell' && setup.style !== 'plate_loaded') continue;
           if (setup.perSide === 0) continue; // the empty bar — nothing to load
+          examined += 1;
           if (setup.plates == null) {
             unbuildable.push(`${ex.id} · ${sex} ${weightKg}kg → ${kg}kg (${setup.perSide} a side)`);
           }
         }
       }
     }
+    /*
+     * A SILENTLY EMPTY SWEEP PROVES NOTHING — and this one WAS empty, for its whole life, because
+     * `loadSetup` was handed an `Exercise` where it takes an id and every iteration fell through the
+     * `continue` above. It went green the entire time. The count is the guard: if a refactor makes
+     * the loop stop reaching real barred lifts again, this fails before the interesting assertion
+     * has a chance to pass by default.
+     */
+    expect(examined).toBeGreaterThan(200);
     expect(unbuildable).toEqual([]);
   });
 

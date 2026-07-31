@@ -140,13 +140,13 @@ describe('coach facts — the message the coach is sent', () => {
     const f = coachFacts({
       profile: {
         ...profile,
-        bodyMap: { Chest: 'more' },
+        bodyMap: { Chest: 'emphasis' },
         repBandByMuscle: { Chest: '6-8' },
         painEases: [{ muscle: 'Shoulders', severity: 'twinge', fromMs: 1, untilMs: 999 }],
       },
       program, history, justFinished: history[0],
     });
-    expect(f.athlete.emphasis).toEqual({ Chest: 'more' });
+    expect(f.athlete.emphasis).toEqual({ Chest: 'emphasis' });
     expect(f.athlete.bandByMuscle).toEqual({ Chest: '6-8' });
     expect(f.athlete.resting).toEqual([{ muscle: 'Shoulders', severity: 'twinge', untilMs: 999 }]);
     expect(f.athlete.minutes).toBe(55);

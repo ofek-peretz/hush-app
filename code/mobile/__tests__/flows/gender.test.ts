@@ -145,7 +145,7 @@ describe('the cue library — the imperatives', () => {
 
   it('an exercise with no feminine variant falls back to its cue, never to English or to nothing', () => {
     setGender('female');
-    for (const id of Object.keys((he as Record<string, Record<string, string[]>>).cues)) {
+    for (const id of Object.keys((he as unknown as Record<string, Record<string, string[]>>).cues)) {
       if (id.endsWith('_female')) continue;
       const cues = exerciseCues(id);
       // Every cue resolves to a real Hebrew line — never a raw dotted key, never empty.

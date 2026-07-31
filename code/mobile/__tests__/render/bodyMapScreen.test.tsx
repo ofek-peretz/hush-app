@@ -16,7 +16,7 @@
  * A typecheck cannot see any of that, which is why this file mounts the screen and asks what an
  * athlete would see.
  */
-import React from 'react';
+import React, { type ComponentProps } from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
@@ -122,7 +122,9 @@ function props(over: Record<string, unknown> = {}) {
       navigation: { navigate: (s: string, p: unknown) => void navigated.push({ s, p }), goBack: () => {} },
       route: { params: { inputs: { name: 'Ofek', daysPerWeek: 4 } } },
       ...over,
-    } as never,
+      // `as never` made every `{...p}` below a spread of `never`. The screen's own prop type is the
+      // honest annotation, and it keeps the fixture answerable to the component it drives.
+    } as unknown as ComponentProps<typeof BodyMap>,
   };
 }
 

@@ -14,7 +14,7 @@ import { startingWeight } from '@/domain/startingLoad';
 import { exerciseById } from '@/data/exercises';
 import type { Session, SetLog } from '@/data/local/models';
 
-const profile = { sex: 'male' as const, weightKg: 80, experience: 'intermediate' as const, age: 30 };
+const profile = { sex: 'male' as const, weightKg: 80 as const, age: 30 };
 
 const set = (exerciseId: string, w: number, reps: number): SetLog => ({
   exerciseId, setIndex: 0, recommendedWeight: w, recommendedReps: 8,

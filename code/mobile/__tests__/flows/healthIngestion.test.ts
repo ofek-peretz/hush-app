@@ -16,7 +16,7 @@ function gate(over: Partial<HealthGate> = {}): HealthGate {
     latestBodyweightKg: async () => null,
     latestBodyweight: async () => ({ kg: 80 }),
     ...over,
-  };
+  } as HealthGate;
 }
 
 function run(g: HealthGate, profileWeightKg: number | null) {

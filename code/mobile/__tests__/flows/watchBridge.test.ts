@@ -19,7 +19,7 @@ function activeMirror(over: Partial<SessionMirror> = {}): SessionMirror {
     nextTargetWeight: null, nextTargetReps: null, completedExerciseName: null,
     canMarkBusy: false, loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
     workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [], ...over,
-  };
+  } as SessionMirror;
 }
 
 function harness() {

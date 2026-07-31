@@ -7,17 +7,23 @@
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
-import type { Profile, WeeklyVolume, Session, ProgramDay } from '@/data/local/models';
+import type { Profile, Session, ProgramDay } from '@/data/local/models';
+import type { MuscleGroup } from '@/data/exercises';
 
 const base: Profile = { units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
 
 beforeEach(async () => { await db.clearAll(); });
 
 describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => {
+  /*
+   * There was a `volume: 'moderate' | 'high'` sweep here. Neither the field nor `WeeklyVolume`
+   * exists any more — it was passed and ignored, so this ran each day-count TWICE against the same
+   * inputs while reporting two-way coverage. Removed rather than replaced: there is no such input.
+   */
   for (let days = 1; days <= 6; days++) {
-    for (const volume of ['moderate', 'high'] as WeeklyVolume[]) {
-      it(`${days}d · ${volume} volume · all-normal map — no day exceeds 60 min`, async () => {
-        const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: days, volume });
+    {
+      it(`${days}d · all-normal map — no day exceeds 60 min`, async () => {
+        const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: days });
         for (const d of prog.days) {
           expect(estimateSessionMinutes(d)).toBeLessThanOrEqual(60);
           expect(d.slots.length).toBeGreaterThan(0); // never starved to empty
@@ -57,7 +63,7 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
     const trained = new Set(
       prog.days.flatMap((d) => d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter(Boolean)),
     );
-    for (const m of ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves'])
+    for (const m of ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves'] as MuscleGroup[])
       expect(trained.has(m)).toBe(true);
   });
 

@@ -38,7 +38,7 @@ function mirror(over: Partial<SessionMirror> = {}): SessionMirror {
     loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
     workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [],
     ...over,
-  };
+  } as SessionMirror;
 }
 
 function intent(over: Partial<WatchIntent> = {}): WatchIntent {
@@ -49,7 +49,7 @@ function intent(over: Partial<WatchIntent> = {}): WatchIntent {
     issuedAt: new Date(NOW - 200).toISOString(),
     expectedGlobalIndex: 0,
     ...over,
-  };
+  } as WatchIntent;
 }
 
 const NONE: ReadonlySet<string> = new Set();

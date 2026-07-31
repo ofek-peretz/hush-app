@@ -85,16 +85,16 @@ describe('retargetPlanForSwap', () => {
   it('the swapped-in exercise adopts ITS OWN prescription, remaining sets only', () => {
     const out = retargetPlanForSwap(plan, targets, 1, 'machine_chest_press');
     expect(out[0].exerciseId).toBe('bb_bench_press'); // set already behind the athlete
-    expect(out[0].target.recommendedWeight).toBe(60);
+    expect(out[0].target!.recommendedWeight).toBe(60);
     expect(out[1].exerciseId).toBe('machine_chest_press');
-    expect(out[1].target.recommendedWeight).toBe(35); // the machine's own load — never 60
+    expect(out[1].target!.recommendedWeight).toBe(35); // the machine's own load — never 60
     expect(out[2].exerciseId).toBe('lateral_raise'); // other exercises untouched
   });
 
   it('falls back to carrying reps at the old target when no prescription is known', () => {
     const out = retargetPlanForSwap(plan, [], 0, 'db_bench_press');
     expect(out[0].exerciseId).toBe('db_bench_press');
-    expect(out[0].target.recommendedWeight).toBe(60); // carry-over (resume edge)
-    expect(out[0].target.exerciseId).toBe('db_bench_press');
+    expect(out[0].target!.recommendedWeight).toBe(60); // carry-over (resume edge)
+    expect(out[0].target!.exerciseId).toBe('db_bench_press');
   });
 });

@@ -91,7 +91,7 @@ describe('one set, one log — whichever surface asked for it', () => {
     recommendedWeight: 60,
     recommendedReps: 5,
     actualWeight: 60,
-    actualReps: 5,
+    actualReps: 5, edited: false, restBeforeS: 120,
     persistedAt: new Date(T0).toISOString(),
   });
 

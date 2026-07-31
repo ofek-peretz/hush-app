@@ -66,9 +66,9 @@ describe('S-11 / L11 · an in-session raise may never pass one rung above her ow
       target: { recommendedWeight: 40, recommendedReps: 8, repBandLo: 8, repBandHi: 10, perRung: 0.5 },
     }));
     const railed = applyLoop1(plan, 0, 40, 40, 0, undefined, 42.5);
-    expect(railed.plan[1].target.recommendedWeight).toBe(42.5);
+    expect(railed.plan[1].target!.recommendedWeight).toBe(42.5);
     const free = applyLoop1(plan, 0, 40, 40, 0);
-    expect(free.plan[1].target.recommendedWeight!).toBeGreaterThan(42.5);
+    expect(free.plan[1].target!.recommendedWeight!).toBeGreaterThan(42.5);
   });
 });
 
@@ -77,9 +77,10 @@ describe('L11 · railCeilingFor reads her real history', () => {
     id: startedAt,
     programDayId: 'd',
     startedAt,
+    state: 'SAVED', earlyFinish: false,
     sets: sets.map((s, i) => ({
       exerciseId: 'bb_bench_press', setIndex: i,
-      recommendedWeight: s.w, recommendedReps: 8, actualWeight: s.w, actualReps: s.r,
+      recommendedWeight: s.w, recommendedReps: 8, actualWeight: s.w, actualReps: s.r, edited: false, restBeforeS: 120,
       persistedAt: startedAt,
     })),
   });
@@ -223,10 +224,11 @@ describe('S-17 · the rest timer is her own measured median, not a constant she 
   const restHistory = (restS: number): Session[] => [
     {
       id: 's1', programDayId: 'd', startedAt: '2026-07-01T10:00:00Z',
+      state: 'SAVED', earlyFinish: false,
       sets: [0, 1, 2, 3].map((i) => ({
         exerciseId: 'bb_bench_press', setIndex: i,
         recommendedWeight: 60, recommendedReps: 8, actualWeight: 60, actualReps: 8,
-        restBeforeS: restS, persistedAt: '2026-07-01T10:00:00Z',
+        edited: false, restBeforeS: restS, persistedAt: '2026-07-01T10:00:00Z',
       })),
     },
   ];
