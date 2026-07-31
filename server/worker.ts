@@ -81,9 +81,33 @@ export interface Env {
  * NOT Pro, though it is affordable: `preview` means Google may retire it and its rate limits are
  * stricter, and this product has no second decider to fall back on when a model disappears.
  *
- * ⚠️ THINKING TOKENS ARE BILLED AS OUTPUT and 3.x thinks by default, so $2.61 is a FLOOR. Not
- * guessed at — `usage.thoughtsTokenCount` returns on every call, which makes it a measurement
- * rather than an argument. MAX_OUTPUT_TOKENS caps the worst case at $0.061 meanwhile.
+ * ── ⚠️ MEASURED, AND THE ESTIMATE ABOVE IS WRONG BY 2.5x ────────────────────────────────────────
+ * The table is what the price page implies. Here is what a real programme build actually cost, from
+ * `usage` on a live call — a full 4-day half-marathon plan built from a two-turn conversation:
+ *
+ *     prompt              4,746 tokens
+ *     visible output        452 tokens
+ *     THINKING            4,105 tokens      <- billed at the OUTPUT rate
+ *                        ──────
+ *     per call           $0.0413            (estimate said $0.0167)
+ *     per athlete/year   $6.44              (estimate said $2.61) — 6.4% of $99.99
+ *
+ * **Thinking is 9x the visible output and 82% of the bill.** Any cost estimate for a 3.x model that
+ * counts only the reply is wrong by roughly that factor. Still comfortably affordable; the number
+ * is corrected here rather than quietly left standing.
+ *
+ * ── AND WHY `thinkingLevel` IS NOT SET ──────────────────────────────────────────────────────────
+ * `generationConfig.thinkingLevel` takes `minimal`/`low`/`medium`/`high` and defaults to `medium`.
+ * The obvious move after the number above is to turn it down. The measurements say do not:
+ *
+ *     "reply with the word OK"        83 thinking tokens
+ *     build a 4-day programme      4,105 thinking tokens
+ *
+ * Fifty times the spend for fifty times the task. **The model is already proportional**, so there is
+ * no waste to trim — only a ceiling to lower on the one call the product sells. It is one line here
+ * if volume ever changes that arithmetic.
+ *
+ * MAX_OUTPUT_TOKENS caps the worst case at $0.061 per call meanwhile.
  *
  * None of this is settled by argument. Unreadable-response counts per model on real athlete data
  * are the honest comparison, and switching is this line plus a deploy.
@@ -157,18 +181,27 @@ function geminiSchema(schema: Record<string, unknown>): Record<string, unknown> 
 
 /* ──────────────────────────────────────────────────────────────────────────────────── the worker */
 
+/**
+ * The headers that let a browser talk to this at all.
+ *
+ * The app is not a browser origin and does not need them. The GALLERY is, and driving this from a
+ * desktop browser is how it gets looked at before it ships — which is not a nicety: see the OPTIONS
+ * handler below for the bug that only a browser could find.
+ */
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'content-type, x-hush-token',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  // Cache the preflight for a day. Without it every single call is TWO round trips, and the first
+  // one carries no data — pure latency, on a screen where she is waiting for an answer.
+  'access-control-max-age': '86400',
+} as const;
+
 /** One JSON reply, with the headers the app needs to read it from a phone. */
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      'content-type': 'application/json',
-      // The app is not a browser origin, but the gallery is — and being able to drive this from a
-      // desktop browser is how it gets looked at before it ships.
-      'access-control-allow-origin': '*',
-      'access-control-allow-headers': 'content-type, x-hush-token',
-      'access-control-allow-methods': 'POST, OPTIONS',
-    },
+    headers: { 'content-type': 'application/json', ...CORS },
   });
 }
 
@@ -188,7 +221,19 @@ function sameSecret(a: string, b: string): boolean {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === 'OPTIONS') return json({}, 204);
+    /*
+     * ⚠️ THE BODY MUST BE null, AND THIS COST A LIVE BUG.
+     *
+     * This used to be `json({}, 204)`. 204 means NO CONTENT, and constructing a Response with a
+     * body at a null-body status throws — so the preflight failed, so the browser never sent the
+     * real request, and every POST from a browser died as a bare "Failed to fetch" with nothing in
+     * any log. The Worker had answered `OK` from PowerShell an hour earlier and looked finished.
+     *
+     * **PowerShell never sends a preflight.** A POST carrying `x-hush-token` from a browser always
+     * does. The whole class was invisible to the only client it had been tested with — the same
+     * lesson this project keeps paying for: what the harness cannot drive, nobody sees.
+     */
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
     // A GET returns a liveness answer and NOTHING else — no version, no model name, no config. An
     // endpoint that describes itself to a stranger is an endpoint that has told them what to try.

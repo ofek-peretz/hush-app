@@ -45,7 +45,7 @@ const facts = coachFacts({ profile, program, history, justFinished: history[0] }
 // Every reply says something — see `CoachAnswer`. These fixtures are about the PROGRAMME, so the
 // sentence is a constant here; the turns that only speak are their own describe block below.
 const wrap = (sessions: unknown) =>
-  JSON.stringify({ v: COACH_PLAN_VERSION, say: 'Here is your week.', sessions });
+  JSON.stringify({ say: 'Here is your week.', sessions });
 
 function read(raw: unknown) {
   const r = parseCoachPlan(raw, facts);
@@ -204,7 +204,6 @@ describe('no answer arrived — the update waits, nothing is written', () => {
   it('names why, in a value that can be counted per model', () => {
     expect(unreadable('{"v":2,"sessions":[')).toBe('not_json'); // the connection dropped mid-object
     expect(unreadable('[]')).toBe('not_an_object');
-    expect(unreadable(JSON.stringify({ v: 1, sessions: [] }))).toBe('wrong_version'); // v1 is gone
     expect(unreadable(wrap([]))).toBe('no_sessions');
     expect(unreadable(wrap([{ name: 'D', blocks: [] }]))).toBe('no_blocks');
     expect(unreadable(wrap([{ name: 'D', blocks: [{ rounds: 1, items: [] }] }]))).toBe('no_items');
@@ -231,7 +230,6 @@ describe('no answer arrived — the update waits, nothing is written', () => {
 
   it('keeps every note it can read, and never loses a decision over prose', () => {
     const raw = JSON.stringify({
-      v: COACH_PLAN_VERSION,
       say: 'One change this week.',
       sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [item] }] }],
       notes: [
@@ -298,7 +296,7 @@ describe('a turn speaks, and only some turns decide', () => {
 
   it('reads a reply with no programme as an ANSWER, not as a failure', () => {
     const r = parseCoachPlan(
-      JSON.stringify({ v: COACH_PLAN_VERSION, say: 'It went down because your last two sets stopped at 8.' }),
+      JSON.stringify({ say: 'It went down because your last two sets stopped at 8.' }),
       facts,
     );
     expect(r.ok).toBe(true);
@@ -320,13 +318,36 @@ describe('a turn speaks, and only some turns decide', () => {
       v: COACH_PLAN_VERSION,
       sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }],
     }))).toBe('nothing_said');
-    expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, say: '   ' }))).toBe('nothing_said');
+    expect(unreadable(JSON.stringify({ say: '   ' }))).toBe('nothing_said');
   });
 
   it('tells an ABSENT programme apart from an EMPTY one', () => {
     // Absent means it only spoke. Empty means it set out to decide and produced nothing, and a
     // programme of zero sessions is worse than telling her the update is waiting.
-    expect(parseCoachPlan(JSON.stringify({ v: COACH_PLAN_VERSION, say: 'ok' }), facts).ok).toBe(true);
-    expect(unreadable(JSON.stringify({ v: COACH_PLAN_VERSION, say: 'ok', sessions: [] }))).toBe('no_sessions');
+    expect(parseCoachPlan(JSON.stringify({ say: 'ok' }), facts).ok).toBe(true);
+    expect(unreadable(JSON.stringify({ say: 'ok', sessions: [] }))).toBe('no_sessions');
+  });
+});
+
+describe('the contract version is ours to stamp, never the coach to guess', () => {
+  /*
+   * THE FIRST LIVE REPLY DIED HERE. `v` was a required integer with no allowed value in the schema
+   * and no mention in the prompt, so the model was being asked for a number it had no way to know.
+   * It guessed, and a perfectly good programme came back `wrong_version`. A required field the
+   * answerer cannot possibly get right is not a check; it is a trap.
+   */
+  it('reads a reply that never mentions a version', () => {
+    const r = read(JSON.stringify({ say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }] }));
+    expect(r.plan.v).toBe(COACH_PLAN_VERSION);
+  });
+
+  it('ignores a version the coach invented rather than refusing the plan', () => {
+    const r = read(JSON.stringify({ v: 99, say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }] }));
+    expect(r.plan.v).toBe(COACH_PLAN_VERSION);
+  });
+
+  it('does not ask for one in the schema at all', () => {
+    expect((COACH_PLAN_SCHEMA.required as readonly string[]).includes('v')).toBe(false);
+    expect('v' in COACH_PLAN_SCHEMA.properties).toBe(false);
   });
 });

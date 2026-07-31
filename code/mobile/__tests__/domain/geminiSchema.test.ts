@@ -59,7 +59,7 @@ describe('the constraints that must survive', () => {
   it('keeps every required field, at every level', () => {
     const t = translated();
     // `say` is required and `sessions` is not — every turn speaks, only some decide.
-    expect(t.required).toEqual(['v', 'say']);
+    expect(t.required).toEqual(['say']);
     const session = ((t.properties as Record<string, Record<string, unknown>>).sessions.items) as Record<string, unknown>;
     expect(session.required).toEqual(['name', 'blocks']);
     const block = ((session.properties as Record<string, Record<string, unknown>>).blocks.items) as Record<string, unknown>;
@@ -88,7 +88,7 @@ describe('the constraints that must survive', () => {
 
   it('states the field order, so the reply is deterministic in shape', () => {
     const t = translated();
-    expect(t.propertyOrdering).toEqual(['v', 'say', 'sessions', 'notes']);
+    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes']);
   });
 });
 
@@ -125,7 +125,6 @@ describe('the shape it promises is the shape the parse accepts', () => {
     // The two must not drift. A schema that permits what the parse refuses is an athlete told her
     // update is waiting, for ever.
     const reply = JSON.stringify({
-      v: COACH_PLAN_VERSION,
       say: 'x',
       sessions: [{
         name: 'Upper A',
@@ -145,7 +144,6 @@ describe('the shape it promises is the shape the parse accepts', () => {
 
   it('keeps a bodyweight load nullable all the way through', () => {
     const bodyweight = JSON.stringify({
-      v: COACH_PLAN_VERSION,
       say: 'x',
       sessions: [{ name: 'D', blocks: [{ rounds: 3, items: [{ kind: 'reps', ex: 'pull_up', reps: [5, 8], load: null }] }] }],
     });

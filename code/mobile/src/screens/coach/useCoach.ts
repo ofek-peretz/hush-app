@@ -46,6 +46,17 @@ import type { CoachTurn } from './CoachChat';
  */
 export type CoachTrouble = CoachFailure | UnreadableReason;
 
+/** What a completed call cost, as the provider reported it. Never estimated here. */
+export interface CoachCallMeta {
+  /** Which model answered — stamped by the Worker, never chosen by the app. */
+  model: string;
+  /**
+   * Token counts, verbatim. On Gemini this carries `thoughtsTokenCount`, which is billed at the
+   * OUTPUT rate and is the one number that can make the measured cost diverge from the estimate.
+   */
+  usage: Record<string, number> | null;
+}
+
 export interface UseCoachOptions {
   /** Her sheet. The caller owns it, because the caller is the one that knows when it changed. */
   facts: CoachFacts;
@@ -57,8 +68,14 @@ export interface UseCoachOptions {
    * The programme half is `answer.plan`, and it is `null` on most turns. Persisting it, appending
    * to the coach's log and putting it in front of her are the caller's job — this hook holds a
    * conversation, it does not own the athlete's programme.
+   *
+   * `meta` is what the call actually cost, as the provider reported it. Carried rather than dropped
+   * because the model was chosen on an ESTIMATE — $2.61 per athlete per year assuming ~1,200 output
+   * tokens — and 3.x bills its thinking as output and thinks by default. The first live call spent
+   * 83 thinking tokens to answer "reply OK". Nothing here acts on the number; it just refuses to
+   * throw away the only evidence that would ever correct that estimate.
    */
-  onAnswer?: (answer: CoachAnswer) => void;
+  onAnswer?: (answer: CoachAnswer, meta: CoachCallMeta) => void;
   /** Something went wrong, with which kind. For counting; the thread already shows her the state. */
   onTrouble?: (trouble: CoachTrouble) => void;
 }
@@ -139,7 +156,7 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
             ...prev.map((tn) => (tn.id === id ? { ...tn, pending: false } : tn)),
             { id: makeId(), by: 'coach', text: parsed.answer.say },
           ]);
-          onAnswer?.(parsed.answer);
+          onAnswer?.(parsed.answer, { model: reply.model, usage: reply.usage });
         })
         .finally(() => {
           setInFlight((n) => Math.max(0, n - 1));

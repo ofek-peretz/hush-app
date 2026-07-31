@@ -55,7 +55,6 @@ describe('every prescribable thing has exactly one id', () => {
     for (const { id, kind } of offered) {
       const r = parseCoachPlan(
         JSON.stringify({
-          v: COACH_PLAN_VERSION,
           say: 'x',
           sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind, ex: id, reps: [8, 12], load: null }] }] }],
         }),

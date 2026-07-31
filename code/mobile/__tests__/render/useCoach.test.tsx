@@ -17,7 +17,6 @@ import renderer, { act } from 'react-test-renderer';
 
 import { useCoach, type UseCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
-import { COACH_PLAN_VERSION } from '@/domain/coachPlan';
 import type { CoachAnswer } from '@/domain/coachPlan';
 import type { Profile, Program, Session } from '@/data/local/models';
 
@@ -41,7 +40,7 @@ const facts = coachFacts({ profile, program, history });
 /** What the coach says when it only speaks. */
 const words = (say: string) => ({
   ok: true as const,
-  text: JSON.stringify({ v: COACH_PLAN_VERSION, say }),
+  text: JSON.stringify({ say }),
   model: 'gemini-3.6-flash',
   usage: null,
 });
@@ -50,7 +49,6 @@ const words = (say: string) => ({
 const wordsAndPlan = (say: string) => ({
   ok: true as const,
   text: JSON.stringify({
-    v: COACH_PLAN_VERSION,
     say,
     sessions: [{ name: 'Upper A', blocks: [{ rounds: 3, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 30 }] }] }],
   }),

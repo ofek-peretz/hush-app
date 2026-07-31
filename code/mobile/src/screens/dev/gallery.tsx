@@ -273,7 +273,18 @@ function LiveCoachChat() {
   const coach = useCoach({
     facts,
     mode: 'intake',
-    onAnswer: (a) => setNote(a.plan ? `a programme arrived: ${a.plan.sessions.length} sessions` : null),
+    onAnswer: (a, meta) => {
+      // The gallery is the only place a REAL answer can be inspected before it has anywhere to go.
+      // A count on screen proves it parsed; it does not show whether the plan is any good, and it
+      // does not show what the call cost — which is the number the model was chosen on.
+      (globalThis as unknown as { __coachAnswer?: unknown }).__coachAnswer = { answer: a, meta };
+      const u = meta.usage;
+      setNote(
+        [a.plan ? `${a.plan.sessions.length} sessions` : 'words only',
+         u ? `in ${u.promptTokenCount} · out ${u.candidatesTokenCount} · thought ${u.thoughtsTokenCount ?? 0}` : meta.model,
+        ].join(' — '),
+      );
+    },
     onTrouble: (t) => setNote(`no answer — ${t}`),
   });
   return (

@@ -206,9 +206,15 @@ export const COACH_PLAN_SCHEMA = {
   additionalProperties: false,
   // `say` is required and `sessions` is NOT. Every turn speaks; only some decide. Requiring
   // `sessions` forced a whole programme out of "why did my bench go down?" — see `CoachAnswer`.
-  required: ['v', 'say'],
+  //
+  // ⚠️ AND THERE IS NO `v` HERE, WHICH COST THE FIRST LIVE REPLY. It used to be required, declared
+  // as a bare integer with no allowed value stated anywhere and never mentioned in the prompt — so
+  // the model was being asked for a number it had no way to know, guessed, and every real answer
+  // was rejected as `wrong_version`. The version is OUR contract number and we already know it,
+  // because we are the ones who sent the schema. It is stamped at parse instead. A required field
+  // the answerer cannot possibly get right is not a check; it is a trap.
+  required: ['say'],
   properties: {
-    v: { type: 'integer' },
     say: { type: 'string' },
     sessions: {
       type: 'array',
@@ -260,7 +266,6 @@ export const COACH_PLAN_SCHEMA = {
 export type UnreadableReason =
   | 'not_json'
   | 'not_an_object'
-  | 'wrong_version'
   /** Nothing was said. A programme with no sentence attached is not an answer we will show her. */
   | 'nothing_said'
   /** `sessions` was PRESENT and empty — the coach tried to decide and produced nothing. Absent is
@@ -304,8 +309,6 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     }
   }
   if (!isObj(root)) return { ok: false, reason: 'not_an_object' };
-  if (root.v !== COACH_PLAN_VERSION) return { ok: false, reason: 'wrong_version' };
-
   const say = typeof root.say === 'string' ? root.say.trim() : '';
   if (say.length === 0) return { ok: false, reason: 'nothing_said' };
 
