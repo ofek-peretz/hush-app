@@ -8,7 +8,7 @@
  *
  * So the verdict has three states, and the third one is the interesting one.
  */
-import { coachVerdict } from '@/domain/coachEarned';
+import { coachVerdict, coachBrief } from '@/domain/coachEarned';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
 import type { CoachDecision } from '@/domain/coachLog';
 
@@ -86,5 +86,50 @@ describe('what it refuses to blend', () => {
     // is a complete answer; an empty `lines` here is not the same as an empty verdict.
     const v = coachVerdict(SESSION, decided, [], false);
     expect(v).toEqual({ state: 'decided', say: decided.say, lines: [] });
+  });
+});
+
+describe('the week, in the coach’s own words', () => {
+  const WEEK_OPEN = Date.parse('2026-07-27T01:00:00.000Z');
+  const week: CoachDecision[] = [
+    { at: '2026-07-25T09:00:00.000Z', ex: 'bb_back_squat', say: 'Last week.' },
+    { at: '2026-07-28T18:00:00.000Z', ex: 'bb_bench_press', say: 'Up 2.5 — you cleared the band twice.' },
+    { at: '2026-07-31T18:00:00.000Z', say: 'Cutting a set from Thursday; you have been finishing short.' },
+  ];
+
+  it('takes the decisions since the week opened, in the order they were made', () => {
+    const b = coachBrief(week, WEEK_OPEN)!;
+    expect(b.count).toBe(2);
+    expect(b.lines.map((l) => l.say)).toEqual([
+      'Up 2.5 — you cleared the band twice.',
+      'Cutting a set from Thursday; you have been finishing short.',
+    ]);
+  });
+
+  it('does not sort, because there is no headline left to choose', () => {
+    /*
+     * The engine sorted its raises by STEP SIZE so that "I put 5 kg on your row" led rather than
+     * "your squat is still the heaviest thing you do". That rule existed to pick a headline out of a
+     * bag of numbers. A coach that writes its own first sentence does not need one chosen for it.
+     */
+    const b = coachBrief(week, WEEK_OPEN)!;
+    expect(b.lines[0].ex).toBe('bb_bench_press'); // the earlier decision, not the bigger one
+  });
+
+  it('tells "never decided anything" apart from "this week, nothing changed"', () => {
+    // Two completely different sentences. The engine drew the same distinction, for the same reason:
+    // both read as "zero changes" if you only count.
+    expect(coachBrief([], WEEK_OPEN)).toBeNull();          // her first week — a baseline, not a decision
+    expect(coachBrief(week, Date.parse('2026-08-03T01:00:00.000Z'))).toEqual({ count: 0, lines: [] });
+  });
+
+  it('is null before the log has been read, rather than an empty week', () => {
+    expect(coachBrief(null, WEEK_OPEN)).toBeNull();
+  });
+
+  it('counts everything when the week anchor is missing, rather than nothing', () => {
+    // A missing anchor is our gap, not hers. Showing her an empty week because we lost a timestamp
+    // would report silence from the coach that never happened.
+    expect(coachBrief(week, null)!.count).toBe(3);
   });
 });

@@ -75,3 +75,42 @@ export function coachVerdict(
       .map((d) => ({ ex: d.ex ?? null, say: d.say })),
   };
 }
+
+/* ──────────────────────────────────────────────────────────── THE WEEK, IN THE COACH'S OWN WORDS */
+
+/**
+ * What the coach changed since the week opened, and how many decisions that was.
+ *
+ * The engine's briefing assembled a sentence out of parts — it sorted the raises by STEP SIZE so
+ * "I put 5 kg on your row" led rather than "your squat is still the heaviest thing you do", it
+ * counted swaps separately from loads, and it had a phrase for a steady week. All of that was the
+ * work of a machine that had numbers and no language.
+ *
+ * The coach has language. Its decisions arrive already written, so the briefing's whole job
+ * collapses to: which of them belong to this week, in the order they were made, and how many. The
+ * sorting rule is gone with the assembly — it existed to pick a headline out of a bag of deltas,
+ * and a coach that writes its own first sentence does not need one chosen for it.
+ *
+ * `null` and `[]` are different answers and must stay different: null is "nothing has been decided
+ * for this athlete yet" (her first week — a baseline, not a decision), `[]` is "this week, nothing
+ * changed", which is a verdict she is owed in words.
+ */
+export function coachBrief(
+  log: CoachDecision[] | null | undefined,
+  weekOpenMs: number | null,
+): { count: number; lines: CoachEarnedLine[] } | null {
+  if (!log) return null;
+  // No decision has ever been recorded — the athlete is inside her first week and the coach has
+  // given her a starting point rather than a change. The engine drew this distinction too, and it
+  // mattered for the same reason: a week with no update and a week where nothing moved read
+  // identically as "zero changes", and they are two completely different sentences.
+  if (log.length === 0) return null;
+  const since = weekOpenMs ?? 0;
+  const lines = log
+    .filter((d) => {
+      const t = Date.parse(d.at);
+      return Number.isFinite(t) && t >= since;
+    })
+    .map((d) => ({ ex: d.ex ?? null, say: d.say }));
+  return { count: lines.length, lines };
+}

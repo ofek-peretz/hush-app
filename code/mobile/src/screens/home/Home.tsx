@@ -50,6 +50,7 @@ import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase'
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import type { Line } from '@/domain/voice';
 import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
+import { coachBrief } from '@/domain/coachEarned';
 import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { LoadDirection } from '@/design/tokens';
@@ -389,8 +390,25 @@ export function Home({ navigation, route }: Props) {
                 ...(view.volume ?? []).map((v) => ({ name: v.muscle, loadFrom: null, loadTo: null, swapped: false })),
               ]
             : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
+        /*
+         * ════ THE COUNT COMES FROM THE COACH ════
+         *
+         * `weekBriefing` assembled a sentence out of deltas — it sorted raises by step size to pick
+         * a headline, counted swaps apart from loads, and had a phrase for a steady week. That was
+         * the work of a machine with numbers and no language. The coach's decisions arrive already
+         * written, so all that survives is: which of them belong to this week, and how many.
+         *
+         * The engine's own count is kept behind it for a legacy athlete whose last fold ran before
+         * the deletion — it goes with the generator.
+         *
+         * ⚠️ `null` and `0` are DIFFERENT and both surfaces depend on it: null is "nothing has ever
+         * been decided for her" (her first week — a baseline, not a decision) and shows no pill at
+         * all; 0 is "this week, nothing changed", which is a verdict she is owed.
+         */
+        const fromCoach = coachBrief(await db.loadCoachLog().catch(() => null), app.weekOpenMs);
+        if (cancelled) return;
         setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
-        setBriefCount(changes ? changes.length : null);
+        setBriefCount(fromCoach ? fromCoach.count : changes ? changes.length : null);
         setLoadsUp(
           (view?.workouts ?? [])
             .flatMap((w) => w.lifts)
