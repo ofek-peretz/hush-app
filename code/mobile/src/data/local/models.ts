@@ -369,6 +369,21 @@ export interface Session {
   // regenerates with fresh day ids (the backend composes a new id per session).
   // Optional: sessions saved before this field fall back to a program lookup.
   programDayName?: string;
+  /**
+   * HOW MUCH WORK THIS SESSION WAS PRESCRIBED, stamped at START.
+   *
+   * `sessionTrained` used to answer "did she finish the workout?" by looking the programme day up
+   * and counting its slots. That lookup has two failure modes and the second is new:
+   *
+   *   · the programme changed shape since — the case the old comment already named;
+   *   · a COACH session has no `ProgramDay` to look up AT ALL, and the fallback for an unknown
+   *     prescription is "any logged work counts". So one set would have finished the workout,
+   *     burned a free trial session and marked the week's workout done.
+   *
+   * Stamping it at start removes both. The number is what she was actually asked to do, by
+   * whoever asked. Absent on sessions saved before this field — those fall back to the old lookup.
+   */
+  prescribed?: number;
   startedAt: string;
   state: SessionState;
   earlyFinish: boolean;

@@ -35,6 +35,7 @@ import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
+import type { CoachPlan } from '@/domain/coachPlan';
 import type { EffortLevel, Session } from '@/data/local/models';
 import { restWithSample } from '@/domain/restPrescription';
 import * as haptics from '@/platform/haptics';
@@ -231,10 +232,32 @@ export function SessionFlow({ navigation, route }: Props) {
    * onboarding and the promise repeated on the gym floor cannot drift apart.
    */
   const previewFirstGym = route?.params?.previewFirstGym;
-  const learnCount = useMemo(
-    () => previewFirstGym ?? (app.program ? learnPhaseLength(app.program.days) : 0),
-    [previewFirstGym, app.program],
-  );
+  /*
+   * The learning phase's length, counted from whichever week she actually has.
+   *
+   * It read `app.program`, which a coach-led athlete does not have — so the promise made in
+   * onboarding ("I learn for N sessions") would have been repeated on the gym floor as zero, which
+   * is the exact drift the comment above exists to prevent.
+   */
+  const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void db.loadCoachPlan().then((p) => alive && setCoachPlan(p));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const learnCount = useMemo(() => {
+    if (previewFirstGym != null) return previewFirstGym;
+    if (coachPlan) {
+      return learnPhaseLength(
+        coachPlan.sessions.map((sess) => ({
+          slots: sess.blocks.flatMap((b) => b.items.map((i) => ({ exerciseId: i.ex }))),
+        })),
+      );
+    }
+    return app.program ? learnPhaseLength(app.program.days) : 0;
+  }, [previewFirstGym, coachPlan, app.program]);
 
   // First Start ever: a confident start haptic, and the one-time "we're learning your gym" note
   // (shown AFTER Start, never in onboarding, never twice). Mount-only.

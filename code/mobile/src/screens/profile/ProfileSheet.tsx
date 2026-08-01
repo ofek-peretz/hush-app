@@ -290,7 +290,18 @@ export function ProfileSheet({ navigation }: Props) {
             This is a HOLDING PLACE, not a ruling. The founder is moving the person-to-person
             surfaces into the tab bar and designing them properly; until then sharing is reachable,
             which is the whole of what this row is for. */}
-        <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last />
+        {/* ⚠️ ONLY WHEN THERE IS SOMETHING IT CAN SHARE.
+            `SharePlanScreen` builds its card from `Program`, and a coach-led athlete has none — the
+            screen would open and bounce straight back, which is worse than no row at all.
+
+            Sharing a COACH programme needs the share format to carry a run and a hold, which it
+            cannot today. Same call as the wrist (`theWristOffersOnlyWhatItCanRun`): offer only what
+            can be done honestly, and say nothing rather than half-do it. The founder is moving the
+            person-to-person surfaces into the tab bar and designing them, and that is where the
+            port belongs. */}
+        {app.program && app.program.days.length > 0 ? (
+          <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last />
+        ) : null}
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a

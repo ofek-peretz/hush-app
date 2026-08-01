@@ -1147,6 +1147,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           id: `sess_${Date.now()}`,
           programDayId: day.id,
           programDayName: day.name, // captured now so History stays stable across regenerations
+          // What she was asked to do, stamped now — see `Session.prescribed`.
+          prescribed: plan2.length,
           startedAt: new Date().toISOString(),
           state: 'ACTIVE',
           earlyFinish: false,
@@ -1187,6 +1189,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           id: `sess_${Date.now()}`,
           programDayId: workoutId,
           programDayName: planned.name,
+          /*
+           * The only answer to "did she finish it?" for a coach session — there is no `ProgramDay`
+           * to count slots on, and the fallback for an unknown prescription is "any logged work
+           * counts", which would let one set close the workout and burn a free trial session.
+           */
+          prescribed: plan2.length,
           startedAt: new Date().toISOString(),
           state: 'ACTIVE',
           earlyFinish: false,

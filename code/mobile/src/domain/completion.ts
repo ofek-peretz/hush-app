@@ -45,7 +45,18 @@ export function workoutTrained(setsLogged: number, day: ProgramDay | undefined |
   return setsLogged >= Math.ceil(prescribed * WORKOUT_TRAINED_FRACTION);
 }
 
-/** The same question, asked of a saved session. */
+/**
+ * The same question, asked of a saved session.
+ *
+ * `session.prescribed` is stamped at START and is preferred over any lookup: it is what she was
+ * actually asked to do, by whoever asked, and it cannot drift when the programme changes shape
+ * underneath her. It is also the ONLY answer for a coach session, which has no `ProgramDay` to look
+ * up — and the fallback for an unknown prescription is "any logged work counts", which would have
+ * let one set finish a workout, burn a free trial session and close the week's slot.
+ */
 export function sessionTrained(session: Session, day: ProgramDay | undefined | null): boolean {
+  if (session.prescribed != null && session.prescribed > 0) {
+    return session.sets.length >= Math.ceil(session.prescribed * WORKOUT_TRAINED_FRACTION);
+  }
   return workoutTrained(session.sets.length, day);
 }
