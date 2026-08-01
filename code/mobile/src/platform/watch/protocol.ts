@@ -19,6 +19,7 @@
  *    entirely on its own, online or offline.
  */
 import type { SessionEvent } from '@/state/machines/sessionState';
+import type { WatchCopyPack } from './watchCopyPack';
 import type { MirrorLoadSetup, SessionMirror } from '@/platform/sessionMirror';
 import type { ReasonType } from '@/data/local/models';
 
@@ -53,6 +54,23 @@ export interface WatchStateEnvelope {
    *  Attached to lobby envelopes only (it changes when the program/targets do, not
    *  per mirror frame). Optional/back-compatible: an older watch ignores it. */
   plan?: WatchPlanSnapshot | null;
+  /**
+   * HER LANGUAGE, RESOLVED — every `watch.*` string plus the layout direction.
+   *
+   * The founder overturned the English-only ruling. The wrist has no i18n runtime and should not
+   * grow one: the phone already holds both languages AND the gendered forms, so it resolves the
+   * copy and sends it. Same law the loads follow — the phone is the sole authority and the watch
+   * renders what it is handed (S-48); this stops making an exception of words.
+   *
+   * Attached to LOBBY envelopes only, never to a mirror frame. A mirror is published many times a
+   * second during a rest and the pack is a kilobyte that changes when she changes her language —
+   * which is to say almost never. The watch caches the last one it saw.
+   *
+   * Optional and back-compatible: a watch binary installs asynchronously from the phone app, so a
+   * phone that has updated will talk to an older wrist for a while. A missing pack means "use the
+   * English you shipped with", never a blank screen.
+   */
+  copy?: WatchCopyPack | null;
 }
 
 export function makeStateEnvelope(
@@ -61,6 +79,7 @@ export function makeStateEnvelope(
   sentAtMs: number,
   lobby: WatchLobby | null = null,
   plan: WatchPlanSnapshot | null = null,
+  copy: WatchCopyPack | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
@@ -68,6 +87,9 @@ export function makeStateEnvelope(
     mirror,
     lobby,
     plan,
+    // Omitted rather than sent as null when there is none, so an unchanged envelope stays
+    // byte-identical for an older watch that has never seen the field.
+    ...(copy ? { copy } : {}),
     authoritySeq,
     sentAt: new Date(sentAtMs).toISOString(),
   };

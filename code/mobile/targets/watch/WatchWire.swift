@@ -199,6 +199,11 @@ struct WireEnvelope: Codable {
   var mirror: WireMirror?
   var lobby: WireLobby?
   var plan: WirePlan?
+  /// Her copy, resolved by the phone. Rides lobby envelopes only — it changes when she changes her
+  /// language, which is almost never, and a mirror is published many times a second during a rest.
+  /// Optional like every post-v1 field: a phone one build behind sends none and the wrist keeps the
+  /// English it shipped with.
+  var copy: WireCopyPack?
   var authoritySeq: Int
   var sentAt: String
 }

@@ -73,6 +73,44 @@ final class WatchStore {
     write(stored, to: planURL)
   }
 
+  // MARK: Her copy (the phone's resolved strings)
+  //
+  // Stored for the same reason the plan is: the standalone runtime exists so she can train with the
+  // phone in a locker, and a wrist that reverted to English the moment it lost the phone would be
+  // the founder's own bug report one step further out.
+
+  private var copyURL: URL { dir.appendingPathComponent("copy.json") }
+
+  func loadCopy() -> WireCopyPack? { read(WireCopyPack.self, from: copyURL) }
+
+  func saveCopy(_ pack: WireCopyPack) {
+    // An empty pack would blank every string on the wrist. Fallbacks are for a MISSING pack.
+    guard !pack.s.isEmpty else { return }
+    write(pack, to: copyURL)
+  }
+
+  // MARK: The workout the phone last offered
+  //
+  // Founder, device QA 2026-07-30: *"the watch's first screen forces a specific workout instead of
+  // showing today."*
+  //
+  // With the phone present the wrist shows what Today shows — the lobby carries `workoutId`. With
+  // the phone ABSENT the wrist rebuilt a lobby from the stored plan and offered `remaining[0]`: the
+  // first workout of the week the watch had not seen finished. That is the plan's order, not hers,
+  // and it disagreed with the phone she had been looking at ten minutes earlier.
+  //
+  // One string is enough to fix it, and it belongs on disk rather than in memory: the case that
+  // matters is precisely the one where the app was relaunched away from the phone.
+
+  private var queuedURL: URL { dir.appendingPathComponent("queued.json") }
+
+  func loadQueuedWorkoutId() -> String? { read([String: String].self, from: queuedURL)?["id"] }
+
+  func saveQueuedWorkoutId(_ id: String?) {
+    guard let id, !id.isEmpty else { return }
+    write(["id": id], to: queuedURL)
+  }
+
   // MARK: Active local session (rewritten on every transition)
 
   private var sessionURL: URL { dir.appendingPathComponent("session.json") }

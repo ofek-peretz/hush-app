@@ -40,6 +40,10 @@ enum Palette {
   static let ink0 = Color(red: 0.945, green: 0.933, blue: 0.898) // cream[0] #f1eee5 — primary text
   static let ink1 = Color(red: 0.659, green: 0.635, blue: 0.565) // cream[1] #a8a290 — secondary
   static let ink2 = Color(red: 0.545, green: 0.518, blue: 0.455) // cream[2] #8b8474 — muted
+  /// The quietest ink on the stage (#57534a), from WT3's struck-through old load. Below the
+  /// contrast a LABEL is allowed — which is the point: it is reserved for a value that has been
+  /// superseded and is on screen only so the live one has something to differ from.
+  static let ink3 = Color(red: 0.341, green: 0.325, blue: 0.290) // #57534a — superseded
   /// Pure white — the brightest value the stage has, reserved for the news (the corrected load).
   /// v7 keeps the READOUT law: emphasis is standing in the light, never a hue (`stage.lift`).
   static let lift = Color.white
@@ -204,7 +208,7 @@ private struct TopStrip: View {
           .foregroundStyle(Palette.ink2)
       }
       if controlsHint {
-        Button(action: goControls) {
+        Button(action: { TapGate.pass(goControls) }) {
           HStack(spacing: 3) {
             Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold))
             Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
@@ -230,6 +234,36 @@ private struct TopStrip: View {
 /// The affordance to act. primary = ochre; onstage = white-on-dark; quiet = raised tile
 /// (secondary but visibly a button); danger = clay (the irreversible act inside the end
 /// guard); ghost = bare.
+/// ════ ONE TAP IS ONE TAP ════
+///
+/// Founder, device QA 2026-07-30: *"tapping quickly skips screens and ends the workout early."*
+///
+/// Every beat on this wrist is short, and several of them replace each other in under two seconds:
+/// the set confirmation holds 1.5 s, WT3 the same, a rest ends the instant it is skipped. A finger
+/// that taps twice where a button USED to be hits whatever took its place — and the sequences that
+/// end a workout are exactly the ones laid out most alike ("End workout" over "Resume", the confirm
+/// screen's "End & save" where "Something feels off" was).
+///
+/// The fix is not per-screen. A screen that guards itself is a screen someone has to remember to
+/// guard, and the one that gets forgotten is found by an athlete mid-workout. So the gate is GLOBAL
+/// and lives at the only door every action goes through: one activation per window, across every
+/// button on every screen, because the whole point is that the second tap lands somewhere else.
+///
+/// 350 ms: longer than the fastest double-tap a person makes by accident (~250 ms), well short of
+/// the ~500 ms it takes to see a new screen, read it, and decide. A deliberate second tap is not
+/// prevented — only one that arrives before the eye could have caught up.
+enum TapGate {
+  private static var lastAt: TimeInterval = 0
+  private static let windowS: TimeInterval = 0.35
+
+  static func pass(_ action: () -> Void) {
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastAt >= windowS else { return }
+    lastAt = now
+    action()
+  }
+}
+
 struct StageButton: View {
   enum Kind { case primary, moss, onstage, quiet, danger, ghost }
   let title: String
@@ -238,7 +272,7 @@ struct StageButton: View {
   var fontSize: CGFloat = 16
   let action: () -> Void
   var body: some View {
-    Button(action: action) {
+    Button(action: { TapGate.pass(action) }) {
       Text(title)
         .font(.system(size: fontSize, weight: .semibold))
         .frame(maxWidth: .infinity).frame(height: Fit.s(height)) // taller targets on larger cases
@@ -396,7 +430,7 @@ private struct TallyMark: View {
 private struct SwapUndoChip: View {
   let action: () -> Void
   var body: some View {
-    Button(action: action) {
+    Button(action: { TapGate.pass(action) }) {
       HStack(spacing: 3) {
         Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold))
         Text(WatchCopy.undo).font(.system(size: 11, weight: .semibold))
@@ -508,7 +542,7 @@ private struct RestActions: View {
     HStack(spacing: 6) {
       StageButton(title: primaryTitle, kind: ready ? .primary : .onstage, height: 42, fontSize: 15, action: onReady)
       if !ready {
-        Button(action: onAdd) {
+        Button(action: { TapGate.pass(onAdd) }) {
           Text(WatchCopy.addShort)
             .font(.system(size: 14, weight: .semibold))
             .frame(width: Fit.s(54), height: Fit.s(42))
@@ -764,6 +798,18 @@ struct WatchRootView: View {
     content
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Palette.stage0.ignoresSafeArea())
+      /*
+       * THE WHOLE WRIST TURNS AROUND, ONCE, HERE.
+       *
+       * `layoutDirection` is an environment value: setting it at the root flips every stack,
+       * alignment and chevron underneath it — the same thing `I18nManager.forceRTL` does to the
+       * phone, and the founder asked for exactly that ("do the same RTL as the phone").
+       *
+       * Doing it here rather than per-screen is the point. Twenty-three screens each remembering
+       * to mirror themselves is twenty-three chances to forget, and the one that forgets is found
+       * by an athlete rather than by us.
+       */
+      .environment(\.layoutDirection, model.rtl ? .rightToLeft : .leftToRight)
       .onReceive(model.onEntryHaptic) { WatchHaptics.play($0) }
   }
 
@@ -782,6 +828,10 @@ struct WatchRootView: View {
       CompleteScreen(mirror: m, kcal: model.completedKcal, onDone: model.dismissComplete)
     case let .setConfirmation(weight, reps, index, total):
       ConfirmScreen(weight: weight, reps: reps, index: index, total: total, onTap: model.dismissSetConfirm)
+    case let .correction(c):
+      // WT3 — the set is logged AND it moved the next load, so this beat says the news instead of
+      // restating a load and a rep count she chose herself thirty seconds ago.
+      CorrectionScreen(c: c, onTap: model.dismissSetConfirm)
     case let .activeSet(m, draft):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
@@ -798,7 +848,8 @@ struct WatchRootView: View {
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1),
                      onPause: model.pause, onEnd: model.endWorkout,
                      liveVolumeKg: m.liveVolumeKg, liveSets: m.liveSets) {
-        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
+        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest,
+                        announced: model.announcedCorrectionAt == m.globalIndex)
       }
     case let .transitionRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
@@ -934,7 +985,7 @@ private struct BeginButton: View {
   var title: String = WatchCopy.begin
   let action: () -> Void
   var body: some View {
-    Button(action: action) {
+    Button(action: { TapGate.pass(action) }) {
       HStack(spacing: 6) {
         Image(systemName: "play.fill").font(.system(size: 12))
         Text(title).font(.system(size: 15, weight: .semibold))
@@ -958,7 +1009,7 @@ private struct OutlineButton: View {
   var fontSize: CGFloat = 11
   let action: () -> Void
   var body: some View {
-    Button(action: action) {
+    Button(action: { TapGate.pass(action) }) {
       HStack(spacing: 5) {
         if let systemImage { Image(systemName: systemImage).font(.system(size: 12)) }
         Text(title).font(.system(size: fontSize, weight: .semibold))
@@ -977,7 +1028,7 @@ private struct CardioPicker: View {
   var body: some View {
     List {
       ForEach(["run", "walk"], id: \.self) { gait in
-        Button { onCardio(gait) } label: {
+        Button { TapGate.pass { onCardio(gait) } } label: {
           HStack(spacing: 8) {
             Image(systemName: gait == "run" ? "figure.run" : "figure.walk")
               .font(.system(size: 15)).foregroundStyle(Palette.signal)
@@ -1006,7 +1057,7 @@ struct ChooseOverlay: View {
         // A workout already trained this week is FINISHED (founder 2026-07-11): it reads as a
         // record — dimmed, marked DONE, and NOT selectable. Only unfinished work can be queued.
         let done = w.done == true
-        Button { onSelect(w.id) } label: {
+        Button { TapGate.pass { onSelect(w.id) } } label: {
           VStack(alignment: .leading, spacing: 3) {
             HStack {
               Text(w.name).font(.system(size: 16, weight: .semibold))
@@ -1147,7 +1198,7 @@ struct ActiveSetScreen: View {
     VStack(spacing: 6) {
       if let wt = shownWeight {
         // Hero load (mock 48 pt mono) — tapping it is the way into Edit (WT9).
-        Button { enterEdit(.weight) } label: {
+        Button { TapGate.pass { enterEdit(.weight) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(fmtW(wt)).font(.system(size: Fit.s(48), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
             Text(WatchCopy.kg).font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink2)
@@ -1160,7 +1211,7 @@ struct ActiveSetScreen: View {
         repRuler
       } else {
         // Bodyweight: the rep count is the hero (founder 2026-07-11); "Bodyweight" a quiet legend.
-        Button { enterEdit(.reps) } label: {
+        Button { TapGate.pass { enterEdit(.reps) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text("\(shownReps)").font(.system(size: Fit.s(48), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
             Text(WatchCopy.reps).font(.system(size: 15, design: .monospaced)).foregroundStyle(Palette.ink2)
@@ -1281,7 +1332,7 @@ struct ActiveSetScreen: View {
 
   /// The bordered rounded pill that holds an edit value (mock line 1531 — border cream .16).
   private func editPill(active: Bool, tap: @escaping () -> Void, @ViewBuilder _ content: () -> some View) -> some View {
-    Button(action: tap) {
+    Button(action: { TapGate.pass(tap) }) {
       content()
         .padding(.vertical, active ? 5 : 4).padding(.horizontal, active ? 14 : 12)
         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Palette.ink0.opacity(0.16), lineWidth: 1))
@@ -1377,7 +1428,64 @@ struct ConfirmScreen: View {
     }
     .padding(.horizontal, 10)
     .contentShape(Rectangle())
-    .onTapGesture(perform: onTap)
+    .onTapGesture { TapGate.pass(onTap) }
+  }
+}
+
+/// WT3 · THE CORRECTION — the full beat, at last.
+///
+/// Founder, device QA 2026-07-30: *"there is no CORRECTION screen on the watch."* He was right and
+/// the omission was old: the phone published the correction, the wrist drew it as a two-line note
+/// under a rest ring, and the moment the brief calls "the single most distinctive in the product"
+/// arrived as a footnote to a timer.
+///
+/// The canonical screen is `_v7_handoff/HUSH_V7_ALL_DARK.html` WT3: an eyebrow, the old load struck
+/// through beside the new one at twice its size, and a quiet serif line under both. It is followed
+/// by the rest ring, which is why the closing words are "logged · resting" — the beat says what
+/// happened and where she is, and asks for nothing.
+///
+/// ── WHERE THIS DEPARTS FROM THE MOCK, DELIBERATELY ──────────────────────────────────────────────
+/// The mock draws the new load in moss (`#A9C49F`) on a screen whose eyebrow reads EASED FOR YOU.
+/// It predates the founder's ruling of 2026-07-29 — **direction is a colour**: down is blue, hold
+/// is cream, raise is moss, on every surface including the wrist. Five surfaces were drawing an ease
+/// as a raise, and that ruling exists to end it. So the figure takes `Palette.down` on an ease and
+/// `Palette.up` on a raise, and the mock's single-colour treatment is not copied.
+struct CorrectionScreen: View {
+  let c: WireCorrection
+  let onTap: () -> Void
+  var body: some View {
+    let up = c.direction == "up"
+    let tone = up ? Palette.up : Palette.down
+    VStack(spacing: 12) {
+      Spacer(minLength: 0)
+      Legend(up ? WatchCopy.raisedForYou : WatchCopy.easedForYou, size: 9)
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        // What it WAS — struck, and dropped to the quietest ink the stage has. It is here only so
+        // the new number has something to be different from.
+        Text(fmtW(c.from))
+          .font(.system(size: Fit.s(26), weight: .medium, design: .monospaced)).monospacedDigit()
+          .strikethrough(true, color: Palette.ink3)
+          .foregroundStyle(Palette.ink3)
+        Text(fmtW(c.to))
+          .font(.system(size: Fit.s(54), weight: .medium, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(tone)
+          // The glow is the mock's, and it is the reason this reads as news rather than as a
+          // number: on the dark stage the new load is the only lit thing on the screen.
+          .shadow(color: tone.opacity(0.22), radius: 15)
+        Text(WatchCopy.kg).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
+      }
+      // ONE line, always: "34 31.5 kg" on a 40 mm case is already tight and a heavy lift
+      // ("112.5 107.5 kg") is tighter. It scales before it wraps.
+      .lineLimit(1).minimumScaleFactor(0.5)
+      Text(WatchCopy.loggedResting)
+        .font(.system(size: Fit.s(12), design: .serif)).foregroundStyle(Palette.ink2)
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.horizontal, 12)
+    .contentShape(Rectangle())
+    // The same escape the confirmation has: a tap moves on rather than waiting out the beat.
+    .onTapGesture { TapGate.pass(onTap) }
   }
 }
 
@@ -1387,7 +1495,14 @@ struct InterRestScreen: View {
   let mirror: WireMirror
   let onReady: () -> Void
   let onAdd: () -> Void
+  /// WT3 already announced this correction, so the note under the ring stands down.
+  ///
+  /// Not an unconditional removal, because the correction rides the envelope AFTER the set and
+  /// sometimes lands past the confirmation beat — WT3 never draws, and the note is then the only
+  /// place the news exists. Each surface speaks exactly when the other did not.
+  var announced: Bool = false
   private var ready: Bool { (mirror.restRemainingS ?? 0) <= 0 }
+  private var note: WireCorrection? { announced ? nil : mirror.correction }
 
   var body: some View {
     // NO SCROLL: the ring, the next-set line, the equipment setup, and BOTH actions stay on screen
@@ -1416,7 +1531,7 @@ struct InterRestScreen: View {
       RestRing(
         endsAt: mirror.restEndsAt,
         totalS: mirror.restTotalS ?? 90,
-        diameter: Fit.s(mirror.correction == nil ? 76 : 56),
+        diameter: Fit.s(note == nil ? 76 : 56),
         // …and it RUNS in the correction's direction. The note below already names the move; the
         // ring is what the wrist actually looks at, so the two must not disagree.
         arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal
@@ -1424,10 +1539,10 @@ struct InterRestScreen: View {
       .padding(.top, 4)
       Spacer(minLength: 3)
       upNextCard
-      // THE SIGNATURE MOMENT — Loop 1 moved the next set's load; the mock gives it its own screen
-      // (WT3), but the phone/watch runtime shows it inline on the rest it belongs to. Kept so the
-      // product's most distinctive beat is never lost on the wrist.
-      if let c = mirror.correction {
+      // THE SIGNATURE MOMENT — Loop 1 moved the next set's load. WT3 is its screen now; this is
+      // the fallback for a correction that landed after that beat had passed, so the product's
+      // most distinctive news is never lost on the wrist.
+      if let c = note {
         CorrectionNote(c: c).padding(.top, 5)
       }
       Spacer(minLength: 3)
@@ -1516,7 +1631,7 @@ struct TransitionRestScreen: View {
             SwapUndoChip(action: onUndo)
           } else if let best = swaps.first {
             // Same honest hit area as the live-set swap glyph (founder 2026-07-12).
-            Button { onSwap(best.id) } label: {
+            Button { TapGate.pass { onSwap(best.id) } } label: {
               Image(systemName: "repeat").font(.system(size: 12))
                 .foregroundStyle(Palette.ink2)
                 .frame(width: 40, height: 24)
@@ -1826,7 +1941,7 @@ struct CompleteScreen: View {
     }
     .padding(.horizontal, 12).padding(.bottom, 8)
     .contentShape(Rectangle())
-    .onTapGesture { finishReading() }
+    .onTapGesture { TapGate.pass(finishReading) }
     .task {
       // `1...0` is not an empty range in Swift — it TRAPS. The branch above cannot reach here
       // with an empty list, but a crash on a wrist is not a thing to leave to an invariant.
@@ -2043,7 +2158,7 @@ private struct PainAreaScreen: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 6) {
-        Button(action: onBack) {
+        Button(action: { TapGate.pass(onBack) }) {
           Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
         }
         .buttonStyle(.plain)
@@ -2051,10 +2166,12 @@ private struct PainAreaScreen: View {
       }
       ScrollView {
         VStack(spacing: 5) {
-          ForEach(WatchCopy.painAreas, id: \.self) { area in
-            Button { onPick(area) } label: {
+          // She taps the label; the phone receives the VALUE. The two are the same word in
+          // English and different words in Hebrew, and the engine only knows the value.
+          ForEach(WatchCopy.painAreas) { area in
+            Button { TapGate.pass { onPick(area.value) } } label: {
               HStack {
-                Text(area).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink0)
+                Text(area.label).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink0)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.ink2)
               }
@@ -2087,20 +2204,21 @@ private struct PainSeverityScreen: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 6) {
-        Button(action: onBack) {
+        Button(action: { TapGate.pass(onBack) }) {
           Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
         }
         .buttonStyle(.plain)
         Legend(WatchCopy.howSharp, size: 10)
       }
-      Text(muscle)
+      // `muscle` is the map's own name — what the wire carries. She reads hers.
+      Text(WatchCopy.muscle(muscle))
         .font(.system(size: Fit.s(17), design: .serif)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.8)
         .padding(.top, 3)
       Spacer(minLength: 4)
       VStack(spacing: 6) {
         ForEach(WatchCopy.severityChoices) { choice in
-          Button { onPick(choice.value) } label: {
+          Button { TapGate.pass { onPick(choice.value) } } label: {
             HStack {
               Text(choice.label).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Palette.ink0)
               Spacer(minLength: 4)

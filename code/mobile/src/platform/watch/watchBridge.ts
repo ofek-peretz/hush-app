@@ -18,6 +18,7 @@
 import type { SessionEvent } from '@/state/machines/sessionState';
 import type { SessionMirror } from '@/platform/sessionMirror';
 import { WATCH_EVENTS } from '@/platform/events';
+import { watchCopyPack } from './watchCopyPack';
 import {
   decideWatchIntent,
   makeStateEnvelope,
@@ -141,7 +142,15 @@ export class WatchSession {
   publishLobby(lobby: WatchLobby | null, plan: WatchPlanSnapshot | null = null): void {
     this.subscribe();
     this.lastMirror = null;
-    const env = makeStateEnvelope(null, ++this.authoritySeq, this.d.now(), lobby, plan);
+    /*
+     * HER COPY RIDES THE LOBBY, and only the lobby.
+     *
+     * A mirror is published many times a second during a rest; the pack is a kilobyte that changes
+     * when she changes her language, which is to say almost never. The lobby is published on every
+     * return to Today — often enough for a language change to reach the wrist before her next
+     * workout, and rare enough to cost nothing.
+     */
+    const env = makeStateEnvelope(null, ++this.authoritySeq, this.d.now(), lobby, plan, watchCopyPack());
     this.d.transport.sendState(env);
     this.d.track(WATCH_EVENTS.statePublished, { phase: 'lobby', seq: this.authoritySeq });
     if (plan) {

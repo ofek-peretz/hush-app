@@ -56,6 +56,9 @@ enum WatchScreen: Equatable {
   case connectionLost(mirror: WireMirror?)
   case workoutComplete(WireMirror)
   case setConfirmation(weight: Double?, reps: Int, index: Int, total: Int)
+  /// WT3 · THE CORRECTION — the set is logged AND it moved the next load, so the beat that would
+  /// have restated what she just did says the news instead.
+  case correction(WireCorrection)
   case activeSet(WireMirror, draft: EditDraft?)
   case interRest(WireMirror)
   case transitionRest(WireMirror)
@@ -68,6 +71,12 @@ enum WatchScreen: Equatable {
 
 final class WatchModel: ObservableObject {
   @Published private(set) var screen: WatchScreen = .idle
+  /// Lay the interface right-to-left, as the phone reported it.
+  ///
+  /// Published rather than read straight off `WatchCopyStore` at render time: SwiftUI has no way to
+  /// know a global changed, and the first pack can arrive on a lobby envelope that alters nothing
+  /// else about the screen. Then a wrist would sit in the wrong direction until the next transition.
+  @Published private(set) var rtl: Bool = false
 
   private var mirror: WireMirror?
   private var lobby: WireLobby?
@@ -189,6 +198,10 @@ final class WatchModel: ObservableObject {
   func start() {
     guard !didStart else { return }
     didStart = true
+    // Her copy BEFORE anything draws — a first frame in English that flips to Hebrew a moment
+    // later is worse than either, and the disk already holds the last pack the phone sent.
+    WatchCopyStore.adopt(store.loadCopy())
+    rtl = WatchCopyStore.isRTL
     manager.model = self
     manager.activate()
     workoutRuntime.requestAuthorization()
@@ -264,10 +277,28 @@ final class WatchModel: ObservableObject {
     // workout can start with the phone absent, days after this envelope.
     if let plan = envelope.plan { store.savePlan(plan) }
 
+    /*
+     * HER LANGUAGE, PERSISTED FOR THE PHONE-ABSENT CASE.
+     *
+     * The pack rides lobby envelopes. It has to be STORED, not merely held: the whole point of the
+     * standalone runtime is that she can train with the phone in a locker, and a workout that
+     * reverted to English the moment she walked away from it would be the same bug the founder
+     * reported, one step further out.
+     */
+    if let copy = envelope.copy {
+      WatchCopyStore.adopt(copy)
+      store.saveCopy(copy)
+      rtl = WatchCopyStore.isRTL
+    }
+
     let prev = mirror
     mirror = envelope.mirror
     lobby = envelope.lobby
-    if let l = envelope.lobby { lastKnownGated = l.gated == true }
+    if let l = envelope.lobby {
+      lastKnownGated = l.gated == true
+      // What Today offers, kept for the next time the phone is not here.
+      store.saveQueuedWorkoutId(l.workoutId)
+    }
 
     let phoneLive = ["active_set", "rest_inter", "rest_transition", "paused"].contains(mirror?.phase ?? "")
 
@@ -411,7 +442,17 @@ final class WatchModel: ObservableObject {
     guard let stored = store.loadPlan() else { return nil }
     let remaining = stored.plan.workouts.filter { !stored.doneWorkoutIds.contains($0.id) }
     guard !remaining.isEmpty else { return nil }
-    let queued = remaining.first { $0.id == offlineQueuedWorkoutId } ?? remaining[0]
+    /*
+     * WHAT THE PHONE OFFERED, then what she picked here, then the plan's order — in that order.
+     *
+     * `remaining[0]` alone was the bug (founder, device QA 2026-07-30): the wrist offered the first
+     * workout of the week it had not seen finished, which is the plan's sequence and not the day
+     * she is on. The phone's last `workoutId` is the only record of Today that survives the phone
+     * going away, and a choice she made ON the wrist still wins over both.
+     */
+    let queued = remaining.first { $0.id == offlineQueuedWorkoutId }
+      ?? remaining.first { $0.id == store.loadQueuedWorkoutId() }
+      ?? remaining[0]
     let lifts = Set(queued.steps.map { $0.exerciseId }).count
     return WireLobby(
       workoutId: queued.id,
@@ -546,6 +587,15 @@ final class WatchModel: ObservableObject {
     if let d = editDraft { return d }
     return EditDraft(weight: effectiveMirror?.targetWeight, reps: effectiveMirror?.targetReps ?? 0)
   }
+
+  /// The set whose correction WT3 already announced.
+  ///
+  /// The rest screen underneath carries the same news, and saying it twice in four seconds on a
+  /// 41 mm case is worse than saying it once. But the note cannot simply go: the correction rides
+  /// the envelope AFTER the set, so it sometimes lands past the confirmation beat and WT3 never
+  /// draws. Then the note is the only place the news exists. Remembering which one was announced
+  /// is what lets each surface say it exactly when the other did not.
+  private(set) var announcedCorrectionAt: Int?
 
   private func scheduleSetConfirmClear() {
     setConfirmToken += 1
@@ -975,6 +1025,21 @@ final class WatchModel: ObservableObject {
       return .connectionLost(mirror: mirror)
     }
     if let sc = setConfirm {
+      /*
+       * WT3 · THE CORRECTION takes the confirmation's place, never a slot of its own.
+       *
+       * The canonical screen (`_v7_handoff/HUSH_V7_ALL_DARK.html`, WT3) is the beat between the
+       * logged set and the rest ring — the same beat the confirmation already owns. Giving the
+       * news its own screen would put THREE full-screen moments between one set and the next.
+       *
+       * And it earns the slot: the confirmation restates the load and reps she chose thirty
+       * seconds ago and executed herself. The correction is the one thing on this beat she does
+       * not already know.
+       */
+      if let c = effectiveMirror?.correction {
+        announcedCorrectionAt = effectiveMirror?.globalIndex
+        return .correction(c)
+      }
       return .setConfirmation(weight: sc.weight, reps: sc.reps, index: sc.index, total: sc.total)
     }
     guard let m = effectiveMirror else {
@@ -1006,6 +1071,9 @@ final class WatchModel: ObservableObject {
     case .workoutComplete: return .workoutSaved
     case .paused: return .paused
     case .setConfirmation: return .setLogged
+    // The same beat, so the same haptic — she logged a set either way, and a change of load is
+    // not a change of what her wrist just did.
+    case .correction: return .setLogged
     default: return nil // cardioComplete plays its own beat in endCardio()
     }
   }
@@ -1014,6 +1082,7 @@ final class WatchModel: ObservableObject {
     switch (a, b) {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
          (.workoutComplete, .workoutComplete), (.setConfirmation, .setConfirmation),
+         (.correction, .correction),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
          (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete):
       return true

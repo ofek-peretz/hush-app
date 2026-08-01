@@ -216,17 +216,20 @@ describe('the pain report she files on the wrist is the one the engine acts on',
     const swift = fs.readFileSync(
       path.join(__dirname, '..', '..', 'targets', 'watch', 'WatchCopy.swift'), 'utf8',
     );
-    const block = swift.slice(swift.indexOf('static let painAreas'));
+    // `painAreaValues`, not `painAreas`: since the wrist speaks Hebrew the list carries a WIRE
+    // VALUE and a LABEL separately, and this law is about the value — the word the phone resolves.
+    const block = swift.slice(swift.indexOf('static let painAreaValues'));
     const offered = [...block.slice(0, block.indexOf(']')).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
     expect(offered.length).toBeGreaterThan(4); // the extraction must not silently match nothing
     expect({ watchOffers: offered }).toEqual({ watchOffers: [...WRIST_PAIN_MUSCLES] });
 
-    // …and the severities, the same way.
-    // The declaration's TYPE carries its own brackets (`[(value: String, label: String)]`), so the
-    // literal starts at the `= [` — slicing from the first `]` would cut before a single row.
-    const sevAt = swift.indexOf('static let severityChoices');
-    const sevBlock = swift.slice(swift.indexOf('= [', sevAt));
-    const values = [...sevBlock.slice(0, sevBlock.indexOf(']')).matchAll(/value:\s*"([a-z]+)"/g)].map((m) => m[1]);
+    // …and the severities, the same way. The rows are read from the declaration itself rather than
+    // from a bracket: the labels now come from the copy pack, so the shape around them has changed
+    // once already and will again.
+    const sevAt = swift.indexOf('static var severityChoices');
+    expect(sevAt).toBeGreaterThan(-1);
+    const values = [...swift.slice(sevAt, sevAt + 500).matchAll(/value:\s*"([a-z]+)"/g)].map((m) => m[1]);
+    expect(values.length).toBeGreaterThan(2); // the extraction must not silently match nothing
     expect({ watchSeverities: values }).toEqual({ watchSeverities: [...PAIN_SEVERITIES] });
   });
 });

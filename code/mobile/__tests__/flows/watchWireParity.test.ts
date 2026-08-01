@@ -16,6 +16,7 @@
  * (Swift may legitimately declare FEWER fields — the watch renders a subset of the mirror. The
  * rule is one-directional: everything Swift decodes must exist on the phone, spelled the same.)
  */
+import { watchCopyPack } from '@/platform/watch/watchCopyPack';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { projectSessionMirror, type SessionMirror } from '@/platform/sessionMirror';
@@ -390,8 +391,11 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
   });
 
   it('WireEnvelope — the wrapper every frame arrives in', () => {
-    const env = makeStateEnvelope(widestMirror(), 7, NOW, null, null);
-    joined('WireEnvelope', keysOf(env));
+    // BOTH shapes: `copy` rides the lobby and is absent from a mirror frame, so an envelope built
+    // without one would leave the wrist decoding a field this test had never seen sent.
+    const mirrorFrame = makeStateEnvelope(widestMirror(), 7, NOW, null, null);
+    const lobbyFrame = makeStateEnvelope(null, 8, NOW, null, null, watchCopyPack());
+    joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame));
   });
 
   it('WireSwapOption — the replacement the wrist offers is one the phone chose', () => {
