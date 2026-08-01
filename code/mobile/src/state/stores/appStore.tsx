@@ -75,6 +75,15 @@ async function tryPortraitSnapshot(model: ModelClient, completedSessions: number
 interface AppState {
   booted: boolean;
   profile: Profile | null;
+  /**
+   * ⚠️ ALWAYS NULL, AND KEPT ONLY SO THE SHAPE DOES NOT CHANGE UNDER THE SCREENS.
+   *
+   * Nothing writes a `Program`. The coach's plan is the programme and it lives on disk under
+   * `hush.coach.plan`, read by `coachWeek` where it is needed rather than held in the store — a
+   * week that is decided after every session does not want a copy in memory that can be stale.
+   *
+   * The field goes when the founder's redesign touches the screens that still name it.
+   */
   program: Program | null;
   modeState: AthleteModeState;
   justUnlockedPortrait: boolean; // one-shot flag consumed by the Well Done → Portrait route
@@ -361,9 +370,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!fresh) salvaged = await salvageOrphanSession();
       }
 
-      const [storedProfile, program, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
+      /*
+       * ⛔ `db.loadProgram()` WAS IN THIS LIST. Nothing writes a `Program` any more, so it could only
+       * ever return a stale week from before the generator went — and reading one would put it back
+       * on screen behind the coach's. The store carries `program: null` and always will.
+       */
+      const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
         db.loadProfile(),
-        db.loadProgram(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadRecents(),
@@ -409,7 +422,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // The copy layer must know who it is speaking to BEFORE the first screen renders
       // (Hebrew conjugates every verb by gender — i18n/gender.ts).
       setGender(profile?.sex);
-      dispatch({ type: 'BOOTED', profile, program, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
+      dispatch({ type: 'BOOTED', profile, program: null, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
 
       /**
        * THE WEEK'S RECEIPT (founder 2026-07-13). Re-scheduled on every boot rather than once at

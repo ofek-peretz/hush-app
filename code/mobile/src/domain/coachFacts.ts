@@ -249,6 +249,13 @@ export interface CoachFacts {
    * swap pool offer it as a substitute for a squat. Two lists, both honest, one prompt.
    */
   movements: FactMovement[];
+  /**
+   * Lifts she has swapped away from, twice, with her hands (S-69). Offered id → what she trains.
+   * Absent when she has never adopted one.
+   */
+  swappedByHer?: Record<string, string>;
+  /** Muscle → a lift she has asked to keep (S-71). Absent when she has asked for none. */
+  keepsByHer?: Record<string, string>;
   programme: FactProgrammeDay[];
 }
 
@@ -481,6 +488,26 @@ export interface CoachFactsInput {
   history: Session[];
   /** The one that just ended, when this sheet is being built because a workout finished. */
   justFinished?: Session;
+  /**
+   * WHAT SHE HAS SWAPPED, WITH HER HANDS, TWICE.
+   *
+   * ⚠️ This was missing and it was the quiet kind of missing. Two same-target swaps in a row adopt a
+   * standing substitute (S-69) — she has told the app, by doing it rather than saying it, that she
+   * trains Y where it offers X. The coach never saw that, so it would have kept prescribing X every
+   * single week while she silently swapped it out every single session.
+   *
+   * A `leaveIt` is the same signal pointing the other way (S-71): a lift the app tried to rotate
+   * away and she swapped BACK to, twice. It is the one thing she has asked to keep.
+   *
+   * Both are TESTIMONY, like her brief — she chose them. They are not measurements and they are not
+   * ours to overrule; the sheet states them and the coach decides what to do about them.
+   */
+  preferences?: {
+    /** offered exercise id → the one she actually trains. */
+    substitutes?: Record<string, string>;
+    /** muscle → the lift she has asked to keep. */
+    keep?: Record<string, string>;
+  };
 }
 
 /**
@@ -489,7 +516,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, plan, history, justFinished }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -531,6 +558,14 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
     equipment: coachEquipment(),
     catalogue: coachCatalogue(),
     movements: coachMovements(),
+    /*
+     * Her own choices, expressed by hand. Omitted entirely when empty rather than sent as `{}` —
+     * an empty object on every sheet is bytes paid for to say "she has not asked for anything".
+     */
+    ...(preferences?.substitutes && Object.keys(preferences.substitutes).length
+      ? { swappedByHer: preferences.substitutes }
+      : {}),
+    ...(preferences?.keep && Object.keys(preferences.keep).length ? { keepsByHer: preferences.keep } : {}),
     programme: (plan?.sessions ?? []).map((sess) => ({
       name: sess.name,
       ...(sess.day ? { day: sess.day } : {}),

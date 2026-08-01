@@ -58,13 +58,15 @@ export function CoachScreen({ navigation }: Props) {
   const [history, setHistory] = React.useState<Session[] | null>(null);
   const [decided, setDecided] = React.useState<CoachDecision[]>([]);
   const [plan, setPlan] = React.useState<CoachPlan | null>(null);
+  const [prefs, setPrefs] = React.useState<{ substitutes: Record<string, string>; keep: Record<string, string> } | null>(null);
   React.useEffect(() => {
     let alive = true;
-    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan()]).then(([h, d, p]) => {
+    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadPreferences()]).then(([h, d, p, prefs]) => {
       if (!alive) return;
       setHistory(h);
       setDecided(d);
       setPlan(p);
+      setPrefs({ substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle });
     });
     return () => {
       alive = false;
@@ -80,9 +82,10 @@ export function CoachScreen({ navigation }: Props) {
             plan,
             history: history ?? [],
             decided,
+            ...(prefs ? { preferences: prefs } : {}),
           })
         : null,
-    [profile, plan, history, decided],
+    [profile, plan, history, decided, prefs],
   );
 
   return (

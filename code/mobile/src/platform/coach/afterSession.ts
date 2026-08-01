@@ -147,13 +147,14 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
   };
 
   try {
-    const [profile, plan, history, decided] = await Promise.all([
+    const [profile, plan, history, decided, prefs] = await Promise.all([
       db.loadProfile(),
       // The programme the coach wrote LAST time. It is being asked to revise it, so it has to see
       // it — this used to hand over the engine's `Program`, which for a coach-led athlete is empty.
       db.loadCoachPlan(),
       db.loadHistory(),
       db.loadCoachLog(),
+      db.loadPreferences(),
     ]);
     // No profile is not a coach failure — it is an athlete who has not finished onboarding, and
     // there is nothing to decide about.
@@ -165,6 +166,9 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       history,
       ...(justFinished ? { justFinished } : {}),
       decided,
+      // What she has swapped by hand, and what she has asked to keep. Without these the coach keeps
+      // prescribing the lift she silently swaps out every session.
+      preferences: { substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle },
     });
 
     const reply = await askCoach(

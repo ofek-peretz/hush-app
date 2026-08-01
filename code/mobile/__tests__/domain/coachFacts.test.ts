@@ -229,3 +229,40 @@ describe('coach facts — the message the coach is sent', () => {
     expect(perAthlete).toBeLessThan(2000);
   });
 });
+
+describe('what she has chosen with her hands', () => {
+  /*
+   * ⚠️ THIS WAS MISSING, AND IT WAS THE QUIET KIND OF MISSING.
+   *
+   * Two same-target swaps in a row adopt a standing substitute (S-69): she has told the app, by
+   * DOING it rather than saying it, that she trains Y where it offers X. The coach never saw that —
+   * so it would have kept prescribing X every single week while she silently swapped it out every
+   * single session, and neither of them would ever have found out.
+   */
+  it('sends the lifts she has swapped away from, and the ones she asked to keep', () => {
+    const f = coachFacts({
+      profile,
+      plan: null,
+      history,
+      preferences: {
+        substitutes: { bb_bench_press: 'db_bench_press' },
+        keep: { Back: 'bb_row' },
+      },
+    });
+    expect(f.swappedByHer).toEqual({ bb_bench_press: 'db_bench_press' });
+    expect(f.keepsByHer).toEqual({ Back: 'bb_row' });
+  });
+
+  it('omits them entirely when she has asked for nothing', () => {
+    // An empty object on every sheet is bytes paid for on every call to say "she has not asked for
+    // anything" — and a field that is present-but-empty invites the coach to reason about it.
+    const f = coachFacts({ profile, plan: null, history, preferences: { substitutes: {}, keep: {} } });
+    expect('swappedByHer' in f).toBe(false);
+    expect('keepsByHer' in f).toBe(false);
+  });
+
+  it('omits them when the caller does not supply any', () => {
+    const f = coachFacts({ profile, plan: null, history });
+    expect('swappedByHer' in f).toBe(false);
+  });
+});
