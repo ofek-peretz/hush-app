@@ -6,7 +6,7 @@
  * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
  * Body data + Training merged into one "About you + Your week" step, v7 2026-07-24):
  *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
- *   → About you + Your week (ManualInfo) → the conversation → Program Created → Home.
+ *   → the conversation → Program Created → Home. Four screens, and one of them is a coach.
  * Invite-token enrollment is removed.
  */
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -36,10 +36,6 @@ export type OnboardingParamList = {
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
   // watch decides, as it always has.
   ConnectHealth: { sex?: 'male' | 'female'; previewWrist?: WristOffer } | undefined;
-  // About you + Your week (v7 1.4, merged 2026-07-24): bodyweight seeds the cold-start load and
-  // `days` sets the week's shape. `healthConnected` is carried from the step before it; `sex` from
-  // NameEntry. Assembles OnboardingInputs and continues straight to the conversation.
-  ManualInfo: { healthConnected: boolean; sex?: 'male' | 'female' } | undefined;
   /*
    * ════ THE BODY MAP LEFT ONBOARDING ════
    *

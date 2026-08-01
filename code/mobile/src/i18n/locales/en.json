@@ -1159,14 +1159,9 @@
     "send": "Send",
     "thinking": "Thinking",
     "notSent": "Not sent",
-    "intakeOpening": "What are you training for?",
     "title": "Coach",
-    "opening": "What do you want to ask me?",
-    "eyebrow": "YOUR COACH",
-    "openLine1": "I write your programme.",
-    "openLine2": "I read every set you log, and I change it.",
-    "openAsk": "So — what are we training for?",
     "openReturning": "What do you want to ask me?",
-    "backToToday": "Today"
+    "inviteNamed": "{{name}} — tell me what you want, and I’ll build it.",
+    "invite": "Tell me what you want, and I’ll build it."
   }
 }

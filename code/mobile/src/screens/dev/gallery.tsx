@@ -18,7 +18,6 @@ import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
-import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
@@ -460,7 +459,7 @@ function LiveCoachChat() {
   });
   return (
     <>
-      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} />
+      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} invitation="Erez — tell me what you want, and I'll build it." />
       {note ? <Text style={{ color: cream[2], fontSize: 11, padding: 8 }}>{note}</Text> : null}
     </>
   );
@@ -479,6 +478,7 @@ function ScriptedCoachChat() {
     <CoachChat
       turns={turns}
       busy={busy}
+      invitation={"Erez — tell me what you want, and I’ll build it."}
       onSend={(text) => {
         setTurns((t) => [...t, { id: `a${t.length}`, by: 'athlete', text }]);
         setBusy(true);
@@ -1143,7 +1143,8 @@ export const GALLERY: GalleryEntry[] = [
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
   { id: '1.3b', label: 'Connect health — a watch is paired', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'confirm' }) },
   { id: '1.3c', label: 'Connect health — watch, not installed', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'install' }) },
-  { id: '1.4', label: 'About you + your week', status: 'live', render: () => mount(ManualInfo, { healthConnected: false, sex: 'male' }) },
+  // 1.4 · ABOUT YOU + YOUR WEEK — deleted 2026-08-01. Two wheel pickers asking a coach's
+  // questions one screen before a coach; the intake prompt asks for both now.
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
   { id: '1.6', label: 'Bring your history', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
 
@@ -1265,6 +1266,7 @@ export const GALLERY: GalleryEntry[] = [
     <InApp>
       <OnStage>
         <CoachChat
+          invitation={"Erez — tell me what you want, and I’ll build it."}
           onSend={noop}
           turns={[
             { id: '1', by: 'coach', text: 'How did the long run go?' },

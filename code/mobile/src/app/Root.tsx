@@ -37,7 +37,6 @@ import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './na
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
-import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -115,11 +114,6 @@ function OnboardingNavigator() {
           and a full-screen horizontal back gesture over them means every attempt to set an age
           drags the STEP instead of turning the rule. The step keeps a hand-held way back — a drag
           across its footer, the one band with no wheel in it (OnboardingScaffold.onSwipeBack). */}
-      <OnboardingStack.Screen
-        name="ManualInfo"
-        component={ManualInfo}
-        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
-      />
       {/* The body map (Rev 7) — a vertical list, so the default horizontal back-swipe is fine. */}
       {/* THE INTAKE. Swipe-back is left ON: nothing is committed until a plan lands, so returning
           to the body map is as reversible as every step before it. */}

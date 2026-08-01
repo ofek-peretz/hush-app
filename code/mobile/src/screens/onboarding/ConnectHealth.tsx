@@ -35,6 +35,8 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button, Switch, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
+import * as Localization from 'expo-localization';
+import { unitsForDevice } from '@/domain/unitsForDevice';
 import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
@@ -109,13 +111,49 @@ export function ConnectHealth({ navigation, route }: Props) {
     // unset (no watch, or WCSession did not answer in time) and 10.4 remains armed to say it the
     // first open that knows. Both exits set it, because both leave the screen having shown it.
     if (wrist) void markWristOffered();
-    navigation.navigate('ManualInfo', { healthConnected: withHealth, sex });
+    /*
+     * ════ THE LAST STEP BEFORE THE COACH ════
+     *
+     * Founder, 2026-08-01: *"delete every screen you can and change the prompt accordingly. Good
+     * onboarding is short — precise and to the point, and now that we added a conversation window
+     * we MUST make onboarding as short as possible."*
+     *
+     * `ManualInfo` used to sit here: two wheel pickers asking her bodyweight and how many days she
+     * trains. Both are questions a coach asks, and the very next screen IS a coach — so she was
+     * being asked twice, once by a form that cannot follow up and once by something that can.
+     *
+     * The intake prompt names both as things to learn. What is left here is what a conversation
+     * genuinely cannot supply: her units, which the PHONE already knows and should never be a
+     * question at all.
+     */
+    navigation.navigate('CoachIntake', {
+      inputs: {
+        // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
+        goal: 'build_muscle',
+        /*
+         * A PLACEHOLDER, and the coach replaces it.
+         *
+         * `daysPerWeek` is not optional on `OnboardingInputs` and the whole sheet reads it, so it
+         * needs a number before the first call. Four is the median week this app was designed
+         * around — and the intake ask tells the coach in as many words to find out what she can
+         * actually do, so the placeholder survives exactly one exchange.
+         */
+        daysPerWeek: 4,
+        // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
+        // This was `'kg'` for everybody, so every American athlete was told her bodyweight in
+        // kilos and then had to go and find a switch. `unitsForDevice` reads the measurement
+        // system SHE set when she set the phone up, and falls back to its region.
+        units: unitsForDevice(Localization.getLocales()[0]),
+        healthConnected: withHealth,
+        sex,
+      },
+    });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 4 }}
+      progress={{ index: 2, total: 3 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       voice={t('ob.healthSub')}

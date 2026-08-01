@@ -27,7 +27,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { db } from '@/data/local/db';
-import { initI18n } from '@/i18n';
+import { tg, initI18n } from '@/i18n';
 import type { OnboardingInputs } from '@/data/local/models';
 
 jest.mock('@/platform/coach/coachClient', () => ({
@@ -94,9 +94,19 @@ beforeEach(async () => {
 });
 
 describe('the intake is the last step', () => {
-  it('opens by asking her something, rather than a cursor waiting for her to know what to say', () => {
+  it('opens with an INVITATION in her name, not a cursor waiting for her to know what to say', () => {
+    /*
+     * The screen used to recite three lines about the coach before she had said a word, and the
+     * founder's verdict was exact: *"it's as if before talking to you these sentences appeared —
+     * it's strange."* Nobody introduces themselves to an empty room.
+     *
+     * What opens the room now is one line, above the thread, that uses the name 1.2 asked for. The
+     * introduction moved into the prompt, where it happens while the coach is already being useful.
+     */
     askCoach.mockResolvedValue(QUESTION);
-    expect(mount().texts().join(' ')).toContain('training for');
+    const read = mount().texts().join(' ');
+    expect(read).toContain('Dana');
+    expect(read).toContain(tg('coach.inviteNamed', { name: 'Dana' }));
   });
 
   it('briefs the coach with everything the forms already collected', async () => {

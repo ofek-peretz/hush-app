@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 5;
+export const COACH_PROMPT_VERSION = 6;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -366,11 +366,41 @@ ${JSON.stringify(hersAlone(facts))}
     case 'intake':
       blocks.push({
         text:
-          'This is the intake conversation. She has no record yet — "performed" is empty and there ' +
-          'is no session. Ask what you need to build her the right programme, one or two questions ' +
-          'at a time, following what she actually said rather than a list. Do not re-ask what she ' +
-          'has already told you below. When you know enough, build it — say so in "say" and attach ' +
-          'the whole programme in "sessions" in the same reply.\n\n' +
+          /*
+           * ════ THE INTRODUCTION LIVES HERE, NOT ON THE SCREEN ════
+           *
+           * Founder, 2026-08-01: *"during the conversation the coach introduces and explains
+           * itself, and explains how and what it is going to do to reach the athlete's goals —
+           * exactly like a normal conversation, exactly as if I asked you to run a coach–athlete
+           * simulation."*
+           *
+           * The screen used to recite three lines about the coach before she had said a word, and
+           * he was right that it read as strange: nobody introduces themselves to an empty room. So
+           * the introduction is an INSTRUCTION now, and it happens the way it happens with a real
+           * coach — inside the first answer, while already being useful.
+           *
+           * ── AND THE INTAKE INHERITED TWO QUESTIONS ──────────────────────────────────────────
+           * `ManualInfo` is deleted (founder: *"delete every screen you can, and change the prompt
+           * accordingly. Good onboarding is short"*). It collected her bodyweight and how many days
+           * she trains, and both are named here because a programme cannot be written without the
+           * second and the first is what most starting loads are reasoned from.
+           *
+           * They are named as things to LEARN, not as a form to complete: a coach asks how often
+           * you can get to a gym, not "days per week: [ ]".
+           */
+          'This is the intake conversation, and it is the FIRST thing she has ever heard from you. ' +
+          'She has no record yet — "performed" is empty and there is no session.\n\n' +
+          'Open by answering what she said, and introduce yourself INSIDE that answer — who you ' +
+          'are, and what you are going to do about what she just told you. One or two sentences, ' +
+          'the way a coach does it standing in front of someone. Never a list of your features, ' +
+          'never a greeting on its own, and never a question you have already been answered.\n\n' +
+          'Before you can build, you need two things she has not been asked for anywhere else: ' +
+          'roughly what she weighs, and how many days a week she can actually train. Ask for them ' +
+          'the way a person would, when they fit the conversation — not as a form, and not both at ' +
+          'once.\n\n' +
+          'Ask what you need, one or two questions at a time, following what she actually said ' +
+          'rather than a list. When you know enough, build it — say so in "say" and attach the ' +
+          'whole programme in "sessions" in the same reply.\n\n' +
           'THE CONVERSATION SO FAR — her last line is what you are answering:\n' +
           conversation(ask.turns),
       });

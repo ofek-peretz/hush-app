@@ -99,7 +99,6 @@ describe('the register and the surface speak the same language (L5, one layer ou
     'S-45': 'src/screens/session/WellDone.tsx',           // Saturday decides nothing — it was all told already
     'S-13': 'src/screens/session/SessionFlow.tsx',        // the 2-corrections-per-exercise cap
     'S-17': 'src/screens/home/Home.tsx',                  // her learned rest rides to the wrist
-    'B-1': 'src/screens/onboarding/ManualInfo.tsx',       // cold start = sex × bodyweight only
     /*
      * ════ S-64 AND F-4 LOST THEIR SURFACES, AND THAT IS THE RIGHT ANSWER ════
      *
@@ -116,7 +115,11 @@ describe('the register and the surface speak the same language (L5, one layer ou
      * for her minutes in words, and it decides emphasis when it writes the programme. A situation
      * whose surface is a conversation cannot be pinned to a file, so it is not pinned to one.
      *
-     * ⚠️ If either ever gets a screen again, it belongs back in this map on the same day.
+     * B-1 (cold start = sex × bodyweight) joined them when `ManualInfo` was deleted for the same
+     * reason: the coach asks for her bodyweight in the conversation and prescribes the opening
+     * loads itself, so the situation's surface is a sentence rather than a file.
+     *
+     * ⚠️ If any of them ever gets a screen again, it belongs back in this map on the same day.
      */
   };
 

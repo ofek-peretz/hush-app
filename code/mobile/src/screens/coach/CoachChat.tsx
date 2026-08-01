@@ -42,6 +42,7 @@ import {
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { textStart } from '@/i18n/bidi';
 import { color, font, radius, space, stage } from '@/design/tokens';
 
 /** Who said it. `pending` is hers, on screen, not yet acknowledged by the coach. */
@@ -61,87 +62,60 @@ export interface CoachTurn {
   failed?: boolean;
 }
 
-/* ──────────────────────────────────────────────────────────────────────────── the opening beat */
+/* ─────────────────────────────────────────────────────────────────────────── the invitation */
 
 /**
- * ════ THE FIRST THING SHE EVER HEARS FROM HUSH ════
+ * ════ THE LINE THAT OPENS THE ROOM ════
  *
- * Founder, 2026-08-01: *"this is his first moment talking to the coach, it has to be perfect"* and
- * *"the user should feel he is talking to a professional authority, one of the best in the world."*
+ * Founder, 2026-08-01, on the version this replaces: *"I don't like it. It's as if before talking
+ * to you these sentences appeared — it's strange. What it does need is to be INVITING, to start a
+ * conversation, and during the conversation the coach introduces and explains itself... exactly
+ * like a normal conversation, exactly as if I asked you to run a coach–athlete simulation."*
  *
- * The screen used to be one serif question on an empty black field with a "Write a message" box at
- * the foot. That is a chatbot — and the founder's whole reason for keeping the coach OUT of the tab
- * bar was not to look like one.
+ * He is right, and the mistake is worth naming: the previous build made the coach recite three
+ * lines about itself before she had said a word. Nobody introduces themselves to an empty room. A
+ * real coach shakes your hand, asks what you want, and tells you who they are WHILE answering —
+ * which is why the introduction moved into the prompt (`coachPrompt`, the intake ask) and out of
+ * the screen entirely.
  *
- * ── WHY IT SPEAKS BEFORE IT ASKS ────────────────────────────────────────────────────────────────
- * An authority does not open with an open question and wait. A physiotherapist does not begin with
- * "so what do you want?" — they tell you what they are going to do, then ask the one thing they
- * need. So three beats, in this order:
+ * What is left here is one sentence, and it is not a message: it is the room. It sits above the
+ * thread as chrome, it never scrolls away as a turn would, and it does exactly one thing — make
+ * starting feel obvious.
  *
- *   1. I write your programme.               ← what it IS
- *   2. I read every set you log, and I change it.  ← why it is worth talking to
- *   3. So — what are we training for?        ← the only question on the screen
+ *   "Erez — tell me what you want, and I'll build it."
  *
- * Every line is a fact in the first person and none of them sells. The third is the ask, and it
- * arrives last so that by the time she has a cursor, she knows who she is answering.
+ * Her NAME is in it because we have it (1.2 asks for it) and because a coach who has been told your
+ * name uses it. Without one the sentence still stands; it simply starts a word later.
  *
- * ── THE MOTION IS THE POINT, AND IT IS RESTRAINED ───────────────────────────────────────────────
- * The lines land one at a time, ~520 ms apart, rising 10 pt as they fade in. The mark above them
- * draws first and alone. It reads as someone THINKING, then speaking — which is exactly the claim
- * being made — and it is over in under two seconds, because an athlete who opens this screen at the
- * gym on her second visit must not have to sit through a performance.
- *
- * Nothing is blocked while it plays: the composer is live from the first frame. A person who
- * already knows what to say should never wait for an animation to finish.
+ * ── THE MOTION ──────────────────────────────────────────────────────────────────────────────────
+ * The rule draws, then the line rises. Under a second, once, and never again — this is the frame
+ * being set, not a performance. The composer is live throughout.
  */
-function OpeningBeat({ returning }: { returning: boolean }) {
-  const { t } = useCopy();
-  const lines = returning
-    ? [t('coach.openReturning')]
-    : [t('coach.openLine1'), t('coach.openLine2'), t('coach.openAsk')];
-
-  // One driver per line, so each keeps its own timing and the stagger is declared rather than
-  // computed with delays inside a loop that re-runs on every render.
-  const marks = useRef(lines.map(() => new Animated.Value(0))).current;
+function Invitation({ text }: { text: string }) {
   const rule = useRef(new Animated.Value(0)).current;
+  const line = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(rule, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.stagger(
-        520,
-        marks.map((m) =>
-          Animated.timing(m, { toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        ),
-      ),
+      Animated.timing(rule, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(line, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-    // The drivers are created once and the copy cannot change under a mounted screen.
+    // Created once; the copy cannot change under a mounted screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <View style={styles.opening}>
-      {/* The mark, alone first — the same rule-and-serifs glyph the close of a workout uses. It is
-          the product signing its name before it speaks. */}
-      <Animated.View style={[styles.openingMark, { opacity: rule, transform: [{ scaleX: rule }] }]}>
-        <View style={styles.markRule} />
-      </Animated.View>
-      <Legend style={styles.openingEyebrow}>{t('coach.eyebrow')}</Legend>
-      {lines.map((line, i) => (
-        <Animated.View
-          key={line}
-          style={{
-            opacity: marks[i],
-            transform: [{ translateY: marks[i].interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
-          }}
-        >
-          {/* The ASK is the last line and it carries the weight — same serif, one size up, so the
-              eye lands on the question rather than on the introduction. */}
-          <Text style={[styles.coachText, styles.openingLine, i === lines.length - 1 && styles.openingAsk]}>
-            {line}
-          </Text>
-        </Animated.View>
-      ))}
+    <View style={styles.invite}>
+      {/* The mark — the product signing its name before it opens its mouth. */}
+      <Animated.View style={[styles.inviteMark, { opacity: rule, transform: [{ scaleX: rule }] }]} />
+      <Animated.Text
+        style={[
+          styles.inviteText,
+          { opacity: line, transform: [{ translateY: line.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] },
+        ]}
+      >
+        {text}
+      </Animated.Text>
     </View>
   );
 }
@@ -208,15 +182,16 @@ export interface CoachChatProps {
   busy?: boolean;
   onSend: (text: string) => void;
   /**
-   * She has met the coach before.
+   * The one line above an empty thread, already resolved by the screen that owns the name.
    *
-   * The intake introduces itself in three beats; every conversation after it opens the floor in
-   * one. Re-introducing itself to someone eleven weeks in would be the app forgetting her.
+   * A prop rather than a lookup because the two callers say different things: the intake invites
+   * her to describe what she wants; the returning conversation opens the floor. Neither is a
+   * message, and neither survives the first turn.
    */
-  returning?: boolean;
+  invitation: string;
 }
 
-export function CoachChat({ turns, busy = false, onSend, returning = false }: CoachChatProps) {
+export function CoachChat({ turns, busy = false, onSend, invitation }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
   const scroll = useRef<ScrollView>(null);
@@ -248,7 +223,7 @@ export function CoachChat({ turns, busy = false, onSend, returning = false }: Co
         onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
         keyboardDismissMode="interactive"
       >
-        {turns.length === 0 ? <OpeningBeat returning={returning} /> : null}
+        {turns.length === 0 ? <Invitation text={invitation} /> : null}
         {turns.map((turn) => (
           <Turn key={turn.id} turn={turn} />
         ))}
@@ -327,14 +302,17 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6, paddingVertical: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: stage.ink2 },
 
-  /* The opening owns the whole thread area when there are no turns — it is not a message. */
-  opening: { paddingTop: space[8], paddingBottom: space[6], gap: space[2] },
-  openingMark: { alignItems: 'flex-start', marginBottom: space[4] },
-  markRule: { width: 34, height: 1.5, backgroundColor: stage.ink2 },
-  openingEyebrow: { marginBottom: space[1] },
-  openingLine: { fontSize: 21, lineHeight: 30 },
-  /* The question, one size up: the eye should land on what it is being asked. */
-  openingAsk: { fontSize: 25, lineHeight: 34, color: color.textPrimary },
+  /* The invitation is the ROOM, not a turn — it owns the space above an empty thread. */
+  invite: { paddingTop: space[9], paddingBottom: space[6], gap: space[5] },
+  inviteMark: { width: 34, height: 1.5, backgroundColor: stage.ink2 },
+  /* The largest serif in the app outside a workout's close. It is the one thing on the screen. */
+  inviteText: {
+    fontFamily: font.serif,
+    fontSize: 27,
+    lineHeight: 37,
+    color: color.textPrimary,
+    textAlign: textStart,
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

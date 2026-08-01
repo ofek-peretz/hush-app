@@ -62,55 +62,46 @@ const turns: CoachTurn[] = [
 
 describe('the conversation', () => {
   it('shows both voices in the order they were said', () => {
-    const read = textOf(draw(<CoachChat turns={turns} onSend={jest.fn()} />));
+    const read = textOf(draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />));
     expect(read).toContain('What are you training for?');
     expect(read).toContain('marathon in April');
     expect(read.indexOf('What are you training')).toBeLessThan(read.indexOf('marathon in April'));
   });
 
-  it('⚠️ opens by SAYING WHAT IT IS, then asking — an authority does not wait', () => {
+  it('⚠️ opens with ONE INVITATION, and says nothing else', () => {
     /*
-     * Founder, 2026-08-01: *"this is his first moment talking to the coach, it has to be
-     * perfect... the user should feel he is talking to a professional authority, one of the best
-     * in the world."*
+     * Founder, 2026-08-01, on the version this replaces: *"I don't like it. It's as if before
+     * talking to you these sentences appeared — it's strange. What it needs is to be INVITING, to
+     * start a conversation, and DURING the conversation the coach introduces and explains
+     * itself."*
      *
-     * The screen used to be a single question on an empty black field over a "Write a message"
-     * box, which is a chatbot — and keeping the coach out of the tab bar was precisely so it would
-     * not read as one. A physiotherapist does not begin with "so what do you want?": they tell you
-     * what they are going to do, then ask the one thing they need.
+     * The build before this made the coach recite three lines about itself before she had said a
+     * word. Nobody introduces themselves to an empty room. The introduction moved into the prompt,
+     * where it happens while answering her — like a person.
+     *
+     * What is left is the room: one line, above the thread, that makes starting obvious.
      */
-    const read = textOf(draw(<CoachChat turns={[]} onSend={jest.fn()} />));
-    expect(read).toContain(tg('coach.eyebrow'));
-    expect(read).toContain(tg('coach.openLine1'));
-    expect(read).toContain(tg('coach.openLine2'));
-    expect(read).toContain(tg('coach.openAsk'));
-    // …and the ASK comes last. A question asked before the introduction is an empty box again.
-    expect(read.indexOf(tg('coach.openLine1'))).toBeLessThan(read.indexOf(tg('coach.openAsk')));
+    const read = textOf(draw(<CoachChat invitation="AN INVITATION" turns={[]} onSend={jest.fn()} />));
+    expect(read).toContain('AN INVITATION');
+    // Nothing pretends to be a message from the coach before she has spoken.
+    expect(read).not.toContain(tg('coach.thinking'));
   });
 
-  it('does not re-introduce itself to someone eleven weeks in', () => {
-    // The intake introduces itself in three beats; every conversation after it opens the floor in
-    // one. Saying "I write your programme" to an athlete who has trained on it all season is the
-    // app forgetting her.
-    const read = textOf(draw(<CoachChat turns={[]} returning onSend={jest.fn()} />));
-    expect(read).toContain(tg('coach.openReturning'));
-    expect(read).not.toContain(tg('coach.openLine1'));
+  it('drops the invitation the moment there is a real conversation', () => {
+    // It is the room, not a turn. A frame that stayed once the conversation started would be a
+    // header nobody asked for, taking the space her words should have.
+    const read = textOf(draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />));
+    expect(read).not.toContain('AN INVITATION');
   });
 
-  it('drops the opening the moment there is a real conversation', () => {
-    const read = textOf(draw(<CoachChat turns={turns} onSend={jest.fn()} />));
-    expect(read).not.toContain(tg('coach.openLine1'));
-    expect(read).not.toContain(tg('coach.eyebrow'));
-  });
-
-  it('never blocks the composer while the opening plays', () => {
+  it('never blocks the composer while the invitation draws', () => {
     /*
      * The lines land over about a second and a half. A person who already knows what to say must
      * never wait for a performance to finish — so the field and the send control are live from the
      * first frame, and the beat is decoration over a working screen rather than a gate in front of
      * one.
      */
-    const input = byLabel(draw(<CoachChat turns={[]} onSend={jest.fn()} />), tg('coach.placeholder'));
+    const input = byLabel(draw(<CoachChat invitation="AN INVITATION" turns={[]} onSend={jest.fn()} />), tg('coach.placeholder'));
     expect(input.props.editable).not.toBe(false);
   });
 });
@@ -118,14 +109,14 @@ describe('the conversation', () => {
 describe('sending', () => {
   it('sends what she typed, trimmed', () => {
     const onSend = jest.fn();
-    const r = draw(<CoachChat turns={turns} onSend={onSend} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
     type(r, '  Longest was 18 km.  ');
     press(r, tg('coach.send'));
     expect(onSend).toHaveBeenCalledWith('Longest was 18 km.');
   });
 
   it('clears the field so she cannot send the same thing twice by accident', () => {
-    const r = draw(<CoachChat turns={turns} onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
     type(r, 'Eighteen kilometres.');
     press(r, tg('coach.send'));
     expect(byLabel(r, tg('coach.placeholder')).props.value).toBe('');
@@ -134,7 +125,7 @@ describe('sending', () => {
   it('refuses an empty message, and refuses whitespace', () => {
     // The send control sits live on a blank field; without this guard a stray tap costs a call.
     const onSend = jest.fn();
-    const r = draw(<CoachChat turns={turns} onSend={onSend} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
     press(r, tg('coach.send'));
     type(r, '   \n  ');
     press(r, tg('coach.send'));
@@ -142,7 +133,7 @@ describe('sending', () => {
   });
 
   it('marks the send control disabled until there is something to send', () => {
-    const r = draw(<CoachChat turns={turns} onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
     expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: true });
     type(r, 'ok');
     expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: false });
@@ -152,7 +143,7 @@ describe('sending', () => {
     // A model can take many seconds. Locking the field for that long makes the app feel broken,
     // and her next thought is gone by the time it unlocks.
     const onSend = jest.fn();
-    const r = draw(<CoachChat turns={turns} busy onSend={onSend} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} busy onSend={onSend} />);
     type(r, 'Also my knee has been sore.');
     press(r, tg('coach.send'));
     expect(onSend).toHaveBeenCalledWith('Also my knee has been sore.');
@@ -161,18 +152,18 @@ describe('sending', () => {
 
 describe('the states that are easy to fake and expensive to get wrong', () => {
   it('says the coach is composing, in a way a screen reader can hear', () => {
-    const r = draw(<CoachChat turns={turns} busy onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} busy onSend={jest.fn()} />);
     expect(byLabel(r, tg('coach.thinking'))).toBeDefined();
   });
 
   it('says nothing about composing when it is not', () => {
-    const r = draw(<CoachChat turns={turns} onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
     expect(r.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.thinking')).length).toBe(0);
   });
 
   it('shows a message that has not landed differently from one that has', () => {
     const pending: CoachTurn[] = [...turns, { id: '4', by: 'athlete', text: 'Sent but unanswered', pending: true }];
-    const r = draw(<CoachChat turns={pending} onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={pending} onSend={jest.fn()} />);
     // The distinction has to be visible, not just present in the data — a pending message that
     // looks delivered is why people send the same thing twice.
     const bubbles = r.root.findAll((n) => Array.isArray(n.props?.style) && n.props.style.length >= 2);
@@ -184,26 +175,26 @@ describe('the states that are easy to fake and expensive to get wrong', () => {
     // Not a toast: a toast has already faded by the time she looks, and the thing she needs to know
     // about is a specific message, not the session.
     const failed: CoachTurn[] = [...turns, { id: '4', by: 'athlete', text: 'This never arrived', failed: true }];
-    const read = textOf(draw(<CoachChat turns={failed} onSend={jest.fn()} />));
+    const read = textOf(draw(<CoachChat invitation="AN INVITATION" turns={failed} onSend={jest.fn()} />));
     expect(read).toContain('This never arrived');
     expect(read.toUpperCase()).toContain(tg('coach.notSent').toUpperCase());
   });
 
   it('says nothing about failure on an ordinary message', () => {
-    const read = textOf(draw(<CoachChat turns={turns} onSend={jest.fn()} />)).toUpperCase();
+    const read = textOf(draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />)).toUpperCase();
     expect(read).not.toContain(tg('coach.notSent').toUpperCase());
   });
 });
 
 describe('the keyboard is part of the screen', () => {
   it('asks for the dark keyboard — a light one is the brightest thing in the product', () => {
-    const r = draw(<CoachChat turns={turns} onSend={jest.fn()} />);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
     expect(byLabel(r, tg('coach.placeholder')).props.keyboardAppearance).toBe('dark');
   });
 
   it('lets Return make a newline instead of sending', () => {
     // On a multiline field, a Return that sends costs her the paragraph she was halfway through.
-    const input = byLabel(draw(<CoachChat turns={turns} onSend={jest.fn()} />), tg('coach.placeholder'));
+    const input = byLabel(draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />), tg('coach.placeholder'));
     expect(input.props.multiline).toBe(true);
     expect(input.props.blurOnSubmit).toBe(false);
   });
