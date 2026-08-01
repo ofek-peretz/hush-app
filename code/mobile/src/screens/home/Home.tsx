@@ -351,9 +351,10 @@ export function Home({ navigation, route }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const [log, before] = await Promise.all([
+        const [log, before, letterSeen] = await Promise.all([
           db.loadCoachLog().catch(() => null),
           db.loadCoachPlanPrev().catch(() => null),
+          db.loadCoachLetterSeen().catch(() => null),
         ]);
         if (cancelled) return;
         const fromCoach = coachBrief(log, app.weekOpenMs);
@@ -394,6 +395,13 @@ export function Home({ navigation, route }: Props) {
          * owed.
          */
         setBriefCount(fromCoach ? fromCoach.count : null);
+        /*
+         * THE UNSEEN DOT, from one comparison. A decision newer than her last visit to the letter is
+         * news she has not read. There is no second "seen" flag to write and therefore none to fall
+         * out of step with the log about whether there is anything to see.
+         */
+        const newest = (fromCoach?.lines.length ?? 0) > 0 ? Math.max(...(log ?? []).map((d) => Date.parse(d.at)).filter(Number.isFinite)) : 0;
+        setBriefUnseen(newest > 0 && newest > (letterSeen ?? 0));
         setChangedDir(directions);
       } catch {
         if (!cancelled) {

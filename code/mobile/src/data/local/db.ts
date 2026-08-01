@@ -84,6 +84,9 @@ const K = {
   /* The one before it. Kept for exactly one reason — see `saveCoachPlan`: the direction a load
    * moved is a fact about TWO programmes, and the founder's law says a direction is a colour. */
   coachPlanPrev: 'hush.coach.plan.prev',
+  /* When she last opened the Saturday letter, as epoch ms. The changes pill wears an unseen dot
+   * until a decision newer than this exists — one comparison, no second flag to fall out of step. */
+  coachLetterSeen: 'hush.coach.letter.seen',
   /* The last post-session attempt and how it went. The app must be able to SAY that an update is
    * waiting; the one thing worse than it not arriving is not knowing that it did not. */
   coachUpdate: 'hush.coach.update',
@@ -351,6 +354,9 @@ export const db = {
   loadCoachPlanPrev: () => getJSON<CoachPlan>(K.coachPlanPrev),
 
   /* ── How the last post-session call went ───────────────────────────────────────────────────── */
+
+  loadCoachLetterSeen: () => getJSON<number>(K.coachLetterSeen),
+  saveCoachLetterSeen: (atMs: number) => setJSON(K.coachLetterSeen, atMs),
 
   loadCoachUpdate: () => getJSON<CoachUpdate>(K.coachUpdate),
   saveCoachUpdate: (u: CoachUpdate) => setJSON(K.coachUpdate, u),

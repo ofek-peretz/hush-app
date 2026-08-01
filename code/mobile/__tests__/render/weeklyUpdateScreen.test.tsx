@@ -47,10 +47,11 @@ const baseView = (): WeeklyPlanView => ({
   workouts: [{ dayId: 'd1', name: 'Upper A', groups: ['Chest'], lifts: [] }],
 });
 
-jest.mock('@/domain/weeklyUpdate', () => ({
-  getWeeklyPlan: async () => mockView,
-  markWeeklyUpdateSeen: async () => {},
-}));
+/*
+ * ⛔ `@/domain/weeklyUpdate` WAS MOCKED HERE. The module is deleted — it dispatched to the engine's
+ * weekly view, which needed a `Program` and a changeLog, and both are gone. The letter reads the
+ * coach's log directly now, so there is nothing to stand in for.
+ */
 
 const mockProfileUpdates: Array<Record<string, unknown>> = [];
 let mockBodyMap: Record<string, 'off' | 'normal' | 'emphasis'> = {};

@@ -35,7 +35,7 @@ import { db } from '@/data/local/db';
 import { coachBrief } from '@/domain/coachEarned';
 import type { CoachDecision } from '@/domain/coachLog';
 import { track } from '@/platform/telemetry';
-import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView } from '@/domain/weeklyUpdate';
+import type { WeeklyPlanView } from '@/engine/weeklyView';
 import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, standingRecord, type QuarterlyProgressEntry, type StandingRecord } from '@/domain/progressReport';
@@ -162,7 +162,12 @@ export function WeeklyUpdate({ navigation, route }: Props) {
       setCoachLog(log ?? []);
       setLoaded(true);
       void track('weekly_update_viewed', { weekIndex: null, changes: coachBrief(log, app.weekOpenMs)?.count ?? 0 });
-      void markWeeklyUpdateSeen();
+      /*
+       * SEEN, as an instant rather than a flag. The pill on Today compares it against the newest
+       * decision — one number, one comparison, and no second piece of state that can disagree with
+       * the log about whether there is news.
+       */
+      void db.saveCoachLetterSeen(Date.now());
     })();
     return () => {
       active = false;

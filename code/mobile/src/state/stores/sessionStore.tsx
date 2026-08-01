@@ -1,3 +1,13 @@
+        /*
+         * ⛔ THE STRUCTURAL-CHANGE RECORD WENT WITH THE LOG NOBODY READS.
+         *
+         * An adopted learned swap used to be stamped into the engine's changeLog so the Saturday
+         * mirror could name it. Nothing reads that log any more — and the swap reaches the coach a
+         * better way: it is a PREFERENCE (`preferences.substitutes`), it travels on her sheet as
+         * `swappedByHer`, and the coach decides what to do about it rather than being told after
+         * the fact that the app already had.
+         */
+
 /**
  * Live session engine. Drives the Session Flow via the session-state machine
  * (spec §6.3), persists per-set actuals at each Complete Set (§8.4), and honors
@@ -37,7 +47,7 @@ import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageRe
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
-import { recordStructuralChangeV5, observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
+import { observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
 import { refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
 import { sessionKcal } from '@/domain/energy';
@@ -968,11 +978,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             delete engineRotated[anchor];
           }
           await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, leaveItsByMuscle, engineRotated });
-          // S-45: a newly ADOPTED learned swap (S-69) is a Hush decision — let the Saturday mirror name
-          // it. The adoption is the key whose standing substitute just changed.
-          for (const k of Object.keys(next.substitutes))
-            if (next.substitutes[k] !== prev[k])
-              await recordStructuralChangeV5(k, next.substitutes[k], 'swap').catch(() => {});
+          /*
+           * ⛔ THE ADOPTION USED TO BE STAMPED INTO THE ENGINE'S CHANGELOG so the Saturday mirror
+           * could name it. Nothing reads that log any more — and the adoption reaches the coach a
+           * better way than a stamp: it is a PREFERENCE, it travels on her sheet as `swappedByHer`,
+           * and the coach decides what to do about it instead of being told after the fact what the
+           * app has already done.
+           */
         } catch {
           /* best-effort — a learning failure never affects the saved workout */
         }
