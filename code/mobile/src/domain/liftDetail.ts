@@ -18,6 +18,7 @@
  * back, exactly as the Record screen (3.3b) reads `sessionForward` back.
  */
 import type { EngineV5State } from '@/data/local/db';
+import type { CoachDecision } from './coachLog';
 import type { Session } from '@/data/local/models';
 import { earnedMilestones, type EarnedMilestone, type MilestoneProfile } from '@/domain/milestones';
 
@@ -155,6 +156,12 @@ export interface LiftChange {
   atMs: number;
   loadFrom: number | null;
   loadTo: number | null;
+  /**
+   * WHY. It was an engine decision CODE — `progress`, `stall_backoff` — that the screen turned into
+   * a sentence through the copy layer. It is the coach's own sentence now, already written, in her
+   * language. Same field, and the screen prints it either way; what changed is that the reason is
+   * no longer a category the app expands but the thing the coach actually said.
+   */
   decision: string;
   /** Structural / volume moves (S-45); absent on an ordinary load change. */
   kind?: 'graduate' | 'swap' | 'volume' | 'rung';
@@ -203,4 +210,34 @@ export function changeDirection(c: LiftChange): ChangeDirection {
 export function pointIndexAt(points: ClimbPoint[], atMs: number): number {
   const key = dayKey(atMs);
   return points.findIndex((p) => dayKey(p.atMs) === key);
+}
+
+/**
+ * ════ THE ALL-CHANGES TAB, FROM THE COACH ════
+ *
+ * `liftChanges` above reads the engine's stamped changeLog. Nothing writes that log any more — the
+ * between-session fold is deleted — so on any athlete who started after it went, this tab would be
+ * permanently empty. Empty is not "no changes"; it is "we stopped recording", and the screen exists
+ * to answer *why did this lift move?*
+ *
+ * The coach's log answers it better than the engine's ever did: the engine stamped a decision CODE
+ * that the copy layer expanded into a sentence, and the coach wrote the sentence.
+ *
+ * ⚠️ NO from→to FIGURES, and that is honest rather than lossy. The coach states a programme, never a
+ * delta — see `coachLoadDirections` for why a direction has to be derived from two plans. A row here
+ * carries WHEN and WHY, and the load it set is on Today next to the lift. Inventing a `loadFrom` by
+ * looking backwards through her history would be this file forming an opinion about a decision it
+ * did not make.
+ */
+export function liftChangesFromCoach(log: CoachDecision[] | undefined, exerciseId: string): LiftChange[] {
+  return (log ?? [])
+    .filter((d) => d.ex === exerciseId)
+    .map((d) => ({
+      atMs: Date.parse(d.at),
+      loadFrom: null,
+      loadTo: null,
+      decision: d.say,
+    }))
+    .filter((c) => Number.isFinite(c.atMs))
+    .sort((a, b) => b.atMs - a.atMs);
 }

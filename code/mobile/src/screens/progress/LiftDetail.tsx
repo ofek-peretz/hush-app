@@ -26,12 +26,14 @@ import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db, type EngineV5State } from '@/data/local/db';
+import type { CoachDecision } from '@/domain/coachLog';
+import type { CoachPlan } from '@/domain/coachPlan';
 import { exerciseById, exerciseDisplayName } from '@/data/exercises';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import {
   changeDirection,
-  liftChanges,
+  liftChangesFromCoach,
   liftClimb,
   liftMoments,
   pointIndexAt,
@@ -49,12 +51,23 @@ type Props = NativeStackScreenProps<MainParamList, 'LiftDetail'>;
 type Tab = 'moments' | 'changes';
 
 /** The engine's own band for this lift, read structurally off persisted state (no engine import). */
-function bandOf(state: EngineV5State | null, exerciseId: string): [number, number] | null {
-  const ex = state?.exercises?.[exerciseId] as { band?: unknown } | undefined;
-  const b = ex?.band;
-  return Array.isArray(b) && b.length === 2 && typeof b[0] === 'number' && typeof b[1] === 'number'
-    ? [b[0], b[1]]
-    : null;
+/**
+ * Her band for this lift — the prescription, read from the programme that prescribes it.
+ *
+ * ⚠️ It read the ENGINE's stamped state, and nothing writes that any more: `ensureExercisesV5` has
+ * no caller left, so the band was silently null on every lift for every athlete. The coach writes
+ * the band into the item, which is where it was always going to be most honest — it is the same
+ * pair the session runs against rather than a second copy in a ledger.
+ */
+function bandOf(plan: CoachPlan | null, exerciseId: string): [number, number] | null {
+  for (const session of plan?.sessions ?? []) {
+    for (const block of session.blocks) {
+      for (const item of block.items) {
+        if (item.kind === 'reps' && item.ex === exerciseId) return item.reps;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -68,16 +81,27 @@ export function LiftDetail({ navigation, route }: Props) {
   const exerciseId = route.params.exerciseId;
 
   const [sessions, setSessions] = useState<Session[] | null>(null);
-  const [engine, setEngine] = useState<EngineV5State | null>(null);
+  const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
+  const [plan, setPlan] = useState<CoachPlan | null>(null);
 
   useEffect(() => {
     let active = true;
     db.loadHistory().then((all) => active && setSessions(all));
-    // The stamped ledger, read back. A first-run device has no state yet — the tab then simply
-    // holds no rows, which is the true answer, not an error.
-    Promise.resolve(db.loadEngineV5())
-      .then((s) => active && setEngine(s ?? null))
-      .catch(() => active && setEngine(null));
+    /*
+     * The coach's own decisions about this lift, read back.
+     *
+     * This read the ENGINE's stamped changeLog, and nothing writes that any more — so on any athlete
+     * who started after the fold was deleted this tab would be permanently empty. Empty is not "no
+     * changes": it is "we stopped recording", on the one screen that exists to answer *why did this
+     * lift move?*
+     */
+    void Promise.all([db.loadCoachLog(), db.loadCoachPlan()])
+      .then(([l, p]) => {
+        if (!active) return;
+        setCoachLog(l);
+        setPlan(p);
+      })
+      .catch(() => active && setCoachLog([]));
     return () => {
       active = false;
     };
@@ -88,7 +112,10 @@ export function LiftDetail({ navigation, route }: Props) {
     () => liftMoments(sessions ?? [], app.profile, exerciseId, climb),
     [sessions, app.profile, exerciseId, climb],
   );
-  const changes = useMemo<LiftChange[]>(() => liftChanges(engine?.changeLog, exerciseId), [engine, exerciseId]);
+  const changes = useMemo<LiftChange[]>(
+    () => liftChangesFromCoach(coachLog ?? undefined, exerciseId),
+    [coachLog, exerciseId],
+  );
 
   return (
     <LiftDetailView
@@ -97,7 +124,7 @@ export function LiftDetail({ navigation, route }: Props) {
       climb={climb}
       moments={moments}
       changes={changes}
-      band={bandOf(engine, exerciseId)}
+      band={bandOf(plan, exerciseId)}
       loaded={sessions != null}
       onBack={() => navigation.goBack()}
     />

@@ -30,7 +30,6 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
-import { currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';

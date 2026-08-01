@@ -331,36 +331,18 @@ export function WellDone({ navigation, route }: Props) {
     };
   }, []);
 
-  const [volume, setVolume] = useState<VolumeMove[]>([]);
-  useEffect(() => {
-    if (notStarted || earned === null || !summary?.startedAtMs) return;
-    let active = true;
-    const at = summary.startedAtMs;
-    void db
-      .loadEngineV5()
-      .then((s) => {
-        if (!active) return;
-        setVolume(
-          (s?.changeLog ?? [])
-            .filter((c) => c.at === at && c.kind === 'volume' && c.muscle)
-            .map((c) => {
-              // The narration for the same move — `Explanation.slotId` holds the muscle on a volume
-              // entry, which is exactly what makes the join possible without recomputing anything.
-              const said = earned.find((e) => e.slotId === c.muscle);
-              return {
-                muscle: c.muscle as string,
-                setsFrom: c.setsFrom,
-                setsTo: c.setsTo,
-                reason: said ? { key: said.text.key, params: said.text.params } : null,
-              };
-            }),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [notStarted, earned, summary?.startedAtMs]);
+  /*
+   * ⛔ THE VOLUME ROWS WERE HERE, and they went with Loop 3.
+   *
+   * They read the engine's changeLog for entries stamped `kind: 'volume'` — a muscle earning or
+   * losing a set — and nothing writes that log any more. There is no volume DECISION either: the
+   * coach writes the whole programme, so a set count changing is not a separate kind of news with
+   * its own row shape. It is part of the week it wrote, and its reason is the sentence it attached.
+   *
+   * Kept as an empty list rather than pulled out of the view, because the view's shape is the
+   * founder's and he is redesigning it — a prop deleted today is a prop argued about twice.
+   */
+  const volume: VolumeMove[] = [];
 
   // Milestones crossed by THIS session (the latest in history), most personal
   // first. [0] is the single celebrated mark; the rest go quietly to the gallery.

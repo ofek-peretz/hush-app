@@ -165,9 +165,13 @@ export async function salvageOrphanSession(): Promise<SalvageResult> {
         if (!history.some((h) => h.id === active.id)) {
           // Stamp the TRAINED verdict (domain/completion) like any other save, so the workout-count
           // milestones and the week heal read a salvaged session exactly as they read a finished one.
-          const program = await db.loadProgram().catch(() => null);
-          const day = program?.days.find((d) => d.id === active.programDayId);
-          const trained = sessionTrained(active, day);
+          /*
+           * The verdict, from what the session itself carries. It used to look the programme day up
+           * and count its slots — there is no programme to look in, and `Session.prescribed` is
+           * stamped at START by whichever door opened the workout, which is the better answer
+           * anyway: it is what she was actually asked to do, not what the plan says today.
+           */
+          const trained = sessionTrained(active, null);
           const saved: Session = {
             ...active,
             state: 'SAVED',

@@ -45,10 +45,19 @@ const set = (i: number): SetLog => ({
   persistedAt: new Date().toISOString(),
 });
 
+/**
+ * A crashed session, with the prescription it was started against.
+ *
+ * `prescribed` is stamped at START by whichever door opened the workout. That is what makes the
+ * verdict answerable at all here: the salvage used to look the programme day up and count its
+ * slots, and there is no programme to look in — so without the stamped number an unknown
+ * prescription falls back to "any logged work counts" and a three-set crash credits a workout.
+ */
 const orphan = (sets: number): Session => ({
   id: 'sess_crashed',
   programDayId: DAY_ID,
   programDayName: 'Push A',
+  prescribed: 8,
   startedAt: new Date().toISOString(),
   state: 'ACTIVE',
   earlyFinish: false,
