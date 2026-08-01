@@ -81,6 +81,9 @@ const K = {
   coachLog: 'hush.coach.log',
   /* The programme the coach decided, stored AS THE COACH WROTE IT — see `saveCoachPlan`. */
   coachPlan: 'hush.coach.plan',
+  /* The one before it. Kept for exactly one reason — see `saveCoachPlan`: the direction a load
+   * moved is a fact about TWO programmes, and the founder's law says a direction is a colour. */
+  coachPlanPrev: 'hush.coach.plan.prev',
   /* The last post-session attempt and how it went. The app must be able to SAY that an update is
    * waiting; the one thing worse than it not arriving is not knowing that it did not. */
   coachUpdate: 'hush.coach.update',
@@ -328,7 +331,24 @@ export const db = {
    * So the plan is the record, whole, and the surfaces read IT. `buildPlanFromCoach` turns one
    * session into runnable steps without losing anything on the way.
    */
-  saveCoachPlan: (p: CoachPlan) => setJSON(K.coachPlan, p),
+  async saveCoachPlan(p: CoachPlan): Promise<void> {
+    /*
+     * THE OUTGOING PLAN IS KEPT, and it is not history-for-its-own-sake.
+     *
+     * The founder's law is that a DIRECTION IS A COLOUR: a load that went up is moss, one that came
+     * down is blue, one that held is cream, on every surface without exception. The engine could
+     * state a direction because it computed a delta. The coach states a PROGRAMME — it says what she
+     * lifts next, not which way it moved — so the direction is not in the answer.
+     *
+     * It is still knowable, and honestly: it is the difference between two programmes we hold. So
+     * the previous one is kept, and Today reads the direction off the pair rather than being told.
+     * That is a derivation from two facts, not a guess about one.
+     */
+    const outgoing = await getJSON<CoachPlan>(K.coachPlan);
+    if (outgoing) await setJSON(K.coachPlanPrev, outgoing);
+    await setJSON(K.coachPlan, p);
+  },
+  loadCoachPlanPrev: () => getJSON<CoachPlan>(K.coachPlanPrev),
 
   /* ── How the last post-session call went ───────────────────────────────────────────────────── */
 

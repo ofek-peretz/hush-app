@@ -220,3 +220,52 @@ function formatDistance(metres: number, units: 'kg' | 'lb'): string {
     ? `${Number((metres / 1609.344).toFixed(2))} mi`
     : `${Number((metres / 1000).toFixed(2))} km`;
 }
+
+/* ─────────────────────────────────────────────────────────────────────── WHICH WAY A LOAD MOVED */
+
+/**
+ * The direction each lift's load moved between two programmes.
+ *
+ * ⚠️ THIS IS DERIVED, NOT REPORTED, AND THAT DISTINCTION IS THE POINT. The engine could state a
+ * direction because it computed a delta. The coach states a PROGRAMME — what she lifts next, not
+ * which way it moved — so the direction is not in the answer and never will be.
+ *
+ * It is still a fact rather than a guess: it is the difference between two programmes the app
+ * holds, both written by the same coach. Asking the coach to also state a direction would invite it
+ * to state one that disagreed with its own numbers, and the founder's law
+ * (`direction is a colour`) is precisely about surfaces not disagreeing.
+ *
+ * Only LIFTS, and only where both sides carry a load: a run has no direction, and a lift that was
+ * not in the previous week has not moved — it has arrived, which is a different thing and is why
+ * a new lift is absent here rather than marked as a raise.
+ */
+export function coachLoadDirections(
+  now: CoachPlan | null | undefined,
+  before: CoachPlan | null | undefined,
+): Record<string, 'up' | 'down' | 'hold'> {
+  if (!now || !before) return {};
+
+  /** Every lift's load in a plan, first occurrence wins — a lift on two days is one prescription. */
+  const loads = (plan: CoachPlan): Map<string, number> => {
+    const out = new Map<string, number>();
+    for (const session of plan.sessions) {
+      for (const block of session.blocks) {
+        for (const item of block.items) {
+          if (item.kind !== 'reps' || item.load == null) continue;
+          if (!out.has(item.ex)) out.set(item.ex, item.load);
+        }
+      }
+    }
+    return out;
+  };
+
+  const then = loads(before);
+  const out: Record<string, 'up' | 'down' | 'hold'> = {};
+  for (const [ex, load] of loads(now)) {
+    const was = then.get(ex);
+    if (was == null) continue; // arrived rather than moved
+    // A float comparison, because loads are halves and quarters of a kilogram.
+    out[ex] = Math.abs(load - was) < 1e-6 ? 'hold' : load > was ? 'up' : 'down';
+  }
+  return out;
+}

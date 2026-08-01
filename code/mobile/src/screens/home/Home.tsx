@@ -21,7 +21,7 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachSession, coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
@@ -67,7 +67,6 @@ export function Home({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const session = useSession();
-  const program = app.program;
   // WEEKLY model: Home offers the next UNFINISHED workout in the week (any order, no calendar).
   /*
    * A CHIP SHOWS A PLAN — including a finished one (founder 2026-07-17: "tapping each chip shows
@@ -88,10 +87,6 @@ export function Home({ navigation, route }: Props) {
   const [doneCoachIds, setDoneCoachIds] = useState<string[]>([]);
 
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const chosenDay =
-    chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
-  const nextUp = program ? nextWorkout(program) : null;
-  const day = chosenDay ?? nextUp;
 
   /*
    * ════ WHICH WORKOUT TODAY IS ABOUT, WHOEVER DECIDED IT ════
@@ -105,13 +100,18 @@ export function Home({ navigation, route }: Props) {
    * never match, so the coach branch was unreachable and every workout quietly ran the engine's.
    */
   const coachWorkouts = React.useMemo(() => coachWeek(coachPlan), [coachPlan]);
-  const coachLed = coachWorkouts.length > 0;
   const nextCoach = coachWorkouts.find((w) => !doneCoachIds.includes(w.id)) ?? null;
   const chosenCoach = coachWorkouts.find((w) => w.id === chosenId) ?? null;
-  const todayCoach = coachLed ? chosenCoach ?? nextCoach : null;
-
-  const todayId = coachLed ? todayCoach?.id ?? null : day?.id ?? null;
-  const todayName = coachLed ? todayCoach?.name ?? '' : day?.name ?? '';
+  /**
+   * The workout Today is about: the one she tapped, or the next one she has not trained.
+   *
+   * A CHOSEN workout may be a finished one she tapped to re-read — that is deliberate and was
+   * ruled on (founder 2026-07-17): a done chip still shows its plan, and the gate lives on the ACT
+   * rather than the view.
+   */
+  const todayCoach = chosenCoach ?? nextCoach;
+  const todayId = todayCoach?.id ?? null;
+  const todayName = todayCoach?.name ?? '';
 
   /*
    * There is only ONE door to the selection now — the chips. "THE LAST INTENT WINS" used to
@@ -131,18 +131,14 @@ export function Home({ navigation, route }: Props) {
    * never match, so the coach branch was unreachable and every workout quietly ran the engine's
    * version. Whoever supplies the chips supplies the id Begin resolves.
    */
-  const workouts: HomeWorkoutOption[] = coachLed
-    ? coachWorkouts.map((w) => ({
-        id: w.id,
-        name: w.name,
-        // The coach names its own sessions ("Intervals & Core"), so there is no muscle line to
-        // derive — and inventing one would be a claim about a week nobody made.
-        muscles: '',
-        done: doneCoachIds.includes(w.id),
-      }))
-    : (program?.days ?? [])
-        .filter((d) => !d.isRest)
-        .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups), done: !!d.completed }));
+  const workouts: HomeWorkoutOption[] = coachWorkouts.map((w) => ({
+    id: w.id,
+    name: w.name,
+    // The coach names its own sessions ("Intervals & Core"), so there is no muscle line to derive —
+    // and inventing one would be a claim about a week nobody made.
+    muscles: '',
+    done: doneCoachIds.includes(w.id),
+  }));
   const isFocused = useIsFocused();
 
   /*
@@ -220,37 +216,22 @@ export function Home({ navigation, route }: Props) {
   const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
   const [whyFor, setWhyFor] = useState<string | null>(null);
   const [formFor, setFormFor] = useState<string | null>(null);
-  const dayIdForPlan = day?.id ?? null;
-  useEffect(() => {
-    if (!dayIdForPlan) {
-      setPlanTargets(null);
-      return;
-    }
-    let alive = true;
-    setPlanTargets(null); // never show the previous workout's loads under a new name
-    app.model
-      .sessionTargets({ programDayId: dayIdForPlan, completedSessions: app.modeState.completedSessions })
-      .then((ts) => {
-        if (alive) setPlanTargets(ts);
-      })
-      .catch(() => {
-        if (alive) setPlanTargets([]); // an unreadable plan is an empty section, never a hang
-      });
-    return () => {
-      alive = false;
-    };
-  }, [app.model, app.modeState.completedSessions, dayIdForPlan]);
-
-  // THE LIST DOES NOT STAND DOWN WHEN THE SELECTION CHANGES (A.12) — see `homePlan.ts` for the
-  // whole argument. The rows are the day's; only their figures are the engine's, and only those wait.
+  /*
+   * ⛔ THE ENGINE'S PER-SET TARGET READ WAS HERE, and the `pending` machinery around it.
+   *
+   * It asked `sessionTargets` for the selected day and held the rows blank until the promise landed
+   * — the flicker the founder reported (A.12) and the reason `homePlan` carries a `pending` flag at
+   * all. The coach decided every load before this screen opened and it is in the stored plan, so
+   * there is nothing to wait for and nothing to flicker.
+   */
+  /*
+   * Every row is known SYNCHRONOUSLY. The coach already decided each load and it is in the stored
+   * plan, so — unlike the engine read this replaced — there is nothing in flight and no `pending`
+   * state to get wrong. The whole class of "tapping the chips flickers" (founder A.12) cannot occur.
+   */
   const plan = React.useMemo(
-    () =>
-      coachLed
-        ? // The coach already decided every load and it is in the stored plan — nothing is in
-          // flight, so unlike the engine path there is no `pending` state to get wrong.
-          coachPlanRows(todayId ? coachRows(coachPlan, todayId) : null, app.profile?.units ?? 'kg')
-        : homePlanRows(day, planTargets, changedDir),
-    [coachLed, coachPlan, todayId, app.profile?.units, day, planTargets, changedDir],
+    () => coachPlanRows(todayId ? coachRows(coachPlan, todayId) : null, app.profile?.units ?? 'kg'),
+    [coachPlan, todayId, app.profile?.units],
   );
 
   const nowMs = Date.now();
@@ -262,7 +243,15 @@ export function Home({ navigation, route }: Props) {
   // It reads `nextUp`, not `day`: `day` can now be a FINISHED workout the athlete tapped to re-read,
   // and looking back at Monday's session is not a reason to stop saying the week is complete —
   // choosing one simply shows it, and Recovery returns the moment the selection is cleared.
-  const resting = !!program && program.days.length > 0 && !nextUp && !chosenDay;
+  /*
+   * RECOVERY: every workout of the loaded week is done, so there is no next one to offer. The week
+   * only turns over at the Saturday roll, so a week finished early holds Recovery until then —
+   * the "no starting early" gate is structural rather than a separate lock.
+   *
+   * It reads `nextCoach`, not the chosen one: tapping a finished workout to re-read it is not a
+   * reason to stop saying the week is complete, and Recovery returns when the selection clears.
+   */
+  const resting = coachWorkouts.length > 0 && !nextCoach && !chosenCoach;
 
   // Training-week counter ("Week N") — a mid-week signup's extended first bucket
   // stays "Week 1" until it actually rolls (domain/weekCadence.displayWeekNumber).
@@ -306,61 +295,27 @@ export function Home({ navigation, route }: Props) {
      * rest would have her do a different workout from the one the coach wrote, on the one device
      * with no screen to say so.
      */
-    if (coachLed) {
-      void (async () => {
-        refreshLearnedRests(await db.loadHistory().catch(() => []));
-        if (cancelled) return;
-        setWatchPlan(
-          buildCoachWatchPlan({
-            sessions: coachWorkouts
-              .filter((w) => !doneCoachIds.includes(w.id))
-              .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),
-            nowMs: Date.now(),
-            restInterS: REST_INTER_S,
-            restTransitionS: restTransitionSeconds(),
-          }),
-        );
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (!program) return;
     void (async () => {
-      const days = program.days.filter((d) => !d.isRest && !d.completed);
-      const targetsByDay: Record<string, SetTarget[]> = {};
-      for (const d of days) {
-        try {
-          targetsByDay[d.id] = await app.model.sessionTargets({
-            programDayId: d.id,
-            completedSessions: app.modeState.completedSessions,
-          });
-        } catch {
-          /* skip this day — the watch just can't start it offline */
-        }
-      }
-      if (cancelled) return;
-      // S-17 — the standalone watch plan must ship HER rests, not the tier bootstrap. The phone is
-      // the sole authority (S-48), so it hands the wrist the same learned timer it would run itself.
+      // S-17 — the standalone watch plan ships HER learned rests, not a tier bootstrap. The phone is
+      // the sole authority (S-48), so the wrist gets the same timer the phone would run.
       refreshLearnedRests(await db.loadHistory().catch(() => []));
+      if (cancelled) return;
       setWatchPlan(
-        buildWatchPlanSnapshot({
-          days,
-          targetsByDay,
+        buildCoachWatchPlan({
+          sessions: coachWorkouts
+            .filter((w) => !doneCoachIds.includes(w.id))
+            .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),
           nowMs: Date.now(),
           restInterS: REST_INTER_S,
-          restTransitionS: restTransitionSeconds(), // S-17 — her learned transition rides to the wrist too
-          restInterSFor: restInterSecondsFor,
+          restTransitionS: restTransitionSeconds(),
         }),
       );
-      setEngineTick((n) => n + 1); // the week's decisions are now on disk — the briefing may read
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, program, app.modeState.completedSessions, coachLed, coachPlan, coachWorkouts, doneCoachIds]);
+  }, [isFocused, coachPlan, coachWorkouts, doneCoachIds]);
 
   /**
    * THE BRIEFING — Hush's own sentence about what it did to this week's plan (domain/weekBriefing).
@@ -379,128 +334,49 @@ export function Home({ navigation, route }: Props) {
   const [loadsUp, setLoadsUp] = useState(0);
   /** The engine rotation she can take back — see `undoEngineSwap`. Null unless one is live. */
   const [undoable, setUndoable] = useState<{ anchor: string; name: string } | null>(null);
+  /*
+   * ════ WHAT THE COACH CHANGED THIS WEEK ════
+   *
+   * This was the engine's weekly view joined to a changeLog. Both are gone with the generator, and
+   * what the surface is FOR did not change: how many decisions this week, and which way each lift's
+   * load moved.
+   *
+   * ⚠️ THE DIRECTION IS DERIVED, NOT REPORTED. The coach states a PROGRAMME — what she lifts next,
+   * not which way it moved — so the direction is the difference between the current plan and the
+   * one before it, both of which the app holds. Asking the coach to state a direction as well would
+   * invite it to state one that disagreed with its own numbers, and the founder's law that a
+   * direction is a colour is exactly about surfaces not disagreeing.
+   */
   useEffect(() => {
-    if (!isFocused || !program) return;
+    if (!isFocused) return;
     let cancelled = false;
     void (async () => {
       try {
-        // `getWeeklyUpdate()` is the one honest test of "has the engine ever decided anything for
-        // this athlete" — it is null until the first roll folds a week in. The PLAN view alone
-        // cannot answer it: a week with no update and a week where nothing changed both read as
-        // zero changes, and those are two completely different sentences.
-        const [update, view, prefs] = await Promise.all([getWeeklyUpdate(), getWeeklyPlan(program), db.loadPreferences()]);
+        const [log, before] = await Promise.all([
+          db.loadCoachLog().catch(() => null),
+          db.loadCoachPlanPrev().catch(() => null),
+        ]);
         if (cancelled) return;
+        const fromCoach = coachBrief(log, app.weekOpenMs);
         /*
-         * WHICH SWAP CAN SHE TAKE BACK? Only a live engine ROTATION (S-71's scope — a graduation is
-         * not resistible, and her own learned swap is not ours to undo).
-         *
-         * `engineRotated` maps anchor → the lift it rotated to, so the lift now IN the plan is the
-         * value and the one to give back is the KEY. Same reverse-lookup the in-workout swap menu
-         * does to offer the original first (S-70) — one fact, read the same way in both places.
+         * `null` and `0` are DIFFERENT and both surfaces depend on it: null is "nothing has ever
+         * been decided for her" — her first week, where the coach gave a starting point rather than
+         * a change — and shows no pill at all; 0 is "this week, nothing changed", a verdict she is
+         * owed.
          */
-        const rotated = prefs.engineRotated ?? {};
-        const undoAnchorFor = (currentExerciseId: string): string | null =>
-          Object.keys(rotated).find((anchor) => rotated[anchor] === currentExerciseId) ?? null;
-        const changes: BriefChange[] | null =
-          update && view
-            ? [
-                ...view.workouts.flatMap((w) =>
-                  w.lifts
-                    .filter((l) => l.change)
-                    .map((l) => ({
-                      name: l.name,
-                      loadFrom: l.change!.snapshot.loadFrom,
-                      loadTo: l.change!.snapshot.loadTo,
-                      swapped: l.change!.snapshot.swapped,
-                    })),
-                ),
-                // Loop 3 volume moves are news too: they carry no load and no swap, so they reach
-                // the briefing only as COUNT (the "tuned" sentence) — but they must reach it, or a
-                // volume-only week reads "steady" here while the letter shows what changed.
-                ...(view.volume ?? []).map((v) => ({ name: v.muscle, loadFrom: null, loadTo: null, swapped: false })),
-              ]
-            : null; // week 1: the engine has a baseline, not a decision — and it says nothing here
-        /*
-         * ════ THE COUNT COMES FROM THE COACH ════
-         *
-         * `weekBriefing` assembled a sentence out of deltas — it sorted raises by step size to pick
-         * a headline, counted swaps apart from loads, and had a phrase for a steady week. That was
-         * the work of a machine with numbers and no language. The coach's decisions arrive already
-         * written, so all that survives is: which of them belong to this week, and how many.
-         *
-         * The engine's own count is kept behind it for a legacy athlete whose last fold ran before
-         * the deletion — it goes with the generator.
-         *
-         * ⚠️ `null` and `0` are DIFFERENT and both surfaces depend on it: null is "nothing has ever
-         * been decided for her" (her first week — a baseline, not a decision) and shows no pill at
-         * all; 0 is "this week, nothing changed", which is a verdict she is owed.
-         */
-        const fromCoach = coachBrief(await db.loadCoachLog().catch(() => null), app.weekOpenMs);
-        if (cancelled) return;
-        setBrief(weekBriefing(changes, app.profile?.units ?? 'kg'));
-        setBriefCount(fromCoach ? fromCoach.count : changes ? changes.length : null);
-        setLoadsUp(
-          (view?.workouts ?? [])
-            .flatMap((w) => w.lifts)
-            .filter(
-              (l) =>
-                l.change != null &&
-                l.change.snapshot.loadFrom != null &&
-                l.change.snapshot.loadTo != null &&
-                l.change.snapshot.loadTo > l.change.snapshot.loadFrom,
-            ).length,
-        );
-        const changedLifts = (view?.workouts ?? []).flatMap((w) => w.lifts).filter((l) => l.change);
-        // The direction the row is lit in, from the stamped snapshot and nothing else. A structural
-        // change (a graduation, a rotation) has no load it came FROM, so it is not a fall — it is a
-        // new lift arriving, and it lights like one.
-        setChangedDir(
-          Object.fromEntries(
-            changedLifts.map((l) => {
-              const s = l.change!.snapshot;
-              const dir: LoadDirection =
-                s.loadFrom == null || s.loadTo == null ? 'up' : s.loadTo < s.loadFrom ? 'down' : s.loadTo > s.loadFrom ? 'up' : 'hold';
-              return [l.exerciseId, dir];
-            }),
-          ),
-        );
-        // …and the case for each, read off the same stamped view plus the two most recent sessions
-        // of that lift in the athlete's own history.
-        const history = await db.loadHistory().catch(() => [] as Session[]);
-        if (cancelled) return;
-        setWhyByExercise(
-          Object.fromEntries(
-            changedLifts.map((l) => [l.exerciseId, changedLiftCase(l, history, app.profile?.units ?? 'kg')]),
-          ),
-        );
-        // The undo, if the engine rotated a lift away this week. At most one is offered: the
-        // sentence names one swap ("I swapped one lift — X"), so the button beside it can only
-        // honestly belong to that one.
-        const swappedLift = (view?.workouts ?? [])
-          .flatMap((w) => w.lifts)
-          .find((l) => l.change?.snapshot.swapped && undoAnchorFor(l.exerciseId));
-        setUndoable(
-          swappedLift
-            ? { anchor: undoAnchorFor(swappedLift.exerciseId)!, name: exerciseDisplayName(undoAnchorFor(swappedLift.exerciseId)!) }
-            : null,
-        );
-        setBriefUnseen(!!update && !update.seen);
+        setBriefCount(fromCoach ? fromCoach.count : null);
+        setChangedDir(coachLoadDirections(coachPlan, before));
       } catch {
-        // The engine record could not be read. Say NOTHING rather than something generic — an
-        // invented sentence about decisions we cannot see would be the one unforgivable lie here.
         if (!cancelled) {
-          setBrief(null);
           setBriefCount(null);
           setChangedDir({});
-          setLoadsUp(0);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, program, engineTick, app.profile?.units]);
+  }, [isFocused, coachPlan, app.weekOpenMs]);
 
   // Session-at-a-time: re-resolve today's session on focus; drain offline work.
   const [startError, setStartError] = useState(false);
@@ -515,56 +391,47 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
-  // Warm the targets cache for the offered workout (best-effort, silent).
-  useEffect(() => {
-    if (!isFocused || !day) return;
-    if (prefetch.current?.dayId === day.id) return;
-    let cancelled = false;
-    void app.model
-      .sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions })
-      .then((targets) => {
-        if (cancelled) return;
-        prefetch.current = { dayId: day.id, targets }; // warm the cache for a no-wait slide-to-start
-      })
-      .catch(() => {
-        /* fall back to fetching on demand in onStart */
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, day?.id, app.modeState.completedSessions]);
+  /*
+   * ⛔ THE TARGETS PREFETCH WAS HERE.
+   *
+   * It warmed `sessionTargets` for the offered workout so Slide-to-start had no network wait. The
+   * coach's loads are already on disk when this screen draws — there is no round trip left to warm.
+   */
 
   // Keep the Apple Watch Start screen in sync with the queued workout (read-only —
   // the watch mirrors the iPhone home card). Starting a workout stays phone-initiated;
   // this only publishes WHAT is queued. No-op while a session is active (the mirror
   // drives the watch then). Re-publishes when the queued workout / list / lock changes.
   useEffect(() => {
-    const lifts = day ? day.slots.length : undefined;
+    const lifts = todayCoach?.items;
     session.publishWatchLobby({
-      workoutId: day?.id ?? null,
-      workoutName: day?.name ?? '',
-      muscles: muscleGroupsLabel(day?.muscleGroups),
+      workoutId: todayId,
+      workoutName: todayName,
+      // The coach names its own sessions and does not state muscles; deriving one for the wrist
+      // would be a claim about a week nobody made.
+      muscles: '',
       lifts,
-      // Rough estimate (no per-day duration on the model yet): ~8 min per lift.
-      durationLabel: lifts ? `~${lifts * 8} min` : undefined,
+      /*
+       * The coach's own count of the work whose duration is KNOWN, rather than "~8 min per lift".
+       * A distance has no duration without a pace and this app does not guess one, so a session
+       * carrying uncounted work says the figure it can stand behind and no more.
+       */
+      durationLabel: todayCoach && todayCoach.minutes > 0 ? `~${todayCoach.minutes} min` : undefined,
       // WT7 — her very first: no completed session anywhere in her history. Read from the same
       // history every other surface reads, so the wrist and the phone agree about which day it is.
       firstWorkout: saved != null && saved.length === 0,
       resting,
       gated,
-      workouts: (program?.days ?? [])
-        .filter((d) => !d.isRest)
-        .map((d) => ({
-          id: d.id,
-          name: d.name,
-          lifts: d.slots.length,
-          muscles: muscleGroupsLabel(d.muscleGroups),
-          done: d.completed,
-        })),
+      workouts: coachWorkouts.map((w) => ({
+        id: w.id,
+        name: w.name,
+        lifts: w.items,
+        muscles: '',
+        done: doneCoachIds.includes(w.id),
+      })),
     }, watchPlan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day?.id, day?.name, resting, gated, workouts.length, watchPlan]);
+  }, [todayId, todayName, resting, gated, workouts.length, watchPlan, coachWorkouts, doneCoachIds]);
 
   // Let the watch Start screen run the EXACT same Begin / Choose the phone does (start + navigate /
   // queue another workout). Bound while Home is MOUNTED — not just focused — so a watch Begin works
@@ -587,7 +454,7 @@ export function Home({ navigation, route }: Props) {
     // freeze `onStart` around the workout that was current when the screen mounted — and the wrist
     // would start yesterday's session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayId, resting, coachLed]);
+  }, [todayId, resting]);
 
   // Mid-workout resume (S3): an interrupted (app-killed) session younger than the resume
   // window replaces Begin with "Continue {workout}". Re-checked on every focus; cleared the
@@ -672,7 +539,7 @@ export function Home({ navigation, route }: Props) {
   }
 
   async function onStart() {
-    if (!day && !(coachLed && todayId)) return;
+    if (!todayId) return;
     if (resting) return; // hard gate: the next week is locked until the Saturday 20:30 roll
     if (gated) {
       navigation.navigate('Paywall', { source: 'gate' });
@@ -681,36 +548,16 @@ export function Home({ navigation, route }: Props) {
     setStartError(false);
     try {
       /*
-       * ════ THE COACH'S WEEK WINS WHERE THERE IS ONE ════
-       *
-       * A workout the coach decided is run from the coach's own plan — its loads are already
-       * decided and sitting in the items, and three of its four shapes (a run, a hold, open work)
-       * cannot be written as a `ProgramDay` at all, so there is nothing here to ask the engine for.
-       *
-       * The engine path below is the FALLBACK, and it is temporary: it is what every athlete
-       * already on TestFlight is training from, and deleting it before the coach path stands would
-       * leave them with no programme and no load progression at all. It goes when the generator
-       * goes, not before.
+       * She trains what the coach wrote. Its loads are already decided and sitting in the items —
+       * there is nothing to ask anyone for, which is why this has no network wait and no prefetch
+       * behind it any more.
        */
-      if (coachLed && todayId) {
-        const planned = coachSession(coachPlan, todayId);
-        if (planned) {
-          await session.startCoach(planned, todayId);
-          navigation.navigate('SessionFlow');
-          return;
-        }
+      const planned = coachSession(coachPlan, todayId);
+      if (!planned) {
+        setStartError(true);
+        return;
       }
-
-      // Past the coach branch there is nothing but the engine path, which needs a `ProgramDay`.
-      if (!day) return;
-      const targets =
-        prefetch.current?.dayId === day.id
-          ? prefetch.current.targets
-          : await app.model.sessionTargets({
-              programDayId: day.id,
-              completedSessions: app.modeState.completedSessions,
-            });
-      await session.start(day, targets);
+      await session.startCoach(planned, todayId);
       navigation.navigate('SessionFlow');
     } catch {
       setStartError(true);
@@ -718,7 +565,7 @@ export function Home({ navigation, route }: Props) {
   }
 
   // Weekly model: completed (non-rest) workouts in the current program week.
-  const trainedThisWeek = program ? program.days.filter((d) => d.completed && !d.isRest).length : 0;
+  const trainedThisWeek = doneCoachIds.length;
 
   /* ════ §10 · THE TWO STATES THAT REPLACE TODAY ════
    *
@@ -780,7 +627,7 @@ export function Home({ navigation, route }: Props) {
     const last = (saved ?? [])[0];
     return (
       <LapsedView
-        dayName={day?.name ?? null}
+        dayName={todayName || null}
         endedOn={app.entitlement.expiresAt ? new Date(app.entitlement.expiresAt).toLocaleDateString() : ''}
         priceLabel={null}
         onResume={() => navigation.navigate('Paywall', { source: 'profile' })}
@@ -789,7 +636,7 @@ export function Home({ navigation, route }: Props) {
             ? [{
                 key: 'last',
                 title: t('lapsed.lastSession', { date: new Date(last.startedAt).toLocaleDateString() }),
-                detail: sessionDayName(last, program),
+                detail: sessionDayName(last, null),
                 onOpen: () => navigation.navigate('WorkoutDetail', { sessionId: last.id }),
               }]
             : []),
@@ -834,17 +681,28 @@ export function Home({ navigation, route }: Props) {
     <HomeView
       resting={resting}
       name={app.profile?.name}
-      dayName={day?.name ?? null}
-      dayId={day?.id ?? null}
-      muscles={muscleGroupsLabel(day?.muscleGroups)}
+      dayName={todayName || null}
+      dayId={todayId}
+      // The coach names its own sessions and does not state muscles — see the chips above.
+      muscles={''}
       trainedThisWeek={trainedThisWeek}
       startError={startError}
       weekNumber={weekNumber}
       plan={plan}
-      planMinutes={day ? Math.max(5, Math.round(estimateSessionMinutes(day) / 5) * 5) : 0}
-      overBudget={!!day?.overBudget}
+      /*
+       * The coach's own count of the work whose duration is KNOWN, rounded to five. A distance has
+       * no duration without a pace and this app does not guess one, so a session carrying a run
+       * states what it can stand behind rather than a confident total.
+       */
+      planMinutes={todayCoach ? Math.max(5, Math.round(todayCoach.minutes / 5) * 5) : 0}
+      /*
+       * `overBudget` was the GENERATOR saying a day could not be cut to fit her minutes after every
+       * legal trim. Nothing composes a day now, so nothing can report that — and the coach is told
+       * her budget in the sheet, which makes it its own to honour rather than ours to flag.
+       */
+      overBudget={false}
       budgetMinutes={app.profile?.workoutMinutes ?? 60}
-      dayDone={!!day?.completed}
+      dayDone={!!todayId && doneCoachIds.includes(todayId)}
       units={app.profile?.units ?? 'kg'}
       // A CHANGED ROW OPENS ITS CASE (v7 2.1b); an unchanged one opens the form clip. The rule is
       // the row's own state, so there is nothing to teach: the lift Hush moved is already the one
@@ -869,7 +727,7 @@ export function Home({ navigation, route }: Props) {
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       weekDays={weekDays}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
-      nextWorkoutName={program?.days.find((d) => !d.isRest)?.name ?? null}
+      nextWorkoutName={nextCoach?.name ?? null}
       />
       {/* WHY THIS CHANGED — the engine's argument for the lift it moved, at full length. */}
       {whyFor && whyByExercise[whyFor] ? (

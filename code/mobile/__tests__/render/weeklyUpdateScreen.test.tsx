@@ -158,44 +158,17 @@ describe('S-56 · the one question, at the Saturday mirror', () => {
   });
 });
 
-describe('S-45 · a Loop 3 volume move is muscle news, and the letter shows it', () => {
-  it('renders the muscle row with its set move and its why', async () => {
-    mockView = {
-      ...baseView(),
-      changedCount: 1,
-      volume: [{
-        muscle: 'Chest', setsFrom: 9, setsTo: 10,
-        explanation: {
-          slotId: 'Chest', pattern: '' as never,
-          observation: { key: 'explain.volumeUp.observation', params: { muscle: 'Chest' } },
-          conclusion: { key: 'explain.volumeUp.conclusion' },
-          action: { key: 'explain.volumeUp.action', params: { muscle: 'Chest' } },
-          text: { key: 'explain.volumeUp.text', params: { muscle: 'Chest' } },
-        },
-      }],
-    };
-    const r = await open();
-    const said = texts(r).join(' ');
-    expect(said).toContain(tg('muscle.Chest'));
-    // v7 splits the move into two styled spans — where it came from, and where it went — so assert
-    // the two facts rather than one glued string.
-    expect(said).toContain('9');
-    expect(said).toContain(`→ 10 ${tg('weekly.setsUnit')}`);
-    // The reason UNFOLDS: a muscle has no case sheet to open, so its WHY is a sentence in place.
-    //
-    // It is resolved with the TRANSLATED muscle, not the engine's raw stamp. The engine is pure
-    // and hands over the English name; the row's title has always translated it and the sentence
-    // beneath it did not, so a Hebrew athlete read "העבודה על chest מתקדמת" (found while answering
-    // C.15). English gained from the same fix: `muscle.*` is authored lowercase for mid-sentence,
-    // so the line now reads "Your chest work is progressing" instead of capitalising it.
-    const why = tg('explain.volumeUp.text', { muscle: tg('muscle.Chest') });
-    expect(said).not.toContain(why);
-    await act(async () => byLabel(r, tg('weekly.whyLink'))!.props.onPress());
-    expect(texts(r).join(' ')).toContain(why);
-    // A volume-only week is NOT a "steady" week — the evidence screen must not appear.
-    expect(texts(r).join(' ')).not.toContain(tg('weekly.evidenceIntro'));
-  });
-});
+/*
+ * ⛔ "S-45 · A LOOP 3 VOLUME MOVE IS MUSCLE NEWS" WAS HERE, and it went with Loop 3.
+ *
+ * There is no volume decision any more — the coach writes the whole programme, so a set count
+ * arriving or leaving is not a separate kind of news with its own row shape. It is simply part of
+ * the week it wrote, and its reason is the sentence it attached.
+ *
+ * What the test was guarding survives in `theSaturdayLetter` above: a reason UNFOLDS rather than
+ * hiding behind a chevron. It is stronger now — a coach row has no "Why?" pill at all, because the
+ * sentence is the row.
+ */
 
 /**
  * ════ THE LETTER MAY NOT SPEAK BEFORE IT HAS READ (founder 2026-07-28) ════
@@ -210,14 +183,20 @@ describe('S-45 · a Loop 3 volume move is muscle news, and the letter shows it',
  */
 describe('a week with no changes is never reported as a count', () => {
   it('says nothing at all until the read lands', async () => {
-    // The read never resolves — the state every letter passes through, and the one a storage
-    // failure stops in.
+    /*
+     * The read is `db.loadCoachLog()` now rather than the engine's weekly view, and the failure it
+     * guards is identical: `changedCount` falls back to 0 while the read is out, so the letter would
+     * print "I read last week's sessions and changed 0 lifts" — a count nobody counted, a claim to
+     * have read what has not been read, and an instruction to tap rows that do not exist.
+     */
     mockView = null;
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });
-    const real = jest.requireMock('@/domain/weeklyUpdate') as { getWeeklyPlan: () => Promise<unknown> };
-    const original = real.getWeeklyPlan;
-    real.getWeeklyPlan = async () => { await held; return null; };
+    const real = db.loadCoachLog.bind(db);
+    (db as unknown as { loadCoachLog: () => Promise<unknown> }).loadCoachLog = async () => {
+      await held;
+      return [];
+    };
     try {
       const r = await open();
       const said = texts(r).join(' ');
@@ -226,7 +205,7 @@ describe('a week with no changes is never reported as a count', () => {
       expect(said).not.toContain(tg('weekly.evidenceIntro'));
     } finally {
       release();
-      real.getWeeklyPlan = original;
+      (db as unknown as { loadCoachLog: typeof real }).loadCoachLog = real;
     }
   });
 

@@ -139,33 +139,30 @@ export function WeeklyUpdate({ navigation, route }: Props) {
     }
     let active = true;
     void (async () => {
-      // 1 · the calendar roll (a new bucket, if Saturday 20:30 has passed since the last one)
+      /*
+       * ⛔ THIS USED TO DRIVE THE ENGINE BEFORE READING IT.
+       *
+       * Three steps: roll the week, force the fold by asking `sessionTargets` for any day, then
+       * read the record it had just written. All three are gone — nothing composes a week and
+       * nothing folds between sessions, so there is nothing to provoke and nothing to wait for.
+       *
+       * The roll survives because the ANCHOR still turns (which decisions belong to this week, when
+       * the push fires, when Recovery gives way). It just no longer produces a programme.
+       */
       await app.refreshProgram().catch(() => {});
-      // The store's `app.program` in this closure is the PRE-roll one; read the bucket that now
-      // exists on disk, or fall back to what we were rendered with.
-      const program = (await db.loadProgram().catch(() => null)) ?? app.program;
+      /*
+       * ⚠️ `loaded` FLIPS ONLY ONCE THE COACH'S LOG IS IN HAND, and that ordering is the law here
+       * (founder 2026-07-28). `changedCount` falls back to 0 while the read is out, so flipping it
+       * early prints "I read last week's sessions and changed 0 lifts" — a count nobody counted, a
+       * claim to have read what has not been read, and an instruction to tap rows that do not
+       * exist. A letter whose read FAILS keeps that sentence for ever.
+       */
+      const log = await db.loadCoachLog().catch(() => null);
       if (!active) return;
-      if (!program) {
-        setLoaded(true);
-        return;
-      }
-      // 2 · the engine's weekly fold (raises, match-downs, swaps) — it runs inside sessionTargets,
-      //     which is where the record this screen renders is actually written.
-      try {
-        const day = program.days.find((d) => !d.isRest);
-        if (day) {
-          await app.model.sessionTargets({ programDayId: day.id, completedSessions: app.modeState.completedSessions });
-        }
-      } catch {
-        /* the engine could not advance — render whatever record exists rather than nothing */
-      }
-      // 3 · …and only now, read it.
-      const v = await getWeeklyPlan(program);
-      if (!active) return;
-      setView(v);
+      setCoachLog(log ?? []);
       setLoaded(true);
-      void track('weekly_update_viewed', { weekIndex: v?.weekIndex ?? null, changes: v?.changedCount ?? 0 });
-      if (v && !v.seen) void markWeeklyUpdateSeen();
+      void track('weekly_update_viewed', { weekIndex: null, changes: coachBrief(log, app.weekOpenMs)?.count ?? 0 });
+      void markWeeklyUpdateSeen();
     })();
     return () => {
       active = false;
@@ -274,9 +271,9 @@ export function WeeklyUpdate({ navigation, route }: Props) {
     let active = true;
     void (async () => {
       try {
-        const [history, program] = await Promise.all([
+        const [history, weekPlan] = await Promise.all([
           db.loadHistory(),
-          db.loadProgram().catch(() => app.program),
+          db.loadCoachPlan().catch(() => null),
         ]);
         if (!active) return;
         const weekEnd = currentWeekOpen(Date.now());
@@ -287,7 +284,8 @@ export function WeeklyUpdate({ navigation, route }: Props) {
         });
         // "N/M workouts" counts whole workouts trained (the workout-count rule: trained !== false).
         const done = inWeek.filter((s) => s.trained !== false).length;
-        const planned = program ? program.days.filter((d) => !d.isRest).length : 0;
+        // How many workouts the COACH set for the week — the denominator of "N/M workouts".
+        const planned = weekPlan?.sessions.length ?? 0;
         let kg = 0;
         let kcal = 0;
         let kcalSeen = false;
@@ -318,14 +316,8 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * started after it went. What the letter is FOR has not changed at all: what did Hush change,
    * and why. That is `coachLog`, filtered to this week, already written in her language.
    */
+  // Written by the load effect below, which is what `loaded` waits on — one read, one ordering.
   const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
-  useEffect(() => {
-    let active = true;
-    void db.loadCoachLog().then((l) => active && setCoachLog(l));
-    return () => {
-      active = false;
-    };
-  }, []);
   const fromCoach = React.useMemo(() => coachBrief(coachLog, app.weekOpenMs), [coachLog, app.weekOpenMs]);
 
   const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;
