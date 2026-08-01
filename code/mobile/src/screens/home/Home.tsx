@@ -25,7 +25,7 @@ import { coachSession, coachWeek, coachRows, coachPlanRows } from '@/domain/coac
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
-import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
+import { buildWatchPlanSnapshot, buildCoachWatchPlan } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
@@ -295,8 +295,38 @@ export function Home({ navigation, route }: Props) {
    */
   const [engineTick, setEngineTick] = useState(0);
   useEffect(() => {
-    if (!isFocused || !program) return;
+    if (!isFocused) return;
     let cancelled = false;
+
+    /*
+     * ════ THE WRIST GETS THE COACH'S WEEK, MINUS WHAT IT CANNOT RUN ════
+     *
+     * The watch protocol is reps-at-a-load and nothing else, so a session with a run or a hold in
+     * it is not offered standalone — see `buildCoachWatchPlan`. Sending the lifts and dropping the
+     * rest would have her do a different workout from the one the coach wrote, on the one device
+     * with no screen to say so.
+     */
+    if (coachLed) {
+      void (async () => {
+        refreshLearnedRests(await db.loadHistory().catch(() => []));
+        if (cancelled) return;
+        setWatchPlan(
+          buildCoachWatchPlan({
+            sessions: coachWorkouts
+              .filter((w) => !doneCoachIds.includes(w.id))
+              .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),
+            nowMs: Date.now(),
+            restInterS: REST_INTER_S,
+            restTransitionS: restTransitionSeconds(),
+          }),
+        );
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!program) return;
     void (async () => {
       const days = program.days.filter((d) => !d.isRest && !d.completed);
       const targetsByDay: Record<string, SetTarget[]> = {};
@@ -330,7 +360,7 @@ export function Home({ navigation, route }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, program, app.modeState.completedSessions]);
+  }, [isFocused, program, app.modeState.completedSessions, coachLed, coachPlan, coachWorkouts, doneCoachIds]);
 
   /**
    * THE BRIEFING — Hush's own sentence about what it did to this week's plan (domain/weekBriefing).
@@ -553,8 +583,11 @@ export function Home({ navigation, route }: Props) {
       },
     });
     return () => session.setWatchHomeActions(null);
+    // `todayId` and not `day?.id`: on a coach-led week `day` is null for ever, so keying on it would
+    // freeze `onStart` around the workout that was current when the screen mounted — and the wrist
+    // would start yesterday's session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day?.id, resting]);
+  }, [todayId, resting, coachLed]);
 
   // Mid-workout resume (S3): an interrupted (app-killed) session younger than the resume
   // window replaces Begin with "Continue {workout}". Re-checked on every focus; cleared the

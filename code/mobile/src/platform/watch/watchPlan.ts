@@ -14,6 +14,7 @@
  */
 import type { ProgramDay, SetTarget } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
+import type { PlannedItem } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
 import {
   WATCH_PLAN_SCHEMA_VERSION,
@@ -113,6 +114,91 @@ export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot 
       steps,
     });
   }
+  if (workouts.length === 0) return null;
+  return {
+    schema: WATCH_PLAN_SCHEMA_VERSION,
+    planId: contentHash(workouts),
+    generatedAt: new Date(inp.nowMs).toISOString(),
+    restInterS: inp.restInterS,
+    restTransitionS: inp.restTransitionS,
+    workouts,
+  };
+}
+
+/* ────────────────────────────────────────────────────── THE COACH'S WEEK, AS FAR AS THE WRIST GOES */
+
+/**
+ * ════ THE WATCH OFFERS ONLY WHAT IT CAN HONESTLY EXECUTE ════
+ *
+ * The wrist's protocol is reps-at-a-load and nothing else: `targetWeight`, `targetReps`,
+ * `setIndexInExercise`. Three of the coach's four shapes have no field in it — a 400 m repeat, a
+ * 45-second plank, and open work all have nowhere to go.
+ *
+ * So a session containing any of them is NOT OFFERED standalone. The alternative was to send the
+ * lifts and drop the rest, and that is the one thing this layer exists to prevent: she would start
+ * "Intervals & Core" on her wrist, do the squats, and never see the running — a different workout
+ * from the one the coach wrote, with nothing anywhere saying so.
+ *
+ * Not offering it is a true statement about what the watch can do today. Widening the protocol is
+ * native work (Swift, a schema bump, and a watch binary that ships asynchronously from the phone),
+ * and until that lands "you cannot start this one from your wrist" is the honest answer.
+ *
+ * ⚠️ IT RETURNS null RATHER THAN AN EMPTY LOBBY when nothing qualifies, which is the same answer
+ * `buildWatchPlanSnapshot` gives: an empty plan on the wrist reads as "you have no workouts", and
+ * she has a week — just not one this device can run by itself.
+ */
+export function buildCoachWatchPlan(inp: {
+  sessions: { id: string; name: string; blocks: { rounds: number; restS?: number; items: PlannedItem[] }[] }[];
+  nowMs: number;
+  restInterS: number;
+  restTransitionS: number;
+}): WatchPlanSnapshot | null {
+  const workouts: WatchPlanWorkout[] = [];
+
+  for (const session of inp.sessions) {
+    const everyItemIsALift = session.blocks.every((b) => b.items.every((i) => i.kind === 'reps'));
+    if (!everyItemIsALift) continue;
+
+    const steps: WatchPlanStep[] = [];
+    let global = 0;
+    for (const block of session.blocks) {
+      for (const item of block.items) {
+        if (item.kind !== 'reps') continue; // unreachable given the guard; the narrowing is for TS
+        const ex = exerciseById(item.ex);
+        const setup = loadSetup(item.ex, item.load, 'kg');
+        for (let r = 0; r < block.rounds; r++) {
+          steps.push({
+            exerciseId: item.ex,
+            exerciseName: ex?.name ?? item.ex,
+            exerciseGroup: ex?.muscle ?? '',
+            setIndexInExercise: r,
+            totalSetsInExercise: block.rounds,
+            globalIndex: global,
+            targetWeight: item.load,
+            targetReps: item.reps[0],
+            // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.
+            targetRepsHi: item.reps[1],
+            // The coach's own rest for this block, which is the number the phone would run too.
+            ...(block.restS != null ? { restInterS: block.restS } : {}),
+            ...(setup
+              ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
+              : {}),
+          });
+          global += 1;
+        }
+      }
+    }
+    if (steps.length === 0) continue;
+    workouts.push({
+      id: session.id,
+      name: session.name,
+      // The coach names its own sessions, so there is no muscle line to derive — and inventing one
+      // would be a claim about a week nobody made.
+      muscles: '',
+      steps,
+    });
+  }
+
   if (workouts.length === 0) return null;
   return {
     schema: WATCH_PLAN_SCHEMA_VERSION,
