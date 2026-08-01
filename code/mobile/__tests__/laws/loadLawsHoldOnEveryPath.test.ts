@@ -37,7 +37,6 @@ import { smartSeed } from '@/data/api/fixtureModel';
 import { snapDown, nextRung, prevRung, moveRungs, loadFloor } from '@/engine/v5/grid';
 import { STARTING_INCREMENT } from '@/engine/v5/constants';
 import { correctInSession } from '@/engine/v5/loop1';
-import { decideExercise } from '@/engine/v5/loop2';
 import type { Band, ExerciseMeta, ExerciseState, SessionRecord } from '@/engine/v5/types';
 import type { Profile, Session } from '@/data/local/models';
 
@@ -140,39 +139,6 @@ describe('LAW · S-55 — every path that computes a load respects the physical 
       },
     },
     {
-      name: 'Loop 2 — progress / hold / stall back-off (S-22/S-24/S-25)',
-      emit: (ex) => {
-        const out: number[] = [];
-        for (const { meta } of metasFor(ex)) {
-          for (const load of loadsFor(meta.equipment)) {
-            // Histories that drive each branch: a clean clear, a wall she once cleared, a fresh lift.
-            const histories: SessionRecord[][] = [
-              [],
-              [{ load, sets: [{ load, reps: 8 }, { load, reps: 8 }] }], // cleared this very load before
-              [
-                { load, sets: [{ load, reps: 5 }] },
-                { load, sets: [{ load, reps: 5 }] },
-                { load, sets: [{ load, reps: 8 }, { load, reps: 8 }] },
-              ],
-            ];
-            for (const history of histories) {
-              const state: ExerciseState = { exerciseId: ex.id, load, band: BAND, sets: 4, history };
-              for (const reps of REPS) {
-                const r = decideExercise({
-                  state,
-                  session: [{ load, reps }, { load, reps }],
-                  meta,
-                  rotationAvailable: true,
-                });
-                if (r.load != null) out.push(r.load);
-              }
-            }
-          }
-        }
-        return out;
-      },
-    },
-    {
       name: 'engine/loadMath.normalizeLoad — the cold-start seed path',
       emit: (ex) => {
         const eq = exerciseMeta(ex.id).equipment;
@@ -249,90 +215,18 @@ describe('LAW · S-55 — every path that computes a load respects the physical 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // LAW 2 · L11 — NO LOOP MAY PRESCRIBE ABOVE ONE RUNG PAST HER OWN RECORD
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-describe('LAW · L11 — every UPWARD move, from either loop, stops at the rail', () => {
-  it('Loop 1 · no rep count, however absurd, raises past the rail', () => {
-    const violations: string[] = [];
-    for (const ex of loaded) {
-      for (const { meta } of metasFor(ex)) {
-        for (const currentLoad of loadsFor(meta.equipment)) {
-          const rail = nextRung(currentLoad, meta.equipment, meta.observedLoads);
-          for (const repsJustDone of REPS) {
-            for (const perRung of PER_RUNGS) {
-              const r = correctInSession({
-                currentLoad, band: BAND, repsJustDone, correctionsSoFar: 0, isLastSet: false, meta,
-                perRung, railCeiling: rail,
-              });
-              // The rail binds a RAISE. It may never drag her below the load she is already on.
-              if (r.nextLoad != null && r.nextLoad > Math.max(rail, currentLoad) + 1e-9)
-                violations.push(`${ex.id}: ${currentLoad} ×${repsJustDone} → ${r.nextLoad} (rail ${rail})`);
-              if (r.direction === 'up' && r.nextLoad != null && r.nextLoad < currentLoad - 1e-9)
-                violations.push(`${ex.id}: a RAISE went down — ${currentLoad} → ${r.nextLoad}`);
-            }
-          }
-        }
-      }
-    }
-    expect({ pastTheRail: [...new Set(violations)].slice(0, 12) }).toEqual({ pastTheRail: [] });
-  });
-
-  it('Loop 2 · no session, however good, progresses past the rail', () => {
-    const violations: string[] = [];
-    for (const ex of loaded) {
-      for (const { meta } of metasFor(ex)) {
-        for (const load of loadsFor(meta.equipment)) {
-          const history: SessionRecord[] = [{ load, sets: [{ load, reps: 8 }, { load, reps: 8 }] }];
-          const state: ExerciseState = { exerciseId: ex.id, load, band: BAND, sets: 4, history };
-          for (const reps of REPS) {
-            const r = decideExercise({ state, session: [{ load, reps }, { load, reps }], meta });
-            // Her record is the heaviest load she completed at ≥ Tlo, across settled history AND
-            // this session's anchor (which is a SNAPPED rung, L11); the ceiling is one rung past it.
-            const best = Math.max(load, snapDown(load, meta.equipment, meta.observedLoads));
-            const ceiling = nextRung(best, meta.equipment, meta.observedLoads);
-            if (r.load != null && r.load > ceiling + 1e-9)
-              violations.push(`${ex.id}: ${load} ×${reps} → ${r.load} (rail ${ceiling}, ${r.decision})`);
-          }
-        }
-      }
-    }
-    expect({ pastTheRail: [...new Set(violations)].slice(0, 12) }).toEqual({ pastTheRail: [] });
-  });
-
-  it('the rail is INACTIVE on a lift she has never completed at Tlo — S-49, not an invented ceiling', () => {
-    // The one place the register refuses to add a guard: a brand-new lift has no record to rail
-    // against, and the athlete's own eyes are the guard. A "safe default" ceiling here would be
-    // exactly the theory F-10 was deleted for.
-    const meta: ExerciseMeta = { equipment: 'machine', bodyweight: false };
-    const free = correctInSession({
-      currentLoad: 20, band: BAND, repsJustDone: 40, correctionsSoFar: 0, isLastSet: false, meta, perRung: 0.5,
-    });
-    expect(free.nextLoad!).toBeGreaterThan(20 + 2.5); // more than one cautious rung — S-11's whole point
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────────────────────────
-// LAW 3 · S-25.1 — A BACK-OFF MUST GO DOWN
-// ─────────────────────────────────────────────────────────────────────────────────────────────────
-describe('LAW · S-25.1 — a stall back-off always steps DOWN, on every lift in the catalogue', () => {
-  it('no lift can be stalled into a back-off that leaves the load where it was', () => {
-    const violations: string[] = [];
-    for (const ex of loaded) {
-      for (const { meta, label } of metasFor(ex)) {
-        for (const load of loadsFor(meta.equipment)) {
-          if (load <= gridStart(meta.equipment) + 1e-9) continue; // already at the floor — nowhere to go
-          // The freeze shape: she cleared this load once, went up, came back, and is failing it.
-          const history: SessionRecord[] = [
-            { load, sets: [{ load, reps: 5 }] },
-            { load: load + 2.5, sets: [{ load: load + 2.5, reps: 5 }] },
-            { load, sets: [{ load, reps: 8 }, { load, reps: 8 }] }, // the old clear AT the wall
-          ];
-          const state: ExerciseState = { exerciseId: ex.id, load, band: BAND, sets: 4, history };
-          const r = decideExercise({ state, session: [{ load, reps: 4 }], meta, rotationAvailable: true });
-          if (r.decision !== 'stall_backoff' && r.decision !== 'stall_rotate') continue;
-          if (r.load != null && r.load >= load - 1e-9)
-            violations.push(`${ex.id} (${label}): stalled at ${load} → backed off to ${r.load}`);
-        }
-      }
-    }
-    expect({ frozen: [...new Set(violations)].slice(0, 12) }).toEqual({ frozen: [] });
-  });
-});
+/*
+ * ⛔ LAW · L11 ("every UPWARD move, from either loop, stops at the rail") AND LAW · S-25.1 ("a stall
+ * back-off always steps DOWN") WERE HERE, AND THEY WENT WITH THE LOOP THEY GUARDED.
+ *
+ * Both were about Loop 2 — the between-session load decision. There is no such decision any more:
+ * the coach sets the next load and `parseCoachPlan` types it onto a rung she has actually used.
+ *
+ * What still guards a load is `theOpeningLoadIsLoadable` (it must be buildable out of real plates)
+ * and the parse's own normalisation (it must land on a real rung). Neither is a ceiling on a
+ * decision this app makes, because it does not make one.
+ *
+ * LAW · S-55 above survives untouched and still sweeps every remaining producer — "no path may
+ * prescribe below the lightest weight that physically exists" is a fact about barbells, not a rule
+ * about deciding.
+ */

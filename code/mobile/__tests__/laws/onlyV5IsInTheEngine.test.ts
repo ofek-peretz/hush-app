@@ -174,7 +174,10 @@ describe('the source itself carries no v4 decision input', () => {
     // what to put on the bar on Wednesday — any such link is a fatigue theory, and it is banned
     // (Part 1's banned inputs). The day someone wires cardio or HR into a decision, this fails.
     const engineFiles = [
-      'engine/v5/loop1.ts', 'engine/v5/loop2.ts', 'engine/v5/loop3.ts', 'engine/v5/v5Engine.ts',
+      // `loop2.ts` and `loop3.ts` were here. They were the between-session decision and they are
+      // gone — see `theEngineDecidesNothingBetweenSessions`. Loop 1 stays: it acts inside the
+      // workout, on what it is watching, against a prescription the coach wrote.
+      'engine/v5/loop1.ts', 'engine/v5/v5Engine.ts',
       'engine/v5/liveSession.ts', 'engine/v5/programAssembly.ts', 'engine/v5/repsPerRung.ts',
       'engine/loadMath.ts', 'data/api/fixtureModel.ts',
     ];

@@ -11,7 +11,6 @@
  */
 import { correctInSession } from '@/engine/v5/loop1';
 import { applyLoop1, type LiveStep } from '@/engine/v5/liveSession';
-import { decideExercise } from '@/engine/v5/loop2';
 import type { ExerciseMeta, ExerciseState } from '@/engine/v5/types';
 import { railCeilingFor } from '@/engine/v5/v5Engine';
 import { prevRung, snapDown, moveRungs, loadFloor } from '@/engine/v5/grid';
@@ -101,56 +100,6 @@ describe('L11 · railCeilingFor reads her real history', () => {
 });
 
 // ── S-25.1 · a back-off must actually back OFF ───────────────────────────────────────────────────
-describe('S-25.1 · the back-off target is read strictly BELOW the wall she is stalled at', () => {
-  /**
-   * The freeze, exactly as it happened: she cleared 40 (→ 42.5), failed 42.5 twice (→ back to 40),
-   * then failed 40 twice. Her window still holds the old 40 CLEAR, so "the heaviest load at which
-   * all sets met Tlo" answered 40 — the load she was stuck on. The load never moved; `isRepeatedStall`
-   * never fired either (it needs an occurrence LOWER than the current load, and 42.5 is not lower).
-   */
-  const frozen: ExerciseState = {
-    exerciseId: 'bb_bench_press',
-    load: 40,
-    band,
-    sets: 4,
-    history: [
-      { load: 40, sets: [{ load: 40, reps: 8 }, { load: 40, reps: 5 }] }, // failed the wall
-      { load: 42.5, sets: [{ load: 42.5, reps: 6 }] },
-      { load: 42.5, sets: [{ load: 42.5, reps: 6 }] },
-      { load: 40, sets: [{ load: 40, reps: 8 }, { load: 40, reps: 8 }] }, // the old clear at the wall
-      { load: 37.5, sets: [{ load: 37.5, reps: 9 }, { load: 37.5, reps: 9 }] },
-    ],
-  };
-
-  it('a stall at a wall she once cleared still steps DOWN, never sideways onto itself', () => {
-    const out = decideExercise({
-      state: frozen,
-      session: [{ load: 40, reps: 8 }, { load: 40, reps: 4 }],
-      meta: { ...barbell, observedLoads: [37.5, 40, 42.5] },
-    });
-    expect(out.decision).toBe('stall_backoff');
-    expect(out.load).toBe(37.5); // her heaviest proven load BELOW the wall
-    expect(out.load!).toBeLessThan(frozen.load!); // the property that matters: it is a back-OFF
-  });
-
-  it('with no proven lighter load it falls back to one honest rung down', () => {
-    const noLighter: ExerciseState = {
-      ...frozen,
-      history: [
-        { load: 40, sets: [{ load: 40, reps: 5 }] },
-        { load: 40, sets: [{ load: 40, reps: 8 }, { load: 40, reps: 8 }] },
-      ],
-    };
-    const out = decideExercise({
-      state: noLighter,
-      session: [{ load: 40, reps: 5 }],
-      meta: { ...barbell, observedLoads: [40] },
-    });
-    expect(out.decision).toBe('stall_backoff');
-    expect(out.load!).toBeLessThan(40);
-  });
-});
-
 // ── S-55 · the bar is the floor on the ENGINE's own grid, not just the seed's ────────────────────
 describe('S-55 · a prescription never falls below the lightest weight that physically exists', () => {
   it('a barbell down-correction cannot walk under the empty bar', () => {
