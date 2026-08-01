@@ -41,7 +41,7 @@ import { useApp } from '@/state/stores/appStore';
 import type { MainParamList } from '@/app/navigation';
 import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan } from '@/domain/coachPlan';
-import type { Session } from '@/data/local/models';
+import type { Session, CardioActivity } from '@/data/local/models';
 
 type Props = NativeStackScreenProps<MainParamList, 'Coach'>;
 
@@ -60,14 +60,16 @@ export function CoachScreen({ navigation }: Props) {
   const [decided, setDecided] = React.useState<CoachDecision[]>([]);
   const [plan, setPlan] = React.useState<CoachPlan | null>(null);
   const [prefs, setPrefs] = React.useState<{ substitutes: Record<string, string>; keep: Record<string, string> } | null>(null);
+  const [cardio, setCardio] = React.useState<CardioActivity[]>([]);
   React.useEffect(() => {
     let alive = true;
-    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadPreferences()]).then(([h, d, p, prefs]) => {
+    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadPreferences(), db.loadCardio()]).then(([h, d, p, prefs, c]) => {
       if (!alive) return;
       setHistory(h);
       setDecided(d);
       setPlan(p);
       setPrefs({ substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle });
+      setCardio(c);
     });
     return () => {
       alive = false;
@@ -84,10 +86,11 @@ export function CoachScreen({ navigation }: Props) {
             history: history ?? [],
             decided,
             ...(prefs ? { preferences: prefs } : {}),
+            cardio,
             language: currentLocale(),
           })
         : null,
-    [profile, plan, history, decided, prefs],
+    [profile, plan, history, decided, prefs, cardio],
   );
 
   return (

@@ -46,7 +46,7 @@
  * not touch the network, and knows nothing about any model or provider.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import type { EffortReport, ItemResult, Profile, Session, SetLog, Program } from '@/data/local/models';
+import type { EffortReport, ItemResult, Profile, Session, SetLog, Program, CardioActivity } from '@/data/local/models';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
@@ -206,6 +206,19 @@ export interface CoachFacts {
     language: string;
     /** Minutes she says she has for a workout. */
     minutes: number;
+    /**
+     * WHAT SHE WEIGHED WHEN HUSH MET HER, beside what she weighs now.
+     *
+     * ⚠️ Only the current weight was sent, and for one goal that is enough and for the others it is
+     * the whole feedback loop. An athlete whose goal is to gain or lose is telling the coach
+     * whether the plan is working with this number and nothing else — and a coach shown a single
+     * reading has no way to know which direction she has been going, or how fast, or whether the
+     * last month of work did anything at all.
+     *
+     * The app has held it since day one (`Profile.startWeightKg`, stamped at onboarding and never
+     * moved) because the milestone ladders are cut from it. It simply was not being handed over.
+     */
+    startWeightKg?: number;
     /** Her declared rep band, and any per-muscle override she set in the body map. */
     band?: string;
     bandByMuscle?: Record<string, string>;
@@ -266,7 +279,37 @@ export interface CoachFacts {
   swappedByHer?: Record<string, string>;
   /** Muscle → a lift she has asked to keep (S-71). Absent when she has asked for none. */
   keepsByHer?: Record<string, string>;
+  /**
+   * Runs and walks she recorded on her own, newest first — see `FactCardio`. Absent when there are
+   * none, which is most athletes.
+   */
+  ranOwn?: FactCardio[];
   programme: FactProgrammeDay[];
+}
+
+/**
+ * A RUN SHE RECORDED HERSELF, outside anything the coach wrote.
+ *
+ * ⚠️ THIS WAS MISSING, and it was missing for a reason that had stopped being true. Open training
+ * was "recorded, never coached" — a deliberate wall, built when the engine only understood lifting
+ * and a run was not something it could reason about. The coach PRESCRIBES runs now. It was still
+ * not being shown the ones she does on her own.
+ *
+ * The consequence is not subtle: it would have written her a 5 km Tuesday without knowing she ran
+ * 10 km on Sunday, every week, and then wondered in its own notes why her legs were not recovering.
+ * The whole architecture rests on the coach seeing what she actually did.
+ *
+ * Metres like every other distance, pace in seconds per kilometre — the number a runner thinks in.
+ * NO ROUTE: a GPS trace is the most identifying thing this app holds, and it tells the coach
+ * nothing that a distance and a pace do not.
+ */
+export interface FactCardio {
+  at: string;
+  gait: string;
+  metres: number;
+  seconds: number;
+  paceSecPerKm: number;
+  avgHr?: number;
 }
 
 const byId = new Map<string, Exercise>(EXERCISES.map((e) => [e.id, e]));
@@ -401,6 +444,27 @@ function liftsOf(s: Session): FactLift[] {
  * `lastLoad` are read from it, so an unsorted list would report the wrong "last" — hence the
  * explicit sort rather than trusting the caller.
  */
+/**
+ * The runs she recorded herself, newest first, capped.
+ *
+ * Capped for the same reason everything else here is: it travels on every call. Twelve is a
+ * quarter of a runner's year at one a week and more than enough to see a pattern — and the coach
+ * has her whole strength record in aggregate beside it, so this is context, not the archive.
+ */
+function cardioFrom(cardio: CardioActivity[] | undefined, limit = 12): FactCardio[] {
+  return [...(cardio ?? [])]
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+    .slice(0, limit)
+    .map((c) => ({
+      at: c.startedAt,
+      gait: c.gait,
+      metres: Math.round(c.distanceKm * 1000),
+      seconds: Math.round(c.durationSec),
+      paceSecPerKm: Math.round(c.avgPaceSec),
+      ...(c.avgHr != null ? { avgHr: Math.round(c.avgHr) } : {}),
+    }));
+}
+
 function performedFrom(history: Session[]): FactPerformed[] {
   const oldestFirst = [...history].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
   const acc = new Map<string, { loads: (number | null)[]; lastLoad: number | null; lastReps: number[]; occ: number }>();
@@ -499,6 +563,14 @@ export interface CoachFactsInput {
   /** The one that just ended, when this sheet is being built because a workout finished. */
   justFinished?: Session;
   /**
+   * Runs and walks she recorded on her own (Open training).
+   *
+   * ⚠️ Not sent for a whole build, and it mattered: the coach prescribes running now, and it would
+   * have written her a 5 km Tuesday without knowing she ran 10 km on Sunday. "Recorded, never
+   * coached" was a wall built when a run was not something anything here could reason about.
+   */
+  cardio?: CardioActivity[];
+  /**
    * WHAT SHE HAS SWAPPED, WITH HER HANDS, TWICE.
    *
    * ⚠️ This was missing and it was the quiet kind of missing. Two same-target swaps in a row adopt a
@@ -532,7 +604,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, language = 'en' }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, cardio, language = 'en' }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -541,6 +613,7 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       ...(profile.weightKg != null ? { weightKg: profile.weightKg } : {}),
       daysPerWeek: profile.daysPerWeek,
       units: profile.units,
+      ...(profile.startWeightKg != null ? { startWeightKg: profile.startWeightKg } : {}),
       language,
       minutes: profile.workoutMinutes ?? 60,
       ...(profile.repBand ? { band: profile.repBand } : {}),
@@ -583,6 +656,7 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       ? { swappedByHer: preferences.substitutes }
       : {}),
     ...(preferences?.keep && Object.keys(preferences.keep).length ? { keepsByHer: preferences.keep } : {}),
+    ...(cardio?.length ? { ranOwn: cardioFrom(cardio) } : {}),
     programme: (plan?.sessions ?? []).map((sess) => ({
       name: sess.name,
       ...(sess.day ? { day: sess.day } : {}),

@@ -189,11 +189,16 @@ describe('coach facts — the message the coach is sent', () => {
     const json = JSON.stringify(build());
     expect(json).not.toContain('Dana');
     expect(json).not.toContain('Levi');
-    // The athlete block is an allow-list, not a copy of the profile.
-    expect(Object.keys(build().athlete).sort()).toEqual(
+    /*
+     * The athlete block is an allow-list, not a copy of the profile — asserted against a REAL
+     * profile, which always carries `startWeightKg` (stamped at onboarding and never moved). A
+     * fixture missing it would let a new field slip in unlisted whenever it happened to be absent.
+     */
+    const full = coachFacts({ profile: { ...profile, startWeightKg: 62 }, plan: null, history, justFinished: history[0] });
+    expect(Object.keys(full.athlete).sort()).toEqual(
       // `language` is on the athlete because everything the coach writes is read by HER — see
       // `thePreambleIsTheSameForEveryone`, which holds it below the cache breakpoint.
-      ['band', 'daysPerWeek', 'language', 'minutes', 'sex', 'units', 'weightKg'].sort(),
+      ['band', 'daysPerWeek', 'language', 'minutes', 'sex', 'startWeightKg', 'units', 'weightKg'].sort(),
     );
   });
 
@@ -266,5 +271,60 @@ describe('what she has chosen with her hands', () => {
   it('omits them when the caller does not supply any', () => {
     const f = coachFacts({ profile, plan: null, history });
     expect('swappedByHer' in f).toBe(false);
+  });
+});
+
+describe('everything the workout produces reaches the coach', () => {
+  /*
+   * The founder's check before moving on: *"does it use all the data the workout gives it, in the
+   * best way?"* Two things did not, and both were invisible because nothing broke.
+   */
+  it('⚠️ sends the runs she recorded HERSELF, outside the programme', () => {
+    /*
+     * "Recorded, never coached" was a wall built when a run was not something anything here could
+     * reason about. The coach PRESCRIBES runs now — so without this it would write her a 5 km
+     * Tuesday knowing nothing about the 10 km she ran on Sunday, every week, and then wonder in its
+     * own notes why her legs were not recovering.
+     */
+    const f = coachFacts({
+      profile, plan: null, history,
+      cardio: [{
+        kind: 'cardio', id: 'c1', gait: 'run', startedAt: '2026-07-28T06:00:00.000Z',
+        durationSec: 3120, distanceKm: 10.4, avgPaceSec: 300, avgHr: 152, splits: [],
+      }],
+    });
+    expect(f.ranOwn).toEqual([
+      { at: '2026-07-28T06:00:00.000Z', gait: 'run', metres: 10400, seconds: 3120, paceSecPerKm: 300, avgHr: 152 },
+    ]);
+  });
+
+  it('does not send the ROUTE', () => {
+    // A GPS trace is the most identifying thing this app holds, and it tells the coach nothing a
+    // distance and a pace do not.
+    const f = coachFacts({
+      profile, plan: null, history,
+      cardio: [{
+        kind: 'cardio', id: 'c1', gait: 'run', startedAt: '2026-07-28T06:00:00.000Z',
+        durationSec: 1800, distanceKm: 5, avgPaceSec: 360, splits: [],
+        route: [{ lat: 32.08, lon: 34.78, at: 1 }] as never,
+      }],
+    });
+    expect(JSON.stringify(f)).not.toContain('32.08');
+    expect(JSON.stringify(f)).not.toContain('route');
+  });
+
+  it('omits her runs entirely when there are none', () => {
+    expect('ranOwn' in coachFacts({ profile, plan: null, history })).toBe(false);
+  });
+
+  it('⚠️ sends what she WEIGHED when Hush met her, beside what she weighs now', () => {
+    /*
+     * For "get stronger" the current number is enough. For gain or lose it is the whole feedback
+     * loop — and a coach shown a single reading cannot know which direction she has been going,
+     * how fast, or whether the last month of work did anything at all.
+     */
+    const f = coachFacts({ profile: { ...profile, weightKg: 66, startWeightKg: 62 }, plan: null, history });
+    expect(f.athlete.startWeightKg).toBe(62);
+    expect(f.athlete.weightKg).toBe(66);
   });
 });
