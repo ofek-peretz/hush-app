@@ -63,6 +63,33 @@ export interface CoachUpdate {
   say?: string;
 }
 
+/*
+ * ════ WHO IS LISTENING, AND WHY THERE HAS TO BE SOMEBODY ════
+ *
+ * This call is fired and not awaited — she has finished and left, and nothing may block on it. But
+ * Well Done opens IMMEDIATELY, and the thing it exists to show is what this call decides. The old
+ * engine had the answer before the screen drew, because the answer was computed locally in a
+ * millisecond. The coach takes fifteen seconds.
+ *
+ * So the screen has three honest states — thinking, decided, waiting — and this is how it learns
+ * which one it is in. A module-level listener rather than a store: exactly one call can be in
+ * flight (one workout just ended), and a whole store for one boolean and one sentence is furniture.
+ */
+export type CoachUpdateListener = (update: CoachUpdate | null) => void;
+const listeners = new Set<CoachUpdateListener>();
+/** True from the moment a post-session call starts until it settles. Drives "I am deciding". */
+let inFlight = false;
+
+export function coachIsDeciding(): boolean {
+  return inFlight;
+}
+
+/** Subscribe to the post-session outcome. Returns the unsubscribe. */
+export function onCoachUpdate(fn: CoachUpdateListener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
 /**
  * Ask the coach what happens next, and land whatever comes back.
  *
@@ -72,8 +99,19 @@ export interface CoachUpdate {
  */
 export async function askAfterSession(justFinished: Session): Promise<CoachUpdate> {
   const at = new Date().toISOString();
+  inFlight = true;
   const settle = async (update: CoachUpdate): Promise<CoachUpdate> => {
     await db.saveCoachUpdate(update).catch(() => {});
+    inFlight = false;
+    // The listeners are a screen that is already open and waiting. A throwing one must not turn a
+    // successful decision into the catch below, which would report `waiting` on a landed programme.
+    for (const fn of [...listeners]) {
+      try {
+        fn(update);
+      } catch {
+        /* a listener's problem is not this call's problem */
+      }
+    }
     return update;
   };
 
