@@ -41,6 +41,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { db, type PersistedCoachTurn } from '@/data/local/db';
+import { chatRemaining, spendChat } from '@/domain/coachQuota';
 
 import type { CoachFacts } from '@/domain/coachFacts';
 import { COACH_PLAN_SCHEMA, parseCoachPlan, type CoachAnswer, type UnreadableReason } from '@/domain/coachPlan';
@@ -55,7 +56,7 @@ import type { CoachTurn } from './CoachChat';
  * is it arriving as something we could not read. Counted together, per model, they are the only
  * honest comparison between a cheap model and an expensive one on our own athletes' data.
  */
-export type CoachTrouble = CoachFailure | UnreadableReason;
+export type CoachTrouble = CoachFailure | UnreadableReason | 'quota_spent';
 
 /** What a completed call cost, as the provider reported it. Never estimated here. */
 export interface CoachCallMeta {
@@ -73,6 +74,14 @@ export interface UseCoachOptions {
   facts: CoachFacts;
   /** Intake is the first conversation — no record yet, and the coach is told to build when ready. */
   mode: 'intake' | 'chat';
+  /**
+   * Whether she is paying, for the chat allowance (`domain/coachQuota`).
+   *
+   * Only CHAT is counted. The intake is never capped — she cannot get a programme without it, so a
+   * limit there does not ration a conversation, it says "you cannot finish signing up" — and the
+   * post-session call is what she is paying for in the first place.
+   */
+  entitled?: boolean;
   /**
    * A turn arrived. Fires for EVERY answer, whether or not it carried a programme.
    *
@@ -101,7 +110,7 @@ export interface UseCoach {
 let nextId = 0;
 const makeId = () => `t${(nextId += 1)}`;
 
-export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions): UseCoach {
+export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }: UseCoachOptions): UseCoach {
   const [turns, setTurns] = useState<CoachTurn[]>([]);
   const [inFlight, setInFlight] = useState(0);
   /** Hydration has finished. Until it has, nothing may be written — see the effect below. */
@@ -152,12 +161,36 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
   }, []);
 
   const send = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const said = text.trim();
       if (said.length === 0) return;
 
       const id = makeId();
       write((prev) => [...prev, { id, by: 'athlete', text: said, pending: true }]);
+
+      const settleTrouble = (trouble: CoachTrouble) => {
+        write((prev) => prev.map((tn) => (tn.id === id ? { ...tn, pending: false, failed: true } : tn)));
+        onTrouble?.(trouble);
+      };
+
+      /*
+       * ════ THE ALLOWANCE, SPENT BEFORE THE CALL AND NOT AFTER ════
+       *
+       * Checked and decremented here rather than on the reply, because a call that goes out has
+       * already cost the money whether or not it comes back. Counting successes would let a flaky
+       * network be free — and it is the same money either way.
+       *
+       * Her message STAYS in the thread, marked, exactly as it does when the network fails. She
+       * wrote it; it is hers; the app does not get to delete it because it declined to send it.
+       */
+      if (mode === 'chat') {
+        const stored = await db.loadCoachQuota().catch(() => null);
+        if (chatRemaining(stored, entitled).remaining <= 0) {
+          settleTrouble('quota_spent');
+          return;
+        }
+        void db.saveCoachQuota(spendChat(stored, entitled));
+      }
 
       const seq = (latest.current += 1);
       setInFlight((n) => n + 1);
@@ -176,11 +209,8 @@ export function useCoach({ facts, mode, onAnswer, onTrouble }: UseCoachOptions):
         cache: true,
       });
 
-      const settle = (trouble: CoachTrouble) => {
-        // Her message is marked failed wherever it is in the thread — she may have sent others since.
-        write((prev) => prev.map((tn) => (tn.id === id ? { ...tn, pending: false, failed: true } : tn)));
-        onTrouble?.(trouble);
-      };
+      // Her message is marked failed wherever it is in the thread — she may have sent others since.
+      const settle = settleTrouble;
 
       void askCoach(request, COACH_PLAN_SCHEMA as unknown as Record<string, unknown>)
         .then((reply) => {

@@ -108,7 +108,7 @@ export function CoachScreen({ navigation }: Props) {
               rather than the centre of what is left over. */}
           <View style={styles.back} />
         </View>
-        {facts ? <Body facts={facts} /> : null}
+        {facts ? <Body facts={facts} entitled={app.entitlement.active} /> : null}
       </SafeAreaView>
     </View>
   );
@@ -121,9 +121,10 @@ export function CoachScreen({ navigation }: Props) {
  * Holding the whole screen back until the profile loads would be worse — the header is hers either
  * way, and a screen that appears blank for a frame is a screen that looks broken.
  */
-function Body({ facts }: { facts: NonNullable<ReturnType<typeof coachFacts>> }) {
+function Body({ facts, entitled }: { facts: NonNullable<ReturnType<typeof coachFacts>>; entitled: boolean }) {
   const { t } = useCopy();
-  const coach = useCoach({ facts, mode: 'chat' });
+  // Only chat is capped, and the allowance depends on whether she is paying — see `coachQuota`.
+  const coach = useCoach({ facts, mode: 'chat', entitled });
   return (
     <CoachChat
       turns={coach.turns}

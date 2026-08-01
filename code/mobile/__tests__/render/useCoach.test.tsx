@@ -20,6 +20,7 @@ import { coachFacts } from '@/domain/coachFacts';
 import type { CoachAnswer } from '@/domain/coachPlan';
 import type { Profile, Program, Session } from '@/data/local/models';
 import { db } from '@/data/local/db';
+import { CHAT_PER_MONTH, CHAT_PER_TRIAL, quotaWindow } from '@/domain/coachQuota';
 
 jest.mock('@/platform/coach/coachClient', () => ({
   askCoach: jest.fn(),
@@ -96,6 +97,7 @@ beforeEach(async () => {
   // this each test inherits the last one's conversation — which is itself the proof that the
   // persistence works, and a reason every test below must start from an empty one.
   await db.clearCoachThread();
+  await db.clearAll();
 });
 
 describe('an ordinary exchange', () => {
@@ -325,5 +327,47 @@ describe('it survives the app dying', () => {
     await c.send('why?');
     await act(async () => { await Promise.resolve(); });
     expect((await db.loadCoachLog()).length).toBe(before);
+  });
+});
+
+describe('the allowance', () => {
+  /*
+   * A business guard and only that — anyone who unpacks the app bypasses it, and the Worker's rate
+   * limit is what stands in the way of abuse. It exists for the HONEST case: the athlete who chats
+   * every day and costs more than she pays.
+   */
+  it('spends one before the call, not after — the money is gone either way', async () => {
+    /*
+     * A call that goes out has already cost whether or not it comes back. Counting successes would
+     * make a flaky network free, and it is the same bill.
+     */
+    askCoach.mockResolvedValue({ ok: false, reason: 'offline' });
+    const c = mount({ mode: 'chat', entitled: true });
+    await c.send('why did my bench go down?');
+    expect((await db.loadCoachQuota())?.used).toBe(1);
+  });
+
+  it('refuses the call once it is spent, and keeps her words', async () => {
+    await db.saveCoachQuota({ window: quotaWindow(true), used: CHAT_PER_MONTH });
+    askCoach.mockResolvedValue(words('should not be reached'));
+    const c = mount({ mode: 'chat', entitled: true });
+    await c.send('one more');
+
+    expect(askCoach).not.toHaveBeenCalled();
+    expect(c.seen.trouble).toEqual(['quota_spent']);
+    // She wrote it; it is hers. The app does not delete a message because it declined to send it.
+    expect(c.turns[0]).toMatchObject({ text: 'one more', failed: true });
+  });
+
+  it('never counts the INTAKE — a limit there says "you cannot finish signing up"', async () => {
+    /*
+     * She cannot get a programme without the intake conversation. Rationing it does not ration a
+     * conversation; it blocks the only road into the product.
+     */
+    await db.saveCoachQuota({ window: quotaWindow(false), used: CHAT_PER_TRIAL });
+    askCoach.mockResolvedValue(words('How many days a week can you train?'));
+    const c = mount({ mode: 'intake' });
+    await c.send('I want to get stronger');
+    expect(askCoach).toHaveBeenCalledTimes(1);
   });
 });
