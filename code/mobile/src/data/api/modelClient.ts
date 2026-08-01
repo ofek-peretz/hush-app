@@ -75,15 +75,14 @@ export interface ModelClient {
    * the composing.
    */
 
-  /**
-   * Resolve advisory targets for the next session of a program day. During
-   * calibration these are conservative with NO reason line attached — the
-   * model owns that gating (spec §5.6, §2.3). The app renders what it gets.
+  /*
+   * ⛔ `sessionTargets` WAS HERE.
+   *
+   * It answered "what load for each set of this workout" — the engine's read of its own state, and
+   * the thing that ran the between-session fold on the way past. Both are gone: the coach decides
+   * every load and writes it into the programme, so a load is READ FROM THE PLAN rather than asked
+   * for. Nothing on this seam decides anything any more.
    */
-  sessionTargets(args: {
-    programDayId: string;
-    completedSessions: number;
-  }): Promise<SetTarget[]>;
 
   /** Post actuals for a finished (or early-finished) session. */
   recordSession(args: {

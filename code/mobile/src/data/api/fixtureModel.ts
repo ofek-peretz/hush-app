@@ -666,115 +666,14 @@ export const fixtureModel: ModelClient = {
    * re-writes it after every session, from what she actually did rather than from a body map filled
    * in on the day she signed up.
    */
-  async sessionTargets({ programDayId }): Promise<SetTarget[]> {
-    void programDayId; // targets are keyed by exercise; the screen picks the day's slots
-    const profile = await loadProfileSafe();
-    const history = await loadHistorySafe();
-    const out: SetTarget[] = [];
-
-    const program = await db.loadProgram();
-    const prefs = await loadPreferencesSafe();
-    // The bucket the athlete is actually executing (null pre-upgrade). The engine advances WITH it,
-    // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
-    // change (weekCadence.firstBucketOpen).
-    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
-    // ════ THE REASON ARROW IS THE ENGINE'S DECISION, NOT A DIFF AGAINST HER HISTORY ════
-    //
-    // "↑ 2.5" beside a load is Hush claiming, in its own voice, that it raised her. It used to be
-    // computed by comparing the new prescription to the LAST WEIGHT SHE LOGGED — and those are not
-    // the same question, because **Loop 1 moves the load mid-session**. Her last logged weight is
-    // wherever Loop 1 left her, not the load Loop 2 stepped from.
-    //
-    // The failure is not exotic; a six-week simulation produced it on an ordinary lift. Loop 1 eased
-    // her hammer curl to 2 kg late in the session; Loop 2 then decided the occurrence's real move,
-    // **4 → 3 — a cut** — and the stage compared 3 against the 2 she last logged and drew an **UP
-    // arrow**. Hush announced a raise on the very occurrence it took weight off the bar.
-    //
-    // The engine already stamps exactly this, per occurrence, in the changeLog: `loadFrom → loadTo`,
-    // the number the Complete screen and the Saturday mirror both read (`getSessionForwardV5`). So
-    // the stage reads the same record instead of re-deriving a rival one.
-    //
-    // R7 / S-16 · **a hold says nothing.** The arrow belongs to the lift's MOST RECENT occurrence, so
-    // an entry is only news while no later session has trained that lift — once she trains it again
-    // and it holds, the engine decided nothing and the stage falls silent, rather than re-announcing
-    // a move from a fortnight ago every time she opens the workout.
-    //
-    // The v4 "WEEK 1 is the learning week: silent" gate stays REMOVED (L7 — a decision is told at
-    // the moment it is born, never on a calendar). In her first week there is simply no stamped
-    // decision yet, so the reason stays silent from a FACT rather than from the calendar.
-    const engineState = await db.loadEngineV5().catch(() => null);
-    const lastTrainedAt = new Map<string, number>();
-    for (const sess of history) {
-      const at = Date.parse(sess.startedAt);
-      if (!Number.isFinite(at)) continue;
-      for (const set of sess.sets) {
-        if (set.isApproach) continue;
-        lastTrainedAt.set(set.exerciseId, Math.max(lastTrainedAt.get(set.exerciseId) ?? 0, at));
-      }
-    }
-    /** exerciseId → the load move the engine made at that lift's most recent occurrence. */
-    const decided = new Map<string, { from: number; to: number }>();
-    for (const c of engineState?.changeLog ?? []) {
-      if (c.kind != null || c.loadFrom == null || c.loadTo == null) continue; // structural/volume news is not an arrow
-      if (c.at !== lastTrainedAt.get(c.exerciseId)) continue; // superseded by a later occurrence → a hold
-      decided.set(c.exerciseId, { from: c.loadFrom, to: c.loadTo });
-    }
-
-    // The v5 engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It
-    // advances per workout and its prescription drives every exercise it manages; unmanaged / swap-only
-    // exercises fall back to the seed. The Weekly Update reads from v5 too (domain/weeklyUpdate), so a
-    // v5 athlete's load, progression and narration all come from one engine.
-    // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
-    // to her single declared band, then the '8-10' default.
-    const bandOf = (exId: string) => {
-      const m = exerciseById(exId)?.muscle;
-      return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
-    };
-    let v5targets: Record<string, V5Target> = {};
-    if (program) {
-      await foldEngine(program, profile, history, prefs, bucketOpenMs);
-      v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
-        void track('engine_error', { op: 'currentV5Targets', message: String(e) });
-        return {};
-      });
-    }
-    // Cover EVERY renderable set with a real target. A slot's setCount can exceed MAX_SETS once Loop 3
-    // has LEARNED a muscle's volume — distributeMuscleSets assigns up to SETS_MAX (5, F-1) to a single
-    // lift, so a grown compound can be a 5-set slot. buildPlan renders slot.setCount sets and falls back
-    // to a null-weight/reps-8 neutral target for any set with no match, so emitting a fixed 4 would leave
-    // that 5th set uncovered (her load and band silently dropped). Emit up to the real max setCount in the
-    // programme (never fewer than MAX_SETS) so the "sessionTargets always covers a slot" invariant holds.
-    const maxSetCount = program
-      ? Math.max(MAX_SETS, ...program.days.flatMap((d) => d.slots.map((s) => s.setCount)))
-      : MAX_SETS;
-    for (const ex of EXERCISES) {
-      const v5t = v5targets[ex.id];
-      // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
-      const weight = v5t ? v5t.weight : smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
-      const reps = v5t ? v5t.reps : bandOf(ex.id).lo;
-      const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
-      let reasonType: SetTarget['reasonType'];
-      let reasonDelta: number | undefined;
-      // The engine's own stamped move for this lift's last occurrence — never a diff against the
-      // weight Loop 1 happened to leave her on. `to !== weight` means something changed the
-      // prescription since (a band change, an edit): the stamped entry is no longer what she is
-      // being asked for, and Hush says nothing rather than something stale.
-      const move = decided.get(ex.id);
-      if (weight != null && move != null && move.to === weight && move.from !== move.to) {
-        reasonType = move.to > move.from ? 'increase' : 'decrease';
-        reasonDelta = Math.round((move.to - move.from) * 10) / 10;
-      }
-      // No approach / warm-up set (founder ruling, 2026-07-16): every set is the working weight from
-      // set 1, and Loop 1 responds to her performance from the first set (as v4 did).
-      // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
-      // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
-      const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
-      for (let s = 0; s < maxSetCount; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
-    }
-    return out;
-  },
-
+  /*
+   * ⛔ `sessionTargets` WAS HERE, and about 100 lines of seeding and per-set target assembly.
+   *
+   * It resolved a load for every set of a workout out of the engine's own state, and it was also
+   * where the between-session fold was triggered from. The coach decides every load now and writes
+   * it into the programme, so a load is READ FROM THE PLAN — `coachRows` for the screens,
+   * `buildPlanFromCoach` for the machine — and there is nothing left to ask.
+   */
   async recordSession(_args: { programDayId: string; sets: ActualSet[]; earlyFinish: boolean }) {
     // The completed session is persisted to local history by the session flow (db.append
     // CompletedSession); progression reads that history on the next sessionTargets call.

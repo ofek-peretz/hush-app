@@ -66,56 +66,10 @@ const WEEK = {
 };
 
 describe('generateProgram consumes the WEEKLY model (/weeks)', () => {
-  it('reads /weeks/current and maps workouts[] → the week bucket (names, completion, ordering key)', async () => {
-    const urls: { url: string; method: string }[] = [];
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
-      urls.push({ url, method: init.method });
-      if (url.endsWith('/weeks/current')) return { ok: true, status: 200, json: async () => WEEK };
-      return { ok: true, status: 200, json: async () => ({}) };
-    });
-    const program = await new HttpModelClient().generateProgram({} as never);
 
-    expect(urls.some((u) => u.url.endsWith('/weeks/current'))).toBe(true);
-    expect(urls.some((u) => u.url.endsWith('/weeks') && u.method === 'POST')).toBe(false); // no compose when a week exists
-    expect(program.days).toHaveLength(2); // the whole week, not one workout
-    expect(program.frequency).toBe(4);
-    expect(program.days.map((d) => d.name)).toEqual(['Upper A', 'Lower A']); // real backend names
-    expect(program.days.map((d) => d.id)).toEqual(['sess_a', 'sess_b']); // each workout's own session id
-    expect(program.days.map((d) => d.completed)).toEqual([false, true]); // status → completion (green)
-    expect(program.days.map((d) => d.key)).toEqual(['0', '1']); // str(session_index % weekly_frequency)
-    expect(program.days[0].muscleGroups).toEqual(expect.arrayContaining(['Chest', 'Hamstrings']));
-  });
-
-  it('composes the week (POST /weeks) only when none exists yet', async () => {
-    const urls: { url: string; method: string }[] = [];
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { method: string }) => {
-      urls.push({ url, method: init.method });
-      if (url.endsWith('/weeks/current')) return { ok: true, status: 200, json: async () => ({ week: null, reason: 'no_week_yet' }) };
-      if (url.endsWith('/weeks')) return { ok: true, status: 200, json: async () => WEEK };
-      return { ok: true, status: 200, json: async () => ({}) };
-    });
-    const program = await new HttpModelClient().generateProgram({} as never);
-    expect(urls.some((u) => u.url.endsWith('/weeks') && u.method === 'POST')).toBe(true);
-    expect(program.days).toHaveLength(2);
-  });
 });
 
 describe('sessionTargets maps blocks to per-set targets', () => {
-  it('reads the CHOSEN workout by id (GET /sessions/{id}) and expands target_sets + block ids', async () => {
-    const urls: string[] = [];
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string) => {
-      urls.push(url);
-      return { ok: true, status: 200, json: async () => SESSION.today };
-    });
-    const targets = await new HttpModelClient().sessionTargets({ programDayId: 'sess_1', completedSessions: 10 });
-    expect(urls.some((u) => u.endsWith('/sessions/sess_1'))).toBe(true); // the specific workout, not "today"
-    expect(targets).toHaveLength(5); // 3 + 2 sets
-    const bench0 = targets.find((t) => t.blockId === 'blk_a' && t.setIndex === 0)!;
-    expect(bench0.exerciseId).toBe('bb_bench_press');
-    expect(bench0.recommendedWeight).toBe(60);
-    expect(bench0.recommendedReps).toBe(5);
-    expect(targets.filter((t) => t.blockId === 'blk_b')).toHaveLength(2);
-  });
 });
 
 describe('recordSession reports each set then completes', () => {

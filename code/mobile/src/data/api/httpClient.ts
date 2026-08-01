@@ -164,26 +164,7 @@ export class HttpModelClient implements ModelClient {
     return typeof strat.sessions_completed === 'number' ? strat.sessions_completed : null;
   }
 
-  async setWeeklyFrequency(daysPerWeek: number): Promise<void> {
-    // PATCH /profile carries the chosen frequency into the server strategy (the sole
-    // strategy writer) so compose_week builds that many workouts. Must run BEFORE the
-    // first POST /weeks (compose is idempotent — frequency can't change after).
-    await this.request('PATCH', '/profile', {
-      client_request_id: `freq_${daysPerWeek}_${Date.now()}`,
-      weekly_frequency: daysPerWeek,
-    });
-  }
 
-  async generateProgram(_profile: Profile): Promise<Program> {
-    // WEEKLY-PROGRAM model: read the current week; compose it (POST /weeks, idempotent) only
-    // when none exists yet. Read-first so a routine Home refresh never writes. The backend
-    // returns the N workouts in the athlete's owned order; we map them as the week's bucket.
-    let week = await this.request<WeekResponse>('GET', '/weeks/current');
-    if (!week || week.week == null) {
-      week = await this.request<WeekResponse>('POST', '/weeks', { client_request_id: `week_${Date.now()}` });
-    }
-    return this.weekToProgram(week);
-  }
 
   /** Map a `{week, rest, workouts[]}` payload to the client Program (the weekly bucket of N
    *  workouts). Each workout becomes a non-rest ProgramDay carrying its backend session id (the
@@ -214,53 +195,6 @@ export class HttpModelClient implements ModelClient {
     return { id: week.week?.id ?? 'week', frequency, days };
   }
 
-  async sessionTargets({ programDayId }: { programDayId: string; completedSessions: number }): Promise<SetTarget[]> {
-    // WEEKLY model: `programDayId` IS the chosen workout's backend session id. Read THAT
-    // session (not "today") so the athlete can start any of the week's workouts in any order.
-    // The session's blocks ARE the targets.
-    const session = await this.request<SessionOut>('GET', `/sessions/${programDayId}`);
-    if (!session) return [];
-
-    // The athlete's last logged weight per exercise (for the reason-line delta).
-    const lastWeight = await this.lastLoggedWeights();
-
-    const out: SetTarget[] = [];
-    for (const b of session.blocks) {
-      // Honest reason line from the real recommendation (contract §12) — increase/decrease only.
-      let reasonType: SetTarget['reasonType'];
-      let reasonDelta: number | undefined;
-      if (b.recommendation_id) {
-        try {
-          const why = await this.request<WhyResponse>('GET', `/recommendations/${b.recommendation_id}/why`);
-          reasonType = mapDecision(why).reasonType;
-          if (reasonType === 'increase' || reasonType === 'decrease') {
-            // C3: prefer the model's AUTHORITATIVE previous load (Δ = recommended − previous_weight);
-            // fall back to the athlete's own last logged weight only when the model has no prior.
-            // Omit the reason if neither exists (cannot render "Up [Δ]" honestly).
-            const prev = why.previous_weight ?? lastWeight.get(b.exercise);
-            if (prev != null) reasonDelta = Math.round((b.recommended_weight - prev) * 10) / 10;
-            else reasonType = undefined;
-          }
-        } catch {
-          // /why unavailable → stay silent rather than guess (§5.2/§18).
-        }
-      }
-
-      for (let s = 0; s < b.target_sets; s++) {
-        const first = s === 0; // reason line on the first working set only (ratified)
-        out.push({
-          exerciseId: b.exercise,
-          setIndex: s,
-          blockId: b.id, // carried so report_set can target the block
-          recommendedWeight: b.recommended_weight,
-          recommendedReps: b.target_reps,
-          reasonType: first ? reasonType : undefined,
-          reasonDelta: first ? reasonDelta : undefined,
-        });
-      }
-    }
-    return out;
-  }
 
   /** Most recent logged actual weight per exercise, from local history. */
   private async lastLoggedWeights(): Promise<Map<string, number>> {
