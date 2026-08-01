@@ -185,7 +185,28 @@ const MARK: Record<string, string> = { live: '●', device: '◐', todo: '○', 
  * "not shown here" and "not built" are different facts, and it says which is which.
  */
 function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
+  /*
+   * ════ FIVE SCREENS WERE IN THE GALLERY AND IN NO SECTION ════
+   *
+   * Founder, 2026-08-01: *"look at the gallery yourself — it does not appear there at all."*
+   *
+   * He was right, and it was the worst possible five. The coach — §00, the newest surface in the
+   * product and the one the whole AI move was for — had no `test` matching `0.`, so every one of
+   * its screens was filtered out of the index. They were built, they rendered, and the only way to
+   * reach one was to already know its id and type it into the URL.
+   *
+   * The counts made it invisible in both directions: the header counted all 71 live screens while
+   * the list below it drew 66, and nobody subtracts two numbers on a page that has always looked
+   * right.
+   *
+   * ── THE FIX IS THE CATCH-ALL, NOT THE ROW ───────────────────────────────────────────────────
+   * Adding §00 fixes today. What stops it happening again is `UNFILED`: any entry no section
+   * claims lands in a visible group of its own, at the top, where it is embarrassing. A
+   * hand-maintained list of sections beside a hand-maintained list of screens will always drift —
+   * the only question is whether the drift is loud.
+   */
   const sections: { title: string; test: (g: GalleryEntry) => boolean }[] = [
+    { title: '00 · THE COACH', test: (g) => g.id.startsWith('0.') },
     { title: '01 · ARRIVE', test: (g) => g.id.startsWith('1.') },
     { title: '02 · TRAIN', test: (g) => g.id.startsWith('2.') },
     { title: '03 · REFLECT', test: (g) => g.id.startsWith('3.') },
@@ -193,6 +214,8 @@ function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
     { title: '06–11 · SURFACES', test: (g) => /^(6|7|8|9|10|11)\./.test(g.id) },
     { title: '13 · WHEN SOMETHING HURTS', test: (g) => g.id.startsWith('13.') },
   ];
+  const unfiled = GALLERY.filter((g) => !sections.some((s) => s.test(g)));
+  if (unfiled.length) sections.unshift({ title: '⚠ UNFILED', test: (g) => unfiled.includes(g) });
   const live = GALLERY.filter((g) => g.status === 'live').length;
   const built = GALLERY.filter((g) => g.status === 'live' || g.status === 'device').length;
   // A withdrawn screen is not work outstanding, so it leaves the denominator entirely — otherwise
