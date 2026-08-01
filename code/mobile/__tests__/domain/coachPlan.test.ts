@@ -40,7 +40,7 @@ const history: Session[] = [{
 }];
 
 const program: Program = { id: 'p', frequency: 4, days: [] };
-const facts = coachFacts({ profile, program, history, justFinished: history[0] });
+const facts = coachFacts({ profile, plan: null, history, justFinished: history[0] });
 
 // Every reply says something — see `CoachAnswer`. These fixtures are about the PROGRAMME, so the
 // sentence is a constant here; the turns that only speak are their own describe block below.

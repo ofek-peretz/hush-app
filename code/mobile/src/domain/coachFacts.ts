@@ -50,6 +50,7 @@ import type { EffortReport, ItemResult, Profile, Session, SetLog, Program } from
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
+import type { CoachPlan } from './coachPlan';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
 
 /** Bumped when the shape changes, so a stored or in-flight sheet is never read as the wrong shape. */
@@ -167,10 +168,23 @@ export interface FactMovement {
   gps?: true;
 }
 
-/** The programme as it stands right now, before the coach changes anything. */
+/**
+ * The programme as it stands right now — WHAT THE COACH ITSELF WROTE LAST TIME.
+ *
+ * ⚠️ This used to be the ENGINE's `Program`, and for a coach-led athlete that is empty. So the
+ * coach was revising blind: asked after every session to decide what happens next, without being
+ * shown the week it had prescribed. It could see what she DID and why it had decided things, but
+ * not what it had actually asked for.
+ *
+ * It carries all four shapes, because the programme does. A `lifts` list would have described a
+ * marathon week as three squat sessions and nothing else.
+ */
 export interface FactProgrammeDay {
   name: string;
-  lifts: { ex: string; sets: number }[];
+  /** Present only where the programme fixes a day (a long run belongs on Sunday). */
+  day?: string;
+  /** Each item as the coach wrote it, with how many rounds its block runs. */
+  items: { ex: string; kind: string; rounds: number; reps?: [number, number]; load?: number | null; seconds?: number; metres?: number }[];
 }
 
 export interface CoachFacts {
@@ -456,7 +470,13 @@ export interface CoachFactsInput {
   brief?: string;
   /** Its own past decisions, oldest first as stored — see `CoachFacts.decided`. */
   decided?: CoachDecision[];
-  program: Program | null;
+  /**
+   * The programme the coach wrote last time, so it can see what it is revising.
+   *
+   * Null before the intake has produced one — which is a fact about her, not a hole: on that one
+   * call there genuinely is no programme yet, and the ask says so.
+   */
+  plan: CoachPlan | null;
   /** Every session in the record, newest first. */
   history: Session[];
   /** The one that just ended, when this sheet is being built because a workout finished. */
@@ -469,7 +489,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, program, history, justFinished }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -511,11 +531,19 @@ export function coachFacts({ profile, brief, decided, program, history, justFini
     equipment: coachEquipment(),
     catalogue: coachCatalogue(),
     movements: coachMovements(),
-    programme: (program?.days ?? [])
-      .filter((d) => !d.isRest)
-      .map((d) => ({
-        name: d.name,
-        lifts: d.slots.map((s) => ({ ex: s.exerciseId, sets: s.setCount })),
-      })),
+    programme: (plan?.sessions ?? []).map((sess) => ({
+      name: sess.name,
+      ...(sess.day ? { day: sess.day } : {}),
+      items: sess.blocks.flatMap((b) =>
+        b.items.map((i) => ({
+          ex: i.ex,
+          kind: i.kind,
+          rounds: b.rounds,
+          ...(i.kind === 'reps' ? { reps: i.reps, load: i.load } : {}),
+          ...(i.kind === 'time' ? { seconds: i.seconds } : {}),
+          ...(i.kind === 'distance' ? { metres: i.metres } : {}),
+        })),
+      ),
+    })),
   };
 }

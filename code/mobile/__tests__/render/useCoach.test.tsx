@@ -36,7 +36,7 @@ const profile: Profile = {
 };
 const program: Program = { id: 'p', frequency: 4, days: [] };
 const history: Session[] = [];
-const facts = coachFacts({ profile, program, history });
+const facts = coachFacts({ profile, plan: null, history });
 
 /** What the coach says when it only speaks. */
 const words = (say: string) => ({

@@ -147,9 +147,11 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
   };
 
   try {
-    const [profile, program, history, decided] = await Promise.all([
+    const [profile, plan, history, decided] = await Promise.all([
       db.loadProfile(),
-      db.loadProgram(),
+      // The programme the coach wrote LAST time. It is being asked to revise it, so it has to see
+      // it — this used to hand over the engine's `Program`, which for a coach-led athlete is empty.
+      db.loadCoachPlan(),
       db.loadHistory(),
       db.loadCoachLog(),
     ]);
@@ -159,7 +161,7 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
 
     const facts = coachFacts({
       profile,
-      program: program ?? { id: 'none', frequency: profile.daysPerWeek ?? 0, days: [] },
+      plan,
       history,
       ...(justFinished ? { justFinished } : {}),
       decided,

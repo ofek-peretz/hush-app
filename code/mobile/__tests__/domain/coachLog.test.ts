@@ -86,7 +86,7 @@ describe('and it reaches the sheet', () => {
       { at: 't1', ex: 'bb_bench_press', say: 'up to 32.5' },
       { at: 't2', ex: 'bb_bench_press', say: 'holding — you reported a tender shoulder' },
     ];
-    const f = coachFacts({ profile, program, history: [], decided });
+    const f = coachFacts({ profile, plan: null, history: [], decided });
     expect(f.decided!.map((d) => d.say)).toEqual([
       'holding — you reported a tender shoulder',
       'up to 32.5',
@@ -96,15 +96,15 @@ describe('and it reaches the sheet', () => {
   it('is ABSENT on an athlete the coach has never decided anything for', () => {
     // Empty would read as "I have decided nothing", which is a different statement from "this is
     // the first decision".
-    expect('decided' in coachFacts({ profile, program, history: [] })).toBe(false);
-    expect('decided' in coachFacts({ profile, program, history: [], decided: [] })).toBe(false);
+    expect('decided' in coachFacts({ profile, plan: null, history: [] })).toBe(false);
+    expect('decided' in coachFacts({ profile, plan: null, history: [], decided: [] })).toBe(false);
   });
 
   it('carries no private second reason — one sentence, said and remembered', () => {
     // The design this test defends: a public `say` plus a private `why` would let the coach hold a
     // real reason it never told her, and the gap between them IS the drift this app forbids.
     const decided: CoachDecision[] = [{ at: 't', ex: 'a', say: 'the reason' }];
-    const f = coachFacts({ profile, program, history: [], decided });
+    const f = coachFacts({ profile, plan: null, history: [], decided });
     expect(Object.keys(f.decided![0]).sort()).toEqual(['at', 'ex', 'say']);
   });
 });

@@ -224,12 +224,12 @@ describe('the sheet carries it, and carries absence as absence', () => {
   };
 
   it('states her answer beside the sets it is about', () => {
-    const f = coachFacts({ profile, program, history: [session], justFinished: session });
+    const f = coachFacts({ profile, plan: null, history: [session], justFinished: session });
     expect(f.session!.lifts.find((l) => l.ex === 'bb_bench_press')!.effort).toBe('nothing_left');
   });
 
   it('never invents one for a lift she was not asked about', () => {
-    const f = coachFacts({ profile, program, history: [session], justFinished: session });
+    const f = coachFacts({ profile, plan: null, history: [session], justFinished: session });
     const row = f.session!.lifts.find((l) => l.ex === 'bb_row')!;
     // An effort inferred from the reps would be the coach reading its own guess back as her
     // testimony — the exact failure the whole architecture exists to prevent.

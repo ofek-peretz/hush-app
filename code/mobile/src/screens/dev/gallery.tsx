@@ -395,7 +395,7 @@ function LiveCoachChat() {
   const facts = React.useMemo(
     () => coachFacts({
       profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
-      program: { id: 'p', frequency: 4, days: [] },
+      plan: null,
       history: [],
       decided,
     }),

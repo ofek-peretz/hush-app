@@ -1,4 +1,5 @@
 import { coachFacts, coachCatalogue, coachEquipment, COACH_FACTS_VERSION } from '@/domain/coachFacts';
+import { parseCoachPlan } from '@/domain/coachPlan';
 import { EXERCISES } from '@/data/exercises';
 import { STARTING_INCREMENT } from '@/engine/v5/constants';
 import type { Profile, Session, SetLog, Program } from '@/data/local/models';
@@ -75,7 +76,7 @@ const program: Program = {
 const history = [session('2026-07-26T17:00:00.000Z', 30), session('2026-07-19T17:00:00.000Z', 27.5)];
 
 function build() {
-  return coachFacts({ profile, program, history, justFinished: history[0] });
+  return coachFacts({ profile, plan: null, history, justFinished: history[0] });
 }
 
 describe('coach facts — the message the coach is sent', () => {
@@ -128,12 +129,45 @@ describe('coach facts — the message the coach is sent', () => {
     }
   });
 
-  it('states the programme as it stands, so a change is a change to something', () => {
-    const f = build();
+  it('shows the coach THE PROGRAMME IT WROTE, in all four shapes', () => {
+    /*
+     * ⚠️ This used to send the ENGINE's `Program`, which for a coach-led athlete is empty — so the
+     * coach was being asked after every session to decide what happens next WITHOUT being shown the
+     * week it had prescribed. It could see what she did and why it had decided things, and not what
+     * it had actually asked for.
+     *
+     * All four shapes, because the programme has them: a `lifts` list would describe a marathon week
+     * as three squat sessions and nothing else.
+     */
+    const parsed = parseCoachPlan(
+      JSON.stringify({
+        say: 'ok',
+        sessions: [{
+          name: 'Intervals', day: 'tue',
+          blocks: [
+            { rounds: 4, restS: 60, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 400 }] },
+            { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 40 }] },
+          ],
+        }],
+      }),
+    );
+    if (!parsed.ok) throw new Error('the fixture must parse');
+    const f = coachFacts({ profile, plan: parsed.answer.plan, history, justFinished: history[0] });
     expect(f.programme).toEqual([
-      { name: 'Upper A', lifts: [{ ex: 'bb_bench_press', sets: 4 }, { ex: 'bb_row', sets: 3 }] },
+      {
+        name: 'Intervals',
+        day: 'tue',
+        items: [
+          { ex: 'run_outdoor', kind: 'distance', rounds: 4, metres: 400 },
+          { ex: 'bb_bench_press', kind: 'reps', rounds: 3, reps: [8, 12], load: 40 },
+        ],
+      },
     ]);
-    expect(f.programme.some((d) => d.name === 'Rest')).toBe(false); // a rest day is not a workout
+  });
+
+  it('states an empty programme before the coach has written one', () => {
+    // The intake's one call. A fact about her, not a hole to fill with assumptions.
+    expect(build().programme).toEqual([]);
   });
 
   it('sends her instructions — her band, her map, her injuries — as instructions, not readings', () => {
@@ -143,8 +177,7 @@ describe('coach facts — the message the coach is sent', () => {
         bodyMap: { Chest: 'emphasis' },
         repBandByMuscle: { Chest: '6-8' },
         painEases: [{ muscle: 'Shoulders', severity: 'twinge', fromMs: 1, untilMs: 999 }],
-      },
-      program, history, justFinished: history[0],
+      }, plan: null , history, justFinished: history[0],
     });
     expect(f.athlete.emphasis).toEqual({ Chest: 'emphasis' });
     expect(f.athlete.bandByMuscle).toEqual({ Chest: '6-8' });
@@ -163,7 +196,7 @@ describe('coach facts — the message the coach is sent', () => {
   });
 
   it('holds its shape when there is no history, no programme and no session', () => {
-    const f = coachFacts({ profile, program: null, history: [], justFinished: undefined });
+    const f = coachFacts({ profile, plan: null, history: [], justFinished: undefined });
     expect(f.session).toBeUndefined();
     expect(f.performed).toEqual([]);
     expect(f.programme).toEqual([]);
@@ -172,7 +205,7 @@ describe('coach facts — the message the coach is sent', () => {
 
   it('drops a lift whose id is no longer in the catalogue rather than inventing a name for it', () => {
     const ghost = { ...history[0], sets: [...history[0].sets, set('deleted_lift_id', 0, 50, 5, 30)] };
-    const f = coachFacts({ profile, program, history: [ghost], justFinished: ghost });
+    const f = coachFacts({ profile, plan: null, history: [ghost], justFinished: ghost });
     expect(f.session!.lifts.map((l) => l.ex)).toEqual(['bb_bench_press', 'bb_row']);
     expect(f.performed.map((p) => p.ex).includes('deleted_lift_id')).toBe(false);
   });

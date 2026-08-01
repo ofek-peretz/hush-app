@@ -42,7 +42,7 @@ const session: Session = {
   items,
 };
 
-const facts = () => coachFacts({ profile, program, history: [session], justFinished: session });
+const facts = () => coachFacts({ profile, plan: null, history: [session], justFinished: session });
 
 describe('the record fits every shape', () => {
   it('carries all five items to the coach, not just the one that was reps', () => {
@@ -98,7 +98,7 @@ describe('the record fits every shape', () => {
 
   it('says nothing about `work` on a session recorded before it existed', () => {
     const { items: _dropped, ...legacy } = session;
-    const f = coachFacts({ profile, program, history: [legacy], justFinished: legacy });
+    const f = coachFacts({ profile, plan: null, history: [legacy], justFinished: legacy });
     // Absent, not empty: an old session did not do zero non-rep items, we simply did not record it.
     expect('work' in f.session!).toBe(false);
     expect(f.session!.lifts.length).toBe(1); // and the rep half still reads exactly as before

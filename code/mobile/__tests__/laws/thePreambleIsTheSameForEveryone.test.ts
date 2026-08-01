@@ -45,7 +45,7 @@ const program: Program = { id: 'p', frequency: 4, days: [] };
 const forDana = () =>
   coachRequest({
     facts: coachFacts({
-      profile: dana, program, history: [session], justFinished: session,
+      profile: dana, plan: null , history: [session], justFinished: session,
       brief: 'Plays 5-a-side Thursdays. Right hamstring tweaked twice, both sprinting cold.',
       decided: [{ at: 't1', ex: 'bb_bench_press', say: 'Up to 32.5 — you cleared 12 twice.' }],
     }),
@@ -55,7 +55,7 @@ const forDana = () =>
 
 const forYossi = () =>
   coachRequest({
-    facts: coachFacts({ profile: yossi, program: null, history: [] }),
+    facts: coachFacts({ profile: yossi, plan: null, history: [] }),
     ask: { kind: 'chat', turns: [{ from: 'her', text: 'Can I swap the squat for a leg press this week?' }] },
     cache: true,
   });
@@ -90,7 +90,7 @@ describe('the preamble is the same for everyone', () => {
 
   it('does not mark a breakpoint at all when caching is off', () => {
     const r = coachRequest({
-      facts: coachFacts({ profile: dana, program, history: [] }),
+      facts: coachFacts({ profile: dana, plan: null , history: [] }),
       ask: { kind: 'after_session' },
     });
     // Default is OFF: a cache written and never read costs 1.25x and returns nothing, which is the
@@ -116,7 +116,7 @@ describe('everything that varies is below the breakpoint', () => {
 
   it('tells the intake that there is no record yet, rather than sending an empty one silently', () => {
     const r = coachRequest({
-      facts: coachFacts({ profile: dana, program: null, history: [] }),
+      facts: coachFacts({ profile: dana, plan: null, history: [] }),
       ask: { kind: 'intake', turns: [{ from: 'her', text: 'I want to be able to run a half marathon.' }] },
     });
     const last = r.blocks.at(-1)!.text;
@@ -180,7 +180,7 @@ describe('the catalogue is sent once', () => {
     // Measured before the fix: 3,667 tokens for an athlete with NO history at all, 46% of it the
     // duplicated catalogue. The bound is what stops that coming back.
     const noHistory = coachRequest({
-      facts: coachFacts({ profile: dana, program: null, history: [] }),
+      facts: coachFacts({ profile: dana, plan: null, history: [] }),
       ask: { kind: 'after_session' },
     });
     expect(tok(noHistory.blocks[1].text)).toBeLessThan(900);

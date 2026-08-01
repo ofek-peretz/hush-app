@@ -39,6 +39,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import type { MainParamList } from '@/app/navigation';
 import type { CoachDecision } from '@/domain/coachLog';
+import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 
 type Props = NativeStackScreenProps<MainParamList, 'Coach'>;
@@ -56,12 +57,14 @@ export function CoachScreen({ navigation }: Props) {
    */
   const [history, setHistory] = React.useState<Session[] | null>(null);
   const [decided, setDecided] = React.useState<CoachDecision[]>([]);
+  const [plan, setPlan] = React.useState<CoachPlan | null>(null);
   React.useEffect(() => {
     let alive = true;
-    void Promise.all([db.loadHistory(), db.loadCoachLog()]).then(([h, d]) => {
+    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan()]).then(([h, d, p]) => {
       if (!alive) return;
       setHistory(h);
       setDecided(d);
+      setPlan(p);
     });
     return () => {
       alive = false;
@@ -74,12 +77,12 @@ export function CoachScreen({ navigation }: Props) {
       profile
         ? coachFacts({
             profile,
-            program: app.program ?? { id: 'none', frequency: profile.daysPerWeek ?? 0, days: [] },
+            plan,
             history: history ?? [],
             decided,
           })
         : null,
-    [profile, app.program, history, decided],
+    [profile, plan, history, decided],
   );
 
   return (

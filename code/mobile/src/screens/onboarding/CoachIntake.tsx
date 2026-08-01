@@ -75,7 +75,9 @@ export function CoachIntake({ navigation, route }: Props) {
   // No programme and no history — the sheet says so, and the intake ask tells the coach to expect
   // it. An empty record is a fact about her, not a hole to fill with assumptions.
   const facts = React.useMemo(
-    () => coachFacts({ profile, program: { id: 'none', frequency: inputs.daysPerWeek, days: [] }, history: [] }),
+    // No programme yet, and that is a fact about her rather than a hole: this is the one call
+    // where there genuinely is none, and the intake ask says so.
+    () => coachFacts({ profile, plan: null, history: [] }),
     [profile, inputs.daysPerWeek],
   );
 

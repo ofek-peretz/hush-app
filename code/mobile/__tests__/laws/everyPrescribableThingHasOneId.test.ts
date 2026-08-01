@@ -44,7 +44,7 @@ describe('every prescribable thing has exactly one id', () => {
   });
 
   it('can prescribe EVERY id the sheet shows — nothing on offer is unusable', () => {
-    const facts = coachFacts({ profile, program, history: [] });
+    const facts = coachFacts({ profile, plan: null, history: [] });
     const offered = [
       ...facts.catalogue.map((c) => ({ id: c.id, kind: 'reps' as const })),
       // A movement is offered for the shapes `measures` names; `reps` stands in for the rest since
@@ -70,7 +70,7 @@ describe('every prescribable thing has exactly one id', () => {
     // The failure this guards is silent and total: leave `movements` out of the sheet and every
     // cardio plan comes back with an unresolvable id, which reads as the model hallucinating when
     // in fact it was never given the list.
-    const facts = coachFacts({ profile, program, history: [] });
+    const facts = coachFacts({ profile, plan: null, history: [] });
     expect(facts.movements.length).toBe(MOVEMENTS.length);
     expect(facts.movements.some((m) => m.gps)).toBe(true); // a run is in there
     expect(facts.movements.some((m) => m.loadable)).toBe(true); // and something she can carry

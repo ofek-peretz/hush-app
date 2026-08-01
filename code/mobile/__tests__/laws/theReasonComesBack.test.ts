@@ -40,7 +40,7 @@ describe('the whole loop, hop by hop', () => {
     expect(log).toEqual([{ at: '2026-08-01T09:00:00.000Z', ex: 'bb_back_squat', say: REASON }]);
 
     // 2 — the sheet built for the NEXT call carries it.
-    const facts = coachFacts({ profile, program, history, decided: log });
+    const facts = coachFacts({ profile, plan: null, history, decided: log });
     expect(facts.decided?.[0]?.say).toBe(REASON);
 
     // 3 — and it is actually in the bytes that get sent, below the cache breakpoint.
@@ -55,7 +55,7 @@ describe('the whole loop, hop by hop', () => {
   it('sends the newest decisions first, because that is the one about to be contradicted', () => {
     let log = appendDecisions([], [{ ex: 'a', say: 'first' }], '2026-06-01T00:00:00.000Z');
     log = appendDecisions(log, [{ ex: 'a', say: 'second' }], '2026-07-01T00:00:00.000Z');
-    const facts = coachFacts({ profile, program, history, decided: log });
+    const facts = coachFacts({ profile, plan: null, history, decided: log });
     expect(facts.decided?.map((d) => d.say)).toEqual(['second', 'first']);
   });
 
@@ -74,7 +74,7 @@ describe('the whole loop, hop by hop', () => {
   it('says nothing at all when there is nothing decided yet', () => {
     // An empty `decided: []` on every intake sheet is bytes paid for to say "no history", on the
     // one call where there is definitionally none.
-    const facts = coachFacts({ profile, program, history, decided: [] });
+    const facts = coachFacts({ profile, plan: null, history, decided: [] });
     expect('decided' in facts).toBe(false);
   });
 });
