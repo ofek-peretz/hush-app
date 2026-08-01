@@ -40,6 +40,7 @@ import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ManualInfo } from '@/screens/onboarding/ManualInfo';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
+import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
@@ -162,6 +163,7 @@ function MainNavigator() {
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
+      <MainStack.Screen name="Coach" component={CoachScreen} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />

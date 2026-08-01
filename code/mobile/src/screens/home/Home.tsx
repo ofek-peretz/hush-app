@@ -832,7 +832,7 @@ export function Home({ navigation, route }: Props) {
       }}
       briefUnseen={briefUnseen}
       trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions)}
-      onShare={() => navigation.navigate('SharePlan')}
+      onCoach={() => navigation.navigate('Coach')}
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       weekDays={weekDays}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}

@@ -157,6 +157,9 @@ export interface HomeViewProps {
   trialLeft?: number | null;
   /** Open the account surface (the You tab) — the avatar opposite the wordmark. */
   /** Open the SHARE surface — the two-figure door opposite the wordmark (v7 2.1). */
+  /** Open the coach — the conversation, from the corner of the first screen she sees. */
+  onCoach?: () => void;
+  /** Open the plan-share door. Reached from the You tab now; Today's corner is the coach's. */
   onShare?: () => void;
 
   // ── RECOVERY, v7 3.5 "THE WEEK IS DONE" — all optional, all best-effort. Absent → the section
@@ -224,18 +227,27 @@ export function HomeView(props: HomeViewProps) {
             <RangeMark />
             <Text style={styles.wordmark}>hush</Text>
           </View>
-          {/* ════ THE DOOR OPPOSITE THE WORDMARK IS THE SHARE DOOR (founder 2026-07-28) ════
-              It was an initial in a circle — a second way into the You tab, which the tab bar
-              already owns, sitting in the most valuable corner of the first screen she sees. The
-              canonical HTML puts the two-figure glyph here instead, and it earns the spot: sharing
-              is the one thing on Today that nothing else offers a way to. The icon is traced from
-              that file (`twoPeople`), in the moss it is drawn in there. */}
-          {props.onShare ? (
+          {/* ════ THE DOOR OPPOSITE THE WORDMARK IS THE COACH (founder 2026-08-01) ════
+              It held the share glyph, and before that an initial in a circle. It is the coach now,
+              and the founder's reason for putting it HERE rather than in the tab bar is the whole
+              product's positioning in one sentence:
+
+                > *"I don't want to put the AI in the tab bar, because that would signal hardest of
+                > all that we're just another AI app — when we really, really aren't."*
+
+              Which is exactly right. A tab is a section of an app; this is not a section, it is who
+              decides everything the rest of the app shows. A door in the corner is what a coach
+              gets: available from the first screen, always, and announcing nothing.
+
+              Sharing moved to the You tab rather than being deleted — it was the only way into it.
+              The glyph is left alone deliberately; the founder is redesigning this in Claude Design
+              and a placeholder chosen carefully is a placeholder argued about twice. */}
+          {props.onCoach ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t('planShare.title')}
+              accessibilityLabel={t('coach.title')}
               hitSlop={10}
-              onPress={props.onShare}
+              onPress={props.onCoach}
               style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
             >
               <Icon name="twoPeople" size={21} color={signal[0]} strokeWidth={2.1} />

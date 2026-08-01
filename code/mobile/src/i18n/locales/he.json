@@ -1820,6 +1820,8 @@
     "send": "שלח",
     "thinking": "חושב",
     "notSent": "לא נשלח",
-    "intakeOpening": "על מה אנחנו עובדים?"
+    "intakeOpening": "על מה אנחנו עובדים?",
+    "title": "מאמן",
+    "opening": "מה תרצי לשאול אותי?"
   }
 }

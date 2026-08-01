@@ -83,7 +83,7 @@ function homeProps(over: Partial<HomeViewProps> = {}): HomeViewProps {
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
-    onShare: () => {},
+    onCoach: () => {},
     ...over,
   };
 }
@@ -94,12 +94,17 @@ function homeProps(over: Partial<HomeViewProps> = {}): HomeViewProps {
  * The fix is not a brighter colour (it is already the accent, on the darkest surface the palette
  * has). It is that a control needs a BODY: a 34 px touch target with nothing drawn in it reads as
  * decoration beside the wordmark, and a thumb never goes there.
+ *
+ * ⚠️ THE LAW FOLLOWED THE DOOR, NOT ITS LABEL. That corner held the share door when this was
+ * written; it holds the COACH now (founder 2026-08-01 — the AI is deliberately not in the tab bar).
+ * What the founder complained about was the CORNER being invisible, so the law belongs to whoever
+ * is standing in it.
  */
-describe('the share door reads as a control', () => {
+describe('the corner door reads as a control', () => {
   it('has a surface under its glyph, not just a hit box', () => {
     const r = mount(<HomeView {...homeProps()} />);
     const door = r.root.findAll(
-      (n) => n.props?.accessibilityLabel === tg('planShare.title') && typeof n.props.onPress === 'function',
+      (n) => n.props?.accessibilityLabel === tg('coach.title') && typeof n.props.onPress === 'function',
     )[0];
     expect(door).toBeTruthy();
     const style = flat(typeof door.props.style === 'function' ? door.props.style({ pressed: false }) : door.props.style);
@@ -109,9 +114,9 @@ describe('the share door reads as a control', () => {
     expect(style?.borderRadius).toBe(17);
   });
 
-  it('and it is gone entirely when there is nothing to share', () => {
-    const r = mount(<HomeView {...homeProps({ onShare: undefined })} />);
-    expect(r.root.findAll((n) => n.props?.accessibilityLabel === tg('planShare.title'))).toHaveLength(0);
+  it('and it is gone entirely when there is nowhere for it to go', () => {
+    const r = mount(<HomeView {...homeProps({ onCoach: undefined })} />);
+    expect(r.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.title'))).toHaveLength(0);
   });
 });
 

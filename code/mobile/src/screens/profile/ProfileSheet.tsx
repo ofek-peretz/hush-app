@@ -280,12 +280,17 @@ export function ProfileSheet({ navigation }: Props) {
             whole programme (register Part 3), and it is the only place the per-muscle rep band is
             ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
             same screen twice — this opens something else entirely. */}
-        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} last />
-        {/* ════ PLAN-SHARING LEFT THIS TAB (founder A.14 / B.9) ════
-            "That icon is where everything person-to-person belongs." The two-figure door on Today
-            opens the same screen and is the door he chose; a second entrance buried in a settings
-            list is the same act offered twice, and it is the one the athlete would never find.
-            The route is untouched — only this row is gone. */}
+        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} />
+        {/* ════ AND PLAN-SHARING CAME BACK (2026-08-01) ════
+            It left this tab in A.14 for a good reason — "that icon is where everything
+            person-to-person belongs" — and the icon it left for is the COACH's now. So the door it
+            was moved to no longer exists, and a feature with no entrance at all is worse than one
+            offered twice.
+
+            This is a HOLDING PLACE, not a ruling. The founder is moving the person-to-person
+            surfaces into the tab bar and designing them properly; until then sharing is reachable,
+            which is the whole of what this row is for. */}
+        <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last />
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a

@@ -83,6 +83,14 @@ export type HomeTabsParamList = {
 };
 
 export type MainParamList = {
+  /**
+   * THE COACH — the conversation, reached from the corner of Today rather than the tab bar.
+   *
+   * The founder's reason is the product's positioning: *"I don't want to put the AI in the tab bar,
+   * because that would signal hardest of all that we're just another AI app — when we really,
+   * really aren't."* A tab is a section; this is who decides what the other sections show.
+   */
+  Coach: undefined;
   // The tab host is the stack's root. Everything below is pushed on top of the tabs.
   HomeTabs: NavigatorScreenParams<HomeTabsParamList> | undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
