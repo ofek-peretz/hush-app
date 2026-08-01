@@ -58,6 +58,8 @@ enum WatchScreen: Equatable {
   /// WT3 · THE CORRECTION — the set is logged AND it moved the next load, so the beat that would
   /// have restated what she just did says the news instead.
   case correction(WireCorrection)
+  /// WT10 · EXERCISE DONE — the set is logged and it was the LAST of its lift.
+  case liftDone(String)
   case activeSet(WireMirror, draft: EditDraft?)
   case interRest(WireMirror)
   case transitionRest(WireMirror)
@@ -1040,6 +1042,12 @@ final class WatchModel: ObservableObject {
       announcedCorrectionAt = effectiveMirror?.globalIndex
       return .correction(c)
     }
+    // WT10 — the same window, when the set she just logged CLOSED a lift. The phone sets
+    // `completedExerciseName` only on a transition frame, which is exactly that moment. It cannot
+    // collide with the correction above: Loop 1 makes the last set of an exercise a no-op.
+    if setConfirm != nil, let done = effectiveMirror?.completedExerciseName, !done.isEmpty {
+      return .liftDone(done)
+    }
     guard let m = effectiveMirror else {
       if let l = lobby { return .start(l) }
       // No phone state at all: boot the Start screen from the stored plan snapshot
@@ -1070,7 +1078,7 @@ final class WatchModel: ObservableObject {
     case .paused: return .paused
     // The set landed. The haptic says so whether or not the load moved with it — it was the
     // confirmation SCREEN that was redundant, not the confirmation.
-    case .correction: return .setLogged
+    case .correction, .liftDone: return .setLogged
     default: return nil // cardioComplete plays its own beat in endCardio()
     }
   }
@@ -1078,7 +1086,7 @@ final class WatchModel: ObservableObject {
   private func sameKind(_ a: WatchScreen, _ b: WatchScreen) -> Bool {
     switch (a, b) {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
-         (.workoutComplete, .workoutComplete), (.correction, .correction),
+         (.workoutComplete, .workoutComplete), (.correction, .correction), (.liftDone, .liftDone),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
          (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete):
       return true

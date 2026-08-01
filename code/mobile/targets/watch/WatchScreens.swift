@@ -955,6 +955,9 @@ struct WatchRootView: View {
       ConnectionLostScreen(mirror: m)
     case let .workoutComplete(m):
       CompleteScreen(mirror: m, kcal: model.completedKcal, onDone: model.dismissComplete)
+    case let .liftDone(name):
+      // WT10 — the lift is closed. One beat, then the transition rest names what is next.
+      LiftDoneScreen(name: name, onTap: model.dismissSetConfirm)
     case let .correction(c):
       // WT3 — the set is logged AND it moved the next load, so this beat says the news instead of
       // restating a load and a rep count she chose herself thirty seconds ago.
@@ -1626,6 +1629,42 @@ struct CorrectionScreen: View {
   }
 }
 
+/// WT10 · EXERCISE DONE — the lift she just closed, named once.
+///
+/// It used to be a line inside the transition rest, and the founder's *"the TRANSITION REST screen
+/// is crowded with words"* was partly about it: a sentence in the past tense sitting above a card
+/// about the future, on a screen whose job is a countdown.
+///
+/// The canonical gives it its own beat, and that is what it is now — the same window WT3 uses, the
+/// one between a logged set and a rest. The two can never collide: Loop 1 makes the last set of an
+/// exercise a no-op, so a correction on the beat that closes a lift is impossible by construction
+/// (`sessionMirror.ts` states the same invariant).
+///
+/// Facts, not praise. "Bench, done." — the next lift's own card says what is coming.
+struct LiftDoneScreen: View {
+  let name: String
+  let onTap: () -> Void
+  var body: some View {
+    WristScreen {
+      VStack(spacing: 13) {
+        Spacer(minLength: 0)
+        ZStack {
+          Circle().strokeBorder(Palette.signal, lineWidth: 1.6).frame(width: Fit.s(52), height: Fit.s(52))
+          DrawCheck(size: Fit.s(22))
+        }
+        Text(WatchCopy.liftDone(name))
+          .font(.system(size: Fit.s(20), design: .serif)).foregroundStyle(Palette.ink0)
+          .multilineTextAlignment(.center)
+          .lineLimit(2).minimumScaleFactor(0.6)
+        Spacer(minLength: 0)
+      }
+      .frame(maxWidth: .infinity)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture { TapGate.pass(onTap) }
+  }
+}
+
 // MARK: 04 · Inter-Set Rest
 
 struct InterRestScreen: View {
@@ -1669,6 +1708,17 @@ struct InterRestScreen: View {
           // ring is what the wrist actually looks at, so the two must not disagree.
           arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal
         )
+        // WT5 · REST — LEARNED. Her measured rest (S-17) is already what this timer runs; this is
+        // the line that SAYS so, and it appears only once the median is hers rather than the
+        // bootstrap. It went missing in the 2026-08-01 relayout and is restored: without it the
+        // wrist silently uses her pace and never tells her, which is the app doing something FOR
+        // her without her knowing.
+        if mirror.restIsLearned == true {
+          Text(WatchCopy.yourPace)
+            .font(.system(size: 11, design: .serif)).italic()
+            .foregroundStyle(Palette.ink2)
+            .padding(.top, 3)
+        }
         Spacer(minLength: 4)
         upNextCard
         if let c = note {
@@ -1818,6 +1868,12 @@ struct TransitionRestScreen: View {
         } else {
           Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal)
         }
+      }
+      // The direction the new lift's opening load moved, if it moved. Restored after the
+      // 2026-08-01 relayout dropped it: a load that changed and says nothing about it is the one
+      // thing the founder's colour ruling exists to prevent.
+      if (mirror.nextLoadDeltaKg ?? 0) != 0 {
+        LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: 9)
       }
     }
     .padding(.vertical, 9).padding(.horizontal, 11)

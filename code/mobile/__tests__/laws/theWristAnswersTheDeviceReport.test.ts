@@ -80,7 +80,9 @@ describe('#5 · the correction gets its screen', () => {
      * an ease as a raise. A pixel-faithful WT3 would have made it six.
      */
     const src = read('WatchScreens.swift');
-    const screen = src.slice(src.indexOf('struct CorrectionScreen'), src.indexOf('// MARK: 04'));
+    // WT3 only — WT10 now sits between it and the next MARK, and its check ring is moss by right.
+    const at = src.indexOf('struct CorrectionScreen');
+    const screen = src.slice(at, src.indexOf('\nstruct ', at + 10));
     expect(screen).toMatch(/up \? Palette\.up : Palette\.down/);
     expect(screen).not.toMatch(/Palette\.signal\b/);
   });
