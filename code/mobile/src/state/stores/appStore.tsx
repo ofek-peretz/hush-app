@@ -426,23 +426,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // code that schedules a repeating push does not cancel the push — it lives in iOS's queue.
       void notifier.cancelRetiredNotes();
 
-      // Finding 5: heal a crashed completion. If a session for a program day is in THIS week's
-      // history but the day wasn't flagged done (a kill between the history write and the flag
-      // write), mark it done so Home never re-offers an already-trained workout. Best-effort +
-      // isolated so it can never break boot. (The completed-session COUNT is no longer surfaced,
-      // so only the day flag needs healing.)
-      void (async () => {
-        try {
-          if (!program) return;
-          const healed = healWeekCompletion(program, await db.loadHistory(), weekOpenMs, Date.now());
-          if (healed) {
-            await db.saveProgram(healed);
-            dispatch({ type: 'PROGRAM_UPDATED', program: healed, recents });
-          }
-        } catch {
-          /* best-effort heal — never blocks boot */
-        }
-      })();
+      /*
+       * ⛔ THE COMPLETION HEAL WAS HERE, and it is not needed because the thing it healed is gone.
+       *
+       * It repaired a `ProgramDay.completed` flag that a crash could leave unwritten while the
+       * session itself was already in history — two copies of one fact, and a repair for when they
+       * disagreed. "Done" is read from the history directly now, so there is only ever one.
+       */
 
       // Reconcile the entitlement against StoreKit (source of truth) right after
       // boot. Best-effort + fully isolated so it can never break the boot path; a
@@ -867,48 +857,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
 
       async reorderExercise(dayId, fromIndex, toIndex) {
-        if (!state.program) return;
-        const day = state.program.days.find((d) => d.id === dayId);
-        if (!day) return;
-        const slots = move(day.slots, fromIndex, toIndex);
-        const days = state.program.days.map((d) => (d.id === dayId ? { ...d, slots } : d));
-        const program: Program = { ...state.program, days };
-        await db.saveProgram(program);
-        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-        // Athlete-owned order (Athlete > Model): persist the workout's exercise sequence so future
-        // weekly regenerations preserve it. Exercise ids are the durable keys composition consumes.
-        void track('exercise_reordered', { dayId });
-        model
-          .setOrder({ scope: 'exercise', order: slots.map((s) => s.exerciseId), workoutKey: day.key })
-          .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'exercise' }));
+        /*
+         * ⛔ NOTHING TO REORDER. This moved a slot within a generated `ProgramDay`. The coach writes
+         * the order it wants and there is no local structure to rearrange behind its back — if she
+         * wants a different order she can say so, which is a better door than a drag that had to be
+         * inferred.
+         */
+        void dayId; void fromIndex; void toIndex;
       },
 
       async reorderWorkouts(fromIndex, toIndex) {
-        if (!state.program) return;
-        const days = move(state.program.days, fromIndex, toIndex);
-        const program: Program = { ...state.program, days };
-        await db.saveProgram(program);
-        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-        // Athlete-owned workout order (Athlete > Model): persist the sequence by workout key so
-        // future weekly plans preserve it. Days without a key (legacy) persist nothing.
-        void track('workout_reordered', {});
-        const order = days.map((d) => d.key).filter((k): k is string => !!k);
-        if (order.length > 0) {
-          model
-            .setOrder({ scope: 'workout', order })
-            .catch((e) => void track('preference_sync_failed', { kind: e instanceof HttpError ? e.kind : 'unknown', scope: 'workout' }));
-        }
+        /*
+         * ⛔ NOTHING TO REORDER, for the same reason as `reorderExercise` above: this moved a
+         * generated week's days around, and the coach writes the order it means. A programme has a
+         * shape — a long run belongs on Sunday — and dragging it silently would edit a decision.
+         */
+        void fromIndex; void toIndex;
       },
 
       async markWorkoutCompleted(programDayId) {
-        if (!state.program) return;
-        const days = state.program.days.map((d) =>
-          d.id === programDayId ? { ...d, completed: true } : d,
-        );
-        if (days.every((d, i) => d.completed === state.program!.days[i].completed)) return; // no change
-        const program: Program = { ...state.program, days };
-        await db.saveProgram(program);
-        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        /*
+         * ⛔ NOTHING TO MARK. "Done this week" used to be a FLAG written onto a `ProgramDay`, and
+         * the flag needed healing at boot because a kill between the history write and the flag
+         * write left a trained workout still on offer.
+         *
+         * It is DERIVED now: a coach workout is done when a completed session carrying its id sits
+         * in this week's history. One fact, read where it is needed, and there is no second copy to
+         * fall out of step with the first — which is what the heal existed to repair.
+         */
+        void programDayId;
       },
 
       // Test harness only — never reachable in a release build. Simulates having

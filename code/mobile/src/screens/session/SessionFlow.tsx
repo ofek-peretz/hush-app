@@ -256,8 +256,8 @@ export function SessionFlow({ navigation, route }: Props) {
         })),
       );
     }
-    return app.program ? learnPhaseLength(app.program.days) : 0;
-  }, [previewFirstGym, coachPlan, app.program]);
+    return 0;
+  }, [previewFirstGym, coachPlan]);
 
   // First Start ever: a confident start haptic, and the one-time "we're learning your gym" note
   // (shown AFTER Start, never in onboarding, never twice). Mount-only.

@@ -27,18 +27,22 @@ const program: Program = {
 describe('sessionDayName (stable History labels)', () => {
   it('prefers the name captured at start (survives regeneration with new ids)', () => {
     const s = session({ programDayId: 'day_old', programDayName: 'Full A' });
-    expect(sessionDayName(s, program)).toBe('Full A'); // not the current program's "Full B"
+    expect(sessionDayName(s)).toBe('Full A'); // not the current program's "Full B"
   });
 
-  it('falls back to a live program lookup for legacy sessions (no captured name)', () => {
-    const s = session({ programDayId: 'day_new', programDayName: undefined });
-    expect(sessionDayName(s, program)).toBe('Full B');
+  it('says "Workout" for a legacy session that never captured a name', () => {
+    /*
+     * It used to fall back to a live programme lookup. There is no programme to look in, and the
+     * fallback was always the weaker answer: it named the workout by what the plan says TODAY
+     * rather than by what she actually trained that day.
+     */
+    expect(sessionDayName(session({ programDayId: 'day_new', programDayName: undefined }))).toBe('Workout');
   });
 
   it('falls back to a neutral label when nothing matches — never empty (§7.9)', () => {
     const s = session({ programDayId: 'gone', programDayName: undefined });
-    expect(sessionDayName(s, program)).toBe('Workout');
-    expect(sessionDayName(s, null)).toBe('Workout');
+    expect(sessionDayName(s)).toBe('Workout');
+    expect(sessionDayName(s)).toBe('Workout');
   });
 });
 

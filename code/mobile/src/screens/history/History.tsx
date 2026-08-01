@@ -129,7 +129,7 @@ export function History({ navigation }: Props) {
     <HistoryView
       sessions={sessions}
       cardio={cardio}
-      dayName={(s) => sessionDayName(s, app.program)}
+      dayName={(s) => sessionDayName(s)}
       onLifts={() => navigation.goBack()}
       onSession={(id) => navigation.navigate('WorkoutDetail', { sessionId: id })}
       onCardio={(activity) => navigation.navigate('CardioDetail', { activity })}

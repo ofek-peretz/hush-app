@@ -27,10 +27,16 @@ export function weekProgress(program: Program): { done: number; total: number } 
  * regenerations), then a live program lookup for legacy sessions, then a neutral
  * fallback — never an empty or "—" label (§7.9).
  */
-export function sessionDayName(session: Session, program: Program | null): string {
-  if (session.programDayName) return session.programDayName;
-  const fromProgram = program?.days.find((d) => d.id === session.programDayId)?.name;
-  return fromProgram ?? 'Workout';
+/**
+ * What to call a saved session.
+ *
+ * It used to fall back to a programme lookup for rows written before `programDayName` was stamped
+ * at start. There is no programme to look in any more — and the fallback was always the weaker
+ * answer anyway, because it named the workout by what the plan says TODAY rather than by what she
+ * actually trained.
+ */
+export function sessionDayName(session: Session): string {
+  return session.programDayName || 'Workout';
 }
 
 /** kg<->lb display. Stored values are kg; display follows the athlete's setting (§10.1). */

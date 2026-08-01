@@ -71,7 +71,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
       forward={forward}
       loading={loading}
       units={app.profile?.units ?? 'kg'}
-      dayName={session ? sessionDayName(session, app.program) : ''}
+      dayName={session ? sessionDayName(session) : ''}
       bodyweightKg={app.profile?.weightKg}
       onBack={() => navigation.goBack()}
     />

@@ -636,7 +636,7 @@ export function Home({ navigation, route }: Props) {
             ? [{
                 key: 'last',
                 title: t('lapsed.lastSession', { date: new Date(last.startedAt).toLocaleDateString() }),
-                detail: sessionDayName(last, null),
+                detail: sessionDayName(last),
                 onOpen: () => navigation.navigate('WorkoutDetail', { sessionId: last.id }),
               }]
             : []),
