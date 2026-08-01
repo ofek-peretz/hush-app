@@ -5,6 +5,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
+import { trialUsed, nextLedger } from '@/domain/trialLedger';
+import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
 import { askCoachToRevise } from '@/platform/coach/afterSession';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
@@ -375,13 +377,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
        * ever return a stale week from before the generator went — and reading one would put it back
        * on screen behind the coach's. The store carries `program: null` and always will.
        */
-      const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs] = await Promise.all([
+      const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs, ledger] = await Promise.all([
         db.loadProfile(),
         db.loadMode(),
         db.loadSnapshots(),
         db.loadRecents(),
         db.loadEntitlement(),
         db.loadWeekOpen(),
+        readTrialLedger(),
       ]);
       // Age upkeep (founder 2026-07-10): age is asked once — the app advances it a
       // year per full year elapsed, so program construction always sees the current
@@ -406,6 +409,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let mode: AthleteModeState = persistedMode
         ? { mode: persistedMode.mode, completedSessions: persistedMode.completedSessions, portrait: persistedMode.portrait }
         : initialAthleteModeState;
+      /*
+       * ⚠️ THE KEYCHAIN RAISES A COUNT A REINSTALL RESET.
+       *
+       * The trial lived only in AsyncStorage, so deleting the app — or "erase account" inside it —
+       * handed back fourteen free workouts, and it took no skill at all. The ledger outlives the
+       * app; `trialUsed` takes the HIGHER of the two so an unreadable Keychain never gifts a second
+       * trial. See `domain/trialLedger` for why that direction and what it honestly buys.
+       */
+      const used = trialUsed(ledger, mode.completedSessions);
+      if (used > mode.completedSessions) mode = { ...mode, completedSessions: used };
       // CREDIT A SALVAGED WORKOUT (founder 2026-07-11): the app died mid-workout, but the athlete
       // TRAINED it (>= half the prescribed sets) — a crash is not their fault, so it counts exactly
       // like a workout they finished by hand: the session count advances (free trial + calibration),
@@ -494,6 +507,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async function persistMode(m: AthleteModeState) {
       const p: PersistedMode = { mode: m.mode, completedSessions: m.completedSessions, portrait: m.portrait };
       await db.saveMode(p);
+      /*
+       * …and the same number into the Keychain, which outlives the app.
+       *
+       * The founder's question was whether someone can take fourteen free workouts, not subscribe,
+       * delete the app and do it again. They could: this count lived only in AsyncStorage, which a
+       * reinstall clears and which "erase account" clears from inside the app.
+       *
+       * Best-effort and never awaited-on for correctness — a device that cannot keep the ledger
+       * still counts locally, and `trialUsed` takes the higher of the two. See `domain/trialLedger`.
+       */
+      void writeTrialLedger(nextLedger(null, m.completedSessions));
     }
 
     return {
