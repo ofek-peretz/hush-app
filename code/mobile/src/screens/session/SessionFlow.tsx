@@ -37,7 +37,7 @@ import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { EffortLevel, Session } from '@/data/local/models';
-import { restWithSample } from '@/domain/restPrescription';
+import { restWithSample, restedSeconds } from '@/domain/restPrescription';
 import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -2080,7 +2080,9 @@ function Rest({
             // move her median, and the beat says so on the way out. A rest that simply ran out
             // taught nothing new, so it hands straight over to the set.
             const changed = remaining > 0 || session.restExtraSeconds > 0;
-            if (changed && !isTransition) onLearned(Math.max(0, total - remaining), total);
+            // What she actually rested — see `restedSeconds` for why the added seconds have to be
+            // added back (founder C.10).
+            if (changed && !isTransition) onLearned(restedSeconds(total, remaining, session.restExtraSeconds), total);
             else session.endRest();
           }}
         />

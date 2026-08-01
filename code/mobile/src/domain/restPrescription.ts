@@ -117,3 +117,27 @@ export function restWithSample(history: Session[], exerciseId: string, sampleS: 
 export function restTransitionSeconds(): number {
   return learnedTransitionS ?? REST_TRANSITION_S;
 }
+
+/**
+ * ════ WHAT SHE ACTUALLY RESTED ════
+ *
+ * The number the learned-rest beat reports, and the sample her median moves on.
+ *
+ * ⚠️ IT HAS TO ADD BACK THE SECONDS SHE ADDED, and that is the whole of founder C.10 — *"adding
+ * +15 s shows nothing, so the learning looks one-directional."* Two correct rules met and produced
+ * a wrong number:
+ *
+ *   · `restTotalS` NEVER GROWS when she presses +15. That is the fill-forward law, and it is what
+ *     makes the ring sweep by a visible slice instead of nudging imperceptibly.
+ *   · the elapsed rest was read as `total - remaining`, off that same deliberately frozen total.
+ *
+ * So every second she ADDED was invisible to the measurement. She stretched her rest, the beat
+ * reported the old duration, her median did not move, and the one direction the feature could not
+ * learn was the one she had just demonstrated with her thumb.
+ *
+ * The clock she actually watched is `total + extra`.
+ */
+export function restedSeconds(totalS: number, remainingS: number, extraS: number): number {
+  // Never negative: a resume across a clock change can hand back more remaining than total.
+  return Math.max(0, totalS + extraS - remainingS);
+}
