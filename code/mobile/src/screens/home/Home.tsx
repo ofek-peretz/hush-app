@@ -13,7 +13,7 @@ import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
-import { HomeView } from '@/screens/home/HomeView';
+import { HomeView, type HomeWorkoutOption } from '@/screens/home/HomeView';
 import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
@@ -21,7 +21,8 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachSession } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
+import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
@@ -75,6 +76,16 @@ export function Home({ navigation, route }: Props) {
    * the WRONG plan. The gate moved to where it belongs — the act, not the view: a done day still
    * renders its lifts, and the button becomes the quiet "trained this week" note instead of Begin.
    */
+  /*
+   * ════ THE COACH'S WEEK, WHEN THERE IS ONE ════
+   *
+   * Read on focus, because the post-session call may have landed a new one while she was away —
+   * that is the whole point of it. `null` until the read returns and whenever the coach has never
+   * decided anything, in which case everything below falls through to the engine's programme.
+   */
+  const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
+  const [doneCoachIds, setDoneCoachIds] = useState<string[]>([]);
+
   const [chosenId, setChosenId] = useState<string | null>(null);
   const chosenDay =
     chosenId && program ? program.days.find((d) => d.id === chosenId && !d.isRest) ?? null : null;
@@ -82,16 +93,96 @@ export function Home({ navigation, route }: Props) {
   const day = chosenDay ?? nextUp;
 
   /*
+   * ════ WHICH WORKOUT TODAY IS ABOUT, WHOEVER DECIDED IT ════
+   *
+   * One id and one name, resolved from the coach's week when there is one and from the engine's
+   * programme otherwise. Everything downstream — the watch lobby, telemetry, Begin — reads THESE
+   * rather than `day`, because `day` is a `ProgramDay` and a coach workout is not one.
+   *
+   * ⚠️ The ids must come from wherever the CHIPS came from. A first pass had Begin look the coach
+   * session up by the engine day's id (`day_1`) while the coach issues `coach_0` — ids that can
+   * never match, so the coach branch was unreachable and every workout quietly ran the engine's.
+   */
+  const coachWorkouts = React.useMemo(() => coachWeek(coachPlan), [coachPlan]);
+  const coachLed = coachWorkouts.length > 0;
+  const nextCoach = coachWorkouts.find((w) => !doneCoachIds.includes(w.id)) ?? null;
+  const chosenCoach = coachWorkouts.find((w) => w.id === chosenId) ?? null;
+  const todayCoach = coachLed ? chosenCoach ?? nextCoach : null;
+
+  const todayId = coachLed ? todayCoach?.id ?? null : day?.id ?? null;
+  const todayName = coachLed ? todayCoach?.name ?? '' : day?.name ?? '';
+
+  /*
    * There is only ONE door to the selection now — the chips. "THE LAST INTENT WINS" used to
    * arbitrate between two: a chip here, and Begin pressed inside the workout's plan screen, which
    * returned with `focusDayId`. That screen is gone (its list, with the loads it never showed, is
    * on this page), so the arbitration went with it. One door needs no referee.
    */
-  // Every non-rest workout in the week, with its muscle groups, for the chooser.
-  const workouts = (program?.days ?? [])
-    .filter((d) => !d.isRest)
-    .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups), done: !!d.completed }));
+  /*
+   * ════ THE WEEK, FROM WHOEVER DECIDED IT ════
+   *
+   * The coach's plan when there is one, the engine's programme otherwise. Not a merge and not a
+   * preference — a MIGRATION: the engine path is what every athlete already on TestFlight trains
+   * from, and it goes when the generator goes.
+   *
+   * ⚠️ THE IDS MUST COME FROM THE SAME PLACE AS THE WORKOUTS. A first pass had Begin look the coach
+   * session up by the ENGINE day's id (`day_1`) while the coach issues `coach_0` — ids that can
+   * never match, so the coach branch was unreachable and every workout quietly ran the engine's
+   * version. Whoever supplies the chips supplies the id Begin resolves.
+   */
+  const workouts: HomeWorkoutOption[] = coachLed
+    ? coachWorkouts.map((w) => ({
+        id: w.id,
+        name: w.name,
+        // The coach names its own sessions ("Intervals & Core"), so there is no muscle line to
+        // derive — and inventing one would be a claim about a week nobody made.
+        muscles: '',
+        done: doneCoachIds.includes(w.id),
+      }))
+    : (program?.days ?? [])
+        .filter((d) => !d.isRest)
+        .map((d) => ({ id: d.id, name: d.name, muscles: muscleGroupsLabel(d.muscleGroups), done: !!d.completed }));
   const isFocused = useIsFocused();
+
+  /*
+   * READ THE COACH'S WEEK ON FOCUS, not once at mount.
+   *
+   * The post-session call may have landed a whole new programme while she was away from this
+   * screen — that is the entire point of it. Reading once would show her last week's decision for
+   * as long as the app stayed open.
+   *
+   * "Done" is derived from HISTORY rather than a flag on the plan, because the plan is the coach's
+   * and we do not write to it. A coach workout is done when a session carrying its id was completed
+   * since the week opened.
+   */
+  React.useEffect(() => {
+    if (!isFocused) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const [stored, history, weekOpenMs] = await Promise.all([
+          db.loadCoachPlan(),
+          db.loadHistory(),
+          db.loadWeekOpen(),
+        ]);
+        if (!alive) return;
+        setCoachPlan(stored);
+        const since = weekOpenMs ?? 0;
+        setDoneCoachIds(
+          history
+            .filter((h) => Date.parse(h.startedAt) >= since && h.trained !== false)
+            .map((h) => h.programDayId)
+            .filter((id) => id.startsWith('coach_')),
+        );
+      } catch {
+        // An unreadable plan is the engine's week, not a broken screen.
+        if (alive) setCoachPlan(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isFocused]);
 
   /*
    * TODAY'S LIFTS, WITH THEIR LOADS — read here so Home can show the athlete what is waiting.
@@ -151,7 +242,15 @@ export function Home({ navigation, route }: Props) {
 
   // THE LIST DOES NOT STAND DOWN WHEN THE SELECTION CHANGES (A.12) — see `homePlan.ts` for the
   // whole argument. The rows are the day's; only their figures are the engine's, and only those wait.
-  const plan = React.useMemo(() => homePlanRows(day, planTargets, changedDir), [day, planTargets, changedDir]);
+  const plan = React.useMemo(
+    () =>
+      coachLed
+        ? // The coach already decided every load and it is in the stored plan — nothing is in
+          // flight, so unlike the engine path there is no `pending` state to get wrong.
+          coachPlanRows(todayId ? coachRows(coachPlan, todayId) : null, app.profile?.units ?? 'kg')
+        : homePlanRows(day, planTargets, changedDir),
+    [coachLed, coachPlan, todayId, app.profile?.units, day, planTargets, changedDir],
+  );
 
   const nowMs = Date.now();
   // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
@@ -522,7 +621,7 @@ export function Home({ navigation, route }: Props) {
   }
 
   async function onStart() {
-    if (!day) return;
+    if (!day && !(coachLed && todayId)) return;
     if (resting) return; // hard gate: the next week is locked until the Saturday 20:30 roll
     if (gated) {
       navigation.navigate('Paywall', { source: 'gate' });
@@ -542,14 +641,17 @@ export function Home({ navigation, route }: Props) {
        * leave them with no programme and no load progression at all. It goes when the generator
        * goes, not before.
        */
-      const coachPlan = await db.loadCoachPlan().catch(() => null);
-      const planned = coachSession(coachPlan, day.id);
-      if (planned) {
-        await session.startCoach(planned, day.id);
-        navigation.navigate('SessionFlow');
-        return;
+      if (coachLed && todayId) {
+        const planned = coachSession(coachPlan, todayId);
+        if (planned) {
+          await session.startCoach(planned, todayId);
+          navigation.navigate('SessionFlow');
+          return;
+        }
       }
 
+      // Past the coach branch there is nothing but the engine path, which needs a `ProgramDay`.
+      if (!day) return;
       const targets =
         prefetch.current?.dayId === day.id
           ? prefetch.current.targets

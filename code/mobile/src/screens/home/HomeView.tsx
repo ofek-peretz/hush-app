@@ -68,6 +68,17 @@ export interface HomeWorkoutOption {
 export interface HomePlanLift {
   exerciseId: string;
   name: string;
+  /**
+   * THE RIGHT-HAND FIGURE, ALREADY WRITTEN — for work that is not reps at a load.
+   *
+   * A lift's figure is assembled here from `load` / `band` / `sets`, and that assembly only knows
+   * how to say "40 · 3×8–12". A 400 m repeat and a 45-second plank have no load and no band, and
+   * bending them into those fields would print "0 · 4×0–0". So the shapes that cannot be said in
+   * this vocabulary arrive already said, from `coachWeek`, and this row prints them verbatim.
+   *
+   * Absent on every engine row, where the existing assembly is exactly right.
+   */
+  detail?: string;
   /** kg; null = bodyweight (the row then says the reps carry the work, not a weight). */
   load: number | null;
   sets: number;
@@ -567,6 +578,8 @@ function RangeMark() {
  * The load, formatted for display — "41", "" for bodyweight.
  */
 function figureLoad(lift: HomePlanLift, units: 'kg' | 'lb'): string {
+  // A pre-written figure carries its own numbers; a load column beside it would print twice.
+  if (lift.detail != null) return '';
   if (lift.load == null) return '';
   const w = displayWeight(lift.load, units);
   return w == null ? '' : String(+w.toFixed(2));
@@ -584,6 +597,7 @@ function figureLoad(lift: HomePlanLift, units: 'kg' | 'lb'): string {
  * scheme wears, so the LOAD is still the only lit thing in the figure.
  */
 function figureUnit(lift: HomePlanLift, units: 'kg' | 'lb'): string {
+  if (lift.detail != null) return '';
   return lift.load == null ? '' : ` ${unitLabel(units)}`;
 }
 
@@ -605,6 +619,7 @@ function whatIsLeftFirst(workouts: HomeWorkoutOption[]): HomeWorkoutOption[] {
 
 /** The scheme, tight and with an EN-dash range: " · 4×8–10" (leading separator when a load precedes). */
 function figureScheme(lift: HomePlanLift): string {
+  if (lift.detail != null) return lift.detail;
   const [lo, hi] = lift.band;
   const scheme = `${lift.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
   return lift.load == null ? scheme : ` · ${scheme}`;

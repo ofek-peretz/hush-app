@@ -157,3 +157,66 @@ export function coachSession(plan: CoachPlan | null | undefined, workoutId: stri
   const index = (plan?.sessions ?? []).findIndex((_, i) => coachWorkoutId(i) === workoutId);
   return index < 0 ? null : plan!.sessions[index];
 }
+
+/**
+ * The coach's rows in the shape Today already prints.
+ *
+ * `HomePlanLift` was written for the engine's one shape — reps at a load — and its figure assembles
+ * itself from `load` / `band` / `sets`. Three of the coach's four shapes cannot be said that way at
+ * all, and forcing them through would print "0 · 4×0–0" on a 400 m repeat. So those arrive with
+ * their figure ALREADY WRITTEN, in `detail`, and the row prints it verbatim.
+ *
+ * `reps` is not given a `detail` on purpose: it is exactly what the existing assembly is for, so it
+ * keeps the load emphasis, the unit, and the moss/blue tone that says which way the coach moved it.
+ * Two ways of printing the same thing is how two screens end up disagreeing about a number.
+ *
+ * ⚠️ `say` IS DELIBERATELY NOT SHOWN HERE. It is an execution instruction — "at a pace where you
+ * could hold a conversation" — and it belongs where she reads it while doing the work, on the
+ * stage. Printing it on an overview would put a paragraph on every row of Today.
+ */
+export function coachPlanRows(
+  rows: CoachRow[] | null,
+  units: 'kg' | 'lb',
+): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string }[] | null {
+  if (!rows) return null;
+  return rows.map((r) => {
+    const base = { exerciseId: r.ex, name: r.name, sets: r.rounds, band: [0, 0] as [number, number] };
+    switch (r.kind) {
+      case 'reps':
+        // The one shape the existing assembly already says correctly.
+        return { ...base, load: r.load ?? null, band: r.band ?? [0, 0] };
+      case 'time':
+        return { ...base, load: null, detail: `${r.rounds}×${formatSeconds(r.seconds ?? 0)}` };
+      case 'distance':
+        return { ...base, load: null, detail: `${r.rounds}×${formatDistance(r.metres ?? 0, units)}` };
+      case 'open':
+        // No number worth stating — the founder's law: a control that says nothing says nothing.
+        return { ...base, load: null, detail: '' };
+    }
+  });
+}
+
+/** "45s" under a minute, "2:30" above it — the way a stopwatch reads, not a spreadsheet. */
+function formatSeconds(total: number): string {
+  if (total < 60) return `${total}s`;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return s === 0 ? `${m}m` : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Metres below a kilometre; kilometres above it, or MILES for an athlete who reads in pounds.
+ *
+ * ⚠️ SHORT DISTANCES STAY IN METRES IN BOTH SYSTEMS, and that is not an oversight. A 400 m repeat
+ * is 400 m on every track on earth, including American ones — converting it to "437 yd" replaces a
+ * number she recognises with one nobody has ever run. The unit question only arises at the long
+ * end, where 5 km and 3.1 mi are genuinely two different ways of saying it.
+ *
+ * The record is always metres. This is display, and display follows the athlete.
+ */
+function formatDistance(metres: number, units: 'kg' | 'lb'): string {
+  if (metres < 1000) return `${metres} m`;
+  return units === 'lb'
+    ? `${Number((metres / 1609.344).toFixed(2))} mi`
+    : `${Number((metres / 1000).toFixed(2))} km`;
+}

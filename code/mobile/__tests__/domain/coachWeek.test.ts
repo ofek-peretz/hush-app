@@ -7,7 +7,7 @@
  * in it. A conversion would delete a 5 km run, a 45-second plank and every `say` on the way past,
  * quietly, in a function that looked like plumbing.
  */
-import { coachWeek, coachRows, coachSession, coachWorkoutId } from '@/domain/coachWeek';
+import { coachWeek, coachRows, coachSession, coachWorkoutId, coachPlanRows } from '@/domain/coachWeek';
 import { parseCoachPlan, type CoachPlan } from '@/domain/coachPlan';
 
 /** A week only the widened vocabulary can hold: intervals, a lift, a hold, and open work. */
@@ -125,5 +125,55 @@ describe('the rows keep every shape the coach can write', () => {
     expect(s.name).toBe('Intervals');
     expect(s.blocks[0].items).toHaveLength(2);
     expect(coachSession(plan(), 'coach_99')).toBeNull();
+  });
+});
+
+describe('the rows Today prints', () => {
+  /*
+   * `HomePlanLift`'s figure assembles itself from `load` / `band` / `sets` — the engine's one shape.
+   * Three of the coach's four cannot be said that way, and forcing them through prints "0 · 4×0–0"
+   * on a 400 m repeat. So those arrive with the figure already written.
+   */
+  const rowsFor = (id: string, units: 'kg' | 'lb' = 'kg') => coachPlanRows(coachRows(plan(), id), units)!;
+
+  it('leaves a LIFT to the existing assembly, so the load keeps its emphasis and its tone', () => {
+    // Two ways of printing the same thing is how two screens end up disagreeing about a number.
+    const [squat] = rowsFor(coachWorkoutId(1));
+    expect(squat).toMatchObject({ exerciseId: 'bb_back_squat', load: 40, sets: 3, band: [8, 12] });
+    expect(squat.detail).toBeUndefined();
+  });
+
+  it('writes a distance as a distance, and never as a load', () => {
+    const [run] = rowsFor(coachWorkoutId(0));
+    expect(run.detail).toBe('4×400 m');
+    expect(run.load).toBeNull();
+  });
+
+  it('keeps a track repeat in METRES in both systems, and converts only the long end', () => {
+    /*
+     * A 400 m repeat is 400 m on every track on earth, American ones included — "437 yd" replaces a
+     * number she recognises with one nobody has ever run. The unit question only arises where 5 km
+     * and 3.11 mi are genuinely two ways of saying the same thing.
+     */
+    expect(rowsFor(coachWorkoutId(0), 'lb')[0].detail).toBe('4×400 m');
+    expect(rowsFor(coachWorkoutId(0), 'kg')[0].detail).toBe('4×400 m');
+  });
+
+  it('says a held time the way a stopwatch does, not the way a spreadsheet does', () => {
+    const plank = rowsFor(coachWorkoutId(1)).find((r) => r.exerciseId === 'plank')!;
+    expect(plank.detail).toBe('2×45s');
+    const walk = rowsFor(coachWorkoutId(0)).find((r) => r.exerciseId === 'walk_outdoor')!;
+    expect(walk.detail).toBe('4×1:30');
+  });
+
+  it('says nothing at all on open work', () => {
+    // The founder's law: a control that has nothing to say says nothing. A "3×" on mobility is a
+    // number invented to fill a column.
+    const open = rowsFor(coachWorkoutId(1)).find((r) => r.exerciseId === 'mobility')!;
+    expect(open.detail).toBe('');
+  });
+
+  it('is null before the coach has decided, so the section stands down rather than lying', () => {
+    expect(coachPlanRows(null, 'kg')).toBeNull();
   });
 });
