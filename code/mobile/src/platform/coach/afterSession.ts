@@ -26,7 +26,7 @@
  */
 import { db } from '@/data/local/db';
 import { coachFacts } from '@/domain/coachFacts';
-import { COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
 import { coachRequest } from '@/domain/coachPrompt';
 import type { Session } from '@/data/local/models';
 import { askCoach } from './coachClient';
@@ -98,7 +98,10 @@ export async function askAfterSession(justFinished: Session): Promise<CoachUpdat
 
     const reply = await askCoach(
       coachRequest({ facts, ask: { kind: 'after_session' } }),
-      COACH_PLAN_SCHEMA as unknown as Record<string, unknown>,
+      // The DECISION schema, not the plan schema: on this call `sessions` is required, so omitting
+      // it is not something the model can do. Prose asked for it first and prose lost — see
+      // `COACH_DECISION_SCHEMA`.
+      COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
     );
     if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId: justFinished.id, trouble: reply.reason });
 

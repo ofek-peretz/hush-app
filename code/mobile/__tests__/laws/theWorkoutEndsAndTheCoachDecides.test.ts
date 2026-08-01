@@ -148,3 +148,42 @@ describe('the workout ends and the coach decides', () => {
     expect(blocks[0].text).toContain('NEVER DO IS SAY YOU CHANGED SOMETHING AND NOT ATTACH IT');
   });
 });
+
+describe('the programme is required after a session', () => {
+  /*
+   * ⚠️ THIS WAS ASKED FOR IN PROSE FIRST, AND PROSE LOST.
+   *
+   * The instruction said "sessions IS REQUIRED ON THIS TURN", in capitals, and the first live
+   * post-session call answered *"I have increased your bench press load to 32.5 kg"* with no
+   * `sessions` at all. She would have read a change that never happened.
+   *
+   * Structured output is not a suggestion. With `sessions` in `required`, omitting it stops being
+   * something the model can do — so the guarantee moves off the prompt, where it was a request,
+   * and onto the schema, where it is a constraint.
+   */
+  it('sends a schema the coach cannot answer without a programme', async () => {
+    askCoach.mockResolvedValue(REPLY);
+    await askAfterSession(finished);
+    const schema = askCoach.mock.calls[0][1] as { required: string[]; properties: Record<string, unknown> };
+    expect(schema.required).toEqual(['say', 'sessions']);
+    // …and it is the same schema otherwise. Two hand-written copies are two chances to drift.
+    expect(Object.keys(schema.properties)).toEqual(['say', 'sessions', 'notes']);
+  });
+
+  it('still reports honestly if the model manages to answer without one', async () => {
+    // Belt and braces: the schema makes it very hard, and `spoke` is what happens if it occurs
+    // anyway. A surface must treat it exactly like `waiting` — nothing changed.
+    askCoach.mockResolvedValue({ ok: true, model: 'm', usage: null, text: JSON.stringify({ say: 'Up 2.5 on the bench.' }) });
+    const update = await askAfterSession(finished);
+    expect(update.outcome).toBe('spoke');
+    expect(await db.loadCoachPlan()).toBeNull();
+  });
+
+  it('leaves the CHAT schema permissive — most turns are a question answered', async () => {
+    // The two must not converge. A chat turn locked to a required programme is "why did my bench
+    // go down?" answered with a whole week, every time.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { COACH_PLAN_SCHEMA } = require('@/domain/coachPlan') as { COACH_PLAN_SCHEMA: { required: string[] } };
+    expect(COACH_PLAN_SCHEMA.required).toEqual(['say']);
+  });
+});

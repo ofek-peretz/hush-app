@@ -254,6 +254,29 @@ export const COACH_PLAN_SCHEMA = {
   },
 } as const;
 
+/**
+ * ════ THE SAME SCHEMA, WITH THE PROGRAMME REQUIRED ════
+ *
+ * For the ONE call where words alone are not an answer: after a session.
+ *
+ * `COACH_PLAN_SCHEMA` makes `sessions` optional because most turns are a question answered. The
+ * post-session call is not one of those — whatever it attaches IS what she trains next, and an
+ * unchanged week still has to be sent, because nothing else says what she does.
+ *
+ * ⚠️ IT WAS ASKED FOR IN PROSE FIRST, AND PROSE LOST. The instruction said "sessions IS REQUIRED ON
+ * THIS TURN" in capitals, and the first live post-session call answered *"I have increased your
+ * bench press load to 32.5 kg"* with no `sessions` at all — a promise the app cannot keep, and one
+ * she would have read as a change that never happened. Structured output is not a suggestion: with
+ * `sessions` in `required`, omitting it is not a thing the model can do.
+ *
+ * Derived rather than copied, so a change to the plan's shape cannot leave this describing the old
+ * one. `theProgrammeIsRequiredAfterASession` holds the seam.
+ */
+export const COACH_DECISION_SCHEMA = {
+  ...COACH_PLAN_SCHEMA,
+  required: ['say', 'sessions'],
+} as const;
+
 /* ────────────────────────────────────────────────────────────────────────────────── The parse */
 
 /**
