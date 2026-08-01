@@ -15,28 +15,33 @@ import {
   sharedPlan,
 } from '@/domain/planShare';
 
-/** A program carrying exactly the things that must NOT travel, alongside the things that must. */
+/**
+ * THE COACH'S PLAN, carrying exactly the things that must NOT travel beside the things that must.
+ *
+ * It reads the coach's programme now rather than the engine's `Program`, and that RAISED the stakes
+ * of the leak test below rather than changing it: the coach's plan holds her actual prescription —
+ * every load, every band, every rest — so a careless port would have started sharing precisely the
+ * numbers this feature exists to keep private.
+ *
+ * There is also a RUN in it. A shared week can contain one, and filtering to lifts would share a
+ * marathon plan as its three strength sessions with the running quietly missing.
+ */
 const program = {
-  id: 'p1',
-  frequency: 4,
-  days: [
+  v: 2,
+  sessions: [
     {
-      id: 'd0',
       name: 'Upper A',
-      muscleGroups: ['Chest', 'Back', 'Shoulders'],
-      isRest: false,
-      slots: [
-        { exerciseId: 'bb_bench_press', setCount: 4, recommendedWeight: 42.5, oneRepMax: 61 },
-        { exerciseId: 'bb_row', setCount: 4, recommendedWeight: 47.5 },
+      blocks: [
+        { rounds: 4, restS: 120, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 42.5 }] },
+        { rounds: 4, restS: 90, items: [{ kind: 'reps', ex: 'bb_row', reps: [8, 12], load: 47.5 }] },
       ],
     },
-    { id: 'd1', name: 'Rest', muscleGroups: [], isRest: true, slots: [] },
     {
-      id: 'd2',
       name: 'Lower A',
-      muscleGroups: ['Quads', 'Hamstrings'],
-      isRest: false,
-      slots: [{ exerciseId: 'bb_back_squat', setCount: 4, recommendedWeight: 60 }],
+      blocks: [
+        { rounds: 4, restS: 150, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [8, 12], load: 60 }] },
+        { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 3000 }] },
+      ],
     },
   ],
 } as never;
@@ -47,12 +52,20 @@ describe('what travels', () => {
     expect(p.v).toBe(PLAN_SHARE_VERSION);
     expect(p.days.map((d) => d.name)).toEqual(['Upper A', 'Lower A']);
     expect(p.days[0].exerciseIds).toEqual(['bb_bench_press', 'bb_row']);
-    expect(p.days[0].muscleGroups).toEqual(['Chest', 'Back', 'Shoulders']);
-    expect(planLiftCount(p)).toBe(3);
+    // The muscle line is READ from the catalogue — the coach names its own sessions and does not
+    // state muscles, and inventing them would be a claim about a week nobody made.
+    expect(p.days[0].muscleGroups).toEqual(['Chest', 'Back']);
+    // The run travels too. A movement resolves to no muscle, so it adds none — a run is not a muscle.
+    expect(p.days[1].exerciseIds).toEqual(['bb_back_squat', 'run_outdoor']);
+    expect(p.days[1].muscleGroups).toEqual(['Quads']);
+    expect(planLiftCount(p)).toBe(4);
   });
 
-  it('drops rest days — there is nothing in one to adopt', () => {
-    expect(sharedPlan(program).days.some((d) => d.name === 'Rest')).toBe(false);
+  it('drops a session with nothing in it', () => {
+    // There are no rest DAYS to drop any more — the coach writes only the sessions she trains — but
+    // an empty one is still nothing to adopt.
+    const withEmpty = { v: 2, sessions: [{ name: 'Ghost', blocks: [] }, ...(program as never as { sessions: unknown[] }).sessions] } as never;
+    expect(sharedPlan(withEmpty).days.some((d) => d.name === 'Ghost')).toBe(false);
   });
 
   it('carries the rep bands — a preference, not a measurement', () => {
@@ -77,13 +90,18 @@ describe('THE PROMISE · no weight and no body data ever leaves', () => {
 
   it('is an ALLOW-LIST — a field added to a program tomorrow does not travel by default', () => {
     const withSecrets = {
-      days: [
+      v: 2,
+      sessions: [
         {
           name: 'Upper A',
-          muscleGroups: ['Chest'],
-          isRest: false,
-          slots: [{ exerciseId: 'bb_bench_press' }],
-          // things a future Program might grow
+          blocks: [
+            {
+              rounds: 4,
+              restS: 120,
+              items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 42.5, say: 'a rep short of failure' }],
+            },
+          ],
+          // things a coach plan might grow, and things it already has that must not travel
           bodyweightKg: 78,
           athleteSex: 'female',
           notes: 'my left shoulder hurts',
@@ -94,12 +112,19 @@ describe('THE PROMISE · no weight and no body data ever leaves', () => {
     expect(text).not.toContain('78');
     expect(text).not.toContain('female');
     expect(text).not.toContain('shoulder');
+    // The coach's own numbers and its instruction to HER: her prescription, not the week's shape.
+    expect(text).not.toContain('42.5');
+    expect(text).not.toContain('failure');
+    expect(text).not.toContain('restS');
   });
 });
 
 describe('the link', () => {
   it('survives the round trip, non-ASCII names included', () => {
-    const p = sharedPlan({ days: [{ name: 'עליון א', muscleGroups: ['חזה'], isRest: false, slots: [{ exerciseId: 'bb_bench_press' }] }] } as never, { from: 'דנה' });
+    const p = sharedPlan(
+      { sessions: [{ name: 'עליון א', blocks: [{ items: [{ ex: 'bb_bench_press' }] }] }] } as never,
+      { from: 'דנה' },
+    );
     const back = decodePlan(encodePlan(p));
     expect(back!.days[0].name).toBe('עליון א');
     expect(back!.from).toBe('דנה');

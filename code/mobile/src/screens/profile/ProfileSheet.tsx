@@ -26,6 +26,7 @@ import { HushMark } from '@/components/HushMark';
 import { Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { health } from '@/platform/health';
 import type { HealthPermissionState } from '@/platform/health/healthModel';
 import * as haptics from '@/platform/haptics';
@@ -49,6 +50,17 @@ type Overlay = 'none' | 'delete' | 'signout';
 export function ProfileSheet({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  // Whether there is a programme to share at all. `undefined` until the read lands; the row simply
+  // does not draw until then, which is right — an entrance that appears and works beats one that
+  // appears and apologises.
+  const [hasPlan, setHasPlan] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    void db.loadCoachPlan().then((p) => alive && setHasPlan(!!p && p.sessions.length > 0));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const toast = useToast();
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
@@ -290,18 +302,9 @@ export function ProfileSheet({ navigation }: Props) {
             This is a HOLDING PLACE, not a ruling. The founder is moving the person-to-person
             surfaces into the tab bar and designing them properly; until then sharing is reachable,
             which is the whole of what this row is for. */}
-        {/* ⚠️ ONLY WHEN THERE IS SOMETHING IT CAN SHARE.
-            `SharePlanScreen` builds its card from `Program`, and a coach-led athlete has none — the
-            screen would open and bounce straight back, which is worse than no row at all.
-
-            Sharing a COACH programme needs the share format to carry a run and a hold, which it
-            cannot today. Same call as the wrist (`theWristOffersOnlyWhatItCanRun`): offer only what
-            can be done honestly, and say nothing rather than half-do it. The founder is moving the
-            person-to-person surfaces into the tab bar and designing them, and that is where the
-            port belongs. */}
-        {app.program && app.program.days.length > 0 ? (
-          <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last />
-        ) : null}
+        {/* Only when there is something to share — a control that opens and bounces straight back
+            is worse than no control. `SharePlanScreen` reads the same plan. */}
+        {hasPlan ? <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last /> : null}
 
 
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a

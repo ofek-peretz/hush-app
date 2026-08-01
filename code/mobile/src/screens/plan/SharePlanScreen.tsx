@@ -9,6 +9,8 @@ import React from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
+import type { CoachPlan } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
 import { encodePlan, sharedPlan } from '@/domain/planShare';
 import { shareText } from '@/platform/share';
@@ -23,16 +25,27 @@ export const planLink = (token: string) => `hush://plan?p=${encodeURIComponent(t
 export function SharePlanScreen({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const program = app.program;
+  const [programme, setProgramme] = React.useState<CoachPlan | null | undefined>(undefined);
+  React.useEffect(() => {
+    let alive = true;
+    void db.loadCoachPlan().then((p) => alive && setProgramme(p));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  // Nothing to share before a programme exists. The route is only reachable from You, which is
-  // only reachable after onboarding — but a screen must never assume its own preconditions.
-  if (!program || program.days.length === 0) {
+  // `undefined` = the read is still out. Bouncing on it would close the screen the instant it
+  // opened, every time — the read is fast but it is not synchronous.
+  if (programme === undefined) return null;
+
+  // Nothing to share before the coach has written one. The route is only reachable from You, and
+  // the row there is hidden without a plan — but a screen must never assume its own preconditions.
+  if (!programme || programme.sessions.length === 0) {
     navigation.goBack();
     return null;
   }
 
-  const plan = sharedPlan(program, {
+  const plan = sharedPlan(programme, {
     from: app.profile?.name,
     repBandByMuscle: app.profile?.repBandByMuscle,
   });

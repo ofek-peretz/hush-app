@@ -19,6 +19,7 @@
  * from their own body and corrects from their first working set, exactly as it does for a plan Hush
  * built. Nothing in a payload can set a load, because no payload carries one.
  */
+import { muscleOf } from '@/data/exercises';
 
 /** The share-format version. A receiver that does not know a version refuses the payload. */
 export const PLAN_SHARE_VERSION = 1;
@@ -41,31 +42,57 @@ export interface SharedPlan {
   repBandByMuscle?: Record<string, string>;
 }
 
-/** The minimum a program must look like for us to read a shape out of it. */
-interface ProgramLike {
-  days: {
+/**
+ * The minimum a programme must look like for us to read a shape out of it.
+ *
+ * Deliberately structural rather than `CoachPlan` itself: this file is the ALLOW-LIST, and an
+ * allow-list that imports the whole shape it is filtering is one refactor away from forwarding a
+ * field nobody looked at.
+ */
+interface PlanLike {
+  sessions: {
     name: string;
-    muscleGroups?: string[];
-    isRest?: boolean;
-    slots?: { exerciseId?: string }[];
+    blocks: { items: { ex?: string }[] }[];
   }[];
 }
 
 /**
  * Build the shareable shape. ALLOW-LIST — see the note above; do not refactor into a redaction.
+ *
+ * ── WHAT TRAVELS, AND WHAT DELIBERATELY DOES NOT ────────────────────────────────────────────────
+ * The SHAPE of the week: the session names and the things in them, in order. Not the loads, not the
+ * rounds, not the rest — those are hers, decided from what her body did, and they would be wrong on
+ * anyone else's body in a way that looks authoritative.
+ *
+ * That was already true when this read the engine's `Program`. It matters more now: the coach's
+ * plan carries her actual prescription, so a careless port would have started sharing the exact
+ * numbers it was written to keep private.
+ *
+ * ── EVERY SHAPE, NOT JUST THE LIFTS ─────────────────────────────────────────────────────────────
+ * `ex` is a catalogue lift OR a movement id, because a shared week can contain a run. Filtering to
+ * lifts would share a marathon plan as its three strength sessions and quietly drop the running —
+ * the same failure the wrist refuses by not offering the session at all.
  */
 export function sharedPlan(
-  program: ProgramLike,
+  plan: PlanLike,
   opts: { from?: string; repBandByMuscle?: Record<string, string> } = {},
 ): SharedPlan {
   const days: SharedPlanDay[] = [];
-  for (const d of program.days) {
-    if (d.isRest) continue; // a rest day is the absence of a workout — there is nothing to adopt
-    const exerciseIds = (d.slots ?? [])
-      .map((s) => s.exerciseId)
+  for (const session of plan.sessions) {
+    const exerciseIds = session.blocks
+      .flatMap((b) => b.items.map((i) => i.ex))
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
     if (exerciseIds.length === 0) continue;
-    days.push({ name: d.name, muscleGroups: [...(d.muscleGroups ?? [])], exerciseIds });
+    /*
+     * The muscle line is READ from the catalogue rather than carried, because the coach names its
+     * own sessions ("Intervals & Core") and does not state muscles. Deriving is a lookup; inventing
+     * would be a claim about a week nobody made. A movement resolves to nothing and simply adds
+     * none — a run is not a muscle.
+     */
+    const muscleGroups: string[] = [
+      ...new Set(exerciseIds.map((id) => muscleOf(id)).filter((m): m is NonNullable<typeof m> => !!m)),
+    ];
+    days.push({ name: session.name, muscleGroups, exerciseIds });
   }
   return {
     v: PLAN_SHARE_VERSION,
