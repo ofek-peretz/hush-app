@@ -64,10 +64,16 @@ export interface ModelClient {
    * has the chosen number of workouts. The server clamps to a supported template
    * (2–4). Best-effort; fixture honors it via the profile in generateProgram.
    */
-  setWeeklyFrequency(daysPerWeek: number): Promise<void>;
 
-  /** Generate the program before Home renders (spec §1.4/§4.1, flow §2.1). */
-  generateProgram(profile: Profile): Promise<Program>;
+  /*
+   * ⛔ `generateProgram` WAS HERE.
+   *
+   * It composed a week from her body map. Nothing composes a week any more — the coach decides the
+   * programme in the intake conversation and re-decides it after every session, and a locally
+   * assembled second week would make "which one is she training?" a question with an answer nobody
+   * chose. `setWeeklyFrequency` went with it: it carried the frequency into the strategy that did
+   * the composing.
+   */
 
   /**
    * Resolve advisory targets for the next session of a program day. During

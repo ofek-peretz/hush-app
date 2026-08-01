@@ -38,7 +38,8 @@ import { Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
-import { assembleV5DayLists } from '@/engine/v5/programAssembly';
+import { db } from '@/data/local/db';
+import type { CoachPlan } from '@/domain/coachPlan';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -55,7 +56,15 @@ export function ProgramCreated({ route }: Props) {
   const { inputs } = route.params;
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
   // HER learning phase, from the programme the assembler is about to build (see `learnCount`).
-  const learnTicks = useMemo(() => learnCount(inputs), [inputs]);
+  const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void db.loadCoachPlan().then((p) => alive && setCoachPlan(p));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const learnTicks = useMemo(() => learnCount(coachPlan), [coachPlan]);
   const [phase, setPhase] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -233,10 +242,20 @@ export function ProgramCreated({ route }: Props) {
  * the map she just drew. `learnPhaseLength` counts the work, not the names — and it is the SAME
  * call 2.0 makes off the finished programme, so the two screens cannot promise different lengths.
  */
-function learnCount(inputs: OnboardingInputs): number {
-  const days = Math.min(Math.max(inputs.daysPerWeek, 2), 6); // the generator's own clamp
-  const lists = assembleV5DayLists(inputs.bodyMap, days, {}, {}, {}, inputs);
-  return learnPhaseLength(lists.map((d) => ({ slots: d.exerciseIds.map((exerciseId) => ({ exerciseId })) })));
+/**
+ * How many sessions the learning phase runs for.
+ *
+ * It used to ask the ASSEMBLER to compose her week and count the lifts in it. The assembler is
+ * deleted, and by the time this screen draws the coach has already written her programme — so it is
+ * counted from what she will actually train rather than from a second week nobody will see.
+ */
+function learnCount(plan: CoachPlan | null): number {
+  if (!plan) return 0;
+  return learnPhaseLength(
+    plan.sessions.map((s) => ({
+      slots: s.blocks.flatMap((b) => b.items.map((i) => ({ exerciseId: i.ex }))),
+    })),
+  );
 }
 
 /** The moss start/finish measuring mark — two caps, a rule between them, the dot arrived at centre. */

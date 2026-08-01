@@ -8,7 +8,6 @@
  * had it stop at four (founder 2026-07-28).
  */
 import { distinctWorkoutCount } from '@/domain/schedule';
-import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 
 const asDays = (lists: { exerciseIds: string[] }[]) =>
   lists.map((d) => ({ slots: d.exerciseIds.map((exerciseId) => ({ exerciseId })) }));
@@ -38,19 +37,10 @@ describe('distinctWorkoutCount — the work, not the label', () => {
     ])).toBe(1);
   });
 
-  it('tracks the athlete: 2 days a week is 2, 6 days is 6 — never a fixed 4', () => {
-    const profile = { sex: 'female' as const, weightKg: 60 };
-    for (const days of [2, 3, 4, 5, 6]) {
-      const n = distinctWorkoutCount(asDays(assembleV5DayLists(undefined, days, {}, {}, {}, profile)));
-      expect({ days, learnsIn: n }).toEqual({ days, learnsIn: days });
-    }
-  });
-
-  it('never promises more learning sessions than the trial holds', () => {
-    // The screen paints `n` of FREE_SESSION_LIMIT ticks; a count past the end would paint nothing.
-    const profile = { sex: 'male' as const, weightKg: 80 };
-    const n = distinctWorkoutCount(asDays(assembleV5DayLists(undefined, 6, {}, {}, {}, profile)));
-    expect(n).toBeLessThanOrEqual(14);
-    expect(n).toBeGreaterThan(0);
-  });
+  /*
+   * ⛔ TWO TESTS HERE COMPOSED A WEEK WITH THE ASSEMBLER AND COUNTED ITS DAYS. The assembler is
+   * deleted — nothing composes a week. What they were guarding survives in `distinctWorkoutCount`
+   * above, which is the part that was ever ours: given a programme, how many distinct workouts is
+   * it. Where that programme comes from stopped being a question this file can answer.
+   */
 });

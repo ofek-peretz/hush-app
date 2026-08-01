@@ -97,9 +97,40 @@ export function onCoachUpdate(fn: CoachUpdateListener): () => void {
  * `waiting` result, because a rejected promise inside a finished workout is a crash report about
  * something that does not affect the workout at all.
  */
+/**
+ * Ask the coach to revise the programme because something about HER changed.
+ *
+ * Three things used to rebuild the week locally and instantly: a pain report, a change to how many
+ * days she trains, and undoing an engine rotation. The third went with Loop 2 — nothing rotates any
+ * more. The first two are real and still need answering, and the answer is not ours: her sheet
+ * already carries the ease and the frequency, so the coach is told what happened and re-decides.
+ *
+ * ⚠️ IT MATTERS THAT THIS IS IMMEDIATE, NOT DEFERRED TO THE NEXT SESSION. A shoulder that hurts
+ * today must not be programmed tomorrow because the next post-session call has not happened yet.
+ * The engine's instant reshape was protective, and dropping it in favour of "the coach will see it
+ * eventually" would have traded a real safeguard for an architectural tidiness.
+ *
+ * `why` is stated in her own terms and reaches the coach as a turn: "her shoulder hurts", "she
+ * changed to five days a week". No schema of reasons — the sheet carries the facts, this carries
+ * what just happened to them.
+ */
+export async function askCoachToRevise(why: string): Promise<CoachUpdate> {
+  return runCoachCall({ kind: 'revise', why });
+}
+
 export async function askAfterSession(justFinished: Session): Promise<CoachUpdate> {
+  return runCoachCall({ kind: 'after_session', justFinished });
+}
+
+type Occasion =
+  | { kind: 'after_session'; justFinished: Session }
+  | { kind: 'revise'; why: string };
+
+async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
+  const justFinished = occasion.kind === 'after_session' ? occasion.justFinished : null;
   const at = new Date().toISOString();
   inFlight = true;
+  const sessionId = justFinished?.id ?? `revise_${at}`;
   const settle = async (update: CoachUpdate): Promise<CoachUpdate> => {
     await db.saveCoachUpdate(update).catch(() => {});
     inFlight = false;
@@ -124,34 +155,40 @@ export async function askAfterSession(justFinished: Session): Promise<CoachUpdat
     ]);
     // No profile is not a coach failure — it is an athlete who has not finished onboarding, and
     // there is nothing to decide about.
-    if (!profile) return settle({ at, outcome: 'waiting', sessionId: justFinished.id, trouble: 'not_configured' });
+    if (!profile) return settle({ at, outcome: 'waiting', sessionId, trouble: 'not_configured' });
 
     const facts = coachFacts({
       profile,
       program: program ?? { id: 'none', frequency: profile.daysPerWeek ?? 0, days: [] },
       history,
-      justFinished,
+      ...(justFinished ? { justFinished } : {}),
       decided,
     });
 
     const reply = await askCoach(
-      coachRequest({ facts, ask: { kind: 'after_session' } }),
+      coachRequest({
+        facts,
+        ask:
+          occasion.kind === 'after_session'
+            ? { kind: 'after_session' }
+            : { kind: 'revise', why: occasion.why },
+      }),
       // The DECISION schema, not the plan schema: on this call `sessions` is required, so omitting
       // it is not something the model can do. Prose asked for it first and prose lost — see
       // `COACH_DECISION_SCHEMA`.
       COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
     );
-    if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId: justFinished.id, trouble: reply.reason });
+    if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: reply.reason });
 
     const parsed = parseCoachPlan(reply.text, facts);
-    if (!parsed.ok) return settle({ at, outcome: 'waiting', sessionId: justFinished.id, trouble: parsed.reason });
+    if (!parsed.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: parsed.reason });
 
     // The same seam the chat uses. Two callers, one order of writes — see `db.recordCoachAnswer`.
     await db.recordCoachAnswer(parsed.answer, at);
     return settle({
       at,
       outcome: parsed.answer.plan ? 'decided' : 'spoke',
-      sessionId: justFinished.id,
+      sessionId,
       say: parsed.answer.say,
     });
   } catch {
@@ -160,6 +197,6 @@ export async function askAfterSession(justFinished: Session): Promise<CoachUpdat
      * `waiting` — the difference between "the coach did not answer" and "our own code fell over" is
      * a distinction for the log, and she is owed the same sentence either way.
      */
-    return settle({ at, outcome: 'waiting', sessionId: justFinished.id, trouble: 'upstream' });
+    return settle({ at, outcome: 'waiting', sessionId, trouble: 'upstream' });
   }
 }

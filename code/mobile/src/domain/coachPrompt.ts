@@ -176,6 +176,12 @@ export interface CoachSaid {
 export type CoachAsk =
   /** A workout just ended. Decide what happens next. */
   | { kind: 'after_session' }
+  /**
+   * Something about HER changed and the programme has to answer it now — a pain report, a change
+   * to how many days she trains. Not a workout, and not a conversation: an event the sheet already
+   * carries, plus the sentence that says what just happened to it.
+   */
+  | { kind: 'revise'; why: string }
   /** She said something. Answer it. The whole conversation so far, hers last. */
   | { kind: 'chat'; turns: CoachSaid[] }
   /** The intake conversation — no record yet, and the brief is being built. */
@@ -265,6 +271,18 @@ export function coachRequest({
           'the whole programme even where nothing changed — an unchanged week still has to be sent, ' +
           'because there is nothing else that says what she does. Say what changed and why in "say", ' +
           'and put every reason worth remembering in "notes".',
+      });
+      break;
+    case 'revise':
+      blocks.push({
+        text:
+          `Something changed for her, outside a workout: ${ask.why}
+
+` +
+          'Her record above already carries it. Decide what her programme should be from here and ' +
+          'reply with the whole thing — "sessions" IS REQUIRED ON THIS TURN, even for the parts ' +
+          'that do not change, because what you attach is what she trains next and there is nothing ' +
+          'else that says what she does. Say what you changed and why in "say".',
       });
       break;
     case 'chat':

@@ -5,6 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
+import { askCoachToRevise } from '@/platform/coach/afterSession';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
 import { agedProfile } from '@/domain/profileAge';
@@ -87,8 +88,8 @@ interface AppState {
 type Action =
   | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement; weekOpenMs: number | null }
   | { type: 'ENTITLEMENT'; entitlement: Entitlement }
-  | { type: 'PROGRAM_UPDATED'; program: Program; recents: string[]; weekOpenMs?: number }
-  | { type: 'ONBOARDED'; profile: Profile; program: Program; mode: AthleteModeState; snapshots: PortraitSnapshot[]; weekOpenMs: number }
+  | { type: 'PROGRAM_UPDATED'; program: Program | null; recents: string[]; weekOpenMs?: number }
+  | { type: 'ONBOARDED'; profile: Profile; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; weekOpenMs: number }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
   | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[] }
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
@@ -588,17 +589,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         const live = modelRef.current; // the (possibly just-swapped) live model
 
-        // Carry the chosen weekly frequency into the server strategy BEFORE composing
-        // the first week (compose is idempotent — frequency can't change after). Best-
-        // effort: a failure here must not strand onboarding (the week then falls back to
-        // the strategy default); generateProgram below would surface a real outage anyway.
-        try {
-          await live.setWeeklyFrequency(inputs.daysPerWeek);
-        } catch {
-          /* non-fatal — proceed; the composed week uses the default frequency */
-        }
-        // Program generated BEFORE Home renders (spec flow §2.1).
-        const program = await live.generateProgram(programProfile(profile));
+        /*
+         * ⛔ THE PROGRAMME IS NOT GENERATED HERE ANY MORE. It already exists.
+         *
+         * `CoachIntake` is the step before this one, and it does not leave until the coach's plan is
+         * ON DISK (`db.recordCoachAnswer`). By the time this runs there is a programme, written by
+         * the thing that will keep writing it. Composing a second one locally would put two weeks
+         * in the app and make "which one is she training?" a question with an answer nobody chose.
+         *
+         * `setWeeklyFrequency` went with it: it carried the chosen frequency into a server strategy
+         * that composed the week, and nothing composes a week here now.
+         */
+        const program: Program | null = null;
 
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
@@ -616,11 +618,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // frequency (e.g. Thursday + 4×/week), the first bucket is stamped for the NEXT open so
         // it survives the first Saturday roll — the athlete's first program gets a full runway.
         const weekOpenMs = firstBucketOpen(Date.now(), inputs.daysPerWeek);
-        await Promise.all([db.saveProfile(profile), db.saveProgram(program), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
+        await Promise.all([db.saveProfile(profile), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
         setGender(profile.sex);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
-        void track('program_generated', { reason: 'onboarding', frequency: program.frequency, workouts: program.days.length });
         // THE WEEKLY RECEIPT IS THE ONLY RECURRING PUSH (founder 2026-07-29). A quarterly-report
         // note used to be armed here too; it was not on the founder's list of what may ever fire,
         // and the screen that announced it no longer promises it. The twelve-week window is still
@@ -726,16 +727,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           return; // mid-week: keep the bucket intact (completed flags + athlete edits survive).
         }
-        try {
-          const program = await model.generateProgram(programProfile(state.profile));
-          await db.saveProgram(program);
-          await db.saveWeekOpen(weekOpen);
-          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents, weekOpenMs: weekOpen });
-          void track('program_generated', { reason: 'weekly', frequency: program.frequency, workouts: program.days.length });
-        } catch {
-          // Backend unreachable → keep the last-known bucket (degrade quietly, §5.3); the roll
-          // re-attempts on the next Home focus since the anchor is only advanced on success.
-        }
+        /*
+         * ⛔ THE ROLL NO LONGER COMPOSES A WEEK. It only advances the anchor.
+         *
+         * A new week used to mean a newly generated programme. It does not any more: the coach
+         * decides the programme after every session, so by Saturday the current one is already the
+         * one it wants her to train — regenerating on the calendar would overwrite a decision that
+         * was made from her actual training with one assembled from her body map.
+         *
+         * The anchor still turns, because plenty still hangs off it: which decisions belong to
+         * "this week" in the letter, when the weekly push fires, and when Recovery gives way.
+         */
+        await db.saveWeekOpen(weekOpen);
+        dispatch({ type: 'PROGRAM_UPDATED', program: state.program, recents: state.recents, weekOpenMs: weekOpen });
       },
 
       async setUnits(units) {
@@ -755,16 +759,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('pain_reported', { muscle, severity });
-        // The muscle is off now, so the week must stop offering it. Best-effort — the ease is
-        // already saved, and it applies at the next regeneration regardless.
-        try {
-          const fresh = await model.generateProgram(programProfile(profile, now));
-          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, now) ?? fresh;
-          await db.saveProgram(program);
-          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-        } catch {
-          /* offline — the rest is recorded; the week reshapes at the next regeneration */
-        }
+        /*
+         * THE MUSCLE IS OFF NOW, AND THE PROGRAMME HAS TO ANSWER THAT TODAY.
+         *
+         * This used to regenerate the week on the spot. It cannot any more — nothing composes a
+         * week — but the URGENCY was never about the generator: a shoulder that hurts today must
+         * not be programmed tomorrow. So the coach is told immediately rather than at the next
+         * post-session call, which might be days away.
+         *
+         * Fire and forget: the ease is already saved and is in her sheet regardless, so the worst
+         * case is that the revision arrives later rather than never.
+         */
+        void askCoachToRevise(`her ${muscle} hurts (${severity}) and is eased until it settles`);
       },
 
       async updateProfileInfo(fields) {
@@ -793,29 +799,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         void track('profile_edited', {
           changed: Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null),
         });
-        // A changed weekly frequency reshapes the split; a changed time budget re-runs the time cap
-        // (S-64) — either reshapes the week, so rebuild now (athlete-owned pins/order re-apply through
-        // generateProgram). Best-effort; otherwise it applies at the next regeneration.
         if (daysChanged || minutesChanged || mapChanged) {
-          if (daysChanged) {
-            try {
-              await model.setWeeklyFrequency(profile.daysPerWeek);
-            } catch {
-              /* non-fatal — generateProgram below still uses the profile's frequency */
-            }
-          }
-          try {
-            const fresh = await model.generateProgram(programProfile(profile));
-            // A MID-WEEK rebuild must not resurrect finished work: the fresh days come back
-            // `completed: false`, so re-apply this week's DONE flags from the history (else
-            // Home re-offers a workout the athlete already trained).
-            const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
-            await db.saveProgram(program);
-            dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-            void track('program_generated', { reason: daysChanged ? 'frequency' : mapChanged ? 'body_map' : 'minutes', frequency: program.frequency });
-          } catch {
-            /* offline — applies on the next weekly regeneration */
-          }
+          /*
+           * SHE CHANGED SOMETHING STRUCTURAL — most often how many days a week she trains.
+           *
+           * The week used to be rebuilt here from her body map. The coach owns that decision now,
+           * and her sheet already carries the new number, so it is told what happened and answers
+           * with a whole programme. Not awaited: the profile edit is saved and complete on its own.
+           */
+          void askCoachToRevise(`she now trains ${profile.daysPerWeek} days a week`);
         }
       },
 
@@ -864,14 +856,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (next === prefs) return; // not a live rotation — nothing to undo, nothing to write
         await db.savePreferences(next);
         void track('engine_rotation_undone', { exerciseId: anchorExerciseId });
-        try {
-          const fresh = await model.generateProgram(programProfile(state.profile));
-          const program = healWeekCompletion(fresh, await db.loadHistory(), state.weekOpenMs, Date.now()) ?? fresh;
-          await db.saveProgram(program);
-          dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
-        } catch {
-          /* offline — the preference is saved; it applies at the next regeneration */
-        }
+        /*
+         * ⚠️ THERE ARE NO ENGINE ROTATIONS LEFT TO UNDO. Rotation was Loop 2's, and Loop 2 is gone.
+         *
+         * The preference write above still runs so a rotation enacted BEFORE the deletion can still
+         * be taken back by an athlete who is living with one. Nothing rebuilds a week here: if she
+         * wants a different exercise she can say so, which is a better door than a double tap that
+         * had to infer what she meant.
+         */
       },
 
       async reorderExercise(dayId, fromIndex, toIndex) {

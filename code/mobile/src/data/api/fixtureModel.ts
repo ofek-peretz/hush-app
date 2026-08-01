@@ -32,7 +32,6 @@ import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
-import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
@@ -659,171 +658,14 @@ export const fixtureModel: ModelClient = {
     return null;
   },
 
-  async setWeeklyFrequency() {
-    // No-op: generateProgram already honors profile.daysPerWeek directly.
-  },
-
-  async generateProgram(profile: Profile): Promise<Program> {
-    // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all N are
-    // done). The programme is ASSEMBLED from her body map (register Part 3), never a shelf split.
-    // Frequency is 2..6 — one workout a week is not a programme, so it is not offered (onboarding wheel
-    // is min 2), and clamping to 2 keeps the region split coherent (a single day can't cover a body).
-    const n = Math.min(Math.max(profile.daysPerWeek, 2), 6);
-    // One goal: hypertrophy (register Part 9 §A — the goal question is deleted; toning/strength are
-    // gone), so no goal is read anywhere. The weekly VOLUME lever (low/moderate/high) is gone too: in
-    // v5 volume is earned and cut from facts (Loop 3, S-32/S-34) starting from B-2, never set by a dial.
-    const prefs = await loadPreferencesSafe();
-
-    // The programme is GENERATED from the body map (register Part 3) — an `off` muscle never appears,
-    // emphasis earns more, and the region days fall out of where the volume is. The demographic split
-    // (MEN_SPLITS/WOMEN_SPLITS) is DELETED (S-58). Loop 3 (D): the LEARNED per-muscle volume reshapes
-    // the programme at every regeneration — a muscle that earned sets grows an exercise / fuller
-    // schemes, a trimmed one shrinks. Empty until she has trained, so the day-one shape is untouched
-    // for a fresh athlete.
-    const learnedVolume = await getVolumeTargetsV5().catch((e): Record<string, number> => {
-      void track('engine_error', { op: 'getVolumeTargetsV5', message: String(e) });
-      return {};
-    });
-    let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
-    // Safety net: everything-off (S-3) is prevented by the body-map screen (validateMap), but if a map
-    // ever yields no workout, fall back to an ALL-NORMAL map (never a demographic shelf) so a workout
-    // always exists. Unreachable in practice.
-    if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
-    const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts));
-
-    // S-29 · "The same exercise in two workouts in one week. **One progression, fed by both
-    // sessions** — automatic under exercise-keying. The `canonicalEngineId` unification hack is
-    // deleted." It was still here, computing slot ids nothing reads: v5 keys every decision to the
-    // EXERCISE, so two occurrences of one lift already share one progression by construction.
-
-    // Generation touches NO engine state: v5 does no engine-initiated swap here (a learned substitute
-    // is already applied inside the assembler, C1), and the 3-week CALENDAR rotation is deleted
-    // (register Part 5 — variety comes from a measured stall, not a schedule). Per-exercise state is
-    // created lazily by advanceV5 in sessionTargets.
-    for (const d of days) applyLeaveIts(d, prefs.leaveItsByMuscle); // a leave-it leads its muscle (S-30/S-71)
-    // A leave-it may sit on different EQUIPMENT than the slot it replaced — re-run the station
-    // ordering so the block law survives the substitution (Part 3 #3; runs before core is appended).
-    for (const d of days) reflowDayForStations(d);
-    // Core rides as supplemental work, but its SIZE follows the body map (S-50/S-2/S-4): off → none,
-    // emphasis → a second movement. Never a shelf default that ignores what she declared.
-    addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal');
-    const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
-    // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
-    // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
-    const history = await loadHistorySafe();
-    const restCache = new Map<string, number | null>();
-    const restSecFor = (id: string): number | null => {
-      let r = restCache.get(id);
-      if (r === undefined) {
-        const rests: (number | null | undefined)[] = [];
-        // INTER samples only (setIndex > 0): a first-set rest is the TRANSITION — priced separately
-        // below, and it must not drag this lift's between-sets median up (S-17, one clean fact each).
-        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach && l.setIndex > 0) rests.push(l.restBeforeS);
-        r = learnedRestS(rests);
-        restCache.set(id, r);
-      }
-      return r;
-    };
-    // B-4's other half: her measured SET DURATION, from the timestamps already on every logged set.
-    // Only consecutive same-exercise sets inside one session can yield it (see learnedExecS).
-    const execCache = new Map<string, number | null>();
-    const execSecFor = (id: string): number | null => {
-      let e = execCache.get(id);
-      if (e === undefined) {
-        const samples: ExecSample[] = [];
-        for (const s of history) for (const l of s.sets) {
-          if (l.exerciseId !== id || l.isApproach) continue;
-          samples.push({ exerciseId: l.exerciseId, sessionId: s.id, atMs: Date.parse(l.persistedAt), restBeforeS: l.restBeforeS });
-        }
-        samples.sort((a, b) => a.atMs - b.atMs);
-        e = learnedExecS(samples);
-        execCache.set(id, e);
-      }
-      return e;
-    };
-    // D4: resolve an over-budget day by DONATING from the muscle that can best spare it (S-37, emphasis
-    // protected) BEFORE the positional safety net.
-    // S-59 / Part 3 #5 — her learned leave-its (S-71) are cut LAST by both trims.
-    const leaveIts = new Set(Object.values(prefs.leaveItsByMuscle));
-    // The between-exercises rest: her pooled transition median, else the declared 120 s — the SAME
-    // seconds the transition timer actually runs (S-17), so the budget prices the workout she has.
-    const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
-    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
-    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS); // work ≤ her minutes
-    // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
-    // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
-    // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
-    // its last lift (S-35's two protected drops).
-    //
-    // TODO(screens · S-3) — THE ENGINE HALF IS DONE; THE SENTENCE IS NOT. The register says the
-    // engine "says so", and today it only says so to telemetry. She should be told, in words, that
-    // this workout does not fit the minutes she declared and what her options are (more minutes, or
-    // a muscle off). Held deliberately for the founder's redesign of the programme surfaces —
-    // 2026-07-21. The engine emits everything the copy needs: the day, its real minutes, her budget.
-    //
-    // TODO(screens · S-59) — the other half of the same family. "Her leave-its do not fit inside her
-    // declared minutes": the ASSEMBLY rule is built (a leave-it is cut last, here and in
-    // trimV5ToBudget), and Rev 10 deleted the old prompt because a declarative pin no longer exists.
-    // If the redesign wants to surface anything here, it is the same S-3 sentence, not a question.
-    for (const d of days) {
-      // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
-      // report can never disagree with the enforcement about whether a day fits.
-      const mins = estimateSessionMinutes(d, restSecFor, execSecFor, transitionS);
-      if (mins > budgetMin + 1e-9) {
-        // S-3 — carry the verdict onto the day so the surface can SAY it (Home), not only telemetry.
-        // Same estimate the trims enforced, so the sentence can never disagree with the enforcement.
-        d.overBudget = true;
-        void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
-      }
-    }
-    for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
-    const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
-    return { id: 'program_v1', frequency: n, days: ordered };
-  },
-
-  /**
-   * WHAT THIS WORKOUT EARNED — folded at the whistle, then read back.
+  /*
+   * ⛔ `generateProgram` AND `setWeeklyFrequency` WERE HERE, and about 300 lines of assembly with
+   * them — the body-map read, the region split, the capability slots, the time-cap trimming.
    *
-   * The brief's promise is "at the end of a workout, next time's weights are already decided — and
-   * it says so, THEN." Before this, they were decided lazily at the next session start, so Complete
-   * had nothing true to show and pointed at Saturday instead. Folding here makes the promise real.
-   *
-   * `[]` is a real and common answer — a workout where every lift held (S-24) changed nothing, and
-   * the screen must say so rather than invent a change (R7 / S-16).
+   * Nothing composes a week now. The coach writes the programme in the intake conversation and
+   * re-writes it after every session, from what she actually did rather than from a body map filled
+   * in on the day she signed up.
    */
-  async sessionEarned({ startedAtMs }): Promise<Explanation[]> {
-    const program = await db.loadProgram();
-    if (!program) return [];
-    const profile = await loadProfileSafe();
-    const history = await loadHistorySafe();
-    const prefs = await loadPreferencesSafe();
-    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
-    await foldEngine(program, profile, history, prefs, bucketOpenMs);
-    return getSessionEarnedV5(startedAtMs).catch((e): Explanation[] => {
-      void track('engine_error', { op: 'sessionEarned', message: String(e) });
-      return [];
-    });
-  },
-
-  /**
-   * The absolute next load per lift one occurrence set (v7 3.3b Record badges). Folds first — so the
-   * most recent whistle is decided before we read it back — then reads the stamped changeLog. A lift
-   * that held has no entry; the screen reads its absence as "holds at what she lifted".
-   */
-  async sessionForward({ startedAtMs }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
-    const program = await db.loadProgram();
-    if (!program) return {};
-    const profile = await loadProfileSafe();
-    const history = await loadHistorySafe();
-    const prefs = await loadPreferencesSafe();
-    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
-    await foldEngine(program, profile, history, prefs, bucketOpenMs);
-    return getSessionForwardV5(startedAtMs).catch((e): Record<string, { loadFrom: number | null; loadTo: number | null }> => {
-      void track('engine_error', { op: 'sessionForward', message: String(e) });
-      return {};
-    });
-  },
-
   async sessionTargets({ programDayId }): Promise<SetTarget[]> {
     void programDayId; // targets are keyed by exercise; the screen picks the day's slots
     const profile = await loadProfileSafe();

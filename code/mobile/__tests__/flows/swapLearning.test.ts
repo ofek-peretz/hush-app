@@ -5,7 +5,6 @@
  */
 import { extractOccurrences, foldSessionSwaps, learnedLeaveIts, undoEngineRotation } from '@/domain/swapLearning';
 import { emptyLearning, offeredFor, type SwapLearning } from '@/engine/v5/learnedSwap';
-import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
 import { muscleOf } from '@/data/exercises';
 
@@ -81,11 +80,12 @@ describe('Rev 7 · foldSessionSwaps — two sessions adopt, and it is reversible
     let st = emptyLearning();
     st = foldSessionSwaps(st, [BENCH], [DBBENCH]);
     st = foldSessionSwaps(st, [BENCH], [DBBENCH]); // adopted bench → db bench
-    const chest = assembleV5DayLists(undefined, 4, {}, st.substitutes)
-      .flatMap((d) => d.exerciseIds)
-      .filter((id) => muscleOf(id) === 'Chest');
-    expect(chest).toContain(DBBENCH); // the learned choice reaches the programme
-    expect(chest).not.toContain(BENCH);
+    /*
+     * ⛔ THIS BUILT A WEEK WITH THE ASSEMBLER to check the learned substitute appeared in it. There
+     * is no assembler. The learning itself — two same-target swaps adopt a standing substitute — is
+     * fully covered above and is the part that survived: it writes a PREFERENCE, and what reads it
+     * is now the coach's sheet rather than a composer.
+     */
   });
 });
 

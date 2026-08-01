@@ -85,48 +85,18 @@ describe('B-1 · the cold start reads her sex and her bodyweight, and nothing el
   });
 });
 
-describe('the programme is not shaped by any v4 declaration', () => {
-  it('a declared GOAL changes nothing — there is one goal (Part 5)', async () => {
-    const a = await fixtureModel.generateProgram({ ...base, goal: 'build_muscle' });
-    await db.clearAll();
-    const b = await fixtureModel.generateProgram({ ...base, goal: 'lose_fat' as never });
-    expect(shape(b)).toEqual(shape(a));
-  });
-
-  it('AGE changes no set count (S-42 refuses the same class of guess)', async () => {
-    const young = await fixtureModel.generateProgram({ ...base, age: 25 });
-    await db.clearAll();
-    const old = await fixtureModel.generateProgram({ ...base, age: 72 });
-    expect(shape(old)).toEqual(shape(young));
-  });
-
-  it('there is no weekly VOLUME lever left to pull', async () => {
-    const p = await fixtureModel.generateProgram({ ...base, volume: 'high' } as never);
-    await db.clearAll();
-    const q = await fixtureModel.generateProgram({ ...base, volume: 'low' } as never);
-    expect(shape(q)).toEqual(shape(p));
-  });
-
-  it('S-27 · every set count sits inside F-1 [3, 5] — the register names ONE ceiling', async () => {
-    for (const days of [2, 3, 4, 5, 6]) {
-      await db.clearAll();
-      const p = await fixtureModel.generateProgram({ ...base, daysPerWeek: days });
-      for (const d of p.days) for (const s of d.slots) {
-        expect(s.setCount).toBeGreaterThanOrEqual(SETS_MIN);
-        expect(s.setCount).toBeLessThanOrEqual(SETS_MAX);
-      }
-    }
-  });
-
-  it('no slot carries a slot key — v5 is exercise-keyed (Loop 2 / S-29)', async () => {
-    const p = await fixtureModel.generateProgram(base);
-    expect(p.days.every((d) => d.slots.every((s) => s.engineSlotId == null))).toBe(true);
-  });
-});
-
-const shape = (p: { days: { name: string; slots: { exerciseId: string; setCount: number }[] }[] }) =>
-  p.days.map((d) => ({ name: d.name, slots: d.slots.map((s) => `${s.exerciseId}x${s.setCount}`) }));
-
+/*
+ * ⛔ "THE PROGRAMME IS NOT SHAPED BY ANY v4 DECLARATION" WAS HERE — goal, age and a weekly volume
+ * lever each proved to change nothing about the composed week.
+ *
+ * The generator is deleted, so there is no composed week to compare. The guarantee did not die
+ * with it, it moved: the coach is handed her record and her own words and decides from those, and
+ * `theSheetNamesEveryFieldItSends` is what now says exactly which fields reach it. A declaration
+ * that is never sent cannot shape anything.
+ *
+ * The source sweep below survives untouched and still matters most — it is the tripwire that stops
+ * a v4 input creeping back into the code at all.
+ */
 describe('the source itself carries no v4 decision input', () => {
   const src = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', 'src', rel), 'utf8');
   /** The file with its comments stripped — a comment may NAME a removed thing to record why it went,
@@ -174,11 +144,13 @@ describe('the source itself carries no v4 decision input', () => {
     // what to put on the bar on Wednesday — any such link is a fatigue theory, and it is banned
     // (Part 1's banned inputs). The day someone wires cardio or HR into a decision, this fails.
     const engineFiles = [
+      // `programAssembly.ts` was here too, with `loop2.ts` and `loop3.ts`. The first composed a
+      // week and the other two decided between sessions; all three are deleted.
       // `loop2.ts` and `loop3.ts` were here. They were the between-session decision and they are
       // gone — see `theEngineDecidesNothingBetweenSessions`. Loop 1 stays: it acts inside the
       // workout, on what it is watching, against a prescription the coach wrote.
       'engine/v5/loop1.ts', 'engine/v5/v5Engine.ts',
-      'engine/v5/liveSession.ts', 'engine/v5/programAssembly.ts', 'engine/v5/repsPerRung.ts',
+      'engine/v5/liveSession.ts', 'engine/v5/repsPerRung.ts',
       'engine/loadMath.ts', 'data/api/fixtureModel.ts',
     ];
     for (const f of engineFiles) {
@@ -198,7 +170,7 @@ describe('the source itself carries no v4 decision input', () => {
 
   it('THERE IS NO PIN — the word survives only as history, the state is a learned leave-it', () => {
     // Founder, 2026-07-21: "there is no PIN any more, the engine learns from the SWAP at K=2."
-    for (const f of ['data/local/db.ts', 'engine/v5/programAssembly.ts', 'domain/swapLearning.ts']) {
+    for (const f of ['data/local/db.ts', 'domain/swapLearning.ts']) {
       const code = src(f).split('\n')
         .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//') && !l.trim().startsWith('/*')).join('\n');
       expect({ file: f, hasPinState: /pinsByMuscle|pinnedByMuscle/.test(code) }).toEqual({ file: f, hasPinState: false });
