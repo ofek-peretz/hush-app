@@ -269,3 +269,72 @@ export function coachLoadDirections(
   }
   return out;
 }
+
+/**
+ * The case behind a lift the coach moved — what Today opens when she taps a lit load.
+ *
+ * The engine's version (`changedLiftCase`) assembled a three-part argument out of a stamped weekly
+ * snapshot: the load it came from, the delta, the band, and the two sessions that made it. Most of
+ * that is not the coach's to state — it writes a programme, not a delta — so the case is built from
+ * what IS known: the two loads (the current plan and the one before it, which is where the direction
+ * comes from too), her band, and the coach's own sentence.
+ *
+ * ⚠️ THE SESSIONS ARE LEFT EMPTY, and that is a real narrowing rather than an oversight. The engine
+ * could name the two sessions that made a decision because it made the decision FROM them, by a rule
+ * this app owned. The coach reads her whole record and answers in a sentence; picking two sessions
+ * out of it afterwards and captioning them "these are why" would be this file inventing the argument
+ * and attributing it. The sentence is the argument now.
+ */
+export function coachChangedCase(
+  exerciseId: string,
+  now: CoachPlan | null | undefined,
+  before: CoachPlan | null | undefined,
+  say: string,
+  units: 'kg' | 'lb',
+): {
+  exerciseId: string;
+  verdict: 'up' | 'down' | 'hold';
+  from: string | null;
+  to: string;
+  unit: string;
+  delta: string | null;
+  band: [number, number];
+  line: { text: string };
+  sessions: never[];
+} | null {
+  const find = (plan: CoachPlan | null | undefined) => {
+    for (const session of plan?.sessions ?? []) {
+      for (const block of session.blocks) {
+        for (const item of block.items) {
+          if (item.kind === 'reps' && item.ex === exerciseId) return item;
+        }
+      }
+    }
+    return null;
+  };
+  const item = find(now);
+  if (!item) return null;
+
+  const was = find(before)?.load ?? null;
+  const load = item.load;
+  const show = (kg: number | null) => (kg == null ? null : String(+(units === 'lb' ? kg * 2.2046226 : kg).toFixed(2)));
+  const verdict: 'up' | 'down' | 'hold' =
+    load == null || was == null || Math.abs(load - was) < 1e-6 ? 'hold' : load > was ? 'up' : 'down';
+
+  return {
+    exerciseId,
+    verdict,
+    // Nothing to strike through on a hold or on a lift that has just arrived.
+    from: verdict === 'hold' ? null : show(was),
+    to: show(load) ?? '',
+    unit: units,
+    delta:
+      verdict === 'hold' || load == null || was == null
+        ? null
+        // A REAL minus sign, not a hyphen — the same character every other figure in the app uses.
+        : `${load > was ? '+' : '−'}${+Math.abs(load - was).toFixed(2)}`,
+    band: item.reps,
+    line: { text: say },
+    sessions: [],
+  };
+}

@@ -21,7 +21,7 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
@@ -49,7 +49,6 @@ import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import type { Line } from '@/domain/voice';
-import { getWeeklyPlan, getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachBrief } from '@/domain/coachEarned';
 import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
@@ -358,6 +357,36 @@ export function Home({ navigation, route }: Props) {
         ]);
         if (cancelled) return;
         const fromCoach = coachBrief(log, app.weekOpenMs);
+        const directions = coachLoadDirections(coachPlan, before);
+        /*
+         * THE CASE BEHIND EACH LIT LOAD. Today lights a moved load in the direction it moved, and
+         * tapping it must say why — otherwise the tap falls through to the form clip and the one
+         * screen that names a decision refuses to explain it.
+         *
+         * The sentence is the coach's own, matched to the lift by the note it wrote. A lift with a
+         * direction and no note keeps its colour and simply has no sheet: the colour is a fact we
+         * derived, and inventing a sentence to go under it would be the app arguing on the coach's
+         * behalf.
+         */
+        const saidFor = new Map((log ?? []).filter((d) => d.ex).map((d) => [d.ex as string, d.say]));
+        setWhyByExercise(
+          Object.fromEntries(
+            Object.keys(directions)
+              .map((ex) => {
+                const say = saidFor.get(ex);
+                if (!say) return null;
+                const c = coachChangedCase(ex, coachPlan, before, say, app.profile?.units ?? 'kg');
+                return c ? ([ex, c] as const) : null;
+              })
+              .filter((e): e is NonNullable<typeof e> => e != null),
+          ),
+        );
+        /*
+         * LOADS UP — the fact on the recovery band. It was counted off the engine's snapshot; it is
+         * counted off the same two programmes the direction comes from, so the band and the row
+         * colours can never disagree about how many went up.
+         */
+        setLoadsUp(Object.values(directions).filter((d) => d === 'up').length);
         /*
          * `null` and `0` are DIFFERENT and both surfaces depend on it: null is "nothing has ever
          * been decided for her" — her first week, where the coach gave a starting point rather than
@@ -365,11 +394,13 @@ export function Home({ navigation, route }: Props) {
          * owed.
          */
         setBriefCount(fromCoach ? fromCoach.count : null);
-        setChangedDir(coachLoadDirections(coachPlan, before));
+        setChangedDir(directions);
       } catch {
         if (!cancelled) {
           setBriefCount(null);
           setChangedDir({});
+          setWhyByExercise({});
+          setLoadsUp(0);
         }
       }
     })();
@@ -713,6 +744,13 @@ export function Home({ navigation, route }: Props) {
       onStart={onStart}
       workouts={workouts}
       onChooseWorkout={setChosenId}
+      /*
+       * Never written since the coach took the week: `weekBriefing` assembled a sentence out of
+       * deltas and the coach writes its own. `HomeView` does not render it either — it has read
+       * only `briefCount` since the v7 restructure moved the sentence off Today. Left as the prop
+       * it is rather than removed, because the view's shape is the founder's and he is redesigning
+       * it.
+       */
       brief={brief}
       briefCount={briefCount}
       undoable={undoable}

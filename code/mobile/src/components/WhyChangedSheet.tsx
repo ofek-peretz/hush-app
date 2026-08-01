@@ -223,7 +223,8 @@ export function whyProps(
       figure: s.figure,
       reached: s.reached,
     })),
-    line: c.line.key ? t(c.line.key, c.line.params) : '',
+    // The engine's reason was an i18n key the app expanded; the coach's is already a sentence.
+    line: 'text' in c.line ? c.line.text : c.line.key ? t(c.line.key, c.line.params) : '',
   };
 }
 

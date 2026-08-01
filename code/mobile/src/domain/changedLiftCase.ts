@@ -39,8 +39,15 @@ export interface ChangedLiftCase {
   /** "+3.5" / "−2.5", already signed with a real minus. Null on a hold. */
   delta: string | null;
   band: [number, number];
-  /** The engine's own sentence, as an i18n key + params. */
-  line: { key: string; params?: Record<string, string | number> };
+  /**
+   * WHY, in whoever's words decided it.
+   *
+   * It was the engine's sentence as an i18n key + params — it had to be, being a machine assembling
+   * prose for two languages. The coach writes the sentence itself, in her language, so a case may
+   * now carry literal text instead. Translating that back into a key would turn "your last two
+   * sessions ended short" into `endedShort` and the reason she is owed into a category.
+   */
+  line: { key: string; params?: Record<string, string | number> } | { text: string };
   /** Oldest first, at most two — the sessions that made the case. */
   sessions: CaseSession[];
 }
