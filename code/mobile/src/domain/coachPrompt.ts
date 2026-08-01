@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 6;
+export const COACH_PROMPT_VERSION = 7;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -379,14 +379,28 @@ ${JSON.stringify(hersAlone(facts))}
            * the introduction is an INSTRUCTION now, and it happens the way it happens with a real
            * coach — inside the first answer, while already being useful.
            *
-           * ── AND THE INTAKE INHERITED TWO QUESTIONS ──────────────────────────────────────────
+           * ── WHAT THE APP NO LONGER ASKS, AND WHY THAT IS NOT A CHECKLIST ────────────────────
            * `ManualInfo` is deleted (founder: *"delete every screen you can, and change the prompt
            * accordingly. Good onboarding is short"*). It collected her bodyweight and how many days
-           * she trains, and both are named here because a programme cannot be written without the
-           * second and the first is what most starting loads are reasoned from.
+           * she trains.
            *
-           * They are named as things to LEARN, not as a form to complete: a coach asks how often
-           * you can get to a gym, not "days per week: [ ]".
+           * ⚠️ The first cut of this block then told the coach it *needed* both before it could
+           * build, and the founder caught it:
+           *
+           *   > *"Why did you decide the AI must compute the weights from sex × bodyweight? What if
+           *   > it thinks it is better by sex × bodyweight × other facts the athlete tells it ×
+           *   > experience? Why are you limiting it — what did I put an AI in for?"*
+           *
+           * He is right, and the instruction was the mistake rather than the intent. Nothing in
+           * this app clamps the coach's loads — there is no floor, no ceiling and no formula
+           * applied to what it writes; `startingLoad` belongs to the retired local model and to the
+           * milestone ladders, and neither is consulted here. But an instruction that says "you
+           * need X before you can build" is a constraint even when no code enforces it: it decides,
+           * in advance, what a good coach considers enough.
+           *
+           * So the block below states a FACT — nothing else in the app will ever ask her these —
+           * and leaves the judgement where it belongs. If it can write a better first week from her
+           * training history and the equipment she has than from a number on a scale, it should.
            */
           'This is the intake conversation, and it is the FIRST thing she has ever heard from you. ' +
           'She has no record yet — "performed" is empty and there is no session.\n\n' +
@@ -394,10 +408,11 @@ ${JSON.stringify(hersAlone(facts))}
           'are, and what you are going to do about what she just told you. One or two sentences, ' +
           'the way a coach does it standing in front of someone. Never a list of your features, ' +
           'never a greeting on its own, and never a question you have already been answered.\n\n' +
-          'Before you can build, you need two things she has not been asked for anywhere else: ' +
-          'roughly what she weighs, and how many days a week she can actually train. Ask for them ' +
-          'the way a person would, when they fit the conversation — not as a form, and not both at ' +
-          'once.\n\n' +
+          'Two things NOTHING ELSE in the app will ever ask her: her bodyweight, and how many days ' +
+          'a week she can train. If you want either, ask for it the way a person would, when it ' +
+          'fits the conversation — never as a form. Whether you need them, and what else you need, ' +
+          'is your judgement: you decide the opening loads and you decide what you must know to ' +
+          'set them.\n\n' +
           'Ask what you need, one or two questions at a time, following what she actually said ' +
           'rather than a list. When you know enough, build it — say so in "say" and attach the ' +
           'whole programme in "sessions" in the same reply.\n\n' +
