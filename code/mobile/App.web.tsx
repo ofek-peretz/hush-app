@@ -170,7 +170,12 @@ class Boundary extends React.Component<{ children: React.ReactNode }, { error: E
 }
 
 /** The mark beside each row — what the harness can and cannot show, said in one glyph. */
-const MARK: Record<string, string> = { live: '●', device: '◐', todo: '○', held: '—' };
+/*
+ * A withdrawn screen had no mark, so the index printed the word "undefined" beside every one of
+ * them — five rows of it, in the list the founder reads to decide what is left to do. `cancelled`
+ * is a real status in `ScreenStatus`; it simply never got a glyph. `held` is not, and never was.
+ */
+const MARK: Record<string, string> = { live: '●', device: '◐', todo: '○', cancelled: '×' };
 
 /**
  * THE INDEX — every handoff screen, in the handoff's order, with where it stands.
@@ -228,7 +233,7 @@ function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
       })}
 
       <Text style={styles.indexNote}>
-        {'●  opens here     ◐  built, device-only     ○  not built     —  held'}
+        {'●  opens here     ◐  built, device-only     ○  not built     ×  withdrawn'}
       </Text>
     </ScrollView>
   );
