@@ -1126,10 +1126,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       toLoad: current ? isToLoad(plan, machine.setIndex, state.session?.sets ?? []) : false,
 
       publishWatchLobby(lobby, watchPlan) {
-        // An active session drives the watch via the mirror; never overwrite it.
-        const sessionActive =
-          plan.length > 0 && machine.phase !== 'SESSION_SAVED' && machine.phase !== 'WELL_DONE';
-        if (sessionActive) return;
+        /*
+         * ⚠️ WELL DONE IS STILL THE SESSION (founder, device QA 2026-07-30: *"I managed to start a
+         * workout from the watch while the phone was showing What this session earned"*).
+         *
+         * This read `plan.length > 0 && phase !== 'SESSION_SAVED' && phase !== 'WELL_DONE'` — so the
+         * instant the last set was written, the lobby went back to the wrist and its Start came
+         * alive while the phone was still on the closing beat. She could begin a second workout out
+         * of the end of the first.
+         *
+         * The two exclusions were there to get the lobby back promptly after a workout. They are not
+         * needed for it: `END` empties the plan, and an EMPTY PLAN is what "she has left the session"
+         * actually means. The phase was a step INSIDE the finish, and reading a step as the end is
+         * the whole of this bug.
+         */
+        if (plan.length > 0) return;
         watchRef.current?.publishLobby(lobby, watchPlan ?? null);
       },
       setWatchHomeActions(handlers) {
@@ -1142,6 +1153,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       clearCorrection: () => setCorrection(null),
 
       async start(day, targets) {
+        /*
+         * ⚠️ ONE SESSION AT A TIME, GUARDED WHERE IT CANNOT BE ROUTED AROUND.
+         *
+         * The founder started a second workout from his wrist while the phone was on the closing
+         * beat of the first. The lobby fix above closes the door he walked through; this closes the
+         * doorway. `watchStartRef` stays bound while Home is MOUNTED rather than focused — on
+         * purpose, so a watch Begin works with Settings or Well Done pushed on top — which means a
+         * lobby already sitting on the wrist can still call in. A second START would replace the
+         * live plan, and the first workout's remaining sets would simply cease to exist.
+         */
+        if (plan.length > 0) return;
         // The athlete chose a FRESH workout while an interrupted one was still resumable
         // (or a stale orphan lingered): salvage its logged work first, then compose cleanly.
         await creditSalvage(await salvageOrphanSession());
@@ -1180,6 +1202,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
 
       async startCoach(planned, workoutId) {
+        /*
+         * ⚠️ ONE SESSION AT A TIME, GUARDED WHERE IT CANNOT BE ROUTED AROUND.
+         *
+         * The founder started a second workout from his wrist while the phone was on the closing
+         * beat of the first. The lobby fix above closes the door he walked through; this closes the
+         * doorway. `watchStartRef` stays bound while Home is MOUNTED rather than focused — on
+         * purpose, so a watch Begin works with Settings or Well Done pushed on top — which means a
+         * lobby already sitting on the wrist can still call in. A second START would replace the
+         * live plan, and the first workout's remaining sets would simply cease to exist.
+         */
+        if (plan.length > 0) return;
         /*
          * Everything `start` does before it composes, because none of it is about where the plan
          * came from: salvage an orphan, clear the previous session's banked rest, reset Loop 1's
