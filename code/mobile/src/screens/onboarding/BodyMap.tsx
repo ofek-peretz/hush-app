@@ -102,7 +102,9 @@ export function BodyMap({ navigation, route }: Props) {
     // S-3 / F-4, enforced HERE. `fixtureModel`'s all-normal fallback is a belt for a map that should
     // never arrive; letting one arrive would mean Hush rebuilding her week behind her back.
     if (!check.ok) return;
-    navigation.navigate('ProgramCreated', { inputs: { ...inputs, bodyMap: map } });
+    // The body map is the last thing collected FROM a form. What follows is the conversation that
+    // turns all of it into a programme — see `CoachIntake`.
+    navigation.navigate('CoachIntake', { inputs: { ...inputs, bodyMap: map } });
   }
 
   return (

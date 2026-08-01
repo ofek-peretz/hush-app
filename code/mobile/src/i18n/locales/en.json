@@ -1067,6 +1067,7 @@
     "placeholder": "Write a message",
     "send": "Send",
     "thinking": "Thinking",
-    "notSent": "Not sent"
+    "notSent": "Not sent",
+    "intakeOpening": "What are you training for?"
   }
 }

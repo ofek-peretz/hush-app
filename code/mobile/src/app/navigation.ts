@@ -44,6 +44,12 @@ export type OnboardingParamList = {
   // from it (register Part 3), replacing the demographic split. Carries the assembled inputs from
   // the previous step, writes bodyMap, then continues to the build.
   BodyMap: { inputs: OnboardingInputs };
+  // THE INTAKE — the first conversation, and the step that produces the programme. Everything
+  // before it collects what a coach cannot ask for twice (name, gender, bodyweight, days, the body
+  // map); this is where she is asked the things only she knows, by the thing that will act on them.
+  // The profile is NOT written here: `Root` swaps navigators the instant it exists, which would
+  // take this screen out from under her mid-conversation. See `CoachIntake`.
+  CoachIntake: { inputs: OnboardingInputs };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };
