@@ -32,6 +32,8 @@ import { currentLocale } from '@/i18n';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { coachBrief } from '@/domain/coachEarned';
+import type { CoachDecision } from '@/domain/coachLog';
 import { track } from '@/platform/telemetry';
 import { getWeeklyPlan, markWeeklyUpdateSeen, type WeeklyPlanView } from '@/domain/weeklyUpdate';
 import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
@@ -308,7 +310,25 @@ export function WeeklyUpdate({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const changedCount = view?.changedCount ?? 0;
+  /*
+   * ════ THE WEEK, FROM THE COACH ════
+   *
+   * `getWeeklyPlan` joins the programme to a changeLog the between-session fold wrote, and that
+   * fold is deleted — so the engine's half of this letter is empty for ever on any athlete who
+   * started after it went. What the letter is FOR has not changed at all: what did Hush change,
+   * and why. That is `coachLog`, filtered to this week, already written in her language.
+   */
+  const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    void db.loadCoachLog().then((l) => active && setCoachLog(l));
+    return () => {
+      active = false;
+    };
+  }, []);
+  const fromCoach = React.useMemo(() => coachBrief(coachLog, app.weekOpenMs), [coachLog, app.weekOpenMs]);
+
+  const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;
   const whenLabel = view
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
     : '';
@@ -322,6 +342,30 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * travelled — the biggest decision is the one worth reading first.
    */
   const allChanges = React.useMemo(() => {
+    /*
+     * A COACH ROW HAS NO from→to AND NO "WHY?" PILL, and both absences are the point.
+     *
+     * The coach states the next programme whole rather than a set of deltas, so there is nothing to
+     * print in a move column — and the arrow exists to show a direction, which a sentence does not
+     * have. The pill existed because the engine's reason was a three-part case folded behind a
+     * chevron; the coach's reason is one sentence, and a control that hides one sentence is a
+     * control stealing the job of the thing underneath it (the founder's law: let the control
+     * speak). So the sentence is simply on the row.
+     */
+    if (fromCoach) {
+      const rows: LetterRow[] = fromCoach.lines.map((l, i) => ({
+        key: l.ex ?? `note_${i}`,
+        name: l.ex ? exerciseDisplayName(l.ex) : '',
+        from: '',
+        to: '',
+        suffix: '',
+        dir: 'hold' as LoadDirection,
+        magnitude: 0,
+        slotId: null,
+        line: l.say,
+      }));
+      return rows;
+    }
     const lifts = (view?.workouts ?? []).flatMap((w) => w.lifts.filter((l) => l.change));
     const rows: LetterRow[] = lifts.map((l) => {
       const c = l.change!.snapshot;
@@ -480,27 +524,39 @@ export function WeeklyUpdate({ navigation, route }: Props) {
               const open = openId === (row.slotId ?? row.key);
               return (
                 <View key={row.key} style={[styles.row, i === shown.length - 1 && styles.rowLast]}>
+                  {/* A ROW WITH NO MOVE HAS NO ARROW AND NO PILL. The coach states a programme
+                      whole rather than a set of deltas, so there is no from→to to draw — and its
+                      reason is one sentence, which a "Why?" pill would hide rather than announce
+                      (let the control speak). The name may be empty too: a note about the whole
+                      week belongs to no single lift, and inventing one to fill the column would be
+                      attributing a decision to a lift it was not about. */}
                   <View style={styles.rowTop}>
-                    <Text style={styles.rowName} numberOfLines={1}>{bidi(row.name)}</Text>
-                    <View style={styles.rowRight}>
-                      <Text style={styles.rowMove} numberOfLines={1}>
-                        <Text style={styles.rowFrom}>{`${row.from} `}</Text>
-                        <Text style={{ color: directionTone(row.dir) }}>
-                          {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
+                    {row.name ? (
+                      <Text style={styles.rowName} numberOfLines={1}>{bidi(row.name)}</Text>
+                    ) : null}
+                    {row.from || row.to ? (
+                      <View style={styles.rowRight}>
+                        <Text style={styles.rowMove} numberOfLines={1}>
+                          <Text style={styles.rowFrom}>{`${row.from} `}</Text>
+                          <Text style={{ color: directionTone(row.dir) }}>
+                            {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
+                          </Text>
                         </Text>
-                      </Text>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={t('weekly.whyLink')}
-                        onPress={() => setOpenId((cur) => (cur === (row.slotId ?? row.key) ? null : (row.slotId ?? row.key)))}
-                        hitSlop={6}
-                        style={({ pressed }) => [styles.whyPill, pressed && styles.pressedDim]}
-                      >
-                        <Legend size={10.5} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
-                      </Pressable>
-                    </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t('weekly.whyLink')}
+                          onPress={() => setOpenId((cur) => (cur === (row.slotId ?? row.key) ? null : (row.slotId ?? row.key)))}
+                          hitSlop={6}
+                          style={({ pressed }) => [styles.whyPill, pressed && styles.pressedDim]}
+                        >
+                          <Legend size={10.5} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
-                  {open && row.line ? <Text style={styles.rowLine}>{row.line}</Text> : null}
+                  {(open || !(row.from || row.to)) && row.line ? (
+                    <Text style={styles.rowLine}>{row.line}</Text>
+                  ) : null}
                 </View>
               );
             })
