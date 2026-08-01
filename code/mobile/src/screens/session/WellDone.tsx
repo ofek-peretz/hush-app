@@ -52,6 +52,9 @@ import { bidi } from '@/i18n/bidi';
 import { monoCanDraw } from '@/design/monoVoice';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { coachIsDeciding, onCoachUpdate, type CoachUpdate } from '@/platform/coach/afterSession';
+import { coachVerdict } from '@/domain/coachEarned';
+import type { CoachDecision } from '@/domain/coachLog';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
 import { ensureNotificationPermission, markNotificationsAsked, shouldAskForNotifications } from '@/platform/notifications';
 import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/haptics';
@@ -156,16 +159,28 @@ export interface VolumeMove {
   reason: { key: string; params?: Record<string, string | number> } | null;
 }
 
+/**
+ * A reason, either said by the APP or said by the COACH.
+ *
+ * The engine narrated in i18n keys — it had to, being a machine assembling a sentence for two
+ * languages. The coach writes the sentence itself, in her language, because it was asked to.
+ * Translating its prose back into an enum would turn "your last two sessions ended short" into
+ * `endedShort` and the reason she is owed into a category.
+ */
+export type EarnedReason =
+  | { key: string; params?: Record<string, string | number> }
+  | { text: string };
+
 /** One line of "what this session earned": the lift, the load it moved from → to, and the
- *  engine's own sentence for why. */
+ *  sentence for why. */
 export interface EarnedLine {
   key: string;
   name: string;
   from: string | null;
   to: string | null;
-  /** The engine held this lift at the load she lifted — no arrow, the word and the figure (S-24). */
+  /** Held at the load she lifted — no arrow, the word and the figure (S-24). */
   held: boolean;
-  reason: { key: string; params?: Record<string, string | number> };
+  reason: EarnedReason;
 }
 
 /**
@@ -285,6 +300,37 @@ export function WellDone({ navigation, route }: Props) {
    * `sessionEarned` is what runs the fold — reading the log before it has been written would find
    * this workout's decisions missing and quietly draw nothing.
    */
+  /*
+   * ════ THE COACH'S VERDICT, WHICH MAY NOT HAVE ARRIVED YET ════
+   *
+   * `askAfterSession` was fired the moment the workout was saved and it takes about fifteen
+   * seconds. This screen opens immediately, so it subscribes: `thinking` while the call is out,
+   * then the sentence, or the honest "nothing changed" if it never landed.
+   *
+   * The engine used to answer in a millisecond and this screen could assume the answer existed by
+   * the time it drew. Drawing an empty list in that gap would tell her the workout changed nothing —
+   * which is a real verdict (a hold) and therefore the one thing silence must never look like.
+   */
+  const [coachUpdate, setCoachUpdate] = useState<CoachUpdate | null>(null);
+  const [coachLog, setCoachLog] = useState<CoachDecision[]>([]);
+  const [deciding, setDeciding] = useState(() => coachIsDeciding());
+  useEffect(() => {
+    let active = true;
+    const read = () =>
+      void Promise.all([db.loadCoachUpdate(), db.loadCoachLog()]).then(([u, l]) => {
+        if (!active) return;
+        setCoachUpdate(u);
+        setCoachLog(l);
+        setDeciding(coachIsDeciding());
+      });
+    read(); // it may already have landed before this screen mounted
+    const off = onCoachUpdate(() => read());
+    return () => {
+      active = false;
+      off();
+    };
+  }, []);
+
   const [volume, setVolume] = useState<VolumeMove[]>([]);
   useEffect(() => {
     if (notStarted || earned === null || !summary?.startedAtMs) return;
@@ -377,6 +423,33 @@ export function WellDone({ navigation, route }: Props) {
   const decisions = useMemo(
     () => earnedLines(earned && earned.filter((e) => !volumeMuscles.has(e.slotId)), forward, units),
     [earned, forward, units, volumeMuscles],
+  );
+
+  /**
+   * WHAT THE COACH DECIDED, as rows this screen already knows how to draw.
+   *
+   * No from→to figures: the coach states the next programme whole rather than a set of deltas, so
+   * there is no "moved from" to print. `held` is true on every row for the same reason — the arrow
+   * exists to show a direction, and there is no direction in a sentence. The number she wants is on
+   * Today, next to the lift; what belongs here is the reason.
+   */
+  const coachDecided = useMemo(
+    () => coachVerdict(session?.id ?? '', coachUpdate, coachLog, deciding),
+    [session?.id, coachUpdate, coachLog, deciding],
+  );
+  const coachLines = useMemo<EarnedLine[]>(
+    () =>
+      coachDecided.state === 'decided'
+        ? coachDecided.lines.map((l, i) => ({
+            key: l.ex ?? `note_${i}`,
+            name: l.ex ? exerciseDisplayName(l.ex) : '',
+            from: null,
+            to: null,
+            held: true,
+            reason: { text: l.say },
+          }))
+        : [],
+    [coachDecided],
   );
 
   const lifts = useMemo(() => {
@@ -626,9 +699,21 @@ export function WellDone({ navigation, route }: Props) {
       durationLabel={durationLabel}
       kcal={kcal}
       tonnes={tonnes}
-      decisions={decisions}
+      /*
+       * The COACH's rows now, with the engine's kept behind them.
+       *
+       * `decisions` is what the between-session fold used to produce and it is empty for ever —
+       * the fold is deleted. Kept in the expression rather than dropped so a legacy athlete whose
+       * last fold ran before the deletion still sees the sentence she was already promised.
+       */
+      decisions={coachLines.length ? coachLines : decisions}
       volume={volume}
-      answered={earned !== null}
+      /*
+       * `answered` is what stops the screen drawing "nothing changed" over a decision that is still
+       * in the post. `thinking` is the one state the old surface never had, because the engine
+       * answered in a millisecond and this one takes fifteen seconds.
+       */
+      answered={coachDecided.state !== 'thinking' && earned !== null}
       onDone={() => leave(goHome)}
       onRecord={() => leave(goRecord)}
       onShare={recordCard ? () => navigation.navigate('ShareCardModal', { card: recordCard }) : undefined}
@@ -742,7 +827,9 @@ export function SessionEarned({
                       )}
                     </Text>
                   </View>
-                  <Text style={styles.earnedReason}>{t(d.reason.key, d.reason.params)}</Text>
+                  <Text style={styles.earnedReason}>
+                    {'text' in d.reason ? d.reason.text : t(d.reason.key, d.reason.params)}
+                  </Text>
                 </View>
               ))}
 
