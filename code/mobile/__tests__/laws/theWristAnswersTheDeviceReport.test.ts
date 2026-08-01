@@ -85,17 +85,26 @@ describe('#5 · the correction gets its screen', () => {
     expect(screen).not.toMatch(/Palette\.signal\b/);
   });
 
-  it('takes the confirmation’s slot rather than adding a third full-screen beat', () => {
-    // Set → confirmation → WT3 → rest would be three screens between one set and the next. And the
-    // confirmation is the one that can go: it restates a load and a rep count she chose herself.
+  it('⚠️ took the confirmation’s slot, and the confirmation is GONE', () => {
+    /*
+     * Founder, device review 2026-08-01: *"remove the SET LOGGED screen — it is a leftover from the
+     * earlier screens, and what I asked for in its place was WT3."*
+     *
+     * The first cut of WT3 kept both and let the correction win the slot when there was one. He
+     * wants the beat itself gone: it restated a load and a rep count she had chosen herself and
+     * executed thirty seconds earlier, and it cost a second and a half of every single rest.
+     *
+     * `setConfirm` survives as the TIMER — it is what holds WT3 on screen and what a tap dismisses.
+     * A screen case named for the confirmation must not come back with it.
+     */
     const model = read('WatchModel.swift');
-    const at = model.indexOf('if let sc = setConfirm {');
+    expect(model).not.toContain('case setConfirmation');
+    expect(model).not.toContain('.setConfirmation(');
+    expect(read('WatchScreens.swift')).not.toContain('struct ConfirmScreen');
+    // …and the correction still reaches the screen, off the same window.
+    const at = model.indexOf('if setConfirm != nil');
     expect(at).toBeGreaterThan(-1);
-    const block = model.slice(at, at + 900);
-    expect(block).toContain('return .correction(c)');
-    // And the correction is checked FIRST — otherwise the confirmation always wins and WT3 is dead
-    // code that compiles.
-    expect(block.indexOf('return .correction(c)')).toBeLessThan(block.indexOf('return .setConfirmation'));
+    expect(model.slice(at, at + 300)).toContain('return .correction(c)');
   });
 
   it('does not say it twice — but never loses it either', () => {
@@ -108,6 +117,105 @@ describe('#5 · the correction gets its screen', () => {
     const src = read('WatchScreens.swift');
     expect(src).toMatch(/private var note: WireCorrection \{ 0 \}|announced \? nil : mirror\.correction/);
     expect(src).toContain('announced: model.announcedCorrectionAt == m.globalIndex');
+  });
+});
+
+describe('the layout law — nothing gets cut off again', () => {
+  /*
+   * Founder, device review 2026-08-01, four separate findings that are one bug: *"on the first
+   * workout screen the START is cut off"*, *"that SOMETHING FEELS OFF button gets cut off"*, *"on
+   * the MILESTONES screen Done is cut off"*, and the transition rest's buttons running off the
+   * bottom of his screenshot.
+   *
+   * Every one of them was a screen laying itself out by hand — a VStack of blocks with Spacers
+   * between them, hoping the total came to less than the case. `WristScreen` measures the action
+   * zone FIRST and lets the body compress into what is left, which is the difference between a
+   * layout and a hope.
+   */
+  const SCREENS = 'WatchScreens.swift';
+
+  it('gives every screen with an action the container that reserves it', () => {
+    const src = read(SCREENS);
+    // The container exists and takes its actions at a higher layout priority than its body.
+    const at = src.indexOf('struct WristScreen<');
+    expect(at).toBeGreaterThan(-1);
+    const decl = src.slice(at, at + 1400);
+    expect(decl).toContain('.layoutPriority(1)');
+    // And it is actually used — by every screen that ends in a button.
+    expect((src.match(/WristScreen \{/g) ?? []).length).toBeGreaterThan(10);
+  });
+
+  it('⚠️ leaves NO screen laying out its own bottom edge by hand', () => {
+    /*
+     * The regression this file exists to catch. A new screen that pads its own bottom with a
+     * hand-picked number is a new screen that will clip on the 40 mm case, and it will be found by
+     * an athlete rather than by us — there is no Xcode in this project and no simulator in this
+     * suite, so the text is the only place it can be caught.
+     */
+    const src = read(SCREENS);
+    const handRolled = [...src.matchAll(/\.padding\(\.bottom, (\d+)\)/g)].map((m) => m[1]);
+    expect(handRolled).toEqual([]);
+  });
+
+  it('holds the type floor — a watch is read in under a second, sweating', () => {
+    /*
+     * Founder: *"the 12 kg a side is written very small"*, *"the UP NEXT line is very small"*,
+     * *"the text is tiny, impossible to see through a watch, especially the KG · SETS line"*.
+     *
+     * 7.5 pt appeared eleven times in this file. It is not a small size; it is a decision to be
+     * unreadable. The floor is 10, and `Wrist.legend` is where it is written down.
+     */
+    const src = read(SCREENS);
+    const sizes = [...src.matchAll(/\.system\(size: ([0-9.]+)/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(40);
+    expect(sizes.filter((n) => n < 8)).toEqual([]);
+  });
+});
+
+describe('#4 · the two weights that disagreed', () => {
+  it('⚠️ reads the load of the set that is COMING, not the one behind her', () => {
+    /*
+     * Founder, device review 2026-08-01: *"it says the next set is 44 kg and one line below it says
+     * 50 kg — there is probably a bug behind the scenes."*
+     *
+     * There was, and `sessionMirror.ts` documents it: on a rest frame the phone HOLDS the finished
+     * set's index, so `targetWeight` is the load she has just lifted and `nextTargetWeight` is the
+     * one coming. The up-next card read the first.
+     *
+     * The two agree on every ordinary rest, which is why it survived months of use. They diverge in
+     * exactly one case — when Loop 1 has just moved the load — which is the case where the card sits
+     * directly above a correction announcing the new number.
+     */
+    const src = read('WatchScreens.swift');
+    const at = src.indexOf('struct InterRestScreen');
+    const body = src.slice(at, src.indexOf('// MARK: 05', at));
+    expect(body).toContain('mirror.nextTargetWeight ?? mirror.targetWeight');
+    // The card must read that, and not reach for the raw field beside it.
+    const card = body.slice(body.indexOf('private var upNextCard'));
+    expect(card).toContain('nextLoad');
+    expect(card).not.toContain('mirror.targetWeight');
+  });
+});
+
+describe('#14 · one cardio, not two gaits', () => {
+  it('asks her to move, not to declare which way', () => {
+    // Founder: *"why was there a Run option and a Walk option? it was just general cardio."* The
+    // canonical CR1 agrees — one serif "Cardio" and one "Start cardio".
+    const src = read('WatchScreens.swift');
+    const at = src.indexOf('private struct CardioPicker');
+    const body = src.slice(at, src.indexOf('struct ChooseOverlay', at));
+    expect(body).toContain('WatchCopy.startCardio');
+    expect(body).not.toContain('figure.walk');
+    expect(body).not.toContain('ForEach');
+  });
+
+  it('gives the run the gym’s own swipe', () => {
+    // Founder: *"swiping to the side opens a PAUSE screen like the gym mode."*
+    const src = read('WatchScreens.swift');
+    expect(src).toContain('struct CardioStageScreen');
+    expect(src).toContain('struct CardioPausedScreen');
+    const at = src.indexOf('struct CardioPager');
+    expect(src.slice(at, at + 1600)).toContain('TabView(selection: $page)');
   });
 });
 

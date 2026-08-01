@@ -337,6 +337,12 @@ enum WatchCopy {
 
   // Open training (run / walk on the wrist — recorded to Health, never coached)
   static var openTraining: String { L("openTraining", "Open training") }
+  // CR1 · READY — one cardio, not two gaits (founder 2026-08-01). The gait is decided, not asked.
+  static var startCardio: String { L("startCardio", "Start cardio") }
+  static var recordedNotCoached: String { L("recordedNotCoached", "Recorded beside your lifting.") }
+  // CR4 · DONE — a run closes on its DISTANCE, the way a workout closes on its work.
+  static var cardioSaved: String { L("cardioSaved", "CARDIO · SAVED") }
+  static var thatsTheDistance: String { L("thatsTheDistance", "That’s the distance.") }
   static var run: String { L("run", "Run") }
   static var walk: String { L("walk", "Walk") }
   static var running: String { L("running", "Running") }

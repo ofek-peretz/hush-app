@@ -55,7 +55,6 @@ enum WatchScreen: Equatable {
   case start(WireLobby)
   case connectionLost(mirror: WireMirror?)
   case workoutComplete(WireMirror)
-  case setConfirmation(weight: Double?, reps: Int, index: Int, total: Int)
   /// WT3 · THE CORRECTION — the set is logged AND it moved the next load, so the beat that would
   /// have restated what she just did says the news instead.
   case correction(WireCorrection)
@@ -1024,23 +1023,22 @@ final class WatchModel: ObservableObject {
     if localMirror == nil, connection == .reconnecting, mirror != nil {
       return .connectionLost(mirror: mirror)
     }
-    if let sc = setConfirm {
-      /*
-       * WT3 · THE CORRECTION takes the confirmation's place, never a slot of its own.
-       *
-       * The canonical screen (`_v7_handoff/HUSH_V7_ALL_DARK.html`, WT3) is the beat between the
-       * logged set and the rest ring — the same beat the confirmation already owns. Giving the
-       * news its own screen would put THREE full-screen moments between one set and the next.
-       *
-       * And it earns the slot: the confirmation restates the load and reps she chose thirty
-       * seconds ago and executed herself. The correction is the one thing on this beat she does
-       * not already know.
-       */
-      if let c = effectiveMirror?.correction {
-        announcedCorrectionAt = effectiveMirror?.globalIndex
-        return .correction(c)
-      }
-      return .setConfirmation(weight: sc.weight, reps: sc.reps, index: sc.index, total: sc.total)
+    /*
+     * ════ SET LOGGED IS GONE. WT3 KEEPS THE BEAT ════
+     *
+     * Founder, device review 2026-08-01: *"remove the SET LOGGED screen — it is a leftover from the
+     * earlier screens, and what I asked for in its place was WT3."*
+     *
+     * It restated a load and a rep count she had chosen herself and executed thirty seconds
+     * earlier, and it cost a second and a half of every rest. The canonical set has no such beat:
+     * WT2 → WT3 (only when the load moved) → WT4.
+     *
+     * `setConfirm` survives as the TIMER for that window — it is what holds WT3 on screen and what
+     * a tap dismisses. With no correction to announce, the window simply passes through to the rest.
+     */
+    if setConfirm != nil, let c = effectiveMirror?.correction {
+      announcedCorrectionAt = effectiveMirror?.globalIndex
+      return .correction(c)
     }
     guard let m = effectiveMirror else {
       if let l = lobby { return .start(l) }
@@ -1070,9 +1068,8 @@ final class WatchModel: ObservableObject {
     case .connectionLost: return .connectionLost
     case .workoutComplete: return .workoutSaved
     case .paused: return .paused
-    case .setConfirmation: return .setLogged
-    // The same beat, so the same haptic — she logged a set either way, and a change of load is
-    // not a change of what her wrist just did.
+    // The set landed. The haptic says so whether or not the load moved with it — it was the
+    // confirmation SCREEN that was redundant, not the confirmation.
     case .correction: return .setLogged
     default: return nil // cardioComplete plays its own beat in endCardio()
     }
@@ -1081,8 +1078,7 @@ final class WatchModel: ObservableObject {
   private func sameKind(_ a: WatchScreen, _ b: WatchScreen) -> Bool {
     switch (a, b) {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
-         (.workoutComplete, .workoutComplete), (.setConfirmation, .setConfirmation),
-         (.correction, .correction),
+         (.workoutComplete, .workoutComplete), (.correction, .correction),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
          (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete):
       return true

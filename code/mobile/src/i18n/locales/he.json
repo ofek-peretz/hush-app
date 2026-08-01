@@ -1032,7 +1032,12 @@
     "swapTitle_female": "החליפי תרגיל",
     "easedForYou": "הוקל בשבילך",
     "raisedForYou": "הועלה בשבילך",
-    "loggedResting": "נרשם · במנוחה"
+    "loggedResting": "נרשם · במנוחה",
+    "startCardio": "התחל אימון חופשי",
+    "startCardio_female": "התחילי אימון חופשי",
+    "recordedNotCoached": "מתועד לצד האימונים שלך.",
+    "cardioSaved": "אימון חופשי · נשמר",
+    "thatsTheDistance": "זה המרחק."
   },
   "language": {
     "title": "שפה",

@@ -938,7 +938,11 @@
     "recordedLegend": "Recorded",
     "easedForYou": "EASED FOR YOU",
     "raisedForYou": "RAISED FOR YOU",
-    "loggedResting": "logged · resting"
+    "loggedResting": "logged · resting",
+    "startCardio": "Start cardio",
+    "recordedNotCoached": "Recorded beside your lifting.",
+    "cardioSaved": "CARDIO · SAVED",
+    "thatsTheDistance": "That’s the distance."
   },
   "paywall": {
     "title": "It was a pleasure training with you.",
