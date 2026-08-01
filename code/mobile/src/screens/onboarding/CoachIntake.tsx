@@ -35,6 +35,7 @@ import { CoachChat } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import type { OnboardingParamList } from '@/app/navigation';
 import type { Profile } from '@/data/local/models';
 
@@ -77,7 +78,7 @@ export function CoachIntake({ navigation, route }: Props) {
   const facts = React.useMemo(
     // No programme yet, and that is a fact about her rather than a hole: this is the one call
     // where there genuinely is none, and the intake ask says so.
-    () => coachFacts({ profile, plan: null, history: [] }),
+    () => coachFacts({ profile, plan: null, history: [], language: currentLocale() }),
     [profile, inputs.daysPerWeek],
   );
 

@@ -36,6 +36,7 @@ import { coachFacts } from '@/domain/coachFacts';
 import { db } from '@/data/local/db';
 import { color, s } from '@/design/tokens';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
 import type { MainParamList } from '@/app/navigation';
 import type { CoachDecision } from '@/domain/coachLog';
@@ -83,6 +84,7 @@ export function CoachScreen({ navigation }: Props) {
             history: history ?? [],
             decided,
             ...(prefs ? { preferences: prefs } : {}),
+            language: currentLocale(),
           })
         : null,
     [profile, plan, history, decided, prefs],

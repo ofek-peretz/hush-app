@@ -194,6 +194,16 @@ export interface CoachFacts {
     weightKg?: number;
     daysPerWeek: number;
     units: string;
+    /**
+     * THE LANGUAGE SHE READS THE APP IN — a BCP-47 tag, and everything the coach writes must be in
+     * it: the sentence she reads, the note on an item, and the NAME of every session.
+     *
+     * ⚠️ It lives on her SHEET and not in the preamble, and that is not tidiness. The preamble is
+     * byte-identical for every athlete on earth and that is what makes it cacheable; one word of
+     * Hebrew in it and every English athlete's call goes cold, silently, with the bill arriving a
+     * month later.
+     */
+    language: string;
     /** Minutes she says she has for a workout. */
     minutes: number;
     /** Her declared rep band, and any per-muscle override she set in the body map. */
@@ -502,6 +512,12 @@ export interface CoachFactsInput {
    * Both are TESTIMONY, like her brief — she chose them. They are not measurements and they are not
    * ours to overrule; the sheet states them and the coach decides what to do about them.
    */
+  /**
+   * Her app language as a BCP-47 tag. Defaults to English rather than being omitted: a coach with
+   * no instruction answers in whatever the conversation happens to be in, and a session NAME has no
+   * conversation to take its cue from.
+   */
+  language?: string;
   preferences?: {
     /** offered exercise id → the one she actually trains. */
     substitutes?: Record<string, string>;
@@ -516,7 +532,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, language = 'en' }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -525,6 +541,7 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       ...(profile.weightKg != null ? { weightKg: profile.weightKg } : {}),
       daysPerWeek: profile.daysPerWeek,
       units: profile.units,
+      language,
       minutes: profile.workoutMinutes ?? 60,
       ...(profile.repBand ? { band: profile.repBand } : {}),
       ...(profile.repBandByMuscle ? { bandByMuscle: stringMap(profile.repBandByMuscle) } : {}),

@@ -25,6 +25,7 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import { db } from '@/data/local/db';
+import { currentLocale } from '@/i18n';
 import { coachFacts } from '@/domain/coachFacts';
 import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
 import { coachRequest } from '@/domain/coachPrompt';
@@ -169,6 +170,7 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       // What she has swapped by hand, and what she has asked to keep. Without these the coach keeps
       // prescribing the lift she silently swaps out every session.
       preferences: { substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle },
+      language: currentLocale(),
     });
 
     const reply = await askCoach(

@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 3;
+export const COACH_PROMPT_VERSION = 4;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -260,7 +260,36 @@ export function coachRequest({
 
   // EVERYTHING BELOW THE BREAKPOINT VARIES. Her sheet, then the ask — in that order, because the
   // sheet is stable across the messages of one chat sitting and the message is not.
-  blocks.push({ text: `HER RECORD:\n${JSON.stringify(hersAlone(facts))}` });
+  /*
+   * HER SHEET, and the one instruction that has to travel with it: WHAT LANGUAGE TO WRITE IN.
+   *
+   * It is here and never in the preamble. The preamble is byte-identical for every athlete alive,
+   * which is the whole of what makes it cacheable — one language instruction up there and every
+   * athlete who reads another one pays full price, silently, for ever.
+   *
+   * SESSION NAMES ARE NAMED EXPLICITLY, because a name is the one thing with no conversation to
+   * take its cue from. A model answering a Hebrew message answers in Hebrew unasked; it will still
+   * call the workout "Upper A", and that name is what she reads on the first screen of the app
+   * every day (founder B.5: "the day name is in English… it reads broken").
+   *
+   * EXERCISE IDS ARE NOT NAMES. The app resolves each id through its own catalogue, and that
+   * catalogue keeps lifts in English on purpose — it is what is printed on the equipment and what a
+   * Hebrew-speaking lifter says out loud. Translating them here would put a second set of names in
+   * the app that agrees with nothing.
+   */
+  blocks.push({
+    text:
+      `HER RECORD:
+${JSON.stringify(hersAlone(facts))}
+
+` +
+      `Everything you write is read by her, and she reads this app in "${facts.athlete.language}". ` +
+      `Write "say", every item's "say", and every note in that language. ` +
+      'NAME EACH SESSION IN THAT LANGUAGE TOO — the name is the first thing she sees on her home ' +
+      'screen every day, and an English name beside her own language reads as broken. ' +
+      'Exercise ids stay exactly as the catalogue spells them: they are ids, not names, and the app ' +
+      'prints its own name for each one.',
+  });
 
   switch (ask.kind) {
     case 'after_session':

@@ -191,7 +191,9 @@ describe('coach facts — the message the coach is sent', () => {
     expect(json).not.toContain('Levi');
     // The athlete block is an allow-list, not a copy of the profile.
     expect(Object.keys(build().athlete).sort()).toEqual(
-      ['band', 'daysPerWeek', 'minutes', 'sex', 'units', 'weightKg'].sort(),
+      // `language` is on the athlete because everything the coach writes is read by HER — see
+      // `thePreambleIsTheSameForEveryone`, which holds it below the cache breakpoint.
+      ['band', 'daysPerWeek', 'language', 'minutes', 'sex', 'units', 'weightKg'].sort(),
     );
   });
 

@@ -42,6 +42,10 @@ const session: Session = {
 };
 const program: Program = { id: 'p', frequency: 4, days: [] };
 
+/** The same athlete, reading the app in a given language. */
+const factsFor = (language: string) =>
+  coachFacts({ profile: dana, plan: null, history: [session], justFinished: session, language });
+
 const forDana = () =>
   coachRequest({
     facts: coachFacts({
@@ -206,5 +210,43 @@ describe('who the coach is', () => {
   it('bumps its version when the text changes — a changed preamble is a cold cache for everyone', () => {
     expect(COACH_PROMPT_VERSION).toBeGreaterThanOrEqual(1);
     expect(forDana().v).toBe(COACH_PROMPT_VERSION);
+  });
+});
+
+describe('her language travels on her sheet, never in the preamble', () => {
+  /*
+   * ⚠️ THE WHOLE POINT, AND IT IS AN EASY ONE TO GET WRONG. "Answer in Hebrew" belongs in the
+   * instructions, and the instructions look like they belong at the top. They do not: the preamble
+   * is byte-identical for every athlete alive, which is the entire reason it can be cached. One
+   * word of anyone's language in it and every athlete who reads another one pays full price —
+   * silently, for ever, with the bill arriving a month later.
+   */
+  it('says nothing about a language above the cache breakpoint', () => {
+    const he = coachRequest({ facts: factsFor('he'), ask: { kind: 'after_session' }, cache: true });
+    const en = coachRequest({ facts: factsFor('en'), ask: { kind: 'after_session' }, cache: true });
+    expect(he.blocks[0].text).toBe(en.blocks[0].text);
+    // Matched as the QUOTED tag: "he" is a substring of half the English words in there.
+    expect(he.blocks[0].text).not.toContain('"he"');
+    expect(he.blocks[0].text).not.toMatch(/reads this app in/);
+    expect(he.blocks[0].cache).toBe(true);
+  });
+
+  it('names her language, and names the SESSION NAME specifically', () => {
+    // A model answering a Hebrew message answers in Hebrew unasked. It will still call the workout
+    // "Upper A" — and that name is what she reads on the first screen of the app every day.
+    const sent = coachRequest({ facts: factsFor('he'), ask: { kind: 'after_session' } })
+      .blocks.map((b) => b.text)
+      .join(String.fromCharCode(10));
+    expect(sent).toContain('"he"');
+    expect(sent).toMatch(/NAME EACH SESSION IN THAT LANGUAGE/);
+  });
+
+  it('tells it to leave exercise IDS alone', () => {
+    // They are ids, not names. The app prints its own name for each, and the catalogue keeps lifts
+    // in English on purpose — it is what is written on the equipment.
+    const sent = coachRequest({ facts: factsFor('he'), ask: { kind: 'after_session' } })
+      .blocks.map((b) => b.text)
+      .join(String.fromCharCode(10));
+    expect(sent).toMatch(/Exercise ids stay exactly as the catalogue spells them/);
   });
 });
