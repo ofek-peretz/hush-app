@@ -37,13 +37,49 @@ import { coachFacts } from '@/domain/coachFacts';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import type { OnboardingParamList } from '@/app/navigation';
-import type { Profile } from '@/data/local/models';
+import type { OnboardingInputs, Profile } from '@/data/local/models';
+import type { LearnedAboutHer } from '@/domain/coachPlan';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'CoachIntake'>;
+
+/**
+ * Her onboarding inputs, corrected by what she actually told the coach.
+ *
+ * ⚠️ `daysPerWeek: 4` ARRIVES HERE AS A PLACEHOLDER. `ConnectHealth` hands one over because the
+ * field is not optional and the sheet needs a number before the first call — its comment says "the
+ * coach replaces it", and until now nothing did. So an athlete who agreed on three days trained the
+ * three-day programme the coach wrote while her profile said four, and every later sheet told the
+ * coach four, under a rule that reads *"write exactly that many sessions"*.
+ *
+ * Exported for the law that holds this seam: the placeholder is invisible until it disagrees with
+ * her, which is exactly the kind of defect that survives a rebuild.
+ */
+export function withLearned(inputs: OnboardingInputs, learned: LearnedAboutHer): OnboardingInputs {
+  return {
+    ...inputs,
+    ...(learned.weightKg != null ? { weightKg: learned.weightKg } : {}),
+    ...(learned.daysPerWeek != null ? { daysPerWeek: learned.daysPerWeek } : {}),
+    ...(learned.minutes != null ? { workoutMinutes: learned.minutes } : {}),
+  };
+}
 
 export function CoachIntake({ navigation, route }: Props) {
   const { t } = useCopy();
   const { inputs } = route.params;
+
+  /**
+   * ════ WHAT SHE TELLS IT, KEPT UNTIL THERE IS SOMEWHERE TO PUT IT ════
+   *
+   * She says what she weighs in the second turn; the programme arrives in the fifth. There is no
+   * profile to write to in between — `Root` renders the main app the instant one exists, which is
+   * the whole reason this screen assembles hers in memory (see the header) — so the facts are
+   * accumulated here and handed to `completeOnboarding` with everything else.
+   *
+   * A ref, not state: nothing on this screen renders differently because the coach now knows her
+   * bodyweight, and a re-render mid-conversation would rebuild the sheet under a call in flight.
+   * Later turns overwrite earlier ones — if she corrects herself, the correction is the fact.
+   */
+  const learned = React.useRef<LearnedAboutHer>({});
 
   /**
    * Her profile as it WILL be, without being written.
@@ -88,6 +124,8 @@ export function CoachIntake({ navigation, route }: Props) {
     facts,
     mode: 'intake',
     onAnswer: (answer) => {
+      // Every turn, plan or no plan — she states her weight long before there is a programme.
+      if (answer.learned) learned.current = { ...learned.current, ...answer.learned };
       /*
        * A plan arrived. `useCoach` has already stored it through `db.recordCoachAnswer`, so by the
        * time this runs it is on disk — the next step writes the profile against a programme that
@@ -98,7 +136,7 @@ export function CoachIntake({ navigation, route }: Props) {
        */
       if (!answer.plan || handed.current) return;
       handed.current = true;
-      navigation.replace('ProgramCreated', { inputs });
+      navigation.replace('ProgramCreated', { inputs: withLearned(inputs, learned.current) });
     },
   });
 

@@ -4,6 +4,8 @@
  */
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
+import type { LearnedAboutHer } from '@/domain/coachPlan';
+import { applyLearned } from '@/domain/coachLearned';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { trialUsed, nextLedger } from '@/domain/trialLedger';
 import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
@@ -227,6 +229,22 @@ interface AppApi extends AppState {
      *  progression re-read it live (S-43 recomputes from her history at the new T), so no rebuild. */
     repBandByMuscle?: Record<string, RepBandChoice>;
   }) => Promise<void>;
+  /**
+   * ════ SHE TOLD THE COACH SOMETHING ABOUT HERSELF, AND THE APP WRITES IT DOWN ════
+   *
+   * The intake asks for her bodyweight and her days in conversation, because nothing else in the
+   * app ever will. This is where the answer stops being a sentence in a transcript and becomes
+   * part of her record — see `LearnedAboutHer`.
+   *
+   * ⚠️ IT IS DELIBERATELY NOT `updateProfileInfo`. That one exists for her CHANGING HER MIND, and
+   * it ends by telling the coach so (`askCoachToRevise`). Routing this through it would answer the
+   * coach's own sentence by calling the coach to inform it of what it just said — a paid round trip
+   * to tell somebody their own news, and a programme rewritten on the strength of it.
+   *
+   * No rebuild, no revision, no toast. The number was already true when she said it; the app is
+   * merely the last to hear.
+   */
+  learnFromCoach: (learned: LearnedAboutHer) => Promise<void>;
   /** Persist the Apple Health connection (Settings). The switch's only writer. */
   setHealthConnected: (connected: boolean) => Promise<void>;
   /** Athlete-owned exercise order within a workout (Athlete > Model). Durable + preserved across
@@ -596,8 +614,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // map itself comes from the body-map screen (all-normal when skipped → a full-body v5 plan).
           repBand: '8-10',
           bodyMap: inputs.bodyMap,
-          // Rev 7: the time budget is a 60-minute ceiling by default (S-64), editable in Settings.
-          workoutMinutes: 60,
+          // Rev 7: the time budget is a 60-minute ceiling by default (S-64), editable in Settings —
+          // and hers when she told the coach how long she actually has (`withLearned`).
+          workoutMinutes: inputs.workoutMinutes ?? 60,
         };
         // SELF-ENROLL (zero-friction): create the backend athlete from the onboarding
         // stats + adopt its token, so the REAL model drives the program from the first
@@ -836,6 +855,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
            */
           void askCoachToRevise(`she now trains ${profile.daysPerWeek} days a week`);
         }
+      },
+
+      async learnFromCoach(learned) {
+        if (!state.profile) return;
+        // The rule itself is `domain/coachLearned` — including the one that matters, that nothing is
+        // written when nothing moved. Null means her record already says all of it.
+        const applied = applyLearned(state.profile, learned);
+        if (!applied) return;
+        await db.saveProfile(applied.profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile: applied.profile });
+        void track('coach_learned', { fields: applied.changed });
       },
 
       /**

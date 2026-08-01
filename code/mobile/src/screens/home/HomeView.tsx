@@ -240,8 +240,15 @@ export function HomeView(props: HomeViewProps) {
               gets: available from the first screen, always, and announcing nothing.
 
               Sharing moved to the You tab rather than being deleted — it was the only way into it.
-              The glyph is left alone deliberately; the founder is redesigning this in Claude Design
-              and a placeholder chosen carefully is a placeholder argued about twice. */}
+
+              ⚠️ AND THE GLYPH WAS STILL THE SHARE GLYPH. `twoPeople` is two figures over two
+              shoulders, drawn for exactly one job: "send this to another person". Left in the
+              corner it did not read as a neutral placeholder, it read as the door it used to be —
+              the one thing this door can no longer do. A bubble says the plain true thing (something
+              here talks) without saying the forbidden one: no sparkle, no robot, nothing that makes
+              the corner announce an AI in an app whose whole positioning is that it is not one.
+
+              ⏸️ Still a placeholder — the founder is drawing this in Claude Design. */}
           {props.onCoach ? (
             <Pressable
               accessibilityRole="button"
@@ -250,7 +257,7 @@ export function HomeView(props: HomeViewProps) {
               onPress={props.onCoach}
               style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
             >
-              <Icon name="twoPeople" size={21} color={signal[0]} strokeWidth={2.1} />
+              <Icon name="speech" size={21} color={signal[0]} strokeWidth={2.1} />
             </Pressable>
           ) : null}
         </View>

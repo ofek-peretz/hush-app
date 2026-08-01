@@ -88,7 +88,9 @@ describe('the constraints that must survive', () => {
 
   it('states the field order, so the reply is deterministic in shape', () => {
     const t = translated();
-    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes']);
+    // `learned` is last on purpose: it is the rarest field on the object — she states her
+    // bodyweight once — and the ordering is what the model fills in, in order.
+    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes', 'learned']);
   });
 });
 

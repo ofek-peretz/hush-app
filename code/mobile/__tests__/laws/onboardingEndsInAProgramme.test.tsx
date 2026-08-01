@@ -137,7 +137,10 @@ describe('the intake is the last step', () => {
     // The plan is stored before the next step is reached, so the step that writes the profile does
     // it against a programme that already exists rather than promising one.
     expect((await db.loadCoachPlan())?.sessions[0].name).toBe('Upper A');
-    expect(c.nav.replace).toHaveBeenCalledWith('ProgramCreated', { inputs });
+    // …and it carries what the conversation produced. `daysPerWeek` is 1 here because this fixture's
+    // week is one session, and the programme is the answer to "how many days a week does she train"
+    // whatever the form guessed on the way in. See `theNumbersReachHerRecord`.
+    expect(c.nav.replace).toHaveBeenCalledWith('ProgramCreated', { inputs: { ...inputs, daysPerWeek: 1 } });
   });
 
   it('writes NO profile of its own — Root would swap the navigator out mid-sentence', async () => {

@@ -38,7 +38,7 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_PLAN_SCHEMA } from './coachPlan';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 7;
+export const COACH_PROMPT_VERSION = 8;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -173,6 +173,18 @@ sentence. Use it. Omit it when there is nothing to add.
 to the lift it is about. It is also what comes back to you next time under "decided", so write it as
 the reason you will want to remember, not a summary. There is no private version: if you cannot say
 the real reason to her, the reason is wrong.
+
+"learned" IS HOW WHAT SHE TELLS YOU REACHES THE REST OF THE APP.
+You are the only part of this product that hears her sentences. When she states what she weighs, how
+many days a week she can train, or how long she has for a session, put it in "learned" on that turn.
+Nothing else ever asks her, so a number you hear and do not report is a number the app never has —
+and it will hand you back your own sheet next time saying something different.
+
+Only what she actually SAID, and only in the turn she said it. Never a guess, never a default,
+never a figure you inferred from how strong she seems or how her week looks. If she has not told
+you, leave it out: the app knows the difference between not knowing and being told wrong, and only
+one of those is recoverable. Bodyweight goes in "weightKg" in KILOGRAMS whatever unit she used —
+converting it is your job, because you are the one who heard "one thirty-five".
 
 SCHEMA:
 ${JSON.stringify(COACH_PLAN_SCHEMA)}`;
@@ -412,7 +424,8 @@ ${JSON.stringify(hersAlone(facts))}
           'a week she can train. If you want either, ask for it the way a person would, when it ' +
           'fits the conversation — never as a form. Whether you need them, and what else you need, ' +
           'is your judgement: you decide the opening loads and you decide what you must know to ' +
-          'set them.\n\n' +
+          'set them. When she answers, put what she said in "learned" on that turn — it is the ' +
+          'only way any of it reaches her record.\n\n' +
           'Ask what you need, one or two questions at a time, following what she actually said ' +
           'rather than a list. When you know enough, build it — say so in "say" and attach the ' +
           'whole programme in "sessions" in the same reply.\n\n' +

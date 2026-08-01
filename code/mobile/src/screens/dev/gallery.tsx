@@ -1108,6 +1108,7 @@ function TodayDriven() {
       onChooseWorkout={setChosen}
       onWeeklyUpdate={noop}
       onShare={noop}
+      onCoach={noop}
     />
   );
 }
@@ -1162,6 +1163,11 @@ const todayView = (
     onChooseWorkout={noop}
     onWeeklyUpdate={noop}
     onShare={noop}
+    /* ⚠️ WITHOUT THIS THE COACH'S DOOR IS NOT DRAWN AT ALL. `HomeView` renders the corner only when
+       it is handed a handler, and no fixture on this page ever was — so the one control that IS the
+       coach's whole presence in the app has never appeared in the harness, through every pass that
+       argued about which glyph belongs in it. */
+    onCoach={noop}
   />
 );
 

@@ -168,7 +168,61 @@ export interface CoachAnswer {
   say: string;
   /** The programme, whole, when this turn decided one. `null` when the coach only spoke. */
   plan: CoachPlan | null;
+  /**
+   * What she TOLD it about herself in this turn, when she told it something.
+   *
+   * ════ THE NUMBERS WERE STAYING IN THE TRANSCRIPT ════
+   *
+   * The intake prompt names two facts nothing else in the app will ever ask her for — her
+   * bodyweight and how many days a week she can train — and asks the coach to get them in
+   * conversation, the way a person does. It does. Then they stopped there: the profile kept
+   * `daysPerWeek: 4`, the placeholder `ConnectHealth` hands over ("the coach replaces it", and
+   * nothing did), and `weightKg` stayed empty for ever.
+   *
+   * That is not a cosmetic gap. `coachFacts` builds every LATER sheet from the profile, so a coach
+   * that agreed on three days read "daysPerWeek: 4" on its own sheet next time, under a rule that
+   * says *"write exactly that many sessions"* — it contradicted itself out of its own record. And
+   * an empty bodyweight silently switched off everything keyed to it: the calorie estimate, the
+   * milestone ladders' anchor, and her weight trend, which cannot start without a first weight.
+   *
+   * Reported rather than PARSED, because the thing that already reads her sentences is the model.
+   * A regex over free text in two languages ("62 kilos", "around 60", "I'm 135 pounds") is a second
+   * interpreter of the same words, and the one place it would go wrong is the one place it matters.
+   */
+  learned?: LearnedAboutHer;
 }
+
+/**
+ * Facts about the ATHLETE that only the conversation can produce.
+ *
+ * Deliberately three fields and no more. Everything else the coach might infer about her — that she
+ * seems tired, that she prefers mornings — is an OPINION, and this object is written straight into
+ * her profile, which is the app's record of fact. If a value is not something she said in so many
+ * words, it does not belong here.
+ */
+export interface LearnedAboutHer {
+  /** Her bodyweight, in kilograms, as she stated it. */
+  weightKg?: number;
+  /** How many times a week she trains. */
+  daysPerWeek?: number;
+  /** How long she has for one session, in minutes. */
+  minutes?: number;
+}
+
+/**
+ * The bounds a stated fact has to fall inside to be written down.
+ *
+ * Not a validation nicety: this object is persisted to her profile unread by anybody, so a wrong
+ * number here is a wrong number in the app for ever, and the athlete never typed it. A value
+ * outside these is dropped and the turn is otherwise unaffected — the sentence and the programme
+ * are still perfectly good, and refusing the whole answer over a stray field would cost her a
+ * workout to save a number.
+ */
+const LEARNED_BOUNDS = {
+  weightKg: [25, 300],
+  daysPerWeek: [1, 7],
+  minutes: [10, 240],
+} as const satisfies Record<keyof LearnedAboutHer, readonly [number, number]>;
 
 /* ─────────────────────────────────────────────────────────────── The schema handed to the model */
 
@@ -251,6 +305,20 @@ export const COACH_PLAN_SCHEMA = {
         properties: { ex: { type: 'string' }, say: { type: 'string' } },
       },
     },
+    /**
+     * What she stated about herself — see `LearnedAboutHer`. Optional, and absent on nearly every
+     * turn: she says her weight once. `weightKg` is named in the unit the record keeps, because the
+     * coach is the only layer that knows she said "135 pounds".
+     */
+    learned: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        weightKg: { type: 'number' },
+        daysPerWeek: { type: 'integer' },
+        minutes: { type: 'integer' },
+      },
+    },
   },
 } as const;
 
@@ -316,6 +384,28 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   v != null && typeof v === 'object' && !Array.isArray(v);
 
 /**
+ * What she stated about herself, or nothing.
+ *
+ * Every field is dropped independently: a plausible bodyweight beside an impossible day count is
+ * one good fact and one bad one, and throwing the good one away would be a second mistake. An
+ * object left with no fields is omitted entirely rather than sent on as `{}` — "she told me
+ * nothing" and "she told me something I refused" must not look the same to the caller, which
+ * writes what it is given straight into her profile.
+ */
+function readLearned(raw: unknown): { learned?: LearnedAboutHer } {
+  if (!isObj(raw)) return {};
+  const out: LearnedAboutHer = {};
+  for (const key of ['weightKg', 'daysPerWeek', 'minutes'] as const) {
+    const v = raw[key];
+    const [lo, hi] = LEARNED_BOUNDS[key];
+    if (!isNum(v) || v < lo || v > hi) continue;
+    // A week has whole days in it and a session has whole minutes; only a bodyweight is fractional.
+    out[key] = key === 'weightKg' ? v : Math.round(v);
+  }
+  return Object.keys(out).length > 0 ? { learned: out } : {};
+}
+
+/**
  * Read a response as a plan, or say why it could not be read.
  *
  * `facts` is optional and is used for one thing only: her performed rungs, so a lift's load snaps
@@ -335,15 +425,21 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   const say = typeof root.say === 'string' ? root.say.trim() : '';
   if (say.length === 0) return { ok: false, reason: 'nothing_said' };
 
+  const learned = readLearned(root.learned);
+
   /*
    * NO `sessions` IS AN ANSWER, NOT A FAILURE — but an EMPTY `sessions` is a failure.
    *
    * Absent means the coach only spoke, which is most turns: a question answered, a clarification
    * asked during intake. Present-and-empty means it set out to decide and produced nothing, and
    * handing her a programme of zero sessions is worse than telling her the update is waiting.
+   *
+   * ⚠️ AND THIS IS THE PATH THE LEARNED FACTS ARRIVE ON. She says what she weighs several turns
+   * before there is a programme to attach it to, so a `learned` read only alongside `sessions`
+   * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...learned }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -449,9 +545,28 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     }
   }
 
+  /*
+   * ════ AND THE PROGRAMME ITSELF STATES HOW MANY DAYS A WEEK SHE TRAINS ════
+   *
+   * `sessions.length` is not a guess about her — it is the coach's own decision, and the prompt's
+   * bound reads *"'daysPerWeek' is how many times a week she trains. Write exactly that many
+   * sessions."* So a four-session week IS four days, whether or not the coach thought to say so in
+   * `learned`.
+   *
+   * It fills the field rather than overriding it: a stated number is her sentence, and this is an
+   * inference from it. They should agree — and when they do not, what she trains next week is the
+   * programme in front of her, so the programme wins the tie by being the thing that actually
+   * happens. (`0` cannot occur: an empty `sessions` was refused above.)
+   */
+  const days = learned.learned?.daysPerWeek ?? (sessions.length <= 7 ? sessions.length : undefined);
+
   return {
     ok: true,
-    answer: { say, plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) } },
+    answer: {
+      say,
+      plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
+      ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
+    },
     snapped,
   };
 }

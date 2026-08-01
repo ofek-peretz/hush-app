@@ -167,7 +167,7 @@ describe('the programme is required after a session', () => {
     const schema = askCoach.mock.calls[0][1] as { required: string[]; properties: Record<string, unknown> };
     expect(schema.required).toEqual(['say', 'sessions']);
     // …and it is the same schema otherwise. Two hand-written copies are two chances to drift.
-    expect(Object.keys(schema.properties)).toEqual(['say', 'sessions', 'notes']);
+    expect(Object.keys(schema.properties)).toEqual(['say', 'sessions', 'notes', 'learned']);
   });
 
   it('still reports honestly if the model manages to answer without one', async () => {

@@ -17,10 +17,15 @@
  * announcing nothing.
  *
  * ── WHAT IT DOES WITH AN ANSWER ─────────────────────────────────────────────────────────────────
- * Nothing, deliberately. `useCoach` already lands whatever arrives through `db.recordCoachAnswer` —
- * the plan is stored and the reasons are written where the next call reads them back — so a turn
- * that changes her programme has already changed it by the time this screen hears about it. Today
+ * Almost nothing. `useCoach` already lands whatever arrives through `db.recordCoachAnswer` — the
+ * plan is stored and the reasons are written where the next call reads them back — so a turn that
+ * changes her programme has already changed it by the time this screen hears about it. Today
  * re-reads on focus, which is how she sees it.
+ *
+ * The one exception is what she said about HERSELF. "I'm down to 58 now", "I can only make three
+ * days from next month" — the coach reports those in `learned`, and they belong in her profile,
+ * which is the sheet every later call is built from. Without this the conversation and the record
+ * drift apart silently and the coach ends up arguing with its own sheet.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import React from 'react';
@@ -40,7 +45,7 @@ import { currentLocale } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
 import type { MainParamList } from '@/app/navigation';
 import type { CoachDecision } from '@/domain/coachLog';
-import type { CoachPlan } from '@/domain/coachPlan';
+import type { CoachPlan, LearnedAboutHer } from '@/domain/coachPlan';
 import type { Session, CardioActivity } from '@/data/local/models';
 
 type Props = NativeStackScreenProps<MainParamList, 'Coach'>;
@@ -111,7 +116,13 @@ export function CoachScreen({ navigation }: Props) {
               rather than the centre of what is left over. */}
           <View style={styles.back} />
         </View>
-        {facts ? <Body facts={facts} entitled={app.entitlement.active} /> : null}
+        {facts ? (
+          <Body
+            facts={facts}
+            entitled={app.entitlement.active}
+            onLearned={(learned) => void app.learnFromCoach(learned)}
+          />
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -124,10 +135,25 @@ export function CoachScreen({ navigation }: Props) {
  * Holding the whole screen back until the profile loads would be worse — the header is hers either
  * way, and a screen that appears blank for a frame is a screen that looks broken.
  */
-function Body({ facts, entitled }: { facts: NonNullable<ReturnType<typeof coachFacts>>; entitled: boolean }) {
+function Body({
+  facts,
+  entitled,
+  onLearned,
+}: {
+  facts: NonNullable<ReturnType<typeof coachFacts>>;
+  entitled: boolean;
+  onLearned: (learned: LearnedAboutHer) => void;
+}) {
   const { t } = useCopy();
   // Only chat is capped, and the allowance depends on whether she is paying — see `coachQuota`.
-  const coach = useCoach({ facts, mode: 'chat', entitled });
+  const coach = useCoach({
+    facts,
+    mode: 'chat',
+    entitled,
+    onAnswer: (answer) => {
+      if (answer.learned) onLearned(answer.learned);
+    },
+  });
   return (
     <CoachChat
       turns={coach.turns}

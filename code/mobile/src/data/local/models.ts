@@ -104,6 +104,9 @@ export interface OnboardingInputs {
   /** Engine v5 (Revision 7) — the body map set on the body-map onboarding screen. Its presence (via
    *  completeOnboarding's repBand default) is what puts a new athlete on the v5 engine. */
   bodyMap?: Record<string, MuscleStance>;
+  /** How long she has for one session, when she told the coach so in the intake (`LearnedAboutHer`).
+   *  Absent => the 60-minute default. No screen asks for it; only the conversation can produce it. */
+  workoutMinutes?: number;
 }
 
 /** A frame-owned slot in a program day. */

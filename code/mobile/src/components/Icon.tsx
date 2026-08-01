@@ -65,6 +65,7 @@ export type IconName =
   | 'alert' // a warning triangle — the ONE place it appears is the pain door (v7 13.1)
   | 'share' // a tray with an arrow out of it — sending a plan link (v7 11.4)
   | 'twoPeople' // two figures — the door to the share cards, from Today (v7 2.1)
+  | 'speech' // a single bubble — the door to the coach, in the corner of Today
   | 'eyeOff' // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
   | 'watch'; // a watch on its band, crown at the side — the wrist (10.4)
 
@@ -485,6 +486,29 @@ function render(
         <G {...common}>
           <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
           <Path d="M4 4l16 16" />
+        </G>
+      );
+    case 'speech':
+      /*
+       * ONE BUBBLE, AND NOTHING INSIDE IT.
+       *
+       * The corner of Today drew `twoPeople` — the SHARE glyph, left behind when that corner became
+       * the coach's door. Two figures say "send this to a friend", which is what the corner used to
+       * do and is now the one thing it cannot.
+       *
+       * What it may not say either is "AI": no sparkle, no spark, no robot. The founder's whole
+       * reason for keeping the coach out of the tab bar is that the app must not read as another
+       * AI app, and a sparkle in the corner would undo that in one glyph. A speech bubble is the
+       * plainest true statement available — something here talks — and it is the same shape a
+       * person's message takes everywhere else on a phone.
+       *
+       * ⏸️ Still a placeholder: the founder is drawing this one in Claude Design. It is here because
+       * a WRONG meaning is worse than a plain one, not because it is finished.
+       */
+      // lucide `message-square`, untouched — one closed outline, no ellipsis inside it.
+      return (
+        <G {...common}>
+          <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </G>
       );
     case 'watch':
