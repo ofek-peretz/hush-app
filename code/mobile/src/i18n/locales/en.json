@@ -643,7 +643,7 @@
     "chipAllTime": "All time",
     "everythingLifted": "Everything you've lifted",
     "tonneUnit": "t",
-    "raises": "+{{count}} raises",
+    "raises": "{{count}} personal bests",
     "workoutsWeeks": "{{workouts}} workouts · {{weeks}} weeks",
     "allTimeMilestones": "All-time milestones",
     "volWeekOne": "Week 1",
@@ -651,12 +651,12 @@
     "badgeLifted": "Lifted",
     "badgeWorkouts": "Workouts",
     "badgeBurned": "Burned",
-    "badgeRaises": "Raises",
+    "badgeRaises": "Bests",
     "badgeCardio": "Cardio",
     "unitTonnes": "T",
     "unitDone": "Done",
     "unitKcal": "Kcal",
-    "unitUp": "Up",
+    "unitUp": "PB",
     "unitKm": "Km",
     "bandMeta": "band {{lo}}–{{hi}}",
     "sinceMeta": "since {{date}}",
@@ -880,7 +880,9 @@
     "later": "Not now",
     "billedOnce": "{{price}} billed once a year",
     "perMonthShort": "/month",
-    "perYearShort": "/year"
+    "perYearShort": "/year",
+    "trialLeft": "Session {{done}} of {{n}}",
+    "trialConverts": "The trial does not renew by itself. Start now and nothing changes until it runs out."
   },
   "explain": {
     "progressLoad": {

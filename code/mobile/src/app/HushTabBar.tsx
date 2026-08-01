@@ -28,7 +28,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Icon, type IconName } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import * as haptics from '@/platform/haptics';
 import { color, font, textScale } from '@/design/tokens';
 
 /** v7 2.1 draws these four exactly: the range mark, the activity waveform, a bare trace, a head. */
@@ -57,7 +56,12 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
         const onPress = () => {
           const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
           if (focused || event.defaultPrevented) return;
-          haptics.tick();
+          /*
+           * NO HAPTIC ON A TAB (founder A.9). The vocabulary is deliberate: a tick answers something
+           * she DID to her training — a set logged, a rest ended, a load moved. Moving between the
+           * app's own rooms is not one of those, and spending the strongest signal the product has
+           * on navigation makes every other tick mean slightly less.
+           */
           navigation.navigate(route.name);
         };
         const tint = focused ? color.textPrimary : color.textMuted;

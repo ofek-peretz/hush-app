@@ -702,7 +702,7 @@
     "chipAllTime": "כל הזמנים",
     "everythingLifted": "כל מה שהרמת",
     "tonneUnit": "t",
-    "raises": "‎+{{count}} העלאות",
+    "raises": "{{count}} שיאים אישיים",
     "workoutsWeeks": "{{workouts}} אימונים · {{weeks}} שבועות",
     "allTimeMilestones": "אבני דרך — כל הזמנים",
     "volWeekOne": "שבוע 1",
@@ -710,12 +710,12 @@
     "badgeLifted": "הורם",
     "badgeWorkouts": "אימונים",
     "badgeBurned": "נשרף",
-    "badgeRaises": "העלאות",
+    "badgeRaises": "שיאים",
     "badgeCardio": "קרדיו",
     "unitTonnes": "T",
     "unitDone": "בוצעו",
     "unitKcal": "קלוריות",
-    "unitUp": "עלו",
+    "unitUp": "שיא",
     "unitKm": "ק״מ",
     "bandMeta": "טווח {{lo}}–{{hi}}",
     "sinceMeta": "מאז {{date}}",
@@ -952,7 +952,9 @@
     "later": "לא עכשיו",
     "billedOnce": "{{price}} בחיוב אחד לשנה",
     "perMonthShort": "/חודש",
-    "perYearShort": "/שנה"
+    "perYearShort": "/שנה",
+    "trialLeft": "אימון {{done}} מתוך {{n}}",
+    "trialConverts": "הניסיון לא מתחדש מעצמו. אפשר להתחיל עכשיו — שום דבר לא משתנה עד שהוא ייגמר."
   },
   "explain": {
     "progressLoad": {

@@ -285,7 +285,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | A.6 | THE SET screen: the figure **37 is clipped**; the clock and `LIFT n/m` are **not centred**. His proposal: drop the Swap button under the video to free the room, then lower `LIFT` slightly (a little clearance from the clock). **Also:** gyms stock 2.5 kg jumps — why prescribe 8.5/side? At least on the first workout, maximise plate-accuracy and the athlete's opening load. **And:** find a more elegant way to carry the lift number and the set count than TEXT that steals focus — circles? He explicitly invites a proposal. | open |
 | A.7 | **BUG:** Pause → "something doesn't feel right" → Back returns to the WORKOUT instead of the Pause screen — and afterwards **the Pause button no longer works at all.** | **done** |
 | A.8 | Today: the **two-people icon is swallowed** by the background — effectively invisible. | **done** |
-| A.9 | Tab bar: **tapping fires a haptic — remove it.** Transitions are not fully smooth; there is a small flicker. | open |
+| A.9 | Tab bar: **tapping fires a haptic — remove it.** Transitions are not fully smooth; there is a small flicker. | **half done — the haptic is gone; the transition smoothness is unverifiable on Windows and needs a device** |
 | A.10 | When the athlete **edits and confirms, it must confirm** — not bounce back to the set screen. | **done** |
 | A.11 | **Remove the "next screen in 3 seconds" line AND its progress bar from every workout screen.** | **done** |
 | A.12 | Today: **tapping the chips flickers.** | **done** |
@@ -334,7 +334,7 @@ intent, nothing merged away and nothing dropped.** Status column is the only thi
 | C.14 | 2.3 Correction | **Remove the "REST BEGINS IN 3" line and its bar.** (Same as A.11.) | **done** |
 | C.15 | 2.5 Session earned | The engine **added a set to three different exercises** in one session. Not necessarily wrong — he wants to understand **why**. | **answered — see the banner; a Hebrew bug in the answer is fixed** |
 | C.16 | 2.3b Final set | "LIFT 6/6 · SET 3 · FINAL · LOGGED · NEXT LIFT COMING UP" — **the screen does not look good enough.** | open |
-| C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | open |
+| C.17 | 3.2 Progress | It reads **"+0 raises"** although the engine had just raised several lifts. Contradiction. | **done — the figure was right and the WORD was wrong. It counts times a lift beat its own all-time best: her personal bests, things she did. "Raises" is what the app does TO her programme, and there had just been several — so a screen showing zero of them was, in the only sense that matters, wrong. It says "personal bests" now. The prescription's direction lives on Today, in colour, next to the lift.** |
 | C.18 | 3.2b Lift detail | **No graph** when you open a lift. | **done** |
 | C.19 | 3.4 Cardio live | **Not what the HTML draws.** There is a **line across the middle** connected to nothing — remove it. And for someone with **no Apple Watch, HR must not appear** — tie it to the same flag as the watch presence. | **done** |
 | C.20 | 6.2 Live Activity | Our lock-screen activity is **small next to Spotify's.** Make it the same size, lay the data out better, and make calories legible. | **done — needs a device build to SEE** |

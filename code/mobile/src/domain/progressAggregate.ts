@@ -32,6 +32,21 @@ export interface ProgressAggregate {
    * lens, so a veteran's count would silently stop growing. A peak is the right unbounded fact for
    * this surface; the claim about who caused it is the part that has to stay honest.
    */
+  /**
+   * ⚠️ RENAMED IN THE COPY, NOT IN THE MATHS (founder C.17).
+   *
+   * He read "+0 raises" on the same day several of his lifts had been raised, and called it a
+   * contradiction. It was not a counting bug — the figure is right and always was. It counts times a
+   * lift beat its own ALL-TIME BEST LOAD: her personal bests, things she did.
+   *
+   * The word was the lie. "Raises" is what the app does TO her programme, and there had just been
+   * several — so a screen showing zero of them was, in the only sense that matters, wrong. It says
+   * "personal bests" now, which is what the number has always been.
+   *
+   * The two really are different and both are worth having: a raise that re-climbs toward an old
+   * peak is a decision and not a best, and a best set on a lift nobody touched is hers and not a
+   * decision. The prescription's direction lives on Today, in colour, next to the lift.
+   */
   raises: number;
   /** Lifetime kcal: strength MET estimate + recorded cardio calories. 0 when nothing is estimable. */
   kcal: number;

@@ -39,6 +39,12 @@ const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 export function Paywall({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  /*
+   * How much of the trial she has actually used. Clamped to the limit so a session logged past the
+   * gate (the watch reconciling offline work, say) cannot print "session 15 of 14".
+   */
+  const sessionsDone = Math.min(app.modeState.completedSessions, FREE_SESSION_LIMIT);
+  const trialSpent = sessionsDone >= FREE_SESSION_LIMIT;
   const source = route.params?.source ?? 'gate';
 
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
@@ -128,12 +134,27 @@ export function Paywall({ navigation, route }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* THE TRIAL CLOSES LIKE A MILESTONE — the mark, the fact, the sentence. */}
+        {/*
+          * ⚠️ IT SAYS WHERE SHE ACTUALLY IS (founder A.14).
+          *
+          * The eyebrow read "Session 14 · your trial is complete" whatever her number was — so
+          * tapping "Hush Pro" in the You tab at session three showed a spent trial that had not
+          * been spent. A screen asking her to pay is the worst place in the product to be wrong
+          * about how much she has already had.
+          *
+          * And when the trial is still running the screen is an INVITATION rather than a gate, so
+          * it says the one thing that makes deciding early safe: it does not renew by itself, and
+          * starting now changes nothing until it runs out. His words — people may want to subscribe
+          * before the fourteen are gone.
+          */}
         <RangeMark width={44} height={18} tone={signal[0]} />
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>
-          {t('paywall.trialDone', { n: FREE_SESSION_LIMIT })}
+          {trialSpent
+            ? t('paywall.trialDone', { n: FREE_SESSION_LIMIT })
+            : t('paywall.trialLeft', { done: sessionsDone, n: FREE_SESSION_LIMIT })}
         </Legend>
         <Text style={styles.title} accessibilityRole="header">{t('paywall.title')}</Text>
+        {trialSpent ? null : <Text style={styles.converts}>{t('paywall.trialConverts')}</Text>}
 
         {/* THREE QUIET PROMISES, not a pitch. Hairline-ruled, so they read as a list of facts. */}
         <View style={styles.promises}>
@@ -292,6 +313,15 @@ const styles = StyleSheet.create({
   closePressed: { backgroundColor: color.fillSubtleStrong },
   scroll: { paddingHorizontal: 30, paddingTop: 8, paddingBottom: space[5] },
 
+  // The one line that makes deciding EARLY safe. Quiet — it is a fact, not a pitch.
+  converts: {
+    color: color.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 18,
+  },
   eyebrow: { marginTop: 14, marginBottom: 12 },
   // v7 4.3: the close of the trial is the coach speaking — the serif at 36, not UI chrome.
   title: {
