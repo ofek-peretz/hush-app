@@ -44,6 +44,10 @@ import { CardioLiveView, CardioComplete, CardioCountdown, KmMoment } from '@/scr
 import { HistoryView } from '@/screens/history/History';
 import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { ProfileSheet } from '@/screens/profile/ProfileSheet';
+import { ProfileEdit } from '@/screens/profile/ProfileEdit';
+import { CoachScreen } from '@/screens/coach/CoachScreen';
+import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
@@ -1221,6 +1225,17 @@ export const GALLERY: GalleryEntry[] = [
      full one. Scripted here so it is drivable before a server exists — type and send and the
      scripted reply arrives, exactly as the real one will. Plain on purpose; the founder is
      redesigning it in Claude Design. */
+  /*
+   * ⚠️ 0.1 and 0.1a below mount `CoachChat` — the CONVERSATION component — with fixtures. They are
+   * how the chat itself is judged, and they are not the screens the product renders.
+   *
+   * `CoachIntake` and `CoachScreen` wrap that component in everything an athlete actually sees: the
+   * chrome, the way back, the record it reads first. Neither had an entry, so neither had ever been
+   * looked at in the gallery — which is how a body map nobody wanted survived in the step directly
+   * before one of them.
+   */
+  { id: '0.0', label: 'The coach — the intake SCREEN', status: 'live', note: 'the real onboarding step, chrome and all — not the chat component', render: () => mount(CoachIntake, { inputs: onboardingInputs }) },
+  { id: '0.0b', label: 'The coach — the conversation SCREEN', status: 'live', note: 'the real screen behind the corner of Today', render: () => mount(CoachScreen) },
   { id: '0.1', label: 'The coach — intake', status: 'live', note: 'type and send: a scripted reply lands after a beat', render: () => (
     <InApp>
       <OnStage>
@@ -1571,6 +1586,13 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.6c', label: 'The next twelve', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
 
   // ── 04 · OWN ───────────────────────────────────────────────────────────────────────────────
+  /*
+   * §04 held the body-map editor and the paywall, and not the SCREEN THEY ARE REACHED FROM. The
+   * founder's "You is becoming a screen we just push things into" is a judgement about a surface
+   * the gallery could not show him.
+   */
+  { id: '4.0', label: 'You', status: 'live', note: 'the whole tab — every row, in one place, which is the point', render: () => mount(ProfileSheet) },
+  { id: '4.0b', label: 'You — edit', status: 'live', render: () => mount(ProfileEdit) },
   { id: '4.1', label: 'Body map — editor', status: 'live', note: 'tap a muscle; Front / Back turns the body', render: () => mount(BodyMapEdit) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
 

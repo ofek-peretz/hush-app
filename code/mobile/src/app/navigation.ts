@@ -6,7 +6,7 @@
  * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
  * Body data + Training merged into one "About you + Your week" step, v7 2026-07-24):
  *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
- *   → About you + Your week (ManualInfo) → Body map → Program Created → Home.
+ *   → About you + Your week (ManualInfo) → the conversation → Program Created → Home.
  * Invite-token enrollment is removed.
  */
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -37,16 +37,29 @@ export type OnboardingParamList = {
   // watch decides, as it always has.
   ConnectHealth: { sex?: 'male' | 'female'; previewWrist?: WristOffer } | undefined;
   // About you + Your week (v7 1.4, merged 2026-07-24): bodyweight seeds the cold-start load and
-  // sessions-per-week shapes the split — one screen. `healthConnected` records whether Health was
-  // connected; `sex` is carried from NameEntry. Assembles OnboardingInputs and continues to BodyMap.
+  // `days` sets the week's shape. `healthConnected` is carried from the step before it; `sex` from
+  // NameEntry. Assembles OnboardingInputs and continues straight to the conversation.
   ManualInfo: { healthConnected: boolean; sex?: 'male' | 'female' } | undefined;
-  // The BODY MAP (Revision 7) — off / normal / emphasis per muscle; the programme's shape follows
-  // from it (register Part 3), replacing the demographic split. Carries the assembled inputs from
-  // the previous step, writes bodyMap, then continues to the build.
-  BodyMap: { inputs: OnboardingInputs };
+  /*
+   * ════ THE BODY MAP LEFT ONBOARDING ════
+   *
+   * Founder, 2026-08-01: *"I really did ask you to get rid of the body map in onboarding... and I
+   * think we don't need a body map at all, because we said this is something the AI handles in the
+   * case of an injury."*
+   *
+   * He asked, and it was still there — reachable in the product, absent from the gallery, so it
+   * looked gone to the only person who reads the gallery.
+   *
+   * The screen asked her to mark ten muscles off / normal / emphasis BEFORE she had ever trained,
+   * and then the very next screen asked a coach the same question in words. Two answers to one
+   * question, and the coach's is the better one: it can ask WHY, and it can change its mind.
+   *
+   * The MAP itself is not gone — it is the pain flow's own surface (13.2) and the profile editor
+   * (4.1). What is gone is asking a stranger to fill one in.
+   */
   // THE INTAKE — the first conversation, and the step that produces the programme. Everything
-  // before it collects what a coach cannot ask for twice (name, gender, bodyweight, days, the body
-  // map); this is where she is asked the things only she knows, by the thing that will act on them.
+  // before it collects what a coach cannot ask for twice (name, gender, bodyweight, days); this is
+  // where she is asked the things only she knows, by the thing that will act on them.
   // The profile is NOT written here: `Root` swaps navigators the instant it exists, which would
   // take this screen out from under her mid-conversation. See `CoachIntake`.
   CoachIntake: { inputs: OnboardingInputs };

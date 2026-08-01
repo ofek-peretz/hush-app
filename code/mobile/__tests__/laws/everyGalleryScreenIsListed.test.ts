@@ -94,6 +94,52 @@ describe('the index lists what the gallery holds', () => {
   });
 });
 
+describe('⚠️ the gallery holds what the PRODUCT has — the other direction', () => {
+  /*
+   * ════ THE BODY MAP WAS LIVE AND UNLISTED ════
+   *
+   * Founder, 2026-08-01: *"I really did ask you to get rid of the body map in onboarding. It does
+   * not even appear in the gallery, so I don't understand how you say it suddenly appears."*
+   *
+   * Both halves were true, and that is the bug. `BodyMap` sat in the onboarding stack between
+   * ManualInfo and CoachIntake — every new athlete walked through it — and it had no gallery entry
+   * at all. He read the gallery, saw it gone, and reasonably concluded it was gone.
+   *
+   * The first law here checks that every GALLERY entry is listed. That is one direction. This is
+   * the other, and it is the one that misleads a person: a screen the product renders and the
+   * gallery does not know about is a screen nobody reviews, nobody screenshots, and everybody
+   * believes was deleted.
+   */
+  const ROOT_SRC = fs.readFileSync(path.join(ROOT, 'src', 'app', 'Root.tsx'), 'utf8');
+
+  it('lists every screen COMPONENT the navigators register', () => {
+    const registered = [...ROOT_SRC.matchAll(/\.Screen\s+name="\w+"[^\n]*component=\{(\w+)\}/g)].map((m) => m[1]);
+    const multiline = [...ROOT_SRC.matchAll(/name="\w+"\s*\n\s*component=\{(\w+)\}/g)].map((m) => m[1]);
+    const all = [...new Set([...registered, ...multiline])];
+    expect(all.length).toBeGreaterThan(20);
+
+    /*
+     * A component is "in the gallery" when the gallery imports it — an entry can mount it under any
+     * label, and several do (`SessionFlow` alone backs a dozen states).
+     *
+     * The exemptions are surfaces a gallery cannot host, and each one is a reason rather than a
+     * shrug: the two navigator containers are not screens, and `ShareCardModal` captures a native
+     * view the web harness has no renderer for.
+     */
+    const CANNOT_BE_HOSTED = new Set(['HomeTabs', 'CardioTab', 'ShareCardModal']);
+    /*
+     * A screen may be hosted under its own name OR under its presentational half. Several screens
+     * split container/View on purpose (`SharePlanScreen` renders `SharePlanView`) and the gallery
+     * mounts the View with fixtures — which IS that screen, visually. Accept either.
+     */
+    const hosted = (c: string) =>
+      new RegExp(`\\b${c}\\b`).test(SRC) ||
+      new RegExp(`\\b${c.replace(/(Screen|Sheet)$/, '')}View\\b`).test(SRC);
+    const missing = all.filter((c) => !CANNOT_BE_HOSTED.has(c) && !hosted(c));
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('a status always has a mark', () => {
   it('⚠️ gives every ScreenStatus a glyph — `cancelled` printed the word "undefined"', () => {
     /*

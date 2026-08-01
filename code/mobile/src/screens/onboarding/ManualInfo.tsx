@@ -46,7 +46,7 @@ export function ManualInfo({ navigation, route }: Props) {
 
   function onContinue() {
     void track('days_per_week_selected', { days });
-    navigation.navigate('BodyMap', {
+    navigation.navigate('CoachIntake', {
       inputs: {
         // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
         goal: 'build_muscle',
