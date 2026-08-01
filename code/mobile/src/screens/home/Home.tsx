@@ -21,6 +21,7 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { coachSession } from '@/domain/coachWeek';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
@@ -529,6 +530,26 @@ export function Home({ navigation, route }: Props) {
     }
     setStartError(false);
     try {
+      /*
+       * ════ THE COACH'S WEEK WINS WHERE THERE IS ONE ════
+       *
+       * A workout the coach decided is run from the coach's own plan — its loads are already
+       * decided and sitting in the items, and three of its four shapes (a run, a hold, open work)
+       * cannot be written as a `ProgramDay` at all, so there is nothing here to ask the engine for.
+       *
+       * The engine path below is the FALLBACK, and it is temporary: it is what every athlete
+       * already on TestFlight is training from, and deleting it before the coach path stands would
+       * leave them with no programme and no load progression at all. It goes when the generator
+       * goes, not before.
+       */
+      const coachPlan = await db.loadCoachPlan().catch(() => null);
+      const planned = coachSession(coachPlan, day.id);
+      if (planned) {
+        await session.startCoach(planned, day.id);
+        navigation.navigate('SessionFlow');
+        return;
+      }
+
       const targets =
         prefetch.current?.dayId === day.id
           ? prefetch.current.targets

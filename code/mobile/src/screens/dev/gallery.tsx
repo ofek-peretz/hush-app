@@ -147,6 +147,7 @@ const sessionFixture = {
   endResult: null,
   correction: null,
   start: asyncNoop,
+  startCoach: asyncNoop,
   loadResumable: async () => null,
   resumeSaved: async () => false,
   /*

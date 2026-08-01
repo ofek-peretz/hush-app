@@ -289,6 +289,18 @@ export interface SessionView {
   startedAtMs: number | null;
   // actions
   start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;
+  /**
+   * Begin a session the COACH wrote.
+   *
+   * The same machine, entered through a different door. `start` takes a `ProgramDay` and a set of
+   * engine targets; a coach session has neither — it has blocks of items, three of whose four
+   * shapes a `ProgramDay` cannot express, and its loads are already decided and sitting in the
+   * plan. So the two doors stay separate rather than one of them pretending to be the other.
+   *
+   * `workoutId` is the coach workout's positional id (`coachWorkoutId`), stamped on the session so
+   * History can say which workout this was long after the programme has changed shape.
+   */
+  startCoach: (session: PlannedSession, workoutId: string) => Promise<void>;
   /** An interrupted (app-killed) workout that can still be picked up, or null. Home reads
    *  this on focus to offer "Continue {workout}" as the primary CTA (S3). */
   loadResumable: () => Promise<{ workoutName: string } | null>;
@@ -1150,6 +1162,43 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           session,
           machine: initialSessionMachine(plan2.length <= 1),
           targets,
+        });
+      },
+
+      async startCoach(planned, workoutId) {
+        /*
+         * Everything `start` does before it composes, because none of it is about where the plan
+         * came from: salvage an orphan, clear the previous session's banked rest, reset Loop 1's
+         * budget, and read her history so the live loop has her learned grid and rest.
+         */
+        await creditSalvage(await salvageOrphanSession());
+        setRestResumeRemainingS(null);
+        restStartedAtRef.current = null;
+        pendingRestSRef.current = null;
+        loop1Ref.current = { exerciseId: '', count: 0 };
+        historyRef.current = await db.loadHistory().catch(() => []);
+        refreshLearnedRests(historyRef.current);
+
+        // No `targets` argument, and that is the whole difference. The engine's per-set targets are
+        // what `start` composes a plan AROUND; here the loads are already decided and are in the
+        // items. Only the `reps` shape carries one at all — a run has no load to prescribe.
+        const plan2 = buildPlanFromCoach(planned);
+        const session: Session = {
+          id: `sess_${Date.now()}`,
+          programDayId: workoutId,
+          programDayName: planned.name,
+          startedAt: new Date().toISOString(),
+          state: 'ACTIVE',
+          earlyFinish: false,
+          sets: [],
+        };
+        await db.saveActiveSession(session);
+        void track('session_started', { sessionId: session.id, programDayId: workoutId, blockCount: planned.blocks.length });
+        dispatch({
+          type: 'START',
+          plan: plan2,
+          session,
+          machine: initialSessionMachine(plan2.length <= 1),
         });
       },
 
