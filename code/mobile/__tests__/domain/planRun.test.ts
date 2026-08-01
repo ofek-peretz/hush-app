@@ -83,7 +83,10 @@ describe('an interval block — six by four hundred', () => {
   });
 
   it('walks ninety seconds between repeats and not after the sixth', () => {
-    expect(runSteps(session).map((s) => s.restAfterS)).toEqual([0, 90, 90, 90, 90, 90, 0, 0]);
+    // The warm-up and the cool-down blocks state no rest at all, and that is UNDEFINED, not zero:
+    // the runner falls back to her learned rest there, where a zero would be an instruction to
+    // start the next thing immediately. The sixth repeat's zero is real — the block is over.
+    expect(runSteps(session).map((s) => s.restAfterS)).toEqual([undefined, 90, 90, 90, 90, 90, undefined, 0]);
     expect(plannedRestS(session)).toBe(450);
   });
 

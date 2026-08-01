@@ -55,8 +55,21 @@ export function workoutTrained(setsLogged: number, day: ProgramDay | undefined |
  * let one set finish a workout, burn a free trial session and close the week's slot.
  */
 export function sessionTrained(session: Session, day: ProgramDay | undefined | null): boolean {
+  /*
+   * WHAT SHE DID IS EVERY STEP SHE DID, NOT EVERY SET.
+   *
+   * `prescribed` counts the steps she was asked for, and a coach's session counts intervals, holds
+   * and carries among them. Measuring the answer in `sets` alone compared two different units: an
+   * interval session finished to the last repeat logged ZERO sets against a prescription of
+   * fourteen, so a completed workout read as abandoned — no credit, still on the week's list.
+   *
+   * `items` is the canonical record and holds every shape (a reps step is written to both), so it
+   * is the count whenever it exists. `sets` remains the answer for every session written before it
+   * did, and for an engine-built plan, which is reps by construction.
+   */
+  const done = session.items?.length ?? session.sets.length;
   if (session.prescribed != null && session.prescribed > 0) {
-    return session.sets.length >= Math.ceil(session.prescribed * WORKOUT_TRAINED_FRACTION);
+    return done >= Math.ceil(session.prescribed * WORKOUT_TRAINED_FRACTION);
   }
-  return workoutTrained(session.sets.length, day);
+  return workoutTrained(done, day);
 }

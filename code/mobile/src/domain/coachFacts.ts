@@ -258,7 +258,17 @@ export interface CoachFacts {
     trained: boolean;
     endedEarly: boolean;
     lifts: FactLift[];
-    /** Every item in every shape — see `FactWork`. Absent on a session recorded before it existed. */
+    /**
+     * Every item in every shape, IN THE ORDER SHE MET THEM — see `FactWork`.
+     *
+     * A reps step appears here AND in `lifts`, and that is deliberate rather than duplication: the
+     * two say different things. `lifts` groups a lift's sets together with the rest before each and
+     * her own effort answer; `work` is the session's STRUCTURE — block, round, position — which is
+     * the only way to tell that the bench was inside a circuit with the plank rather than four
+     * straight sets before it. The coach wrote that structure; it must be able to read it back.
+     *
+     * Absent on a session recorded before `items` existed.
+     */
     work?: FactWork[];
   };
   performed: FactPerformed[];

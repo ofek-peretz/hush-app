@@ -312,6 +312,7 @@
   "workout": {
     "bodyweight": "משקל גוף",
     "completeSet": "סיים סט",
+    "completeSet_female": "סיימי סט",
     "editResult": "עריכת תוצאה",
     "reps": "× {{reps}}",
     "setOfM": "סט {{n}} מתוך {{m}}",
@@ -383,7 +384,9 @@
     "effortAboutRight": "בדיוק מתאים",
     "effortNothingLeft": "לא נשאר כלום",
     "itemStart": "התחל",
+    "itemStart_female": "התחילי",
     "itemStop": "עצור",
+    "itemStop_female": "עצרי",
     "itemDone": "סיימתי",
     "itemCarrying": "נושאת {{load}} ק\"ג"
   },

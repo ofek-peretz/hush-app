@@ -48,8 +48,16 @@ export interface RunStep {
   /** 1-based position within the round, for a circuit's "2 of 3". */
   position: number;
   positions: number;
-  /** Seconds to rest AFTER this step, or 0. Between-rounds rest, then the block's own tail. */
-  restAfterS: number;
+  /**
+   * Seconds to rest AFTER this step. Between-rounds rest, then the block's own tail.
+   *
+   * ⚠️ 0 AND UNDEFINED ARE DIFFERENT ANSWERS, and collapsing them costs a real workout. A zero is
+   * the coach saying *no rest here* — the gap between the two lifts of a superset, where stopping
+   * the clock would make it two exercises. UNDEFINED is the coach not saying: `restS` is optional
+   * in the schema, and a block that omits it must fall back to what she actually rests on that
+   * lift (S-17), not run four sets of squats back to back because a field was absent.
+   */
+  restAfterS: number | undefined;
   /** True when this is the last step of the whole session — nothing follows it. */
   last: boolean;
 }
@@ -81,8 +89,9 @@ export function runSteps(session: PlannedSession): RunStep[] {
           rounds: block.rounds,
           position: i + 1,
           positions,
-          // Between ROUNDS, not between the items of a round — see the header.
-          restAfterS: endOfBlock ? (block.restAfterS ?? 0) : endOfRound ? (block.restS ?? 0) : 0,
+          // Between ROUNDS, not between the items of a round — see the header. Inside a round the
+          // zero is deliberate; at the edge of one an absent number stays absent (see `restAfterS`).
+          restAfterS: endOfBlock ? block.restAfterS : endOfRound ? block.restS : 0,
           last: false,
         });
       });
@@ -98,7 +107,13 @@ export function runSteps(session: PlannedSession): RunStep[] {
   return steps;
 }
 
-/** Total prescribed rest in a session, in seconds — what the plan intends her to spend waiting. */
+/**
+ * Total PRESCRIBED rest in a session, in seconds — what the plan intends her to spend waiting.
+ *
+ * A rest the coach did not state counts as nothing here, deliberately: this is the plan's own
+ * arithmetic (does the session fit her minutes?), and the learned rest that fills the gap at run
+ * time is a fact about her, not part of what was written.
+ */
 export function plannedRestS(session: PlannedSession): number {
-  return runSteps(session).reduce((sum, s) => sum + s.restAfterS, 0);
+  return runSteps(session).reduce((sum, s) => sum + (s.restAfterS ?? 0), 0);
 }

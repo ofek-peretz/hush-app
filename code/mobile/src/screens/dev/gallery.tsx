@@ -135,6 +135,10 @@ const sessionFixture = {
   currentExerciseId: 'bb_bench_press',
   sessionExerciseIds: ['bb_bench_press'],
   currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+  // A lift, so the stage takes its ordinary set path. The shapes that are NOT sets have their own
+  // entries below (2.2c/2.2d/2.2e) — see `itemFixture`.
+  currentItem: null,
+  nextItem: null,
   nextExerciseId: 'bb_bench_press',
   setLabel: { n: 2, m: 4 },
   globalProgress: { index: 1, total: 24 },
@@ -168,6 +172,7 @@ const sessionFixture = {
    * state it exists to show. Same shape as C.9, C.13 and A.6.
    */
   completeSet: async () => ({ ended: false, unlockedPortrait: false, correction: null }),
+  completeItem: async () => ({ ended: false, unlockedPortrait: false }),
   reportEffort: noop,
   editCurrentSet: noop,
   endRest: noop,
@@ -217,6 +222,36 @@ const crossingFixture = {
   nextExercise: { id: 'bb_overhead_press', name: 'Overhead Press', muscle: 'Shoulders', equipment: 'barbell' },
   nextTarget: { exerciseId: 'bb_overhead_press', setIndex: 0, recommendedWeight: 22.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
   nextSetLabel: { n: 1, m: 4 },
+  correction: null,
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/**
+ * 2.2i · A STEP THAT IS NOT A SET, INSIDE THE STAGE.
+ *
+ * 2.2f/g/h mount the three stages BARE, which is why none of them could show the thing that was
+ * actually broken: `SessionFlow` never branched to any of them, so a plank arrived at the SET
+ * screen. A fixture that only ever draws the destination cannot see a missing road — the same
+ * lesson as 2.1's static Today. This one goes through the stage.
+ */
+const itemFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  currentExercise: null, // a movement is not in the lift catalogue, by design
+  currentExerciseId: 'plank',
+  currentTarget: null, // no weight, no rep band — the whole point
+  currentItem: { kind: 'time', ex: 'plank', seconds: 45, say: 'Ribs down, breathe. Stop when the hips drop, not before.' },
+  setLabel: { n: 2, m: 3 },
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** 2.4e · A CROSSING INTO A RUN — the up-next card with no load to state. */
+const crossingToRunFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  displayPhase: 'REST_TRANSITION',
+  restSeconds: 72,
+  nextExercise: null,
+  nextExerciseId: 'run_outdoor',
+  nextTarget: null,
+  nextItem: { kind: 'distance', ex: 'run_outdoor', metres: 5000, say: 'Conversation pace the whole way.' },
+  nextSetLabel: { n: 1, m: 1 },
   correction: null,
 } as unknown as React.ContextType<typeof SessionContext>;
 
@@ -1311,8 +1346,10 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
+  { id: '2.2i', label: 'A held duration — in the stage', status: 'live', note: '2.2f/g/h draw the stage bare; this is the workout screen ROUTING to it — chrome, pause and all', render: () => mount(SessionFlow, undefined, itemFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
+  { id: '2.4e', label: 'Crossing into a run', status: 'live', note: 'the up-next card states the distance — it used to say “bodyweight”', render: () => mount(SessionFlow, undefined, crossingToRunFixture) },
   { id: '2.4c', label: 'The scan', status: 'live', note: 'held mid-read — lift 3 of 6', render: () => (
     <InApp>
       <SessionScan

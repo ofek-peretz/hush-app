@@ -28,14 +28,15 @@ import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult, type LiveCorrection } from '@/state/stores/sessionStore';
-import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
+import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
+import { TimeStage, DistanceStage, OpenStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
 import { inWorkoutLadder } from '@/domain/replacement';
 import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
-import type { CoachPlan } from '@/domain/coachPlan';
+import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import type { EffortLevel, Session } from '@/data/local/models';
 import { restWithSample, restedSeconds } from '@/domain/restPrescription';
 import * as haptics from '@/platform/haptics';
@@ -599,9 +600,29 @@ export function SessionFlow({ navigation, route }: Props) {
       ? t('workout.exerciseCount', { n: exIndex + 1, N: session.exerciseProgress.total })
       : undefined;
   const onSet = !confirm && session.displayPhase === 'SET_PRESENTED';
+  /**
+   * ════ THE STEP SHE IS ON IS NOT ALWAYS A SET ════
+   *
+   * The coach writes four shapes and only one of them is a weight for a number of reps. This is the
+   * branch — the one thing that was missing between a stage built for all four (`ItemStage`) and a
+   * plan that carried all four (`buildPlanFromCoach`). Without it a plank reached the SET screen as
+   * a set with no weight and no rep band, in the middle of a workout.
+   *
+   * `reps` and a step with no item at all (an engine-built plan) are the ordinary path, untouched.
+   */
+  const itemShape = session.currentItem && session.currentItem.kind !== 'reps' ? session.currentItem : null;
+  /**
+   * Both end-edge doors belong to a LIFT, and neither means anything on a run.
+   *
+   * Swap answers "the machine is taken" out of a pool of lifts in the same class; a movement is in
+   * no class and has no synonyms. Form plays a demo of a catalogue exercise; there is no film of a
+   * five-kilometre run, and `exerciseCues` for a movement id is empty. A door that opens onto
+   * nothing is worse than no door.
+   */
+  const onLift = !!exerciseById(session.currentExerciseId ?? '');
   // The swap is offered before the FIRST set of every lift — one rule (`isSwapMoment`), asked by
   // the phone and the wrist alike, so the two surfaces can never disagree about when a swap is legal.
-  const canSwap = isSwapMoment((session.setLabel?.n ?? 1) - 1);
+  const canSwap = isSwapMoment((session.setLabel?.n ?? 1) - 1) && onLift;
 
   return (
     <View style={styles.root}>
@@ -616,7 +637,7 @@ export function SessionFlow({ navigation, route }: Props) {
             elapsedFrom={session.startedAtMs}
             onExit={openPause}
             onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
-            onDemo={confirm ? undefined : () => setOverlay('demo')}
+            onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
           />
         )}
         {paceBeat ? (
@@ -628,6 +649,8 @@ export function SessionFlow({ navigation, route }: Props) {
             correction={beatCorrection}
             onAnswer={(level) => closeEffort(level)}
           />
+        ) : session.displayPhase === 'SET_PRESENTED' && itemShape ? (
+          <ItemBeat item={itemShape} />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
           <ActiveSet
             units={units}
@@ -776,6 +799,41 @@ export function SessionFlow({ navigation, route }: Props) {
       ) : null}
     </View>
   );
+}
+
+/* ------------------------------------------------------------------ Item beat */
+/**
+ * THE THREE SHAPES THAT ARE NOT A SET, ON THE STAGE SHE IS ALREADY STANDING IN FRONT OF.
+ *
+ * `ItemStage` draws them; this is what hands them the athlete's step and takes back what she did.
+ * It is deliberately thin — no beat, no dwell, no question. A set earns its 1.4-second capture
+ * because a number was decided and Hush may have moved the next one; a plank that ended has no news
+ * in it, and holding the screen to say nothing is the exact thing C.13 removed from the set path.
+ *
+ * The haptic is the same single tap a logged set gets: one step captured, one tap, whatever shape
+ * it was — the five-event rhythm law (WATCH_EXPERIENCE_SPEC §3) counts events, not shapes.
+ */
+function ItemBeat({ item }: { item: Exclude<PlannedItem, { kind: 'reps' }> }) {
+  const session = useSession();
+  const name = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
+  const finish = useCallback(
+    (done?: { seconds?: number; metres?: number }) => {
+      haptics.setLogged();
+      // When it ends the session, the `endResult` effect navigates to Well Done — one path for
+      // every shape and every surface, exactly as the set path leaves it.
+      void session.completeItem(done);
+    },
+    [session],
+  );
+
+  switch (item.kind) {
+    case 'time':
+      return <TimeStage item={item} name={name} onDone={(seconds) => finish({ seconds })} />;
+    case 'distance':
+      return <DistanceStage item={item} name={name} onDone={() => finish()} />;
+    case 'open':
+      return <OpenStage item={item} name={name} onDone={() => finish()} />;
+  }
 }
 
 /* --------------------------------------------------------------- Stage chrome */
@@ -1781,6 +1839,24 @@ function Rest({
   const nextTarget = session.nextTarget;
   // The upcoming load is the engine's prescribed value verbatim (same number the athlete will lift).
   const nextWeight = displayWeight(nextTarget?.recommendedWeight ?? null, units);
+  /**
+   * WHAT IS COMING, WHEN WHAT IS COMING IS NOT A LIFT.
+   *
+   * The crossing card's right-hand figure is a load, and it prints the WORD "bodyweight" when there
+   * is none — correct for a push-up, a lie in front of a five-kilometre run, which is the next thing
+   * the coach can now put there. A movement's instruction is its own measure: the distance, or the
+   * hold. `open` has neither and gets nothing, which is the honest answer for an item whose whole
+   * point is that no number was worth stating.
+   */
+  const nextItem = session.nextItem;
+  const nextFigure =
+    nextItem?.kind === 'distance'
+      ? distanceOf(nextItem.metres)
+      : nextItem?.kind === 'time'
+        ? { figure: clockOf(nextItem.seconds), unit: '' }
+        : null;
+  // Both doors open onto a lift's pool and a lift's film — see `onLift` on the stage above.
+  const nextIsLift = !!exerciseById(session.nextExerciseId ?? '');
   // (The upcoming REPS are deliberately absent — see the up-next law below. They were read here
   // and printed on the rest card; nothing reads them now.)
   const nextSet = session.nextSetLabel;
@@ -2006,7 +2082,16 @@ function Rest({
                 </Legend>
                 <Text style={styles.upName} numberOfLines={2}>{nextName}</Text>
               </View>
-              {isTransition ? (
+              {isTransition && nextItem && nextItem.kind !== 'reps' ? (
+                nextFigure ? (
+                  <View style={styles.upRight}>
+                    <Text style={styles.upWeight}>
+                      {nextFigure.figure}
+                      {nextFigure.unit ? <Text style={styles.upWeightUnit}> {nextFigure.unit}</Text> : null}
+                    </Text>
+                  </View>
+                ) : null
+              ) : isTransition ? (
                 <View style={styles.upRight}>
                   {/* A load is a FIGURE (mono); "bodyweight" is a WORD, and it takes the word's voice
                       — the mono face has no Hebrew letters to draw it with at all.
@@ -2054,7 +2139,7 @@ function Rest({
           {/* BOTH DOORS, side by side (v7 2.4b): watch the next lift's form, or swap it if the
               machine is taken. They are equals — two outlines of the same width — because at a
               crossing neither is more likely than the other. */}
-          {isTransition ? (
+          {isTransition && nextIsLift ? (
             <View style={styles.upActions}>
               <StageOutline icon="playCircle" label={t('workout.form')} onPress={onDemo} />
               <StageOutline icon="repeat" label={t('workout.swapAction')} onPress={onSwap} />

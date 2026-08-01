@@ -32,6 +32,7 @@
 import i18next from 'i18next';
 import { getGender } from '@/i18n/gender';
 import type { Capability } from './local/models';
+import { MOVEMENTS } from './movements';
 
 export type EquipmentFamily = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
 
@@ -488,12 +489,19 @@ export function muscleOf(id: string | null | undefined): MuscleGroup | undefined
  * live backend uses bare ids like "overhead_press" where the catalog has
  * "bb_overhead_press"). Returns the catalog name when known, otherwise humanizes the
  * id ("overhead_press" → "Overhead Press"). Never returns a raw snake_case id.
+ *
+ * ⚠️ AND THE THINGS THAT ARE NOT LIFTS HAVE NAMES TOO. The coach may prescribe any of the 25
+ * MOVEMENTS, none of which is in `EXERCISES` — by design, since a run has no muscle and no
+ * capability (`data/movements`). Left to the humaniser, `run_outdoor` came out as "Run Outdoor"
+ * and `farmer_carry` lost its apostrophe: a catalogue we ship, spelled by a fallback.
  */
 const EQUIP_PREFIX = new Set(['bb', 'db', 'kb', 'machine', 'cable', 'smith']);
 export function exerciseDisplayName(id: string | null | undefined): string {
   if (!id) return '';
   const ex = BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id));
   if (ex) return ex.name;
+  const move = MOVEMENTS.find((m) => m.id === id);
+  if (move) return move.name;
   const parts = id.split('_').filter(Boolean);
   if (parts.length > 1 && EQUIP_PREFIX.has(parts[0])) parts.shift();
   return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');

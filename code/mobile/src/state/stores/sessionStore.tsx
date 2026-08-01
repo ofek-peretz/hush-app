@@ -17,7 +17,7 @@
  * defaults. "Ready" (endRest) is the only rest agency.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { EffortLevel, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
+import type { EffortLevel, ItemResult, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, muscleOf, type Exercise } from '@/data/exercises';
 import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
@@ -146,6 +146,8 @@ interface InternalState {
 type Action =
   | { type: 'START'; plan: Step[]; session: Session; machine: SessionMachine; targets?: SetTarget[] }
   | { type: 'LOG'; setLog: SetLog; session: Session; machine: SessionMachine }
+  /** A step that was not a set — held, covered, or simply done. Same movement, no `SetLog`. */
+  | { type: 'LOG_ITEM'; session: Session; machine: SessionMachine }
   | { type: 'MACHINE'; machine: SessionMachine }
   | { type: 'EFFORT'; session: Session }
   | { type: 'SWAP_PLAN'; plan: Step[] }
@@ -156,6 +158,7 @@ function reducer(s: InternalState, a: Action): InternalState {
     case 'START':
       return { plan: a.plan, session: a.session, machine: a.machine, targets: a.targets ?? [] };
     case 'LOG':
+    case 'LOG_ITEM':
       return { ...s, session: a.session, machine: a.machine };
     case 'MACHINE':
       return { ...s, machine: a.machine };
@@ -278,6 +281,14 @@ export interface SessionView {
    *  lift the session already contains (no duplicate in one workout). */
   sessionExerciseIds: string[];
   currentTarget: SetTarget | null;
+  /**
+   * What the coach wrote for the step she is on, when the plan came from a coach — the
+   * discriminator the stage switches on. Absent on an engine-built plan (which is reps by
+   * construction), and `kind: 'reps'` is the ordinary set screen exactly as it has always been.
+   */
+  currentItem: PlannedItem | null;
+  /** The same, for the step a rest is leading into — so a crossing card can say what is coming. */
+  nextItem: PlannedItem | null;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
@@ -318,6 +329,14 @@ export interface SessionView {
    *  rest caught up). False when nothing usable remains — the caller falls back to Begin. */
   resumeSaved: () => Promise<boolean>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
+  /**
+   * End the current step when it is NOT a set — held, covered, or simply done.
+   *
+   * `seconds` is what she ACTUALLY held (a plank stopped at 20 of 45 is a 20-second plank, not a
+   * failure); `metres` what she actually covered. Both default to what was asked. Refuses a reps
+   * step, exactly as `completeSet` refuses one without a target.
+   */
+  completeItem: (done?: { seconds?: number; metres?: number; skipped?: true }) => Promise<CompleteResult>;
   /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
   editCurrentSet: (v: { weight: number | null; reps: number }) => void;
@@ -494,6 +513,79 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
       lastSetOfSession: st.last,
     };
   });
+}
+
+/**
+ * ════ HOW LONG SHE RESTS AFTER THIS STEP — one answer, asked in three places ════
+ *
+ * The coach's number when the coach gave one, and what she actually rests otherwise.
+ *
+ * ⚠️ THIS FIELD WAS STAMPED ONTO EVERY COACH STEP AND READ BY NOBODY. `buildPlanFromCoach` carried
+ * `restAfterS` faithfully from `planRun`, and the machine went on asking the learned rest for every
+ * step of every session — so a coach who wrote 20 seconds between the two lifts of a superset, or
+ * three minutes between heavy squat sets, was overruled by a median. The founder's ruling is
+ * explicit that the next workout's **prescribed rest** is the coach's decision, and a prescription
+ * nothing reads is not a prescription.
+ *
+ * Absent means the coach did not say (`restS` is optional), and then S-17 stands: her own median on
+ * that lift. Zero means the coach said no rest, which is a real instruction — it is how a superset
+ * and a circuit are written — and the machine skips the rest screen entirely (§1.14).
+ */
+export function restAfterStep(step: Step): number {
+  if (step.restAfterS != null) return step.restAfterS;
+  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId);
+}
+
+/**
+ * ════ THE RECORD OF ONE STEP, WHATEVER SHAPE IT WAS ════
+ *
+ * `Session.items` is the canonical record and `sets` is the rep-only view kept in step beside it
+ * (see `ItemResult`). Both are written here so nothing downstream has to know which of the two a
+ * given reader is on — and so a plank is never written as zero reps at zero kilograms, which is the
+ * lie the type exists to prevent.
+ *
+ * Null when the step did not come from a coach plan: an engine-built step has no block, round or
+ * position, and inventing one would make up a structure the athlete was never given.
+ */
+function itemResultOf(
+  step: Step,
+  done: { seconds?: number; metres?: number; skipped?: true; restBeforeS?: number | null },
+  log: SetLog | null,
+  at: string,
+): ItemResult | null {
+  const item = step.item;
+  if (!item || !step.where) return null;
+  const restBeforeS = log ? log.restBeforeS : done.restBeforeS ?? undefined;
+  const base = {
+    ex: step.exerciseId,
+    ...step.where,
+    at,
+    ...(restBeforeS != null ? { restBeforeS } : {}),
+    ...(done.skipped ? { skipped: true as const } : {}),
+  };
+  switch (item.kind) {
+    case 'reps':
+      if (!log) return null;
+      return {
+        ...base,
+        kind: 'reps',
+        load: log.actualWeight ?? null,
+        reps: log.actualReps,
+        ...(log.edited ? { edited: true } : {}),
+      };
+    case 'time':
+      return { ...base, kind: 'time', seconds: done.seconds ?? item.seconds, askedSeconds: item.seconds };
+    case 'distance':
+      return { ...base, kind: 'distance', metres: done.metres ?? item.metres, askedMetres: item.metres };
+    case 'open':
+      return { ...base, kind: 'open' };
+  }
+}
+
+/** Has this exact place in the session already been written? One step, one row. */
+function alreadyRecorded(items: ItemResult[] | undefined, where: Step['where']): boolean {
+  if (!items || !where) return false;
+  return items.some((i) => i.block === where.block && i.round === where.round && i.position === where.position);
 }
 
 /**
@@ -773,10 +865,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { plan, machine } = state;
     const loggedSets = state.session?.sets ?? [];
+    /*
+     * ⚠️ THE MIRROR COUNTS IN SET-SPACE, THE MACHINE COUNTS IN STEP-SPACE.
+     *
+     * `buildMirrorSteps` drops every step that is not a set — a plank has no weight and no rep band
+     * to draw on a wrist, and publishing zeros would put "0 kg × 0" on it. But `machine.setIndex`
+     * indexes the PLAN, and the mirror reads it against its own shorter list: one plank early in a
+     * session and every frame after it named the wrong lift, on the Lock Screen and the wrist alike.
+     *
+     * So the cursor is translated into the mirror's space — the number of SETS she has reached.
+     * While she is on an item, that lands on the next set, which is the honest approximation
+     * available to a surface that cannot draw the item at all.
+     *
+     * ⏸️ Drawing the item ITSELF on those two surfaces is watch work, and the watch is deferred by
+     * the founder until his QA batch. This keeps them truthful in the meantime.
+     */
+    const mirrorSteps = buildMirrorSteps(plan);
+    const setsBeforeCursor = plan.slice(0, machine.setIndex).filter((s) => s.target).length;
     const mirror = projectSessionMirror({
-      steps: buildMirrorSteps(plan),
+      steps: mirrorSteps,
       total: plan.length,
-      machine,
+      machine: setsBeforeCursor === machine.setIndex ? machine : { ...machine, setIndex: setsBeforeCursor },
       // Per-tier: the mirror's REST_INTER duration belongs to the CURRENT exercise.
       restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
       // WT5 — whether that number is HER median or the tier bootstrap. The wrist says "your pace"
@@ -860,17 +969,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         : 'REST_TRANSITION'
       : 'SET_PRESENTED';
     // A rest resumed after an app kill anchors on its true remaining time, not the base length.
+    //
+    // The rest belongs to the step that just ENDED — which is `current`, since the cursor only moves
+    // on REST_ELAPSED — so it is the same question `completeSet` asked when it decided there would
+    // be a rest at all (`restAfterStep`). Asking it differently here is how the machine and the
+    // countdown come to disagree about a coach's three minutes.
     const restSeconds =
-      restResumeRemainingS ?? (displayPhase === 'REST_INTER' ? restInterSecondsFor(current?.exerciseId) : restTransitionSeconds());
+      restResumeRemainingS ??
+      (current ? restAfterStep(current) : restTransitionSeconds());
 
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
       const session = sessionRef.current;
       if (!session) return { ended: true, unlockedPortrait: false };
 
       // NOT STARTED (UX item 3A): the athlete entered the workout and left without completing a
-      // single set. This is NOT a workout — it is never saved to history, never counted toward
+      // single step. This is NOT a workout — it is never saved to history, never counted toward
       // calibration, and never marks the day done. Just clear the orphan session and exit.
-      if (session.sets.length === 0) {
+      //
+      // ⚠️ IT ASKED ONLY ABOUT SETS. A session of intervals and holds — which the coach can now
+      // write, and which is an entire training week for a runner — logs no `SetLog` at all, so a
+      // finished workout would have been thrown away as never started.
+      if (session.sets.length === 0 && !session.items?.length) {
         await db.clearActiveSession();
         await db.clearSessionResume().catch(() => {});
         dispatch({ type: 'END' });
@@ -1073,7 +1192,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       ).size;
       const summary: SessionSummary = {
         workoutName: saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? '',
-        sets: saved.sets.length,
+        // Every step she did, for the same reason `sessionTrained` counts them: a session of
+        // intervals reading "0" would tell her she had done nothing on the screen that closes it.
+        sets: saved.items?.length ?? saved.sets.length,
         progressed,
         durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
         // The key every decision this occurrence earned is stamped with (changeLog[].at).
@@ -1096,6 +1217,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       currentExerciseId: current?.exerciseId ?? null,
       sessionExerciseIds: [...new Set(plan.map((s) => s.exerciseId))],
       currentTarget: current?.target ?? null,
+      currentItem: current?.item ?? null,
+      nextItem: resting ? next?.item ?? null : null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
@@ -1287,7 +1410,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             },
             active,
             Date.now(),
-            (kind, exerciseId) => (kind === 'inter' ? restInterSecondsFor(exerciseId) : restTransitionSeconds()),
+            // The coach's own number for the step the rest belongs to, when there is one — the
+            // machine sits ON the completed step while resting, so this is the same step
+            // `restAfterStep` would ask about. Without it a three-minute prescribed rest comes back
+            // from a crash as her ninety-second median.
+            (kind, exerciseId) =>
+              resumePlan[(snap.machine as SessionMachine).setIndex]?.restAfterS ??
+              (kind === 'inter' ? restInterSecondsFor(exerciseId) : restTransitionSeconds()),
           );
           if (!r) {
             // Unusable (stale / fully completed) → salvage so the next Begin composes cleanly.
@@ -1373,7 +1502,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ...(pendingRestSRef.current != null ? { restBeforeS: pendingRestSRef.current } : {}),
         };
         pendingRestSRef.current = null; // spent — one rest belongs to exactly one set
-        const updated: Session = { ...session, sets: [...session.sets, setLog] };
+        // …and the same set as a row of the canonical record. One write, both views: `sets` is what
+        // the engine, History and the mirror still read; `items` is what the coach is sent, and a
+        // session whose record held only its planks would tell it she had stopped lifting.
+        const repsRow = itemResultOf(current, {}, setLog, setLog.persistedAt);
+        const updated: Session = {
+          ...session,
+          sets: [...session.sets, setLog],
+          ...(repsRow ? { items: [...(session.items ?? []), repsRow] } : {}),
+        };
         // Persist the actual at each Complete Set (§8.4).
         await db.saveActiveSession(updated);
 
@@ -1395,7 +1532,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
         if (setLog.edited) void trackFirst('first_override');
 
-        const restSecondsForThis = current.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(current.exerciseId);
+        const restSecondsForThis = restAfterStep(current);
         const m = sessionReducer(
           { ...machine, isLastSetOfSession: current.lastSetOfSession },
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
@@ -1463,6 +1600,72 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           return finalize(false);
         }
         return { ended: false, unlockedPortrait: false, correction: liveCorrection };
+        } finally {
+          completingRef.current = false;
+        }
+      },
+
+      /**
+       * ════ THE STEP THAT WAS NOT A SET ════
+       *
+       * A hold, a distance, an open item. Everything `completeSet` does except the parts that only
+       * mean something for a weight: no Loop 1 (there is no band to correct against), no carry
+       * forward (there is no load to carry), no `SetLog`.
+       *
+       * ⚠️ WITHOUT THIS THE COACH COULD WRITE THREE OF ITS FOUR SHAPES AND THE APP COULD RUN NONE
+       * OF THEM. `ItemStage` was built, `ItemResult` was designed, `planRun` expanded them and
+       * `buildPlanFromCoach` carried them — and the workout screen never branched, so a plank
+       * arrived at the set stage as a set with no weight and no reps, mid-session.
+       */
+      async completeItem(done = {}): Promise<CompleteResult> {
+        const session = sessionRef.current;
+        if (!current || !session) return { ended: false, unlockedPortrait: false };
+        // A paused workout is frozen (§7.2) — the same law the set path holds.
+        if (machineRef.current.phase === 'PAUSED') return { ended: false, unlockedPortrait: false };
+        // A set comes through `completeSet`, which knows about bands, loads and Loop 1. This is the
+        // twin of that function's `!current.target` guard: neither door accepts the other's work.
+        if (!current.item || current.item.kind === 'reps') return { ended: false, unlockedPortrait: false };
+        if (completingRef.current) return { ended: false, unlockedPortrait: false };
+        if (alreadyRecorded(session.items, current.where)) return { ended: false, unlockedPortrait: false };
+        completingRef.current = true;
+        try {
+          const row = itemResultOf(
+            current,
+            { ...done, restBeforeS: pendingRestSRef.current },
+            null,
+            new Date().toISOString(),
+          );
+          if (!row) return { ended: false, unlockedPortrait: false };
+          pendingRestSRef.current = null; // spent — one rest belongs to exactly one step
+          const updated: Session = { ...session, items: [...(session.items ?? []), row] };
+          await db.saveActiveSession(updated);
+          void track('item_completed', {
+            sessionId: session.id,
+            ex: current.exerciseId,
+            kind: current.item.kind,
+            ...(row.kind === 'time' ? { seconds: row.seconds, askedSeconds: row.askedSeconds } : {}),
+            ...(row.kind === 'distance' ? { metres: row.metres, askedMetres: row.askedMetres } : {}),
+            skipped: !!done.skipped,
+          });
+
+          const restSecondsForThis = restAfterStep(current);
+          const m = sessionReducer(
+            { ...machine, isLastSetOfSession: current.lastSetOfSession },
+            { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
+          );
+          sessionRef.current = updated;
+          setRestResumeRemainingS(null);
+          // Nothing here can correct a load, so nothing here may leave one on screen: a correction
+          // belongs to the set that earned it, and the rest after a plank is not that rest.
+          setCorrection(null);
+          dispatch({ type: 'LOG_ITEM', session: updated, machine: m });
+
+          if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {
+            restStartedAtRef.current = Date.now();
+            restExtraSecondsRef.current = 0;
+          }
+          if (m.phase === 'SESSION_SAVED') return finalize(false);
+          return { ended: false, unlockedPortrait: false };
         } finally {
           completingRef.current = false;
         }

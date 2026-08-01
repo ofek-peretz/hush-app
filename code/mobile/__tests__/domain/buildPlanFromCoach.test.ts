@@ -89,7 +89,10 @@ describe('every shape that is not reps carries NO target', () => {
 
   it('carries the prescribed rest, and none after the final step', () => {
     const plan = buildPlanFromCoach(session);
-    expect(plan.map((s) => s.restAfterS)).toEqual([0, 45, 45, 0, 0, 0]);
+    // A block that states no rest carries UNDEFINED, not zero — the runner then rests her at her own
+    // learned pace (S-17). Zero is an instruction ("straight on"), and handing it to every block
+    // whose `restS` the coach left out would run four sets of squats back to back.
+    expect(plan.map((s) => s.restAfterS)).toEqual([undefined, 45, 45, undefined, undefined, 0]);
     expect(plan.at(-1)!.lastSetOfSession).toBe(true);
   });
 });
@@ -121,6 +124,8 @@ describe('a circuit', () => {
   });
 
   it('rests between laps and not between the exercises of a lap', () => {
+    // Every zero here is the coach's own instruction: inside a lap you go straight on to the next
+    // exercise, and after the last lap the block is over.
     expect(buildPlanFromCoach(session).map((s) => s.restAfterS)).toEqual([0, 120, 0, 120, 0, 0]);
   });
 });

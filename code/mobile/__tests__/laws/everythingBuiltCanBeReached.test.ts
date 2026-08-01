@@ -71,6 +71,77 @@ describe('the phone — every route has a door', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
+// THE PHONE, ONE LEVEL DOWN — a branch INSIDE a screen
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+/**
+ * ⚠️ THE ROUTE CHECK ABOVE PASSES ON A SCREEN NOBODY CAN REACH.
+ *
+ * `ItemStage` is not a route. It is three stages the workout screen was supposed to branch to when
+ * the coach prescribes a hold, a distance or an open item — built, styled, unit-tested, drawn in the
+ * gallery, and imported by **nothing but the gallery** for an entire build. `SessionFlow` rendered
+ * the set screen for every step of every session, so a plank reached the athlete as a set with no
+ * weight and no rep band. Every layer around it was green, and the route law could not see it: a
+ * dead branch inside a screen is not a missing door, it is a door that was never drawn.
+ *
+ * So: a stage the APP does not use is not built, whatever the harness can show. The gallery is
+ * explicitly not a user of anything — its whole job is to render things in isolation, which is
+ * exactly why it cannot be the proof that they are connected.
+ */
+describe('the phone — nothing is reachable only from the harness', () => {
+  const GALLERY = 'src/screens/dev/gallery.tsx';
+
+  /**
+   * Every source file, comments stripped.
+   *
+   * A component named in a comment is not a component anybody renders — and this file's own prose
+   * names several. Read the code, never the account of it (`svgBackgroundsAreSizedOneWay` learned
+   * the same lesson by flagging the comment that explained its own fix).
+   */
+  function sources(): { rel: string; text: string }[] {
+    const out: { rel: string; text: string }[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(e.name)) {
+          const text = fs
+            .readFileSync(path.join(ROOT, rel), 'utf8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\/\/[^\n]*/g, '')
+            .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+          out.push({ rel, text });
+        }
+      }
+    };
+    walk('src');
+    return out;
+  }
+
+  it('⚠️ renders every screen component it builds — the item stages were gallery-only', () => {
+    const files = sources();
+    const orphans: string[] = [];
+    for (const { rel, text } of files) {
+      if (!rel.startsWith('src/screens/') || rel === GALLERY) continue;
+      // A component, not a helper: an exported function whose name is capitalised.
+      for (const m of text.matchAll(/export function ([A-Z]\w+)/g)) {
+        const name = m[1];
+        const re = new RegExp(`\\b${name}\\b`, 'g');
+        /*
+         * Its OWN file counts — a screen split into presentational parts renders them itself, and
+         * that is reachable. What may not count is the declaration (every component has exactly
+         * one) and the gallery (which renders things in isolation on purpose).
+         */
+        const uses = files
+          .filter((f) => f.rel !== GALLERY)
+          .reduce((n, f) => n + (f.text.match(re)?.length ?? 0), 0);
+        if (uses <= 1) orphans.push(`${rel}:${name}`);
+      }
+    }
+    expect(orphans).toEqual([]);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
 // THE WATCH
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 describe('the watch — every view reaches the root, and reads what it is given', () => {
