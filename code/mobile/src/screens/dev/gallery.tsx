@@ -56,7 +56,7 @@ import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
 import { PainResponse } from '@/screens/pain/PainResponse';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
-import { exerciseCues, EXERCISES } from '@/data/exercises';
+import { exerciseCues, exerciseDisplayName, EXERCISES } from '@/data/exercises';
 import { tg } from '@/i18n';
 import { WhyChangedSheet, type WhyChangedProps } from '@/components/WhyChangedSheet';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
@@ -1224,6 +1224,19 @@ export const GALLERY: GalleryEntry[] = [
         formGuideLabel={tg('workout.formGuide')}
         doneLabel={tg('workout.tapAnywhere')}
         exerciseId="bb_bench_press"
+        onDone={noop}
+      />
+    </InApp>
+  ) },
+  { id: '2.2j', label: 'Form — a lift from the expansion', status: 'live', note: 'the 47 new lifts ship their cues in both languages and both voices: switch the bar under the frame', render: () => (
+    <InApp>
+      <ExerciseDemo
+        title={exerciseDisplayName('single_leg_rdl')}
+        cues={exerciseCues('single_leg_rdl')}
+        focusLabel={tg('workout.focusOn')}
+        formGuideLabel={tg('workout.formGuide')}
+        doneLabel={tg('workout.tapAnywhere')}
+        exerciseId="single_leg_rdl"
         onDone={noop}
       />
     </InApp>

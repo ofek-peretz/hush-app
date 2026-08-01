@@ -78,12 +78,14 @@ export type SwapPattern =
   | 'press_flat' | 'press_incline' | 'fly'
   // Triceps
   | 'press' | 'elbow_extension'
-  // Back
-  | 'row' | 'pulldown' | 'rear_delt'
+  // Back — a SHRUG is scapular elevation, not a row: nothing else in the catalogue trains it, and
+  // scoring it as a row would answer a busy shrug with a barbell row.
+  | 'row' | 'pulldown' | 'rear_delt' | 'shrug'
   // Biceps
   | 'curl'
-  // Shoulders
-  | 'press_overhead' | 'lateral_raise'
+  // Shoulders — a FRONT raise is a different plane from a lateral one, and the delt it trains is
+  // the one the presses already hammer. Kept apart so a swap never trades one for the other.
+  | 'press_overhead' | 'lateral_raise' | 'front_raise'
   // Quads
   | 'squat' | 'lunge' | 'knee_extension'
   // Calves — straight knee is the GASTROCNEMIUS, bent knee is the SOLEUS. Different muscles.
@@ -93,8 +95,9 @@ export type SwapPattern =
   | 'hinge' | 'knee_flexion'
   // Glutes
   | 'thrust' | 'kickback' | 'abduction' | 'adduction'
-  // Core
-  | 'crunch' | 'leg_raise' | 'anti_extension';
+  // Core — ROTATION is a function the catalogue had no entry for at all: every core movement in it
+  // flexed the spine or resisted it, and nothing turned it.
+  | 'crunch' | 'leg_raise' | 'anti_extension' | 'rotation';
 
 /**
  * How much of the STABILISATION the equipment has taken away. Ordered, not boolean — that is the
@@ -199,6 +202,9 @@ export const EXERCISES: Exercise[] = [
   { id: 'knee_push_up', name: 'Knee Push-Up', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', regression: true, equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Body straight from knees to head.', 'Lower the chest to the floor.', 'Press the floor away.'], synonyms: ['kneeling push-up'] },
   { id: 'pec_deck', name: 'Pec Deck Fly', capability: 'horizontal_push', muscle: 'Chest', pattern: 'fly', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Soft elbows.', 'Squeeze the chest together.', 'Open slowly.'], synonyms: ['chest fly', 'machine fly'] },
   { id: 'cable_fly', name: 'Cable Fly', capability: 'horizontal_push', muscle: 'Chest', pattern: 'fly', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 12, cues: ['Slight forward lean.', 'Hug the arms together.', 'Control the stretch.'] },
+  { id: 'incline_db_fly', name: 'Incline Dumbbell Fly', capability: 'horizontal_push', muscle: 'Chest', pattern: 'fly', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 8, cues: ['Set a ~30° incline.', 'Open wide with soft elbows.', 'Hug the weights together.'] },
+  { id: 'incline_push_up', name: 'Incline Push-Up', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'bodyweight', tier: 'compound', regression: true, bodyweight: true, cues: ['Hands on a bench or bar.', 'Body in a straight line.', 'Lower the chest to the bar.'] },
+  { id: 'decline_push_up', name: 'Decline Push-Up', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Feet up on a bench.', 'Body in a straight line.', 'Lower the chest to the floor.'] },
 
   // ───────────────────────── horizontal_push · Triceps ─────────────────────────
   { id: 'close_grip_bench', name: 'Close-Grip Bench Press', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 32, bwScaled: true, cues: ['Hands shoulder-width.', 'Tuck the elbows.', 'Press through the triceps.'] },
@@ -206,6 +212,12 @@ export const EXERCISES: Exercise[] = [
   { id: 'overhead_triceps_ext', name: 'Overhead Triceps Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Elbows by your ears.', 'Stretch behind the head.', 'Extend to lockout.'] },
   { id: 'skullcrusher', name: 'Skullcrusher', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pointed up.', 'Lower to the forehead.', 'Extend to lockout.'], synonyms: ['lying triceps extension'] },
   { id: 'machine_dip', name: 'Seated Dip Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'supported', equipment: 'machine', tier: 'compound', baseKg: 40, cues: ['Chest tall, shoulders down.', 'Press the handles to lockout.', 'Control the return.'], synonyms: ['triceps dip machine', 'seated dip'] },
+  { id: 'db_overhead_triceps_ext', name: 'Dumbbell Overhead Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 12, cues: ['Elbows by your ears.', 'Lower behind the head.', 'Extend to lockout.'] },
+  { id: 'triceps_kickback', name: 'Triceps Kickback', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 6, cues: ['Hinge forward, upper arm still.', 'Extend the elbow back.', 'Return under control.'] },
+  { id: 'bench_dip', name: 'Bench Dip', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands on the bench edge.', 'Lower until the elbows bend 90°.', 'Press back to lockout.'] },
+  { id: 'diamond_push_up', name: 'Diamond Push-Up', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands together under the chest.', 'Elbows brush the ribs.', 'Press the floor away.'] },
+  { id: 'machine_triceps_ext', name: 'Triceps Extension Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Set the seat height.', 'Extend fully.', 'Resist on the way back.'] },
+  { id: 'single_arm_pushdown', name: 'Single-Arm Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 10, cues: ['Elbow pinned to your side.', 'Extend fully.', 'Resist on the way up.'] },
 
   // ───────────────────────── horizontal_pull · Back ─────────────────────────
   { id: 'bb_row', name: 'Barbell Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Hinge to about 45°.', 'Pull to your lower ribs.', 'Control the descent.'] },
@@ -218,12 +230,24 @@ export const EXERCISES: Exercise[] = [
   { id: 'machine_row', name: 'Machine Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'supported', equipment: 'machine', tier: 'compound', baseKg: 35, cues: ['Chest on the pad.', 'Drive the elbows back.', 'Control the return.'] },
   { id: 'face_pull', name: 'Face Pull', capability: 'horizontal_pull', muscle: 'Back', pattern: 'rear_delt', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Pull to your forehead.', 'Lead with the elbows.', 'Squeeze the rear delts.'] },
   { id: 'rear_delt_fly', name: 'Rear Delt Fly', capability: 'horizontal_pull', muscle: 'Back', pattern: 'rear_delt', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 7, cues: ['Soft elbows.', 'Open to the sides.', 'Squeeze the rear delts.'] },
+  { id: 'incline_db_row', name: 'Chest-Supported Dumbbell Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'supported', equipment: 'dumbbell', tier: 'compound', baseKg: 16, cues: ['Chest on the incline bench.', 'Row to your lower ribs.', 'Lower fully.'] },
+  { id: 'single_arm_cable_row', name: 'Single-Arm Cable Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'supported', equipment: 'cable', tier: 'compound', unilateral: true, baseKg: 20, cues: ['Tall chest.', 'Pull to your waist.', 'Let the shoulder travel forward.'] },
+  { id: 'inverted_row', name: 'Inverted Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Bar at hip height.', 'Body in a straight line.', 'Pull the chest to the bar.'] },
+  { id: 'straight_arm_pulldown', name: 'Straight-Arm Pulldown', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 20, cues: ['Soft elbows, arms long.', 'Sweep the bar to your thighs.', 'Return slowly.'] },
+  { id: 'reverse_pec_deck', name: 'Reverse Pec Deck', capability: 'horizontal_pull', muscle: 'Back', pattern: 'rear_delt', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 20, cues: ['Chest on the pad.', 'Open to the sides.', 'Squeeze the rear delts.'] },
+  { id: 'bb_shrug', name: 'Barbell Shrug', capability: 'horizontal_pull', muscle: 'Back', pattern: 'shrug', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 50, cues: ['Arms long, no curling.', 'Lift the shoulders straight up.', 'Lower for a full stretch.'] },
+  { id: 'db_shrug', name: 'Dumbbell Shrug', capability: 'horizontal_pull', muscle: 'Back', pattern: 'shrug', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 24, cues: ['Weights at your sides.', 'Lift the shoulders straight up.', 'Lower for a full stretch.'] },
 
   // ───────────────────────── horizontal_pull · Biceps ─────────────────────────
   { id: 'bb_curl', name: 'Barbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pinned to your sides.', 'Curl without swinging.', 'Lower under control.'] },
   { id: 'db_curl', name: 'Dumbbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 10, cues: ['No swinging.', 'Curl and squeeze.', 'Lower slowly.'] },
   { id: 'hammer_curl', name: 'Hammer Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 10, cues: ['Neutral grip.', 'Keep elbows still.', 'Control the descent.'] },
   { id: 'preacher_curl', name: 'Preacher Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 18, cues: ['Arms flat on the pad.', 'Curl without lifting the elbows.', 'Lower under control.'] },
+  { id: 'incline_db_curl', name: 'Incline Dumbbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'dumbbell', tier: 'isolation', baseKg: 8, cues: ['Sit back on the incline.', 'Let the arms hang behind you.', 'Curl without moving the elbows.'] },
+  { id: 'cable_curl', name: 'Cable Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 18, cues: ['Elbows pinned to your sides.', 'Curl without swinging.', 'Resist on the way down.'] },
+  { id: 'concentration_curl', name: 'Concentration Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow braced on the inner thigh.', 'Curl and squeeze.', 'Lower slowly.'] },
+  { id: 'reverse_curl', name: 'Reverse Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 15, cues: ['Overhand grip.', 'Elbows still.', 'Lower under control.'] },
+  { id: 'single_arm_cable_curl', name: 'Single-Arm Cable Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow pinned to your side.', 'Curl and squeeze.', 'Resist on the way down.'] },
 
   // ───────────────────────── vertical_push · Shoulders ─────────────────────────
   { id: 'bb_overhead_press', name: 'Overhead Press', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'press_overhead', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 25, bwScaled: true, cues: ['Brace your midsection.', 'Bar over the mid-foot.', 'Lock out overhead.'], synonyms: ['ohp', 'shoulder press'] },
@@ -233,6 +257,10 @@ export const EXERCISES: Exercise[] = [
   { id: 'lateral_raise', name: 'Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'lateral_raise', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 7, cues: ['Soft elbows.', 'Raise to shoulder height.', 'Lower slowly.'], synonyms: ['side raise'] },
   { id: 'cable_lateral_raise', name: 'Cable Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'lateral_raise', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 6, cues: ['Lead with the elbow.', 'Raise to shoulder height.', 'Resist on the way down.'] },
   { id: 'machine_lateral_raise', name: 'Machine Lateral Raise', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'lateral_raise', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 20, cues: ['Set the seat so pads sit at the elbows.', 'Raise to shoulder height.', 'Lower slowly.'], synonyms: ['lateral raise machine', 'side raise machine'] },
+  { id: 'landmine_press', name: 'Landmine Press', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'press_overhead', support: 'free', equipment: 'barbell', tier: 'compound', unilateral: true, baseKg: 15, cues: ['Stand tall, brace.', 'Press up and slightly across.', 'Lower to the shoulder.'] },
+  { id: 'pike_push_up', name: 'Pike Push-Up', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'press_overhead', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hips high, head between the arms.', 'Lower the crown to the floor.', 'Press the floor away.'] },
+  { id: 'db_front_raise', name: 'Front Raise', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'front_raise', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 7, cues: ['Soft elbows.', 'Raise to shoulder height.', 'Lower slowly.'] },
+  { id: 'cable_front_raise', name: 'Cable Front Raise', capability: 'vertical_push', muscle: 'Shoulders', pattern: 'front_raise', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 8, cues: ['Cable from behind you.', 'Raise to shoulder height.', 'Resist on the way down.'] },
 
   // ───────────────────────── knee_dominant · Quads ─────────────────────────
   { id: 'bb_back_squat', name: 'Barbell Back Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Big breath, brace.', 'Sit between the hips.', 'Drive up evenly.'], synonyms: ['squat'] },
@@ -243,11 +271,19 @@ export const EXERCISES: Exercise[] = [
   { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Back foot elevated.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['split squat'] },
   { id: 'walking_lunge', name: 'Walking Lunge', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Long step.', 'Knee tracks the toes.', 'Push off the front foot.'], synonyms: ['lunge'] },
   { id: 'leg_extension', name: 'Leg Extension', capability: 'knee_dominant', muscle: 'Quads', pattern: 'knee_extension', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Extend fully.', 'Lower under control.'] },
+  { id: 'reverse_lunge', name: 'Reverse Lunge', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', equipment: 'dumbbell', tier: 'compound', unilateral: true, baseKg: 10, cues: ['Step back, not forward.', 'Drop the back knee straight down.', 'Drive through the front heel.'] },
+  { id: 'step_up', name: 'Step-Up', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', equipment: 'dumbbell', tier: 'compound', unilateral: true, baseKg: 10, cues: ['Box at about knee height.', 'Drive through the top foot.', 'Lower under control.'] },
+  { id: 'bodyweight_squat', name: 'Bodyweight Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'bodyweight', tier: 'compound', regression: true, bodyweight: true, cues: ['Feet shoulder-width.', 'Sit straight down.', 'Drive up through mid-foot.'] },
+  { id: 'single_leg_press', name: 'Single-Leg Press', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'supported', equipment: 'machine', tier: 'compound', unilateral: true, loadStyle: 'plate_loaded', station: 'leg_press', baseKg: 40, cues: ['One foot mid-platform.', 'Knee tracks the toes.', 'Stop short of lockout.'] },
 
   // ───────────────────────── knee_dominant · Calves ─────────────────────────
   { id: 'standing_calf_raise', name: 'Standing Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 40, bwScaled: true, cues: ['Rise onto the balls of your feet.', 'Pause at the top.', 'Lower for a full stretch.'] },
   { id: 'seated_calf_raise', name: 'Seated Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_bent', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Knees under the pad.', 'Drive through the toes.', 'Stretch at the bottom.'] },
   { id: 'leg_press_calf_raise', name: 'Leg Press Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'isolation', baseKg: 60, bwScaled: true, station: 'leg_press', cues: ['Toes on the platform edge.', 'Press through the balls of your feet.', 'Control the stretch.'] },
+  { id: 'db_calf_raise', name: 'Dumbbell Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 16, cues: ['Balls of the feet on a step.', 'Rise as high as you can.', 'Lower for a full stretch.'] },
+  { id: 'single_leg_calf_raise', name: 'Single-Leg Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'free', equipment: 'bodyweight', tier: 'isolation', unilateral: true, bodyweight: true, cues: ['One foot on a step.', 'Rise as high as you can.', 'Lower for a full stretch.'] },
+  { id: 'seated_db_calf_raise', name: 'Seated Dumbbell Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_bent', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 12, cues: ['Weights on the knees.', 'Drive through the toes.', 'Stretch at the bottom.'] },
+  { id: 'bw_calf_raise', name: 'Bodyweight Calf Raise', capability: 'knee_dominant', muscle: 'Calves', pattern: 'calf_straight', support: 'free', equipment: 'bodyweight', tier: 'isolation', regression: true, bodyweight: true, cues: ['Stand tall.', 'Rise onto the balls of your feet.', 'Lower slowly.'] },
 
   // ───────────────────────── hip_dominant · Hamstrings ─────────────────────────
   { id: 'bb_deadlift', name: 'Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Bar over mid-foot.', 'Flat back, brace.', 'Push the floor away.'], synonyms: ['conventional deadlift'] },
@@ -259,6 +295,10 @@ export const EXERCISES: Exercise[] = [
   { id: 'leg_curl', name: 'Lying Leg Curl', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'knee_flexion', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Hips down.', 'Curl fully.', 'Lower slowly.'], synonyms: ['hamstring curl', 'leg curl', 'lying hamstring curl'] },
   { id: 'seated_leg_curl', name: 'Seated Leg Curl', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'knee_flexion', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Pad low across the thighs.', 'Curl the heels under the seat.', 'Straighten the knees fully.'], synonyms: ['seated hamstring curl'] },
   { id: 'back_extension', name: 'Back Extension', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'supported', equipment: 'machine', tier: 'isolation', bodyweight: true, cues: ['Hinge at the hips.', 'Squeeze at the top.', 'Lower slowly.'], synonyms: ['hyperextension'] },
+  { id: 'single_leg_rdl', name: 'Single-Leg Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'dumbbell', tier: 'compound', unilateral: true, baseKg: 10, cues: ['Soft standing knee.', 'Hinge, free leg travels back.', 'Stand up through the hip.'] },
+  { id: 'trap_bar_deadlift', name: 'Trap Bar Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Stand in the middle of the bar.', 'Flat back, brace.', 'Push the floor away.'] },
+  { id: 'standing_leg_curl', name: 'Standing Leg Curl', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'knee_flexion', support: 'guided', equipment: 'machine', tier: 'isolation', unilateral: true, baseKg: 12, cues: ['Hips against the pad.', 'Curl the heel to the glute.', 'Straighten the knee fully.'] },
+  { id: 'nordic_curl', name: 'Nordic Curl', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'knee_flexion', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Ankles anchored, hips locked.', 'Lower as slowly as you can.', 'Catch with your hands.'] },
 
   // ───────────────────────── hip_dominant · Glutes ─────────────────────────
   { id: 'hip_thrust', name: 'Barbell Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Upper back on the bench.', 'Drive through the heels.', 'Squeeze the glutes at the top.'], synonyms: ['thrust'] },
@@ -270,6 +310,9 @@ export const EXERCISES: Exercise[] = [
   { id: 'machine_hip_thrust', name: 'Machine Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Upper back settled on the pad.', 'Drive through the heels.', 'Squeeze the glutes at the top.'], synonyms: ['hip thrust machine', 'glute drive'] },
   { id: 'hip_adduction', name: 'Hip Adduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'adduction', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Squeeze the knees together.', 'Control the return.'], synonyms: ['adductor machine', 'inner thigh machine'] },
   { id: 'cable_hip_adduction', name: 'Cable Hip Adduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'adduction', support: 'guided', unilateral: true, equipment: 'cable', tier: 'isolation', baseKg: 8, cues: ['Cuff on the inside ankle.', 'Pull the leg across your midline.', 'Resist on the way out.'], synonyms: ['standing cable adduction'] },
+  { id: 'single_leg_hip_thrust', name: 'Single-Leg Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'bodyweight', tier: 'compound', unilateral: true, bodyweight: true, cues: ['Upper back on the bench.', 'Drive through one heel.', 'Squeeze at the top.'] },
+  { id: 'machine_kickback', name: 'Glute Kickback Machine', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'kickback', support: 'supported', equipment: 'machine', tier: 'isolation', unilateral: true, baseKg: 20, cues: ['Hips against the pad.', 'Drive the heel back.', 'Return under control.'] },
+  { id: 'bw_glute_bridge', name: 'Bodyweight Glute Bridge', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'bodyweight', tier: 'compound', regression: true, bodyweight: true, cues: ['Heels close to your seat.', 'Drive the hips up.', 'Squeeze at the top.'] },
 
   // ───────────────────────── hip_dominant · Core ─────────────────────────
   // Generation pool = the accessible movements (cable/machine crunch); hanging leg raise and the
@@ -279,6 +322,13 @@ export const EXERCISES: Exercise[] = [
   { id: 'machine_crunch', name: 'Ab Crunch Machine', capability: 'hip_dominant', muscle: 'Core', pattern: 'crunch', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Chest on the pad.', 'Crunch down through the abs.', 'Return with control.'], synonyms: ['crunch machine', 'ab machine'] },
   { id: 'hanging_leg_raise', name: 'Hanging Leg Raise', capability: 'hip_dominant', muscle: 'Core', pattern: 'leg_raise', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Hang tall, no swing.', 'Raise the legs with control.', 'Lower slowly.'] },
   { id: 'ab_wheel', name: 'Ab Wheel Rollout', capability: 'hip_dominant', muscle: 'Core', pattern: 'anti_extension', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Brace hard.', 'Roll out only as far as you control.', 'Pull back with the abs.'], synonyms: ['rollout'] },
+  { id: 'lying_leg_raise', name: 'Lying Leg Raise', capability: 'hip_dominant', muscle: 'Core', pattern: 'leg_raise', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Lower back flat on the floor.', 'Raise the legs with control.', 'Stop before the back arches.'] },
+  { id: 'captains_chair_raise', name: 'Captain’s Chair Knee Raise', capability: 'hip_dominant', muscle: 'Core', pattern: 'leg_raise', support: 'supported', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Back against the pad.', 'Raise the knees to your chest.', 'Lower without swinging.'] },
+  { id: 'sit_up', name: 'Sit-Up', capability: 'hip_dominant', muscle: 'Core', pattern: 'crunch', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Feet planted, knees bent.', 'Sit all the way up.', 'Lower one vertebra at a time.'] },
+  { id: 'bicycle_crunch', name: 'Bicycle Crunch', capability: 'hip_dominant', muscle: 'Core', pattern: 'crunch', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Lower back flat on the floor.', 'Elbow towards the opposite knee.', 'Slow, not fast.'] },
+  { id: 'russian_twist', name: 'Russian Twist', capability: 'hip_dominant', muscle: 'Core', pattern: 'rotation', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Lean back, chest tall.', 'Rotate from the ribs.', 'Touch the floor each side.'] },
+  { id: 'cable_woodchop', name: 'Cable Woodchop', capability: 'hip_dominant', muscle: 'Core', pattern: 'rotation', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 15, cues: ['Arms long, hips square.', 'Rotate from the ribs.', 'Return under control.'] },
+  { id: 'dead_bug', name: 'Dead Bug', capability: 'hip_dominant', muscle: 'Core', pattern: 'anti_extension', support: 'free', equipment: 'bodyweight', tier: 'isolation', bodyweight: true, cues: ['Lower back flat on the floor.', 'Opposite arm and leg reach out.', 'Stop before the back arches.'] },
 ];
 
 // ───────────────────────── catalog ↔ engine synchronization ─────────────────────────
@@ -314,6 +364,15 @@ export const SWAP_ONLY_IDS: ReadonlySet<string> = new Set([
   'seated_leg_curl', 'cable_hip_abduction', 'cable_hip_adduction',
   // core — advanced movements are never assigned by default (generation pool = cable/machine crunch)
   'hanging_leg_raise', 'ab_wheel',
+  /*
+   * 2026-08-01 catalogue expansion. Two kinds join the list, for the reason the core entries above
+   * already give: a REGRESSION is the answer to "I cannot do the loaded one yet", never something
+   * to hand an athlete who did not ask (offering a bodyweight squat to someone squatting 60 kg
+   * reads as the app losing confidence in her); and a movement that demands strength or skill she
+   * may not have is hers to choose, not the app's to assign.
+   */
+  'incline_push_up', 'decline_push_up', 'bodyweight_squat', 'bw_calf_raise', 'bw_glute_bridge',
+  'nordic_curl', 'pike_push_up',
 ]);
 
 export function isSwapOnly(id: string): boolean {

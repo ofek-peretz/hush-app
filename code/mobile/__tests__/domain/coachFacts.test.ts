@@ -230,7 +230,12 @@ describe('coach facts — the message the coach is sent', () => {
     // all, and `name` stops the coach from rendering a lift by a name the screen does not use.
     // The bound guards GROWTH, which is the real risk — a field added here is paid on every call
     // for every athlete for ever.
-    expect(cat).toBeLessThan(3500);
+    // ⚠️ PER LIFT, not per catalogue (2026-08-01, when the catalogue went 68 → 116). A total is
+    // blind to the difference between a lift added — which is what the list is for — and a FIELD
+    // added, which is paid on every entry of it for ever. `everyPrescribableThingHasOneId` holds
+    // the founder's own number (~159 bytes a lift); this holds the ratio that made the split worth
+    // making at all.
+    expect(cat / EXERCISES.length).toBeLessThan(50);
     expect(tok(EXERCISES)).toBeGreaterThan(cat * 1.8); // the saving is real, not rounding
     // THE FRESH HALF — paid in full on every call. This is the number the cost table rests on.
     expect(perAthlete).toBeLessThan(2000);

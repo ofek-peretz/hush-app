@@ -140,8 +140,19 @@ describe('the stable half is worth caching at all', () => {
   });
 
   it('is not so large that a cold write is a problem', () => {
-    // It is paid in full on every cache write, and on every call when caching is off.
-    expect(tok(preamble())).toBeLessThan(8000);
+    /*
+     * It is paid in full on every cache write, and on every call while caching is off.
+     *
+     * Raised 8,000 → 12,000 when the catalogue went 68 → 116 lifts (2026-08-01), and the raise is
+     * the cheap kind of growth: the per-lift shape is unchanged and held to the byte by
+     * `everyPrescribableThingHasOneId`, so what grew is the LIST the coach chooses from — the one
+     * thing in this block that is supposed to grow. Measured 8,310, of which the catalogue is 5,364.
+     *
+     * The headroom is not an invitation. What this bound is still for is a preamble that starts
+     * carrying PROSE — rules, examples, a second schema — which is the growth that buys nothing per
+     * token and is the reason a ceiling exists at all.
+     */
+    expect(tok(preamble())).toBeLessThan(12000);
   });
 
   it('states the schema from the schema, so prose cannot describe an older one', () => {

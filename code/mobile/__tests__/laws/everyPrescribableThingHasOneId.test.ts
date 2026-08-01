@@ -77,10 +77,21 @@ describe('every prescribable thing has exactly one id', () => {
   });
 
   it('keeps both lists lean enough to sit in the cached half of every call', () => {
-    const tok = (o: unknown) => Math.round(JSON.stringify(o).length / 3.5);
-    // Measured at 68 lifts + the movements. The bound guards GROWTH: this block is byte-identical
-    // for every athlete and read on every call, so a field added here is paid for ever. Growing the
-    // catalogue itself is cheap and expected (~45 tokens a lift) — growing the SHAPE is not.
-    expect(tok(coachCatalogue()) + tok(coachMovements())).toBeLessThan(4200);
+    /*
+     * ⚠️ THE BUDGET IS PER ENTRY, NOT PER LIST — founder, 2026-08-01: *"keep the ceiling we talked
+     * about (~159 bytes per exercise in the cached prefix)"*.
+     *
+     * It used to be one number for the whole block (4,200 tokens, measured at 68 lifts), and that
+     * number cannot tell the two kinds of growth apart. Adding a LIFT is the point of the catalogue
+     * and costs one entry; adding a FIELD is paid on every entry, on every call, for every athlete,
+     * for ever. A total that fails on the 69th lift would have stopped the cheap kind and said
+     * nothing about the expensive one.
+     *
+     * Measured at 116 lifts: 161.8 bytes each, which is the same shape the 68 were — `id`, `name`,
+     * `muscle`, `capability`, `pattern`, `equipment`, `tier`. The slack is for names, not fields.
+     */
+    const per = (o: unknown[], n: number) => JSON.stringify(o).length / n;
+    expect(per(coachCatalogue(), EXERCISES.length)).toBeLessThan(170);
+    expect(per(coachMovements(), MOVEMENTS.length)).toBeLessThan(80);
   });
 });

@@ -166,20 +166,73 @@ describe('the cue library — the imperatives', () => {
     }
   });
 
+  const MASCULINE = [
+    'דחוף', 'הורד', 'כווץ', 'משוך', 'החזר', 'החזק', 'רד', 'שלוט', 'כוון', 'שב', 'כופף',
+    'התנגד', 'הרם', 'יישר', 'עלה', 'סגור', 'פתח', 'התחל', 'הובל', 'נעל', 'חבר', 'שחרר',
+    'חתור', 'חבק', 'סובב', 'הישאר', 'עצור', 'שכב', 'גלגל', 'הרחק', 'רכון',
+    // added with the 2026-08-01 catalogue expansion
+    'רכן', 'התרומם', 'העבר', 'גע', 'הישען', 'בלום', 'הדק', 'מתח', 'תן',
+    /*
+     * ⚠️ 'צעד' AND 'עמוד' ARE NOT ON THIS LIST, and the omission is the rule.
+     *
+     * Every word here has to be a verb and ONLY a verb. `walking_lunge` says "צעד ארוך" — a long
+     * STEP, the noun — and `bb_deadlift`'s neighbours talk about the עמוד. Adding either turned a
+     * correct, genderless line into a failure, and the fix for that is never to rewrite good copy
+     * so a word list can stay simple. (The same lesson from the other direction as the B.9 case,
+     * where the linter matched "שלחי" inside "נשלחים": a first word cannot tell you its part of
+     * speech, so the list only holds words that have one.)
+     */
+  ];
+  const firstWordOf = (line: string) => line.split(' ')[0].replace(/[.,]/g, '');
+
   it('no feminine cue still carries a masculine imperative', () => {
-    const MASCULINE = [
-      'דחוף', 'הורד', 'כווץ', 'משוך', 'החזר', 'החזק', 'רד', 'שלוט', 'כוון', 'שב', 'כופף',
-      'התנגד', 'הרם', 'יישר', 'עלה', 'סגור', 'פתח', 'התחל', 'הובל', 'נעל', 'חבר', 'שחרר',
-      'חתור', 'חבק', 'סובב', 'הישאר', 'עצור', 'שכב', 'גלגל', 'הרחק', 'רכון',
-    ];
     const cues = (he as unknown as { cues: Record<string, string[]> }).cues;
     for (const id of Object.keys(cues)) {
       if (!id.endsWith('_female')) continue;
       for (const line of cues[id]) {
-        const firstWord = line.split(' ')[0].replace(/[.,]/g, '');
-        expect({ id, line, masculine: MASCULINE.includes(firstWord) }).toEqual({ id, line, masculine: false });
+        expect({ id, line, masculine: MASCULINE.includes(firstWordOf(line)) }).toEqual({ id, line, masculine: false });
       }
     }
+  });
+
+  /**
+   * ⚠️ …AND EVERY CUE THAT COMMANDS HER NEEDS A VOICE TO COMMAND HER IN.
+   *
+   * The law above can only judge a feminine array that EXISTS. `exerciseCues` falls back to the
+   * masculine base when it does not — a safety net that reads, to a woman, as the app addressing
+   * someone else. Two of the original 68 have no feminine array and are correct: their cues are
+   * noun phrases ("ברכיים רכות") which are the same sentence in both voices. That is the test:
+   * a cue that IMPERATIVES needs the variant; a cue that describes does not.
+   *
+   * Found by writing 47 new exercises, where the tempting thing is to add the base and move on.
+   */
+  it('every cue that gives an ORDER has a feminine voice to give it in', () => {
+    const cues = (he as unknown as { cues: Record<string, string[]> }).cues;
+    const unvoiced: string[] = [];
+    for (const id of Object.keys(cues)) {
+      if (id.endsWith('_female') || cues[`${id}_female`]) continue;
+      const order = cues[id].find((line) => MASCULINE.includes(firstWordOf(line)));
+      if (order) unvoiced.push(`${id} → ${order}`);
+    }
+    expect(unvoiced).toEqual([]);
+  });
+
+  /**
+   * The cue library is HEBREW, and a key that holds English is a bug no length check can see.
+   *
+   * This exact mistake shipped for the length of one command: the merge that added 47 exercises put
+   * the ENGLISH cues under the Hebrew key. Every count was right, `techniqueNotes` was green, and a
+   * Hebrew athlete would have read "Set a ~30° incline." on her workout screen.
+   */
+  it('is written in Hebrew — every line of it', () => {
+    const cues = (he as unknown as { cues: Record<string, string[]> }).cues;
+    const notHebrew: string[] = [];
+    for (const [id, lines] of Object.entries(cues)) {
+      for (const line of lines) {
+        if (!/[֐-׿]/.test(line)) notHebrew.push(`${id} → ${line}`);
+      }
+    }
+    expect(notHebrew).toEqual([]);
   });
 });
 
