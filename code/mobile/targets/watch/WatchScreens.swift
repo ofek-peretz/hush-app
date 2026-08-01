@@ -709,8 +709,9 @@ private struct MetricTile: View {
 /// carries only the work; everything here is secondary-but-reachable. Metrics degrade
 /// to placeholders when HealthKit has no data — never a blocker, never a fake number.
 private struct ControlsScreen: View {
-  @ObservedObject var metrics: LiveMetrics
-  let workoutName: String?
+  // No metrics, no workout name: this page delegates to WT13 · PAUSED now, and every figure it
+  // used to draw is on the GLANCE page one swipe the other way. An input a view accepts and never
+  // reads is how the live-set swap stayed invisible for months — see the reachability law.
   var lift: (i: Int, n: Int)? = nil
   /// This page is the one on screen. An armed end-guard DISARMS the moment the athlete
   /// swipes back to the stage — a guard they walked away from must never be waiting for
@@ -895,7 +896,7 @@ private struct ExecutionPager<Content: View>: View {
     // work in the middle. It was two — the only thing beside the stage was the way to END, so a
     // swipe the "wrong" way found nothing at all (founder 2026-07-28).
     TabView(selection: $page) {
-      ControlsScreen(metrics: metrics, workoutName: workoutName, lift: lift, onPage: page == 0,
+      ControlsScreen(lift: lift, onPage: page == 0,
                      onPause: onPause, onEnd: onEnd, onReportPain: onReportPain).tag(0)
       // The stage is handed the way IN to the Controls page: the "‹ ⏸" hint taps through
       // to exactly where the swipe lands. The page index never leaves this view.
@@ -969,10 +970,7 @@ struct WatchRootView: View {
                      liveVolumeKg: m.liveVolumeKg, liveSets: m.liveSets,
                      onReportPain: model.reportPain) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
-                        onComplete: model.completeSet,
-                        onSwap: { model.swapCurrent($0, replacing: m.exerciseName) },
-                        undo: model.currentUndo,
-                        onUndo: model.undoSwap)
+                        onComplete: model.completeSet)
       }
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics, workoutName: m.workoutName,
@@ -996,8 +994,8 @@ struct WatchRootView: View {
       }
     case .paused:
       PausedScreen(onResume: model.resume, onEnd: model.endWorkout, onReportPain: model.reportPain)
-    case let .cardio(gait, paused):
-      CardioPager(gait: gait, paused: paused, metrics: model.liveMetrics, split: model.kmSplit,
+    case let .cardio(_, paused):
+      CardioPager(paused: paused, metrics: model.liveMetrics, split: model.kmSplit,
                   elapsed: model.cardioElapsed,
                   onPauseToggle: model.toggleCardioPause, onEnd: model.endCardio)
     case let .cardioComplete(summary):
@@ -1267,10 +1265,22 @@ struct ActiveSetScreen: View {
   let draft: EditDraft?
   let onSave: (Double?, Int) -> Void
   let onComplete: () -> Void
-  let onSwap: (String) -> Void
-  /// The way back for the 6 s after a one-tap swap (founder 2026-07-12) — nil once it lapses.
-  let undo: WireSwapOption?
-  let onUndo: () -> Void
+  /*
+   * ════ THE LIVE-SET SWAP WAS WIRED, AND DEAD ════
+   *
+   * This screen used to take `onSwap`, `undo` and `onUndo`. The root wired all three to real model
+   * methods — `swapCurrent`, `currentUndo`, `undoSwap` — and the body read none of them. WT11b
+   * could not be opened from a live set at all, and from the call site it looked fully connected.
+   *
+   * Removing them rather than building the affordance follows a ruling already made: the founder
+   * held the canonical mock authoritative for WT2, and WT2 carries no swap glyph. The wrist swaps
+   * BETWEEN lifts (WT11 → WT11b), which is also the only moment a swap is coherent — changing the
+   * exercise after you have already logged sets on it is not a swap, it is two exercises.
+   *
+   * ⚠️ The phone still offers a swap on a live set, so the two surfaces differ here on purpose. If
+   * that should change, this is where it comes back — and `mirror.swapOptions` is already on the
+   * wire for the active set, so nothing else has to move.
+   */
 
   @State private var editing = false
   @State private var field: EditField = .weight
@@ -1281,7 +1291,6 @@ struct ActiveSetScreen: View {
   private var bodyweight: Bool { mirror.targetWeight == nil }
   private var shownWeight: Double? { draft?.weight ?? mirror.targetWeight }
   private var shownReps: Int { draft?.reps ?? mirror.targetReps }
-  private var swaps: [WireSwapOption] { mirror.swapOptions ?? [] }
 
   var body: some View {
     /*
@@ -1902,7 +1911,9 @@ struct TransitionRestScreen: View {
  * mid-stride, in the rain. The second page bought nothing but a bigger clock.
  */
 struct CardioPager: View {
-  let gait: String
+  // The GAIT is gone from this view, not from the product: it still configures the OS workout
+  // session and still travels home on the record. It is simply no longer something a screen says,
+  // because CR1 asks for cardio rather than for a declaration (founder 2026-08-01).
   let paused: Bool
   @ObservedObject var metrics: LiveMetrics
   /// CR3 — the split just closed, if one has. Non-nil takes the stage for its own beat.
