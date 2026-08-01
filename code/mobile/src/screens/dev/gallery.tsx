@@ -25,6 +25,9 @@ import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
+import { coachRequest } from '@/domain/coachPrompt';
+import { COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import { askCoach } from '@/platform/coach/coachClient';
 import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import { askAfterSession } from '@/platform/coach/afterSession';
@@ -387,7 +390,41 @@ const sw = StyleSheet.create({
   dim: { color: cream[2], fontSize: 13, padding: 16 },
 });
 
+/**
+ * ════ THE ADVERSARIAL PROBE — dev only, and it earns its place ════
+ *
+ * The founder asked whether someone can get the coach to talk about things that have nothing to do
+ * with training, and said it needs testing properly. Properly means MANY attempts, INDEPENDENT of
+ * each other — an attempt that inherits the previous conversation is not the same attempt — and it
+ * means the real prompt, not a reconstruction of it.
+ *
+ * Typing them one at a time into the screen gives neither: the thread accumulates, and each round
+ * trip is twenty seconds. This fires each attempt as its own single-turn conversation, in parallel,
+ * through the same `coachRequest` the app builds. `__DEV__` only; the gallery is a dev route and
+ * this never reaches a build she can open.
+ */
+function installProbe() {
+  if (!__DEV__) return;
+  (globalThis as unknown as { __probe?: unknown }).__probe = async (message: string, language = 'en') => {
+    const facts = coachFacts({
+      profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
+      plan: null,
+      history: [],
+      language,
+    });
+    const reply = await askCoach(
+      coachRequest({ facts, ask: { kind: 'chat', turns: [{ from: 'her', text: message }] } }),
+      COACH_PLAN_SCHEMA as unknown as Record<string, unknown>,
+    );
+    if (!reply.ok) return `NO ANSWER: ${reply.reason}`;
+    const parsed = parseCoachPlan(reply.text, facts);
+    if (!parsed.ok) return `UNREADABLE: ${parsed.reason}`;
+    return { say: parsed.answer.say, attachedAProgramme: parsed.answer.plan != null, out: reply.usage?.candidatesTokenCount ?? null };
+  };
+}
+
 function LiveCoachChat() {
+  React.useEffect(installProbe, []);
   // The coach's own past decisions, read back so they travel with the next call. Without this the
   // log is written and never read, which is the whole mechanism missing its return half.
   const [decided, setDecided] = React.useState<CoachDecision[]>([]);

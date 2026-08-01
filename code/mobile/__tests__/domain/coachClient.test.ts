@@ -120,9 +120,30 @@ describe('every failure is the same failure', () => {
     expect(await askCoach(request)).toEqual({ ok: false, reason: 'refused' });
   });
 
+  it('keeps OUR limit apart from an outage — she is owed a different sentence', async () => {
+    /*
+     * 429 is the Worker's own rate limit, keyed on this install. It is not weather: the sentence
+     * she is owed is "in a moment", not "no connection". A real athlete cannot reach it by hand —
+     * an answer takes fifteen seconds and the ceiling is thirty a minute — so seeing it at all
+     * means something is looping.
+     */
+    const { askCoach } = load();
+    fetchOnce({ ok: false, status: 429 });
+    expect(await askCoach(request)).toEqual({ ok: false, reason: 'rate_limited' });
+  });
+
+  it('sends the install id, so the limit can be generous to HER and still stop a script', async () => {
+    // Keyed on the shared token alone the ceiling would have to be low enough to hurt a real
+    // athlete; the token ships in the bundle and cannot identify anyone.
+    const { askCoach } = load();
+    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm' }) });
+    await askCoach(request);
+    expect('x-hush-install' in ((spy.mock.calls[0][1] as RequestInit).headers as Record<string, string>)).toBe(true);
+  });
+
   it('reads any other non-200 as upstream', async () => {
     const { askCoach } = load();
-    for (const status of [400, 429, 500, 502]) {
+    for (const status of [400, 500, 502]) {
       fetchOnce({ ok: false, status });
       expect({ status, r: await askCoach(request) }).toEqual({ status, r: { ok: false, reason: 'upstream' } });
     }

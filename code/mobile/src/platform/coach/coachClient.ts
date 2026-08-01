@@ -25,6 +25,7 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import type { CoachRequest } from '@/domain/coachPrompt';
+import { deviceContext } from '@/platform/deviceContext';
 
 /**
  * Where the Worker lives, and the token it expects.
@@ -39,6 +40,24 @@ import type { CoachRequest } from '@/domain/coachPrompt';
  */
 const COACH_URL = process.env.EXPO_PUBLIC_COACH_URL || '';
 const COACH_TOKEN = process.env.EXPO_PUBLIC_COACH_TOKEN || '';
+
+/**
+ * The install id, read once and remembered.
+ *
+ * `deviceContext()` reads storage; doing that on every call would put a disk read in front of every
+ * message she sends. It cannot change while the app is running.
+ */
+let installIdCache: string | null = null;
+async function installId(): Promise<string> {
+  if (installIdCache) return installIdCache;
+  try {
+    installIdCache = (await deviceContext()).device_id;
+  } catch {
+    // A device with no readable id is still allowed to train. The Worker falls back to the IP.
+    installIdCache = '';
+  }
+  return installIdCache;
+}
 
 /** Both configured — otherwise the app is on its own and should not pretend otherwise. */
 export function coachIsReachable(): boolean {
@@ -58,6 +77,14 @@ export type CoachFailure =
   | 'offline'
   | 'timed_out'
   | 'refused'
+  /**
+   * Too many calls too quickly — the Worker's limit, keyed on this install.
+   *
+   * Kept apart from `upstream` because it is the one failure that is about US rather than the
+   * weather, and the sentence she is owed is different: "in a moment", not "no connection". A real
+   * athlete cannot reach it by hand; a loop reaches it at once.
+   */
+  | 'rate_limited'
   | 'upstream'
   | 'empty';
 
@@ -100,7 +127,20 @@ export async function askCoach(
   try {
     response = await fetch(COACH_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN },
+      /*
+       * THE INSTALL'S OWN ID RIDES ALONG, and it is the only thing that lets the Worker tell one
+       * athlete from a script.
+       *
+       * The shared token ships in the app bundle — that is a property of shipping a client, not a
+       * choice — so anyone who unpacks the app holds a working key to our Gemini spend. A limit
+       * that can only see "somebody with the token" has to be set low enough to hurt real athletes.
+       * Keyed on the install, the limit can be generous to her and still stop a loop.
+       *
+       * It is NOT an identity: it is the same non-crypto install id telemetry already uses, it
+       * survives no reinstall, and it says nothing about who she is. It never leaves as anything
+       * but a rate-limit key.
+       */
+      headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN, 'x-hush-install': await installId() },
       body: JSON.stringify({ blocks: request.blocks, ...(schema ? { schema } : {}) }),
       signal: controller.signal,
     });
@@ -115,6 +155,8 @@ export async function askCoach(
   // A 401 is OURS — a wrong or missing token, i.e. a build shipped misconfigured. Kept apart from a
   // generic upstream failure so it cannot hide inside the noise of ordinary outages.
   if (response.status === 401) return { ok: false, reason: 'refused' };
+  // 429 is ours, not the weather — see `rate_limited`.
+  if (response.status === 429) return { ok: false, reason: 'rate_limited' };
   if (!response.ok) return { ok: false, reason: 'upstream' };
 
   let body: { text?: unknown; model?: unknown; usage?: unknown };

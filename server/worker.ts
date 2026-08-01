@@ -41,6 +41,12 @@ export interface Env {
    * chose and a bill you did not.
    */
   HUSH_TOKEN: string;
+  /**
+   * Cloudflare's rate limiter, declared in `wrangler.toml`. Optional at runtime on purpose: a
+   * deploy that has not been given the binding yet still works, it is simply unlimited — and a
+   * Worker that refused to start would be a worse failure than one that spends.
+   */
+  COACH_LIMIT?: { limit(o: { key: string }): Promise<{ success: boolean }> };
 }
 
 /**
@@ -256,6 +262,31 @@ export default {
     const sent = (request.headers.get('x-hush-token') ?? '').trim();
     const stored = (env.HUSH_TOKEN ?? '').trim();
     if (!sameSecret(sent, stored)) return json({ error: 'unauthorized' }, 401);
+
+    /*
+     * ════ THE LIMIT, AND WHY IT IS KEYED ON THE INSTALL ════
+     *
+     * The token above is a speed bump, not a secret — it ships inside the app bundle, because that
+     * is what shipping a client means. Anyone who unpacks the app holds a working key to our Gemini
+     * spend, and there was NO limit of any kind here: a loop could have run all night.
+     *
+     * Keyed on the shared token alone the ceiling would have to be low enough to hurt a real
+     * athlete. Keyed on the INSTALL it can be generous to her and still stop a script — an attacker
+     * has to mint a new id per request to get past it, which is possible and which makes this a
+     * speed bump too. That is the honest description: it turns an open tap into work.
+     *
+     * The IP is the fallback for a client that sends no id, and the harder key of the two.
+     */
+    if (env.COACH_LIMIT) {
+      const install = (request.headers.get('x-hush-install') ?? '').trim();
+      const key = install.length > 0 ? `i:${install}` : `ip:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`;
+      const { success } = await env.COACH_LIMIT.limit({ key }).catch(() => ({ success: true }));
+      if (!success) {
+        // 429 so the app can say "too many, in a moment" rather than "no connection" — a different
+        // sentence, and the only one of the two that is true.
+        return json({ error: 'rate_limited' }, 429);
+      }
+    }
 
     let call: CoachCall;
     try {
