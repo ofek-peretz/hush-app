@@ -133,7 +133,7 @@ function Body({ facts, entitled }: { facts: NonNullable<ReturnType<typeof coachF
       turns={coach.turns}
       busy={coach.busy}
       onSend={coach.send}
-      opening={t('coach.opening')}
+      returning
     />
   );
 }

@@ -68,15 +68,50 @@ describe('the conversation', () => {
     expect(read.indexOf('What are you training')).toBeLessThan(read.indexOf('marathon in April'));
   });
 
-  it('opens with the coach already asking, not an empty box', () => {
-    // An empty chat with a blinking cursor asks HER to know what to say first.
-    const read = textOf(draw(<CoachChat turns={[]} opening="What are you training for?" onSend={jest.fn()} />));
-    expect(read).toContain('What are you training for?');
+  it('⚠️ opens by SAYING WHAT IT IS, then asking — an authority does not wait', () => {
+    /*
+     * Founder, 2026-08-01: *"this is his first moment talking to the coach, it has to be
+     * perfect... the user should feel he is talking to a professional authority, one of the best
+     * in the world."*
+     *
+     * The screen used to be a single question on an empty black field over a "Write a message"
+     * box, which is a chatbot — and keeping the coach out of the tab bar was precisely so it would
+     * not read as one. A physiotherapist does not begin with "so what do you want?": they tell you
+     * what they are going to do, then ask the one thing they need.
+     */
+    const read = textOf(draw(<CoachChat turns={[]} onSend={jest.fn()} />));
+    expect(read).toContain(tg('coach.eyebrow'));
+    expect(read).toContain(tg('coach.openLine1'));
+    expect(read).toContain(tg('coach.openLine2'));
+    expect(read).toContain(tg('coach.openAsk'));
+    // …and the ASK comes last. A question asked before the introduction is an empty box again.
+    expect(read.indexOf(tg('coach.openLine1'))).toBeLessThan(read.indexOf(tg('coach.openAsk')));
+  });
+
+  it('does not re-introduce itself to someone eleven weeks in', () => {
+    // The intake introduces itself in three beats; every conversation after it opens the floor in
+    // one. Saying "I write your programme" to an athlete who has trained on it all season is the
+    // app forgetting her.
+    const read = textOf(draw(<CoachChat turns={[]} returning onSend={jest.fn()} />));
+    expect(read).toContain(tg('coach.openReturning'));
+    expect(read).not.toContain(tg('coach.openLine1'));
   });
 
   it('drops the opening the moment there is a real conversation', () => {
-    const read = textOf(draw(<CoachChat turns={turns} opening="AN OPENING LINE" onSend={jest.fn()} />));
-    expect(read).not.toContain('AN OPENING LINE');
+    const read = textOf(draw(<CoachChat turns={turns} onSend={jest.fn()} />));
+    expect(read).not.toContain(tg('coach.openLine1'));
+    expect(read).not.toContain(tg('coach.eyebrow'));
+  });
+
+  it('never blocks the composer while the opening plays', () => {
+    /*
+     * The lines land over about a second and a half. A person who already knows what to say must
+     * never wait for a performance to finish — so the field and the send control are live from the
+     * first frame, and the beat is decoration over a working screen rather than a gate in front of
+     * one.
+     */
+    const input = byLabel(draw(<CoachChat turns={[]} onSend={jest.fn()} />), tg('coach.placeholder'));
+    expect(input.props.editable).not.toBe(false);
   });
 });
 

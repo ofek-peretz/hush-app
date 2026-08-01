@@ -43,9 +43,7 @@ import { CardioDetail } from '@/screens/cardio/CardioDetail';
 import { CardioLiveView, CardioComplete, CardioCountdown, KmMoment } from '@/screens/cardio/Cardio';
 import { HistoryView } from '@/screens/history/History';
 import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
-import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
-import { ProfileEdit } from '@/screens/profile/ProfileEdit';
 import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { Paywall } from '@/screens/subscription/Paywall';
@@ -462,7 +460,7 @@ function LiveCoachChat() {
   });
   return (
     <>
-      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} opening="What are you training for?" />
+      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} />
       {note ? <Text style={{ color: cream[2], fontSize: 11, padding: 8 }}>{note}</Text> : null}
     </>
   );
@@ -481,7 +479,6 @@ function ScriptedCoachChat() {
     <CoachChat
       turns={turns}
       busy={busy}
-      opening="What are you training for?"
       onSend={(text) => {
         setTurns((t) => [...t, { id: `a${t.length}`, by: 'athlete', text }]);
         setBusy(true);
@@ -1592,8 +1589,6 @@ export const GALLERY: GalleryEntry[] = [
    * the gallery could not show him.
    */
   { id: '4.0', label: 'You', status: 'live', note: 'the whole tab — every row, in one place, which is the point', render: () => mount(ProfileSheet) },
-  { id: '4.0b', label: 'You — edit', status: 'live', render: () => mount(ProfileEdit) },
-  { id: '4.1', label: 'Body map — editor', status: 'live', note: 'tap a muscle; Front / Back turns the body', render: () => mount(BodyMapEdit) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
 
   // ── 06–11 · SURFACES ───────────────────────────────────────────────────────────────────────

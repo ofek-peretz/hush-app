@@ -26,8 +26,10 @@
  * state no fixture can produce is a state nobody looks at.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -57,6 +59,91 @@ export interface CoachTurn {
   pending?: boolean;
   /** It did not reach the coach. See `FailedTurn` — this is a state, not a toast. */
   failed?: boolean;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────── the opening beat */
+
+/**
+ * ════ THE FIRST THING SHE EVER HEARS FROM HUSH ════
+ *
+ * Founder, 2026-08-01: *"this is his first moment talking to the coach, it has to be perfect"* and
+ * *"the user should feel he is talking to a professional authority, one of the best in the world."*
+ *
+ * The screen used to be one serif question on an empty black field with a "Write a message" box at
+ * the foot. That is a chatbot — and the founder's whole reason for keeping the coach OUT of the tab
+ * bar was not to look like one.
+ *
+ * ── WHY IT SPEAKS BEFORE IT ASKS ────────────────────────────────────────────────────────────────
+ * An authority does not open with an open question and wait. A physiotherapist does not begin with
+ * "so what do you want?" — they tell you what they are going to do, then ask the one thing they
+ * need. So three beats, in this order:
+ *
+ *   1. I write your programme.               ← what it IS
+ *   2. I read every set you log, and I change it.  ← why it is worth talking to
+ *   3. So — what are we training for?        ← the only question on the screen
+ *
+ * Every line is a fact in the first person and none of them sells. The third is the ask, and it
+ * arrives last so that by the time she has a cursor, she knows who she is answering.
+ *
+ * ── THE MOTION IS THE POINT, AND IT IS RESTRAINED ───────────────────────────────────────────────
+ * The lines land one at a time, ~520 ms apart, rising 10 pt as they fade in. The mark above them
+ * draws first and alone. It reads as someone THINKING, then speaking — which is exactly the claim
+ * being made — and it is over in under two seconds, because an athlete who opens this screen at the
+ * gym on her second visit must not have to sit through a performance.
+ *
+ * Nothing is blocked while it plays: the composer is live from the first frame. A person who
+ * already knows what to say should never wait for an animation to finish.
+ */
+function OpeningBeat({ returning }: { returning: boolean }) {
+  const { t } = useCopy();
+  const lines = returning
+    ? [t('coach.openReturning')]
+    : [t('coach.openLine1'), t('coach.openLine2'), t('coach.openAsk')];
+
+  // One driver per line, so each keeps its own timing and the stagger is declared rather than
+  // computed with delays inside a loop that re-runs on every render.
+  const marks = useRef(lines.map(() => new Animated.Value(0))).current;
+  const rule = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(rule, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.stagger(
+        520,
+        marks.map((m) =>
+          Animated.timing(m, { toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ),
+      ),
+    ]).start();
+    // The drivers are created once and the copy cannot change under a mounted screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.opening}>
+      {/* The mark, alone first — the same rule-and-serifs glyph the close of a workout uses. It is
+          the product signing its name before it speaks. */}
+      <Animated.View style={[styles.openingMark, { opacity: rule, transform: [{ scaleX: rule }] }]}>
+        <View style={styles.markRule} />
+      </Animated.View>
+      <Legend style={styles.openingEyebrow}>{t('coach.eyebrow')}</Legend>
+      {lines.map((line, i) => (
+        <Animated.View
+          key={line}
+          style={{
+            opacity: marks[i],
+            transform: [{ translateY: marks[i].interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+          }}
+        >
+          {/* The ASK is the last line and it carries the weight — same serif, one size up, so the
+              eye lands on the question rather than on the introduction. */}
+          <Text style={[styles.coachText, styles.openingLine, i === lines.length - 1 && styles.openingAsk]}>
+            {line}
+          </Text>
+        </Animated.View>
+      ))}
+    </View>
+  );
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────── one turn */
@@ -121,15 +208,15 @@ export interface CoachChatProps {
   busy?: boolean;
   onSend: (text: string) => void;
   /**
-   * The opening line, shown when there are no turns at all.
+   * She has met the coach before.
    *
-   * Not a "welcome" — the first thing she sees is the coach already asking her something, because
-   * an empty chat with a blinking cursor asks HER to know what to say first.
+   * The intake introduces itself in three beats; every conversation after it opens the floor in
+   * one. Re-introducing itself to someone eleven weeks in would be the app forgetting her.
    */
-  opening?: string;
+  returning?: boolean;
 }
 
-export function CoachChat({ turns, busy = false, onSend, opening }: CoachChatProps) {
+export function CoachChat({ turns, busy = false, onSend, returning = false }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
   const scroll = useRef<ScrollView>(null);
@@ -161,11 +248,7 @@ export function CoachChat({ turns, busy = false, onSend, opening }: CoachChatPro
         onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
         keyboardDismissMode="interactive"
       >
-        {turns.length === 0 && opening ? (
-          <View style={styles.coachTurn}>
-            <Text style={styles.coachText}>{opening}</Text>
-          </View>
-        ) : null}
+        {turns.length === 0 ? <OpeningBeat returning={returning} /> : null}
         {turns.map((turn) => (
           <Turn key={turn.id} turn={turn} />
         ))}
@@ -244,6 +327,14 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6, paddingVertical: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: stage.ink2 },
 
+  /* The opening owns the whole thread area when there are no turns — it is not a message. */
+  opening: { paddingTop: space[8], paddingBottom: space[6], gap: space[2] },
+  openingMark: { alignItems: 'flex-start', marginBottom: space[4] },
+  markRule: { width: 34, height: 1.5, backgroundColor: stage.ink2 },
+  openingEyebrow: { marginBottom: space[1] },
+  openingLine: { fontSize: 21, lineHeight: 30 },
+  /* The question, one size up: the eye should land on what it is being asked. */
+  openingAsk: { fontSize: 25, lineHeight: 34, color: color.textPrimary },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

@@ -9,11 +9,9 @@
  * the real one: units/language switch instantly, Health opens the system permission flow, Sign Out /
  * Delete run behind a native confirm.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.
-import { emphasisMuscles, trainableMuscles } from '@/engine/v5/bodyMap';
-import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -34,7 +32,6 @@ import { setLocale, currentLocale } from '@/i18n';
 import { notifier } from '@/platform/notifications';
 import { reloadApp } from '@/app/reload';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
-import { displayWeight, unitLabel } from '@/domain/schedule';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
@@ -147,35 +144,6 @@ export function ProfileSheet({ navigation }: Props) {
     setOverlay('delete');
   }
 
-  // Body data summary — exactly what the edit screen manages (Rev 14: weight + sessions/week;
-  // sex is system-maintained, and age/height are no longer collected at all — neither was ever an
-  // engine input, register B-1). Goal is no longer a per-user setting.
-  const bodyBits = [
-    // The athlete's OWN unit (an lb athlete never reads their bodyweight in kg).
-    p?.weightKg != null ? `${displayWeight(p.weightKg, units)} ${unitLabel(units)}` : null,
-    p?.daysPerWeek != null ? t('profile.daysSummary', { n: p.daysPerWeek }) : null,
-  ].filter(Boolean);
-  const bodyData = bodyBits.length ? bodyBits.join(' · ') : null;
-
-  /**
-   * What the map currently SAYS, on its row — never a static caption.
-   *
-   * An untouched map is the honest common case and reads as "everything on"; anything else is
-   * summarised by the two decisions the map actually holds: what she leads with, and what she left
-   * out. `emphasisMuscles` / `trainableMuscles` are the engine's own reads, so this row and the
-   * programme can never disagree about her map.
-   */
-  const mapSummary = useMemo(() => {
-    const map = p?.bodyMap ?? {};
-    const lead = emphasisMuscles(map, CANONICAL_MUSCLE_ORDER);
-    const off = CANONICAL_MUSCLE_ORDER.length - trainableMuscles(map, CANONICAL_MUSCLE_ORDER).length;
-    const bits = [
-      lead.length ? t('profile.mapLeading', { muscles: lead.map((m) => t(`muscle.${m}`)).join(' · ') }) : null,
-      off ? t('profile.mapOff', { n: off }) : null,
-    ].filter(Boolean);
-    return bits.length ? bits.join(' · ') : t('profile.mapAllOn');
-  }, [p?.bodyMap, t]);
-
   // Membership (Subscription + Apple Payments): active → plan name, tapping opens
   // the system manage-subscriptions screen; inactive → free-trial status, tapping
   // opens the paywall.
@@ -283,16 +251,22 @@ export function ProfileSheet({ navigation }: Props) {
             "Account" simply became the paragraph's final line. The section that follows a
             paragraph needs a rule, not more air: an edge is what the rows were giving the others
             for free. */}
-        <Legend style={[styles.sectionLegend, styles.sectionAfterNote]}>{t('profile.account')}</Legend>
-        {/* ONE edit entry (founder 2026-07-10): body data + training frequency. The old second
-            "Experience" row opened the same screen and experience is now derived, not edited. */}
-        <Row label={t('profile.bodyData')} sub={bodyData ?? t('profile.notSet')} onPress={() => navigation.navigate('ProfileEdit')} />
-        {/* The body map (brief, Family 4) — its own row, not folded into the one above, because it is
-            not body DATA. Weight describes her; the map is the decision that shapes the
-            whole programme (register Part 3), and it is the only place the per-muscle rep band is
-            ever set. The founder's "ONE edit entry" ruling above was about Experience opening the
-            same screen twice — this opens something else entirely. */}
-        <Row label={t('profile.bodyMap')} sub={mapSummary} onPress={() => navigation.navigate('BodyMapEdit')} />
+        {/*
+            ════ THE ACCOUNT SECTION IS GONE (founder 2026-08-01) ════
+
+            *"Remove ACCOUNT / Body data 78 kg / Body map, leading with chest."*
+
+            Three rows, and the coach took all three. **Body data** was the cold-start seed and the
+            training frequency — the conversation asks for both now, and it can ask WHY four days
+            rather than five. **The body map** was the one place the per-muscle emphasis was set;
+            the coach decides emphasis when it writes the programme, and the pain flow is what marks
+            a muscle as hurting. A row that edits an input nothing reads any more is not a setting,
+            it is a lie with a chevron.
+
+            ⚠️ `ProfileEdit` and `BodyMapEdit` are NOT deleted. The pain flow still needs the map
+            (13.2 reuses it), and both keep their routes and their gallery entries — what is gone is
+            offering a stranger a form for something she should be talking about.
+        */}
         {/* ════ AND PLAN-SHARING CAME BACK (2026-08-01) ════
             It left this tab in A.14 for a good reason — "that icon is where everything
             person-to-person belongs" — and the icon it left for is the COACH's now. So the door it

@@ -43,8 +43,6 @@ import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
-import { ProfileEdit } from '@/screens/profile/ProfileEdit';
-import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
@@ -154,8 +152,6 @@ function MainNavigator() {
       {/* The four peer surfaces live under the tab bar; the stack pushes everything deeper ON TOP
           of them, so a workout / run / record / modal has no tab bar in its tree. */}
       <MainStack.Screen name="HomeTabs" component={HomeTabs} />
-      <MainStack.Screen name="ProfileEdit" component={ProfileEdit} options={{ presentation: 'modal', animation: sheet }} />
-      <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} options={{ presentation: 'modal', animation: sheet }} />
       {/* Session Flow: only pre-completion exit is Pause -> Finish, so no back gesture. */}
       {/* Home → Workout = Fade Through, 220ms (Screen 01). */}
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />

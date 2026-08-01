@@ -119,9 +119,7 @@ export type MainParamList = {
   // Progress surface and is pushed here on the Main stack (opened from Progress).
   History: undefined;
   // Edit body data after onboarding (opened from Settings).
-  ProfileEdit: undefined;
   /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
-  BodyMapEdit: undefined;
   // The live workout. `previewFirstGym` is the v7 GALLERY's seam and nothing else: 2.0 is an
   // overlay over this screen that rises ONCE PER INSTALL, so the first look at it in the harness
   // was also the last (it wrote the device's "seen" flag and never came back). The harness passes

@@ -98,10 +98,26 @@ describe('the register and the surface speak the same language (L5, one layer ou
     'S-24': 'src/screens/session/WellDone.tsx',           // "nothing changed" is a real verdict, said
     'S-45': 'src/screens/session/WellDone.tsx',           // Saturday decides nothing — it was all told already
     'S-13': 'src/screens/session/SessionFlow.tsx',        // the 2-corrections-per-exercise cap
-    'S-64': 'src/screens/profile/ProfileEdit.tsx',        // the time budget is a ceiling she sets
     'S-17': 'src/screens/home/Home.tsx',                  // her learned rest rides to the wrist
     'B-1': 'src/screens/onboarding/ManualInfo.tsx',       // cold start = sex × bodyweight only
-    'F-4': 'src/screens/profile/BodyMapEdit.tsx',         // the 2-mark emphasis budget, refused out loud
+    /*
+     * ════ S-64 AND F-4 LOST THEIR SURFACES, AND THAT IS THE RIGHT ANSWER ════
+     *
+     * Founder, 2026-08-01: *"remove ACCOUNT / Body data / Body map"* from the You tab — and, on the
+     * same day, the body map left onboarding because *"the AI handles it in the case of an
+     * injury."*
+     *
+     * That left `ProfileEdit` (S-64, the time budget she sets) and `BodyMapEdit` (F-4, the two-mark
+     * emphasis budget) with no door in the product at all, which the reachability laws caught
+     * immediately. Both screens are deleted.
+     *
+     * The SITUATIONS are not retired — the register still declares them, the engine still enforces
+     * both budgets, and their tests still hold. What changed is who sets the input: the coach asks
+     * for her minutes in words, and it decides emphasis when it writes the programme. A situation
+     * whose surface is a conversation cannot be pinned to a file, so it is not pinned to one.
+     *
+     * ⚠️ If either ever gets a screen again, it belongs back in this map on the same day.
+     */
   };
 
   for (const [tag, file] of Object.entries(coverage)) {

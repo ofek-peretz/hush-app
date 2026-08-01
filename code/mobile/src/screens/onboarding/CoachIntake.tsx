@@ -107,7 +107,7 @@ export function CoachIntake({ navigation, route }: Props) {
       turns={coach.turns}
       busy={coach.busy}
       onSend={coach.send}
-      opening={t('coach.intakeOpening')}
+      returning={false}
     />
   );
 }
