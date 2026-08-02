@@ -75,9 +75,16 @@ function mount() {
   const composer = () =>
     tree.root.findAll((n) => typeof n.props?.onChangeText === 'function' && typeof n.props?.value === 'string')[0];
   const sendControl = () =>
-    tree.root.findAll((n) => n.props?.accessibilityRole === 'button' && typeof n.props?.onPress === 'function').at(-1)!;
+    tree.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.send'))[0];
+  /** The programme's own control. Absent until the coach has actually attached one. */
+  const acceptControl = () =>
+    tree.root.findAll((n) => n.props?.label === tg('coach.accept'))[0];
   return {
     nav,
+    acceptShown: () => acceptControl() !== undefined,
+    async accept() {
+      await act(async () => { acceptControl().props.onPress(); });
+    },
     async say(text: string) {
       await act(async () => { composer().props.onChangeText(text); });
       await act(async () => { sendControl().props.onPress(); });
@@ -129,18 +136,56 @@ describe('the intake is the last step', () => {
     expect(c.nav.replace).not.toHaveBeenCalled();
   });
 
-  it('moves on only once a programme is ON DISK', async () => {
+  it('⚠️ shows her the programme and WAITS — a plan arriving is not her agreeing to it', async () => {
+    /*
+     * ⛔ FOUNDER, ON BUILD 39: *"he moved me straight to the transition screen without showing me
+     * the plan first, without asking whether this is what I want and whether I approve."*
+     *
+     * This screen used to navigate the instant a programme appeared — while the coach's own closing
+     * sentence was "what would you like to change?". The prompt and the screen contradicted each
+     * other and the screen won. Now the week is drawn in the conversation, where it can be argued
+     * with, and only her acceptance moves her on.
+     */
     askCoach.mockResolvedValue(PLAN);
     const c = mount();
     await c.say('four days, full gym');
 
-    // The plan is stored before the next step is reached, so the step that writes the profile does
-    // it against a programme that already exists rather than promising one.
+    // It is on disk — `useCoach` awaits the write, so anything downstream reads a programme that
+    // exists rather than racing it. (It did not, and the next screen drew an empty week.)
     expect((await db.loadCoachPlan())?.sessions[0].name).toBe('Upper A');
-    // …and it carries what the conversation produced. `daysPerWeek` is 1 here because this fixture's
-    // week is one session, and the programme is the answer to "how many days a week does she train"
-    // whatever the form guessed on the way in. See `theNumbersReachHerRecord`.
+    // She can see it, and she has not been moved anywhere.
+    expect(c.texts().join(' ')).toContain('Barbell Bench Press');
+    expect(c.acceptShown()).toBe(true);
+    expect(c.nav.replace).not.toHaveBeenCalled();
+  });
+
+  it('hands over when she accepts, carrying what the conversation produced', async () => {
+    askCoach.mockResolvedValue(PLAN);
+    const c = mount();
+    await c.say('four days, full gym');
+    await c.accept();
+    // `daysPerWeek` is 1 here because this fixture's week is one session, and the programme is the
+    // answer to "how many days a week does she train" whatever the form guessed on the way in.
     expect(c.nav.replace).toHaveBeenCalledWith('ProgramCreated', { inputs: { ...inputs, daysPerWeek: 1 } });
+  });
+
+  it('⚠️ lets her ask for a change instead, and shows the NEW week', async () => {
+    // The whole point of waiting. A programme she cannot argue with is one she was handed.
+    askCoach.mockResolvedValue(PLAN);
+    const c = mount();
+    await c.say('four days, full gym');
+    askCoach.mockResolvedValue({
+      ...PLAN,
+      text: JSON.stringify({
+        say: 'Swapped it.',
+        sessions: [{ name: 'Lower A', blocks: [{ rounds: 3, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [8, 12], load: 40 }] }] }],
+      }),
+    });
+    await c.say('I would rather squat');
+    const read = c.texts().join(' ');
+    expect(read).toContain('Barbell Back Squat');
+    expect(read).not.toContain('Barbell Bench Press');
+    expect(c.nav.replace).not.toHaveBeenCalled();
   });
 
   it('writes NO profile of its own — Root would swap the navigator out mid-sentence', async () => {
@@ -149,12 +194,13 @@ describe('the intake is the last step', () => {
     expect(await db.loadProfile()).toBeNull();
   });
 
-  it('hands over exactly once, however many plans arrive', async () => {
-    // A second plan landing after she has moved on must not push this screen again.
+  it('hands over exactly once, however many times she taps', async () => {
+    // Two taps in the same tick would push this screen twice.
     askCoach.mockResolvedValue(PLAN);
     const c = mount();
     await c.say('four days');
-    await c.say('actually make it five');
+    await c.accept();
+    await c.accept();
     expect(c.nav.replace).toHaveBeenCalledTimes(1);
   });
 });

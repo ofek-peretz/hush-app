@@ -38,7 +38,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import type { OnboardingParamList } from '@/app/navigation';
 import type { OnboardingInputs, Profile } from '@/data/local/models';
-import type { LearnedAboutHer } from '@/domain/coachPlan';
+import type { CoachPlan, LearnedAboutHer } from '@/domain/coachPlan';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'CoachIntake'>;
 
@@ -130,6 +130,14 @@ export function CoachIntake({ navigation, route }: Props) {
   );
 
   const handed = React.useRef(false);
+  /**
+   * The newest programme the coach has attached, or null while it is still asking.
+   *
+   * State rather than a ref: the chat draws it, and a later turn that rewrites it must redraw. If
+   * she asks for a change, the coach sends the WHOLE programme again (never a patch), so replacing
+   * this wholesale is the correct merge and there is nothing to reconcile.
+   */
+  const [plan, setPlan] = React.useState<CoachPlan | null>(null);
 
   const coach = useCoach({
     facts,
@@ -139,16 +147,25 @@ export function CoachIntake({ navigation, route }: Props) {
       if (answer.learned) learned.current = { ...learned.current, ...answer.learned };
       if (answer.brief?.length) setBrief(answer.brief);
       /*
-       * A plan arrived. `useCoach` has already stored it through `db.recordCoachAnswer`, so by the
-       * time this runs it is on disk — the next step writes the profile against a programme that
-       * already exists rather than promising one.
+       * ⛔ A PLAN ARRIVING IS NOT HER AGREEING TO IT — founder, on build 39: *"he moved me straight
+       * to the transition screen without showing me the plan first, without asking whether this is
+       * what I want and whether I approve."*
        *
-       * Guarded because most intake turns carry no plan, and because a second one arriving after
-       * she has already moved on must not push this screen again.
+       * This used to `navigation.replace` the instant a programme appeared. Two things were wrong
+       * with that, and the second is worse than the first:
+       *
+       *   · `useCoach` stored the plan with an un-awaited `void`, so the next screen read it off
+       *     disk before the write landed and drew nothing. (Fixed there; the write is awaited now.)
+       *   · **The coach's own last sentence is "what would you like to change?"** — and the app
+       *     navigated away before she could answer it. The prompt and the screen were contradicting
+       *     each other, and the screen won.
+       *
+       * So the programme lands in the CONVERSATION, where it can be argued with. She reads it, and
+       * either says what to change — the coach rewrites it, and the newest one is what she sees — or
+       * she accepts, which is the only thing that moves her on.
        */
-      if (!answer.plan || handed.current) return;
-      handed.current = true;
-      navigation.replace('ProgramCreated', { inputs: withLearned(inputs, learned.current) });
+      if (!answer.plan) return;
+      setPlan(answer.plan);
     },
   });
 
@@ -157,6 +174,14 @@ export function CoachIntake({ navigation, route }: Props) {
       turns={coach.turns}
       busy={coach.busy}
       onSend={coach.send}
+      plan={plan}
+      units={inputs.units}
+      onAccept={() => {
+        // Guarded: two taps in the same tick would push this screen twice.
+        if (handed.current) return;
+        handed.current = true;
+        navigation.replace('ProgramCreated', { inputs: withLearned(inputs, learned.current) });
+      }}
       invitation={inputs.name ? t('coach.inviteNamed', { name: inputs.name }) : t('coach.invite')}
     />
   );

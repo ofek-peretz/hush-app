@@ -287,7 +287,7 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
           const second = parseCoachPlan(retried.text, facts);
           return second.ok && second.answer.plan ? retried : first;
         })
-        .then((reply) => {
+        .then(async (reply) => {
           // A reply to a message she has already followed with another one. Dropping it is the
           // point: shown, it reads as the coach answering the wrong question.
           if (seq !== latest.current) return;
@@ -304,10 +304,21 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
           /*
            * THE DECISION LANDS, through the one seam that both callers share (`recordCoachAnswer`).
            * The programme is stored and every reason is written where the NEXT call reads it back
-           * as `coachFacts.decided` — the return path. Done before the caller is told, so a caller
-           * that navigates away on receipt cannot outrun it.
+           * as `coachFacts.decided` — the return path.
+           *
+           * ⛔ AND IT IS AWAITED, WHICH IT WAS NOT. The comment here already claimed the guarantee —
+           * *"done before the caller is told, so a caller that navigates away on receipt cannot
+           * outrun it"* — and the line under it was `void`. The caller outran it every time.
+           *
+           * ⚠️ FOUND ON THE DEVICE BY THE FOUNDER, 2026-08-02: *"he moved me straight to the
+           * transition screen without showing me the plan."* `ProgramCreated` reads the programme
+           * with `db.loadCoachPlan()` on mount, and the write had not finished — so the screen built
+           * to show her the week she was just given raced the week and lost.
+           *
+           * A comment asserting a guarantee is not the guarantee. This is the second time today
+           * that exact shape has cost something.
            */
-          void db.recordCoachAnswer(parsed.answer, new Date().toISOString());
+          await db.recordCoachAnswer(parsed.answer, new Date().toISOString());
           onAnswer?.(parsed.answer, { model: reply.model, usage: reply.usage });
         })
         .finally(() => {

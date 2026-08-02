@@ -41,11 +41,13 @@ import {
   View,
 } from 'react-native';
 import { Icon } from '@/components/Icon';
-import { Legend } from '@/components/ds';
+import { Legend, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { textStart } from '@/i18n/bidi';
 import { color, font, radius, space, stage } from '@/design/tokens';
 import { pickCoachImage, MAX_IMAGES_PER_TURN, type CoachImage } from '@/platform/coach/coachImage';
+import { PlanWeek } from '@/components/PlanWeek';
+import type { CoachPlan } from '@/domain/coachPlan';
 
 /** Who said it. `pending` is hers, on screen, not yet acknowledged by the coach. */
 export type CoachTurnAuthor = 'athlete' | 'coach';
@@ -184,6 +186,17 @@ export interface CoachChatProps {
   busy?: boolean;
   onSend: (text: string, images?: { mime: string; data: string }[]) => void;
   /**
+   * The programme the coach has attached, drawn at the foot of the conversation.
+   *
+   * ⛔ It lives HERE rather than on the next screen because the coach's own closing line is "what
+   * would you change?" — and the app used to navigate away before she could answer it. A programme
+   * she cannot argue with is a programme she was handed, not one she agreed to.
+   */
+  plan?: CoachPlan | null;
+  units?: 'kg' | 'lb';
+  /** She is happy with it. The only thing that moves her on. */
+  onAccept?: () => void;
+  /**
    * The one line above an empty thread, already resolved by the screen that owns the name.
    *
    * A prop rather than a lookup because the two callers say different things: the intake invites
@@ -193,7 +206,7 @@ export interface CoachChatProps {
   invitation: string;
 }
 
-export function CoachChat({ turns, busy = false, onSend, invitation }: CoachChatProps) {
+export function CoachChat({ turns, busy = false, onSend, invitation, plan, units = 'kg', onAccept }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
   const [attached, setAttached] = useState<CoachImage[]>([]);
@@ -258,6 +271,20 @@ export function CoachChat({ turns, busy = false, onSend, invitation }: CoachChat
           <Turn key={turn.id} turn={turn} />
         ))}
         {busy ? <Thinking /> : null}
+        {/*
+          The week itself, under the sentence that describes it — below the turns and INSIDE the
+          scroll, so it reads as the last thing the coach said rather than a panel bolted to the
+          screen, and so a long programme scrolls with the conversation it came out of.
+
+          She is not trapped by it: the composer is still there. If she asks for a change the coach
+          sends a whole new programme and this redraws, which is why nothing here is dismissible.
+        */}
+        {plan && onAccept ? (
+          <View style={styles.planBlock}>
+            <PlanWeek plan={plan} units={units} />
+            <Button variant="primary" size="lg" block label={t('coach.accept')} onPress={onAccept} />
+          </View>
+        ) : null}
       </ScrollView>
 
       {attached.length > 0 ? (
@@ -376,6 +403,7 @@ const styles = StyleSheet.create({
    * The attachment strip sits ABOVE the composer's own top rule, so the rule stays the boundary
    * between the conversation and the thing she is writing — thumbnails belong on the writing side.
    */
+  planBlock: { gap: 14, paddingTop: 6 },
   attachments: {
     flexDirection: 'row',
     gap: 8,

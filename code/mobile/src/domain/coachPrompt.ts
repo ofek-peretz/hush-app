@@ -129,7 +129,8 @@ train from — get one of them wrong and the best answer you could give never re
 - "equipment" gives each equipment's step and its floor. A load that is not the floor plus a whole
   number of steps is a load she cannot physically set on the machine in front of her.
 - "daysPerWeek" and "minutes" are what she has told you. ABSENT MEANS NOBODY HAS ASKED HER — this
-  app never will, so ask if you want to know, and do not fill in a number on her behalf.
+  app never will, so ask if you want to know, and do not fill in a number on her behalf. An answer
+  you asked for and did not get is still missing: ask again before you decide without it.
 - She trains in a gym with a barbell unless her brief says otherwise.`;
 
 /**

@@ -31,7 +31,7 @@ import { parseCoachPlan } from '@/domain/coachPlan';
 import { applyLearned } from '@/domain/coachLearned';
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { db } from '@/data/local/db';
-import { initI18n } from '@/i18n';
+import { initI18n, tg } from '@/i18n';
 import type { OnboardingInputs, Profile } from '@/data/local/models';
 
 jest.mock('@/platform/coach/coachClient', () => ({
@@ -168,12 +168,21 @@ describe('the intake carries them out of the conversation', () => {
       );
     });
     const composer = () => tree.root.findAll((n) => typeof n.props?.onChangeText === 'function' && typeof n.props?.value === 'string')[0];
-    const send = tree.root.findAll((n) => n.props?.accessibilityRole === 'button' && typeof n.props?.onPress === 'function').at(-1)!;
+    /*
+     * Both controls found by LABEL rather than by position. This used to take the last button on the
+     * screen, which was the send control only for as long as the send control was the last button —
+     * and the programme's own accept control now sits below it.
+     */
+    const send = () => tree.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.send'))[0];
+    const accept = () => tree.root.findAll((n) => n.props?.label === tg('coach.accept'))[0];
     return {
       nav,
+      async accept() {
+        await act(async () => { accept().props.onPress(); });
+      },
       async say(text: string) {
         act(() => composer().props.onChangeText(text));
-        await act(async () => { send.props.onPress(); await Promise.resolve(); await Promise.resolve(); });
+        await act(async () => { send().props.onPress(); await Promise.resolve(); await Promise.resolve(); });
       },
     };
   }
@@ -197,6 +206,13 @@ describe('the intake carries them out of the conversation', () => {
       }),
     });
     await c.say('three days');
+    /*
+     * ⚠️ AND SHE HAS TO ACCEPT IT NOW. The screen used to hand over the instant a programme arrived;
+     * the founder overruled that on build 39 (*"without asking whether this is what I want"*), so
+     * the week is shown in the conversation and her acceptance is what moves her on. The facts
+     * still have to survive all of it, which is what this law is about.
+     */
+    await c.accept();
 
     expect(c.nav.replace).toHaveBeenCalledWith('ProgramCreated', {
       inputs: { ...inputs, weightKg: 58, workoutMinutes: 45, daysPerWeek: 3 },

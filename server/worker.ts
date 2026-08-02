@@ -492,110 +492,178 @@ export default {
      * usual one, because a healthy call never comes near the deadline.
      */
     const conversational = call.think === 'low' || call.think === 'minimal';
-    const attemptMs = conversational ? 20_000 : 45_000;
-    const ATTEMPTS = 3;
+    /*
+     * ⛔ AND THE DEADLINES ARE STAGED, BECAUSE A FLAT ONE MAKES HER PAY THE WORST CASE EVERY TIME.
+     *
+     * ⚠️ FOUNDER, ON BUILD 39: *"it still takes him a very, very long time to answer messages."*
+     * Measured on the exact call the app makes, twelve runs:
+     *
+     *     1.4 · 1.5 · 1.5 · 1.5 · 1.6 · 1.6 · 1.7 · 1.8 · 2.4 · 7.0 · 8.5 · 41.6 · (one 60s failure)
+     *
+     * **A healthy conversational turn is under two seconds.** The stall is not slowness and it is
+     * not thinking — `minimal` was no faster than `low` in the good case. It is a call that gets no
+     * response at all, about one in six.
+     *
+     * The flat 20s deadline was sized from the slowest HEALTHY call, which meant every stall cost
+     * 20 seconds before we even asked again — and two of them cost 40. That is the founder's
+     * complaint exactly: not that the coach is slow, but that when it hangs she pays for it in full.
+     *
+     * Staged instead. The first attempt is sized to the TYPICAL call, so a stall is abandoned while
+     * she is still expecting an answer, and the retry that follows usually lands in a second and a
+     * half. Each later attempt gets more room, because by then the question is no longer "is this
+     * hung" but "is everything slow right now".
+     */
+    /*
+     * ⛔ HEDGED, NOT RETRIED — AND THE DIFFERENCE IS THE WHOLE FIX.
+     *
+     * ⚠️ FOUNDER, ON BUILD 39: *"it still takes him a very, very long time to answer messages."*
+     *
+     * Two earlier attempts at this were both wrong, and the second was worse than the first:
+     *
+     *   · A FLAT 20s DEADLINE, then retry. Twelve measured calls: 1.4 · 1.5 · 1.5 · 1.5 · 1.6 · 1.6
+     *     · 1.7 · 1.8 · 2.4 · 7.0 · 8.5 · 41.6, plus one outright failure at 60s. About one call in
+     *     six gets no response at all, and every one of those cost her the full 20 seconds BEFORE
+     *     we even asked again.
+     *   · SO I SHORTENED IT to 7s, staged. Fourteen calls, median 5.4s and several at 14–19s —
+     *     **worse than what it replaced.** Because a 7s cut cannot tell a stalled call from a live
+     *     one that is merely slow: it killed real work at 7s and paid to start over.
+     *
+     * **You cannot distinguish "hung" from "slow" by waiting. So stop waiting.** A second attempt
+     * starts alongside the first without cancelling it, and whichever answers first wins. A slow-
+     * but-alive call still wins if it finishes; a truly hung one is simply overtaken. Nobody ever
+     * waits out a deadline to discover there is nothing coming.
+     *
+     * It costs a second call on the minority that are slow — a few tenths of a cent of prompt, on
+     * roughly one turn in six — and buys back tens of seconds of somebody staring at a typing
+     * indicator. That is a trade this product should take every time.
+     *
+     * `HEDGE_MS` is set just above the typical call so the common case never spawns a second one.
+     * `OVERALL_MS` is the point where we stop hoping; the app waits longer still (`coachClient`).
+     */
+    /*
+     * ⚠️ TUNED FROM THE FAST CASE, NOT THE SLOW ONE. Three identical requests, seconds apart:
+     * **1.79s, 9.42s, 1.82s.** A healthy conversational turn is under two seconds, so a call still
+     * silent at 2.5 is already the bad draw — and hedging at 4s was firing after the damage.
+     *
+     * Just above the fast case is the right place: the common turn never spawns a second call at
+     * all, and a bad draw gets its replacement while she is still watching the dots.
+     */
+    const HEDGE_MS = conversational ? 1_800 : 20_000;
+    const OVERALL_MS = conversational ? 45_000 : 110_000;
+    const MAX_IN_FLIGHT = 3;
 
-    /** `n` is which attempt this is, from 1. */
-    const attempt = async (n: number): Promise<Response> => {
-      const lastAttempt = n >= ATTEMPTS;
     let upstream: Response;
-    try {
-      upstream = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          // The key rides in a header, never in the URL — a URL ends up in logs and referrers.
-          'x-goog-api-key': env.GEMINI_API_KEY,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(attemptMs),
-      });
-    } catch {
-      /*
-       * ⛔ A STALL MUST NOT COST HER TWO MINUTES — founder, on the device, 2026-08-02: *"it takes
-       * him a huge amount of time to answer, and if he doesn't answer it just says Not sent."*
-       *
-       * ⚠️ MEASURED, AND IT IS NOT THINKING TIME. Four identical three-line conversational turns at
-       * `low`: **9.9s, 8.4s, 125.1s, 2.0s.** The same request, the same short reply. One call in
-       * four simply hangs, and until now it hung all the way to the 125s ceiling and came back as
-       * nothing — after she had watched a typing indicator for two minutes.
-       *
-       * So the deadline below is set from what a HEALTHY call actually costs rather than from what
-       * the ceiling allows, and a call that blows through it is abandoned and asked again. The
-       * retry is cheap: the first attempt produced nothing at all, and the second one has been
-       * answering in seconds.
-       *
-       * Worst case is now two attempts instead of one 125s wall — and the typical case is
-       * untouched, because a healthy call never comes near this.
-       */
-      if (!lastAttempt) return attempt(n + 1);
-      // A second stall, or a gym basement. Nothing was decided, and the app knows what to do:
-      // nothing is written, and the update waits.
-      return json({ error: 'upstream_unreachable' }, 502);
-    }
+    {
+      const controllers: AbortController[] = [];
+      /** Resolves with the first attempt that comes back with usable headers. */
+      let win!: (r: Response) => void;
+      const firstGood = new Promise<Response>((r) => (win = r));
+      /** Whose body we are going to read — the only one that must NOT be aborted. */
+      let keep: AbortController | undefined;
+      let settled = 0;
+      let lastStatus: number | undefined;
+      let lastWhy: string | undefined;
+      let allDone!: () => void;
+      const exhausted = new Promise<void>((r) => (allDone = r));
 
-    if (!upstream.ok) {
-      /*
-       * NEVER RELAY GOOGLE'S ERROR BODY.
-       *
-       * An upstream 400 commonly quotes the offending request back — and the request contains an
-       * athlete's record. Relaying it would put her training history into whatever log the app's
-       * error path happens to write to. The status is enough to act on; the detail belongs in the
-       * Worker's own tail (`npx wrangler tail`), which only the owner can read.
-       */
-      /*
-       * The body goes to the TAIL, never to the caller.
-       *
-       * `npx wrangler tail` is the owner's own console, so the detail — including anything Google
-       * quotes back from the request — stays where only he can read it. Returning it to the app
-       * would put an athlete's record into whatever log the error path happens to write to, which
-       * is the distinction this whole branch exists to hold.
-       */
-      const detail = await upstream.text().catch(() => '');
-      console.log(`gemini ${upstream.status} :: ${detail.slice(0, 800)}`);
+      const launch = () => {
+        const controller = new AbortController();
+        controllers.push(controller);
+        void fetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            // The key rides in a header, never in the URL — a URL ends up in logs and referrers.
+            'x-goog-api-key': env.GEMINI_API_KEY,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        })
+          .then((res) => {
+            // A non-ok status is a real answer about our request and every attempt will get the
+            // same one — so it is remembered, not raced. Only a usable response wins.
+            if (res.ok) {
+              keep = controller;
+              win(res);
+              return undefined;
+            }
+            lastStatus = res.status;
+            /*
+             * ⚠️ THE BODY GOES TO THE TAIL, NEVER TO THE CALLER. An upstream 400 commonly quotes the
+             * offending request back, and the request is an athlete's record — relaying it would put
+             * her training history into whatever log the app's error path happens to write to.
+             * `npx wrangler tail` is the owner's own console.
+             */
+            return res.text().then((detail) => {
+              console.log(`gemini ${res.status} :: ${detail.slice(0, 800)}`);
+              /*
+               * ONE NARROW EXCEPTION, AND ONLY FOR 404 — a 404 is the one status whose message is
+               * about the URL rather than the payload ("models/X is not found for API version
+               * v1beta"), so it names our own configuration and nothing of hers. It turns a
+               * deploy-per-guess into a single answer, and it cost an hour to learn that the fix is
+               * usually to WAIT: Google enables the read path and the billed path on different
+               * clocks, so a fresh key 404s on `:generateContent` while `GET /models` already works.
+               */
+              if (res.status === 404) {
+                try {
+                  lastWhy = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
+                } catch {
+                  lastWhy = '';
+                }
+              }
+            });
+          })
+          .catch(() => {
+            /* aborted, stalled, or the connection died. Nothing to say; another attempt may land. */
+          })
+          .finally(() => {
+            settled += 1;
+            if (settled >= controllers.length && controllers.length >= MAX_IN_FLIGHT) allDone();
+          });
+      };
 
-      /*
-       * ONE NARROW EXCEPTION, AND ONLY FOR 404.
-       *
-       * The rule above stands: Google's error body is not relayed, because it quotes the REQUEST
-       * back and the request is an athlete's record. A 404 is the one status where the message is
-       * about the URL rather than the payload — "models/X is not found for API version v1beta" —
-       * so it names our own configuration and nothing of hers. Relaying just that one string turns
-       * a deploy-per-guess into a single answer.
-       *
-       * `message` only, never the whole body, and never for any other status.
-       */
-      if (upstream.status === 404) {
-        let why = '';
-        try {
-          why = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
-        } catch {
-          why = '';
+      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+      launch();
+      let winner: Response | null = null;
+      const stopAt = Date.now() + OVERALL_MS;
+      for (let n = 1; n <= MAX_IN_FLIGHT && !winner; n += 1) {
+        const remaining = stopAt - Date.now();
+        if (remaining <= 0) break;
+        const waitFor = n < MAX_IN_FLIGHT ? Math.min(HEDGE_MS, remaining) : remaining;
+        winner = await Promise.race([
+          firstGood,
+          // Every attempt has come back and none of them was usable: there is nothing left to wait
+          // for, and sitting out the rest of the budget would be a deadline pretending to be hope.
+          exhausted.then(() => null),
+          sleep(waitFor).then(() => null),
+        ]);
+        if (!winner && n < MAX_IN_FLIGHT) launch();
+      }
+      // Whoever is still running is no longer wanted. Aborting them stops the bytes and the bill.
+      // ⚠️ Except the winner: its body has not been read yet, and aborting it would cancel the very
+      // stream we are about to consume.
+      for (const c of controllers) if (c !== keep) c.abort();
+
+      if (!winner) {
+        // Nothing usable from any attempt. If one of them was told something specific, relay THAT
+        // rather than a generic unreachable — a 401 must not be reported as a bad connection.
+        if (lastStatus === 404) {
+          return json({ error: 'upstream_error', status: 404, why: (lastWhy ?? '').slice(0, 300), url }, 502);
         }
-        return json({ error: 'upstream_error', status: 404, why: why.slice(0, 300), url }, 502);
+        if (lastStatus !== undefined) return json({ error: 'upstream_error', status: lastStatus }, 502);
+        // Nothing was decided, and the app knows what to do: nothing is written, the update waits.
+        return json({ error: 'upstream_unreachable' }, 502);
       }
-      /*
-       * ONE IMMEDIATE RETRY, AND ONLY FOR THE CHEAP FAILURES.
-       *
-       * A 503 is Gemini saying "busy, not you", and it costs seconds to be told — measured twice
-       * today, at 3.7s and 2.2s, on calls that then succeeded on the very next attempt. Losing an
-       * athlete's week to that would be absurd when asking again is nearly free.
-       *
-       * A 524 no longer reaches this branch at all: `attemptMs` abandons a stalled call at 20s or
-       * 45s, long before Cloudflare's 125s cut, so a stall is handled as an abort above. The
-       * distinction that matters is unchanged — a failure we were told about quickly is worth
-       * asking again; one that costs two minutes to learn is not.
-       *
-       * `never retries — one workout is one call, and one bill` still holds: a 503 is not an answer
-       * we were given and disliked, it is the call never having happened.
-       */
-      if ((upstream.status === 503 || upstream.status === 429) && !lastAttempt) {
-        await new Promise((r) => setTimeout(r, 1_200));
-        return attempt(n + 1);
-      }
-      return json({ error: 'upstream_error', status: upstream.status }, 502);
+      upstream = winner;
     }
 
+    /*
+     * NOTE: there is no `!upstream.ok` branch here, and that is not an omission. Only a response
+     * with usable headers can win the hedge above, so by the time we reach this line the status is
+     * good by construction. Everything that used to live here — the never-relay-Google's-body rule
+     * and the one narrow 404 exception — moved INTO the launch handler, which is the only place
+     * that now sees a failing attempt.
+     */
     /*
      * READING THE STREAM.
      *
@@ -611,7 +679,7 @@ export default {
       candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
       usageMetadata?: Record<string, number>;
     };
-    const deadline = Date.now() + attemptMs;
+    const deadline = Date.now() + OVERALL_MS;
     const reader = upstream.body?.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -660,8 +728,5 @@ export default {
       usage,
       model: MODEL,
     });
-    };
-
-    return attempt(1);
   },
 };

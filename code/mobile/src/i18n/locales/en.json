@@ -1166,7 +1166,8 @@
     "inviteNamed": "{{name}} — tell me what you want, and I’ll build it.",
     "invite": "Tell me what you want, and I’ll build it.",
     "attach": "Add a photo",
-    "attachRemove": "Remove"
+    "attachRemove": "Remove",
+    "accept": "This is my program"
   },
   "weekday": {
     "sun": "Sun",
