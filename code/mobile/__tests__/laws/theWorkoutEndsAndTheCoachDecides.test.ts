@@ -144,8 +144,14 @@ describe('the workout ends and the coach decides', () => {
     await askAfterSession(finished);
     const blocks = (askCoach.mock.calls[0][0] as { blocks: { text: string }[] }).blocks;
     expect(blocks.at(-1)!.text).toContain('"sessions" IS REQUIRED ON THIS TURN');
-    // And the preamble states the prohibition that makes the failure impossible to rationalise.
-    expect(blocks[0].text).toContain('NEVER DO IS SAY YOU CHANGED SOMETHING AND NOT ATTACH IT');
+    /*
+     * And the preamble still states the prohibition that makes the failure above impossible to
+     * rationalise. Matched on the RULE, not on its wording: the sentence was rewritten in prompt v15
+     * (see `howToAnswer` — the long version was suppressing the answer), and a law that pins the
+     * phrasing of a prompt breaks every time the prompt is improved, which teaches people to edit
+     * the test rather than think about it.
+     */
+    expect(blocks[0].text).toContain('Never describe a change without attaching it');
   });
 });
 

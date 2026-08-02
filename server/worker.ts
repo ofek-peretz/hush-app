@@ -142,6 +142,18 @@ const TIMEOUT_MS = 170_000;
 /** What the app sends. Mirrors `domain/coachPrompt.CoachRequest`, plus the schema to lock onto. */
 interface CoachCall {
   blocks: { text: string; cache?: true }[];
+  /**
+   * How hard to think. Absent means Google's default, `medium`.
+   *
+   * ⛔ THIS IS NOT A COST KNOB. It is what makes the heaviest call POSSIBLE — see the ceiling
+   * documented at the fetch below. The model emits nothing at all while it thinks, so thinking time
+   * is dead air on the wire, and dead air is what the ceiling counts.
+   *
+   * ⚠️ Turning it DOWN is not the fix it looks like. Measured on the same post-session call:
+   * `low` answered in 3.9s and wrote a one-exercise week; the default wrote a real one. Thinking
+   * level buys the quality of the programme. What we cut instead was the prompt.
+   */
+  think?: 'minimal' | 'low' | 'medium' | 'high';
   /** `COACH_PLAN_SCHEMA`, in JSON Schema. Absent for a plain chat turn, where prose is the answer. */
   schema?: Record<string, unknown>;
 }
@@ -344,6 +356,8 @@ export default {
       contents,
       generationConfig: {
         maxOutputTokens: MAX_OUTPUT_TOKENS,
+        // Nested, not beside: a bare `thinkingLevel` in `generationConfig` is a 400, in 0.3s.
+        ...(call.think ? { thinkingConfig: { thinkingLevel: call.think } } : {}),
         ...(call.schema
           ? {
               // Structured output: the reply is JSON of this shape or it is an error. It is what
@@ -366,7 +380,35 @@ export default {
      * So if this 404s right after a new key: change nothing, wait, call again. Guessing a third id
      * costs a deploy and proves nothing.
      */
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+    /*
+     * ⛔ THERE IS A 125-SECOND CEILING ON THIS CALL AND IT IS NOT OURS TO RAISE.
+     *
+     * Measured 2026-08-02, once Gemini was healthy again: the post-session call failed at
+     * **125.18s / 125.15s / 125.11s** — the same second every time, with an eight-token call
+     * answering in 1.6s either side of it. Not an outage, and not `TIMEOUT_MS` (170s). The status
+     * that comes back is 524, a CLOUDFLARE code: it is the Worker's own outbound subrequest being
+     * cut off, so no timeout we set on either side can move it.
+     *
+     * Switching to `:streamGenerateContent?alt=sse` was the obvious fix and **it did not work** —
+     * failed at 125.14s, identically. The model emits nothing while it thinks, so a stream is just
+     * as idle as a plain request until the first token, and idle is what gets cut.
+     *
+     * The streaming endpoint is kept anyway: it costs nothing, it removes any ceiling on how long
+     * the ANSWER may take once it has started, and it is the honest shape for a long generation. The
+     * app cannot tell — we join the chunks and reply with exactly the same JSON as before.
+     *
+     * ── WHAT ACTUALLY FIXED IT ──────────────────────────────────────────────────────────────────
+     * Thinking is the dead air, so the fix was to give the model less to think about. Prompt v15
+     * halved the preamble (34,878 → 16,330 chars: a compact catalogue, and rationale moved out of
+     * the prompt and into comments). The same call answers in 15.7s now — and answers BETTER. See
+     * `coachPrompt.howToAnswer`, where the measurements are.
+     *
+     * ⚠️ REDUCED, NOT ELIMINATED: one v15 run still hit 125s. That is what the retry below and
+     * `retryWaitingUpdate()` in the app are for. Anything that grows this prompt again spends the
+     * margin that keeps her week arriving.
+     */
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
+    const attempt = async (isRetry: boolean): Promise<Response> => {
     let upstream: Response;
     try {
       upstream = await fetch(url, {
@@ -425,22 +467,94 @@ export default {
         }
         return json({ error: 'upstream_error', status: 404, why: why.slice(0, 300), url }, 502);
       }
+      /*
+       * ONE IMMEDIATE RETRY, AND ONLY FOR THE CHEAP FAILURES.
+       *
+       * A 503 is Gemini saying "busy, not you", and it costs seconds to be told — measured twice
+       * today, at 3.7s and 2.2s, on calls that then succeeded on the very next attempt. Losing an
+       * athlete's week to that would be absurd when asking again is nearly free.
+       *
+       * ⛔ NOT for a 524. That one costs the full 125 seconds to arrive, so a second attempt would
+       * run past the app's own 170s and be abandoned in flight — spending the money without any
+       * way to deliver the answer. That failure belongs to `retryWaitingUpdate()`, which asks again
+       * when she next opens the app, with a whole fresh budget.
+       *
+       * `never retries — one workout is one call, and one bill` still holds: a 503 is not an answer
+       * we were given and disliked, it is the call never having happened.
+       */
+      if ((upstream.status === 503 || upstream.status === 429) && !isRetry) {
+        await new Promise((r) => setTimeout(r, 1_200));
+        return attempt(true);
+      }
       return json({ error: 'upstream_error', status: upstream.status }, 502);
     }
 
-    const data = (await upstream.json()) as {
+    /*
+     * READING THE STREAM.
+     *
+     * Server-sent events: `data: {…}` lines, one GenerateContentResponse each. The text arrives in
+     * pieces and is joined; `finishReason` and `usageMetadata` turn up on the last chunks and simply
+     * overwrite, so what we answer with is the final word on both.
+     *
+     * `AbortSignal.timeout` above covers the headers, not the body — a stream that stalled mid-way
+     * would hang here for ever without the deadline below, which is the one failure mode streaming
+     * introduces that a plain request could not have.
+     */
+    type Chunk = {
       candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
       usageMetadata?: Record<string, number>;
     };
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    const deadline = Date.now() + TIMEOUT_MS;
+    const reader = upstream.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let text = '';
+    let finishReason: string | null = null;
+    let usage: Record<string, number> | null = null;
+
+    const take = (line: string) => {
+      if (!line.startsWith('data:')) return;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') return;
+      let chunk: Chunk;
+      try {
+        chunk = JSON.parse(payload) as Chunk;
+      } catch {
+        return;
+      }
+      const candidate = chunk.candidates?.[0];
+      text += candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+      if (candidate?.finishReason) finishReason = candidate.finishReason;
+      if (chunk.usageMetadata) usage = chunk.usageMetadata;
+    };
+
+    try {
+      while (reader) {
+        if (Date.now() > deadline) throw new Error('stream_stalled');
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        // The tail may be half a line; it waits for the next read.
+        buffer = lines.pop() ?? '';
+        for (const line of lines) take(line.trim());
+      }
+      take(buffer.trim());
+    } catch {
+      // Same ruling as a dropped connection above: a partial answer is not a decision that arrived.
+      return json({ error: 'upstream_unreachable' }, 502);
+    }
 
     return json({
       text,
-      finishReason: data.candidates?.[0]?.finishReason ?? null,
+      finishReason,
       // Passed through so the app can count what a call actually cost, per model, on real data —
       // the only honest way to compare a cheap model with an expensive one.
-      usage: data.usageMetadata ?? null,
+      usage,
       model: MODEL,
     });
+    };
+
+    return attempt(false);
   },
 };
