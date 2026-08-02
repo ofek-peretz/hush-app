@@ -106,7 +106,12 @@ export type CoachReply =
  * paid for, and got thrown away here. The Worker gives up at 90s; this waits a little longer so a
  * near-miss comes back as the Worker's own answer rather than as this timer firing first.
  */
-const TIMEOUT_MS = 100_000;
+/*
+ * Must stay ABOVE the Worker's own ceiling (170 s), or the app hangs up on a call that is still
+ * coming back and reports `timed_out` for an answer that arrived. Measured 2026-08-02: the
+ * post-session call — the heaviest one we make — was being aborted at ninety seconds.
+ */
+const TIMEOUT_MS = 180_000;
 
 /**
  * Ask the coach.

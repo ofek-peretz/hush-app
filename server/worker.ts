@@ -120,8 +120,24 @@ export interface Env {
  */
 const MODEL = 'gemini-3.6-flash';
 const MAX_OUTPUT_TOKENS = 8192;
-/** Google's own upper bound on how long we will wait before calling it a failed call. */
-const TIMEOUT_MS = 90_000;
+/**
+ * How long we wait before calling it a failed call.
+ *
+ * ⚠️ 90 SECONDS WAS NOT ENOUGH FOR THE ONE CALL THIS PRODUCT IS BUILT AROUND. Measured 2026-08-02:
+ * three consecutive post-session calls aborted here, at 90.08 / 90.20 / 90.08 seconds — our ceiling,
+ * not Google's. The same Worker answered an intake in 24 seconds an hour earlier.
+ *
+ * The post-session call is simply the heaviest thing we ask for: ~11,000 tokens of prompt, a
+ * REQUIRED whole programme, and something worth thinking about — a lift stalled three sessions with
+ * falling reps, a 92-minute match on her watch, four weeks of history. The model thinks in
+ * proportion to the task (`thinkingLevel` is deliberately unset, see below), so the call that
+ * deserves the most thought is the one that runs longest.
+ *
+ * A call that takes two minutes and arrives is worth far more than one that is cut off at ninety
+ * seconds and leaves her without a week. Nothing is waiting on it: she has finished and left, and
+ * the app already says the update is coming.
+ */
+const TIMEOUT_MS = 170_000;
 
 /** What the app sends. Mirrors `domain/coachPrompt.CoachRequest`, plus the schema to lock onto. */
 interface CoachCall {
