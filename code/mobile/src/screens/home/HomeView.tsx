@@ -53,6 +53,15 @@ export interface HomeWorkoutOption {
   id: string;
   name: string;
   muscles: string;
+  /**
+   * The weekday the coach put it on ('sun'…'sat'), when it put it on one.
+   *
+   * Absent on a hypertrophy week, which does not care what day is what — four sessions in any order
+   * is the same week. An endurance plan is the opposite: the long run is on Sunday because the rest
+   * of the week is arranged around it, and until now that was decided, stored, sent back to the
+   * coach, and never shown to the athlete once.
+   */
+  day?: string;
   /** Already trained this week — a record, not an option (founder 2026-07-11): it shows
    *  as DONE and cannot be queued again. */
   done?: boolean;
@@ -493,6 +502,17 @@ export function HomeView(props: HomeViewProps) {
                         ]}
                       >
                         {isDone ? <Icon name="check" size={13} color={color.up} strokeWidth={2.6} /> : null}
+                        {/* ⚠️ THE DAY THE COACH PUT IT ON — decided, stored, sent back to the coach,
+                            and never once shown to her. A hypertrophy week names no days and this is
+                            simply absent; an endurance plan names all of them, and without this the
+                            long run that belongs on Sunday was handed over on a Wednesday because
+                            Wednesday came next in the list. Three letters, in the chip's own voice,
+                            ahead of the name because that is the order she reads it in. */}
+                        {w.day ? (
+                          <Text style={[styles.chipDay, current && !isDone && styles.chipTextCurrent]}>
+                            {t(`weekday.${w.day}`).toUpperCase()}
+                          </Text>
+                        ) : null}
                         <Text
                           style={[
                             styles.chipText,
@@ -808,6 +828,15 @@ const styles = StyleSheet.create({
   // …and when the athlete taps it to re-read its plan, it comes back up to full and takes a moss
   // ring. Selected, still finished — never the cream pill of something still to do.
   chipDoneCurrent: { opacity: 1, borderColor: color.up },
+  /** The weekday, quieter than the name it sits beside: a label, not the thing she is choosing. */
+  chipDay: {
+    fontFamily: font.sans,
+    fontSize: 10.5,
+    letterSpacing: 0.6,
+    color: color.textMuted,
+    // The day reads in the athlete's own direction, like every other word on this page.
+    textAlign: 'left',
+  },
   chipText: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: textScale.xs, color: color.textSecondary, textAlign: 'left' },
   chipTextDone: { color: color.textMuted, textDecorationLine: 'line-through' }, // rtl-ok: merged onto chipText, which sets textAlign
   chipTextCurrent: { fontFamily: font.sansSemibold, color: color.onPaper }, // rtl-ok: merged onto chipText, which sets textAlign

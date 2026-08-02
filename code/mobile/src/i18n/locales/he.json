@@ -388,7 +388,8 @@
     "itemStop": "עצור",
     "itemStop_female": "עצרי",
     "itemDone": "סיימתי",
-    "itemCarrying": "נושאת {{load}} ק\"ג"
+    "itemCarrying": "נושאת {{load}} ק\"ג",
+    "straightInto": "ישר אל {{name}}"
   },
   "finishSheet": {
     "legend": "סיום אימון",
@@ -2500,5 +2501,14 @@
     "inviteNamed_female": "{{name}} — ספרי לי מה את רוצה, ואני אבנה את זה.",
     "invite": "ספר לי מה אתה רוצה, ואני אבנה את זה.",
     "invite_female": "ספרי לי מה את רוצה, ואני אבנה את זה."
+  },
+  "weekday": {
+    "sun": "א'",
+    "mon": "ב'",
+    "tue": "ג'",
+    "wed": "ד'",
+    "thu": "ה'",
+    "fri": "ו'",
+    "sat": "שבת"
   }
 }

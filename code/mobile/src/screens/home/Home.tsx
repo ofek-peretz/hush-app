@@ -21,7 +21,7 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
@@ -99,7 +99,12 @@ export function Home({ navigation, route }: Props) {
    * never match, so the coach branch was unreachable and every workout quietly ran the engine's.
    */
   const coachWorkouts = React.useMemo(() => coachWeek(coachPlan), [coachPlan]);
-  const nextCoach = coachWorkouts.find((w) => !doneCoachIds.includes(w.id)) ?? null;
+  /*
+   * ⚠️ NOT "the first one she has not done" any more. If the coach named a weekday and one of them
+   * is TODAY, that is the workout Today offers — see `queuedWorkout`. For a hypertrophy week, where
+   * no session names a day, this is the identical answer it has always given.
+   */
+  const nextCoach = queuedWorkout(coachWorkouts, doneCoachIds);
   const chosenCoach = coachWorkouts.find((w) => w.id === chosenId) ?? null;
   /**
    * The workout Today is about: the one she tapped, or the next one she has not trained.
@@ -136,6 +141,9 @@ export function Home({ navigation, route }: Props) {
     // The coach names its own sessions ("Intervals & Core"), so there is no muscle line to derive —
     // and inventing one would be a claim about a week nobody made.
     muscles: '',
+    // The day the coach put it on, when it put it on one. Drawn on the chip so a week that HAS a
+    // shape reads as one — and absent everywhere else, which is most weeks.
+    ...(w.day ? { day: w.day } : {}),
     done: doneCoachIds.includes(w.id),
   }));
   const isFocused = useIsFocused();

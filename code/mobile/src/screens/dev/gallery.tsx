@@ -139,6 +139,8 @@ const sessionFixture = {
   // entries below (2.2c/2.2d/2.2e) — see `itemFixture`.
   currentItem: null,
   nextItem: null,
+  // An ordinary set: a rest follows it, so nothing is chained. 2.2k drives the superset.
+  straightInto: null,
   nextExerciseId: 'bb_bench_press',
   setLabel: { n: 2, m: 4 },
   globalProgress: { index: 1, total: 24 },
@@ -240,6 +242,17 @@ const itemFixture = {
   currentTarget: null, // no weight, no rep band — the whole point
   currentItem: { kind: 'time', ex: 'plank', seconds: 45, say: 'Ribs down, breathe. Stop when the hips drop, not before.' },
   setLabel: { n: 2, m: 3 },
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/**
+ * 2.2k · A SUPERSET, SAID OUT LOUD.
+ *
+ * The app has always RUN these correctly — no rest inside a round — and never told the athlete.
+ * From her side an intentional superset and a broken rest timer are the same screen.
+ */
+const supersetFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  straightInto: 'Barbell Row',
 } as unknown as React.ContextType<typeof SessionContext>;
 
 /** 2.4e · A CROSSING INTO A RUN — the up-next card with no load to state. */
@@ -1032,11 +1045,13 @@ function TodayDriven() {
   const [rows, setRows] = React.useState<HomePlanLift[] | null>(null);
 
   const workouts = [
+    // Two of them name a DAY, which is what an endurance plan looks like — and the label was
+    // decided, stored and sent back to the coach for a whole build without ever being drawn.
     { id: 'd0', name: 'Push A', muscles: '', done: true },
-    { id: 'd1', name: 'Pull A', muscles: '' },
+    { id: 'd1', name: 'Pull A', muscles: '', day: 'tue' },
     { id: 'd2', name: 'Legs A', muscles: '' },
     { id: 'd3', name: 'Push B', muscles: '' },
-    { id: 'd4', name: 'Pull B', muscles: '', done: true },
+    { id: 'd4', name: 'Pull B', muscles: '', done: true, day: 'sun' },
   ];
 
   // The day's slots — names and set counts, known synchronously (this is the whole point of A.12).
@@ -1366,6 +1381,7 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '2.2i', label: 'A held duration — in the stage', status: 'live', note: '2.2f/g/h draw the stage bare; this is the workout screen ROUTING to it — chrome, pause and all', render: () => mount(SessionFlow, undefined, itemFixture) },
+  { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
   { id: '2.4e', label: 'Crossing into a run', status: 'live', note: 'the up-next card states the distance — it used to say “bodyweight”', render: () => mount(SessionFlow, undefined, crossingToRunFixture) },

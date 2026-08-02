@@ -1466,6 +1466,17 @@ function ActiveSet({
         <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.setOf}>
           {t('workout.setOfM', { n: setN, m: setM })}
         </Legend>
+        {/* ════ AND WHAT SHE GOES STRAIGHT INTO ════
+            The app has always RUN supersets correctly — no rest inside a round, the coach's rest
+            between rounds — and never said a word about it. She finished a set of bench, a row
+            appeared immediately, and from her side an intentional superset and a broken rest timer
+            look exactly alike. One line, under the position, in the muted voice: it is a fact about
+            what happens next, not an instruction, and it is absent on every ordinary set. */}
+        {session.straightInto ? (
+          <Legend size={12.5} track={0.14} align="center" tone="onStage" style={styles.straightInto}>
+            {t('workout.straightInto', { name: session.straightInto })}
+          </Legend>
+        ) : null}
       </View>
 
       {/* `pointerEvents` stops the finger; it does NOT stop VoiceOver, which would happily focus and
@@ -2595,6 +2606,8 @@ const styles = StyleSheet.create({
   /* ── THE HAND-OVER — how long the beat intends to hold the screen. ── */
 
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
+  // The chained lift, quieter than the position it follows — news, not an instruction.
+  straightInto: { marginTop: 6, opacity: 0.72 },
   setOf: { marginTop: 30, color: stage.ink1 },
   setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
 

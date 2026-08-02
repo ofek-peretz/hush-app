@@ -39,7 +39,7 @@ import { COACH_BRIEF_MAX, COACH_PLAN_SCHEMA } from './coachPlan';
 import { REST_UNSTATED_S } from './restPrescription';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 11;
+export const COACH_PROMPT_VERSION = 12;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -176,6 +176,17 @@ walk between them is one block of two items, rounds 6. There is no "sets" field 
 it is how a superset is written, and she goes straight on. Leave it out and the app runs a flat
 ${REST_UNSTATED_S} seconds, which is nobody's idea of a prescription: if the rest matters to what
 you are asking for, say it.
+
+WHICH SHAPE TO USE WHEN THE MACHINE IS INDOORS.
+The phone measures a distance only outdoors, by GPS: a run, a walk, a ride. On a treadmill, a
+rower, a bike, a stair climber or in a pool it can measure nothing at all, so a distance there is
+whatever she tells us afterwards — and what she tells us is the number you asked for, because that
+is the number on the screen in front of her.
+
+"time" is the honest shape for those, and it is a better one anyway: the app runs a real countdown
+and records **what she actually held**, so a twenty-minute row cut short at fourteen arrives as
+fourteen. Ask for a distance indoors when the distance is genuinely the point (a 2 km row test) and
+accept that it comes back as asked. Outdoors, ask for whichever you mean — she is being measured.
 
 FOUR SHAPES:
   reps      — reps at a load.        {"kind":"reps","ex":"bb_bench_press","reps":[8,12],"load":32.5}

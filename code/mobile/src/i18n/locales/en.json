@@ -342,7 +342,8 @@
     "itemStart": "Start",
     "itemStop": "Stop",
     "itemDone": "Done",
-    "itemCarrying": "Carrying {{load}} kg"
+    "itemCarrying": "Carrying {{load}} kg",
+    "straightInto": "Straight into {{name}}"
   },
   "finishSheet": {
     "legend": "End workout",
@@ -1163,5 +1164,14 @@
     "openReturning": "What do you want to ask me?",
     "inviteNamed": "{{name}} — tell me what you want, and I’ll build it.",
     "invite": "Tell me what you want, and I’ll build it."
+  },
+  "weekday": {
+    "sun": "Sun",
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat"
   }
 }

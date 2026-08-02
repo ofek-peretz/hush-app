@@ -122,6 +122,35 @@ export function coachWeek(plan: CoachPlan | null | undefined): CoachWorkout[] {
 }
 
 /**
+ * ════ THE WORKOUT THIS DAY IS FOR ════
+ *
+ * ⚠️ `day` WAS PARSED, STORED, SENT BACK TO THE COACH AND USED BY NOBODY. The schema has always let
+ * a session name its weekday, the parse has always read it and the sheet has always returned it —
+ * and every screen in the app treated the week as an unordered bucket of N. So a marathon plan that
+ * says the long run belongs on Sunday was written, stored, and then handed to her on a Wednesday
+ * because Wednesday was next in the list.
+ *
+ * A hypertrophy week genuinely does not care, which is why this went unnoticed: four sessions in
+ * any order is the same week. An endurance plan is the opposite — the long run is on Sunday because
+ * everything else is arranged around it, and moving it moves the plan.
+ *
+ * So: if any workout she has not done names TODAY, that is the one. Otherwise the next undone, which
+ * is exactly what the app has always done. Nothing is ever withheld — a plan for Sunday can still be
+ * trained on Friday by tapping its chip; this decides only what Today OFFERS.
+ */
+const WEEKDAY_OF: readonly Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+export function queuedWorkout(
+  workouts: CoachWorkout[],
+  doneIds: readonly string[],
+  nowMs: number = Date.now(),
+): CoachWorkout | null {
+  const undone = workouts.filter((w) => !doneIds.includes(w.id));
+  const today = WEEKDAY_OF[new Date(nowMs).getDay()];
+  return undone.find((w) => w.day === today) ?? undone[0] ?? null;
+}
+
+/**
  * The rows under one workout's name.
  *
  * Every row is known SYNCHRONOUSLY. That is the difference from `homePlan`, whose loads are an

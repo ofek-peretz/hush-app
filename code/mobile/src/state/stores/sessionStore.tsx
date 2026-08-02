@@ -18,7 +18,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { EffortLevel, ItemResult, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
-import { exerciseById, catalogIdFromEngine, muscleOf, type Exercise } from '@/data/exercises';
+import { exerciseById, catalogIdFromEngine, exerciseDisplayName, muscleOf, type Exercise } from '@/data/exercises';
 import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
@@ -289,6 +289,14 @@ export interface SessionView {
   currentItem: PlannedItem | null;
   /** The same, for the step a rest is leading into — so a crossing card can say what is coming. */
   nextItem: PlannedItem | null;
+  /**
+   * The next exercise's NAME when there is no rest before it — a superset, a circuit, a lift paired
+   * with a hold. Null whenever a rest follows, which is every ordinary set.
+   *
+   * The app has always RUN these correctly and never told the athlete: she finished a set of bench,
+   * a row appeared immediately, and nothing said that was the plan rather than a fault.
+   */
+  straightInto: string | null;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
@@ -1237,6 +1245,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       currentTarget: current?.target ?? null,
       currentItem: current?.item ?? null,
       nextItem: resting ? next?.item ?? null : null,
+      /*
+       * ════ THE THING SHE GOES STRAIGHT INTO, WITH NO REST ════
+       *
+       * ⚠️ THE APP RAN SUPERSETS CORRECTLY AND NEVER SAID SO. `planRun` expands a two-item block
+       * exactly right — no rest inside a round, the coach's rest between rounds — so she finished a
+       * set of bench and the next screen was a row, immediately, with nothing anywhere telling her
+       * that was deliberate. From the athlete's side an intentional superset and a broken rest timer
+       * look identical.
+       *
+       * Present only when the very next step follows with NO rest, which is the definition the plan
+       * already carries: `restAfterS === 0` is the coach saying "straight on".
+       */
+      straightInto:
+        current && restAfterStep(current) === 0 && next && !current.lastSetOfSession
+          ? exerciseById(next.exerciseId)?.name ?? exerciseDisplayName(next.exerciseId)
+          : null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
