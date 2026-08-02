@@ -19,7 +19,7 @@ import { exerciseDisplayName } from '@/data/exercises';
 import { durationMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
 import { sessionKcal } from '@/domain/energy';
-import type { Session, SetLog } from '@/data/local/models';
+import type { ItemResult, Session, SetLog } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
@@ -114,6 +114,12 @@ export function WorkoutDetailView({
     byEx[set.exerciseId].push(set);
   }
 
+  /**
+   * Everything she did that was NOT a set, in the order she met it — see the block that draws it.
+   * A reps item is already above, grouped with its lift, so it is skipped here.
+   */
+  const other = (session?.items ?? []).filter((i) => i.kind !== 'reps');
+
   const d = session ? new Date(session.startedAt) : null;
   // "SATURDAY 18 JULY" — weekday, day, month, composed to avoid the locale comma.
   const dateLabel = d
@@ -199,6 +205,26 @@ export function WorkoutDetailView({
                 </View>
               );
             })}
+            {/* ════ AND EVERYTHING THAT WAS NOT A SET ════
+                ⚠️ THIS SCREEN GROUPED `sets` AND NOTHING ELSE. An interval session — a warm-up, six
+                400 m repeats, a cool-down — logs no `SetLog`, so tapping its row in the Log opened a
+                page with an empty body: her whole workout, saved and counted, rendered as nothing.
+                One row per item, in the order she met them, saying what she actually did. */}
+            {other.map((item, idx) => (
+              <View
+                key={`${item.ex}-${idx}`}
+                style={[styles.exercise, idx === other.length - 1 ? styles.exerciseLast : styles.exerciseBorder]}
+              >
+                <View style={styles.exHead}>
+                  <Text style={styles.exName} numberOfLines={1}>{exerciseDisplayName(item.ex)}</Text>
+                </View>
+                <View style={styles.chips}>
+                  <View style={styles.chip}>
+                    <Text style={styles.chipNum}>{didOf(item)}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
           </View>
 
           {/* honest close — the record is not coached */}
@@ -207,6 +233,31 @@ export function WorkoutDetailView({
       )}
     </SafeAreaView>
   );
+}
+
+/**
+ * What she actually did, in the shape's own unit — the one figure a non-set item has.
+ *
+ * Metres under a kilometre and kilometres above it, the same reading `ItemStage` gives her while she
+ * is doing it: a record that says "5000 m" for the run the screen called "5 km" is the same fact in
+ * a voice she did not hear.
+ */
+function didOf(item: ItemResult): string {
+  switch (item.kind) {
+    case 'time': {
+      const s = Math.max(0, Math.round(item.seconds));
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    case 'distance':
+      return item.metres >= 1000
+        ? `${Number.isInteger(item.metres / 1000) ? item.metres / 1000 : (item.metres / 1000).toFixed(1)} km`
+        : `${Math.round(item.metres)} m`;
+    case 'reps':
+      return `×${item.reps}`;
+    case 'open':
+      // No number was worth stating when it was prescribed, and inventing one now would be worse.
+      return '·';
+  }
 }
 
 /** One inline fact — a mono figure with its sans meta label (MIN / KCAL / T MOVED / UP). */

@@ -316,8 +316,6 @@ interface ItemResultBase {
   restBeforeS?: number;
   /** ISO instant it was written. */
   at: string;
-  /** She skipped it. A skipped item is a fact about the session, not an absence from it. */
-  skipped?: true;
 }
 
 /** A weight for a number of reps — the shape the app has always had. */

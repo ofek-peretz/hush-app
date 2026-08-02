@@ -43,11 +43,20 @@ import type { MainParamList } from '@/app/navigation';
 // A Main-stack screen in v7 (folded out of the tab bar, opened from Progress · Lifts).
 type Props = NativeStackScreenProps<MainParamList, 'History'>;
 
-/** Wall-clock seconds from the session's start to its last logged set. */
+/**
+ * Wall-clock seconds from the session's start to the last thing she did in it.
+ *
+ * ⚠️ IT READ ONLY SETS. An interval session — a warm-up, six 400 m repeats, a cool-down — logs no
+ * `SetLog` at all, so its duration came out as zero: start to start. The canonical record holds
+ * every shape (`items`), and the last stamp in it is the end of the workout whatever shape it was.
+ */
 function sessionDurationSec(s: Session): number {
   const start = Date.parse(s.startedAt);
-  const ends = s.sets.map((x) => Date.parse(x.persistedAt)).filter((n) => !Number.isNaN(n));
-  const end = ends.length ? Math.max(...ends) : start;
+  const stamps = [
+    ...s.sets.map((x) => Date.parse(x.persistedAt)),
+    ...(s.items ?? []).map((i) => Date.parse(i.at)),
+  ].filter((n) => !Number.isNaN(n));
+  const end = stamps.length ? Math.max(...stamps) : start;
   return Math.max(0, Math.round((end - start) / 1000));
 }
 
@@ -55,8 +64,15 @@ function sessionVolumeKg(s: Session): number {
   return s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
 }
 
-/** How many distinct lifts a session trained (the "N lifts" figure on the row). */
+/**
+ * How many distinct things a session trained (the "N lifts" figure on the row).
+ *
+ * Counted off the canonical record when there is one, so a session of runs and holds says how much
+ * work it was instead of "0 lifts". `sets` remains the answer for everything written before `items`
+ * existed.
+ */
 function sessionLiftCount(s: Session): number {
+  if (s.items?.length) return new Set(s.items.map((i) => i.ex)).size;
   return new Set(s.sets.map((x) => x.exerciseId)).size;
 }
 
@@ -161,9 +177,16 @@ export function HistoryView({
 }) {
   const { t } = useCopy();
 
-  // Only PERFORMED work is a record (founder 2026-07-10): a session with zero completed sets or a
-  // cardio false-start never shows here.
-  const strength = (sessions ?? []).filter((s) => s.sets.length > 0);
+  /*
+   * Only PERFORMED work is a record (founder 2026-07-10): a session with nothing completed in it, or
+   * a cardio false-start, never shows here.
+   *
+   * ⚠️ IT ASKED ONLY ABOUT SETS. A session of intervals and holds logs no `SetLog`, so a workout she
+   * finished to the last repeat — saved, counted as trained, sent to the coach — **never appeared in
+   * her Log at all.** The app kept it and the one screen that shows her what she has done behaved as
+   * though it had not happened.
+   */
+  const strength = (sessions ?? []).filter((s) => s.sets.length > 0 || (s.items?.length ?? 0) > 0);
   const performedCardio = cardio.filter((a) => cardioPerformed(a.durationSec, a.distanceKm));
   const raises = raisesBySession(strength);
 

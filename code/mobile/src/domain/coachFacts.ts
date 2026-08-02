@@ -117,7 +117,6 @@ export interface FactWork {
   restBeforeS?: number;
   /** How long it took, when anything measured it (a timed distance). */
   seconds?: number;
-  skipped?: true;
 }
 
 /** What she has ever actually lifted on one exercise — the substrate for pricing a new one. */
@@ -496,7 +495,6 @@ function workOf(items: ItemResult[]): FactWork[] {
     const where = { kind: i.kind, ex: i.ex, name: nameOf(i.ex), block: i.block, round: i.round, position: i.position };
     const common = {
       ...(i.restBeforeS != null ? { restBeforeS: i.restBeforeS } : {}),
-      ...(i.skipped ? { skipped: true as const } : {}),
     };
     switch (i.kind) {
       case 'reps':

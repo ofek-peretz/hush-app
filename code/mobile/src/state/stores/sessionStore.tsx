@@ -344,7 +344,7 @@ export interface SessionView {
    * failure); `metres` what she actually covered. Both default to what was asked. Refuses a reps
    * step, exactly as `completeSet` refuses one without a target.
    */
-  completeItem: (done?: { seconds?: number; metres?: number; skipped?: true; activityId?: string }) => Promise<CompleteResult>;
+  completeItem: (done?: { seconds?: number; metres?: number; activityId?: string }) => Promise<CompleteResult>;
   /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
   editCurrentSet: (v: { weight: number | null; reps: number }) => void;
@@ -556,7 +556,7 @@ export function restAfterStep(step: Step): number {
  */
 function itemResultOf(
   step: Step,
-  done: { seconds?: number; metres?: number; skipped?: true; restBeforeS?: number | null; activityId?: string },
+  done: { seconds?: number; metres?: number; restBeforeS?: number | null; activityId?: string },
   log: SetLog | null,
   at: string,
 ): ItemResult | null {
@@ -568,7 +568,6 @@ function itemResultOf(
     ...step.where,
     at,
     ...(restBeforeS != null ? { restBeforeS } : {}),
-    ...(done.skipped ? { skipped: true as const } : {}),
   };
   switch (item.kind) {
     case 'reps':
@@ -1685,7 +1684,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             kind: current.item.kind,
             ...(row.kind === 'time' ? { seconds: row.seconds, askedSeconds: row.askedSeconds } : {}),
             ...(row.kind === 'distance' ? { metres: row.metres, askedMetres: row.askedMetres } : {}),
-            skipped: !!done.skipped,
           });
 
           const restSecondsForThis = restAfterStep(current);
