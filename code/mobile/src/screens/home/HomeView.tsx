@@ -129,6 +129,12 @@ export interface HomeViewProps {
   plan: HomePlanLift[] | null;
   /** Honest work-time estimate for the selected workout (minutes). 0 = unknown. */
   planMinutes?: number;
+  /**
+   * The estimate CANNOT be honest, because the session contains work with no duration to price — a
+   * run, a ride. Then the line says how much work it is and stops, rather than printing a number
+   * that is wrong by a factor of six.
+   */
+  planTimeUnknown?: boolean;
   /** S-3 — the engine could not fit this day inside her declared minutes even after every legal cut
    *  (every trained muscle is down to its last lift). Set on ProgramDay by generateProgram. When
    *  true, Hush SAYS so under the plan rather than starving a muscle in silence. */
@@ -392,7 +398,9 @@ export function HomeView(props: HomeViewProps) {
               {/* The shape of the session, one line — "6 LIFTS · ~55 MIN". */}
               {liftCount ? (
                 <Legend size={12.5} track={0.04} weight="regular" tone="onStage" style={styles.shapeLine}>
-                  {t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })}
+                  {props.planTimeUnknown
+                    ? t('home.planShapeNoTime', { lifts: liftCount })
+                    : t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })}
                 </Legend>
               ) : null}
 

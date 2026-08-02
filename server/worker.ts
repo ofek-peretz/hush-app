@@ -196,7 +196,21 @@ function geminiSchema(schema: Record<string, unknown>): Record<string, unknown> 
  */
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type, x-hush-token',
+  /*
+   * ⚠️ EVERY HEADER THE APP SENDS HAS TO BE NAMED HERE, AND `x-hush-install` WAS NOT.
+   *
+   * It was added to the client for the rate limit — the one thing that tells one athlete from a
+   * script — and this list was not updated with it. A browser then asks permission for a header the
+   * answer does not grant, the preflight fails, **the real POST is never sent**, and the app reports
+   * `offline` because from its side nothing came back. Nothing appears in any log, on either side.
+   *
+   * A phone never sees it: a native fetch sends no preflight. So this breaks exactly one thing —
+   * driving the coach from a browser, which is the only way anybody looks at it before a build.
+   * That is the SECOND time this precise trap has cost an hour (the first was `OPTIONS` answering
+   * with a body at a null-body status, 2026-07-31), and both times the symptom was a bare failure
+   * with nothing to read.
+   */
+  'access-control-allow-headers': 'content-type, x-hush-token, x-hush-install',
   'access-control-allow-methods': 'POST, OPTIONS',
   // Cache the preflight for a day. Without it every single call is TWO round trips, and the first
   // one carries no data — pure latency, on a screen where she is waiting for an answer.

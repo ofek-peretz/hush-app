@@ -403,7 +403,7 @@ export const db = {
    * The plan is written BEFORE the log. If only one of the two survives a crash, the programme she
    * is about to train matters more than the record of why.
    */
-  async recordCoachAnswer(answer: { plan: CoachPlan | null; brief?: string }, at: string): Promise<void> {
+  async recordCoachAnswer(answer: { plan: CoachPlan | null; brief?: string[] }, at: string): Promise<void> {
     /*
      * ⚠️ THE BRIEF IS SAVED BEFORE THE EARLY RETURN, and that ordering is the whole feature.
      *
@@ -412,15 +412,18 @@ export const db = {
      * to a question, not programmes. Writing the brief only alongside a plan would drop exactly the
      * turns it exists for.
      */
-    if (answer.brief) await setJSON(K.coachBrief, answer.brief);
+    if (answer.brief?.length) await setJSON(K.coachBrief, answer.brief);
     if (!answer.plan) return; // A turn that only spoke decided nothing else. Nothing more to record.
     await this.saveCoachPlan(answer.plan);
     await this.appendCoachDecisions(answer.plan.notes, at);
   },
 
-  /** The coach's memory of who she is, or null before it has met her. */
-  async loadCoachBrief(): Promise<string | null> {
-    return (await getJSON<string>(K.coachBrief)) ?? null;
+  /** The coach's memory of who she is, as lines, or null before it has met her. */
+  async loadCoachBrief(): Promise<string[] | null> {
+    const stored = await getJSON<string[] | string>(K.coachBrief);
+    if (stored == null) return null;
+    // A brief written before it became a list — one string is one line.
+    return Array.isArray(stored) ? stored : [stored];
   },
 
   // ---- Cardio activities (Open training: recorded, never coached; newest first) ----

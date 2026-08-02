@@ -96,11 +96,11 @@ describe('the sheet names every field it sends', () => {
       sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
     } as unknown as Profile;
     const program: Program = { id: 'p', frequency: 4, days: [] };
-    const brief = 'Plays 5-a-side Thursdays. Right hamstring tweaked twice, both times sprinting cold.';
+    const brief = ['Plays 5-a-side Thursdays.', 'Right hamstring tweaked twice, both times sprinting cold.'];
 
     const withBrief = coachFacts({ profile, brief, plan: null , history: [] });
     // Byte for byte: nothing summarises the summariser, and nothing parses it either.
-    expect(withBrief.athlete.brief).toBe(brief);
+    expect(withBrief.athlete.brief).toEqual(brief);
 
     // Absent, not empty. An athlete who has not been through the intake has no brief; an empty
     // string would read to the coach as "I asked her and she said nothing".

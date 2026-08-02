@@ -35,11 +35,11 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
-import { COACH_BRIEF_MAX, COACH_PLAN_SCHEMA } from './coachPlan';
+import { COACH_BRIEF_LINES, COACH_PLAN_SCHEMA } from './coachPlan';
 import { REST_UNSTATED_S } from './restPrescription';
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 12;
+export const COACH_PROMPT_VERSION = 14;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -209,15 +209,19 @@ You hold nothing between calls. The conversation is capped and the call after a 
 conversation at all — only her record. So anything about her that is not a number and not a set she
 performed exists in exactly one place: this field, written by you, sent back to you on every call.
 
-What belongs in it: why she is here and what she is training for, in her words. What she has told
-you about her history, her injuries, her sport, her life around training. **Every standing request
-she has made** — a lift she never wants to see again, one she wants kept, a day she cannot train, a
-machine her gym does not have. Where her programme came from if she brought one with her.
+It is a LIST OF SHORT LINES, at most ${COACH_BRIEF_LINES} of them, one fact each:
+  "Goal: half marathon in April."
+  "Left shoulder since 2${COACH_BRIEF_LINES}24 — no overhead pressing."
+  "Will not do lunges. Asked twice."
+  "Works night shifts — some weeks she only manages two sessions."
 
-Write it WHOLE — what you send replaces what is stored — and only on a turn where it CHANGED.
-Re-sending it unchanged costs her money to tell yourself what you already know. Keep it under
-${COACH_BRIEF_MAX} characters; when it is full, keep what still matters and let go of what does
-not, the way anyone's memory of a person works.
+What belongs in it: why she is here and what she is training for. What she has told you about her
+history, her injuries, her sport, her life around training. **Every standing request she has made.**
+Where her programme came from if she brought one with her.
+
+Write the WHOLE list — what you send replaces what is stored — and only on a turn where it CHANGED.
+When it is full, drop the line that matters least; that is what a memory is. Never repeat a fact you
+have already written: one line, one thing.
 
 ⚠️ It is not a diary and it is not a log of decisions — "decided" already holds those, with the
 reasons. This is who she is, not what you did.
@@ -474,9 +478,22 @@ ${JSON.stringify(hersAlone(facts))}
           'is your judgement: you decide the opening loads and you decide what you must know to ' +
           'set them. When she answers, put what she said in "learned" on that turn — it is the ' +
           'only way any of it reaches her record.\n\n' +
-          'Ask what you need, one or two questions at a time, following what she actually said ' +
-          'rather than a list. When you know enough, build it — say so in "say" and attach the ' +
-          'whole programme in "sessions" in the same reply.\n\n' +
+          /*
+           * ⚠️ A HARD BRANCH, NOT A REMINDER — measured on the first live intake, 2026-08-02.
+           *
+           * The coach answered "here is your 3-day plan", filled `learned` and `brief` beautifully,
+           * and attached NO SESSIONS. `finishReason: STOP` — it was not truncated, it simply
+           * considered the turn finished. The prose rule against exactly this ("never say you
+           * changed something and not attach it") was already in the preamble and lost to the pull
+           * of a turn that felt complete. So it stops being a warning and becomes the only two
+           * moves there are.
+           */
+          'EVERY TURN HERE IS ONE OF EXACTLY TWO THINGS, AND NEVER ANYTHING BETWEEN THEM.\n' +
+          'Either you are still learning about her — then ASK, one or two questions, and do not ' +
+          'describe a programme, promise one, or say you are about to build one. Or you know ' +
+          'enough — then \"sessions\" IS IN THIS REPLY, whole, and \"say\" tells her what you built.\n' +
+          'There is no turn where you announce a programme that is not attached to the same ' +
+          'message: she would read that sentence, look at her week, and find nothing there.\n\n' +
           'THE CONVERSATION SO FAR — her last line is what you are answering:\n' +
           conversation(ask.turns),
       });

@@ -217,8 +217,18 @@ export interface CoachAnswer {
    *
    * WHOLE, NOT A PATCH, and only when it CHANGED — see the prompt. A rewrite on every turn would
    * cost output tokens to restate what is already stored.
+   *
+   * ⚠️ A LIST OF LINES, AND THAT IS A SCAR. The first version was one free string, capped at 1,500
+   * characters in the PARSE and asked for in prose. The first live call answered with 7,883
+   * characters of the same four facts repeating until the output budget ran out — `MAX_TOKENS`, the
+   * reply truncated, and **no programme at all** on a turn whose `say` promised one.
+   *
+   * A cap the answerer cannot see is not a cap. `maxLength` would say it structurally, and the
+   * Worker's schema translator does not forward that field — but it does forward `maxItems`. So the
+   * memory is a LIST: bounded by something the model is actually told, and a better shape besides.
+   * One fact per line is how the rest of this product is written.
    */
-  brief?: string;
+  brief?: string[];
 }
 
 /**
@@ -230,6 +240,11 @@ export interface CoachAnswer {
  * shape of an imported programme; short enough that it cannot quietly become a diary.
  */
 export const COACH_BRIEF_MAX = 1500;
+
+/** How many lines the memory may hold. Bounded structurally — see `CoachAnswer.brief`. */
+export const COACH_BRIEF_LINES = 14;
+/** And how long one of them may be. A fact, not a paragraph. */
+export const COACH_BRIEF_LINE_MAX = 160;
 
 /**
  * Facts about the ATHLETE that only the conversation can produce.
@@ -358,8 +373,14 @@ export const COACH_PLAN_SCHEMA = {
         minutes: { type: 'integer' },
       },
     },
-    /** The coach's own memory of her — see `CoachAnswer.brief`. Whole, and only when it changed. */
-    brief: { type: 'string' },
+    /**
+     * The coach's own memory of her — see `CoachAnswer.brief`. Whole, and only when it changed.
+     *
+     * `maxItems` is the load-bearing part: it is the only bound the model is actually TOLD, because
+     * it is the only one the Worker's translator forwards. Without it the first live call wrote the
+     * same four facts until the output budget was gone.
+     */
+    brief: { type: 'array', items: { type: 'string' }, maxItems: COACH_BRIEF_LINES },
   },
 } as const;
 
@@ -471,8 +492,14 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
    * last week with nothing — the one way this field can lose information rather than carry it.
    */
-  const briefText = typeof root.brief === 'string' ? root.brief.trim().slice(0, COACH_BRIEF_MAX) : '';
-  const brief = briefText.length > 0 ? { brief: briefText } : {};
+  const lines = Array.isArray(root.brief)
+    ? root.brief
+        .filter((l): l is string => typeof l === 'string')
+        .map((l) => l.trim().slice(0, COACH_BRIEF_LINE_MAX))
+        .filter((l) => l.length > 0)
+        .slice(0, COACH_BRIEF_LINES)
+    : [];
+  const brief = lines.length > 0 ? { brief: lines } : {};
 
   /*
    * NO `sessions` IS AN ANSWER, NOT A FAILURE — but an EMPTY `sessions` is a failure.
@@ -523,7 +550,17 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
         if (!Array.isArray(raw.reps) || raw.reps.length !== 2 || !raw.reps.every(isInt)) {
           return { ok: false, reason: 'not_a_number', at: raw.ex };
         }
-        if (raw.load !== null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        /*
+         * ⚠️ AN ABSENT LOAD IS BODYWEIGHT, NOT A MALFORMED ONE. This read `!== null`, so a `load`
+         * the coach simply left out — which the schema permits, and which is the natural thing to
+         * write for a push-up or a dead bug — failed the check and **the entire programme was
+         * thrown away**: one omitted optional field on one item of one block, and she gets no week.
+         *
+         * Found on the first live intake that produced a real plan (2026-08-02): three good
+         * sessions rejected on `dead_bug`. Every other shape already asked `!= null` here; only reps
+         * was strict, and only reps has a load that is meaningfully absent.
+         */
+        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
         const [lo, hi] = raw.reps as number[];
         return { ok: true, item: { kind: 'reps', ex: raw.ex, reps: [lo, hi], load: settle(raw.load) ?? null, ...say } };
       }

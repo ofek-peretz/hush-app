@@ -89,7 +89,8 @@
     "trialLeft_one": "1 workout left in your trial",
     "trialLeft_other": "{{count}} workouts left in your trial",
     "undoSwap": "Keep {{lift}}",
-    "undoSwapA11y": "Keep {{lift}} — undo the swap"
+    "undoSwapA11y": "Keep {{lift}} — undo the swap",
+    "planShapeNoTime": "{{lifts}} exercises"
   },
   "cardio": {
     "legend": "Open training",

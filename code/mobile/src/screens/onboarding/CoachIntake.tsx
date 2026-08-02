@@ -90,7 +90,7 @@ export function CoachIntake({ navigation, route }: Props) {
    * brief back after onboarding ended. It is state rather than a ref for exactly that reason: the
    * sheet has to rebuild when it changes.
    */
-  const [brief, setBrief] = React.useState<string | null>(null);
+  const [brief, setBrief] = React.useState<string[] | null>(null);
 
   /**
    * Her profile as it WILL be, without being written.
@@ -125,7 +125,7 @@ export function CoachIntake({ navigation, route }: Props) {
   const facts = React.useMemo(
     // No programme yet, and that is a fact about her rather than a hole: this is the one call
     // where there genuinely is none, and the intake ask says so.
-    () => coachFacts({ profile, plan: null, history: [], ...(brief ? { brief } : {}), language: currentLocale() }),
+    () => coachFacts({ profile, plan: null, history: [], ...(brief?.length ? { brief } : {}), language: currentLocale() }),
     [profile, inputs.daysPerWeek, brief],
   );
 
@@ -137,7 +137,7 @@ export function CoachIntake({ navigation, route }: Props) {
     onAnswer: (answer) => {
       // Every turn, plan or no plan — she states her weight long before there is a programme.
       if (answer.learned) learned.current = { ...learned.current, ...answer.learned };
-      if (answer.brief) setBrief(answer.brief);
+      if (answer.brief?.length) setBrief(answer.brief);
       /*
        * A plan arrived. `useCoach` has already stored it through `db.recordCoachAnswer`, so by the
        * time this runs it is on disk — the next step writes the profile against a programme that

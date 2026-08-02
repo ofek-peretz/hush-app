@@ -50,7 +50,7 @@ const forDana = () =>
   coachRequest({
     facts: coachFacts({
       profile: dana, plan: null , history: [session], justFinished: session,
-      brief: 'Plays 5-a-side Thursdays. Right hamstring tweaked twice, both sprinting cold.',
+      brief: ['Plays 5-a-side Thursdays. Right hamstring tweaked twice, both sprinting cold.'],
       decided: [{ at: 't1', ex: 'bb_bench_press', say: 'Up to 32.5 — you cleared 12 twice.' }],
     }),
     ask: { kind: 'after_session' },

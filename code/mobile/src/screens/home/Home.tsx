@@ -742,6 +742,11 @@ export function Home({ navigation, route }: Props) {
        * states what it can stand behind rather than a confident total.
        */
       planMinutes={todayCoach ? Math.max(5, Math.round(todayCoach.minutes / 5) * 5) : 0}
+      /* ⚠️ A SESSION WITH A RUN IN IT HAS NO HONEST MINUTE COUNT, and this line was printing one
+         anyway. `timeOf` cannot price a distance — there is no pace to price it with — so a workout
+         built around a 5 km run came out as "~6 min" on the first screen she opens. The flag has
+         been computed since the week was written and read by nobody. */
+      planTimeUnknown={todayCoach?.hasUncountedWork ?? false}
       /*
        * `overBudget` was the GENERATOR saying a day could not be cut to fit her minutes after every
        * legal trim. Nothing composes a day now, so nothing can report that — and the coach is told

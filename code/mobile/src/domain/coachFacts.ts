@@ -270,7 +270,7 @@ export interface CoachFacts {
      * programme looks the way it does, and a coach that has forgotten the goal is a random-plan
      * generator with good manners.
      */
-    brief?: string;
+    brief?: string[];
   };
   /**
    * What the coach has already decided, and why — newest first (`domain/coachLog`).
@@ -667,8 +667,8 @@ export function coachEquipment(): Record<string, FactEquipment> {
 
 export interface CoachFactsInput {
   profile: Profile;
-  /** The coach's own summary from the intake conversation — see `CoachFacts.athlete.brief`. */
-  brief?: string;
+  /** The coach's own memory of her, as lines — see `CoachFacts.athlete.brief`. */
+  brief?: string[];
   /** Its own past decisions, oldest first as stored — see `CoachFacts.decided`. */
   decided?: CoachDecision[];
   /**
@@ -749,7 +749,7 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       ...(profile.repBand ? { band: profile.repBand } : {}),
       ...(profile.repBandByMuscle ? { bandByMuscle: stringMap(profile.repBandByMuscle) } : {}),
       ...(profile.bodyMap ? { emphasis: stringMap(profile.bodyMap) } : {}),
-          ...(brief ? { brief } : {}),
+          ...(brief?.length ? { brief } : {}),
       ...(profile.painEases?.length
         ? {
             resting: profile.painEases.map((p) => ({

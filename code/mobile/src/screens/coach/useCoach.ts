@@ -44,7 +44,7 @@ import { db, type PersistedCoachTurn } from '@/data/local/db';
 import { chatRemaining, spendChat } from '@/domain/coachQuota';
 
 import type { CoachFacts } from '@/domain/coachFacts';
-import { COACH_PLAN_SCHEMA, parseCoachPlan, type CoachAnswer, type UnreadableReason } from '@/domain/coachPlan';
+import { COACH_DECISION_SCHEMA, COACH_PLAN_SCHEMA, parseCoachPlan, type CoachAnswer, type UnreadableReason } from '@/domain/coachPlan';
 import { coachRequest, type CoachSaid } from '@/domain/coachPrompt';
 import { askCoach, type CoachFailure } from '@/platform/coach/coachClient';
 import type { CoachTurn } from './CoachChat';
@@ -212,7 +212,38 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
       // Her message is marked failed wherever it is in the thread — she may have sent others since.
       const settle = settleTrouble;
 
-      void askCoach(request, COACH_PLAN_SCHEMA as unknown as Record<string, unknown>)
+      /**
+       * ════ THE INTAKE'S ONE RE-ASK ════
+       *
+       * ⚠️ MEASURED, TWICE, AGAINST THE LIVE MODEL (2026-08-02). Handed a first message containing
+       * her goal, her injury, her weight, her days and her minutes, the coach replied *"I'm Hush.
+       * I've built you a three-day plan for the half marathon"* — filled `learned` and `brief`
+       * perfectly, and attached **no sessions at all**. `finishReason: STOP`: not truncated, simply
+       * finished. She would have read that sentence, looked at her week, and found nothing there.
+       *
+       * The preamble already forbids it in capitals, and the intake ask was rewritten to make it a
+       * hard branch. **Both failed.** A programme is fifteen hundred tokens of work and the schema
+       * lets it be omitted; acknowledging is the cheaper move and the model takes it.
+       *
+       * So the fix is not more prose. `COACH_DECISION_SCHEMA` is the same schema with `sessions` in
+       * `required` — the one used after a workout, where omitting it stops being something the model
+       * can do. This re-asks with it, ONCE, and only on the signal that the coach itself has what it
+       * needs: it reported her `daysPerWeek`. A turn that is genuinely still asking her questions
+       * reports nothing, and is left alone.
+       */
+      const askOnce = (schema: unknown) =>
+        askCoach(request, schema as Record<string, unknown>);
+
+      void askOnce(COACH_PLAN_SCHEMA)
+        .then(async (first) => {
+          if (mode !== 'intake' || !first.ok) return first;
+          const read = parseCoachPlan(first.text, facts);
+          if (!read.ok || read.answer.plan || read.answer.learned?.daysPerWeek == null) return first;
+          const retried = await askOnce(COACH_DECISION_SCHEMA);
+          // If the second attempt fails for any reason, her first answer still stands — it has her
+          // sentence in it, and a lost turn would be worse than a turn without a programme.
+          return retried.ok ? retried : first;
+        })
         .then((reply) => {
           // A reply to a message she has already followed with another one. Dropping it is the
           // point: shown, it reads as the coach answering the wrong question.

@@ -189,7 +189,7 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       // nothing about the 10 km she ran on Sunday.
       cardio,
       ...(external.length ? { external } : {}),
-      ...(brief ? { brief } : {}),
+      ...(brief?.length ? { brief } : {}),
       language: currentLocale(),
     });
 

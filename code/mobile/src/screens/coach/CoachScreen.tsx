@@ -69,7 +69,7 @@ export function CoachScreen({ navigation }: Props) {
   const [prefs, setPrefs] = React.useState<{ substitutes: Record<string, string>; keep: Record<string, string> } | null>(null);
   const [cardio, setCardio] = React.useState<CardioActivity[]>([]);
   /** The coach's own memory of who she is — see `CoachAnswer.brief`. */
-  const [brief, setBrief] = React.useState<string | null>(null);
+  const [brief, setBrief] = React.useState<string[] | null>(null);
   const [external, setExternal] = React.useState<ExternalWorkout[]>([]);
   React.useEffect(() => {
     let alive = true;
@@ -104,7 +104,7 @@ export function CoachScreen({ navigation }: Props) {
             ...(prefs ? { preferences: prefs } : {}),
             cardio,
             ...(external.length ? { external } : {}),
-            ...(brief ? { brief } : {}),
+            ...(brief?.length ? { brief } : {}),
             language: currentLocale(),
           })
         : null,
