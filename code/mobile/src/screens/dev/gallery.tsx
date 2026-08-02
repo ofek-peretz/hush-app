@@ -175,7 +175,6 @@ const sessionFixture = {
    */
   completeSet: async () => ({ ended: false, unlockedPortrait: false, correction: null }),
   completeItem: async () => ({ ended: false, unlockedPortrait: false }),
-  reportEffort: noop,
   editCurrentSet: noop,
   endRest: noop,
   extendRest: noop,

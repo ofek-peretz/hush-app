@@ -46,7 +46,7 @@
  * not touch the network, and knows nothing about any model or provider.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import type { EffortReport, ItemResult, Profile, Session, SetLog, Program, CardioActivity } from '@/data/local/models';
+import type { ItemResult, Profile, Session, SetLog, Program, CardioActivity } from '@/data/local/models';
 import type { ExternalWorkout } from '@/platform/health/healthModel';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
@@ -83,14 +83,6 @@ export interface FactLift {
   askedReps: number;
   askedSets: number;
   sets: FactSet[];
-  /**
-   * How hard she said it was — `EffortLevel`, in her own answer.
-   *
-   * ABSENT means she was not asked or did not answer, and absent must stay absent: filling it in
-   * from the reps would be the coach reading its own inference back as her testimony. Unknown is an
-   * honest value; a manufactured one is not.
-   */
-  effort?: string;
 }
 
 /**
@@ -166,8 +158,6 @@ export interface FactOccurrence {
   load: number | null;
   /** The reps of each set, in order. */
   reps: number[];
-  /** Her own answer for that lift that day, when she gave one — never inferred. */
-  effort?: string;
 }
 
 /** The grain of each equipment class — so a decision lands on a weight that exists. */
@@ -298,7 +288,7 @@ export interface CoachFacts {
      *
      * A reps step appears here AND in `lifts`, and that is deliberate rather than duplication: the
      * two say different things. `lifts` groups a lift's sets together with the rest before each and
-     * her own effort answer; `work` is the session's STRUCTURE — block, round, position — which is
+     * what she was asked for beside what she did; `work` is the session's STRUCTURE — block, round, position — which is
      * the only way to tell that the bench was inside a circuit with the plank rather than four
      * straight sets before it. The coach wrote that structure; it must be able to read it back.
      *
@@ -455,7 +445,7 @@ function sessionMinutes(s: Session): number | null {
   return Math.round(span / 60000);
 }
 
-function liftOf(exerciseId: string, sets: SetLog[], effort?: EffortReport[]): FactLift | null {
+function liftOf(exerciseId: string, sets: SetLog[]): FactLift | null {
   const ex = byId.get(exerciseId);
   if (!ex) return null; // a lift no longer in the catalogue: it cannot be reasoned about, so it is
   //                       not stated. Never invent a name for an id we cannot resolve.
@@ -472,9 +462,6 @@ function liftOf(exerciseId: string, sets: SetLog[], effort?: EffortReport[]): Fa
     askedLoad: first?.recommendedWeight ?? null,
     askedReps: first?.recommendedReps ?? 0,
     askedSets: ordered.length,
-    ...(effort?.find((e) => e.exerciseId === exerciseId)
-      ? { effort: effort.find((e) => e.exerciseId === exerciseId)!.level }
-      : {}),
     sets: ordered.map((x) => ({
       w: x.actualWeight,
       r: x.actualReps,
@@ -533,7 +520,7 @@ function liftsOf(s: Session): FactLift[] {
   }
   const out: FactLift[] = [];
   for (const id of order) {
-    const lift = liftOf(id, grouped.get(id)!, s.effort);
+    const lift = liftOf(id, grouped.get(id)!);
     if (lift) out.push(lift);
   }
   return out;
@@ -593,8 +580,7 @@ function performedFrom(history: Session[], nowMs: number): FactPerformed[] {
       if (!occ) {
         // Her own answer for THIS lift on THIS day, when she gave one. Never inferred from the reps
         // — an unanswered lift is unknown, and unknown is an honest value.
-        const effort = s.effort?.find((r) => r.exerciseId === set.exerciseId)?.level;
-        occ = { ago, load: set.actualWeight ?? null, reps: [], ...(effort ? { effort } : {}) };
+        occ = { ago, load: set.actualWeight ?? null, reps: [] };
         open.set(set.exerciseId, occ);
         e.occurrences.push(occ);
       }

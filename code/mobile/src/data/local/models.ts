@@ -263,18 +263,9 @@ export interface SessionSummary {
  * Asked ONCE PER EXERCISE, never per set — per set it is a toll on every rep of every workout, and
  * the answer barely moves between the sets of one lift.
  */
-export type EffortLevel =
-  | 'had_more' // she left reps in the tank
-  | 'about_right' // hard, and she finished it
-  | 'nothing_left'; // the last reps were everything she had
+// the last reps were everything she had
 
 /** Her answer for one exercise in one session. Absent = she was not asked, or did not answer. */
-export interface EffortReport {
-  exerciseId: string;
-  level: EffortLevel;
-  /** ISO. She answers at the moment the lift ends, so this is also when it was true. */
-  at: string;
-}
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -404,13 +395,6 @@ export interface Session {
   // ended early (spec §4.10, §2.10). `annotationCapability` carries the load noun.
   annotation?: HistoryAnnotation;
   annotationCapability?: Capability;
-  /**
-   * How hard each exercise was, in her own answer — see `EffortLevel`.
-   *
-   * One entry per exercise she answered for; an exercise she skipped simply has none. Never
-   * inferred from the reps: an unanswered lift is unknown, and unknown is an honest value.
-   */
-  effort?: EffortReport[];
   /**
    * Everything she did, in every shape — see `ItemResult`.
    *

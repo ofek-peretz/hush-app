@@ -121,6 +121,37 @@ export async function askCoachToRevise(why: string): Promise<CoachUpdate> {
   return runCoachCall({ kind: 'revise', why });
 }
 
+/**
+ * ════ SHE IS AT THE RACK AND SOMETHING HURTS ════
+ *
+ * ⛔ FOUNDER, ON BUILD 39: *"On the injury screen you told me explicitly that marking an injury
+ * routes to an AI screen where it talks, and what actually appears is the screen that was there
+ * before."*
+ *
+ * `reportPain` already calls `askCoachToRevise` — the PROGRAMME is rebuilt around the rest window.
+ * But that answer is for next time, and nothing put a word in front of her now, so `PainResponse`
+ * filled the gap with a substitute lift it picked itself out of `swapPool`. That was the last live
+ * engine call in any screen in this app.
+ *
+ * This is the same occasion, asked so that the SENTENCE comes back to the screen. It resolves to
+ * the coach's own words, or an empty string if it could not be reached — and an empty string draws
+ * nothing at all, because the one thing that must never happen here is the app inventing advice
+ * about an injury and letting it read as the coach's.
+ */
+export async function askCoachAboutPain(
+  muscle: string,
+  severity: string,
+  lift: string | null,
+): Promise<string> {
+  const update = await askCoachToRevise(
+    `She has just reported her ${muscle} hurting (${severity})` +
+      (lift ? `, mid-session, on ${lift}` : '') +
+      '. The muscle is already resting and her programme has been rebuilt around it. ' +
+      'Tell HER, in a sentence or two, what to do about the rest of today.',
+  );
+  return update.say ?? '';
+}
+
 export async function askAfterSession(justFinished: Session): Promise<CoachUpdate> {
   return runCoachCall({ kind: 'after_session', justFinished });
 }

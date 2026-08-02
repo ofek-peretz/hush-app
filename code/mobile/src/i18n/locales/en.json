@@ -1167,7 +1167,8 @@
     "invite": "Tell me what you want, and I’ll build it.",
     "attach": "Add a photo",
     "attachRemove": "Remove",
-    "accept": "This is my program"
+    "accept": "This is my program",
+    "noMessagesLeft": "No messages left this month"
   },
   "weekday": {
     "sun": "Sun",

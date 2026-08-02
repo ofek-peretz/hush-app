@@ -39,7 +39,7 @@ import Animated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { color, radius, space } from '@/design/tokens';
+import { color, radius, space, stage } from '@/design/tokens';
 
 const DISMISS_DISTANCE = 90; // drag this far down (or flick) to dismiss
 const DISMISS_VELOCITY = 800;
@@ -130,7 +130,23 @@ export function useSheetScroll(): SheetScroll {
 export function BottomSheet({
   onClose,
   children,
-  background = color.surface,
+  /**
+   * ⛔ OPAQUE, AND IT USED TO BE 5% TRANSLUCENT — founder, twice, on builds 36 and 39: *"the modal
+   * is faded, and you didn't change it."*
+   *
+   * The default was `color.surface` — `rgba(241,238,229,0.05)`, the token for **a card floating on
+   * the stage**. On a card that is right: it is a slight lift off the ground it sits on. On a SHEET
+   * it is wrong twice over, because a sheet is not on the ground — it is over a 45% black scrim
+   * over the whole app, so the scrimmed screen bleeds through a 5% panel and everything under it
+   * turns grey. That grey IS the faded look.
+   *
+   * `stage[1]` is the same raise, stated opaquely (`#1b1914`). Nothing shows through it.
+   *
+   * ⚠️ This is the DARK-STAGE class again, and the third time: a value chosen for the light paper
+   * instrument, carried unchanged onto the v7 dark stage. When something looks wrong on a dark
+   * screen, ask what era its number was chosen in.
+   */
+  background = stage[1],
   heightFraction,
   gutter = space.gutter,
   scrimOpacity = SCRIM_OPACITY,

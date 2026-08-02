@@ -176,15 +176,25 @@ describe('an ordinary set gets no ceremony', () => {
     expect(read).not.toMatch(/SET 2 OF 4 LOGGED/i);
   });
 
-  it('the LAST set of a lift asks how it went — the beat that had nothing to say now has the one thing', async () => {
+  it('⚠️ the LAST set of a lift is a beat, and it ASKS NOTHING', async () => {
+    /*
+     * ⛔ REVERSED BY THE FOUNDER, 2026-08-02, on build 39:
+     *
+     *   > *"Take it off completely. The AI should give the athlete instructions according to their
+     *   > goal. And what about someone who just trains for fun? We already had this conversation
+     *   > and you left this screen in."*
+     *
+     * This used to assert the opposite — that the beat closing a lift asks "how did that go?" with
+     * three answers. It held the stage for six seconds mid-workout and, because it HOLDS rather
+     * than ends, it read as a finish screen that then put her back on the set.
+     *
+     * What survives is the half that was never a question: every pip filled, the lift is spent.
+     */
     const r = draw(makeSession(4, 4, NO_CORRECTION));
     pressCompleteSet(r);
-    // The beat draws it uppercased, so compare on the words rather than the casing.
     const read = textOf(r).toUpperCase();
-    expect(read).toContain(tg('workout.effortAsk').toUpperCase());
-    // All three answers, every time — a scale with a missing rung is not a scale.
-    for (const key of ['workout.effortHadMore', 'workout.effortAboutRight', 'workout.effortNothingLeft']) {
-      expect({ key, shown: read.includes(tg(key).toUpperCase()) }).toEqual({ key, shown: true });
+    for (const key of ['workout.effortAsk', 'workout.effortHadMore', 'workout.effortAboutRight', 'workout.effortNothingLeft']) {
+      expect({ key, shown: read.includes(tg(key).toUpperCase()) }).toEqual({ key, shown: false });
     }
   });
 

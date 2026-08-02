@@ -89,12 +89,17 @@ describe('a stall is visible', () => {
     expect(r.map((o) => o.ago)).toEqual([5, 12, 19, 26, 33, 40]);
   });
 
-  it('carries her own answer for how hard it was, and never invents one', () => {
-    const r = bench(STALLED).recent;
-    expect(r[0].effort).toBe('hard');
-    // She answered on one session out of six. The other five are silent, not "normal".
-    expect(r.slice(1).every((o) => o.effort === undefined)).toBe(true);
-  });
+  /*
+   * ⚠️ THE EFFORT ANSWER IS GONE, AND THIS ASSERTION WENT WITH IT — founder, 2026-08-02:
+   * *"Take it off completely. The AI should give the athlete instructions according to their goal.
+   * And what about someone who just trains for fun?"*
+   *
+   * The mid-workout "how did that go?" beat is deleted, so nothing writes the answer and the sheet
+   * no longer carries the field. What replaces the signal is not nothing: the coach sets a rep band
+   * and `recent` still carries every set's reps against it, which is the same information without
+   * an interrogation. How it should ask, if it ever should, is prompt work reserved for the founder
+   * and me together.
+   */
 
   it('keeps the ladder as well — every rung she has ever used exists in her gym', () => {
     expect(bench(STALLED).rungs).toEqual([32.5, 35, 40]);

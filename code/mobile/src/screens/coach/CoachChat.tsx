@@ -64,6 +64,15 @@ export interface CoachTurn {
   pending?: boolean;
   /** It did not reach the coach. See `FailedTurn` — this is a state, not a toast. */
   failed?: boolean;
+  /**
+   * WHY it did not, when the difference is hers to act on.
+   *
+   * Only one of these is: a spent allowance is a thing she can do something about, and it was being
+   * drawn as a network failure. The rest — offline, a timeout, an unreadable answer — are ours, and
+   * telling her which flavour of our problem it was is noise. So this changes the SENTENCE, not the
+   * number of sentences.
+   */
+  reason?: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── the invitation */
@@ -150,7 +159,7 @@ function Turn({ turn }: { turn: CoachTurn }) {
       </View>
       {turn.failed ? (
         <Legend size={12} track={0.14} align="right" tone="onStage" style={styles.failedNote}>
-          {t('coach.notSent')}
+          {turn.reason === 'quota_spent' ? t('coach.noMessagesLeft') : t('coach.notSent')}
         </Legend>
       ) : null}
     </View>

@@ -118,7 +118,10 @@ describe('every field the sheet declares is filled in and sent', () => {
 
   it('…and the ones that may be absent DO arrive when she has them', () => {
     const json = sheet();
-    for (const field of ['effort', 'edited', 'rest']) {
+    // ⚠️ `effort` was here and is gone: the mid-workout question that produced it was deleted by
+    // the founder (2026-08-02), so the field would now be one the sheet declares and nothing ever
+    // fills — the exact defect this law exists to catch, arriving from the other direction.
+    for (const field of ['edited', 'rest']) {
       expect({ field, sent: json.includes(`"${field}"`) }).toEqual({ field, sent: true });
     }
   });
