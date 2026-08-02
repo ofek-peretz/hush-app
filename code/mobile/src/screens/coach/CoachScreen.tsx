@@ -39,6 +39,8 @@ import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { coachFacts } from '@/domain/coachFacts';
 import { db } from '@/data/local/db';
+import { health } from '@/platform/health';
+import type { ExternalWorkout } from '@/platform/health/healthModel';
 import { color, s } from '@/design/tokens';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
@@ -66,15 +68,24 @@ export function CoachScreen({ navigation }: Props) {
   const [plan, setPlan] = React.useState<CoachPlan | null>(null);
   const [prefs, setPrefs] = React.useState<{ substitutes: Record<string, string>; keep: Record<string, string> } | null>(null);
   const [cardio, setCardio] = React.useState<CardioActivity[]>([]);
+  /** The coach's own memory of who she is — see `CoachAnswer.brief`. */
+  const [brief, setBrief] = React.useState<string | null>(null);
+  const [external, setExternal] = React.useState<ExternalWorkout[]>([]);
   React.useEffect(() => {
     let alive = true;
-    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadPreferences(), db.loadCardio()]).then(([h, d, p, prefs, c]) => {
+    void Promise.all([
+      db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadPreferences(), db.loadCardio(), db.loadCoachBrief(),
+      // What her watch recorded that we did not — she may well be asking about it.
+      health.recentWorkouts(Date.now() - 14 * 86_400_000).catch(() => []),
+    ]).then(([h, d, p, prefs, c, b, ext]) => {
       if (!alive) return;
       setHistory(h);
       setDecided(d);
       setPlan(p);
       setPrefs({ substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle });
       setCardio(c);
+      setBrief(b);
+      setExternal(ext);
     });
     return () => {
       alive = false;
@@ -92,10 +103,12 @@ export function CoachScreen({ navigation }: Props) {
             decided,
             ...(prefs ? { preferences: prefs } : {}),
             cardio,
+            ...(external.length ? { external } : {}),
+            ...(brief ? { brief } : {}),
             language: currentLocale(),
           })
         : null,
-    [profile, plan, history, decided, prefs, cardio],
+    [profile, plan, history, decided, prefs, cardio, brief, external],
   );
 
   return (

@@ -82,6 +82,17 @@ export function CoachIntake({ navigation, route }: Props) {
   const learned = React.useRef<LearnedAboutHer>({});
 
   /**
+   * The coach's own memory of who it has just met, kept live so the NEXT turn of this very
+   * conversation already carries it.
+   *
+   * `useCoach` persists it through `db.recordCoachAnswer` the moment it arrives — but the sheet on
+   * this screen is built in memory, so without this the coach would only start reading its own
+   * brief back after onboarding ended. It is state rather than a ref for exactly that reason: the
+   * sheet has to rebuild when it changes.
+   */
+  const [brief, setBrief] = React.useState<string | null>(null);
+
+  /**
    * Her profile as it WILL be, without being written.
    *
    * The same mapping `completeOnboarding` performs, minus the persistence — the coach needs to know
@@ -114,8 +125,8 @@ export function CoachIntake({ navigation, route }: Props) {
   const facts = React.useMemo(
     // No programme yet, and that is a fact about her rather than a hole: this is the one call
     // where there genuinely is none, and the intake ask says so.
-    () => coachFacts({ profile, plan: null, history: [], language: currentLocale() }),
-    [profile, inputs.daysPerWeek],
+    () => coachFacts({ profile, plan: null, history: [], ...(brief ? { brief } : {}), language: currentLocale() }),
+    [profile, inputs.daysPerWeek, brief],
   );
 
   const handed = React.useRef(false);
@@ -126,6 +137,7 @@ export function CoachIntake({ navigation, route }: Props) {
     onAnswer: (answer) => {
       // Every turn, plan or no plan — she states her weight long before there is a programme.
       if (answer.learned) learned.current = { ...learned.current, ...answer.learned };
+      if (answer.brief) setBrief(answer.brief);
       /*
        * A plan arrived. `useCoach` has already stored it through `db.recordCoachAnswer`, so by the
        * time this runs it is on disk — the next step writes the profile against a programme that

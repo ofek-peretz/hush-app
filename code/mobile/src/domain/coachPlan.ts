@@ -190,7 +190,46 @@ export interface CoachAnswer {
    * interpreter of the same words, and the one place it would go wrong is the one place it matters.
    */
   learned?: LearnedAboutHer;
+  /**
+   * ════ THE COACH'S OWN MEMORY OF WHO SHE IS ════
+   *
+   * ⚠️ THE PROMPT PROMISED THIS FIELD AND NOTHING EVER FILLED IT. It told the coach, in these
+   * words: *"her own words — her goal, her history, her injuries — are in `brief`, and are
+   * testimony."* `domain/athleteBrief` was written for it and imported by nobody, and no caller
+   * ever passed it. The field was empty on every call this product has ever made.
+   *
+   * What that costs is not a rough edge, it is AMNESIA. She says "I want to finish a half marathon"
+   * in the intake and the coach hears it — once. The post-session call, which is the one that
+   * decides what she trains next, sends no conversation at all: only her record and the coach's own
+   * notes, which are capped. So her goal, her history, the thing she asked for in March, all age
+   * out, and a year in the coach is writing perfectly reasonable programmes for someone it no
+   * longer knows anything about.
+   *
+   * ── WHY THE COACH WRITES IT RATHER THAN THE APP ─────────────────────────────────────────────────
+   * A form would ask everyone the same eight questions and flatten "I want to be a better
+   * footballer" and "I have a wedding in four months" into one enum. Whatever the coach thought
+   * worth remembering is worth remembering, in the words it chose. It is never parsed, never
+   * validated, never rendered — it travels back on every call and nothing else reads it.
+   *
+   * It also subsumes the other half of the hole: a standing request. "Never give me lunges again",
+   * "I train around a bad shoulder", "I came over from another app with this split" — she says it
+   * once, the coach writes it here, and it is still true in a year.
+   *
+   * WHOLE, NOT A PATCH, and only when it CHANGED — see the prompt. A rewrite on every turn would
+   * cost output tokens to restate what is already stored.
+   */
+  brief?: string;
 }
+
+/**
+ * How much of the coach's memory travels.
+ *
+ * It rides on EVERY call, so it is charged for on every call — but it is the cheapest memory in the
+ * product by a wide margin: the alternative is re-reading a whole conversation, and the alternative
+ * to that is forgetting. Long enough for a goal, a history, a handful of standing requests and the
+ * shape of an imported programme; short enough that it cannot quietly become a diary.
+ */
+export const COACH_BRIEF_MAX = 1500;
 
 /**
  * Facts about the ATHLETE that only the conversation can produce.
@@ -319,6 +358,8 @@ export const COACH_PLAN_SCHEMA = {
         minutes: { type: 'integer' },
       },
     },
+    /** The coach's own memory of her — see `CoachAnswer.brief`. Whole, and only when it changed. */
+    brief: { type: 'string' },
   },
 } as const;
 
@@ -426,6 +467,12 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   if (say.length === 0) return { ok: false, reason: 'nothing_said' };
 
   const learned = readLearned(root.learned);
+  /*
+   * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
+   * last week with nothing — the one way this field can lose information rather than carry it.
+   */
+  const briefText = typeof root.brief === 'string' ? root.brief.trim().slice(0, COACH_BRIEF_MAX) : '';
+  const brief = briefText.length > 0 ? { brief: briefText } : {};
 
   /*
    * NO `sessions` IS AN ANSWER, NOT A FAILURE — but an EMPTY `sessions` is a failure.
@@ -439,7 +486,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null, ...learned }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...learned, ...brief }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -566,6 +613,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       say,
       plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
+      ...brief,
     },
     snapped,
   };

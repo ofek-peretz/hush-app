@@ -28,10 +28,11 @@ import {
   getRequestStatusForAuthorization,
   isHealthDataAvailableAsync,
   queryQuantitySamples,
+  queryWorkoutSamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
 import type { HealthGate } from '@/platform/health';
-import type { BodyweightSample, HealthPermissionState, HeartRateSample } from './healthModel';
+import type { BodyweightSample, ExternalWorkout, HealthPermissionState, HeartRateSample } from './healthModel';
 
 // String-union identifiers (v14 dropped the enum). Read-only cardio scopes — the
 // metrics the run / walk recorder shows: heart rate, active energy (calories),
@@ -112,4 +113,55 @@ export const healthKitGate: HealthGate = {
       return null;
     }
   },
+
+  /**
+   * ════ EVERY WORKOUT SHE DID THAT THIS APP DID NOT RECORD ════
+   *
+   * The football match, the spin class, the swim. `HKWorkoutTypeIdentifier` has been in `READ_AUTH`
+   * since this gate was written and nothing had ever read it — the same shape as the heart rate.
+   *
+   * ⚠️ OUR OWN RUNS COME BACK THROUGH HERE TOO once the cardio stage writes to Health, and they must
+   * not be counted twice. They are not filtered here: this file reports what Health says, and the
+   * caller (`coachFacts`) is the one that already holds her recorded runs and can tell. A gate that
+   * decided what to omit would be a second opinion in the one layer that is supposed to have none.
+   *
+   * Everything is tolerant of absence: a watch that measured no heart rate simply reports none, and
+   * a workout with no distance is most sports. Nothing here throws, and a denial is indistinguishable
+   * from "no workouts" by HealthKit's design — both are an empty list.
+   */
+  async recentWorkouts(sinceMs: number): Promise<ExternalWorkout[]> {
+    try {
+      const samples = await queryWorkoutSamples({
+        limit: 40,
+        ascending: false,
+        filter: { date: { startDate: new Date(sinceMs) } },
+      });
+      const out: ExternalWorkout[] = [];
+      for (const w of samples ?? []) {
+        const startMs = new Date(w.startDate).getTime();
+        const endMs = new Date(w.endDate).getTime();
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) continue;
+        const minutes = Math.round((endMs - startMs) / 60_000);
+        if (minutes <= 0) continue;
+        const kcal = num(w.totalEnergyBurned?.quantity);
+        const km = num(w.totalDistance?.quantity);
+        out.push({
+          kind: String(w.workoutActivityType ?? 'other'),
+          at: new Date(startMs).toISOString(),
+          minutes,
+          ...(kcal != null ? { kcal: Math.round(kcal) } : {}),
+          // HealthKit reports metres for a distance quantity; the sheet speaks kilometres.
+          ...(km != null ? { km: Math.round((km / 1000) * 100) / 100 } : {}),
+        });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  },
 };
+
+/** A finite number, or nothing. HealthKit hands back `undefined` for a metric it did not measure. */
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}

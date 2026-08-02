@@ -90,7 +90,7 @@ describe('the constraints that must survive', () => {
     const t = translated();
     // `learned` is last on purpose: it is the rarest field on the object — she states her
     // bodyweight once — and the ordering is what the model fills in, in order.
-    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes', 'learned']);
+    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes', 'learned', 'brief']);
   });
 });
 

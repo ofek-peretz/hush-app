@@ -25,9 +25,11 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import { db } from '@/data/local/db';
+import { health } from '@/platform/health';
 import { currentLocale } from '@/i18n';
 import { coachFacts } from '@/domain/coachFacts';
 import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import { applyLearned } from '@/domain/coachLearned';
 import { coachRequest } from '@/domain/coachPrompt';
 import type { Session } from '@/data/local/models';
 import { askCoach } from './coachClient';
@@ -148,7 +150,7 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
   };
 
   try {
-    const [profile, plan, history, decided, prefs, cardio] = await Promise.all([
+    const [profile, plan, history, decided, prefs, cardio, brief, external] = await Promise.all([
       db.loadProfile(),
       // The programme the coach wrote LAST time. It is being asked to revise it, so it has to see
       // it — this used to hand over the engine's `Program`, which for a coach-led athlete is empty.
@@ -157,6 +159,18 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       db.loadCoachLog(),
       db.loadPreferences(),
       db.loadCardio(),
+      // ⚠️ WHO SHE IS. This call sends no conversation at all — only her record — so without the
+      // brief her goal, her history and everything she has ever asked for are simply not in the
+      // message that decides what she trains next.
+      db.loadCoachBrief(),
+      /*
+       * ⚠️ WHAT ELSE SHE DID THIS WEEK, from her watch — the football, the spin class, the swim.
+       * Without it the coach believes a footballer who played on Tuesday rested on Tuesday, and
+       * writes him a heavy leg day for Wednesday. Fourteen days is the window a coach actually
+       * reasons over; anything older is history, not context. Never throws: an athlete with no
+       * Health connection returns an empty list, which is the honest answer.
+       */
+      health.recentWorkouts(Date.now() - 14 * 86_400_000).catch(() => []),
     ]);
     // No profile is not a coach failure — it is an athlete who has not finished onboarding, and
     // there is nothing to decide about.
@@ -174,6 +188,8 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       // The runs she does on her own. Without them the coach writes her a 5 km Tuesday knowing
       // nothing about the 10 km she ran on Sunday.
       cardio,
+      ...(external.length ? { external } : {}),
+      ...(brief ? { brief } : {}),
       language: currentLocale(),
     });
 
@@ -197,6 +213,23 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
 
     // The same seam the chat uses. Two callers, one order of writes — see `db.recordCoachAnswer`.
     await db.recordCoachAnswer(parsed.answer, at);
+
+    /*
+     * ⚠️ AND WHAT IT LEARNED ABOUT HER, WHICH THIS PATH WAS DROPPING ON THE FLOOR.
+     *
+     * The chat applies `learned`; this call did not — and it is the call that produces one on every
+     * single reply, because a plan's own `sessions.length` IS how many days a week she trains. So a
+     * coach that decided she should drop to three days wrote three sessions, the profile kept
+     * saying four, and the next sheet told it four again under a bound reading "write exactly that
+     * many sessions". **The coach could not change her training frequency.**
+     *
+     * Written straight to the record because this runs with no React around it — she has finished
+     * and left. The screens re-read on focus (`refreshProfile`).
+     */
+    if (parsed.answer.learned && profile) {
+      const applied = applyLearned(profile, parsed.answer.learned);
+      if (applied) await db.saveProfile(applied.profile);
+    }
     return settle({
       at,
       outcome: parsed.answer.plan ? 'decided' : 'spoke',

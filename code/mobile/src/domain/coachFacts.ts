@@ -47,6 +47,7 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import type { EffortReport, ItemResult, Profile, Session, SetLog, Program, CardioActivity } from '@/data/local/models';
+import type { ExternalWorkout } from '@/platform/health/healthModel';
 import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
@@ -328,6 +329,23 @@ export interface CoachFacts {
    * none, which is most athletes.
    */
   ranOwn?: FactCardio[];
+  /**
+   * ════ EVERYTHING ELSE SHE DID — the workouts her watch recorded and this app did not ════
+   *
+   * Founder, 2026-08-02: *"for a footballer, if he turns the watch on during football training — is
+   * there a way for the coach to analyse his cardio data and comment on it? And for every sport
+   * that involves aerobic work?"*
+   *
+   * There was not, and the consequence is not subtle: `ranOwn` holds only what OUR cardio stage
+   * recorded, so a ninety-minute match on his wrist did not exist. The coach wrote him a heavy leg
+   * day for the morning after, believing he had rested for two days, and every part of that decision
+   * was defensible from the sheet it was given.
+   *
+   * Facts only — what it was, when, how long, and whatever the watch measured. No score, no "load",
+   * no interpretation. A coach reads "soccer, 92 minutes, avg 148 bpm, yesterday" and knows what to
+   * do about today; that is the entire feature.
+   */
+  alsoDid?: FactExternal[];
   programme: FactProgrammeDay[];
 }
 
@@ -354,6 +372,47 @@ export interface FactCardio {
   seconds: number;
   paceSecPerKm: number;
   avgHr?: number;
+}
+
+/** One workout her watch recorded that this app did not — see `CoachFacts.alsoDid`. */
+export interface FactExternal {
+  /** Apple's own name for the activity: "soccer", "cycling", "swimming", "yoga". */
+  kind: string;
+  at: string;
+  minutes: number;
+  kcal?: number;
+  avgHr?: number;
+  km?: number;
+}
+
+/**
+ * Health's workouts, minus the ones that are already on the sheet as hers.
+ *
+ * ⚠️ THE DOUBLE-COUNT IS THE WHOLE DIFFICULTY. Once the cardio stage writes to Health — and on a
+ * watch it effectively does — her own 5 km comes back through this read as well, and a coach told
+ * she ran twice on Tuesday would halve her week for a rest she did not need. A run is the same run
+ * when it started within a few minutes of one we recorded; nothing else is compared, because
+ * duration and distance drift by a percent or two between two recorders of the same movement.
+ */
+const SAME_WORKOUT_MS = 5 * 60_000;
+
+function externalFrom(workouts: ExternalWorkout[] | undefined, mine: CardioActivity[] | undefined): FactExternal[] {
+  if (!workouts?.length) return [];
+  const ours = (mine ?? []).map((c) => Date.parse(c.startedAt)).filter(Number.isFinite);
+  return workouts
+    .filter((w) => {
+      const at = Date.parse(w.at);
+      if (!Number.isFinite(at)) return false;
+      return !ours.some((o) => Math.abs(o - at) <= SAME_WORKOUT_MS);
+    })
+    .map((w) => ({
+      kind: w.kind,
+      at: w.at,
+      minutes: w.minutes,
+      ...(w.kcal != null ? { kcal: w.kcal } : {}),
+      ...(w.avgHr != null ? { avgHr: w.avgHr } : {}),
+      ...(w.km != null ? { km: w.km } : {}),
+    }));
 }
 
 const byId = new Map<string, Exercise>(EXERCISES.map((e) => [e.id, e]));
@@ -660,6 +719,11 @@ export interface CoachFactsInput {
     keep?: Record<string, string>;
   };
   /**
+   * Workouts her WATCH recorded that this app did not — her football, her spin class, her swim.
+   * See `CoachFacts.alsoDid`. Absent for an athlete with no Health connection, which is most.
+   */
+  external?: ExternalWorkout[];
+  /**
    * Now, injected. The sheet states how long ago each occurrence was (`FactOccurrence.ago`), and a
    * function that reads the clock cannot be checked against a fixed history.
    */
@@ -672,7 +736,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, cardio, language = 'en', nowMs = Date.now() }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, cardio, external, language = 'en', nowMs = Date.now() }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -725,6 +789,10 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       : {}),
     ...(preferences?.keep && Object.keys(preferences.keep).length ? { keepsByHer: preferences.keep } : {}),
     ...(cardio?.length ? { ranOwn: cardioFrom(cardio) } : {}),
+    ...(() => {
+      const alsoDid = externalFrom(external, cardio);
+      return alsoDid.length ? { alsoDid } : {};
+    })(),
     programme: (plan?.sessions ?? []).map((sess) => ({
       name: sess.name,
       ...(sess.day ? { day: sess.day } : {}),

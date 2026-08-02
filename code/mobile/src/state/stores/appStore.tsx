@@ -754,6 +754,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async refreshProgram() {
         if (!state.profile) return;
+        /*
+         * ════ THE PROFILE MAY HAVE MOVED WITHOUT THIS STORE (2026-08-02) ════
+         *
+         * The post-session call runs with no React around it — she has finished and left — and it
+         * applies what the coach learned about her straight to the record (`afterSession`). A coach
+         * that drops her to three days a week writes it there, and this store would go on holding
+         * the four it booted with until the app was killed.
+         *
+         * Re-read before anything else: Home calls this on focus, which is the first moment after a
+         * workout that anybody looks at a number derived from the profile.
+         */
+        const stored = await db.loadProfile().catch(() => null);
+        if (stored && JSON.stringify(stored) !== JSON.stringify(state.profile)) {
+          dispatch({ type: 'PROFILE_UPDATED', profile: stored });
+        }
+
+        /*
+         * ════ AND THE MUSCLE THAT HAS COME BACK (2026-08-02) ════
+         *
+         * ⚠️ A PAIN EASE TURNED A MUSCLE OFF AND NOTHING EVER TURNED IT ON. Reporting pain calls the
+         * coach the same day — correctly, urgently. But the ease carries a window, and when the
+         * window lapses `activeEases` simply stops returning it: the muscle drops off her sheet with
+         * no event, no sentence, and no call. The coach's last instruction about that shoulder was
+         * "leave it alone", and nothing ever contradicted it. She would have to notice herself, and
+         * ask.
+         *
+         * This closes it at the one moment she is looking at Today: an ease that has expired since
+         * the last check is REMOVED from her record, and the coach is told she is clear. Once per
+         * ease — it is deleted in the same breath, so there is nothing left to fire on again.
+         */
+        const live = state.profile.painEases ?? [];
+        const lapsed = live.filter((e) => e.untilMs <= Date.now());
+        if (lapsed.length > 0) {
+          const cleared: Profile = { ...state.profile, painEases: activeEases(live, Date.now()) };
+          await db.saveProfile(cleared);
+          dispatch({ type: 'PROFILE_UPDATED', profile: cleared });
+          void track('pain_ease_lapsed', { muscles: lapsed.map((e) => e.muscle) });
+          void askCoachToRevise(
+            `${lapsed.map((e) => e.muscle).join(' and ')} has settled — the rest window she asked for is over. ` +
+              'Bring it back into her programme at whatever pace you think is right.',
+          );
+        }
         // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
         // Saturday 20:30 local, regardless of workout completion. Finishing every workout early just
         // leaves Home in Recovery (no next workout to offer) until the calendar rolls; missed

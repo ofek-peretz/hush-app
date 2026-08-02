@@ -80,6 +80,12 @@ const K = {
    * not. Both are the athlete's, and both go in a wipe. */
   coachThread: 'hush.coach.thread',
   coachLog: 'hush.coach.log',
+  /* ⚠️ WHO SHE IS, in the coach's own words — the third memory, and the one that was missing.
+   * The transcript ages out at 40 turns and the decision log at 60, and the post-session call sends
+   * NEITHER a transcript nor a conversation: only her record. So without this, the goal she stated
+   * in the intake had nowhere to live, and a year in the coach would be writing sound programmes
+   * for someone it no longer knew anything about. See `CoachAnswer.brief`. */
+  coachBrief: 'hush.coach.brief',
   /* The programme the coach decided, stored AS THE COACH WROTE IT — see `saveCoachPlan`. */
   coachPlan: 'hush.coach.plan',
   /* The one before it. Kept for exactly one reason — see `saveCoachPlan`: the direction a load
@@ -397,10 +403,24 @@ export const db = {
    * The plan is written BEFORE the log. If only one of the two survives a crash, the programme she
    * is about to train matters more than the record of why.
    */
-  async recordCoachAnswer(answer: { plan: CoachPlan | null }, at: string): Promise<void> {
-    if (!answer.plan) return; // A turn that only spoke decided nothing. Nothing to record.
+  async recordCoachAnswer(answer: { plan: CoachPlan | null; brief?: string }, at: string): Promise<void> {
+    /*
+     * ⚠️ THE BRIEF IS SAVED BEFORE THE EARLY RETURN, and that ordering is the whole feature.
+     *
+     * Most turns that teach the coach something about her decide NOTHING — "I want to run a half
+     * marathon", "my shoulder has been bad since March", "please stop giving me lunges" are answers
+     * to a question, not programmes. Writing the brief only alongside a plan would drop exactly the
+     * turns it exists for.
+     */
+    if (answer.brief) await setJSON(K.coachBrief, answer.brief);
+    if (!answer.plan) return; // A turn that only spoke decided nothing else. Nothing more to record.
     await this.saveCoachPlan(answer.plan);
     await this.appendCoachDecisions(answer.plan.notes, at);
+  },
+
+  /** The coach's memory of who she is, or null before it has met her. */
+  async loadCoachBrief(): Promise<string | null> {
+    return (await getJSON<string>(K.coachBrief)) ?? null;
   },
 
   // ---- Cardio activities (Open training: recorded, never coached; newest first) ----
