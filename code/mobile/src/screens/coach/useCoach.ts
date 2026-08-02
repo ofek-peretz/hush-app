@@ -103,7 +103,15 @@ export interface UseCoachOptions {
 export interface UseCoach {
   turns: CoachTurn[];
   busy: boolean;
-  send: (text: string) => void;
+  /**
+   * Her turn. `images` are already resized and encoded — see `coachImage`.
+   *
+   * They are NOT stored in the thread: the transcript is text, it is what is replayed to the coach
+   * on every later turn, and replaying a photograph on every turn for the rest of her membership
+   * would be the most expensive thing in the product. The coach reads the picture once and writes
+   * what it took from it into `brief`, which is exactly what that field is for.
+   */
+  send: (text: string, images?: { mime: string; data: string }[]) => void;
 }
 
 /** Ids that are stable within a session and never collide. `Date.now()` alone does, on a fast tap. */
@@ -161,7 +169,7 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, images?: { mime: string; data: string }[]) => {
       const said = text.trim();
       if (said.length === 0) return;
 

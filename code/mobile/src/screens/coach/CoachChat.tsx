@@ -30,6 +30,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -44,6 +45,7 @@ import { Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { textStart } from '@/i18n/bidi';
 import { color, font, radius, space, stage } from '@/design/tokens';
+import { pickCoachImage, MAX_IMAGES_PER_TURN, type CoachImage } from '@/platform/coach/coachImage';
 
 /** Who said it. `pending` is hers, on screen, not yet acknowledged by the coach. */
 export type CoachTurnAuthor = 'athlete' | 'coach';
@@ -180,7 +182,7 @@ export interface CoachChatProps {
   turns: CoachTurn[];
   /** The coach is composing a reply — the composer stays usable; she may keep typing. */
   busy?: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, images?: { mime: string; data: string }[]) => void;
   /**
    * The one line above an empty thread, already resolved by the screen that owns the name.
    *
@@ -194,18 +196,46 @@ export interface CoachChatProps {
 export function CoachChat({ turns, busy = false, onSend, invitation }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
+  const [attached, setAttached] = useState<CoachImage[]>([]);
   const scroll = useRef<ScrollView>(null);
 
   const send = useCallback(() => {
     const text = draft.trim();
-    // Whitespace is not a message. Without this the send control is live on an empty field and a
-    // stray tap costs a call.
-    if (text.length === 0) return;
+    /*
+     * Whitespace is not a message. Without this the send control is live on an empty field and a
+     * stray tap costs a call.
+     *
+     * A PICTURE ON ITS OWN IS a message, though — "look at this" is a whole sentence when the thing
+     * is attached to it — so an attachment carries an empty field.
+     */
+    if (text.length === 0 && attached.length === 0) return;
     setDraft('');
-    onSend(text);
-  }, [draft, onSend]);
+    setAttached([]);
+    onSend(text, attached.length ? attached.map((a) => ({ mime: a.mime, data: a.data })) : undefined);
+  }, [draft, attached, onSend]);
 
-  const canSend = draft.trim().length > 0;
+  /*
+   * ⚠️ RE-ENTRANCY IS A REF, NOT STATE — the picker takes a second or two to appear and a second tap
+   * in that window opens it twice. State here would re-render the composer under her finger for a
+   * flag nothing draws (the same correction the health toggle needed in C.1).
+   */
+  const picking = useRef(false);
+  const attach = useCallback(async () => {
+    if (picking.current || attached.length >= MAX_IMAGES_PER_TURN) return;
+    picking.current = true;
+    try {
+      const image = await pickCoachImage();
+      // `null` is her backing out of the picker. It is not an error and says nothing to her.
+      if (image) setAttached((prev) => [...prev, image]);
+    } catch {
+      // A picker that fails is a picker that did not attach anything. There is nothing to tell her
+      // that the empty attachment row does not already say.
+    } finally {
+      picking.current = false;
+    }
+  }, [attached.length]);
+
+  const canSend = draft.trim().length > 0 || attached.length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -230,7 +260,36 @@ export function CoachChat({ turns, busy = false, onSend, invitation }: CoachChat
         {busy ? <Thinking /> : null}
       </ScrollView>
 
+      {attached.length > 0 ? (
+        <View style={styles.attachments}>
+          {attached.map((a) => (
+            <Pressable
+              key={a.uri}
+              accessibilityRole="button"
+              accessibilityLabel={t('coach.attachRemove')}
+              onPress={() => setAttached((prev) => prev.filter((keep) => keep.uri !== a.uri))}
+              style={styles.thumbWrap}
+            >
+              <Image source={{ uri: a.uri }} style={styles.thumb} />
+              {/* The whole thumbnail removes it. A separate 18pt × on a 56pt tile is a target
+                  nobody hits, and there is nothing else a tap on it could mean. */}
+              <View style={styles.thumbX}>
+                <Icon name="close" size={12} color={stage[0]} strokeWidth={2.6} />
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       <View style={styles.composer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('coach.attach')}
+          onPress={() => void attach()}
+          style={({ pressed }) => [styles.attach, pressed && styles.attachPressed]}
+        >
+          <Icon name="plus" size={20} color={stage.ink2} strokeWidth={2.4} />
+        </Pressable>
         <TextInput
           style={styles.input}
           value={draft}
@@ -313,6 +372,39 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     textAlign: textStart,
   },
+  /*
+   * The attachment strip sits ABOVE the composer's own top rule, so the rule stays the boundary
+   * between the conversation and the thing she is writing — thumbnails belong on the writing side.
+   */
+  attachments: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: space.gutter,
+    paddingTop: 10,
+  },
+  thumbWrap: { width: 56, height: 56 },
+  thumb: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: color.surface },
+  thumbX: {
+    position: 'absolute',
+    top: -4,
+    // A physical edge would flip wrong in Hebrew; `end` is the logical one (RTL lint).
+    insetInlineEnd: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: color.onSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attach: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // A press changes the SURFACE, never the content's opacity (`aPressNeverDimsWhatYouPressed`).
+  attachPressed: { backgroundColor: color.surface2 },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

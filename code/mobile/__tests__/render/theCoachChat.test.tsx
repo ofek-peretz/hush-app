@@ -3,6 +3,19 @@ import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { initI18n, tg } from '@/i18n';
 
+/*
+ * The picker is native. Mocked so the composer's own behaviour around it can be tested at all —
+ * without this, the one control the founder asked for would ship with no coverage whatsoever,
+ * which is how `ItemStage` reached an athlete unreachable from the app.
+ */
+jest.mock('@/platform/coach/coachImage', () => ({
+  MAX_IMAGES_PER_TURN: 3,
+  pickCoachImage: jest.fn(),
+}));
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { pickCoachImage } = require('@/platform/coach/coachImage') as { pickCoachImage: jest.Mock };
+const A_PHOTO = { mime: 'image/jpeg', data: 'BASE64', uri: 'file://shot.jpg' };
+
 /**
  * ════ THE COACH CHAT ════
  *
@@ -112,7 +125,9 @@ describe('sending', () => {
     const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
     type(r, '  Longest was 18 km.  ');
     press(r, tg('coach.send'));
-    expect(onSend).toHaveBeenCalledWith('Longest was 18 km.');
+    // `undefined` is the images argument: she attached nothing, and a turn with no picture must
+    // not send an empty array — the Worker would then push a parts entry nobody asked for.
+    expect(onSend).toHaveBeenCalledWith('Longest was 18 km.', undefined);
   });
 
   it('clears the field so she cannot send the same thing twice by accident', () => {
@@ -146,7 +161,89 @@ describe('sending', () => {
     const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} busy onSend={onSend} />);
     type(r, 'Also my knee has been sore.');
     press(r, tg('coach.send'));
-    expect(onSend).toHaveBeenCalledWith('Also my knee has been sore.');
+    expect(onSend).toHaveBeenCalledWith('Also my knee has been sore.', undefined);
+  });
+});
+
+describe('a picture she attaches', () => {
+  /*
+   * Founder, 2026-08-02: *"build the option for an image, so the AI knows how to analyse it if a
+   * user sends one."*
+   *
+   * Verified live before any of this was drawn: a photographed programme went through the Worker
+   * and the coach read a note in its margin — "shoulder hurts on overhead" — and wrote it into its
+   * memory of her, without her typing a word about her shoulder. These are the app's half.
+   */
+  beforeEach(() => pickCoachImage.mockReset());
+
+  const attach = async (r: ReactTestRenderer) => {
+    await act(async () => { await byLabel(r, tg('coach.attach')).props.onPress(); });
+  };
+
+  it('⚠️ travels with the message, and the message alone carries no images key', async () => {
+    const onSend = jest.fn();
+    pickCoachImage.mockResolvedValue(A_PHOTO);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
+    await attach(r);
+    type(r, 'This is what I was doing.');
+    press(r, tg('coach.send'));
+    expect(onSend).toHaveBeenCalledWith('This is what I was doing.', [{ mime: 'image/jpeg', data: 'BASE64' }]);
+  });
+
+  it('⚠️ a picture on its own is a message', async () => {
+    // "Look at this" is a whole sentence when the thing is attached to it. The empty-field guard
+    // must not swallow it.
+    const onSend = jest.fn();
+    pickCoachImage.mockResolvedValue(A_PHOTO);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
+    await attach(r);
+    expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: false });
+    press(r, tg('coach.send'));
+    expect(onSend).toHaveBeenCalledWith('', [{ mime: 'image/jpeg', data: 'BASE64' }]);
+  });
+
+  it('lets her take it back before it is sent', async () => {
+    const onSend = jest.fn();
+    pickCoachImage.mockResolvedValue(A_PHOTO);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
+    await attach(r);
+    press(r, tg('coach.attachRemove'));
+    expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: true });
+  });
+
+  it('is cleared once it has gone, so the next message does not carry it again', async () => {
+    const onSend = jest.fn();
+    pickCoachImage.mockResolvedValue(A_PHOTO);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={onSend} />);
+    await attach(r);
+    press(r, tg('coach.send'));
+    type(r, 'And another thing.');
+    press(r, tg('coach.send'));
+    expect(onSend).toHaveBeenLastCalledWith('And another thing.', undefined);
+  });
+
+  it('says nothing when she backs out of the picker', async () => {
+    // `null` is her cancelling. It is not an error and there is nothing to report.
+    pickCoachImage.mockResolvedValue(null);
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
+    await attach(r);
+    expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: true });
+  });
+
+  it('⚠️ survives a picker that throws, rather than taking the screen down', async () => {
+    pickCoachImage.mockRejectedValue(new Error('no photo library'));
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
+    await attach(r);
+    // Still a working composer.
+    type(r, 'never mind');
+    expect(byLabel(r, tg('coach.send')).props.accessibilityState).toEqual({ disabled: false });
+  });
+
+  it('will not attach more than the turn allows', async () => {
+    pickCoachImage.mockImplementation(() => Promise.resolve({ ...A_PHOTO, uri: `file://${Math.random()}.jpg` }));
+    const r = draw(<CoachChat invitation="AN INVITATION" turns={turns} onSend={jest.fn()} />);
+    for (let i = 0; i < 5; i += 1) await attach(r);
+    expect(pickCoachImage).toHaveBeenCalledTimes(3);
   });
 });
 

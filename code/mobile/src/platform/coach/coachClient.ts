@@ -141,6 +141,13 @@ export async function askCoach(
    * answer at all.
    */
   think?: 'minimal' | 'low' | 'medium' | 'high',
+  /**
+   * What she showed it, already resized and base64'd — see `coachImage`.
+   *
+   * The Worker enforces its own count and size limits, because the app is the part an attacker
+   * controls. These arrive AFTER every block of text so the cacheable prefix stays byte-identical.
+   */
+  images?: { mime: string; data: string }[],
 ): Promise<CoachReply> {
   if (!coachIsReachable()) return { ok: false, reason: 'not_configured' };
 
@@ -165,7 +172,12 @@ export async function askCoach(
        * but a rate-limit key.
        */
       headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN, 'x-hush-install': await installId() },
-      body: JSON.stringify({ blocks: request.blocks, ...(schema ? { schema } : {}), ...(think ? { think } : {}) }),
+      body: JSON.stringify({
+        blocks: request.blocks,
+        ...(schema ? { schema } : {}),
+        ...(think ? { think } : {}),
+        ...(images?.length ? { images } : {}),
+      }),
       signal: controller.signal,
     });
   } catch (e) {

@@ -59,6 +59,12 @@
       "expo-notifications",
       "expo-dev-client",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Hush opens your photos so you can show your coach a program you were given, or a machine you want to ask about."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Hush uses your location to measure distance and pace for the runs and walks you record.",

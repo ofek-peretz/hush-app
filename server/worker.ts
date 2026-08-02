@@ -151,7 +151,30 @@ interface CoachCall {
   think?: 'minimal' | 'low' | 'medium' | 'high';
   /** `COACH_PLAN_SCHEMA`, in JSON Schema. Absent for a plain chat turn, where prose is the answer. */
   schema?: Record<string, unknown>;
+  /**
+   * ════ WHAT SHE SHOWED IT ════
+   *
+   * Base64, and the mime type it was encoded as. A photographed programme from a previous coach, the
+   * plate markings on an unfamiliar machine, a rack whose numbers she cannot read.
+   *
+   * ⚠️ THE SIZE LIMIT IS NOT TIDINESS. An image is billed as tokens like everything else, and it
+   * arrives base64 — a third larger than the file. `MAX_IMAGE_BYTES` is enforced HERE rather than in
+   * the app because the app is the part an attacker controls: a client that skipped its own resize
+   * would otherwise be able to spend whatever a phone can encode.
+   */
+  images?: { mime: string; data: string }[];
 }
+
+/**
+ * What an image may be, and how many.
+ *
+ * ~1.3 MB of base64 is roughly a 1 MB JPEG, which is a long way past what the model needs — the app
+ * resizes to 1024px before it ever gets here, landing around 150 KB. This is the ceiling that stops
+ * a broken or hostile client, not the size we expect.
+ */
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 1_400_000;
+const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 
 /* ─────────────────────────────────────────────────────────── the schema dialect (see geminiSchema) */
 
@@ -342,9 +365,31 @@ export default {
      * is the whole saving — one reordering here and every call pays full price, silently. The app
      * already marks which block is the stable one; this only has to not disturb it.
      */
+    /*
+     * ⚠️ AND THE IMAGES GO LAST, AFTER EVERY BLOCK OF TEXT.
+     *
+     * Not a style choice — it is the same cache rule as above, read one level down. The preamble is
+     * byte-identical for every athlete alive and that is what makes the prefix cacheable; a picture
+     * inserted anywhere before it, or between the blocks, would push unique bytes into the shared
+     * region and every call after it would pay full price, silently.
+     *
+     * Last also happens to be where a person would put it: the sheet, the question, then "here,
+     * look at this".
+     */
+    const images = Array.isArray(call.images) ? call.images.slice(0, MAX_IMAGES) : [];
+    for (const img of images) {
+      if (typeof img?.data !== 'string' || !IMAGE_MIME.includes(String(img?.mime))) {
+        return json({ error: 'bad_request' }, 400);
+      }
+      if (img.data.length > MAX_IMAGE_BYTES) return json({ error: 'image_too_large' }, 413);
+    }
+
     const contents = [{
       role: 'user',
-      parts: call.blocks.map((b) => ({ text: String(b.text ?? '') })),
+      parts: [
+        ...call.blocks.map((b) => ({ text: String(b.text ?? '') })),
+        ...images.map((img) => ({ inlineData: { mimeType: img.mime, data: img.data } })),
+      ],
     }];
 
     const body: Record<string, unknown> = {

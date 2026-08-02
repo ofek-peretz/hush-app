@@ -1,7 +1,26 @@
 /**
- * Program Created (§4.6) — the "build" step. A sequenced "Building your program" with
- * four steps, then the "Ready" confirmation. The CTA runs completeOnboarding
- * (selfEnroll + generateProgram + profile), which flips Root to Home.
+ * Program Created (§4.6) — where she meets the week the coach wrote for her.
+ *
+ * ════ ⛔ IT USED TO ANIMATE A GENERATOR THAT NO LONGER EXISTS ════
+ *
+ * Founder, on the device, 2026-08-02: *"there's no screen at all that presents the plan nicely […]
+ * he gave me the feeling of yet another banal, un-personalised programme."*
+ *
+ * This screen opened with 2.8 seconds of sequenced ticks — "Designing your split", "Distributing
+ * weekly volume" — with a comment underneath insisting the pacing was only honest because every
+ * step named real work in the real order. **That stopped being true when the generator was
+ * deleted.** It was theatre for a machine that is gone, and it filled the one moment where she is
+ * most curious about what she is getting with a progress bar for nothing.
+ *
+ * What replaced it is the programme itself. It already exists by the time she arrives — the coach
+ * wrote it during the conversation, and `db.loadCoachPlan()` has it — so there is nothing to wait
+ * for and nothing to stage. `PlanWeek` draws it, the coach's own instruction on each row included.
+ *
+ * ⚠️ THE TRIAL BLOCK BELOW IT IS UNTOUCHED and must stay that way: the fourteen, the FREE pill, the
+ * no-card-until-they-are-done line and the two-phase arc are all founder-ratified, several of them
+ * after a correction. This screen gained a plan; it did not become a different screen.
+ *
+ * ── the original notes, still binding on the half that survives ──────────────────────────────────
  *
  * Founder 2026-07-12:
  *  • Each step LANDS. A completed step fires a light tick against the wrist as its check
@@ -30,11 +49,12 @@
  * trial-complete paywall (§4.3), not here.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Button, Legend } from '@/components/ds';
+import { PlanWeek } from '@/components/PlanWeek';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
@@ -65,57 +85,34 @@ export function ProgramCreated({ route }: Props) {
     };
   }, []);
   const learnTicks = useMemo(() => learnCount(coachPlan), [coachPlan]);
-  const [phase, setPhase] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const reduced = useReducedMotion();
 
-  // Cosmetic, sequenced reveal (the real build runs on the CTA → completeOnboarding).
-  /**
-   * The build's pacing is PRESENTATIONAL — a clock, not a measurement. Assembly finishes in
-   * milliseconds; these marks give the athlete a beat to watch her answers become a programme.
+  /*
+   * ⚠️ THE FOUR-STEP BUILD SEQUENCE IS DELETED, AND ITS OWN COMMENT SAID WHY IT HAD TO BE.
    *
-   * That is only honest while every step names work the engine REALLY does, in the order it really
-   * does it. It did not, until 2026-07-17: step 2 said "Designing your split" — there IS no split
-   * (`MEN_SPLITS`/`WOMEN_SPLITS` are fully deleted; "structure is an OUTPUT of volume, never a
-   * shelf") — and step 3 said "Distributing weekly volume", which is the step that comes FIRST.
-   * The real order is `programAssembly.ts:156`: `weeklyTargets(map)` → `assignRegionDays(targets,
-   * days)` → exercises → seeds. The copy now follows it.
+   * It read: *"the pacing is PRESENTATIONAL — a clock, not a measurement […] that is only honest
+   * while every step names work the engine REALLY does, in the order it really does it"*, and it
+   * had already been corrected once for naming a step that did not exist.
    *
-   * **Never attach a step to a fact.** A line here cannot claim a number, a count or an outcome —
-   * nothing on this screen is observing the engine, so a figure would be a claim Hush did not
-   * measure (R7). Names of real work, and nothing else.
+   * The whole engine it described is gone. Every step named work nothing performs, on a 2.8-second
+   * clock, in front of an athlete whose programme was finished several turns ago. Waiting is not a
+   * feature; it was only ever the cover for a build that took milliseconds.
+   *
+   * She arrives to her actual week now. The seal still draws in, once, because the arrival is worth
+   * a beat — it simply no longer waits for a fictional machine to finish.
    */
-  useEffect(() => {
-    const marks = [700, 1400, 2100, 2800];
-    const timers = marks.map((ms, i) => setTimeout(() => setPhase(i + 1), ms));
-    return () => timers.forEach(clearTimeout);
-  }, []);
-
-  // Every landed step is FELT — a light tick as the check stamps in, the double pulse
-  // when the build resolves.
-  const lastPhase = useRef(0);
-  useEffect(() => {
-    if (phase === lastPhase.current || phase === 0) return;
-    lastPhase.current = phase;
-    if (phase >= 4) haptics.success();
-    else haptics.tick();
-  }, [phase]);
-
-  const ready = phase >= 4;
-
-  // The ready seal draws itself in — something settling, not popping.
   const seal = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!ready) return;
+    haptics.success();
     if (reduced) {
       seal.setValue(1);
       return;
     }
     Animated.timing(seal, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [ready, reduced, seal]);
+  }, [reduced, seal]);
 
-  const steps = [t('ob.buildStep1'), t('ob.buildStep2'), t('ob.buildStep3'), t('ob.buildStep4')];
 
   async function onDone() {
     if (busy) return;
@@ -135,42 +132,7 @@ export function ProgramCreated({ route }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <View style={styles.body}>
-        {!ready ? (
-          <>
-            <Text style={styles.legend}>{t('ob.buildLegend')}</Text>
-            <Text style={styles.buildingTitle}>{t('ob.buildTitle')}</Text>
-            <View style={styles.steps}>
-              {steps.map((s, i) => {
-                const done = i < phase;
-                const running = i === phase;
-                return (
-                  <View key={i} style={styles.stepRow}>
-                    <View style={styles.stepIcon}>
-                      {done ? (
-                        <Icon name="check" size={18} color={color.up} strokeWidth={2.4} />
-                      ) : running ? (
-                        <ActivityIndicator size="small" color={color.textMuted} />
-                      ) : (
-                        <View style={styles.dot} />
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.stepText,
-                        // Landed = ink. Running = ink. Ahead = a real, readable grey — present
-                        // enough to be a plan, quiet enough not to compete.
-                        { color: done || running ? color.textPrimary : color.textMuted },
-                      ]}
-                    >
-                      {s}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        ) : (
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.readyBlock, { opacity: seal }]}>
             {/* The measuring mark — a moss start/finish bracket with the dot arriving at centre. */}
             <StartFinishMark />
@@ -218,15 +180,22 @@ export function ProgramCreated({ route }: Props) {
               />
             </View>
             <Text style={styles.signature}>{t('ob.readySignature')}</Text>
+            {/*
+              ════ THE WEEK ITSELF, AND IT GOES LAST ON PURPOSE ════
+
+              Below the promise rather than above it. The trial arc is the DEAL — the fourteen, the
+              free pill, the no-card line — and it is what she has to understand before she agrees
+              to anything. The programme is what she came for, so it is what the screen ends on and
+              what the CTA sits under: the last thing she reads before "show my program" is the
+              actual programme.
+            */}
+            <PlanWeek plan={coachPlan} units={inputs.units} />
           </Animated.View>
-        )}
+      </ScrollView>
+      <View style={styles.footer}>
+        {failed ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
+        <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={() => void onDone()} disabled={busy} />
       </View>
-      {ready ? (
-        <View style={styles.footer}>
-          {failed ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
-          <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={() => void onDone()} disabled={busy} />
-        </View>
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -323,21 +292,12 @@ function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTi
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 34 },
-  legend: {
-    fontFamily: font.sansMedium,
-    fontSize: textScale['2xs'],
-    letterSpacing: trackingPx(textScale['2xs'], tracking.legend),
-    textTransform: 'uppercase',
-    color: color.textMuted,
-    textAlign: 'left',
-  },
-  buildingTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: color.textPrimary, marginTop: 8, marginBottom: 28, textAlign: 'left' },
-  steps: { gap: 16 },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepIcon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.textTertiary },
-  stepText: { fontFamily: font.sans, fontSize: textScale.base, textAlign: 'left' },
+  /*
+   * A ScrollView's content, not a flex child: the week can be three sessions or six, and a screen
+   * that centred a fixed block now has to be able to run past the bottom of the phone.
+   * `flexGrow` keeps a SHORT programme centred the way it always was.
+   */
+  body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 34, paddingVertical: 24 },
 
   // ready — a left-aligned, centred column (v7 1.5). The mark leads it, FREE is the headline.
   readyBlock: { alignItems: 'stretch', gap: 20 },

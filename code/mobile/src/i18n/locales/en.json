@@ -1164,7 +1164,9 @@
     "title": "Coach",
     "openReturning": "What do you want to ask me?",
     "inviteNamed": "{{name}} — tell me what you want, and I’ll build it.",
-    "invite": "Tell me what you want, and I’ll build it."
+    "invite": "Tell me what you want, and I’ll build it.",
+    "attach": "Add a photo",
+    "attachRemove": "Remove"
   },
   "weekday": {
     "sun": "Sun",
