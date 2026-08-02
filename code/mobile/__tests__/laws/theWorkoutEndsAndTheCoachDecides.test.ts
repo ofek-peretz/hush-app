@@ -172,8 +172,14 @@ describe('the programme is required after a session', () => {
     await askAfterSession(finished);
     const schema = askCoach.mock.calls[0][1] as { required: string[]; properties: Record<string, unknown> };
     expect(schema.required).toEqual(['say', 'sessions']);
-    // …and it is the same schema otherwise. Two hand-written copies are two chances to drift.
-    expect(Object.keys(schema.properties)).toEqual(['say', 'sessions', 'notes', 'learned', 'brief']);
+    /*
+     * …and it is the same schema otherwise. Two hand-written copies are two chances to drift.
+     *
+     * `next` is carried here even though this call has no branch to declare — it is one schema, and
+     * a second copy that omitted a field would be exactly the drift this assertion exists to catch.
+     * It is not in `required`, so the post-session call simply never fills it.
+     */
+    expect(Object.keys(schema.properties)).toEqual(['say', 'next', 'sessions', 'notes', 'learned', 'brief']);
   });
 
   it('still reports honestly if the model manages to answer without one', async () => {

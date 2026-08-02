@@ -121,23 +121,18 @@ export interface Env {
 const MODEL = 'gemini-3.6-flash';
 const MAX_OUTPUT_TOKENS = 8192;
 /**
- * How long we wait before calling it a failed call.
+ * ⚠️ THIS CONSTANT IS GONE, AND THE REASONING THAT SET IT WAS WRONG — kept here as a warning.
  *
- * ⚠️ 90 SECONDS WAS NOT ENOUGH FOR THE ONE CALL THIS PRODUCT IS BUILT AROUND. Measured 2026-08-02:
- * three consecutive post-session calls aborted here, at 90.08 / 90.20 / 90.08 seconds — our ceiling,
- * not Google's. The same Worker answered an intake in 24 seconds an hour earlier.
+ * It was raised 90s → 170s on the theory that the post-session call is simply heavy and deserves
+ * longer: "a call that takes two minutes and arrives is worth far more than one cut off at ninety
+ * seconds". Reasonable, and false. **There is no call that takes two minutes and arrives.** The
+ * ceiling at 125s belongs to Cloudflare (see the fetch below), so every second we waited past it
+ * bought nothing, and a healthy call of any kind has never once needed more than about twenty.
  *
- * The post-session call is simply the heaviest thing we ask for: ~11,000 tokens of prompt, a
- * REQUIRED whole programme, and something worth thinking about — a lift stalled three sessions with
- * falling reps, a 92-minute match on her watch, four weeks of history. The model thinks in
- * proportion to the task (`thinkingLevel` is deliberately unset, see below), so the call that
- * deserves the most thought is the one that runs longest.
- *
- * A call that takes two minutes and arrives is worth far more than one that is cut off at ninety
- * seconds and leaves her without a week. Nothing is waiting on it: she has finished and left, and
- * the app already says the update is coming.
+ * The deadline is per-ATTEMPT now and set from what healthy calls actually cost — see `attemptMs`.
+ * A number chosen from what the infrastructure ALLOWS, rather than from what the work COSTS, is a
+ * number that only ever measures how long she waits to be told nothing happened.
  */
-const TIMEOUT_MS = 170_000;
 
 /** What the app sends. Mirrors `domain/coachPrompt.CoachRequest`, plus the schema to lock onto. */
 interface CoachCall {
@@ -408,7 +403,31 @@ export default {
      * margin that keeps her week arriving.
      */
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
-    const attempt = async (isRetry: boolean): Promise<Response> => {
+    /*
+     * HOW LONG ONE ATTEMPT MAY TAKE, and how many attempts there are.
+     *
+     * Both numbers come from measurement, not from what the infrastructure allows:
+     *
+     *     a conversational turn (`low`)    1.5–12s observed   →  20s, three attempts
+     *     a programme, full thinking        14–20s observed   →  45s, three attempts
+     *
+     * ⚠️ ONE STALL IN FOUR, AND THEN ONE IN EIGHT. The first cut of this used a single retry at 30s
+     * and still lost a call out of eight — 502 at 60.2s, two stalls in a row. A stall is
+     * independent of the request (four identical turns went 9.9s, 8.4s, 125.1s, 2.0s), so the
+     * answer to a 12% failure is a third attempt, not a longer wait: three chances at 20s is 60s
+     * of worst case against roughly one call in six hundred.
+     *
+     * A stalled attempt is abandoned before it produces anything, so this buys reliability with
+     * prompt tokens — about three quarters of a cent in the worst case, and nothing at all in the
+     * usual one, because a healthy call never comes near the deadline.
+     */
+    const conversational = call.think === 'low' || call.think === 'minimal';
+    const attemptMs = conversational ? 20_000 : 45_000;
+    const ATTEMPTS = 3;
+
+    /** `n` is which attempt this is, from 1. */
+    const attempt = async (n: number): Promise<Response> => {
+      const lastAttempt = n >= ATTEMPTS;
     let upstream: Response;
     try {
       upstream = await fetch(url, {
@@ -419,11 +438,29 @@ export default {
           'x-goog-api-key': env.GEMINI_API_KEY,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(attemptMs),
       });
     } catch {
-      // A timeout or a dropped connection is not a decision that arrived. The app already knows
-      // what to do with that: nothing is written, and the update waits.
+      /*
+       * ⛔ A STALL MUST NOT COST HER TWO MINUTES — founder, on the device, 2026-08-02: *"it takes
+       * him a huge amount of time to answer, and if he doesn't answer it just says Not sent."*
+       *
+       * ⚠️ MEASURED, AND IT IS NOT THINKING TIME. Four identical three-line conversational turns at
+       * `low`: **9.9s, 8.4s, 125.1s, 2.0s.** The same request, the same short reply. One call in
+       * four simply hangs, and until now it hung all the way to the 125s ceiling and came back as
+       * nothing — after she had watched a typing indicator for two minutes.
+       *
+       * So the deadline below is set from what a HEALTHY call actually costs rather than from what
+       * the ceiling allows, and a call that blows through it is abandoned and asked again. The
+       * retry is cheap: the first attempt produced nothing at all, and the second one has been
+       * answering in seconds.
+       *
+       * Worst case is now two attempts instead of one 125s wall — and the typical case is
+       * untouched, because a healthy call never comes near this.
+       */
+      if (!lastAttempt) return attempt(n + 1);
+      // A second stall, or a gym basement. Nothing was decided, and the app knows what to do:
+      // nothing is written, and the update waits.
       return json({ error: 'upstream_unreachable' }, 502);
     }
 
@@ -474,17 +511,17 @@ export default {
        * today, at 3.7s and 2.2s, on calls that then succeeded on the very next attempt. Losing an
        * athlete's week to that would be absurd when asking again is nearly free.
        *
-       * ⛔ NOT for a 524. That one costs the full 125 seconds to arrive, so a second attempt would
-       * run past the app's own 170s and be abandoned in flight — spending the money without any
-       * way to deliver the answer. That failure belongs to `retryWaitingUpdate()`, which asks again
-       * when she next opens the app, with a whole fresh budget.
+       * A 524 no longer reaches this branch at all: `attemptMs` abandons a stalled call at 20s or
+       * 45s, long before Cloudflare's 125s cut, so a stall is handled as an abort above. The
+       * distinction that matters is unchanged — a failure we were told about quickly is worth
+       * asking again; one that costs two minutes to learn is not.
        *
        * `never retries — one workout is one call, and one bill` still holds: a 503 is not an answer
        * we were given and disliked, it is the call never having happened.
        */
-      if ((upstream.status === 503 || upstream.status === 429) && !isRetry) {
+      if ((upstream.status === 503 || upstream.status === 429) && !lastAttempt) {
         await new Promise((r) => setTimeout(r, 1_200));
-        return attempt(true);
+        return attempt(n + 1);
       }
       return json({ error: 'upstream_error', status: upstream.status }, 502);
     }
@@ -504,7 +541,7 @@ export default {
       candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
       usageMetadata?: Record<string, number>;
     };
-    const deadline = Date.now() + TIMEOUT_MS;
+    const deadline = Date.now() + attemptMs;
     const reader = upstream.body?.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -555,6 +592,6 @@ export default {
     });
     };
 
-    return attempt(false);
+    return attempt(1);
   },
 };

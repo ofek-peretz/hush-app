@@ -226,7 +226,8 @@ export interface CoachFacts {
   athlete: {
     sex?: 'male' | 'female';
     weightKg?: number;
-    daysPerWeek: number;
+    /** Absent until she has said. Never defaulted — see the omission in `coachFacts`. */
+    daysPerWeek?: number;
     units: string;
     /**
      * THE LANGUAGE SHE READS THE APP IN — a BCP-47 tag, and everything the coach writes must be in
@@ -238,8 +239,8 @@ export interface CoachFacts {
      * month later.
      */
     language: string;
-    /** Minutes she says she has for a workout. */
-    minutes: number;
+    /** Minutes she says she has for a workout. Absent until she has said — never 60 by default. */
+    minutes?: number;
     /**
      * WHAT SHE WEIGHED WHEN HUSH MET HER, beside what she weighs now.
      *
@@ -741,11 +742,30 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
     athlete: {
       ...(profile.sex ? { sex: profile.sex } : {}),
       ...(profile.weightKg != null ? { weightKg: profile.weightKg } : {}),
-      daysPerWeek: profile.daysPerWeek,
+      /*
+       * ⛔ ABSENT MEANS NOBODY HAS ASKED HER. IT MUST NOT MEAN A NUMBER WE MADE UP.
+       *
+       * ⚠️ FOUND ON THE DEVICE BY THE FOUNDER, 2026-08-02: *"he decides by himself that he'll do 4
+       * workouts for me, for some reason, without asking me how many I want."*
+       *
+       * He was right and it was mine. `ConnectHealth` handed over `daysPerWeek: 4` as a placeholder
+       * with a comment saying the coach would replace it, and `minutes` fell back to 60 the same
+       * way. Both then arrived on the sheet — **under a heading that says everything below it is
+       * MEASURED, not reported** — and the preamble's own bound reads *"write exactly that many
+       * sessions"*. So the coach did. It never asked how many days she trains because, as far as it
+       * could tell, it had been told.
+       *
+       * A default is a decision. Putting one on a sheet labelled "what the app watched her do" is
+       * the app deciding and letting the coach take the blame for it — which is precisely the thing
+       * the whole AI move exists to stop.
+       *
+       * Omitted now when nobody has asked, and the preamble says what absence means.
+       */
+      ...(profile.daysPerWeek > 0 ? { daysPerWeek: profile.daysPerWeek } : {}),
       units: profile.units,
       ...(profile.startWeightKg != null ? { startWeightKg: profile.startWeightKg } : {}),
       language,
-      minutes: profile.workoutMinutes ?? 60,
+      ...(profile.workoutMinutes != null ? { minutes: profile.workoutMinutes } : {}),
       ...(profile.repBand ? { band: profile.repBand } : {}),
       ...(profile.repBandByMuscle ? { bandByMuscle: stringMap(profile.repBandByMuscle) } : {}),
       ...(profile.bodyMap ? { emphasis: stringMap(profile.bodyMap) } : {}),

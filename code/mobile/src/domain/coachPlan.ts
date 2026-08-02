@@ -169,6 +169,13 @@ export interface CoachAnswer {
   /** The programme, whole, when this turn decided one. `null` when the coach only spoke. */
   plan: CoachPlan | null;
   /**
+   * Which of its two intake moves the coach says it just made — see `next` on the schema.
+   *
+   * `'built'` with `plan: null` is the one combination that must never reach her: it is the coach
+   * announcing a programme it did not attach. `useCoach` asks again when it sees it.
+   */
+  next?: 'asking' | 'built';
+  /**
    * What she TOLD it about herself in this turn, when she told it something.
    *
    * ════ THE NUMBERS WERE STAYING IN THE TRANSCRIPT ════
@@ -324,6 +331,30 @@ export const COACH_PLAN_SCHEMA = {
   required: ['say'],
   properties: {
     say: { type: 'string' },
+    /**
+     * ════ WHICH OF ITS TWO MOVES THE COACH JUST MADE, SAID IN A FIELD RATHER THAN IN PROSE ════
+     *
+     * ⛔ FOUNDER, ON THE DEVICE, 2026-08-02: *"he says in the conversation 'here is your plan' and
+     * in practice nothing is shown."*
+     *
+     * This is the third time the same failure has been fixed and the first time it has been fixed
+     * where it happens. The preamble forbids it, the intake ask forbids it as a hard branch of
+     * exactly two moves, and a model that has just written a paragraph describing a programme still
+     * considers the turn complete and omits `sessions` — `finishReason: STOP`, not truncation.
+     *
+     * `useCoach` already re-asks with `COACH_DECISION_SCHEMA`, and the trigger was a GUESS: it fired
+     * only when `learned.daysPerWeek` arrived on that same turn. Watched failing on a real
+     * conversation — she gives her days on turn 2 and the coach announces the programme on turn 3,
+     * so the one turn that needed the re-ask was the one turn that could not have it.
+     *
+     * Prose cannot be the signal, and neither can a heuristic about her answers. So the branch the
+     * prompt already describes becomes a field: **the coach states which move it made**, and a claim
+     * of "built" with nothing attached is caught structurally, on any turn, in any language.
+     *
+     * Not required — `chat` and the post-session call have no such branch, and requiring it there
+     * would be a field the answerer has no reason to think about.
+     */
+    next: { type: 'string', enum: ['asking', 'built'] },
     sessions: {
       type: 'array',
       items: {
@@ -487,6 +518,13 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   const say = typeof root.say === 'string' ? root.say.trim() : '';
   if (say.length === 0) return { ok: false, reason: 'nothing_said' };
 
+  /*
+   * Which move it says it made. Anything that is not one of the two words is nothing — an unknown
+   * value is the model improvising, and improvisation here must not be able to trigger a second
+   * paid call.
+   */
+  const next =
+    root.next === 'asking' || root.next === 'built' ? { next: root.next as 'asking' | 'built' } : {};
   const learned = readLearned(root.learned);
   /*
    * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
@@ -513,7 +551,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null, ...learned, ...brief }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -648,6 +686,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     ok: true,
     answer: {
       say,
+      ...next,
       plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
       ...brief,

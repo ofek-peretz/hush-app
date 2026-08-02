@@ -227,18 +227,36 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
        *
        * So the fix is not more prose. `COACH_DECISION_SCHEMA` is the same schema with `sessions` in
        * `required` — the one used after a workout, where omitting it stops being something the model
-       * can do. This re-asks with it, ONCE, and only on the signal that the coach itself has what it
-       * needs: it reported her `daysPerWeek`. A turn that is genuinely still asking her questions
-       * reports nothing, and is left alone.
+       * can do. This re-asks with it, ONCE.
+       *
+       * ⛔ AND THE TRIGGER WAS A GUESS THAT MISSED — founder, on the device, 2026-08-02: *"he says
+       * 'here is your plan' and in practice nothing is shown."*
+       *
+       * It used to fire only when the coach reported her `daysPerWeek` on that same turn. Watched
+       * failing on a real three-turn conversation: she gives her days on turn 2, the coach announces
+       * the programme on turn 3, and `learned` on turn 3 carries her session length instead. **The
+       * one turn that needed the re-ask was the one turn that could not have it**, and the guess
+       * looked right for as long as the whole intake fitted in a single message.
+       *
+       * The signal is `next` now — the coach states which of its two moves it made, in a field
+       * rather than in prose, so a claim of "built" with nothing attached is caught on any turn and
+       * in any language. `daysPerWeek` is kept beside it: an older reply carries no `next` at all,
+       * and between them they cover both shapes of the same failure.
+       *
+       * ── AND THE SECOND CALL IS THE ONE THAT THINKS ──────────────────────────────────────────────
+       * `low` on the first: it is a conversational turn, thinking buys nothing, and it comes back in
+       * a few seconds instead of ninety-nine (measured, on the turn that built). Full strength on
+       * the re-ask, because that one is writing her week and `low` writes a one-exercise week.
        */
-      const askOnce = (schema: unknown) =>
-        askCoach(request, schema as Record<string, unknown>);
+      const askOnce = (schema: unknown, think?: 'low') =>
+        askCoach(request, schema as Record<string, unknown>, think);
 
-      void askOnce(COACH_PLAN_SCHEMA)
+      void askOnce(COACH_PLAN_SCHEMA, 'low')
         .then(async (first) => {
           if (mode !== 'intake' || !first.ok) return first;
           const read = parseCoachPlan(first.text, facts);
-          if (!read.ok || read.answer.plan || read.answer.learned?.daysPerWeek == null) return first;
+          if (!read.ok || read.answer.plan) return first;
+          if (read.answer.next !== 'built' && read.answer.learned?.daysPerWeek == null) return first;
           const retried = await askOnce(COACH_DECISION_SCHEMA);
           // If the second attempt fails for any reason, her first answer still stands — it has her
           // sentence in it, and a lost turn would be worse than a turn without a programme.

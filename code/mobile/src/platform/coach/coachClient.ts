@@ -122,6 +122,25 @@ const TIMEOUT_MS = 180_000;
 export async function askCoach(
   request: CoachRequest,
   schema?: Record<string, unknown>,
+  /**
+   * ════ A TURN THAT TALKS AND A TURN THAT BUILDS ARE NOT THE SAME CALL ════
+   *
+   * ⚠️ FOUNDER, ON THE DEVICE, 2026-08-02: *"it takes him a huge amount of time to answer, and if he
+   * doesn't answer it just says Not sent."* Measured on a real three-turn intake, at the default
+   * thinking level: **14.8s, 20.8s, and 99.5s** — with a 125s failure in the middle of it. She is
+   * sitting there watching a typing indicator for that.
+   *
+   * The two calls want opposite things, and we had been paying the programme's price for both:
+   *
+   *   asking her a question   thinking buys NOTHING — it is one sentence about what she just said
+   *   building her week       thinking buys EVERYTHING — `low` writes a one-exercise week
+   *
+   * So a conversational turn asks for `low` and comes back in a few seconds, and the programme is
+   * built by a deliberate second call at full strength (see `useCoach`). It also moves the whole
+   * conversation well clear of the Worker's 125s ceiling, which is what turns a slow answer into no
+   * answer at all.
+   */
+  think?: 'minimal' | 'low' | 'medium' | 'high',
 ): Promise<CoachReply> {
   if (!coachIsReachable()) return { ok: false, reason: 'not_configured' };
 
@@ -146,7 +165,7 @@ export async function askCoach(
        * but a rate-limit key.
        */
       headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN, 'x-hush-install': await installId() },
-      body: JSON.stringify({ blocks: request.blocks, ...(schema ? { schema } : {}) }),
+      body: JSON.stringify({ blocks: request.blocks, ...(schema ? { schema } : {}), ...(think ? { think } : {}) }),
       signal: controller.signal,
     });
   } catch (e) {

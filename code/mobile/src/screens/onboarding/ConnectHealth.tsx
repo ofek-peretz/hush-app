@@ -131,14 +131,18 @@ export function ConnectHealth({ navigation, route }: Props) {
         // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
         goal: 'build_muscle',
         /*
-         * A PLACEHOLDER, and the coach replaces it.
+         * ⛔ ZERO MEANS NOBODY HAS ASKED HER, AND IT MUST STAY A NUMBER SHE NEVER SEES.
          *
-         * `daysPerWeek` is not optional on `OnboardingInputs` and the whole sheet reads it, so it
-         * needs a number before the first call. Four is the median week this app was designed
-         * around — and the intake ask tells the coach in as many words to find out what she can
-         * actually do, so the placeholder survives exactly one exchange.
+         * ⚠️ This was `4`, with a comment claiming "the coach replaces it, so the placeholder
+         * survives exactly one exchange". **It did not survive one exchange — it decided the
+         * product.** The founder, on the device: *"he decides by himself that he'll do 4 workouts
+         * for me, for some reason, without asking me how many I want."*
+         *
+         * The number went onto the coach's sheet as a measured fact, under a bound that reads
+         * "write exactly that many sessions", so the very first reply was a four-day programme and
+         * the question was never asked. `coachFacts` omits it now while it is 0.
          */
-        daysPerWeek: 4,
+        daysPerWeek: 0,
         // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
         // This was `'kg'` for everybody, so every American athlete was told her bodyweight in
         // kilos and then had to go and find a switch. `unitsForDevice` reads the measurement

@@ -88,9 +88,17 @@ describe('the constraints that must survive', () => {
 
   it('states the field order, so the reply is deterministic in shape', () => {
     const t = translated();
-    // `learned` is last on purpose: it is the rarest field on the object — she states her
-    // bodyweight once — and the ordering is what the model fills in, in order.
-    expect(t.propertyOrdering).toEqual(['say', 'sessions', 'notes', 'learned', 'brief']);
+    /*
+     * `learned` is last on purpose: it is the rarest field on the object — she states her bodyweight
+     * once — and the ordering is what the model fills in, in order.
+     *
+     * ⚠️ `next` sits SECOND, and the position is the point rather than an accident of where it was
+     * declared. It is written immediately after the sentence she reads and BEFORE `sessions`, so
+     * the model commits to which of its two moves it is making while the programme is still ahead
+     * of it. Answering "built" and then finding nothing left to write is the whole failure this
+     * field exists to catch.
+     */
+    expect(t.propertyOrdering).toEqual(['say', 'next', 'sessions', 'notes', 'learned', 'brief']);
   });
 });
 
