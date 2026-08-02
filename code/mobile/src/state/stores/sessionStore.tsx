@@ -336,7 +336,7 @@ export interface SessionView {
    * failure); `metres` what she actually covered. Both default to what was asked. Refuses a reps
    * step, exactly as `completeSet` refuses one without a target.
    */
-  completeItem: (done?: { seconds?: number; metres?: number; skipped?: true }) => Promise<CompleteResult>;
+  completeItem: (done?: { seconds?: number; metres?: number; skipped?: true; activityId?: string }) => Promise<CompleteResult>;
   /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
   editCurrentSet: (v: { weight: number | null; reps: number }) => void;
@@ -548,7 +548,7 @@ export function restAfterStep(step: Step): number {
  */
 function itemResultOf(
   step: Step,
-  done: { seconds?: number; metres?: number; skipped?: true; restBeforeS?: number | null },
+  done: { seconds?: number; metres?: number; skipped?: true; restBeforeS?: number | null; activityId?: string },
   log: SetLog | null,
   at: string,
 ): ItemResult | null {
@@ -575,7 +575,17 @@ function itemResultOf(
     case 'time':
       return { ...base, kind: 'time', seconds: done.seconds ?? item.seconds, askedSeconds: item.seconds };
     case 'distance':
-      return { ...base, kind: 'distance', metres: done.metres ?? item.metres, askedMetres: item.metres };
+      return {
+        ...base,
+        kind: 'distance',
+        metres: done.metres ?? item.metres,
+        askedMetres: item.metres,
+        // A GPS run measured itself. The pace, the splits, the route and the heart rate live on the
+        // `CardioActivity` and are NEVER copied here — one measurement, one home, and the record
+        // points at it instead of holding a second version that can drift.
+        ...(done.seconds != null ? { seconds: done.seconds } : {}),
+        ...(done.activityId ? { activityId: done.activityId } : {}),
+      };
     case 'open':
       return { ...base, kind: 'open' };
   }

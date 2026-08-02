@@ -78,3 +78,14 @@ const byId = new Map<string, Movement>(MOVEMENTS.map((m) => [m.id, m]));
 export function movementById(id: string): Movement | undefined {
   return byId.get(id);
 }
+
+/**
+ * Does the PHONE measure this one?
+ *
+ * The dividing line between a distance she reports and a distance she is handed a map for. A 40 m
+ * farmer's carry has nothing to track; a run, a walk or a ride outdoors has everything to track,
+ * and a "Done" button on one of those asks her to confirm what the phone already knows.
+ */
+export function isGpsMovement(id: string): boolean {
+  return byId.get(id)?.gps === true;
+}

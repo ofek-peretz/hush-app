@@ -47,8 +47,22 @@ import type { MainParamList } from '@/app/navigation';
 type Props = NativeStackScreenProps<MainParamList, 'CardioLive'>;
 type Phase = 'countdown' | 'active' | 'complete';
 
-export function Cardio({ navigation }: Props) {
+export function Cardio({ navigation, route: nav }: Props) {
   const { t } = useCopy();
+  /**
+   * ════ A RUN THE COACH PRESCRIBED ENDS ITSELF ════
+   *
+   * Founder, 2026-08-02: *"why does she need a Done button? The GPS can tell us she finished. And
+   * we can use our existing cardio screen for these cases, no?"* — both right.
+   *
+   * A "5 km" step inside a session used to draw a figure and a button, and ask her to confirm a
+   * distance the phone was already able to measure. It opens THIS stage now, with the coach's
+   * target, and the target is the whole difference: at the distance, the run finishes on its own.
+   *
+   * Absent for an open run from the Cardio tab, which is exactly what it has always been — she
+   * decides when that one is over.
+   */
+  const target = nav.params?.target ?? null;
   // The unit words, read once: each rides a MONO slot in the handoff and hands over to sans in a
   // script mono cannot draw (see `unitWord`).
   const metresUnit = t('cardio.metresUnit');
@@ -163,6 +177,23 @@ export function Cardio({ navigation }: Props) {
     setPaused(true);
     setPhase('complete');
   };
+
+  /**
+   * The prescribed distance is covered — end it, without being asked.
+   *
+   * The signature triple (`exerciseAdvance`) rather than a set's single tap: something FINISHED, and
+   * she is very likely not looking at the screen. She can still stop early; the target only removes
+   * the moment where the phone knows she is done and waits to be told.
+   */
+  const reachedRef = useRef(false);
+  useEffect(() => {
+    if (!target || phase !== 'active' || reachedRef.current) return;
+    if (distanceKm * 1000 < target.metres) return;
+    reachedRef.current = true;
+    haptics.exerciseAdvance();
+    finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, phase, distanceKm]);
 
   if (phase === 'countdown') return <CardioCountdown count={count} />;
 

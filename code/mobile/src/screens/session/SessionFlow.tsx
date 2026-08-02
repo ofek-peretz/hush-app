@@ -18,6 +18,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
@@ -29,6 +30,7 @@ import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult, type LiveCorrection } from '@/state/stores/sessionStore';
 import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
+import { isGpsMovement } from '@/data/movements';
 import { TimeStage, DistanceStage, OpenStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
 import { inWorkoutLadder } from '@/domain/replacement';
 import { isSwapMoment } from '@/domain/swapPool';
@@ -103,6 +105,38 @@ export function SessionFlow({ navigation, route }: Props) {
   // logged set moved the next load, it turns the "Set logged" beat into the correction reveal for
   // an extra beat before rest. Null on an ordinary set.
   const [beatCorrection, setBeatCorrection] = useState<LiveCorrection | null>(null);
+
+  /**
+   * ════ SHE WENT OUT AND RAN, AND THE RECORD PICKS IT UP WHEN SHE COMES BACK ════
+   *
+   * A GPS step hands the athlete to the cardio stage (`ItemBeat`), which measures the run, writes a
+   * `CardioActivity`, and returns here. This is the other half: the step she left is still the
+   * current one, and it is closed from what was MEASURED — the distance she actually covered and
+   * the time it took — rather than from the ask.
+   *
+   * ⚠️ IT MUST NOT CLOSE THE STEP ON A RUN THAT DID NOT HAPPEN. She can open the stage, decide the
+   * weather is wrong and come straight back; `cardioPerformed` refuses to write anything for that,
+   * so there is simply no new activity and the step stands exactly where she left it. The guard is
+   * the activity's own START INSTANT: only a run that began after she left this screen can be the
+   * run this step is waiting for.
+   */
+  const leftForRunAtRef = useRef<number | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const leftAt = leftForRunAtRef.current;
+      if (leftAt == null) return;
+      leftForRunAtRef.current = null;
+      void db.loadCardio().then((all) => {
+        const run = all.find((a) => Date.parse(a.startedAt) >= leftAt);
+        if (!run) return; // she came back without running — the step is still hers to do
+        void session.completeItem({
+          metres: Math.round(run.distanceKm * 1000),
+          seconds: run.durationSec,
+          activityId: run.id,
+        });
+      }).catch(() => {});
+    }, [session]),
+  );
 
   /**
    * ════ AN ORDINARY SET GETS NO CEREMONY (founder, build 36 — C.13) ════
@@ -650,7 +684,13 @@ export function SessionFlow({ navigation, route }: Props) {
             onAnswer={(level) => closeEffort(level)}
           />
         ) : session.displayPhase === 'SET_PRESENTED' && itemShape ? (
-          <ItemBeat item={itemShape} />
+          <ItemBeat
+            item={itemShape}
+            onRun={(metres, say) => {
+              leftForRunAtRef.current = Date.now();
+              navigation.navigate('CardioLive', { target: { metres, ...(say ? { say } : {}) } });
+            }}
+          />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
           <ActiveSet
             units={units}
@@ -813,7 +853,14 @@ export function SessionFlow({ navigation, route }: Props) {
  * The haptic is the same single tap a logged set gets: one step captured, one tap, whatever shape
  * it was — the five-event rhythm law (WATCH_EXPERIENCE_SPEC §3) counts events, not shapes.
  */
-function ItemBeat({ item }: { item: Exclude<PlannedItem, { kind: 'reps' }> }) {
+function ItemBeat({
+  item,
+  onRun,
+}: {
+  item: Exclude<PlannedItem, { kind: 'reps' }>;
+  /** Hand a GPS movement to the cardio stage — see `MEASURED_BY_THE_PHONE` below. */
+  onRun: (metres: number, say?: string) => void;
+}) {
   const session = useSession();
   const name = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
   const finish = useCallback(
@@ -829,8 +876,30 @@ function ItemBeat({ item }: { item: Exclude<PlannedItem, { kind: 'reps' }> }) {
   switch (item.kind) {
     case 'time':
       return <TimeStage item={item} name={name} onDone={(seconds) => finish({ seconds })} />;
-    case 'distance':
-      return <DistanceStage item={item} name={name} onDone={() => finish()} />;
+    case 'distance': {
+      /**
+       * ════ A RUN IS NOT A THING SHE CONFIRMS ════
+       *
+       * Founder, 2026-08-02: *"why does she need a Done button? The GPS can tell us she finished.
+       * And we can use our existing cardio screen for these cases, no?"*
+       *
+       * A 40 m farmer's carry has nothing to measure — she does it and says so, and that is what
+       * this stage was built for. A 5 km run is the opposite: the phone measures the distance, the
+       * pace, the splits and the route, and asking her to press a button at the end asks her to
+       * confirm something it already knows. So a `gps` movement hands over to the cardio stage —
+       * the real one, with the map and the live figures — carrying the coach's distance as its
+       * target, and that stage ends the run itself when the distance is covered.
+       */
+      const measured = isGpsMovement(item.ex);
+      return (
+        <DistanceStage
+          item={item}
+          name={name}
+          measured={measured}
+          onDone={() => (measured ? onRun(item.metres, item.say) : finish())}
+        />
+      );
+    }
     case 'open':
       return <OpenStage item={item} name={name} onDone={() => finish()} />;
   }

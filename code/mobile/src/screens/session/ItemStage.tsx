@@ -167,10 +167,18 @@ export function DistanceStage({
   item,
   name,
   onDone,
+  measured = false,
 }: {
   item: Extract<PlannedItem, { kind: 'distance' }>;
   name: string;
   onDone: () => void;
+  /**
+   * The phone is going to MEASURE this one — a GPS movement, so the act starts the run rather than
+   * confirming it (founder, 2026-08-02: *"why does she need a Done button? The GPS can tell us she
+   * finished"*). The body is identical: she is looking at the same distance either way, and the
+   * only thing that differs is who says it is over.
+   */
+  measured?: boolean;
 }) {
   const { t } = useCopy();
   const { figure, unit } = distanceOf(item.metres);
@@ -192,7 +200,13 @@ export function DistanceStage({
         <SayLine say={item.say} />
       </View>
       <View style={styles.footer}>
-        <Button variant="onstage" size="stage" block label={t('workout.itemDone')} onPress={onDone} />
+        <Button
+          variant="onstage"
+          size="stage"
+          block
+          label={t(measured ? 'workout.itemStart' : 'workout.itemDone')}
+          onPress={onDone}
+        />
       </View>
     </>
   );

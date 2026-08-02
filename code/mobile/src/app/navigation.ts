@@ -108,7 +108,12 @@ export type MainParamList = {
   // route (the READY tab). A shared name made `navigate('Cardio')` from the focused
   // Cardio tab resolve back to that tab — so "Start cardio" no-op'd. The live stage
   // owns its own name so the launch always pushes it.
-  CardioLive: undefined;
+  /**
+   * The live GPS stage. `target` is present only when the run is a STEP OF A WORKOUT the coach
+   * wrote — "5 km" inside a session — and it is what lets the phone end the run itself instead of
+   * asking her to confirm a distance it is already measuring.
+   */
+  CardioLive: { target?: { metres: number; say?: string } } | undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
   // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
