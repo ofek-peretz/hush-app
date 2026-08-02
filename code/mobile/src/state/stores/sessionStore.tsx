@@ -48,7 +48,7 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
 import { observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
-import { refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
+import { refreshLearnedRests, restTransitionSeconds, REST_UNSTATED_S } from '@/domain/restPrescription';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
 import { sessionKcal } from '@/domain/energy';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
@@ -63,7 +63,7 @@ function worthQueuing(e: unknown): boolean {
 // (day-one tier bootstraps + the learned per-lift INTER median + the learned pooled TRANSITION
 // median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
 // importer (Home, the watch plan, tests) keeps its single import point.
-export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
+export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
 
 export interface Step {
@@ -532,8 +532,7 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
  * and a circuit are written — and the machine skips the rest screen entirely (§1.14).
  */
 export function restAfterStep(step: Step): number {
-  if (step.restAfterS != null) return step.restAfterS;
-  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId);
+  return step.restAfterS ?? REST_UNSTATED_S;
 }
 
 /**
@@ -886,12 +885,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       steps: mirrorSteps,
       total: plan.length,
       machine: setsBeforeCursor === machine.setIndex ? machine : { ...machine, setIndex: setsBeforeCursor },
-      // Per-tier: the mirror's REST_INTER duration belongs to the CURRENT exercise.
-      restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
-      // WT5 — whether that number is HER median or the tier bootstrap. The wrist says "your pace"
-      // only when it is hers; a claim on a lift she has never rested through would be false.
-      restIsLearned: restIsLearnedFor(plan[machine.setIndex]?.exerciseId),
-      restTransitionS: restTransitionSeconds(), // S-17 — her learned transition, one registry
+      /*
+       * ⚠️ ONE REST, ONE SOURCE — the step the athlete is on (`restAfterStep`).
+       *
+       * These three read the LEARNED median, while the phone's own clock reads what the coach
+       * wrote. Two answers to one question, on two surfaces, in the same second: a coach's three
+       * minutes on the phone and her ninety-second median on the wrist, with the watch's GO haptic
+       * firing against a rest the phone had not finished.
+       *
+       * `restIsLearned` is false for the same reason — it drives the wrist's "your pace" line (WT5),
+       * and the number is no longer hers. It is the coach's, or the constant.
+       */
+      restInterS: plan[machine.setIndex] ? restAfterStep(plan[machine.setIndex]) : REST_UNSTATED_S,
+      restIsLearned: false,
+      restTransitionS: plan[machine.setIndex] ? restAfterStep(plan[machine.setIndex]) : REST_UNSTATED_S,
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
       nowMs: Date.now(),
@@ -1143,8 +1150,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         steps: buildMirrorSteps(plan),
         total: plan.length,
         machine: { ...machine, phase: 'SESSION_SAVED' },
-        restInterS: restInterSecondsFor(plan[machine.setIndex]?.exerciseId),
-        restTransitionS: restTransitionSeconds(),
+        // The terminal frame draws no timer; the numbers are carried only so the shape is complete.
+        restInterS: REST_UNSTATED_S,
+        restTransitionS: REST_UNSTATED_S,
         restStartedAtMs: null,
         nowMs: Date.now(),
         workoutName: saved.programDayName ?? '',
@@ -1410,13 +1418,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             },
             active,
             Date.now(),
-            // The coach's own number for the step the rest belongs to, when there is one — the
-            // machine sits ON the completed step while resting, so this is the same step
-            // `restAfterStep` would ask about. Without it a three-minute prescribed rest comes back
-            // from a crash as her ninety-second median.
-            (kind, exerciseId) =>
-              resumePlan[(snap.machine as SessionMachine).setIndex]?.restAfterS ??
-              (kind === 'inter' ? restInterSecondsFor(exerciseId) : restTransitionSeconds()),
+            // The coach's own number for the step the rest belongs to — the machine sits ON the
+            // completed step while resting, so this is the same step `restAfterStep` asks about.
+            // Without it a three-minute prescribed rest came back from a crash as ninety seconds.
+            (_kind, _exerciseId) =>
+              restAfterStep(resumePlan[(snap.machine as SessionMachine).setIndex] ?? ({} as Step)),
           );
           if (!r) {
             // Unusable (stale / fully completed) → salvage so the next Begin composes cleanly.

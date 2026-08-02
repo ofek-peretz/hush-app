@@ -35,6 +35,27 @@ export const REST_TRANSITION_S = 120; // between exercises (the walk + setup)
 export const REST_INTER_S = 90;
 
 /**
+ * ════ WHAT THE CLOCK RUNS WHEN THE COACH DID NOT SAY ════
+ *
+ * A CONSTANT, and that is the whole point of it (founder, 2026-08-02).
+ *
+ * Everything above this line learns: her median rest per lift, her pooled median between lifts.
+ * That was written when the ENGINE composed programmes, and under the founder's ruling it is a
+ * second decider — *"the AI makes every decision about the athlete; the engine passes the record
+ * along at the end of a session and corrects a load if she leaves the rep range. That is all."*
+ *
+ * So the learning is not deleted, it is DEMOTED out of the decision — his words: *"make it the dumb
+ * constant, in case something goes wrong."* A constant decides nothing: same number for everyone,
+ * stated to the coach in the prompt, and overridden by any coach that cares. Ninety seconds sits
+ * between the old tier pair (150 compound / 75 isolation) — long enough not to rush a heavy set,
+ * short enough not to strand her at a machine after a curl.
+ *
+ * It lives HERE rather than in the session store because the prompt has to quote it, and a pure
+ * prompt may not import React state.
+ */
+export const REST_UNSTATED_S = 90;
+
+/**
  * Her pooled TRANSITION rest — the median of every known rest she took before the FIRST set of a
  * lift (legacy approach sets excluded). Pure; null until she has one real sample.
  */

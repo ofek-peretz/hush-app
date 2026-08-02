@@ -101,7 +101,7 @@ describe('coach facts — the message the coach is sent', () => {
     // she has NOT done, the same descriptors plus that equipment's grain.
     const f = build();
     const done = f.performed.find((p) => p.ex === 'bb_bench_press')!;
-    expect(done.lastLoad).toBe(30);
+    expect(done.recent[0].load).toBe(30); // newest first — what she pressed last time
     expect(done.rungs).toEqual([27.5, 30]); // her real ladder, both occurrences
     expect(done.occurrences).toBe(2);
     for (const field of ['muscle', 'capability', 'pattern', 'equipment', 'tier'] as const) {
@@ -237,8 +237,19 @@ describe('coach facts — the message the coach is sent', () => {
     // making at all.
     expect(cat / EXERCISES.length).toBeLessThan(50);
     expect(tok(EXERCISES)).toBeGreaterThan(cat * 1.8); // the saving is real, not rounding
-    // THE FRESH HALF — paid in full on every call. This is the number the cost table rests on.
-    expect(perAthlete).toBeLessThan(2000);
+    /*
+     * THE FRESH HALF — paid in full on every call. This is the number the cost table rests on.
+     *
+     * Raised 2,000 → 4,000 on 2026-08-02, when `performed` gained the last six occurrences of each
+     * lift. Measured at the heavy end (15 lifts × 12 weeks): 2,989 tokens, of which the history is
+     * ~1,600 — about $0.37 per athlete per year at $1.50/MTok.
+     *
+     * It is the same trade the catalogue's ceiling makes, and it is worth naming: the sheet used to
+     * be small because it said less than the engine knew. A bench stuck at one load for four
+     * sessions arrived as a tidy ascending ladder. Paying a third of a dollar a year so the coach
+     * can SEE a stall is not a cost problem, it is the product.
+     */
+    expect(perAthlete).toBeLessThan(4000);
   });
 });
 

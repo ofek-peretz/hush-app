@@ -129,11 +129,45 @@ export interface FactPerformed {
   tier: string;
   /** Every distinct load she has performed, ascending — her real rung ladder on this lift (F-2). */
   rungs: number[];
-  /** The most recent load, and the reps she got on it. */
-  lastLoad: number | null;
-  lastReps: number[];
+  /**
+   * ════ THE LAST FEW TIMES SHE DID THIS LIFT — newest first ════
+   *
+   * ⚠️ WITHOUT THIS THE COACH WAS DECIDING WITH LESS THAN THE ENGINE HAD (founder, 2026-08-02:
+   * *"the most important thing is that the AI is genuinely good, and that it is never in a position
+   * where it is dumber than the engine we had"*).
+   *
+   * The sheet used to carry the ladder, the last load and the last reps. Measured on a real
+   * twelve-week history, a bench stuck at 40 kg for four straight sessions — with her reps having
+   * fallen from 9 to 6 the moment she got there — reached the coach as:
+   *
+   *     rungs: [30, 32.5, 35, 37.5, 40], lastLoad: 40, lastReps: [6, 6, 6], occurrences: 8
+   *
+   * which reads as a lift that has just moved up and needs a beat to settle. **A stall was
+   * invisible, and a stall is the single most common thing a coach has to notice.** So was an
+   * absence: nothing in the sheet said WHEN any of it happened, so a lift last trained in March and
+   * one trained on Tuesday looked identical.
+   *
+   * The engine answered both mechanically (S-32b, the absence path). Anything the engine could see
+   * and the coach cannot is a place where this product got worse when the decision moved.
+   *
+   * `ago` is DAYS ago, which is the unit the question is actually asked in — "when did she last
+   * squat" and "how long has this been stuck" are the same field.
+   */
+  recent: FactOccurrence[];
   /** How many separate occurrences of this lift are in the record. */
   occurrences: number;
+}
+
+/** One time she did a lift: how long ago, at what, for how many, and how it felt. */
+export interface FactOccurrence {
+  /** Days before now. 0 is today. */
+  ago: number;
+  /** What she actually lifted. null = bodyweight. */
+  load: number | null;
+  /** The reps of each set, in order. */
+  reps: number[];
+  /** Her own answer for that lift that day, when she gave one — never inferred. */
+  effort?: string;
 }
 
 /** The grain of each equipment class — so a decision lands on a weight that exists. */
@@ -475,24 +509,42 @@ function cardioFrom(cardio: CardioActivity[] | undefined, limit = 12): FactCardi
     }));
 }
 
-function performedFrom(history: Session[]): FactPerformed[] {
+/**
+ * How many occurrences of one lift travel on the sheet.
+ *
+ * Six is the window a coach actually reasons over — long enough to see a stall (three or four
+ * sessions at one load) or a climb, short enough that fifteen lifts still cost about a thousand
+ * tokens on a half of the message that is never cached. The whole ladder is still there in `rungs`;
+ * this is the part where WHEN matters.
+ */
+const RECENT_OCCURRENCES = 6;
+
+function performedFrom(history: Session[], nowMs: number): FactPerformed[] {
   const oldestFirst = [...history].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
-  const acc = new Map<string, { loads: (number | null)[]; lastLoad: number | null; lastReps: number[]; occ: number }>();
+  const acc = new Map<string, { loads: (number | null)[]; occurrences: FactOccurrence[] }>();
   for (const s of oldestFirst) {
-    const seenThisSession = new Set<string>();
+    const at = Date.parse(s.startedAt);
+    const ago = Number.isFinite(at) ? Math.max(0, Math.round((nowMs - at) / 86_400_000)) : 0;
+    const open = new Map<string, FactOccurrence>();
     for (const set of s.sets) {
       if (set.isApproach) continue;
       if (!byId.has(set.exerciseId)) continue;
       let e = acc.get(set.exerciseId);
-      if (!e) { e = { loads: [], lastLoad: null, lastReps: [], occ: 0 }; acc.set(set.exerciseId, e); }
-      if (!seenThisSession.has(set.exerciseId)) {
-        seenThisSession.add(set.exerciseId);
-        e.occ += 1;
-        e.lastReps = []; // a fresh occurrence replaces the previous one's reps
+      if (!e) { e = { loads: [], occurrences: [] }; acc.set(set.exerciseId, e); }
+      let occ = open.get(set.exerciseId);
+      if (!occ) {
+        // Her own answer for THIS lift on THIS day, when she gave one. Never inferred from the reps
+        // — an unanswered lift is unknown, and unknown is an honest value.
+        const effort = s.effort?.find((r) => r.exerciseId === set.exerciseId)?.level;
+        occ = { ago, load: set.actualWeight ?? null, reps: [], ...(effort ? { effort } : {}) };
+        open.set(set.exerciseId, occ);
+        e.occurrences.push(occ);
       }
+      // The load of the occurrence is the LAST one performed on it — Loop 1 moves it mid-lift, and
+      // what she finished on is what she is training at.
+      occ.load = set.actualWeight ?? null;
+      occ.reps.push(set.actualReps);
       e.loads.push(set.actualWeight);
-      e.lastLoad = set.actualWeight;
-      e.lastReps.push(set.actualReps);
     }
   }
   const out: FactPerformed[] = [];
@@ -506,9 +558,10 @@ function performedFrom(history: Session[]): FactPerformed[] {
       equipment: ex.equipment,
       tier: ex.tier,
       rungs: ladder(e.loads),
-      lastLoad: e.lastLoad,
-      lastReps: e.lastReps,
-      occurrences: e.occ,
+      // Newest first: the coach reads down until it has what it needs, and the first line is the
+      // one that answers "what did she do last time".
+      recent: e.occurrences.slice(-RECENT_OCCURRENCES).reverse(),
+      occurrences: e.occurrences.length,
     });
   }
   return out;
@@ -606,6 +659,11 @@ export interface CoachFactsInput {
     /** muscle → the lift she has asked to keep. */
     keep?: Record<string, string>;
   };
+  /**
+   * Now, injected. The sheet states how long ago each occurrence was (`FactOccurrence.ago`), and a
+   * function that reads the clock cannot be checked against a fixed history.
+   */
+  nowMs?: number;
 }
 
 /**
@@ -614,7 +672,7 @@ export interface CoachFactsInput {
  * Handed state, returns an object. Every field is named explicitly — see the allow-list note in the
  * file header for why that is not a style choice.
  */
-export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, cardio, language = 'en' }: CoachFactsInput): CoachFacts {
+export function coachFacts({ profile, brief, decided, plan, history, justFinished, preferences, cardio, language = 'en', nowMs = Date.now() }: CoachFactsInput): CoachFacts {
   const finished = justFinished;
   return {
     v: COACH_FACTS_VERSION,
@@ -654,7 +712,7 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
         }
       : {}),
     ...(decided?.length ? { decided: recentDecisions(decided) } : {}),
-    performed: performedFrom(history),
+    performed: performedFrom(history, nowMs),
     equipment: coachEquipment(),
     catalogue: coachCatalogue(),
     movements: coachMovements(),
