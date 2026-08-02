@@ -119,7 +119,32 @@ export interface Env {
  * are the honest comparison, and switching is this line plus a deploy.
  */
 const MODEL = 'gemini-3.6-flash';
-const MAX_OUTPUT_TOKENS = 8192;
+/**
+ * ⛔ THIS CAP INCLUDES THINKING, AND AT 8192 IT WAS CUTTING PROGRAMMES IN HALF.
+ *
+ * ⚠️ WATCHED HAPPEN, 2026-08-02: two replies came back as JSON that stopped mid-string. The app
+ * reports that as `not_json`, which reaches her as "Not sent" — a whole turn lost, looking exactly
+ * like a network failure and caused by nothing of the sort.
+ *
+ * `thoughtsTokenCount` is billed at the output rate on 3.x, and it is COUNTED AGAINST
+ * `maxOutputTokens` too. Measured on a deliberately heavy build — six days, 90 minutes, "as
+ * detailed as possible", supersets and running:
+ *
+ *     prompt          4,688
+ *     thinking        5,444      <- 79% of the budget, before a single visible character
+ *     visible         1,424
+ *                    ──────
+ *     against          8,192      finishReason STOP, with ~1,300 to spare
+ *
+ * That one survived. A seven-day programme, or a week with more items, does not — and the failure
+ * is silent, because a truncated reply is indistinguishable from a dropped call.
+ *
+ * 16,384 leaves the thinking room to run and the programme room to be written. It is a SAFETY NET
+ * against a runaway generation, not a budget: the model stops when it is finished, so the usual
+ * call is unaffected and only the worst case moves (about $0.12 rather than $0.061 — on a call that
+ * has never once happened).
+ */
+const MAX_OUTPUT_TOKENS = 16_384;
 /**
  * ⚠️ THIS CONSTANT IS GONE, AND THE REASONING THAT SET IT WAS WRONG — kept here as a warning.
  *
