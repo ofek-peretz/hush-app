@@ -9,7 +9,7 @@ import { applyLearned } from '@/domain/coachLearned';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { trialUsed, nextLedger } from '@/domain/trialLedger';
 import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
-import { askCoachToRevise } from '@/platform/coach/afterSession';
+import { askCoachToRevise, retryWaitingUpdate } from '@/platform/coach/afterSession';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
 import { agedProfile } from '@/domain/profileAge';
@@ -769,6 +769,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (stored && JSON.stringify(stored) !== JSON.stringify(state.profile)) {
           dispatch({ type: 'PROFILE_UPDATED', profile: stored });
         }
+
+        /*
+         * ════ AND THE WEEK THAT NEVER ARRIVED ════
+         *
+         * If the post-session call died — the model unreachable for an hour, her phone in a
+         * basement — the app said the update was waiting and nothing ever tried again. Her next
+         * week was simply lost. This is the trying again, on the one occasion that costs nothing to
+         * wait for: her coming back. Not awaited — she is looking at Today, and a decision that
+         * takes a minute must not hold the screen. `retryWaitingUpdate` returns null instantly when
+         * there is nothing waiting, which is almost always.
+         */
+        void retryWaitingUpdate().catch(() => {});
 
         /*
          * ════ AND THE MUSCLE THAT HAS COME BACK (2026-08-02) ════

@@ -125,6 +125,43 @@ export async function askAfterSession(justFinished: Session): Promise<CoachUpdat
   return runCoachCall({ kind: 'after_session', justFinished });
 }
 
+/** Failures that could go the other way on a later day. A refusal or an unreadable reply will not. */
+const WORTH_ANOTHER_TRY: readonly string[] = ['offline', 'timed_out', 'upstream', 'rate_limited'];
+
+/**
+ * ════ THE UPDATE THAT NEVER ARRIVED, ASKED FOR AGAIN WHEN SHE COMES BACK ════
+ *
+ * ⚠️ WATCHED HAPPEN, 2026-08-02. Gemini was unreachable for two hours — 503s, then 524s at two
+ * minutes — and every post-session call in that window died. The app behaved exactly as ruled: it
+ * decided nothing, and said the update was waiting. **And nothing ever tried again.** She finishes a
+ * workout inside a bad hour, and her next week simply never arrives: no error, no retry, no screen
+ * that looks wrong. She would have to open the chat and ask for it.
+ *
+ * `CoachUpdate.sessionId` has carried a comment since the day it was written — *"so a retry sends
+ * the right one, not the newest one"* — and the retry was never built.
+ *
+ * ── WHY HERE AND NOT INSIDE THE CALL ────────────────────────────────────────────────────────────
+ * The ruling `never retries — one workout is one call, and one bill` is about not hammering a model
+ * that just failed, and it stands: this does not retry inside the call, and it does not loop. It
+ * asks ONCE MORE, on the next occasion she opens the app, which recovers from an outage of any
+ * length rather than of twenty seconds — and spends nothing at all on an athlete who never returns.
+ *
+ * Resolves to null when there is nothing waiting, which is almost always.
+ */
+export async function retryWaitingUpdate(): Promise<CoachUpdate | null> {
+  const last = await db.loadCoachUpdate().catch(() => null);
+  if (!last || last.outcome !== 'waiting') return null;
+  // `not_configured` means she has no profile yet; a refusal or an unreadable answer will be refused
+  // and unreadable again. Only the kinds of nothing that are about the moment are worth re-asking.
+  if (!last.trouble || !WORTH_ANOTHER_TRY.includes(last.trouble)) return null;
+  const history = await db.loadHistory().catch(() => []);
+  const session = history.find((s) => s.id === last.sessionId);
+  // The session it was about is gone (a wipe, a very old update). There is nothing to decide from,
+  // and deciding from the NEWEST session instead would answer a question nobody asked.
+  if (!session) return null;
+  return runCoachCall({ kind: 'after_session', justFinished: session });
+}
+
 type Occasion =
   | { kind: 'after_session'; justFinished: Session }
   | { kind: 'revise'; why: string };
