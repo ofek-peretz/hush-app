@@ -64,8 +64,8 @@ describe('the sheet says what is known and nothing else', () => {
      * and it would be right to. The bound has to name the case.
      */
     const text = preamble();
-    expect(text).toMatch(/IF IT IS\s+ABSENT, NOBODY HAS ASKED HER/);
-    expect(text).toContain('do not pick a number for her');
+    expect(text).toMatch(/ABSENT MEANS NOBODY HAS ASKED HER/);
+    expect(text).toContain('do not fill in a number on her behalf');
   });
 
   it('the placeholder that started it cannot come back unnoticed', () => {

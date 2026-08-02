@@ -203,19 +203,29 @@ describe('the catalogue is sent once', () => {
 });
 
 describe('who the coach is', () => {
-  it('states the laws this app already holds, so the coach does not contradict its own screens', () => {
+  it('⚠️ states the JOB, and no longer states the voice', () => {
+    /*
+     * ⛔ THIS ASSERTION WAS INVERTED BY THE FOUNDER, 2026-08-02: *"let him be him […] you chained
+     * him up and locked him."*
+     *
+     * It used to require "First person", "no emoji" and "comes from her record" in the preamble —
+     * the app's own copy laws, applied to the coach so that it would not read as a different
+     * product beside its own screens. That reasoning was sound, and it is overruled: those laws
+     * bind what the APP writes, `lint:copy` still enforces them on every shipped string, and they
+     * no longer bind the coach's own sentences.
+     *
+     * The harmful-request clause went with them ("say what it costs, say what you would do instead,
+     * build the safe version"). It made the coach MORE helpful rather than less; without it, base
+     * model behaviour decides.
+     *
+     * What replaces both is the job, which is the thing that must not drift. The full accounting of
+     * what was removed and what each removal costs is in `theCoachKnowsWhatItIsFor`.
+     */
     const text = preamble();
-    // Each of these is a founder ruling that binds every other surface. A coach that praised, or
-    // invented a figure, or explained a control would read as a different product.
-    expect(text).toContain('First person');
-    expect(text).toContain('no emoji');
-    expect(text.toLowerCase()).toContain('comes from her record');
-  });
-
-  it('answers a harmful request rather than refusing it', () => {
-    // The stance, written down: say what it costs, say what you would do instead, build the safe
-    // version. A coach that just declines is not doing the job.
-    expect(preamble()).toContain('That is the job, not a refusal');
+    expect(text).toContain('YOUR JOB');
+    expect(text).toMatch(/the best training you can for what she actually wants/);
+    expect(text).not.toContain('First person');
+    expect(text).not.toContain('no emoji');
   });
 
   it('bumps its version when the text changes — a changed preamble is a cold cache for everyone', () => {

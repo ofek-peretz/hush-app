@@ -266,9 +266,26 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
           if (!read.ok || read.answer.plan) return first;
           if (read.answer.next !== 'built' && read.answer.learned?.daysPerWeek == null) return first;
           const retried = await askOnce(COACH_DECISION_SCHEMA);
-          // If the second attempt fails for any reason, her first answer still stands — it has her
-          // sentence in it, and a lost turn would be worse than a turn without a programme.
-          return retried.ok ? retried : first;
+          /*
+           * ⛔ THE RETRY IS ONLY AN IMPROVEMENT IF IT ACTUALLY CARRIES A PROGRAMME.
+           *
+           * `retried.ok` is about the CALL, not the answer — and those come apart in a way that was
+           * watched happening. `COACH_DECISION_SCHEMA` puts `sessions` in `required`, so a coach
+           * that would rather keep asking satisfies it with an EMPTY ARRAY: measured, five out of
+           * five, when the schema was forced on a turn the coach considered too early.
+           *
+           * An empty programme fails the parse as `no_sessions` — deliberately, because handing her
+           * a week of nothing is worse than saying the update is waiting. But the old line here
+           * returned that reply anyway, so the outer `.then` reported the parse failure, her
+           * message was marked failed, and **a perfectly good first answer that had already been
+           * received was thrown away.** The re-ask could make the turn worse than not re-asking.
+           *
+           * So it is kept only if it parses into a plan. Her first answer still stands otherwise —
+           * it has her sentence in it, and a lost turn is worse than a turn without a programme.
+           */
+          if (!retried.ok) return first;
+          const second = parseCoachPlan(retried.text, facts);
+          return second.ok && second.answer.plan ? retried : first;
         })
         .then((reply) => {
           // A reply to a message she has already followed with another one. Dropping it is the
