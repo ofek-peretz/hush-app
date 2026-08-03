@@ -20,11 +20,11 @@ const MOBILE = path.resolve(__dirname, '..', '..');
 const REGISTER = path.resolve(MOBILE, '..', '..', 'docs', 'canonical', 'ENGINE_V5_SITUATION_REGISTER.md');
 
 /** The surfaces that speak in the register's language: the screens, the shared components, and the one
- *  domain module (`bodyMapNote`) whose whole job is to say the map's S-2 / S-3 / F-4 line out loud. */
+ *  domain module whose whole job was to say the body map's line out loud — DELETED with the map
+ *  itself (founder 2026-08-02); see the S-2 note below. */
 const SURFACES = [
   ...walk(path.join(MOBILE, 'src', 'screens')),
   ...walk(path.join(MOBILE, 'src', 'components')),
-  path.join(MOBILE, 'src', 'domain', 'bodyMapNote.ts'),
 ];
 
 function walk(dir: string): string[] {

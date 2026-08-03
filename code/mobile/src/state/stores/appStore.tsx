@@ -593,6 +593,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const profile: Profile = {
           name: inputs.name ?? pendingNameRef.current ?? undefined,
           sex: inputs.sex,
+          /* Her words survive onboarding — the coach reads them on every call, for ever. */
+          ...(inputs.goalText ? { goalText: inputs.goalText } : {}),
+          ...(inputs.limitsText ? { limitsText: inputs.limitsText } : {}),
           heightCm: inputs.heightCm,
           weightKg: inputs.weightKg,
           // The weight Hush met them at — the milestone ladders are cut from it and must never

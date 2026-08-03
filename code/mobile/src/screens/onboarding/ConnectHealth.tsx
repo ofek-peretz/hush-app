@@ -55,6 +55,8 @@ export function ConnectHealth({ navigation, route }: Props) {
   const experience = route.params?.experience;
   const daysPerWeekAsked = route.params?.daysPerWeek;
   const workoutMinutes = route.params?.workoutMinutes;
+  const goal = route.params?.goal;
+  const limits = route.params?.limits;
   const [connected, setConnected] = useState(false);
   /**
    * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
@@ -168,6 +170,9 @@ export function ConnectHealth({ navigation, route }: Props) {
         ...(age != null ? { age } : {}),
         ...(experience != null ? { experience } : {}),
         ...(workoutMinutes != null ? { workoutMinutes } : {}),
+        /* Her own words — the two things a form cannot hold. They become the coach's first brief. */
+        ...(goal ? { goalText: goal } : {}),
+        ...(limits ? { limitsText: limits } : {}),
       },
     });
   }
@@ -175,7 +180,7 @@ export function ConnectHealth({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 4, total: 5 }}
+      progress={{ index: 6, total: 6 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       voice={t('ob.healthSub')}

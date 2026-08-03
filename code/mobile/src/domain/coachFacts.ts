@@ -221,6 +221,10 @@ export interface CoachFacts {
     /** How long she has trained. The largest input to a STARTING load, which is the only one
      *  the coach has no measurement for. */
     experience?: 'beginner' | 'intermediate' | 'advanced';
+    /** What she said she is training for, in her words. The programme is answerable to it. */
+    trainingFor?: string;
+    /** What hurts or is refused, in her words. */
+    limits?: string;
     /** Absent until she has said. Never defaulted — see the omission in `coachFacts`. */
     daysPerWeek?: number;
     units: string;
@@ -767,6 +771,18 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
        */
       ...(profile.age != null && profile.age > 0 ? { age: profile.age } : {}),
       ...(profile.experience ? { experience: profile.experience } : {}),
+      /*
+       * ⛔ HER OWN WORDS — what she is training FOR, and what the programme must plan around
+       * (founder 2026-08-04, deleting the intake chat). These are the two things a form cannot hold,
+       * and they are the reason the chat could be deleted at all: everything ELSE it was still
+       * asking is now a wheel or a choice.
+       *
+       * ⚠️ On the sheet rather than in the brief because the brief is the COACH's note about her,
+       * rewritten by it over time. This is HERS, said once, unedited — and the prompt's last
+       * non-negotiable says the programme has to serve it.
+       */
+      ...(profile.goalText ? { trainingFor: profile.goalText } : {}),
+      ...(profile.limitsText ? { limits: profile.limitsText } : {}),
       /*
        * ⛔ ABSENT MEANS NOBODY HAS ASKED HER. IT MUST NOT MEAN A NUMBER WE MADE UP.
        *

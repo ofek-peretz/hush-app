@@ -59,6 +59,18 @@ export interface Profile {
   ageUpdatedAt?: string;
   units: Units;
   goal: Goal;
+  /**
+   * ⛔ HER OWN WORDS, from onboarding (founder 2026-08-04, taking the chat out of the front door).
+   *
+   * Distinct from `goal`, which is an ENUM the product settled long ago (hypertrophy-first, one
+   * value). This is the sentence she typed — "twelve weeks to a half marathon", "get my shoulder
+   * working again" — and it is what the coach's whole programme is answerable to.
+   *
+   * `limitsText` is the same shape for what hurts or is refused. Both are prose on purpose: they are
+   * the two things a form cannot hold, which is why they survived the chat being deleted.
+   */
+  goalText?: string;
+  limitsText?: string;
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
   /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. Also the
@@ -106,6 +118,9 @@ export interface Profile {
 /** Everything onboarding gathers before building the first program (§4.2–4.6). */
 export interface OnboardingInputs {
   goal: Goal;
+  /** Her own words — see `Profile.goalText`. The two things a form cannot hold. */
+  goalText?: string;
+  limitsText?: string;
   experience?: Experience;
   daysPerWeek: number;
   units: Units;

@@ -59,13 +59,13 @@ export function YourTraining({ navigation, route }: Props) {
   const [minutes, setMinutes] = useState<number>(app.profile?.workoutMinutes ?? 60);
 
   function onContinue() {
-    navigation.navigate('ConnectHealth', { ...route.params, experience, daysPerWeek: days, workoutMinutes: minutes });
+    navigation.navigate('WhatFor', { ...route.params, experience, daysPerWeek: days, workoutMinutes: minutes });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 5 }}
+      progress={{ index: 3, total: 6 }}
       legend={t('ob.weekLegend')}
       title={t('ob.weekTitle')}
       voice={t('ob.weekSub')}

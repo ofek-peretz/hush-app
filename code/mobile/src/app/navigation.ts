@@ -49,6 +49,14 @@ export type OnboardingParamList = {
    */
   AboutYou: { sex: 'male' | 'female' };
   YourTraining: { sex: 'male' | 'female'; weightKg: number; age: number };
+  /*
+   * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front
+   * door). What she is training FOR, and what hurts or is refused. Everything else onboarding needs
+   * is a wheel or a choice; these two are prose, and they are the whole of what the intake
+   * conversation was still doing.
+   */
+  WhatFor: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number };
+  Limits: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number; goal: string };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
@@ -60,6 +68,9 @@ export type OnboardingParamList = {
     experience?: Experience;
     daysPerWeek?: number;
     workoutMinutes?: number;
+    /** Her own words: what the programme is FOR, and what it has to plan around. */
+    goal?: string;
+    limits?: string;
     previewWrist?: WristOffer;
   } | undefined;
   /*
