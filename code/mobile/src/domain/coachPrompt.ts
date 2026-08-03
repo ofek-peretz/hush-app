@@ -38,6 +38,22 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_BRIEF_LINES, COACH_PLAN_SCHEMA } from './coachPlan';
 import { REST_UNSTATED_S } from './restPrescription';
 
+/**
+ * The language she reads, as a WORD rather than a tag.
+ *
+ * See the note at the sheet line: `"he"` is an identifier and an English pronoun, and naming the
+ * language plainly is what a model actually acts on. Falls back to the tag itself for anything not
+ * listed, which is honest — an unnamed tag is still better than a wrong name.
+ */
+function languageName(tag: string): string {
+  const base = tag.toLowerCase().split('-')[0];
+  const named: Record<string, string> = {
+    he: 'HEBREW', en: 'ENGLISH', ar: 'ARABIC', ru: 'RUSSIAN', fr: 'FRENCH',
+    es: 'SPANISH', de: 'GERMAN', pt: 'PORTUGUESE', it: 'ITALIAN',
+  };
+  return named[base] ? `${named[base]} ("${tag}")` : `"${tag}"`;
+}
+
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
 export const COACH_PROMPT_VERSION = 16;
 
@@ -449,9 +465,24 @@ export function coachRequest({
 ${JSON.stringify(hersAlone(facts))}
 
 ` +
-      `Everything you write is read by her, and she reads this app in "${facts.athlete.language}". ` +
-      `Write "say", every item's "say", and every note in that language, and NEVER mix a word of ` +
-      'another language into a sentence. ' +
+      /*
+       * ⛔ THE LANGUAGE IS NAMED, NOT TAGGED — and it took two leaks to see why.
+       *
+       * ⚠️ WATCHED TWICE, 2026-08-02: a Hebrew reply came back containing "وهل", and a later one
+       * wrote "الתוכנית" — an ARABIC definite article welded onto a Hebrew noun. Adding "never mix
+       * another language into a sentence" did not stop the second one.
+       *
+       * The likely reason is that this line said `she reads this app in "he"`. A BCP-47 tag is an
+       * identifier, not a word: "he" is also an English pronoun, and it does not name a language the
+       * way "Hebrew" does. So the instruction was weaker than it looked, and the neighbouring script
+       * is exactly where a weak instruction slips.
+       *
+       * `languageName` states both — the word first, the tag after it for anything that needs to be
+       * exact.
+       */
+      `Everything you write is read by her, and she reads this app in ${languageName(facts.athlete.language)}. ` +
+      `Write "say", every item's "say", and every note in that language and in NO OTHER — not one ` +
+      'word, not one article, not one connective borrowed from a neighbouring script. ' +
       'NAME EACH SESSION IN THAT LANGUAGE TOO — the name is the first thing she sees on her home ' +
       'screen every day, and an English name beside her own language reads as broken. ' +
       'Exercise ids stay exactly as the catalogue spells them: they are ids, not names, and the app ' +
