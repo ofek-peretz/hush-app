@@ -1747,7 +1747,7 @@ export const GALLERY: GalleryEntry[] = [
    * That is this file's own law (`everythingBuiltCanBeReached`) failing quietly, which is the exact
    * reason the law exists.
    */
-  { id: '5.4', label: 'Progress · the report', status: 'live', note: 'peak-weight comparison, milestones, the door to History', render: () => (
+  { id: '3.2e', label: 'Progress · the report', status: 'live', note: 'peak-weight comparison, milestones, the door to History', render: () => (
     <InApp>
       <ProgressReportView
         title="All time"
@@ -1765,19 +1765,19 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '2.6', label: 'Paused · the stage held', status: 'live', note: 'resume, end, and the pain door', render: () => (
+  { id: '2.9', label: 'Paused · the stage held', status: 'live', note: 'resume, end, and the pain door', render: () => (
     <InApp>
       <PausedStage subject="Barbell Bench Press" onResume={noop} endLabel="End session" onEnd={noop} onPain={noop}>
         <View style={{ height: 220 }} />
       </PausedStage>
     </InApp>
   ) },
-  { id: '2.7', label: 'Why · the three lines', status: 'live', note: 'saw / means / did — on the stage', render: () => (
+  { id: '2.9b', label: 'Why · the three lines', status: 'live', note: 'saw / means / did — on the stage', render: () => (
     <InApp>
       <WhyTriple saw="12 reps at 30 kg" means="the top of your band" did="up to 32.5" kind="up" onStage />
     </InApp>
   ) },
-  { id: '4.6', label: 'The run, drawn', status: 'live', note: 'the engraved path a GPS run leaves behind', render: () => (
+  { id: '4.9', label: 'The run, drawn', status: 'live', note: 'the engraved path a GPS run leaves behind', render: () => (
     <InApp>
       <RouteTrace width={320} height={200} route={Array.from({ length: 60 }, (_, i) => ({
         lat: 32.08 + Math.sin(i / 9) * 0.004 + i * 0.00012,
@@ -1786,7 +1786,7 @@ export const GALLERY: GalleryEntry[] = [
       })) as never} />
     </InApp>
   ) },
-  { id: '9.4', label: 'A sheet, over the stage', status: 'live', note: 'opaque — the fade he reported twice', render: () => (
+  { id: '9.9', label: 'A sheet, over the stage', status: 'live', note: 'opaque — the fade he reported twice', render: () => (
     <InApp>
       <BottomSheet onClose={noop} heightFraction={0.34}>
         <Text style={{ color: '#f1eee5', fontSize: 17, textAlign: 'left' }}>Delete your account?</Text>
@@ -1802,7 +1802,7 @@ export const GALLERY: GalleryEntry[] = [
    * look at the one component that shows her the programme. That is this file's own law
    * (`everythingBuiltCanBeReached`) failing about the newest thing in the app.
    */
-  { id: '1.6', label: 'The week the coach wrote', status: 'live', note: 'all four shapes, with the coach note on a row', render: () => (
+  { id: '1.9', label: 'The week the coach wrote', status: 'live', note: 'all four shapes, with the coach note on a row', render: () => (
     <PlanWeek
       units="kg"
       plan={{ v: 2, sessions: [
