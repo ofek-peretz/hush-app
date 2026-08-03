@@ -617,8 +617,21 @@ export default {
             /* aborted, stalled, or the connection died. Nothing to say; another attempt may land. */
           })
           .finally(() => {
+            /*
+             * ⛔ EVERYTHING IN FLIGHT HAS FAILED — DO NOT SIT OUT THE HEDGE TIMER.
+             *
+             * ⚠️ Found in the live battery, 2026-08-02: a build came back 503 and the athlete got
+             * nothing. The hedge is timed for a call that is STILL RUNNING — waiting 1.8s before
+             * asking again makes sense when the first attempt might yet answer. A 503 already
+             * answered: it said no. Waiting is then pure delay, and three of them in a row is the
+             * difference between a slow programme and no programme.
+             *
+             * So this fires whenever nothing is left in flight, and the loop below either launches
+             * the next attempt at once or gives up because there are none left. It replaces the
+             * immediate-503-retry that the move to hedging quietly dropped.
+             */
             settled += 1;
-            if (settled >= controllers.length && controllers.length >= MAX_IN_FLIGHT) allDone();
+            if (settled >= controllers.length) allDone();
           });
       };
 
@@ -632,12 +645,17 @@ export default {
         const waitFor = n < MAX_IN_FLIGHT ? Math.min(HEDGE_MS, remaining) : remaining;
         winner = await Promise.race([
           firstGood,
-          // Every attempt has come back and none of them was usable: there is nothing left to wait
-          // for, and sitting out the rest of the budget would be a deadline pretending to be hope.
+          // Nothing is in flight any more and none of it was usable — go again NOW rather than
+          // waiting out a hedge that was timed for a call still running.
           exhausted.then(() => null),
           sleep(waitFor).then(() => null),
         ]);
-        if (!winner && n < MAX_IN_FLIGHT) launch();
+        if (!winner && n < MAX_IN_FLIGHT) {
+          // A failure that came back FAST deserves a breath before the next ask; a hedge does not,
+          // because the first attempt is still going.
+          if (settled >= controllers.length) await sleep(700);
+          launch();
+        }
       }
       // Whoever is still running is no longer wanted. Aborting them stops the bytes and the bill.
       // ⚠️ Except the winner: its body has not been read yet, and aborting it would cancel the very

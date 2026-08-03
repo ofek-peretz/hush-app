@@ -222,8 +222,8 @@ describe('who the coach is', () => {
      * what was removed and what each removal costs is in `theCoachKnowsWhatItIsFor`.
      */
     const text = preamble();
-    expect(text).toContain('YOUR JOB');
-    expect(text).toMatch(/the best training you can for what she actually wants/);
+    expect(text).toContain('WHAT YOU ARE FOR');
+    expect(text).toMatch(/Build the best programme that exists for what SHE asked for/);
     expect(text).not.toContain('First person');
     expect(text).not.toContain('no emoji');
   });

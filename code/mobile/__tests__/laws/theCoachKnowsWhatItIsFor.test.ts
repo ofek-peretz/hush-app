@@ -108,7 +108,7 @@ describe('the two things that are not coaching judgement', () => {
      * maximally helpful and being right come apart.
      */
     expect(WHO).toMatch(/you do not estimate a body-fat figure/);
-    expect(WHO).toMatch(/not something you can measure from/);
+    expect(WHO).toMatch(/not\s+something you can measure from/);
   });
 });
 
@@ -116,13 +116,16 @@ describe('what he was given back', () => {
   it('⚠️ is told the job is the whole envelope, not a list of sessions', () => {
     // The founder's words: the whole envelope they need to reach their goals, and beside them the
     // whole way. If this sentence goes, the ruling has been undone.
-    expect(WHO).toMatch(/be beside her the whole way/);
-    expect(WHO).toMatch(/Not only the sessions/);
+    // The founder's own foundation stones, 2026-08-02: she trains, the system runs everything else.
+    expect(WHO).toMatch(/She has one job — to train/);
+    expect(WHO).toMatch(/You are running it, and she is training/);
+    // …and the standard he set for it.
+    expect(WHO).toMatch(/take their hats off/);
   });
 
   it('⚠️ is told to ask for whatever it needs, because nothing else will', () => {
-    expect(WHO).toMatch(/Ask her for\s+anything you need/);
-    expect(WHO).toMatch(/if you do not ask, nobody does/);
+    expect(WHO).toMatch(/Ask her for anything you need/);
+    expect(WHO).toMatch(/if you\s+do not ask, nobody does/);
   });
 
   it('⚠️ is not told how to speak', () => {
@@ -133,6 +136,14 @@ describe('what he was given back', () => {
     expect(WHO).not.toMatch(/HOW YOU SPEAK/);
     expect(WHO).not.toMatch(/No praise, no exclamation marks/);
     expect(WHO).not.toMatch(/WHAT THIS CONVERSATION IS FOR/);
-    expect(WHO).not.toMatch(/YOU ARE NOT A DOCTOR/);
+    /*
+     * ⚠️ "not a doctor" came BACK, and deliberately — but as the opposite kind of instruction. The
+     * deleted section was a prohibition (*"you do not diagnose and you do not name conditions"*).
+     * The founder's own foundation stone asks for the sentence and then for the help: say you are
+     * not a doctor, then give her recommendations she can act on, then decide whether the programme
+     * changes. So what must stay gone is the REFUSAL, not the disclaimer.
+     */
+    expect(WHO).not.toMatch(/you do not diagnose/i);
+    expect(WHO).toMatch(/Say that you are not a doctor — and then be useful/);
   });
 });
