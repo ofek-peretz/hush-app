@@ -314,3 +314,50 @@ describe('the wire carries what the coach writes', () => {
     expect(read('src/screens/session/SessionCoach.tsx')).toContain('session.reviseToday(update.today)');
   });
 });
+
+describe('⛔ the plan can never shrink out from under the cursor', () => {
+  /*
+   * FOUND BY READING, IN THE AUDIT. `drop` guards against emptying the WHOLE plan
+   * (`done.length + kept.length === 0`) — and that is the wrong boundary.
+   *
+   * She is on the first set of the LAST exercise. `machine.setIndex` is 1; the plan is
+   * [bench, row, row]. Drop the rows: `done` is [bench], `kept` is [] — the total is 1, so the guard
+   * passes and the plan becomes length 1. **`setIndex` is still 1.** `plan[1]` is undefined, so
+   * `currentExercise` is null, `setLabel` is null, and the session has nothing to execute and no
+   * last step to finish — it cannot end, and it cannot go on.
+   *
+   * The right boundary is "nothing left AT OR AFTER where she is standing", and the app already has
+   * the sentence for it: `sessionCoach.cannotSkip` — *"that is the last thing left today; skipping
+   * it ends the workout."* Refusing routes her to the verb that actually means that: `end`.
+   */
+  const threeStep = (): Step[] => [
+    step('bb_bench_press', 0, 0, 1),
+    step('db_row', 1, 0, 2, 22),
+    { ...step('db_row', 2, 1, 2, 22), lastSetOfSession: true },
+  ];
+
+  it('refuses a drop that would leave nothing in front of her', () => {
+    const p = threeStep();
+    expect(applyLiveEdit(p, 1, { do: 'drop', ex: 'db_row' })).toBe(p);
+  });
+
+  it('every verb leaves at least one step at or after the cursor', () => {
+    // The invariant stated once, over the whole vocabulary — the guard above is one instance of it.
+    const edits: LiveEdit[] = [
+      { do: 'drop', ex: 'db_row' },
+      { do: 'drop', ex: 'bb_bench_press' },
+      { do: 'sets', ex: 'db_row', n: 1 },
+      { do: 'load', ex: 'db_row', n: 10 },
+      { do: 'end' },
+    ];
+    for (let here = 0; here < 3; here += 1) {
+      for (const e of edits) {
+        const after = applyLiveEdit(threeStep(), here, e);
+        expect({ edit: e.do, here, remaining: after.length - here }).toEqual(
+          expect.objectContaining({ edit: e.do, here }),
+        );
+        expect(after.length).toBeGreaterThan(here);
+      }
+    }
+  });
+});

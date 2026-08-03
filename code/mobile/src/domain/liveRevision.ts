@@ -123,8 +123,20 @@ export function applyLiveEdit(plan: Step[], fromIndex: number, edit: LiveEdit): 
     }
     case 'drop': {
       const kept = rest.filter((st) => !isEx(st, edit.ex));
-      // Never empty the session, and never silently no-op: both are answered by returning `plan`.
-      if (kept.length === rest.length || done.length + kept.length === 0) return plan;
+      /*
+       * ⛔ THE BOUNDARY IS "NOTHING LEFT IN FRONT OF HER", NOT "NOTHING LEFT AT ALL".
+       *
+       * This guard was `done.length + kept.length === 0` and that is the wrong question. She is on
+       * the first set of the LAST exercise; the plan is [bench, row, row] and `setIndex` is 1. Drop
+       * the rows: `done` is [bench] so the total is 1, the guard passes, and the plan becomes length
+       * 1 while **the cursor stays at 1**. `plan[1]` is undefined — no current exercise, no set
+       * label, no last step to finish. The session cannot go on and cannot end.
+       *
+       * Refusing is also the better answer for her: `sessionCoach.cannotSkip` already says *"that is
+       * the last thing left today — skipping it ends the workout"*, which routes her to the verb
+       * that actually means that.
+       */
+      if (kept.length === rest.length || kept.length === 0) return plan;
       return reindex([...done, ...kept]);
     }
     case 'sets': {
