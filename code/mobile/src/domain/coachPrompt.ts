@@ -263,10 +263,13 @@ FOUR SHAPES:
   distance  {"kind":"distance","ex":"run_outdoor","metres":5000}   metres, always
   open      {"kind":"open","ex":"mobility"}
 
-Any item takes "say" — your one-line instruction for THAT exercise, in your own words ("a rep short
-of failure", "a pace where you could hold a conversation", "stop two short on the last round"). It
-is the difference between a number and a prescription, and it is where the coaching is. Write it
-wherever it changes how she does the movement; leave it out where it genuinely would not.
+Any item takes "say" — one line about HOW HARD, HOW FAST, or WHERE TO STOP. "A rep short of
+failure." "A pace where you could hold a conversation." "Stop two short on the last round." "This
+one is the easy day — do not race it."
+
+⚠️ NOT technique. Every exercise already has its own demonstration video and its own form cues in
+the app; "keep your chest up" is a line she can already get, and spending your one sentence on it
+wastes the only thing the video cannot say. Intent, effort, pace, and when to stop — that is yours.
 
 "notes": one entry per decision worth explaining, tied to the lift. She reads these, and they come
 back to you next time as "decided". Write the reason you will want to remember — including on the

@@ -34,6 +34,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CoachChat } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
 import { coachFacts } from '@/domain/coachFacts';
+import { health } from '@/platform/health';
+import type { ExternalWorkout } from '@/platform/health/healthModel';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -93,6 +95,38 @@ export function CoachIntake({ navigation, route }: Props) {
   const [brief, setBrief] = React.useState<string[] | null>(null);
 
   /**
+   * ════ ⛔ WHAT APPLE HEALTH ALREADY KNOWS ABOUT HER, ON THE FIRST CALL ════
+   *
+   * The screen immediately before this one asks for HealthKit — and the intake then briefed the
+   * coach with `history: []` and nothing else. So an athlete who has been running 30 km a week for
+   * a year was asked "what is your running experience?" while a year of it sat on the phone,
+   * readable, two lines away.
+   *
+   * That is the founder's own foundation stone — *"reason from what you already know […] do not give
+   * her a number detached from reality"* — failing at the one moment it matters most, because the
+   * first programme is the only one built with no record of its own.
+   *
+   * ⚠️ It is her OUTSIDE training, so it lands in `alsoDid` exactly as it does on every later call:
+   * work that happened to her body and that this app did not prescribe. The coach reads it the same
+   * way it always does; the only thing that changed is that it now has it from the start.
+   *
+   * Failure is silent and correct: no permission, no watch, no data — the sheet is simply as empty
+   * as it used to be, and the coach asks her instead.
+   */
+  const [external, setExternal] = React.useState<ExternalWorkout[]>([]);
+  React.useEffect(() => {
+    if (!inputs.healthConnected) return;
+    let alive = true;
+    void health
+      .recentWorkouts(Date.now() - 90 * 86_400_000)
+      .then((w) => alive && setExternal(w))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [inputs.healthConnected]);
+
+  /**
    * Her profile as it WILL be, without being written.
    *
    * The same mapping `completeOnboarding` performs, minus the persistence — the coach needs to know
@@ -125,8 +159,16 @@ export function CoachIntake({ navigation, route }: Props) {
   const facts = React.useMemo(
     // No programme yet, and that is a fact about her rather than a hole: this is the one call
     // where there genuinely is none, and the intake ask says so.
-    () => coachFacts({ profile, plan: null, history: [], ...(brief?.length ? { brief } : {}), language: currentLocale() }),
-    [profile, inputs.daysPerWeek, brief],
+    () =>
+      coachFacts({
+        profile,
+        plan: null,
+        history: [],
+        ...(brief?.length ? { brief } : {}),
+        ...(external.length ? { external } : {}),
+        language: currentLocale(),
+      }),
+    [profile, brief, external],
   );
 
   const handed = React.useRef(false);
