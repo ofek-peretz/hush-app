@@ -140,6 +140,27 @@ export interface PlannedSession {
 export interface CoachPlan {
   v: number;
   /**
+   * ════ WHAT THIS PROGRAMME IS CALLED ════
+   *
+   * ⛔ FOUNDER, 2026-08-04, on the product feeling like a generic AI app: *"my model from the start
+   * of development was to be the SPOTIFY of the fitness world, and right now I don't recognise my
+   * product."*
+   *
+   * The sharpest thing about Discover Weekly is not the algorithm — it is that what arrives is a
+   * MADE OBJECT. It has a name, a cover and a shape, and the intelligence behind it is invisible.
+   * A playlist without a name is a list of songs.
+   *
+   * Hush already had the week. It did not have the thing that makes a week a PROGRAMME she is on:
+   * something to call it. "Twelve weeks to the half" is a commitment; "your plan" is a screen.
+   *
+   * ⚠️ OPTIONAL, because a coach that has nothing worth naming must not be forced to invent a name —
+   * an obligatory title is how you get "Your Personalized Fitness Journey". Absent, every surface
+   * falls back to what it said before.
+   */
+  title?: string;
+  /** One line on why this programme exists, in the coach's own words. Her reason, given back. */
+  why?: string;
+  /**
    * The programme in full, not a patch. A patch has to be merged, and a merge is a second opinion
    * about what the coach meant. Stating it whole costs a few hundred output tokens and removes the
    * entire class of question.
@@ -444,6 +465,13 @@ export const COACH_PLAN_SCHEMA = {
         },
       },
     },
+    /*
+     * The programme's own name and reason. Declared beside `sessions` because they describe the same
+     * object — and `propertyOrdering` puts them BEFORE it, so the coach says what it is building
+     * before it builds it rather than labelling it afterwards.
+     */
+    title: { type: 'string' },
+    why: { type: 'string' },
     sessions: {
       type: 'array',
       items: {
@@ -861,7 +889,18 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       ...next,
       ...hurts,
       ...today,
-      plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
+      /*
+       * ⛔ THE NAME TRAVELS WITH THE PROGRAMME (founder 2026-08-04). Trimmed and dropped when empty,
+       * because a title of "" is worse than no title: every surface would draw a blank heading where
+       * it used to draw a sensible fallback.
+       */
+      plan: {
+        v: COACH_PLAN_VERSION,
+        ...(typeof root.title === 'string' && root.title.trim() ? { title: root.title.trim() } : {}),
+        ...(typeof root.why === 'string' && root.why.trim() ? { why: root.why.trim() } : {}),
+        sessions,
+        ...(notes.length ? { notes } : {}),
+      },
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
       ...brief,
     },

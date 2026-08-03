@@ -1154,6 +1154,8 @@ const todayView = (
   <HomeView
     resting={false}
     name="Erez"
+    /* The coach's own name for the programme — it replaces the "MONDAY · UP NEXT" eyebrow. */
+    programTitle="Twelve weeks to the half"
     dayName="Upper A"
     dayId="d0"
     muscles="Chest · Shoulders · Triceps"

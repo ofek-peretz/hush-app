@@ -98,7 +98,7 @@ describe('the constraints that must survive', () => {
      * of it. Answering "built" and then finding nothing left to write is the whole failure this
      * field exists to catch.
      */
-    expect(t.propertyOrdering).toEqual(['say', 'next', 'hurts', 'today', 'sessions', 'notes', 'learned', 'brief']);
+    expect(t.propertyOrdering).toEqual(['say', 'next', 'hurts', 'today', 'title', 'why', 'sessions', 'notes', 'learned', 'brief']);
     /*
      * `today` sits between `hurts` and `sessions`, and the position is the argument: a pain report
      * is the commonest reason to change the workout she is IN, and changing today comes before

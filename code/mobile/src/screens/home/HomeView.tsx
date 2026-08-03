@@ -161,6 +161,8 @@ export interface HomeViewProps {
   brief: Line[] | null;
   /** How many lifts the engine changed this week — the count on the moss pill beside the title.
    *  Null / 0 in a steady week, where no pill shows. */
+  /** The coach's name for the programme she is on. Null until it has named one. */
+  programTitle?: string | null;
   briefCount: number | null;
   /** This week's update has not been opened yet — the pill wears a small unseen dot. */
   briefUnseen: boolean;
@@ -372,7 +374,19 @@ export function HomeView(props: HomeViewProps) {
               {/* "TUESDAY · UP NEXT" — the weekday is the DEVICE's, read off the clock exactly like
                   the rest state's; it is not the engine claiming a calendar (register L7). What is
                   up next is still the queued workout, whatever day it is opened on. */}
-              <Legend track={0.18}>{`${restWeekday} · ${t('home.upNext')}`}</Legend>
+              {/*
+                ⛔ THE PROGRAMME'S NAME REPLACES THE WEEKDAY EYEBROW (founder 2026-08-04).
+                
+                The line read "MONDAY · UP NEXT", which is two facts she already has: her phone shows
+                the day, and the whole screen is what is next. Naming the PROGRAMME here costs the
+                same pixels and answers a question nothing else on the screen does — what am I on?
+
+                ⚠️ Falls back to the old line when the coach has not named it, because `title` is
+                optional and an empty eyebrow is worse than a redundant one.
+              */}
+              <Legend track={0.18}>
+                {props.programTitle ? props.programTitle.toUpperCase() : `${restWeekday} · ${t('home.upNext')}`}
+              </Legend>
 
               {/* THE NAME, in the coach's serif — with the change count in a moss pill beside it.
                   Tap the pill for the week's decisions (the WHY surface, where the undo lives). */}

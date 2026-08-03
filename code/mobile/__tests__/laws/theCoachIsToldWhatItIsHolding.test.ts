@@ -76,10 +76,11 @@ describe('every fact onboarding collects is named to the coach', () => {
   it('and says which of them matters most where there is no record yet', () => {
     // Week one is the only prescription with nothing behind it, and this is what stands in for the
     // measurement that does not exist.
-    expect(text()).toMatch(/experience" is the one to weigh hardest on the FIRST programme/);
+    expect(text()).toMatch(/Weigh "experience" hardest on the FIRST programme/);
   });
 
   it('⚠️ says these six are ALL the app asks, so the coach knows what is left to it', () => {
-    expect(text()).toMatch(/the only questions this app asks/);
+    // `[\s\S]` because the prompt is hard-wrapped and this rule straddles a line break.
+    expect(text()).toMatch(/the only questions this[\s\S]{0,4}app asks/);
   });
 });

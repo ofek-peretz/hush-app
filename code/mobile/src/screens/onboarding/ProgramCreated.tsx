@@ -114,6 +114,7 @@ export function ProgramCreated({ route }: Props) {
   }, [reduced, seal]);
 
 
+
   async function onDone() {
     if (busy) return;
     setBusy(true);
@@ -141,6 +142,26 @@ export function ProgramCreated({ route }: Props) {
             <Text style={styles.readyBuilt} accessibilityRole="header">
               {name ? t('ob.readyBuilt', { name: bidi(name) }) : t('ob.readyBuiltNoName')}
             </Text>
+            {/*
+              ⛔ THE PROGRAMME HAS A NAME NOW (founder 2026-08-04, on the product feeling generic):
+              *"my model from the start was to be the SPOTIFY of the fitness world, and right now I
+              don't recognise my product."*
+
+              The sharpest thing about Discover Weekly is not the algorithm — it is that what arrives
+              is a MADE OBJECT with a name and a shape. A playlist without a name is a list of songs,
+              and a week without one is a screen. This is that name, in the coach's serif, directly
+              under "your programme is built" — so the first thing she reads is what she is ON.
+
+              ⚠️ ABSENT IS A REAL STATE. `title` is optional in the schema on purpose: a coach forced
+              to name everything writes "Your Personalized Fitness Journey". When it has nothing
+              worth calling the programme, this draws nothing and the screen reads as it always did.
+            */}
+            {coachPlan?.title ? (
+              <View style={styles.programName}>
+                <Text style={styles.programTitle}>{bidi(coachPlan.title)}</Text>
+                {coachPlan.why ? <Text style={styles.programWhy}>{coachPlan.why}</Text> : null}
+              </View>
+            ) : null}
             {/* THE HEADLINE FACT (founder 2026-07-24): the fourteen stand huge, FREE beside them. */}
             <View style={styles.freeRow}>
               <Text style={styles.bigNum}>{FREE_SESSION_LIMIT}</Text>
@@ -291,13 +312,38 @@ function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTi
 }
 
 const styles = StyleSheet.create({
+  // The name sits between the greeting and the fourteen — it is the object, they are its terms.
+  programName: { marginTop: 18, gap: 8 },
+  programTitle: {
+    fontFamily: font.serif,
+    fontSize: 30,
+    lineHeight: 36,
+    color: color.textPrimary,
+    textAlign: 'left',
+  },
+  // The reason is the coach speaking, so it wears the coach's italic — the same voice as its notes.
+  programWhy: {
+    fontFamily: font.serif,
+    fontStyle: 'italic',
+    fontSize: 16,
+    lineHeight: 24,
+    color: color.textSecondary,
+    textAlign: 'left',
+  },
   root: { flex: 1, backgroundColor: color.bg },
   /*
    * A ScrollView's content, not a flex child: the week can be three sessions or six, and a screen
    * that centred a fixed block now has to be able to run past the bottom of the phone.
    * `flexGrow` keeps a SHORT programme centred the way it always was.
    */
-  body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 34, paddingVertical: 24 },
+  body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 34, paddingVertical: 24 },
+
+
+
+
+
+
+
 
   // ready — a left-aligned, centred column (v7 1.5). The mark leads it, FREE is the headline.
   readyBlock: { alignItems: 'stretch', gap: 20 },

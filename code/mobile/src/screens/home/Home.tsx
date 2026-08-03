@@ -784,6 +784,12 @@ export function Home({ navigation, route }: Props) {
        * it.
        */
       brief={brief}
+      /*
+       * ⛔ THE NAME OF THE PROGRAMME SHE IS ON (founder 2026-08-04). It is drawn on the day it
+       * arrives and then never again — which makes it an announcement rather than a thing she is
+       * doing. Today is where she looks every morning, so it is where the name has to live.
+       */
+      programTitle={coachPlan?.title ?? null}
       briefCount={briefCount}
       undoable={undoable}
       onUndoSwap={async () => {
