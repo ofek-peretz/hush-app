@@ -59,12 +59,18 @@ describe('the sheet says what is known and nothing else', () => {
 
   it('⚠️ tells the coach what an absent number MEANS, or absence is just a gap it fills itself', () => {
     /*
+     * ⚠️ THE WORDING CHANGED ON 2026-08-03 AND THE RULE DID NOT. It read "ABSENT MEANS NOBODY HAS
+     * ASKED HER — this app never will", which was true until `YourWeek` started asking for frequency
+     * and session length. The claim had to go; what may never go is that an absent number is never
+     * one the coach invents.
+     */
+    /*
      * The omission alone is not the fix. A model handed a sheet with no `daysPerWeek`, under a rule
      * that says "write exactly that many sessions", will pick a number rather than write nothing —
      * and it would be right to. The bound has to name the case.
      */
     const text = preamble();
-    expect(text).toMatch(/ABSENT MEANS NOBODY HAS ASKED HER/);
+    expect(text).toMatch(/ABSENT means she was never asked/);
     expect(text).toContain('do not fill in a number on her behalf');
   });
 

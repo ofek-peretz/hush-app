@@ -216,6 +216,11 @@ export interface CoachFacts {
   athlete: {
     sex?: 'male' | 'female';
     weightKg?: number;
+    /** Her age, in years. Context for recovery — never a number a formula is applied to. */
+    age?: number;
+    /** How long she has trained. The largest input to a STARTING load, which is the only one
+     *  the coach has no measurement for. */
+    experience?: 'beginner' | 'intermediate' | 'advanced';
     /** Absent until she has said. Never defaulted — see the omission in `coachFacts`. */
     daysPerWeek?: number;
     units: string;
@@ -748,6 +753,20 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
     athlete: {
       ...(profile.sex ? { sex: profile.sex } : {}),
       ...(profile.weightKg != null ? { weightKg: profile.weightKg } : {}),
+      /*
+       * ⛔ COLLECTED BY ONBOARDING SINCE 2026-08-03 AND SENT NOWHERE UNTIL THE AUDIT THAT FOLLOWED.
+       *
+       * `AboutYou` asks for both, `coachRequirements` calls both critical, `Profile` stores both —
+       * and this function, the ONLY thing the coach actually reads, carried neither. Two screens of
+       * hers, answered and thrown away, with every test green.
+       *
+       * ⚠️ It is the same failure the founder caught in the bodyweight one turn earlier, committed
+       * while fixing it: a conditional spread makes an absent fact invisible, so nothing anywhere is
+       * surprised by a field that never arrives. `theCoachIsNeverAskedWithoutWhatItNeeds` now walks
+       * `REQUIRED_FOR_COACH` and checks each one lands here, instead of spot-checking a bodyweight.
+       */
+      ...(profile.age != null && profile.age > 0 ? { age: profile.age } : {}),
+      ...(profile.experience ? { experience: profile.experience } : {}),
       /*
        * ⛔ ABSENT MEANS NOBODY HAS ASKED HER. IT MUST NOT MEAN A NUMBER WE MADE UP.
        *

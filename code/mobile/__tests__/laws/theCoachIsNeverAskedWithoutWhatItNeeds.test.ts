@@ -80,13 +80,27 @@ describe('what the coach cannot work without', () => {
 });
 
 describe('the fact actually reaches the sheet', () => {
-  it('⚠️ her bodyweight is ON the sheet the coach reads', () => {
+  it('⛔ EVERY requirement reaches the sheet — walked, not spot-checked', () => {
     /*
-     * The requirement list being right proves nothing about whether the number travels. This is the
-     * assertion that covers the original bug: `coachFacts` is what the coach actually sees.
+     * ⛔ THIS ASSERTION USED TO CHECK ONE FIELD (the bodyweight, `toContain('62')`) AND IT LET TWO
+     * MORE THROUGH THE VERY NEXT TURN.
+     *
+     * `AboutYou` asks for age and experience, `REQUIRED_FOR_COACH` calls both critical, `Profile`
+     * stores both — and `coachFacts`, the only thing the coach actually reads, carried neither. Two
+     * screens of hers, answered and thrown away, with every test green.
+     *
+     * It is the same failure the founder caught in the bodyweight one turn earlier, committed while
+     * fixing it: a conditional spread makes an absent fact invisible, so nothing is surprised by a
+     * field that never arrives. A spot-check cannot see that; walking the list can.
      */
     const facts = coachFacts({ profile: full, history: [], cardio: [], program: null } as never);
-    expect(JSON.stringify(facts)).toContain('62');
+    const athlete = (facts as { athlete: Record<string, unknown> }).athlete;
+    for (const r of REQUIRED_FOR_COACH) {
+      // `workoutMinutes` is named `minutes` on the wire — the sheet is written for the coach to
+      // read, not to mirror our field names. Everything else keeps its name.
+      const onWire = r.key === 'workoutMinutes' ? 'minutes' : r.key;
+      expect({ key: r.key, sent: athlete[onWire] !== undefined }).toEqual({ key: r.key, sent: true });
+    }
   });
 
   it('and is absent — rather than invented — when it genuinely is not known', () => {

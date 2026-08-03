@@ -43,7 +43,6 @@
  */
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  Platform,
   View,
   Text,
   ScrollView,
@@ -501,23 +500,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     /*
-     * ⚠️ LTR ISLAND — AND IT HAS NEVER WORKED ON THE PLATFORM WE SHIP ON.
+     * ⛔ THE `direction: 'ltr'` "LTR ISLAND" IS GONE — it never worked on ANY platform.
      *
-     * `direction` is a CSS property, not a React Native style. RN Web honours it (which is why the
-     * gallery looks right); iOS ignores it and logs `Invalid style property of "direction"` on every
-     * render — 25 of them in one sweep of the gallery. The intent — keep the numeric wheel ascending
-     * L→R under `I18nManager.forceRTL(true)`, which `i18n/index.ts` DOES call for Hebrew — is real
-     * and is simply not achieved on device.
+     * `direction` is a CSS property, not a React Native style. iOS ignores it and logs `Invalid
+     * style property of "direction"`; **React Native Web logs the same warning**, which is how this
+     * was finally settled — a Platform gate was tried first on the belief that web honoured it, and
+     * the web sweep warned anyway. Neither runtime applies it. It was decoration on a comment.
      *
-     * ⛔ NOT BLIND-FIXED. The honest fix is `flexDirection: 'row-reverse'` under `I18nManager.isRTL`,
-     * and this is the control a sweating hand turns to log a set — the offset math the header
-     * describes is measured against this row's direction. Changing it without a device to turn the
-     * wheel on is how a touch target that works becomes one that does not.
-     *
-     * Platform-gated so web keeps the behaviour it actually has and iOS stops warning about a
-     * property it was already ignoring. Zero behaviour change on either. Left for a device pass.
+     * ⏸️ THE INTENT WAS REAL AND IS STILL UNMET: keep the numeric wheel ascending L→R under
+     * `I18nManager.forceRTL(true)`, which `i18n/index.ts` DOES call for Hebrew. The honest fix is
+     * `flexDirection: 'row-reverse'` under `I18nManager.isRTL` — and this is the control a sweating
+     * hand turns to log a set, with offset maths measured against this row's direction, so it needs
+     * a device to turn the wheel on. Deleting a no-op is safe; guessing at the replacement is not.
      */
-    ...(Platform.OS === 'web' ? { direction: 'ltr' as const } : null),
     // v7 1.4: NO box — the scale is framed by a hairline top and bottom, on the bare stage.
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -541,8 +536,8 @@ const styles = StyleSheet.create({
   numRow: { alignSelf: 'stretch', flex: 1, justifyContent: 'center', overflow: 'hidden' },
   /** The graduation, held at the foot of the frame and OUT of the touch path (see `numRow`). */
   ticksLayer: { position: 'absolute', left: 0, right: 0, bottom: TICK_INSET, alignItems: 'center' },
-  // Same story as `wrap` above — see the note there. Ignored on iOS, honoured on web.
-  scroller: { ...(Platform.OS === 'web' ? { direction: 'ltr' as const } : null) },
+  // Same story as `wrap` above — see the note there. The property was a no-op on both runtimes.
+  scroller: {},
   // The numerals rest where the flow layout used to put them — clear of the graduation and the gap
   // that separated the two — now that the scroller owns the full frame height for touch (C.3).
   scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP_H + 8 },

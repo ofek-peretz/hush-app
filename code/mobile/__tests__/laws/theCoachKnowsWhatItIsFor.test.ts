@@ -65,11 +65,20 @@ describe('the wire — what has to be there or the answer never reaches her', ()
 
   it('⚠️ says what an ABSENT number means, or absence is just a gap it fills itself', () => {
     /*
+     * ⚠️ THE SENTENCE CHANGED ON 2026-08-03 AND THE RULE DID NOT. It used to read "ABSENT MEANS
+     * NOBODY HAS ASKED HER — this app never will", which was TRUE until onboarding started asking
+     * for frequency and session length. Leaving it would have had the coach re-ask her for two
+     * things she had just answered on a form, which is exactly the kind of thing that makes an
+     * intake feel like it was not listening.
+     *
+     * What must survive is that absence is never a number the coach invents.
+     */
+    /*
      * The founder's item 4: it wrote four sessions without ever asking, because a placeholder had
      * put `daysPerWeek: 4` on a sheet labelled MEASURED. Omitting the number is only half the fix —
      * a model with no days and a job to do will pick a number, and would be right to.
      */
-    expect(WHO).toMatch(/ABSENT MEANS NOBODY HAS ASKED HER/);
+    expect(WHO).toMatch(/ABSENT means she was never asked/);
     expect(WHO).toMatch(/do not fill in a number on her behalf/);
   });
 

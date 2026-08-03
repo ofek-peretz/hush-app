@@ -1,8 +1,6 @@
 import {
   athleteBrief,
-  briefIsComplete,
   clampNeeds,
-  missingFrom,
   ATHLETE_BRIEF_VERSION,
   type BriefNeeds,
 } from '@/domain/athleteBrief';
@@ -63,24 +61,6 @@ describe('what a conversation leaves behind', () => {
 });
 
 describe('can the app draw a week yet', () => {
-  it('names only what a SCREEN cannot do without', () => {
-    expect(missingFrom({})).toEqual(['daysPerWeek', 'minutes', 'units']);
-    expect(missingFrom({ daysPerWeek: 4, minutes: 55, units: 'kg' })).toEqual([]);
-    expect(briefIsComplete(needs)).toBe(true);
-  });
-
-  it('does not require a bodyweight or a sex — she may decline both', () => {
-    expect(briefIsComplete({ daysPerWeek: 3, minutes: 45, units: 'lb' })).toBe(true);
-  });
-
-  it('treats a nonsense number as missing rather than as an answer', () => {
-    expect(missingFrom({ daysPerWeek: 0, minutes: 55, units: 'kg' })).toEqual(['daysPerWeek']);
-    expect(missingFrom({ daysPerWeek: NaN, minutes: 55, units: 'kg' })).toEqual(['daysPerWeek']);
-    expect(missingFrom({ daysPerWeek: 4, minutes: 55, units: 'stone' as never })).toEqual(['units']);
-  });
-});
-
-describe('the bounds are about calendars and clocks, not training', () => {
   it('clamps a week to seven days and a session to a real length', () => {
     expect(clampNeeds({ ...needs, daysPerWeek: 12 }).daysPerWeek).toBe(7);
     expect(clampNeeds({ ...needs, daysPerWeek: 0 }).daysPerWeek).toBe(1);

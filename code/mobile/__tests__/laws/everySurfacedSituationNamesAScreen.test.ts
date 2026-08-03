@@ -91,7 +91,18 @@ describe('the register and the surface speak the same language (L5, one layer ou
    * surface loses its citation (a refactor drops the comment, a rename slips), this is what notices.
    */
   const coverage: Record<string, string> = {
-    'S-2': 'src/domain/bodyMapNote.ts',                    // the cost of an OFF, said in one line
+    /*
+     * ⛔ S-2 IS RETIRED, NOT MOVED — founder, 2026-08-02: *"delete them"* (the body map screens).
+     *
+     * S-2 is "a muscle is turned OFF" — a state that only existed because the athlete could tap a
+     * body map to turn one off. There is no map, so there is no OFF, so there is no cost to state.
+     * `domain/bodyMapNote` existed for that one sentence and is deleted with it.
+     *
+     * ⚠️ NOT REPLACED BY THE PAIN CONVERSATION, and it matters that they are different: an EASE is
+     * temporary, measured and reversible, and the coach announces it in its own words. An OFF was a
+     * standing preference the ENGINE had to keep silently. Pointing S-2 at the pain path would claim
+     * a surface still serves a situation it never served.
+     */
     'S-3': 'src/screens/home/HomeView.tsx',               // the day that cannot fit her minutes
     'S-44': 'src/screens/weekly/WeeklyUpdate.tsx',        // a muscle turned back on keeps its history
     'S-56': 'src/screens/weekly/WeeklyUpdate.tsx',        // the one "want it back?" the mirror may ask

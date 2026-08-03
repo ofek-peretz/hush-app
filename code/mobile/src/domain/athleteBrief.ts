@@ -75,25 +75,18 @@ export interface AthleteBrief {
   at: string;
 }
 
-/**
- * The fields without which the app cannot draw a week, in the order a person would ask for them.
+/*
+ * ⛔ `missingFrom` AND `briefIsComplete` WERE DELETED HERE, 2026-08-03.
  *
- * NOT a script and NOT a question list — the coach asks what it likes, in whatever order the
- * conversation takes. This only answers "can the app render a programme yet?", which is a question
- * about screens, not about coaching. Empty means yes.
+ * They answered "can the app render a programme yet?" from the three numbers an intake conversation
+ * had gathered — and nothing in `src` had called either for weeks. `domain/coachRequirements` is
+ * where that question lives now, against a profile rather than against a conversation, and it is the
+ * one onboarding and the laws both read.
+ *
+ * ⚠️ A public function with no caller is not harmless: it reads as a supported seam, and the next
+ * person wires a screen to it instead of to the thing that is actually maintained. Same reason
+ * `theilSenSlope` and `OptStack` were flagged in earlier sweeps.
  */
-export function missingFrom(needs: Partial<BriefNeeds>): (keyof BriefNeeds)[] {
-  const out: (keyof BriefNeeds)[] = [];
-  if (!Number.isFinite(needs.daysPerWeek) || (needs.daysPerWeek ?? 0) < 1) out.push('daysPerWeek');
-  if (!Number.isFinite(needs.minutes) || (needs.minutes ?? 0) < 1) out.push('minutes');
-  if (needs.units !== 'kg' && needs.units !== 'lb') out.push('units');
-  return out;
-}
-
-/** Everything the app needs is known — a programme can be drawn. */
-export function briefIsComplete(needs: Partial<BriefNeeds>): boolean {
-  return missingFrom(needs).length === 0;
-}
 
 /**
  * The bounds the APP enforces on the numbers it renders with, and nothing more.
