@@ -37,6 +37,8 @@ import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './na
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { Bodyweight } from '@/screens/onboarding/Bodyweight';
+import { AboutYou } from '@/screens/onboarding/AboutYou';
+import { YourWeek } from '@/screens/onboarding/YourWeek';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { CoachScreen } from '@/screens/coach/CoachScreen';
@@ -110,6 +112,8 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
       <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="Bodyweight" component={Bodyweight} />
+      <OnboardingStack.Screen name="AboutYou" component={AboutYou} />
+      <OnboardingStack.Screen name="YourWeek" component={YourWeek} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       {/* BODY DATA DOES NOT SWIPE BACK (founder 2026-07-13). Its body is three horizontal wheels,
           and a full-screen horizontal back gesture over them means every attempt to set an age

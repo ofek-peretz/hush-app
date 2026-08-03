@@ -51,7 +51,7 @@ export function NameEntry({ navigation }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 4 }}
+      progress={{ index: 1, total: 6 }}
       keyboard
       title={t('ob.nameTitle')}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}

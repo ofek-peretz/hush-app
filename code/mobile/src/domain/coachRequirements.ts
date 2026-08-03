@@ -28,16 +28,20 @@
  * answers are prose and a form would flatten them into checkboxes. The rule for adding something
  * here: *can the coach write a safe, honest programme without it?* If yes, it is not a requirement.
  *
- * ⛔ `daysPerWeek` is NOT here, on the founder's own ruling. He caught the app handing the coach a
- * placeholder 4 and watched it decide his week unasked: *"it decides on its own that it will do 4
- * workouts for me, without asking."* It stays a question the coach asks her, in words.
+ * ⛔ HEIGHT IS DELIBERATELY ABSENT. The founder asked whether it would sharpen the starting loads:
+ * it does not. What predicts a starting load is bodyweight, sex and experience — height changes the
+ * range of motion, and no model turns centimetres into kilograms. A screen that costs a step and
+ * buys nothing measurable is a screen that should not exist.
+ *
+ * ⛔ EQUIPMENT IS ABSENT TOO, on his scope call: *"not critical, let's focus on people in the gym
+ * only for now, and expand from there if this works smoothly."* A full gym is the assumption.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import type { Profile } from '@/data/local/models';
 
 /** One fact the coach cannot work without, and the reason it is on this list. */
 export interface CoachRequirement {
-  key: 'sex' | 'weightKg';
+  key: 'sex' | 'weightKg' | 'age' | 'experience' | 'daysPerWeek' | 'workoutMinutes';
   /** Why the coach cannot do its job without it — for the reader, not for the athlete. */
   why: string;
 }
@@ -62,6 +66,45 @@ export const REQUIRED_FOR_COACH: readonly CoachRequirement[] = [
      */
     why: 'bodyweight lifts are prescribed against it, and it is the baseline progress is read from',
   },
+  {
+    key: 'age',
+    /*
+     * Not a number the coach applies a formula to — it is context it reasons with. What recovers in
+     * two days at twenty-five takes three at fifty-five, and a coach that does not know which one it
+     * is talking to writes the same week for both.
+     */
+    why: 'how fast she recovers, which is the difference between four sessions a week and three',
+  },
+  {
+    key: 'experience',
+    /*
+     * The single biggest input to a STARTING load. Everything after week one is measured, but week
+     * one is a guess, and this is what makes it an educated one instead of a coin toss.
+     */
+    why: 'the starting loads, which are the only ones the coach has no measurement for',
+  },
+  {
+    key: 'daysPerWeek',
+    /*
+     * ⛔ THIS WAS NOT A REQUIREMENT UNTIL THE FOUNDER PUT IT HERE, 2026-08-03 — and his earlier
+     * ruling looked like the opposite: he caught the app handing the coach a placeholder 4 and
+     * watched it decide his week unasked, *"without asking."*
+     *
+     * The two are not in conflict, and the distinction is worth keeping: what he objected to was the
+     * APP INVENTING a number and presenting it as fact. Asking HER is the opposite of that. A
+     * placeholder is a lie; a question is a question.
+     */
+    why: 'the shape of the week — and it must be HER answer, never a placeholder the app invented',
+  },
+  {
+    key: 'workoutMinutes',
+    /*
+     * ⛔ FOUNDER, 2026-08-03: *"session length — I don't know how critical it is, most people like
+     * 45–60 minutes."* It is critical, and there is evidence: he was handed a six-exercise session
+     * the app called 35 minutes. The coach cannot size a session against a budget nobody told it.
+     */
+    why: 'how much fits in a session — six exercises or four is this number and nothing else',
+  },
 ] as const;
 
 /**
@@ -76,7 +119,11 @@ export function missingForCoach(profile: Profile | null | undefined): CoachRequi
   return REQUIRED_FOR_COACH.filter((r) => {
     const v = profile[r.key];
     // A bodyweight of 0 is absence wearing a number — the shape `weightKg?: number` cannot say so.
-    if (r.key === 'weightKg') return typeof v !== 'number' || !Number.isFinite(v) || v <= 0;
+    // Every numeric requirement has the same failure mode: a 0 that means "nobody asked" rather
+    // than a real answer. `daysPerWeek` is the one the founder actually caught, as a placeholder.
+    if (r.key === 'weightKg' || r.key === 'age' || r.key === 'daysPerWeek' || r.key === 'workoutMinutes') {
+      return typeof v !== 'number' || !Number.isFinite(v) || v <= 0;
+    }
     return v == null;
   }).map((r) => r.key);
 }

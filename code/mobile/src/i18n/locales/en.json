@@ -261,7 +261,20 @@
     "mapNormalLine": "{{muscle}} sits in your week like everything else.",
     "weightLegend": "BODYWEIGHT",
     "weightTitle": "What do you weigh?",
-    "weightSub": "Pull-ups, press-ups and dips are prescribed against this — and it is the line every later reading is drawn from."
+    "weightSub": "Pull-ups, press-ups and dips are prescribed against this — and it is the line every later reading is drawn from.",
+    "aboutLegend": "ABOUT YOU",
+    "aboutTitle": "A little about you",
+    "age": "AGE",
+    "experience": "HOW LONG YOU'VE TRAINED",
+    "expNew": "New to it",
+    "expSome": "A year or two",
+    "expYears": "Years",
+    "weekLegend": "YOUR WEEK",
+    "weekTitle": "How much time have you got?",
+    "weekSub": "I size every session against this. Tell me the number you actually keep.",
+    "daysPerWeek": "DAYS A WEEK",
+    "sessionLength": "HOW LONG A SESSION",
+    "minutesShort": "{{min}} min"
   },
   "menu": {
     "title": "Menu",

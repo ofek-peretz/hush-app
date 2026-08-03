@@ -633,8 +633,28 @@ export function coachCatalogue(): FactCatalogueEntry[] {
 }
 
 /** Everything that is not a lift, in the same lean form as the catalogue. Also cacheable. */
+/**
+ * ⛔ THE CARDIO MACHINES ARE NOT OFFERED YET — founder scope call, 2026-08-03:
+ *
+ *   > *"For the cardio, I think at the start it is enough to do just walking / running, and not
+ *   > deal with all the other things we added."*
+ *
+ * The rower, the bike, the erg, the stair climber, the pool, the rope — every one of them measures
+ * differently, records differently, and is a screen we have not designed. Offering a coach a
+ * vocabulary the app cannot execute is how it prescribes a 2 km row that lands on a stage with no
+ * way to log it.
+ *
+ * ⚠️ THEY ARE FILTERED, NOT DELETED. A movement removed from `MOVEMENTS` would break the display of
+ * every session an athlete has ALREADY recorded against it — history is not a catalogue we get to
+ * edit. This list is what the coach may CHOOSE from today; widening it is one line when the screens
+ * exist, and nothing recorded is ever orphaned.
+ */
+const NOT_YET_OFFERED = new Set([
+  'cycle_outdoor', 'cycle_stationary', 'row_erg', 'elliptical', 'stair_climber', 'swim', 'jump_rope',
+]);
+
 export function coachMovements(): FactMovement[] {
-  return MOVEMENTS.map((m) => ({
+  return MOVEMENTS.filter((m) => !NOT_YET_OFFERED.has(m.id)).map((m) => ({
     id: m.id,
     name: m.name,
     measures: [...m.measures],

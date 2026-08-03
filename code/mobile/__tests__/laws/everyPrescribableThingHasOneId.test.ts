@@ -63,7 +63,7 @@ describe('every prescribable thing has exactly one id', () => {
       if (!r.ok) rejected.push(`${id} → ${r.reason}`);
     }
     expect(rejected).toEqual([]);
-    expect(offered.length).toBe(EXERCISES.length + MOVEMENTS.length);
+    expect(offered.length).toBe(EXERCISES.length + coachMovements().length);
   });
 
   it('shows the movements at all — the coach cannot prescribe what it was not told exists', () => {
@@ -71,9 +71,34 @@ describe('every prescribable thing has exactly one id', () => {
     // cardio plan comes back with an unresolvable id, which reads as the model hallucinating when
     // in fact it was never given the list.
     const facts = coachFacts({ profile, plan: null, history: [] });
-    expect(facts.movements.length).toBe(MOVEMENTS.length);
+    expect(facts.movements.length).toBe(coachMovements().length);
     expect(facts.movements.some((m) => m.gps)).toBe(true); // a run is in there
     expect(facts.movements.some((m) => m.loadable)).toBe(true); // and something she can carry
+  });
+
+  it('⛔ the cardio machines are FILTERED from the offer, not deleted from the catalogue', () => {
+    /*
+     * FOUNDER SCOPE CALL, 2026-08-03: *"for the cardio, at the start it is enough to do just walking
+     * / running, and not deal with all the other things we added."*
+     *
+     * Each of them measures differently, records differently, and is a screen we have not designed —
+     * offering the coach a vocabulary the app cannot execute is how it prescribes a 2 km row onto a
+     * stage with no way to log it.
+     *
+     * ⚠️ AND THE DISTINCTION IS THE POINT. Deleting them from `MOVEMENTS` would break the display of
+     * every session an athlete has ALREADY recorded against one; history is not a catalogue we get
+     * to edit. So they stay resolvable and stop being offered — widening it later is one line.
+     */
+    const offeredIds = new Set(coachMovements().map((m) => m.id));
+    const catalogueIds = new Set(MOVEMENTS.map((m) => m.id));
+    for (const gone of ['row_erg', 'cycle_stationary', 'elliptical', 'stair_climber', 'swim', 'jump_rope', 'cycle_outdoor']) {
+      expect({ id: gone, offered: offeredIds.has(gone), resolvable: catalogueIds.has(gone) })
+        .toEqual({ id: gone, offered: false, resolvable: true });
+    }
+    // …and what a first release DOES do is still there.
+    for (const kept of ['run_outdoor', 'run_treadmill', 'walk_outdoor']) {
+      expect({ id: kept, offered: offeredIds.has(kept) }).toEqual({ id: kept, offered: true });
+    }
   });
 
   it('keeps both lists lean enough to sit in the cached half of every call', () => {

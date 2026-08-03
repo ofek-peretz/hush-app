@@ -51,6 +51,10 @@ export function ConnectHealth({ navigation, route }: Props) {
   const { t } = useCopy();
   const sex = route.params?.sex;
   const weightKg = route.params?.weightKg;
+  const age = route.params?.age;
+  const experience = route.params?.experience;
+  const daysPerWeekAsked = route.params?.daysPerWeek;
+  const workoutMinutes = route.params?.workoutMinutes;
   const [connected, setConnected] = useState(false);
   /**
    * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
@@ -143,7 +147,12 @@ export function ConnectHealth({ navigation, route }: Props) {
          * "write exactly that many sessions", so the very first reply was a four-day programme and
          * the question was never asked. `coachFacts` omits it now while it is 0.
          */
-        daysPerWeek: 0,
+        /*
+         * ⛔ HER ANSWER, FROM `YourWeek` — never a placeholder. This field was hard-coded to a
+         * literal 4 once, and it decided the founder's week without asking him. `0` remains the
+         * fallback so that `coachFacts` omits it rather than stating a number nobody gave.
+         */
+        daysPerWeek: daysPerWeekAsked ?? 0,
         // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
         // This was `'kg'` for everybody, so every American athlete was told her bodyweight in
         // kilos and then had to go and find a switch. `unitsForDevice` reads the measurement
@@ -156,6 +165,9 @@ export function ConnectHealth({ navigation, route }: Props) {
          * practice: `Bodyweight` is on the only path here, and `missingForCoach` is what proves it.
          */
         ...(weightKg != null ? { weightKg } : {}),
+        ...(age != null ? { age } : {}),
+        ...(experience != null ? { experience } : {}),
+        ...(workoutMinutes != null ? { workoutMinutes } : {}),
       },
     });
   }
@@ -163,7 +175,7 @@ export function ConnectHealth({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 4 }}
+      progress={{ index: 5, total: 6 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       voice={t('ob.healthSub')}

@@ -39,6 +39,8 @@ import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
+import { coachChangedCase } from '@/domain/coachWeek';
+import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { restWithSample, restedSeconds } from '@/domain/restPrescription';
@@ -2322,6 +2324,36 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   const { t } = useCopy();
   const session = useSession();
   const app = useApp();
+  /*
+   * ⛔ THE COACH'S OWN CASE, NOT THE ENGINE'S REASON FIELDS — found in the 2026-08-03 audit, and it
+   * is the FOURTH instance of one pattern: a surface still reading a number the deterministic engine
+   * produced, after the coach became the thing that decides.
+   *
+   * `buildPlanFromCoach` writes a target with `exerciseId`, `setIndex`, `recommendedWeight`,
+   * `recommendedReps`, `repBandLo`, `repBandHi` — and **no `reasonType` and no `reasonDelta`.** This
+   * sheet read those two fields for its verdict and its magnitude, so on every coach-built workout
+   * it answered "held · 0", whatever the coach had actually done to the load. The one screen whose
+   * entire job is explaining the number was the screen misreporting it.
+   *
+   * `coachChangedCase` is where that question already has an answer — Today has used it since the
+   * why-case shipped, measured off the current plan and the one before it. One home, two surfaces.
+   */
+  const [coachCase, setCoachCase] = useState<ChangedLiftCase | null>(null);
+  const exId = session.currentExerciseId;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [now, before, log] = await Promise.all([
+        db.loadCoachPlan().catch(() => null),
+        db.loadCoachPlanPrev().catch(() => null),
+        db.loadCoachLog().catch(() => null),
+      ]);
+      if (cancelled || !now || !exId) return;
+      const said = (log ?? []).find((d) => d.ex === exId)?.say;
+      setCoachCase(coachChangedCase(exId, now, before, said, units));
+    })();
+    return () => { cancelled = true; };
+  }, [exId, units]);
   // displayWeekNumber: an extended first bucket (mid-week signup) is still the
   // learning week — the Why sheet keeps the learning note until it rolls.
   const week = displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, Date.now());
@@ -2349,10 +2381,18 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   }
 
   const to = displayWeight(target.recommendedWeight, units) ?? 0;
-  const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
+  const deltaMag = coachCase
+    ? Math.abs(Number(coachCase.delta ?? 0))
+    : displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
   const unit = unitLabel(units);
-  const tone: 'up' | 'down' | 'hold' =
-    target.reasonType === 'increase' ? 'up' : target.reasonType === 'decrease' ? 'down' : 'hold';
+  /*
+   * The coach's verdict wins where there is one; the engine's fields remain the answer for a plan
+   * built the old way from a `ProgramDay`. Neither is a fallback for the other's absence — they are
+   * two eras, and a session belongs to exactly one of them.
+   */
+  const tone: 'up' | 'down' | 'hold' = coachCase
+    ? coachCase.verdict
+    : target.reasonType === 'increase' ? 'up' : target.reasonType === 'decrease' ? 'down' : 'hold';
   const toneColor = tone === 'up' ? up.stage : tone === 'down' ? down.stage : stage.ink1;
   const toneWash = tone === 'up' ? up.wash : tone === 'down' ? down.wash : color.fillSubtle;
   const verdict = tone === 'up' ? t('whyLoad.verdictUp') : tone === 'down' ? t('whyLoad.verdictDown') : t('whyLoad.verdictHold');

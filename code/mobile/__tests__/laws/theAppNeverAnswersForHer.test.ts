@@ -79,6 +79,18 @@ describe('the sheet says what is known and nothing else', () => {
       require('path').join(__dirname, '..', '..', 'src', 'screens', 'onboarding', 'ConnectHealth.tsx'),
       'utf8',
     ) as string;
-    expect(src).toContain('daysPerWeek: 0,');
+    /*
+     * ⛔ THE PLACEHOLDER IS STILL FORBIDDEN — but the field is no longer always empty (2026-08-03).
+     *
+     * The founder caught `daysPerWeek: 4` hard-coded here and watched the coach decide his week
+     * unasked. The fix then was to send nothing. Hours later he put frequency on the list of things
+     * onboarding must COLLECT, and `YourWeek` now asks her.
+     *
+     * Those are the same ruling: what he objected to was the APP INVENTING a number. `0` survives as
+     * the fallback precisely so `coachFacts` omits the field rather than stating a figure nobody
+     * gave — so this assertion still watches for a literal creeping back in.
+     */
+    expect(src).toContain('daysPerWeek: daysPerWeekAsked ?? 0,');
+    expect(src).not.toMatch(/daysPerWeek:\s*[1-9]/);
   });
 });

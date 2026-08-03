@@ -195,7 +195,25 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    */
   const [evidence, setEvidence] = useState<QuarterlyProgressEntry[] | null>(null);
   const [standing, setStanding] = useState<StandingRecord | null>(null);
-  const steady = loaded && (view?.changedCount ?? 0) === 0;
+  /*
+   * ⛔ "1 CHANGE" ON TODAY, "NOTHING CHANGED" IN HERE — founder, 2026-08-03:
+   *
+   *   > *"It also shows one change in green, but when I tap it, it says nothing changed."*
+   *
+   * Two screens counting two different things. Today's pill counts the COACH's decisions
+   * (`coachBrief` over the coach log). `steady` counted `view.changedCount`, which is the old
+   * engine's tally of lifts whose LOAD moved, derived from history. A coach that holds a lift and
+   * writes the reason is exactly one change by the first measure and zero by the second — so the
+   * pill lit, she tapped it, and the screen told her nothing had happened.
+   *
+   * ⚠️ AND THE ROWS WERE ALREADY THERE. `allChanges` reads `fromCoach` and builds a row per
+   * decision; only this flag disagreed, and it wins because it swaps the whole screen for the
+   * "steady week" copy. The fix is not new data — it is one source of truth for the count.
+   */
+  const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
+  const fromCoach = React.useMemo(() => coachBrief(coachLog, app.weekOpenMs), [coachLog, app.weekOpenMs]);
+  const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;
+  const steady = loaded && changedCount === 0;
   useEffect(() => {
     if (!steady) return;
     let active = true;
@@ -321,11 +339,6 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * started after it went. What the letter is FOR has not changed at all: what did Hush change,
    * and why. That is `coachLog`, filtered to this week, already written in her language.
    */
-  // Written by the load effect below, which is what `loaded` waits on — one read, one ordering.
-  const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
-  const fromCoach = React.useMemo(() => coachBrief(coachLog, app.weekOpenMs), [coachLog, app.weekOpenMs]);
-
-  const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;
   const whenLabel = view
     ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
     : '';

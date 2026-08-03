@@ -498,8 +498,21 @@ export function WellDone({ navigation, route }: Props) {
     navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
   }
   function goRecord() {
+    /*
+     * ⛔ THIS LANDED HER ON TODAY (founder 2026-08-03): *"when you press finish workout and then
+     * 'view the workout record', it throws you straight to the TODAY screen."*
+     *
+     * It reset `HomeTabs` to an inner route named `History` — and **History is not a tab.** The tab
+     * navigator holds Today · Cardio · Progress · You; History is a screen on the MAIN stack. React
+     * Navigation cannot find the route inside the navigator it was handed, so it silently falls back
+     * to the first tab. No error, no warning: the one control on the closing screen that promises to
+     * show her what she just did took her to the screen that shows what she does NEXT.
+     *
+     * Two entries in the stack instead: the tabs underneath, History on top — so the back gesture
+     * lands on Today, which is where a workout ends.
+     */
     app.clearPortraitFlag();
-    navigation.reset({ index: 0, routes: [{ name: 'HomeTabs', state: { routes: [{ name: 'History' }] } } as never] });
+    navigation.reset({ index: 1, routes: [{ name: 'HomeTabs' }, { name: 'History' }] as never });
   }
   /**
    * Any exit from the result passes through the milestone beat exactly once.

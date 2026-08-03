@@ -58,13 +58,13 @@ export function Bodyweight({ navigation, route }: Props) {
     const kg = units === 'lb' ? +(value / 2.2046226).toFixed(1) : value;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('ConnectHealth', { sex: route.params.sex, weightKg: kg });
+    navigation.navigate('AboutYou', { sex: route.params.sex, weightKg: kg });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 4 }}
+      progress={{ index: 2, total: 6 }}
       legend={t('ob.weightLegend')}
       title={t('ob.weightTitle')}
       voice={t('ob.weightSub')}

@@ -27,15 +27,18 @@ const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', r
  */
 
 const full: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
-  daysPerWeek: 0, healthConnected: false,
+  sex: 'female', weightKg: 62, age: 34, experience: 'intermediate',
+  daysPerWeek: 4, workoutMinutes: 60,
+  units: 'kg', goal: 'build_muscle', healthConnected: false,
 };
 
 describe('what the coach cannot work without', () => {
   it('names each requirement with the reason it is one', () => {
     // The list is the contract. A requirement with no stated reason is one nobody can argue with
     // later, which is how a floor becomes a questionnaire.
-    expect(REQUIRED_FOR_COACH.map((r) => r.key)).toEqual(['sex', 'weightKg']);
+    expect(REQUIRED_FOR_COACH.map((r) => r.key)).toEqual([
+      'sex', 'weightKg', 'age', 'experience', 'daysPerWeek', 'workoutMinutes',
+    ]);
     for (const r of REQUIRED_FOR_COACH) expect(r.why.length).toBeGreaterThan(20);
   });
 
@@ -47,8 +50,9 @@ describe('what the coach cannot work without', () => {
   it('⚠️ NO profile is missing everything, not nothing', () => {
     // `undefined` here means onboarding has not run. Answering "nothing is missing" would be the
     // exact hole this file exists to close, and it is the answer a naive `Object.keys` filter gives.
-    expect(missingForCoach(null)).toEqual(['sex', 'weightKg']);
-    expect(missingForCoach(undefined)).toEqual(['sex', 'weightKg']);
+    const every = ['sex', 'weightKg', 'age', 'experience', 'daysPerWeek', 'workoutMinutes'];
+    expect(missingForCoach(null)).toEqual(every);
+    expect(missingForCoach(undefined)).toEqual(every);
   });
 
   it('⚠️ a bodyweight of 0 is absence wearing a number', () => {
@@ -59,13 +63,19 @@ describe('what the coach cannot work without', () => {
     expect(missingForCoach({ ...full, sex: undefined })).toEqual(['sex']);
   });
 
-  it('⛔ daysPerWeek is NOT a requirement — the founder ruled it a question', () => {
+  it('⛔ a daysPerWeek of 0 is MISSING, not "the coach will ask"', () => {
     /*
-     * He caught the app handing the coach a placeholder 4 and watched it decide his week unasked:
-     * *"it decides on its own that it will do 4 workouts for me, without asking."* It stays
-     * something the coach asks her, in words — so a profile with 0 days is still READY.
+     * ⚠️ THIS ASSERTION WAS THE EXACT OPPOSITE THIS MORNING, and both versions were right at the
+     * time. The founder caught the app handing the coach a placeholder 4 — *"it decides on its own
+     * that it will do 4 workouts for me, without asking"* — and the fix then was to send nothing.
+     * Hours later he put frequency on the list of things onboarding must collect.
+     *
+     * Not a contradiction: what he objected to was the APP INVENTING a number. Asking HER is the
+     * opposite. A placeholder is a lie; a question is a question. `0` still means "not answered",
+     * which is why it reads as missing rather than as an answer of zero.
      */
-    expect(readyForCoach({ ...full, daysPerWeek: 0 })).toBe(true);
+    expect(missingForCoach({ ...full, daysPerWeek: 0 })).toEqual(['daysPerWeek']);
+    expect(readyForCoach({ ...full, daysPerWeek: 0 })).toBe(false);
   });
 });
 
@@ -92,6 +102,22 @@ describe('onboarding asks for every one of them', () => {
    * ⛔ THESE READ THE SCREENS. A requirement list that nothing collects is a document, and the whole
    * point of this batch is that the guarantee lives in the flow rather than in a hope.
    */
+  it('every requirement is collected by a step on the path', () => {
+    /*
+     * ⛔ THE ASSERTION THAT KEEPS THE LIST HONEST. Add a requirement without a screen that asks for
+     * it and this fails — which is the whole guarantee, since the original bug was a fact nothing
+     * anywhere collected.
+     */
+    const flow = ['NameEntry', 'Bodyweight', 'AboutYou', 'YourWeek', 'ConnectHealth']
+      .map((f) => read(`src/screens/onboarding/${f}.tsx`))
+      .join('\n');
+    for (const r of REQUIRED_FOR_COACH) {
+      // `sex` is the one whose state variable is named after the copy key rather than the field.
+      const asked = r.key === 'sex' ? flow.includes("t('ob.sex')") : new RegExp(`\\b${r.key}\\b`).test(flow);
+      expect({ key: r.key, asked }).toEqual({ key: r.key, asked: true });
+    }
+  });
+
   it('sex is asked on NameEntry, and carried forward', () => {
     const src = read('src/screens/onboarding/NameEntry.tsx');
     expect(src).toContain("t('ob.sex')");
@@ -106,7 +132,7 @@ describe('onboarding asks for every one of them', () => {
      */
     const src = read('src/screens/onboarding/Bodyweight.tsx');
     expect(src).toContain('<WheelPicker');
-    expect(src).toContain("navigation.navigate('ConnectHealth', { sex: route.params.sex, weightKg: kg })");
+    expect(src).toContain("navigation.navigate('AboutYou', { sex: route.params.sex, weightKg: kg })");
     // …and it is registered, or the route is a type that resolves to a blank screen.
     expect(read('src/app/Root.tsx')).toContain('name="Bodyweight"');
   });
