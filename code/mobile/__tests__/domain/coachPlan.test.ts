@@ -281,8 +281,19 @@ describe('the schema is what makes a small model succeed', () => {
     const json = JSON.stringify(COACH_PLAN_SCHEMA);
     expect(json).not.toContain('bb_bench_press');
     expect(json).not.toContain('run_outdoor');
-    // Small enough to sit beside the sheet on every call without being noticed.
-    expect(Math.round(json.length / 3.5)).toBeLessThan(500);
+    /*
+     * Small enough to sit beside the sheet on every call without being noticed.
+     *
+     * ⚠️ RAISED 500 → 600 WHEN `today` LANDED, and raising a budget is normally the wrong move, so
+     * here is why this one is not: what this test guards is the schema not becoming a SECOND COPY
+     * of the catalogue — the two assertions above are the check, and they are exact. This number is
+     * the smell test underneath them, and it moved because a real field arrived (six verbs, four
+     * properties) rather than because prose crept in.
+     *
+     * ⛔ And the schema stopped being printed in the preamble on the same day, so the request got
+     * 1,841 characters SHORTER while this grew by 90. Read the two together before touching either.
+     */
+    expect(Math.round(json.length / 3.5)).toBeLessThan(600);
   });
 });
 

@@ -21,7 +21,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
-import { EmphasesSheet } from './EmphasesSheet';
+import { SessionCoach } from './SessionCoach';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
@@ -49,7 +49,7 @@ import { color, space, stage, font, textScale, tracking, trackingPx, signal, up,
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points';
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'coach';
 export type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -657,12 +657,23 @@ export function SessionFlow({ navigation, route }: Props) {
             ordinal={chromeOrdinal}
             elapsedFrom={session.startedAtMs}
             onExit={openPause}
-            onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
+            /*
+             * ⛔ THE SWAP DISC IS GONE, AND ITS JOB IS NOT (founder 2026-08-02):
+             *
+             *   > *"I was wondering whether to add an AI window and remove SWAP. Then during the
+             *   > workout you can just ask the coach for anything and it happens."*
+             *
+             * Swap was one anticipated need with its own control; the coach serves every need,
+             * including the ones nobody anticipated. It survives as the first CHIP inside the
+             * window — same local code, same instant result, so nothing got slower (see
+             * `SessionCoach` for why the chips exist rather than a bare text field).
+             *
+             * The disc opens the conversation whenever a lift is on the stage. `emphases` no longer
+             * gates it: what she can ASK does not depend on whether the coach happened to write
+             * something, and the key points ride inside the window as its opening turn.
+             */
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
-            /* KEY POINTS (founder 2026-08-02) — the coach's own words about this workout, behind
-               one control instead of printed onto the stage. `undefined` when it wrote nothing:
-               a control that opens onto an empty sheet teaches her not to press it. */
-            onPoints={session.emphases.length > 0 ? () => setOverlay('points') : undefined}
+            onCoach={onLift && !confirm ? () => setOverlay('coach') : undefined}
           />
         )}
         {paceBeat ? (
@@ -761,8 +772,13 @@ export function SessionFlow({ navigation, route }: Props) {
         </BottomSheet>
       ) : null}
 
-      {overlay === 'points' ? (
-        <EmphasesSheet emphases={session.emphases} onClose={() => setOverlay('none')} />
+      {overlay === 'coach' ? (
+        <BottomSheet onClose={() => setOverlay('none')} heightFraction={0.92}>
+          <SessionCoach
+            onClose={() => setOverlay('none')}
+            onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
+          />
+        </BottomSheet>
       ) : null}
       {overlay === 'reasoning' ? (
         <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
@@ -945,7 +961,7 @@ function StageBar({
   onExit,
   onSwap,
   onDemo,
-  onPoints,
+  onCoach,
 }: {
   center?: string;
   ordinal?: string;
@@ -953,8 +969,11 @@ function StageBar({
   onExit: () => void;
   onSwap?: () => void;
   onDemo?: () => void;
-  /** The coach's key points for this workout. Absent when it wrote none — see `domain/emphases`. */
-  onPoints?: () => void;
+  /**
+   * Open the conversation with the coach. Absent only when there is no lift on the stage — a
+   * transition or a confirmation is not a moment to ask about a lift she is not on.
+   */
+  onCoach?: () => void;
 }) {
   const { t } = useCopy();
   const hasLabel = !!(ordinal || center);
@@ -995,9 +1014,10 @@ function StageBar({
           </StageDisc>
         ) : null}
         {/* `speech` and not a lightbulb or an ℹ: this is not the app informing her, it is the
-            COACH talking. The glyph names the speaker, which is the whole distinction. */}
-        {onPoints ? (
-          <StageDisc accessibilityLabel={t('workout.keyPoints')} onPress={onPoints}>
+            COACH talking. The glyph names the speaker, which is the whole distinction — and since
+            the founder's ruling it is literally true: pressing it opens a conversation. */}
+        {onCoach ? (
+          <StageDisc accessibilityLabel={t('sessionCoach.open')} onPress={onCoach}>
             <Icon name="speech" size={15} color={stage.ink0} strokeWidth={1.7} />
           </StageDisc>
         ) : null}

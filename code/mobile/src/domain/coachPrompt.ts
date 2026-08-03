@@ -308,12 +308,22 @@ names) and how bad it is: "twinge", "pain" or "sharp". The app rests that muscle
 nothing else — she no longer taps a body map, so if you do not report it, nothing is rested. Leave
 it out when she is asking about a niggle rather than reporting an injury.
 
+"today": SHE IS MID-WORKOUT AND THIS CHANGES THE SESSION SHE IS STANDING IN. Only on turns where
+the ask tells you a workout is running. She says "my shoulder is tight" or "the rack is taken" or
+"I have to leave in ten minutes" — decide what should happen and write it here; the app does it to
+her screen before she takes another set. Nothing is done to the sets she has already finished.
+  {"do":"drop","ex":"..."}            take it out of today
+  {"do":"defer","ex":"..."}           come back to it later in the session
+  {"do":"swap","ex":"...","to":"..."} put another exercise in its place
+  {"do":"sets","ex":"...","n":3}      that many rounds of it from here
+  {"do":"load","ex":"...","n":40}     that load from here (null = bodyweight)
+  {"do":"end"}                        finish after the set she is on
+Anything you want that is not one of these six, say it in "say" and she will do it. Say what you
+changed and why, in "say", as well — a screen that changes under her with nothing said is alarming.
+
 "learned": what she SAID this turn about her bodyweight, days per week, or session length — you are
 the only part of the app that hears her. Never a guess or a default; leave it out if she has not
-said. "weightKg" is kilograms whatever unit she used.
-
-SCHEMA:
-${JSON.stringify(COACH_PLAN_SCHEMA)}`;
+said. "weightKg" is kilograms whatever unit she used.`;
 }
 
 /**
@@ -321,6 +331,22 @@ ${JSON.stringify(COACH_PLAN_SCHEMA)}`;
  *
  * **Takes no arguments on purpose.** See the file header: a function that cannot be handed an
  * athlete cannot leak one into the cached prefix.
+ */
+/*
+ * ════ ⚠️ THE SCHEMA IS NOT PRINTED IN HERE, AND IT USED TO BE ════
+ *
+ * The preamble ended with a SCHEMA: heading and the whole of COACH_PLAN_SCHEMA stringified — 1,841
+ * characters, on every call, of a constraint Google is ALREADY enforcing: every caller sends the schema as
+ * `responseSchema`, which is not a request but a hard shape the model cannot answer outside.
+ *
+ * It cost twice over. It was 9% of a preamble whose LENGTH is the documented cause of the worst
+ * regression this project has had (`theCoachIsNotDrownedInInstructions`) — and it was a SECOND COPY
+ * that could disagree with the first. The post-session call is constrained by
+ * `COACH_DECISION_SCHEMA`, where `sessions` is required; the text copy said `required: ["say"]`.
+ * On the one call the product sells, the prompt contradicted the wire.
+ *
+ * Nothing was lost: every field is explained in prose above, in the terms the schema cannot carry —
+ * what `brief` is FOR, when to leave `hurts` out. That is the half worth spending characters on.
  */
 export function preamble(): string {
   return [
@@ -364,6 +390,18 @@ export type CoachAsk =
    * carries, plus the sentence that says what just happened to it.
    */
   | { kind: 'revise'; why: string }
+  /**
+   * ⛔ SHE IS INSIDE A WORKOUT AND HAS SAID SOMETHING (founder 2026-08-02).
+   *
+   * The one ask where `today` is meaningful — the coach can change the session she is standing in.
+   *
+   * ⚠️ SEPARATE FROM `revise`, AND THE DIFFERENCE IS THE SCHEMA, NOT THE WORDING. `revise` requires
+   * a whole programme back, which is right for "she now trains four days" and badly wrong here: it
+   * would answer "the rack is taken" with a rewritten month, every time. This is the mistake
+   * `COACH_PLAN_SCHEMA` exists to prevent, and it would have been reintroduced by reusing `revise`
+   * because the two asks look so alike.
+   */
+  | { kind: 'in_session'; why: string }
   /** She said something. Answer it. The whole conversation so far, hers last. */
   | { kind: 'chat'; turns: CoachSaid[] }
   /** The intake conversation — no record yet, and the brief is being built. */
@@ -512,6 +550,19 @@ ${JSON.stringify(hersAlone(facts))}
           'else that says what she does. Say what you changed and why in "say".',
       });
       break;
+    case 'in_session':
+      blocks.push({
+        text:
+          `${ask.why}
+
+` +
+          'Answer HER, in a sentence or two — she is mid-set and cannot read a paragraph. If ' +
+          'something about the rest of today should change, put it in "today" and say what you ' +
+          'changed. Leave "sessions" out unless this changes what she trains in FUTURE weeks; ' +
+          'the session in front of her is "today", not a new programme.',
+      });
+      break;
+
     case 'chat':
       blocks.push({
         text:

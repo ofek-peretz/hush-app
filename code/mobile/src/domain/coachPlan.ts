@@ -64,6 +64,7 @@ const MUSCLES = new Set<string>(EXERCISES.map((e) => e.muscle));
 import { MOVEMENTS, type Movement } from '@/data/movements';
 import { normalizeLoad } from '@/engine/loadMath';
 import type { CoachFacts } from './coachFacts';
+import { LIVE_EDIT_VERBS, type LiveEdit } from './liveRevision';
 
 /**
  * Bumped from 1 when the shape widened past lifts. Version 1 could not describe a run and never
@@ -186,6 +187,14 @@ export interface CoachAnswer {
    * product that hears her; nothing here decides whether it believes her.
    */
   hurts?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp' };
+  /**
+   * ⛔ CHANGES TO THE WORKOUT SHE IS STANDING IN — see `today` on the schema.
+   *
+   * The founder's *"you ask for anything in the chat window and it happens"*. Only meaningful while
+   * a session is running; ignored otherwise. `domain/liveRevision` owns what each verb does and the
+   * invariant that nothing behind her moves.
+   */
+  today?: LiveEdit[];
   /**
    * Which of its two intake moves the coach says it just made — see `next` on the schema.
    *
@@ -395,6 +404,46 @@ export const COACH_PLAN_SCHEMA = {
         severity: { type: 'string', enum: ['twinge', 'pain', 'sharp'] },
       },
     },
+    /*
+     * ════ WHAT TO CHANGE ABOUT THE WORKOUT SHE IS IN RIGHT NOW ════
+     *
+     * ⛔ FOUNDER, 2026-08-02: *"During the workout you can just ask the coach for anything in the
+     * chat window and it happens — skip an exercise, or anything else."*
+     *
+     * `sessions` is next week. This is today, mid-session, and the two must not be confused: a
+     * programme rewrite cannot express "take the last two sets off this lift, I have to leave", and
+     * a live edit cannot express "here is your next four weeks".
+     *
+     * ⚠️ SIX VERBS, AND THE NARROWNESS IS NOT A LEASH ON ITS JUDGEMENT. It writes into a machine
+     * that is mid-execution, with logged sets behind it and a watch mirroring it — prose cannot be
+     * applied to a state machine. The coach decides freely WHAT should change; this is the gauge of
+     * the wire that carries it. Anything outside these six it says in `say`, and she does it, which
+     * is exactly how pain has always worked.
+     */
+    today: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['do'],
+        properties: {
+          do: { type: 'string', enum: [...LIVE_EDIT_VERBS] },
+          /** The exercise id it is about. Absent only on `end`, which is about the session. */
+          ex: { type: 'string' },
+          /**
+           * `swap` only: the exercise id to put in its place.
+           *
+           * ⚠️ SEPARATE FROM `n` ON PURPOSE. One field holding either a word or a number would be
+           * declared `["string","number","null"]`, and `geminiSchema` collapses a union to its
+           * first non-null member — it would reach Google as a bare STRING and every numeric edit
+           * would come back as `"3"` and be dropped by the parse, silently.
+           */
+          to: { type: 'string' },
+          /** `sets`: how many rounds. `load`: the new weight, or null for bodyweight. */
+          n: { type: ['number', 'null'] },
+        },
+      },
+    },
     sessions: {
       type: 'array',
       items: {
@@ -545,6 +594,57 @@ function readLearned(raw: unknown): { learned?: LearnedAboutHer } {
  * within the ladder she has actually used (F-2) rather than a generic increment. Without it the
  * snap still works, it is just coarser.
  */
+/**
+ * ════ THE LIVE EDITS, VALIDATED ONE VERB AT A TIME ════
+ *
+ * ⚠️ EVERY EDIT IS CHECKED ON ITS OWN AND A BAD ONE IS DROPPED, not the whole list. The coach
+ * asking for three changes and getting two wrong on the third is far better than her getting none
+ * — and a list rejected wholesale is the failure that is invisible from her side, because `say`
+ * still describes all three.
+ *
+ * An exercise id is NOT checked against the catalogue here: the session decides whether the lift is
+ * in TODAY, which is a stronger question, and `reviseToday` already returns unchanged when it is
+ * not. Two validators disagreeing about the same id is how an edit goes missing with nobody at
+ * fault.
+ */
+function readToday(raw: unknown): { today?: LiveEdit[] } {
+  if (!Array.isArray(raw)) return {};
+  const out: LiveEdit[] = [];
+  for (const e of raw) {
+    if (!isObj(e) || typeof e.do !== 'string') continue;
+    const ex = typeof e.ex === 'string' ? e.ex.trim() : '';
+    switch (e.do) {
+      case 'end':
+        out.push({ do: 'end' });
+        break;
+      case 'drop':
+      case 'defer':
+        if (ex) out.push({ do: e.do, ex });
+        break;
+      case 'sets':
+        // A count is an integer above zero. `sets: 0` is `drop` said badly, and honouring it as a
+        // drop would be us deciding what it meant.
+        if (ex && typeof e.n === 'number' && Number.isFinite(e.n) && e.n >= 1) {
+          out.push({ do: 'sets', ex, n: Math.round(e.n) });
+        }
+        break;
+      case 'load':
+        // `null` is meaningful — it is bodyweight, and dropping it would leave a fabricated weight
+        // on a lift the coach just took the load off.
+        if (ex && (e.n === null || (typeof e.n === 'number' && Number.isFinite(e.n) && e.n >= 0))) {
+          out.push({ do: 'load', ex, n: e.n as number | null });
+        }
+        break;
+      case 'swap':
+        if (ex && typeof e.to === 'string' && e.to.trim()) out.push({ do: 'swap', ex, to: e.to.trim() });
+        break;
+      default:
+        break;
+    }
+  }
+  return out.length > 0 ? { today: out } : {};
+}
+
 export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): ParsedPlan {
   let root: unknown = raw;
   if (typeof raw === 'string') {
@@ -578,6 +678,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     (hurtRaw.severity === 'twinge' || hurtRaw.severity === 'pain' || hurtRaw.severity === 'sharp')
       ? { hurts: { muscle: hurtRaw.muscle, severity: hurtRaw.severity as 'twinge' | 'pain' | 'sharp' } }
       : {};
+  const today = readToday(root.today);
   const learned = readLearned(root.learned);
   /*
    * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
@@ -632,7 +733,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief, ...spokenNotes, ...hurts }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief, ...spokenNotes, ...hurts, ...today }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -759,6 +860,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       say,
       ...next,
       ...hurts,
+      ...today,
       plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
       ...brief,

@@ -21,6 +21,7 @@ import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
+import { SessionCoach } from '@/screens/session/SessionCoach';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
@@ -151,6 +152,7 @@ const sessionFixture = {
     { ex: 'bb_bench_press', say: 'Leave one rep in the tank on the first two sets. The last one is the one I am reading.' },
     { ex: 'db_row', say: 'Your right side has been the slower one for three weeks, so start every set on it.' },
   ],
+  reviseToday: () => 0,
   globalProgress: { index: 1, total: 24 },
   exerciseProgress: { index: 0, total: 6 },
   nextExercise: null,
@@ -1227,7 +1229,7 @@ export const GALLERY: GalleryEntry[] = [
      swap + form right). It is the only state in which the stage bar's sides are uneven, and it is
      the state the founder photographed for A.6; every other 2.2 fixture sits on set 2, where the
      swap is gone and the bar self-corrects. Nothing could see it. */
-  { id: '2.2e', label: 'The set — first set (swap offered)', status: 'live', note: 'three chrome discs: the only state where the bar’s sides differ', render: () =>
+  { id: '2.2e', label: 'The set — first set (swap offered)', status: 'live', note: 'set 1 — the bar now carries the SAME three discs on every set; the coach disc replaced the swap, which is a chip inside it', render: () =>
     mount(SessionFlow, undefined, {
       ...(sessionFixture as unknown as Record<string, unknown>),
       setLabel: { n: 1, m: 4 },
@@ -1361,7 +1363,22 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
-  { id: '2.2n', label: 'Key points — the coach’s words for this workout', status: 'live', note: 'behind the speech disc on both stages; absent entirely when the coach wrote nothing', render: () => (
+  /*
+   * ⚠️ MOUNTED ON SET **1**, and that is the whole reason this fixture exists.
+   *
+   * `sessionFixture` sits on set 2, where `isSwapMoment` is false — so the SWAP chip is correctly
+   * absent, and the gallery could not see the control the founder's ruling is actually about. Same
+   * law as `gallery-cannot-see-what-it-cannot-drive`: a state the harness cannot produce is a state
+   * nobody looks at.
+   */
+  { id: '2.2p', label: 'The coach, inside the workout', status: 'live', note: 'the disc that used to be SWAP: the points open the thread, the chips are the old controls, typing is everything else', render: () => (
+    <InApp session={{ ...sessionFixture, setLabel: { n: 1, m: 4 } } as React.ContextType<typeof SessionContext>}>
+      <OnStage>
+        <SessionCoach onClose={noop} onSwap={noop} />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '2.2n', label: 'Key points — the coach’s words (cardio)', status: 'live', note: 'the read-only sheet: cardio keeps it, because she is running and cannot type', render: () => (
     <InApp>
       <OnStage>
         <EmphasesSheet

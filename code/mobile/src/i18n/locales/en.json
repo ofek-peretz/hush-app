@@ -1183,5 +1183,15 @@
     "thu": "Thu",
     "fri": "Fri",
     "sat": "Sat"
+  },
+  "sessionCoach": {
+    "invitation": "Tell me anything — I can change what is left of today.",
+    "chipSwap": "Swap this",
+    "chipSkip": "Skip this",
+    "chipBusy": "It's taken",
+    "skipped": "Taken {{name}} out of today.",
+    "cannotSkip": "That is the last thing left today — skipping it ends the workout.",
+    "nothingChanged": "Nothing there for me to change.",
+    "open": "Talk to your coach"
   }
 }

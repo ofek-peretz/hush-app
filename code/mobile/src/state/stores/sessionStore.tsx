@@ -63,6 +63,7 @@ function worthQueuing(e: unknown): boolean {
 // median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
 // importer (Home, the watch plan, tests) keeps its single import point.
 import { emphasesOf, type Emphasis } from '@/domain/emphases';
+import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
@@ -361,6 +362,14 @@ export interface SessionView {
   finishEarly: () => Promise<CompleteResult>;
   /** Mid-session "choose another": swap the UPCOMING exercise in place (situational,
    *  not persisted — §7.3). Capability is preserved (Replacement stays in-class). */
+  /**
+   * ⛔ THE COACH'S WRITE PATH INTO THE RUNNING SESSION (founder 2026-08-02).
+   *
+   * *"You can just ask the coach for anything in the chat window and it happens."* This is the
+   * "it happens". Returns how many edits actually landed — the caller says nothing changed rather
+   * than reporting a change that did not occur.
+   */
+  reviseToday: (edits: LiveEdit[]) => number;
   swapNextExercise: (exerciseId: string) => void;
   /** Swap the CURRENT exercise in place (situational, not persisted). Only meaningful
    *  before any of its sets are logged; capability/load progression are preserved. */
@@ -1783,6 +1792,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             : st,
         );
         dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+      },
+      reviseToday(edits) {
+        /*
+         * ⛔ FROM THE STEP SHE IS ON, NEVER BEHIND IT. A logged set is a fact about her body; no
+         * answer from a model may rewrite one. `applyLiveEdit` enforces the same boundary, and this
+         * is where the boundary's VALUE comes from.
+         */
+        const from = machine.setIndex;
+        let next = plan;
+        let landed = 0;
+        for (const edit of edits) {
+          const before = next;
+          if (edit.do === 'swap') {
+            // The store owns the target table, so the swap adopts the NEW lift's own prescription
+            // rather than carrying a bench load onto a machine pin — the rule `retargetPlanForSwap`
+            // exists for, and the reason this one verb is not in `applyLiveEdit`.
+            const at = next.findIndex((st, i) => i >= from && st.exerciseId === edit.ex);
+            if (at >= 0 && !alreadyInPlan(next, edit.to)) {
+              next = retargetPlanForSwap(next, state.targets, at, edit.to);
+            }
+          } else if (edit.do === 'defer') {
+            const at = next.findIndex((st, i) => i >= from && st.exerciseId === edit.ex);
+            if (at >= 0) next = deferCurrentExercise(next, at);
+          } else {
+            next = applyLiveEdits(next, from, [edit]);
+          }
+          if (next !== before) landed += 1;
+        }
+        if (landed === 0) return 0;
+        void track('coach_revised_today', { sessionId: sessionRef.current?.id, edits: edits.length, landed });
+        dispatch({ type: 'SWAP_PLAN', plan: next });
+        return landed;
       },
       swapNextExercise(exerciseId) {
         const startIdx = machine.setIndex + 1; // the upcoming exercise

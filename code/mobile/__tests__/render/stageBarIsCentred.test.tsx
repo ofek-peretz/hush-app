@@ -60,6 +60,7 @@ function makeSession(setN: number) {
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: setN, m: 4 },
     emphases: [],
+    reviseToday: () => 0,
     nextSetLabel: { n: setN + 1, m: 4 },
     globalProgress: { index: setN, total: 24 },
     exerciseProgress: { index: 0, total: 6 },
@@ -140,13 +141,36 @@ function sideGroups(r: ReactTestRenderer) {
 }
 
 describe('the stage bar centres its middle group', () => {
-  it('offers the swap on set 1 and not on set 2 — the state that made this intermittent', () => {
-    expect(
-      draw(1).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
-    ).toBeGreaterThan(0);
-    expect(
-      draw(2).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
-    ).toBe(0);
+  it('⚠️ no longer carries a swap disc — the coach window took its job', () => {
+    /*
+     * ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: a swap disc present on set 1 and absent on set 2,
+     * which was the state that made the bar's centring intermittent (the sides carried different
+     * numbers of discs).
+     *
+     * FOUNDER, 2026-08-02: *"I was wondering whether to add an AI window and remove SWAP. Then
+     * during the workout you can just ask the coach for anything and it happens."* Swap was ONE
+     * anticipated need with its own control; the coach serves every need. It survives as the first
+     * chip inside the window — same local code, same instant result — so nothing she could do
+     * before became slower or impossible. See `SessionCoach`.
+     *
+     * ⚠️ The centring case this file exists for is BETTER now, not gone: the end side carries a
+     * fixed two discs instead of one-or-two. The next assertion is what actually holds it.
+     */
+    for (const setN of [1, 2]) {
+      expect(
+        draw(setN).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
+      ).toBe(0);
+    }
+  });
+
+  it('opens the coach from the bar, on every set', () => {
+    // What replaced it, and unlike the swap it does NOT come and go — what she can ask does not
+    // depend on which set she is on.
+    for (const setN of [1, 2]) {
+      expect(
+        draw(setN).root.findAll((n) => n.props.accessibilityLabel === tg('sessionCoach.open')).length,
+      ).toBeGreaterThan(0);
+    }
   });
 
   it('gives both side groups the same flex, so the centre holds whatever they carry', () => {

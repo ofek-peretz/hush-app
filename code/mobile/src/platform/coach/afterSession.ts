@@ -28,7 +28,8 @@ import { db } from '@/data/local/db';
 import { health } from '@/platform/health';
 import { currentLocale } from '@/i18n';
 import { coachFacts } from '@/domain/coachFacts';
-import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import { COACH_DECISION_SCHEMA, COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import type { LiveEdit } from '@/domain/liveRevision';
 import { applyLearned } from '@/domain/coachLearned';
 import { coachRequest } from '@/domain/coachPrompt';
 import type { Session } from '@/data/local/models';
@@ -64,6 +65,15 @@ export interface CoachUpdate {
   trouble?: CoachFailure | UnreadableReason;
   /** What the coach said, when it said anything. Shown to her; never invented here. */
   say?: string;
+  /**
+   * ⛔ CHANGES TO THE WORKOUT SHE IS STANDING IN (founder 2026-08-02).
+   *
+   * Carried back rather than applied here, and that is deliberate: this module has no session — it
+   * runs after one has ENDED, and on a cold start it may run with no screen mounted at all. Only
+   * the live session can apply an edit to itself, and only it knows whether the lift is still
+   * ahead of her. See `SessionCoach`, which is the caller that has one.
+   */
+  today?: LiveEdit[];
 }
 
 /*
@@ -119,6 +129,20 @@ export function onCoachUpdate(fn: CoachUpdateListener): () => void {
  */
 export async function askCoachToRevise(why: string): Promise<CoachUpdate> {
   return runCoachCall({ kind: 'revise', why });
+}
+
+/**
+ * ⛔ SHE SAID SOMETHING WHILE THE WORKOUT IS RUNNING (founder 2026-08-02).
+ *
+ * The only call that can come back with `today` — changes to the session she is standing in. Kept
+ * apart from `askCoachToRevise` because that one requires a whole programme in reply, and answering
+ * *"the rack is taken"* with a rewritten month is the failure `COACH_PLAN_SCHEMA` exists to prevent.
+ */
+export async function askCoachInSession(
+  why: string,
+  images?: { mime: string; data: string }[],
+): Promise<CoachUpdate> {
+  return runCoachCall({ kind: 'in_session', why, ...(images?.length ? { images } : {}) });
 }
 
 /**
@@ -195,7 +219,8 @@ export async function retryWaitingUpdate(): Promise<CoachUpdate | null> {
 
 type Occasion =
   | { kind: 'after_session'; justFinished: Session }
-  | { kind: 'revise'; why: string };
+  | { kind: 'revise'; why: string }
+  | { kind: 'in_session'; why: string; images?: { mime: string; data: string }[] };
 
 async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
   const justFinished = occasion.kind === 'after_session' ? occasion.justFinished : null;
@@ -267,12 +292,19 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
         ask:
           occasion.kind === 'after_session'
             ? { kind: 'after_session' }
-            : { kind: 'revise', why: occasion.why },
+            : occasion.kind === 'in_session'
+              ? { kind: 'in_session', why: occasion.why }
+              : { kind: 'revise', why: occasion.why },
       }),
-      // The DECISION schema, not the plan schema: on this call `sessions` is required, so omitting
-      // it is not something the model can do. Prose asked for it first and prose lost — see
-      // `COACH_DECISION_SCHEMA`.
-      COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
+      /*
+       * The DECISION schema, not the plan schema: on these calls `sessions` is required, so omitting
+       * it is not something the model can do. Prose asked for it first and prose lost — see
+       * `COACH_DECISION_SCHEMA`.
+       *
+       * ⚠️ EXCEPT MID-SESSION. She asked one question from inside a workout; requiring a whole
+       * programme back would answer "my shoulder is tight" with a rewritten month and bill for it.
+       */
+      (occasion.kind === 'in_session' ? COACH_PLAN_SCHEMA : COACH_DECISION_SCHEMA) as unknown as Record<string, unknown>,
     );
     if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: reply.reason });
 
@@ -303,6 +335,7 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       outcome: parsed.answer.plan ? 'decided' : 'spoke',
       sessionId,
       say: parsed.answer.say,
+      ...(parsed.answer.today?.length ? { today: parsed.answer.today } : {}),
     });
   } catch {
     /*

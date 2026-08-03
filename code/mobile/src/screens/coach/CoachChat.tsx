@@ -213,9 +213,23 @@ export interface CoachChatProps {
    * message, and neither survives the first turn.
    */
   invitation: string;
+  /**
+   * ⛔ ONE-TAP ACTIONS ABOVE THE COMPOSER (founder 2026-08-02, replacing the swap disc with this
+   * window): *"keep the chat window in case she wants to say something else."*
+   *
+   * The window is the ONE door on the workout screen — swap, skip, the rack being taken, and
+   * anything nobody anticipated. The first three used to be their own controls, and losing them to
+   * a blank text field would cost two things a text field cannot pay back: the SPEED (a tap is
+   * instant and local; a sentence is a model call, and she is standing at a loaded bar) and the
+   * TELLING (the swap disc was how she learnt a swap was allowed at all — "let the control speak").
+   *
+   * So the chips ARE those controls, moved inside the door rather than deleted. Typing is for
+   * everything else, which is the half only the coach can serve.
+   */
+  chips?: { label: string; onPress: () => void }[];
 }
 
-export function CoachChat({ turns, busy = false, onSend, invitation, plan, units = 'kg', onAccept }: CoachChatProps) {
+export function CoachChat({ turns, busy = false, onSend, invitation, plan, units = 'kg', onAccept, chips }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
   const [attached, setAttached] = useState<CoachImage[]>([]);
@@ -312,6 +326,22 @@ export function CoachChat({ turns, busy = false, onSend, invitation, plan, units
               <View style={styles.thumbX}>
                 <Icon name="close" size={12} color={stage[0]} strokeWidth={2.6} />
               </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {chips?.length ? (
+        <View style={styles.chips}>
+          {chips.map((c) => (
+            <Pressable
+              key={c.label}
+              accessibilityRole="button"
+              accessibilityLabel={c.label}
+              onPress={c.onPress}
+              style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+            >
+              <Text style={styles.chipLabel}>{c.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -442,6 +472,15 @@ const styles = StyleSheet.create({
   },
   // A press changes the SURFACE, never the content's opacity (`aPressNeverDimsWhatYouPressed`).
   attachPressed: { backgroundColor: color.surface2 },
+  // A row that WRAPS: three Hebrew labels do not fit on one 390px line, and a chip pushed off the
+  // edge is a control that does not exist.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
+  chip: {
+    paddingHorizontal: 14, height: 36, borderRadius: 18, justifyContent: 'center',
+    backgroundColor: 'rgba(241,238,229,0.08)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.14)',
+  },
+  chipPressed: { backgroundColor: 'rgba(241,238,229,0.15)' },
+  chipLabel: { fontFamily: font.sansMedium, fontSize: 14.5, color: stage.ink0, textAlign: 'left' },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

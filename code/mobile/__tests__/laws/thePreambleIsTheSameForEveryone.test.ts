@@ -155,8 +155,36 @@ describe('the stable half is worth caching at all', () => {
     expect(tok(preamble())).toBeLessThan(12000);
   });
 
-  it('states the schema from the schema, so prose cannot describe an older one', () => {
-    expect(preamble()).toContain(JSON.stringify(COACH_PLAN_SCHEMA));
+  it('⚠️ does NOT print the schema, because Google is already enforcing it', () => {
+    /*
+     * ⛔ THIS ASSERTION USED TO BE ITS OWN INVERSE — `expect(preamble()).toContain(...)` — and the
+     * reasoning behind it was sound at the time: *state the schema FROM the schema, so prose cannot
+     * describe an older one.* That reasoning solved a problem we no longer have.
+     *
+     * Every caller now sends the schema as `responseSchema`, which is not a description the model
+     * reads and may misremember — it is a shape it cannot answer outside. The printed copy was
+     * 1,841 characters, 9% of a preamble whose LENGTH is the documented cause of the worst
+     * regression this project has had (a 34,878-char prompt wrote a one-exercise week).
+     *
+     * ⚠️ AND IT WAS THE WRONG SCHEMA ON THE CALL THAT MATTERS MOST. The preamble printed
+     * `COACH_PLAN_SCHEMA`, where `sessions` is optional. The post-session call is constrained by
+     * `COACH_DECISION_SCHEMA`, where it is REQUIRED. On the one call the product sells, the prompt
+     * contradicted the wire — the exact class of failure the old assertion existed to prevent,
+     * caused by the mechanism it chose to prevent it with.
+     */
+    expect(preamble()).not.toContain(JSON.stringify(COACH_PLAN_SCHEMA));
+    expect(preamble()).not.toContain('additionalProperties');
+
+    /*
+     * What replaces it: every field the coach may fill is NAMED and explained in prose — in the
+     * terms a schema cannot carry (what `brief` is FOR, when to leave `hurts` out). A field added
+     * to the schema and never mentioned here is a field the coach does not know it has, which is
+     * the failure this half of the law now guards.
+     */
+    const text = preamble();
+    for (const field of Object.keys(COACH_PLAN_SCHEMA.properties)) {
+      expect({ field, explained: text.includes(`"${field}"`) }).toEqual({ field, explained: true });
+    }
   });
 
   it('names every shape and both id lists the coach is allowed to draw from', () => {

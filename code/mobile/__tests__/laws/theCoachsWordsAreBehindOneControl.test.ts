@@ -79,22 +79,31 @@ describe('the control is on both stages, and opens onto something', () => {
   const flow = () => read('src/screens/session/SessionFlow.tsx');
   const cardio = () => read('src/screens/cardio/Cardio.tsx');
 
-  it('the strength stage carries the disc, and mounts the sheet it opens', () => {
-    expect(flow()).toMatch(/onPoints=\{session\.emphases\.length > 0 \? \(\) => setOverlay\('points'\) : undefined\}/);
-    expect(flow()).toContain("<EmphasesSheet emphases={session.emphases}");
+  it('⚠️ on the STRENGTH stage the disc opens the conversation, and the points open it', () => {
+    /*
+     * ⛔ THE SECOND RULING, HOURS AFTER THE FIRST. The disc was a read-only key-points sheet; the
+     * founder then replaced the swap disc with a coach WINDOW. A briefing that only lives behind a
+     * control she can no longer reach is a feature deleted by accident — so the points became the
+     * conversation's opening turn instead of a second sheet behind a second control.
+     */
+    expect(flow()).toMatch(/onCoach=\{onLift && !confirm \? \(\) => setOverlay\('coach'\) : undefined\}/);
+    expect(flow()).toContain('<SessionCoach');
+    expect(read('src/screens/session/SessionCoach.tsx')).toMatch(/useState<CoachTurn\[\]>\([\s\S]{0,40}session\.emphases\.map/);
   });
 
-  it('⚠️ the disc is ABSENT when the coach wrote nothing, on both surfaces', () => {
-    // A control that opens onto an empty sheet teaches her not to press it — which costs more than
-    // never having offered it. Strength gates on the count; cardio gates on the sentence existing.
-    expect(flow()).toContain('session.emphases.length > 0 ?');
+  it('⚠️ CARDIO keeps the read-only sheet, and that is not an inconsistency', () => {
+    // She is RUNNING. A conversation is a thing you have standing still between sets; on a live run
+    // the coach's line is something to read, not somewhere to type. Same glyph, same words, one
+    // less thing to do with them.
+    expect(cardio()).toContain("import { EmphasesSheet } from '@/screens/session/EmphasesSheet'");
     expect(cardio()).toMatch(/\{props\.say \? \(\s*<Pressable/);
-    // …and the sheet itself refuses to draw an empty list even if a caller gets it wrong.
+    // …and the sheet refuses to draw an empty list even if a caller gets it wrong.
     expect(read('src/screens/session/EmphasesSheet.tsx')).toContain('if (emphases.length === 0) return null;');
   });
 
-  it('cardio opens the SAME sheet — one place for the coach\'s words, not two designs', () => {
-    expect(cardio()).toContain("import { EmphasesSheet } from '@/screens/session/EmphasesSheet'");
+  it('cardio names the exercise its point is about', () => {
+    // Without `ex` every cardio point would be titled "run_outdoor" — including a row, a bike and
+    // a walk.
     expect(cardio()).toMatch(/emphases=\{\[\{ ex: props\.exerciseId \?\? 'run_outdoor', say: props\.say \}\]\}/);
   });
 
@@ -115,7 +124,7 @@ describe('the control is on both stages, and opens onto something', () => {
   });
 
   it('the glyph names the SPEAKER — it is the coach talking, not the app informing', () => {
-    expect(flow()).toMatch(/accessibilityLabel=\{t\('workout\.keyPoints'\)\}[\s\S]{0,120}name="speech"/);
+    expect(flow()).toMatch(/accessibilityLabel=\{t\('sessionCoach\.open'\)\}[\s\S]{0,120}name="speech"/);
     expect(cardio()).toMatch(/accessibilityLabel=\{t\('workout\.keyPoints'\)\}[\s\S]{0,320}name="speech"/);
   });
 });
