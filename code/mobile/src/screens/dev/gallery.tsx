@@ -1471,11 +1471,12 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '3.3c', label: 'Cardio record', status: 'live', render: cardioRecord },
-  { id: '3.4', label: 'Cardio — live', status: 'live', note: 'the clock is frozen — the harness has no GPS', render: () => (
+  { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach's line is on it", render: () => (
     <InApp>
       <CardioLiveView
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
+        say="בקצב שאפשר לדבר בו — זה היום הקל של השבוע."
         hr={141}
         calories={318}
         splits={runSplits}

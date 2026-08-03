@@ -222,6 +222,7 @@ export function Cardio({ navigation, route: nav }: Props) {
       distanceKm={distanceKm}
       hr={hr}
       watchPaired={watchPaired}
+      {...(target?.say ? { say: target.say } : {})}
       calories={calories}
       splits={splits}
       gps={gps}
@@ -314,6 +315,14 @@ export function CardioLiveView(props: {
   /** A watch is paired to this iPhone (`platform/watch/watchPresence`). Gates the HEART readout —
    *  see `showsHeartRate`. The container reads it; the view only obeys it. */
   watchPaired: boolean;
+  /**
+   * The coach's instruction for THIS run, when it wrote one.
+   *
+   * ⛔ It has been passed into this screen's route since a prescribed run started opening it, and
+   * this file did not contain the word `say` even once — so "at a pace where you could hold a
+   * conversation", the sentence that turns 5 km into a prescription, was handed over and dropped.
+   */
+  say?: string;
   paused: boolean;
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
@@ -346,6 +355,23 @@ export function CardioLiveView(props: {
         <View style={styles.liveTop}>
           <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
         </View>
+
+        {/*
+          ⛔ THE COACH'S INSTRUCTION FOR THIS RUN — and it was being thrown away.
+
+          `SessionFlow` has passed `target.say` into this screen since the day a prescribed run
+          started opening it, and this file did not contain the word `say` even once. So "at a pace
+          where you could hold a conversation" — the one sentence that turns 5 km into a
+          prescription rather than a distance — was handed over and dropped on the floor.
+
+          Same class as everything else found this week: written, wired, and drawn nowhere.
+
+          It sits under the legend and above the clock, because it is the thing she reads BEFORE she
+          starts moving and never needs again.
+        */}
+        {props.say ? (
+          <Text style={styles.coachSay} numberOfLines={2}>{props.say}</Text>
+        ) : null}
 
         <View style={styles.liveBody}>
           {/* the elapsed clock — the hero. Pure figures + ":" — mono. */}
@@ -662,6 +688,16 @@ const styles = StyleSheet.create({
   countGo: { fontFamily: font.sansBold, letterSpacing: -4, color: stageC.lift }, // rtl-ok
 
   // LIVE (3.4)
+  // The coach speaking, on the stage: the serif it uses everywhere else it talks.
+  coachSay: {
+    fontFamily: font.serif,
+    fontSize: 16,
+    lineHeight: 23,
+    color: stageC.ink2,
+    textAlign: 'center',
+    paddingHorizontal: 28,
+    marginTop: 6,
+  },
   liveTop: { alignItems: 'center', paddingTop: 14 },
   liveBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28 },
   // The elapsed clock is the lit thing on a run, exactly as the load is on a set: the BRIGHT
