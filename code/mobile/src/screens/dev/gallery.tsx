@@ -54,6 +54,7 @@ import { OnYourWristView } from '@/screens/watch/OnYourWrist';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
+import { ProgressReportView } from '@/screens/progress/ProgressReportView';
 import { PausedStage } from '@/components/PausedStage';
 import { RouteTrace } from '@/components/RouteTrace';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
@@ -1021,7 +1022,6 @@ const weekDoneView = (
     onStart={noop}
     onChooseWorkout={noop}
     onWeeklyUpdate={noop}
-    onShare={noop}
   />
 );
 
@@ -1122,7 +1122,6 @@ function TodayDriven() {
       onStart={noop}
       onChooseWorkout={setChosen}
       onWeeklyUpdate={noop}
-      onShare={noop}
       onCoach={noop}
     />
   );
@@ -1177,7 +1176,6 @@ const todayView = (
     onStart={noop}
     onChooseWorkout={noop}
     onWeeklyUpdate={noop}
-    onShare={noop}
     /* ⚠️ WITHOUT THIS THE COACH'S DOOR IS NOT DRAWN AT ALL. `HomeView` renders the corner only when
        it is handed a handler, and no fixture on this page ever was — so the one control that IS the
        coach's whole presence in the app has never appeared in the harness, through every pass that
@@ -1398,7 +1396,6 @@ export const GALLERY: GalleryEntry[] = [
         volume={[{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } }]}
         onDone={noop}
         onRecord={noop}
-        onShare={noop}
       />
     </InApp>
   ) },
@@ -1410,6 +1407,34 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.1', label: 'The Saturday letter', status: 'live', note: "a week WITH decisions — the handoff's own example, nothing special about its number", render: () => mount(WeeklyUpdate, { previewPlan: letterWeek }) },
   { id: '3.1b', label: 'The one question', status: 'live', note: 'held open on Quads', render: () => mount(WeeklyUpdate, { previewAskBack: 'Quads' }) },
   { id: '3.1c', label: 'The Saturday letter — a steady week', status: 'live', note: 'nothing changed; the standing record answers', render: () => mount(WeeklyUpdate, { previewPlan: steadyWeek }) },
+  /*
+   * ⚠️ THE FIRST ATTEMPT AT THIS ENTRY WAS BROKEN, AND THE SCREEN WAS NOT.
+   *
+   * The founder: *"3.2e doesn't work at all."* True — and it was my FIXTURE, not
+   * `ProgressReportView`. I passed `firstKg` / `peakKg` where `QuarterlyProgressEntry` declares
+   * `initialPeakKg` / `periodPeakKg` / `currentKg` / `weeksTrained` / `series`, and silenced the
+   * type error with `as never`. Second time in one day the same shortcut produced a fake defect —
+   * the cardio sheet was the first. **`as never` on a fixture buys a green typecheck and a screen
+   * that renders nothing.**
+   *
+   * This is the real shape, and the screen draws it.
+   */
+  { id: '3.2e', label: 'Progress — the all-time report', status: 'live', note: 'peak vs where she is now, per lift', render: () => (
+    <InApp>
+      <ProgressReportView
+        title="כל הזמנים"
+        legend="שבועות 1–24"
+        loaded
+        units="kg"
+        milestones={null}
+        entries={[
+          { exerciseId: 'bb_bench_press', initialPeakKg: 30, periodPeakKg: 42.5, deltaKg: 12.5, currentKg: 42.5, weeksTrained: 14, series: [30, 32.5, 35, 35, 37.5, 40, 42.5] },
+          { exerciseId: 'bb_back_squat', initialPeakKg: 40, periodPeakKg: 60, deltaKg: 20, currentKg: 57.5, weeksTrained: 12, series: [40, 45, 47.5, 50, 55, 60, 57.5] },
+          { exerciseId: 'lat_pulldown', initialPeakKg: 25, periodPeakKg: 35, deltaKg: 10, currentKg: 35, weeksTrained: 11, series: [25, 27.5, 30, 30, 32.5, 35, 35] },
+        ]}
+      />
+    </InApp>
+  ) },
   { id: '3.2', label: 'Progress — lifts', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressView}</UnderTabs></InApp> },
   { id: '3.2b', label: 'Lift detail', status: 'live', note: 'tap a point on the climb', render: () => <InApp>{liftDetailView}</InApp> },
   // C.18's own states. 3.2b hands the screen EIGHT training days, so the two an athlete actually

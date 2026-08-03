@@ -382,9 +382,20 @@ export function Home({ navigation, route }: Props) {
           Object.fromEntries(
             Object.keys(directions)
               .map((ex) => {
-                const say = saidFor.get(ex);
-                if (!say) return null;
-                const c = coachChangedCase(ex, coachPlan, before, say, app.profile?.units ?? 'kg');
+                /*
+                 * ⛔ A MISSING SENTENCE USED TO CLOSE THE SHEET ENTIRELY.
+                 *
+                 * `if (!say) return null` — so a load that visibly moved could be tapped and
+                 * nothing opened. She saw a number in moss and had no way to reach the reason,
+                 * which is the one question this sheet exists to answer. And the coach does not
+                 * write a note for every lift: measured across three live programmes, two of three
+                 * athletes got notes on some lifts and none on others.
+                 *
+                 * The direction and both loads are MEASURED — they come from comparing the coach's
+                 * two programmes. Only the closing line is its prose, so only the closing line is
+                 * missing when it wrote none.
+                 */
+                const c = coachChangedCase(ex, coachPlan, before, saidFor.get(ex), app.profile?.units ?? 'kg');
                 return c ? ([ex, c] as const) : null;
               })
               .filter((e): e is NonNullable<typeof e> => e != null),

@@ -174,7 +174,12 @@ export function WhyChangedSheet(props: WhyChangedProps) {
             </View>
           </View>
 
-          <Text style={styles.line}>{props.line}</Text>
+          {/*
+            The coach's closing sentence — absent when it decided without writing one. An empty
+            string here used to draw an empty italic block with its own top padding, which reads as
+            a sentence that failed to load rather than as a decision that needed no words.
+          */}
+          {props.line ? <Text style={styles.line}>{props.line}</Text> : null}
         </ScrollView>
 
         <View style={styles.footer}>

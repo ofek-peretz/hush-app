@@ -64,7 +64,6 @@ import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
-import { recordCardFromHistory } from '@/domain/shareCard';
 import { sessionKcal } from '@/domain/energy';
 import { durationMinutes } from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
@@ -350,10 +349,6 @@ export function WellDone({ navigation, route }: Props) {
     () => (history ? newlyEarned(history, app.profile)[0] ?? null : null),
     [history, app.profile],
   );
-  // Did THIS session set a personal record worth showing? (domain/shareCard — a real new all-time
-  // load, never fabricated.) When it did, the closing beat offers to post it (§9.1); when it did
-  // not, there is simply nothing to share and no affordance appears.
-  const recordCard = useMemo(() => (history ? recordCardFromHistory(history, units) : null), [history, units]);
   const celebrated = useRef(false);
   const pendingExit = useRef<(() => void) | null>(null);
   /** An exit the athlete asked for before the history had been read (see `leave`). */
@@ -698,7 +693,6 @@ export function WellDone({ navigation, route }: Props) {
       answered={coachDecided.state !== 'thinking' && earned !== null}
       onDone={() => leave(goHome)}
       onRecord={() => leave(goRecord)}
-      onShare={recordCard ? () => navigation.navigate('ShareCardModal', { card: recordCard }) : undefined}
     />
   );
 }
@@ -722,7 +716,6 @@ export function SessionEarned({
   answered,
   onDone,
   onRecord,
-  onShare,
 }: {
   savedLegend: string;
   /** Ended early with real work logged — the closing sentence says so instead. */
@@ -740,7 +733,6 @@ export function SessionEarned({
   /** Offered only when this session set a real record (§9.1) — there is no card for a session that
    *  set none, and a share button that had nothing true to put on one would be the fabrication the
    *  whole card module exists to refuse. */
-  onShare?: () => void;
 }) {
   const { t } = useCopy();
   /** The word a held lift wears — read once so the face check below is done once. */
@@ -762,21 +754,25 @@ export function SessionEarned({
               turns a closing beat into an explanation. */}
           <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
 
-          {/* WHAT IT COST — three measured facts on one mono line (v7 2.5). Every one is already
-              recorded: wall-clock minutes, the declared MET estimate, and Σ(weight × reps). */}
+          {/*
+            ════ WHAT IT COST — THE THREE FACTS, AT THE SIZE OF FACTS ════
+
+            ⛔ FOUNDER, 2026-08-02: *"enlarge the workout time, the calories and the weight lifted to
+            a bigger and clearer size, and give them a clearer colour."*
+
+            They were three 13.5pt muted legends on one line — the type this app uses for LABELS,
+            in the tone it uses for things that are not the point. So the only three measurements a
+            finished workout produces were set smaller than the word "minutes" beside them.
+
+            They are figures now, and they are drawn the way every other figure in this product is:
+            the number in mono at the measurement size, the unit beside it small and quiet. Cream on
+            the stage, not the muted grey — the number is the fact, the word is the label.
+          */}
           <View style={styles.factRow}>
-            <Legend size={13.5} track={0} weight="regular" tone="onStage">
-              {`${durationLabel} ${t('common.minShort')}`}
-            </Legend>
-            {kcal != null ? (
-              <Legend size={13.5} track={0} weight="regular" tone="onStage">
-                {`${kcal} ${t('complete.kcal')}`}
-              </Legend>
-            ) : null}
+            <Fact value={durationLabel} unit={t('common.minShort')} />
+            {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} /> : null}
             {tonnes > 0 ? (
-              <Legend size={13.5} track={0} weight="regular" tone="onStage">
-                {`${tonnes.toFixed(1)} ${t('weekly.tonneUnit')} ${t('complete.movedShort')}`}
-              </Legend>
+              <Fact value={tonnes.toFixed(1)} unit={`${t('weekly.tonneUnit')} ${t('complete.movedShort')}`} />
             ) : null}
           </View>
 
@@ -870,16 +866,15 @@ export function SessionEarned({
           >
             <Text style={styles.recordLinkLabel}>{t('complete.viewRecord')}</Text>
           </Pressable>
-          {onShare ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('share.shareRecord')}
-              onPress={onShare}
-              style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
-            >
-              <Text style={styles.ghostLabel}>{t('share.shareRecord')}</Text>
-            </Pressable>
-          ) : null}
+          {/*
+            ⛔ THE "SHARE YOUR RECORD" CONTROL IS GONE — founder, 2026-08-02.
+
+            It appeared only when the session set a real all-time best, which made it rare and
+            therefore a surprise: a finished workout ends on what she did and what it changed, and
+            a second act arriving on the one day she was strongest turns the closing beat into a
+            prompt. The record itself is still made and still readable — this removes the ask, not
+            the achievement.
+          */}
         </View>
       </SafeAreaView>
     </View>
@@ -961,6 +956,22 @@ export function SessionScan({
   );
 }
 
+/**
+ * One measured fact: the number, and its unit beside it.
+ *
+ * The split is this app's habit everywhere else a figure appears — 34 in mono at the figure's size,
+ * "kg" small and quiet beside it. Three of these read as three measurements; three legends, which
+ * is what they were, read as a caption.
+ */
+function Fact({ value, unit }: { value: string; unit: string }) {
+  return (
+    <View style={styles.fact}>
+      <Text style={styles.factValue}>{value}</Text>
+      <Text style={styles.factUnit}>{unit}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
@@ -1007,7 +1018,17 @@ const styles = StyleSheet.create({
   copy: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: stage.ink1, marginTop: 10, maxWidth: 320, textAlign: 'left' },
 
   // v7 2.5 · WHAT IT COST — three measured facts on one mono line under the closing sentence.
-  factRow: { flexDirection: 'row', gap: 22, marginTop: 16 },
+  factRow: { flexDirection: 'row', gap: 26, marginTop: 18, alignItems: 'flex-end' },
+  // The number and its unit sit on one baseline, the way every figure in this app is set.
+  fact: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  factValue: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 30,
+    color: stage.ink0,
+    textAlign: 'left',
+  },
+  factUnit: { fontFamily: font.sans, fontSize: 13, color: stage.ink2, textAlign: 'left' },
 
   // v7 2.5 · THE DECISIONS — a ruled ledger. Each line opens on a hairline, so the block reads as
   // a record rather than a stack of cards, and the last line closes it.

@@ -318,7 +318,18 @@ export function coachChangedCase(
   exerciseId: string,
   now: CoachPlan | null | undefined,
   before: CoachPlan | null | undefined,
-  say: string,
+  /**
+   * The coach's own sentence about this lift, when it wrote one.
+   *
+   * ⛔ IT USED TO BE REQUIRED, AND THAT CLOSED THE SHEET ENTIRELY. `Home` skipped any lift with no
+   * note, so a load that visibly MOVED could be tapped and nothing would open — she saw a number in
+   * moss and had no way to find out why, which is the exact question the sheet exists to answer.
+   *
+   * The direction and the two loads are MEASURED — they come from comparing the coach's two
+   * programmes, and they are true whether or not it also wrote prose. Only the closing line is the
+   * coach's, so only the closing line is absent when it did not write one.
+   */
+  say: string | undefined,
   units: 'kg' | 'lb',
 ): {
   exerciseId: string;
@@ -328,6 +339,7 @@ export function coachChangedCase(
   unit: string;
   delta: string | null;
   band: [number, number];
+  /** The coach's closing sentence. Empty when it decided without writing one — see `say` above. */
   line: { text: string };
   sessions: never[];
 } | null {
@@ -363,7 +375,7 @@ export function coachChangedCase(
         // A REAL minus sign, not a hyphen — the same character every other figure in the app uses.
         : `${load > was ? '+' : '−'}${+Math.abs(load - was).toFixed(2)}`,
     band: item.reps,
-    line: { text: say },
+    line: { text: say ?? '' },
     sessions: [],
   };
 }
