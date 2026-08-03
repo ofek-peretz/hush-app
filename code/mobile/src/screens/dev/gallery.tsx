@@ -1287,37 +1287,16 @@ export const GALLERY: GalleryEntry[] = [
    * looked at in the gallery — which is how a body map nobody wanted survived in the step directly
    * before one of them.
    */
-  { id: '0.0', label: 'The coach — the intake SCREEN', status: 'live', note: 'the real onboarding step, chrome and all — not the chat component', render: () => mount(CoachIntake, { inputs: onboardingInputs }) },
-  { id: '0.0b', label: 'The coach — the conversation SCREEN', status: 'live', note: 'the real screen behind the corner of Today', render: () => mount(CoachScreen) },
-  { id: '0.1', label: 'The coach — intake', status: 'live', note: 'type and send: a scripted reply lands after a beat', render: () => (
-    <InApp>
-      <OnStage>
-        <ScriptedCoachChat />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '0.1a', label: 'The coach — LIVE', status: 'live', note: 'talks to the real Worker; with no token it shows the not-sent state honestly', render: () => (
+  { id: '0.0', label: 'The conversation — onboarding', status: 'live', note: 'the real onboarding step, chrome and all — not the chat component', render: () => mount(CoachIntake, { inputs: onboardingInputs }) },
+  { id: '0.0b', label: 'The conversation — from Today', status: 'live', note: 'the real screen behind the corner of Today', render: () => mount(CoachScreen) },
+  { id: '0.0d', label: 'The conversation — LIVE (a tool, not a design target)', status: 'live', note: 'talks to the real Worker; with no token it shows the not-sent state honestly', render: () => (
     <InApp>
       <OnStage>
         <LiveCoachChat />
       </OnStage>
     </InApp>
   ) },
-  { id: '0.1c', label: 'The coach — the week it built', status: 'live', note: 'reads back what the live conversation stored; the only place to judge whether the plan is good', render: () => (
-    <InApp>
-      <OnStage>
-        <StoredCoachWeek />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '0.1d', label: 'The coach — after a workout', status: 'live', note: 'the call the product is built around; press it and see what the live coach decides', render: () => (
-    <InApp>
-      <OnStage>
-        <AfterSessionProbe />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '0.1b', label: 'The coach — a message that did not land', status: 'live', note: 'sent, unanswered, and failed — the three states side by side', render: () => (
+  { id: '0.0c', label: 'The conversation — a message that did not land', status: 'live', note: 'sent, unanswered, and failed — the three states side by side', render: () => (
     <InApp>
       <OnStage>
         <CoachChat

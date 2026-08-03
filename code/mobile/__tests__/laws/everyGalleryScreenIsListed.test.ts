@@ -83,7 +83,20 @@ describe('the index lists what the gallery holds', () => {
      */
     expect(sections[0].title).toContain('00');
     expect(sections[0].title.toUpperCase()).toContain('COACH');
-    expect(ids.filter((id) => id.startsWith('0.')).length).toBeGreaterThanOrEqual(5);
+    /*
+     * ⚠️ FOUR, NOT FIVE — and the founder is the reason. The section had seven entries and he could
+     * not tell what he was looking at: *"there should be a conversation screen in onboarding and a
+     * conversation screen in Today from the message icon, and that's it. I don't understand what
+     * you did here."*
+     *
+     * He is right that the app has exactly TWO chat screens. The extras were the same two in
+     * different STATES, filed as if they were separate surfaces. Four now: the two screens, the
+     * failed-message state, and the live one — which is a testing tool and says so in its label.
+     *
+     * The floor stays, because the coach section going EMPTY would mean the intake had quietly
+     * stopped being reachable from the harness, which is a real failure and has happened before.
+     */
+    expect(ids.filter((id) => id.startsWith('0.')).length).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps the catch-all, because the section list will drift again', () => {
