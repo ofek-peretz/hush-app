@@ -660,8 +660,22 @@ ${JSON.stringify(hersAlone(facts))}
           'has, what her week really looks like, anything that has hurt. Ask about what SHE said — ' +
           'a half marathon and a first month in a gym are not the same conversation — one or two ' +
           'questions at a time, never a list.\n' +
-          'NOTHING ELSE in this app will ever ask her any of it, including her bodyweight and how ' +
-          'many days a week she can train. What you need is your judgement; how you ask is your ' +
+          /*
+           * ⛔ THIS SENTENCE SAID THE OPPOSITE UNTIL 2026-08-04: *"NOTHING ELSE in this app will
+           * ever ask her any of it, including her bodyweight and how many days a week she can
+           * train."* True when the coach was the entire intake; false since onboarding started
+           * collecting six facts on a form. Left in, it had the coach open by asking her for a
+           * bodyweight she had typed on a wheel two screens earlier.
+           *
+           * ⚠️ Same staleness as the preamble's version, which was fixed on the same day and this
+           * one was missed — because it lives in the ASK, not the preamble, and the sweep read the
+           * preamble. A prompt assembled from parts goes stale in parts.
+           */
+          'HER SHEET ALREADY HAS her sex, her age, her bodyweight, how long she has trained, her ' +
+          'days a week and her session length — she gave those on a form before you met her, so ' +
+          'never ask for one of them again. What is missing is everything a form cannot hold: what ' +
+          'she is training FOR, what has hurt, what she will not do, what her gym has. ' +
+          'What you need is your judgement; how you ask is your ' +
           'voice — you decide the opening loads and you decide what you must know to set them. ' +
           'When she answers, put what she said in "learned" on that turn — it is the only way any ' +
           'of it reaches her record.\n\n' +

@@ -1,4 +1,8 @@
+import fs from 'fs';
+import path from 'path';
 import { preamble } from '@/domain/coachPrompt';
+
+const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
 import { coachMovements } from '@/domain/coachFacts';
 import { REQUIRED_FOR_COACH } from '@/domain/coachRequirements';
 import { MOVEMENTS } from '@/data/movements';
@@ -78,6 +82,36 @@ describe('the prompt tells the truth about who asks her things', () => {
   it('and still forbids inventing a number when one is genuinely absent', () => {
     // The rule that must survive the rewrite — this is the founder's own "it decided 4 workouts".
     expect(text()).toMatch(/do not fill in a number on her behalf/);
+  });
+});
+
+describe('⛔ the ASK goes stale separately from the preamble', () => {
+  /*
+   * FOUND 2026-08-04, one sweep after the preamble's version of the same lie was fixed. The intake
+   * ask still read: *"NOTHING ELSE in this app will ever ask her any of it, including her bodyweight
+   * and how many days a week she can train."*
+   *
+   * So the coach would have opened the conversation by asking for a bodyweight she had set on a
+   * wheel two screens earlier — the exact thing that makes an intake feel like it was not listening.
+   *
+   * ⚠️ IT WAS MISSED BECAUSE THE SWEEP READ `preamble()`. The prompt is assembled from parts, and a
+   * prompt assembled from parts goes stale in parts. These assertions read the SOURCE, so every
+   * block is covered whether or not it is in the cached prefix.
+   */
+  const src = () => read('src/domain/coachPrompt.ts');
+
+  it('no block claims the app never asks her anything', () => {
+    expect(src()).not.toMatch(/NOTHING ELSE in this app will ever ask her/);
+  });
+
+  it('and the intake is told what her sheet already holds, so it does not re-ask', () => {
+    expect(src()).toMatch(/HER SHEET ALREADY HAS/);
+    expect(src()).toMatch(/never ask for one of them again/);
+  });
+
+  it('⚠️ and is told what a form CANNOT hold, which is what the conversation is for', () => {
+    // Deleting the re-asking without saying what remains would leave an intake with no job.
+    expect(src()).toMatch(/everything a form cannot hold/i);
   });
 });
 
