@@ -344,7 +344,7 @@
     "itemStop": "Stop",
     "itemDone": "Done",
     "itemCarrying": "Carrying {{load}} kg",
-    "straightInto": "Straight into {{name}}"
+    "superset": "Superset"
   },
   "finishSheet": {
     "legend": "End workout",

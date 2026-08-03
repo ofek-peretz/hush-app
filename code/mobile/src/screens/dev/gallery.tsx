@@ -54,15 +54,8 @@ import { OnYourWristView } from '@/screens/watch/OnYourWrist';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
-import { PlanWeek } from '@/components/PlanWeek';
-import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
-import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
-import { encodePlan } from '@/domain/planShare';
 import { PausedStage } from '@/components/PausedStage';
-import { WhyTriple } from '@/components/WhyTriple';
 import { RouteTrace } from '@/components/RouteTrace';
-import { BottomSheet } from '@/components/BottomSheet';
-import { ProgressReportView } from '@/screens/progress/ProgressReportView';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { exerciseCues, exerciseDisplayName, EXERCISES } from '@/data/exercises';
 import { tg } from '@/i18n';
@@ -1256,19 +1249,6 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '2.2j', label: 'Form — a lift from the expansion', status: 'live', note: 'the 47 new lifts ship their cues in both languages and both voices: switch the bar under the frame', render: () => (
-    <InApp>
-      <ExerciseDemo
-        title={exerciseDisplayName('single_leg_rdl')}
-        cues={exerciseCues('single_leg_rdl')}
-        focusLabel={tg('workout.focusOn')}
-        formGuideLabel={tg('workout.formGuide')}
-        doneLabel={tg('workout.tapAnywhere')}
-        exerciseId="single_leg_rdl"
-        onDone={noop}
-      />
-    </InApp>
-  ) },
   { id: '2.3', label: 'The correction', status: 'live', render: () => (
     <InApp>
       <Logged
@@ -1288,7 +1268,6 @@ export const GALLERY: GalleryEntry[] = [
       <Logged units="kg" confirm={{ weight: 14, reps: 8, n: 2, m: 4 }} />
     </InApp>
   ) },
-  { id: '2.3b', label: 'Last set — how did that go?', status: 'live', note: 'press Complete set, then answer — the beat holds 6s for her', render: () => mount(SessionFlow, undefined, lastSetFixture) },
   /* ═══ THE THREE SHAPES THE STAGE COULD NOT RUN (2026-07-31) ═══
      `coachPlan` can write a marathon week, a circuit and a footballer's session. These are where
      the athlete meets the parts of them that are not "a weight for a number of reps". Each one is
@@ -1387,7 +1366,6 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
-  { id: '2.2i', label: 'A held duration — in the stage', status: 'live', note: '2.2f/g/h draw the stage bare; this is the workout screen ROUTING to it — chrome, pause and all', render: () => mount(SessionFlow, undefined, itemFixture) },
   { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
@@ -1421,34 +1399,6 @@ export const GALLERY: GalleryEntry[] = [
   // decisions, not one decision applied three times. 2.5 has said so per muscle since Rev 15
   // (2026-07-29 — the same day his pass is dated, so the build he read predates it). This is what
   // that screen looks like when three muscles earn at once.
-  { id: '2.5b', label: 'Session earned — three muscles', status: 'live', note: 'C.15: three MUSCLES earned, not three exercises', render: () => (
-    <InApp>
-      <SessionEarned
-        savedLegend="Upper A · Saved"
-        partial={false}
-        durationLabel="58"
-        kcal={468}
-        tonnes={13.2}
-        answered
-        decisions={[
-          { key: 'bb_bench_press', name: 'Barbell Bench Press', from: '34', to: '36', held: false,
-            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Bench Press', delta: 2 } } },
-          { key: 'bb_row', name: 'Barbell Row', from: '44', to: '46', held: false,
-            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Row', delta: 2 } } },
-          { key: 'bb_overhead_press', name: 'Overhead Press', from: '21', to: '22.5', held: false,
-            reason: { key: 'explain.progressLoad.text', params: { ex: 'Overhead Press', delta: 1.5 } } },
-        ]}
-        volume={[
-          { muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } },
-          { muscle: 'Back', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'back' } } },
-          { muscle: 'Shoulders', setsFrom: 2, setsTo: 3, reason: { key: 'explain.volumeUp.text', params: { muscle: 'shoulders' } } },
-        ]}
-        onDone={noop}
-        onRecord={noop}
-        onShare={noop}
-      />
-    </InApp>
-  ) },
   { id: '2.5', label: 'What this session earned', status: 'live', render: () => (
     <InApp>
       <SessionEarned
@@ -1744,9 +1694,6 @@ export const GALLERY: GalleryEntry[] = [
    * really sees. 11.4 draws a plan that is already in memory; 11.4b is the same screen reading it
    * off disk, which is the one that can be empty.
    */
-  { id: '11.4b', label: 'Share your plan — the route', status: 'live', note: 'reads the programme off disk; empty until one exists', render: () => mount(SharePlanScreen) },
-  { id: '11.5b', label: 'Plan, received — the route', status: 'live', note: 'decodes a real share token', render: () => mount(PlanReceivedScreen, { token: encodePlan(sharedFixture as never) }) },
-  { id: '11.5c', label: 'Plan, received — a token that will not open', status: 'live', note: 'truncated link, the state a real one reaches', render: () => mount(PlanReceivedScreen, { token: 'not-a-real-token' }) },
   { id: '11.5', label: 'Plan, received', status: 'live', render: () => (
     <InApp><PlanReceivedView splitName="Upper / Lower" plan={sharedFixture} onAdopt={noop} onDecline={noop} /></InApp>
   ) },
@@ -1762,34 +1709,11 @@ export const GALLERY: GalleryEntry[] = [
    * That is this file's own law (`everythingBuiltCanBeReached`) failing quietly, which is the exact
    * reason the law exists.
    */
-  { id: '3.2e', label: 'Progress · the report', status: 'live', note: 'peak-weight comparison, milestones, the door to History', render: () => (
-    <InApp>
-      <ProgressReportView
-        title="All time"
-        legend="Every session"
-        loaded
-        units="kg"
-        entries={[
-          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', mode: 'load', firstKg: 30, peakKg: 42.5, deltaKg: 12.5, sessions: 14 },
-          { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', mode: 'load', firstKg: 40, peakKg: 60, deltaKg: 20, sessions: 12 },
-          { exerciseId: 'push_up', name: 'Push-Up', mode: 'reps', firstKg: 0, peakKg: 0, deltaKg: 0, sessions: 9 },
-        ] as never}
-        milestones={null}
-        onBack={noop}
-        onHistory={noop}
-      />
-    </InApp>
-  ) },
   { id: '2.9', label: 'Paused · the stage held', status: 'live', note: 'resume, end, and the pain door', render: () => (
     <InApp>
       <PausedStage subject="Barbell Bench Press" onResume={noop} endLabel="End session" onEnd={noop} onPain={noop}>
         <View style={{ height: 220 }} />
       </PausedStage>
-    </InApp>
-  ) },
-  { id: '2.9b', label: 'Why · the three lines', status: 'live', note: 'saw / means / did — on the stage', render: () => (
-    <InApp>
-      <WhyTriple saw="12 reps at 30 kg" means="the top of your band" did="up to 32.5" kind="up" onStage />
     </InApp>
   ) },
   { id: '4.9', label: 'The run, drawn', status: 'live', note: 'the engraved path a GPS run leaves behind', render: () => (
@@ -1801,13 +1725,6 @@ export const GALLERY: GalleryEntry[] = [
       })) as never} />
     </InApp>
   ) },
-  { id: '9.9', label: 'A sheet, over the stage', status: 'live', note: 'opaque — the fade he reported twice', render: () => (
-    <InApp>
-      <BottomSheet onClose={noop} heightFraction={0.34}>
-        <Text style={{ color: '#f1eee5', fontSize: 17, textAlign: 'left' }}>Delete your account?</Text>
-      </BottomSheet>
-    </InApp>
-  ) },
 
   // ── 13 · WHEN SOMETHING HURTS ──────────────────────────────────────────────────────────────
   { id: '13.1', label: 'Paused · the affordance', status: 'live', note: 'the door sits under the two acts', render: () => mount(SessionFlow, undefined, pausedFixture) },
@@ -1817,20 +1734,6 @@ export const GALLERY: GalleryEntry[] = [
    * look at the one component that shows her the programme. That is this file's own law
    * (`everythingBuiltCanBeReached`) failing about the newest thing in the app.
    */
-  { id: '1.9', label: 'The week the coach wrote', status: 'live', note: 'all four shapes, with the coach note on a row', render: () => (
-    <PlanWeek
-      units="kg"
-      plan={{ v: 2, sessions: [
-        { name: 'אימון 1: כוח וריצה', day: 'mon', blocks: [
-          { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [8, 10], load: 40, say: 'חזרה אחת לפני כישלון בסט האחרון.' }] },
-          { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'push_up', reps: [8, 12], load: null }] },
-          { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 5000, say: 'בקצב שאפשר לדבר בו.' }] },
-          { rounds: 3, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
-        ] },
-        { name: 'אימון 2', blocks: [{ rounds: 4, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [5, 5], load: 32.5 }] }] },
-      ] }}
-    />
-  ) },
 ];
 
 export const DEFAULT_SCREEN = '';

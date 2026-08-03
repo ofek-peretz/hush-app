@@ -390,7 +390,7 @@
     "itemStop_female": "עצרי",
     "itemDone": "סיימתי",
     "itemCarrying": "נושאת {{load}} ק\"ג",
-    "straightInto": "ישר אל {{name}}"
+    "superset": "סופרסט"
   },
   "finishSheet": {
     "legend": "סיום אימון",

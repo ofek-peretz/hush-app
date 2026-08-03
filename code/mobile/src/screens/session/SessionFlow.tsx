@@ -1310,8 +1310,34 @@ function ActiveSet({
       {/* The chrome (pause · position · clock · swap · form) is rendered ONCE by SessionFlow, above
           every beat — see "THE CHROME NEVER LEAVES". This body starts under it. */}
       <View style={styles.stageBody}>
-        {group ? <Legend size={12} track={0.22} align="center" style={styles.group}>{t(`muscle.${group}`)}</Legend> : null}
+        {/*
+          ════ A SUPERSET IS NAMED AT THE TOP, AND BOTH LIFTS STAND TOGETHER ════
+
+          Founder, 2026-08-02, specifying it exactly: *"write SUPERSET at the top, underneath it the
+          current exercise as it is now, and beneath that the NEXT exercise at the same size, in the
+          grey the KG label uses."*
+
+          It used to be one muted line under the set counter — "Straight into Cable Row" — which
+          says the same fact in the place the eye goes last. Both lifts are the subject here, so
+          both are set at the subject's size; the one she is not on yet is the quieter of the two.
+
+          ⚠️ VERIFIED, not assumed: `restAfterS === 0` already skips the rest phase outright
+          (`afterSetCompletion` — `restSeconds <= REST_SKIP_THRESHOLD_S` goes straight to the next
+          SET_PRESENTED), so there is no timer between the two halves. And the coach reads them as
+          ONE piece of work rather than two with no rest, because the sheet carries `block`, `round`
+          and `position` — same block, same round, two positions.
+        */}
+        {session.straightInto ? (
+          <Legend size={12} track={0.28} align="center" style={styles.group}>{t('workout.superset')}</Legend>
+        ) : group ? (
+          <Legend size={12} track={0.22} align="center" style={styles.group}>{t(`muscle.${group}`)}</Legend>
+        ) : null}
         <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
+        {session.straightInto ? (
+          <Text style={styles.supersetNext} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>
+            {session.straightInto}
+          </Text>
+        ) : null}
 
         <>
             {/* 1 · LOAD — Hush's decision, the hero (set before you arrived).
@@ -1447,17 +1473,6 @@ function ActiveSet({
         <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.setOf}>
           {t('workout.setOfM', { n: setN, m: setM })}
         </Legend>
-        {/* ════ AND WHAT SHE GOES STRAIGHT INTO ════
-            The app has always RUN supersets correctly — no rest inside a round, the coach's rest
-            between rounds — and never said a word about it. She finished a set of bench, a row
-            appeared immediately, and from her side an intentional superset and a broken rest timer
-            look exactly alike. One line, under the position, in the muted voice: it is a fact about
-            what happens next, not an instruction, and it is absent on every ordinary set. */}
-        {session.straightInto ? (
-          <Legend size={12.5} track={0.14} align="center" tone="onStage" style={styles.straightInto}>
-            {t('workout.straightInto', { name: session.straightInto })}
-          </Legend>
-        ) : null}
       </View>
 
       {/* `pointerEvents` stops the finger; it does NOT stop VoiceOver, which would happily focus and
@@ -2365,6 +2380,9 @@ const styles = StyleSheet.create({
   // The muscle group — the lift's eyebrow: centred over the name, in the ordinal's ink.
   group: { marginBottom: 11 },
   exName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
+  // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
+  // label wears — present as an equal, subordinate only in colour.
+  supersetNext: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
   loadBtnPressed: { backgroundColor: color.fillSubtleStrong },
@@ -2529,7 +2547,6 @@ const styles = StyleSheet.create({
 
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
   // The chained lift, quieter than the position it follows — news, not an instruction.
-  straightInto: { marginTop: 6, opacity: 0.72 },
   setOf: { marginTop: 30, color: stage.ink1 },
   setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
 
