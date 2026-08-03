@@ -20,6 +20,7 @@ import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
+import { WheelPicker } from '@/components/ds';
 import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
 import { SessionCoach } from '@/screens/session/SessionCoach';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
@@ -1401,6 +1402,23 @@ export const GALLERY: GalleryEntry[] = [
    * Same law as `gallery-cannot-see-what-it-cannot-drive`, third time: an unused fixture is a state
    * nobody looks at.
    */
+  /*
+   * ⛔ THE WHEEL HAD NO ENTRY OF ITS OWN, and that is how its numerals went missing unnoticed.
+   *
+   * 2.2b reaches the editor only by TAPPING the load on 2.2 — a state the gallery renders as the
+   * ordinary set screen, so nobody ever looked at the wheel here. And `everyWheelIsTheSameWheel`
+   * cannot see it either: the law calls `onLayout` ITSELF with a hard-coded width, which is exactly
+   * the input that turns out to be missing in the real app.
+   */
+  { id: '1.4', label: 'The wheel, on its own', status: 'live', note: 'the measuring rule: numerals, graduation, detents — mounted bare so the track is visible without driving the editor', render: () => (
+    <InApp>
+      <OnStage>
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 28 }}>
+          <WheelPicker value={137.5} onChange={noop} step={0.5} min={0} max={500} size="lg" ends="chevron" label="Load" onStage />
+        </View>
+      </OnStage>
+    </InApp>
+  ) },
   { id: '2.2q', label: 'An item, inside the session — with its chrome', status: 'live', note: 'a plank on the real stage: the coach disc must be here too, and for half an hour it was not', render: () => mount(SessionFlow, undefined, itemFixture) },
   { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },

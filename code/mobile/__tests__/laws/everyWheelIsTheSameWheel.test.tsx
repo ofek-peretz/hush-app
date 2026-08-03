@@ -128,3 +128,36 @@ describe('the whole control takes the swipe (C.3)', () => {
     expect(tickLayer!.props.pointerEvents).toBe('none');
   });
 });
+
+describe('⛔ the track draws WITHOUT being measured first', () => {
+  /*
+   * FOUNDER, BUILD 40: *"on the edit-exercise screen the numbers have vanished from the rulers."*
+   *
+   * The track was `{width > 0 ? <ScrollView …> : null}`, and `width` came from an `onLayout`. When
+   * that measurement did not arrive, the wheel drew its frame, its graduation and its carets — and
+   * not one numeral, ever. Measured in the browser: the numeral row was 334px wide with **zero**
+   * children, on the editor and on a bare wheel alike.
+   *
+   * The gate bought nothing. `itemW` is a CONSTANT — every offset, detent and index calculation is
+   * independent of the measured width. `width` feeds only `sidePad`, which already falls back to 0.
+   *
+   * ── ⚠️ AND WHY EVERY TEST ABOVE STAYED GREEN THROUGH IT ─────────────────────────────────────
+   * `draw()` calls `onLayout` ITSELF, with a hard-coded 390 — it supplies the exact input that was
+   * missing in the real app. A harness that provides the broken step tests everything except the
+   * break. So this one mounts the wheel and NEVER measures it, which is the state a real screen was
+   * actually in.
+   */
+  it('renders its numerals with no onLayout at all', () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = renderer.create(
+        <WheelPicker value={137.5} onChange={() => {}} step={0.5} min={0} max={500} size="lg" label="Load" />,
+      );
+    });
+    mounted.push(r);
+    // NO onLayout fired — this is the whole point.
+    const drawn = r.root.findAllByType(Text).map((t) => t.props.children).filter((c) => typeof c === 'string' || typeof c === 'number');
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.map(String)).toContain('137.5');
+  });
+});

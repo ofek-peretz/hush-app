@@ -210,17 +210,26 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   // Position the wheel on the controlled value — the single writer. The window is
   // re-anchored FIRST so the target cells exist when the scroll lands (content size is
   // constant, so the offset itself never depends on what is rendered).
+  /*
+   * ⛔ NO LONGER GUARDED ON THE MEASUREMENT — same bug as the track above, one layer down.
+   *
+   * `if (width === 0) return;` meant an unmeasured wheel never scrolled to its own value. With the
+   * track drawing unconditionally, that left the numerals rendered at their absolute offset — 137.5
+   * sat at x≈26,400 — which looks exactly like the blank wheel it replaced.
+   *
+   * The offset does not need the width: `wheelOffset` is `index × itemW`, and `itemW` is a constant.
+   * `sidePad` still centres the first detent once the measurement lands, and changing it changes the
+   * content size, which re-fires this through `onContentSizeChange`.
+   */
   const positionToValue = useCallback(() => {
-    if (width === 0) return;
     const target = indexOfValue(value);
     lastIndexRef.current = target;
     setActiveIndex(target);
     setAnchor(target);
     listRef.current?.scrollTo({ x: wheelOffset(target, itemW), animated: false });
-  }, [width, indexOfValue, value, itemW]);
+  }, [indexOfValue, value, itemW]);
 
   useEffect(() => {
-    if (width === 0) return;
     if (indexOfValue(value) === lastIndexRef.current) return;
     const raf = requestAnimationFrame(positionToValue);
     return () => cancelAnimationFrame(raf);
@@ -303,8 +312,27 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
       <View style={styles.scale} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {/* The numerals — a scrolling readout, five at a time. */}
         <View style={styles.numRow}>
-          {width > 0 ? (
-            <ScrollView
+          {/*
+            ⛔ THE TRACK NO LONGER WAITS TO BE MEASURED — founder, build 40: *"on the edit-exercise
+            screen the numbers have vanished from the rulers."*
+
+            It was `{width > 0 ? <ScrollView …> : null}`, and `width` comes from the `onLayout` on
+            the row above. When that measurement does not arrive, the wheel renders its frame, its
+            graduation and its carets — and **not one numeral, ever.** Measured in the browser: the
+            numeral row is 334px wide with zero children, on the editor and on a bare wheel alike.
+
+            ⚠️ AND THE GATE BOUGHT NOTHING. `itemW` is a CONSTANT (`ITEM_W[size]`) — every offset,
+            detent and index calculation is independent of the measured width. The only thing `width`
+            feeds is `sidePad`, the padding that centres the first detent, and that already falls
+            back to 0. So the track can draw immediately and re-centre when the measurement lands:
+            changing `sidePad` changes the content size, which fires `onContentSizeChange`, which is
+            already wired to `positionToValue`.
+
+            ⛔ AND THE LAW COULD NOT SEE IT. `everyWheelIsTheSameWheel` calls `onLayout` ITSELF with a
+            hard-coded 390 — it supplies the exact input that is missing in the real app. A harness
+            that provides the broken step tests everything except the break.
+          */}
+          <ScrollView
               ref={listRef}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -364,7 +392,6 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
               })}
               <View style={{ width: (values.length - win.end) * itemW }} />
             </ScrollView>
-          ) : null}
         </View>
 
         {/* The engraved tick strip — a fixed, even graduation, struck at centre by one moss tick.
