@@ -55,6 +55,9 @@ import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
 import { PlanWeek } from '@/components/PlanWeek';
+import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
+import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
+import { encodePlan } from '@/domain/planShare';
 import { PausedStage } from '@/components/PausedStage';
 import { WhyTriple } from '@/components/WhyTriple';
 import { RouteTrace } from '@/components/RouteTrace';
@@ -1732,6 +1735,18 @@ export const GALLERY: GalleryEntry[] = [
   { id: '11.4', label: 'Share your plan', status: 'live', note: 'the card IS the payload — no weight is in it', render: () => (
     <InApp><SharePlanView splitName="Upper / Lower" plan={sharedFixture} onSend={noop} onPreview={noop} onBack={noop} /></InApp>
   ) },
+  /*
+   * ⛔ THE CONTAINERS, NOT ONLY THEIR VIEWS — founder, 2026-08-02.
+   *
+   * `SharePlanScreen` and `PlanReceivedScreen` are seventy-line routes that load the data and hand
+   * it to the views above. Filing only the views was defensible right up until the moment it was
+   * not: a container is where the LOADING and EMPTY states live, and those are states an athlete
+   * really sees. 11.4 draws a plan that is already in memory; 11.4b is the same screen reading it
+   * off disk, which is the one that can be empty.
+   */
+  { id: '11.4b', label: 'Share your plan — the route', status: 'live', note: 'reads the programme off disk; empty until one exists', render: () => mount(SharePlanScreen) },
+  { id: '11.5b', label: 'Plan, received — the route', status: 'live', note: 'decodes a real share token', render: () => mount(PlanReceivedScreen, { token: encodePlan(sharedFixture as never) }) },
+  { id: '11.5c', label: 'Plan, received — a token that will not open', status: 'live', note: 'truncated link, the state a real one reaches', render: () => mount(PlanReceivedScreen, { token: 'not-a-real-token' }) },
   { id: '11.5', label: 'Plan, received', status: 'live', render: () => (
     <InApp><PlanReceivedView splitName="Upper / Lower" plan={sharedFixture} onAdopt={noop} onDecline={noop} /></InApp>
   ) },

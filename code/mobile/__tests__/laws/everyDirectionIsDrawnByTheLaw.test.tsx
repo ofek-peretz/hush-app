@@ -193,8 +193,12 @@ describe('pain wears the clay, and only a load wears the blue', () => {
     ['components/PausedStage.tsx', '13.1 · the pain door'],
     // ⚠️ `PainResponse` is DELETED (founder, 2026-08-02: the body map and its read-back screen are
     // replaced by a conversation). `PainWhere` is that conversation now, and the law still binds it.
+    /*
+     * ⚠️ `BodyMapFigure` is DELETED with the map itself (founder, 2026-08-02). Reporting an injury
+     * is a conversation now, so nothing taps a muscle and nothing draws a tender one — and the
+     * component had no caller left at all once `PainWhere` became the chat.
+     */
     ['screens/pain/PainWhere.tsx', '13.2 · something hurts — the conversation'],
-    ['components/BodyMapFigure.tsx', 'the tender muscle on the map'],
   ])('%s draws no direction tone at all (%s)', (rel) => {
     const src = read(rel);
     expect({ rel, borrowsTheDirection: /\bcolor\.down\b|\bdown\.stage\b|\bcolor\.downWash\b|\bdown\.wash\b/.test(src) }).toEqual({
