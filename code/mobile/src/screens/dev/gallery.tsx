@@ -55,6 +55,11 @@ import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
 import { PlanWeek } from '@/components/PlanWeek';
+import { PausedStage } from '@/components/PausedStage';
+import { WhyTriple } from '@/components/WhyTriple';
+import { RouteTrace } from '@/components/RouteTrace';
+import { BottomSheet } from '@/components/BottomSheet';
+import { ProgressReportView } from '@/screens/progress/ProgressReportView';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { exerciseCues, exerciseDisplayName, EXERCISES } from '@/data/exercises';
 import { tg } from '@/i18n';
@@ -1729,6 +1734,64 @@ export const GALLERY: GalleryEntry[] = [
   ) },
   { id: '11.5', label: 'Plan, received', status: 'live', render: () => (
     <InApp><PlanReceivedView splitName="Upper / Lower" plan={sharedFixture} onAdopt={noop} onDecline={noop} /></InApp>
+  ) },
+
+  /*
+   * ── SURFACES THAT WERE BUILT AND HAD NO ENTRY ────────────────────────────────────────────────
+   *
+   * ⛔ FOUNDER, 2026-08-02: *"I don't want a screen in the code that is supposed to appear and does
+   * not appear in the gallery."* Five of them: a whole progress report, the paused stage, the
+   * three-line explanation, the run's own path, and the sheet whose fade he reported twice — none
+   * of which he could look at without running the app and reaching the state.
+   *
+   * That is this file's own law (`everythingBuiltCanBeReached`) failing quietly, which is the exact
+   * reason the law exists.
+   */
+  { id: '5.4', label: 'Progress · the report', status: 'live', note: 'peak-weight comparison, milestones, the door to History', render: () => (
+    <InApp>
+      <ProgressReportView
+        title="All time"
+        legend="Every session"
+        loaded
+        units="kg"
+        entries={[
+          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', mode: 'load', firstKg: 30, peakKg: 42.5, deltaKg: 12.5, sessions: 14 },
+          { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', mode: 'load', firstKg: 40, peakKg: 60, deltaKg: 20, sessions: 12 },
+          { exerciseId: 'push_up', name: 'Push-Up', mode: 'reps', firstKg: 0, peakKg: 0, deltaKg: 0, sessions: 9 },
+        ] as never}
+        milestones={null}
+        onBack={noop}
+        onHistory={noop}
+      />
+    </InApp>
+  ) },
+  { id: '2.6', label: 'Paused · the stage held', status: 'live', note: 'resume, end, and the pain door', render: () => (
+    <InApp>
+      <PausedStage subject="Barbell Bench Press" onResume={noop} endLabel="End session" onEnd={noop} onPain={noop}>
+        <View style={{ height: 220 }} />
+      </PausedStage>
+    </InApp>
+  ) },
+  { id: '2.7', label: 'Why · the three lines', status: 'live', note: 'saw / means / did — on the stage', render: () => (
+    <InApp>
+      <WhyTriple saw="12 reps at 30 kg" means="the top of your band" did="up to 32.5" kind="up" onStage />
+    </InApp>
+  ) },
+  { id: '4.6', label: 'The run, drawn', status: 'live', note: 'the engraved path a GPS run leaves behind', render: () => (
+    <InApp>
+      <RouteTrace width={320} height={200} route={Array.from({ length: 60 }, (_, i) => ({
+        lat: 32.08 + Math.sin(i / 9) * 0.004 + i * 0.00012,
+        lon: 34.78 + Math.cos(i / 7) * 0.005,
+        at: 1_760_000_000_000 + i * 20_000,
+      })) as never} />
+    </InApp>
+  ) },
+  { id: '9.4', label: 'A sheet, over the stage', status: 'live', note: 'opaque — the fade he reported twice', render: () => (
+    <InApp>
+      <BottomSheet onClose={noop} heightFraction={0.34}>
+        <Text style={{ color: '#f1eee5', fontSize: 17, textAlign: 'left' }}>Delete your account?</Text>
+      </BottomSheet>
+    </InApp>
   ) },
 
   // ── 13 · WHEN SOMETHING HURTS ──────────────────────────────────────────────────────────────
