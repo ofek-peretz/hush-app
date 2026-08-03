@@ -36,6 +36,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { exerciseById } from '@/data/exercises';
 import { font, space, stage } from '@/design/tokens';
 import { heroType } from '@/domain/loadPresentation';
 import type { PlannedItem } from '@/domain/coachPlan';
@@ -73,11 +74,52 @@ export function SayLine({ say }: { say?: string }) {
 }
 
 /** The name of the thing, above the figure. Chrome everywhere else; here it names the subject. */
-function ItemName({ name }: { name: string }) {
+/**
+ * ════ THE SAME HEADER THE SET STAGE WEARS ════
+ *
+ * ⛔ FOUNDER, 2026-08-02: *"design them like the workout screens — the cardio ones if it is
+ * aerobic, the strength ones if it is strength."*
+ *
+ * ⚠️ MEASURED IN THE RUNNING HARNESS rather than guessed, which is the only reason this is a fix
+ * and not another opinion. The two stages side by side, as the browser actually computed them:
+ *
+ *                      2.2 · the set              2.2f · a held duration
+ *     muscle           12px Assistant-Medium      —
+ *     the lift         29px Assistant-SemiBold    13px MONO, muted
+ *     the hero        118px mono                 118px mono          ✓ already agreed
+ *     the unit         26px mono, muted           —
+ *     where she is     15px "set 2 of 4"          —
+ *
+ * A plank was announcing itself in the chrome's voice — a 13pt mono legend, the type this app uses
+ * for labels — while the lift beside it in the same session got the subject's 29pt. Same session,
+ * same athlete, two different products.
+ *
+ * The muscle line above it is absent for a MOVEMENT (a run has no muscle) and present for a lift,
+ * which is the honest difference rather than a missing feature.
+ */
+/**
+ * The muscle line, for a LIFT only.
+ *
+ * A movement — a run, a carry, a mobility drill — has no single muscle, and inventing one to fill
+ * the slot would be the app stating something it does not know.
+ */
+function muscleFor(ex: string, t: (k: string) => string): string | null {
+  const m = exerciseById(ex)?.muscle;
+  return m ? t(`muscle.${m}`) : null;
+}
+
+function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
   return (
-    <Legend size={13} track={0.18} align="center" tone="onStage">
-      {name}
-    </Legend>
+    <>
+      {muscle ? (
+        <Legend size={12} track={0.22} align="center" style={styles.itemMuscle}>
+          {muscle}
+        </Legend>
+      ) : null}
+      <Text style={styles.itemName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>
+        {name}
+      </Text>
+    </>
   );
 }
 
@@ -135,7 +177,7 @@ export function TimeStage({
   return (
     <>
       <View style={styles.body}>
-        <ItemName name={name} />
+        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
         <Text style={[styles.hero, heroType(figure)]} numberOfLines={1} accessibilityLabel={figure}>
           {figure}
         </Text>
@@ -185,7 +227,7 @@ export function DistanceStage({
   return (
     <>
       <View style={styles.body}>
-        <ItemName name={name} />
+        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
         <View style={styles.figureRow}>
           <Text style={[styles.hero, heroType(figure)]} numberOfLines={1}>
             {figure}
@@ -234,7 +276,7 @@ export function OpenStage({
   return (
     <>
       <View style={styles.body}>
-        <ItemName name={name} />
+        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
         <Text style={styles.openHero}>{item.say ?? name}</Text>
       </View>
       <View style={styles.footer}>
@@ -260,6 +302,9 @@ const styles = StyleSheet.create({
   },
   figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   unit: { fontFamily: font.monoMedium, fontSize: 22, color: stage.ink2, textAlign: 'left' },
+  // Matched to the set stage, measured: 12 / 29, the muscle in the label tone and the lift in cream.
+  itemMuscle: { marginBottom: 4 },
+  itemName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // The instruction: the coach's serif, resting in shadow beneath the fact she acts on.
   say: {
     fontFamily: font.serif,
