@@ -134,7 +134,6 @@ export type MainParamList = {
   // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
   // offer the ordinary swap for it; absent when the report is made outside a session.
   PainWhere: { exerciseId?: string } | undefined;
-  PainResponse: { muscle: string; severity: 'twinge' | 'pain' | 'sharp'; exerciseId?: string };
   // ONE LIFT'S CARD (v7 3.2b) — its climb, the marks it crossed, and the engine's stamped log for
   // it. Pushed from a chip on Progress · Lifts, so it opens above the tabs, not inside them.
   LiftDetail: { exerciseId: string };

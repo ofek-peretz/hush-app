@@ -108,7 +108,14 @@ describe('the two things that are not coaching judgement', () => {
      * maximally helpful and being right come apart.
      */
     expect(WHO).toMatch(/you do not estimate a body-fat figure/);
-    expect(WHO).toMatch(/not\s+something you can measure from/);
+    /*
+     * ⚠️ AND IT IS NARROW, WHICH TOOK A SECOND PASS. Founder, testing his stone on pictures: the
+     * clause was firing on ANY photograph, so the coach opened with a refusal instead of the
+     * professional opinion he asked for. It now names the exception as an exception, and the second
+     * assertion holds that shape: everything else about the picture is still the coach's to use.
+     */
+    expect(WHO).toMatch(/The single exception is a photograph OF HER BODY, and it is narrow/);
+    expect(WHO).toMatch(/Everything else about that picture is still yours to be\s+useful about/);
   });
 });
 

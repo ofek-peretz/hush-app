@@ -191,8 +191,9 @@ describe('pain wears the clay, and only a load wears the blue', () => {
 
   it.each([
     ['components/PausedStage.tsx', '13.1 · the pain door'],
-    ['screens/pain/PainWhere.tsx', '13.2 · where, and how much'],
-    ['screens/pain/PainResponse.tsx', '13.3 · what I did about it'],
+    // ⚠️ `PainResponse` is DELETED (founder, 2026-08-02: the body map and its read-back screen are
+    // replaced by a conversation). `PainWhere` is that conversation now, and the law still binds it.
+    ['screens/pain/PainWhere.tsx', '13.2 · something hurts — the conversation'],
     ['components/BodyMapFigure.tsx', 'the tender muscle on the map'],
   ])('%s draws no direction tone at all (%s)', (rel) => {
     const src = read(rel);

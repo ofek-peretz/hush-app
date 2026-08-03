@@ -98,7 +98,7 @@ describe('the constraints that must survive', () => {
      * of it. Answering "built" and then finding nothing left to write is the whole failure this
      * field exists to catch.
      */
-    expect(t.propertyOrdering).toEqual(['say', 'next', 'sessions', 'notes', 'learned', 'brief']);
+    expect(t.propertyOrdering).toEqual(['say', 'next', 'hurts', 'sessions', 'notes', 'learned', 'brief']);
   });
 });
 

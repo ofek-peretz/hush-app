@@ -1,170 +1,175 @@
 /**
- * WHERE, AND HOW MUCH (v7 13.2) — "two taps, no forms".
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * SOMETHING HURTS — and she says so in words, to the coach.
  *
- * "…and it's the same body map you already own. Point to the area, set how sharp it is. Pain isn't a
- * new system: the muscle just goes off for a limited window. The coach never asks you to diagnose."
+ * ⛔ FOUNDER, 2026-08-02, twice: *"I am still seeing the body-map screens in the injury case. I
+ * asked you to take them off and put a chat window with the AI in their place, where she can talk
+ * to it and update the injury."*
  *
- * So this screen renders the SAME `BodyMapFigure` the editor and onboarding render — turned to clay,
- * with the stances hidden, because the only question here is where. It asks for two facts and offers
- * no third: no free text, no scale of ten, no body part Hush cannot act on. Every zone is a muscle
- * the assembler knows, which is what makes the answer actionable rather than a note in a diary.
+ * What was here: a clay body figure, tap a muscle, pick one of three severities, and a second
+ * screen that read the result back. Two taps, no forms — and it was the right design for an ENGINE,
+ * because an engine can only act on a muscle id and a number. It cannot act on "the outside of my
+ * elbow when I straighten it".
+ *
+ * A coach can. So the question stops being a form and becomes what it is between two people: she
+ * says what is wrong, and the thing that decides answers her.
+ *
+ * ── WHERE THE REST WINDOW COMES FROM NOW ────────────────────────────────────────────────────────
+ * Nothing taps a muscle any more, so nothing but the coach knows which one she means. It reports it
+ * (`hurts` on the answer — the same pattern as `learned` for her bodyweight) and `reportPain` writes
+ * the ease from that. ⚠️ The app never guesses: a reply with no `hurts` rests nothing, which is the
+ * correct outcome for "my knee feels a bit odd, is that normal?" — a question, not an injury.
+ *
+ * ── AND IT IS THE ORDINARY CHAT ─────────────────────────────────────────────────────────────────
+ * Same component, same transport, same conversation history. She can send a photograph of the
+ * swelling, argue with the answer, or say it is fine after all. `PainResponse` is gone with the map:
+ * a screen that reads back what happened is what you need when a machine decided; when a coach
+ * answers, the answer IS the screen.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+import React from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Legend, SegmentedControl } from '@/components/ds';
+
+import { CoachChat } from '@/screens/coach/CoachChat';
+import { useCoach } from '@/screens/coach/useCoach';
 import { Icon } from '@/components/Icon';
-import { BodyMapFigure, viewOf, type BodyView } from '@/components/BodyMapFigure';
+import { Legend } from '@/components/ds';
+import { coachFacts } from '@/domain/coachFacts';
+import { db } from '@/data/local/db';
+import { exerciseDisplayName } from '@/data/exercises';
+import { color, s } from '@/design/tokens';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
-import { PAIN_SEVERITIES, type PainSeverity } from '@/domain/painReport';
-import * as haptics from '@/platform/haptics';
-import { color, font, textScale, space, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+import type { CoachDecision } from '@/domain/coachLog';
+import type { CoachPlan } from '@/domain/coachPlan';
+import type { Session } from '@/data/local/models';
 
 type Props = NativeStackScreenProps<MainParamList, 'PainWhere'>;
 
 export function PainWhere({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const winW = useWindowDimensions().width;
-  const [stageW, setStageW] = useState(0);
-  const figureW = stageW || Math.max(0, Math.round(winW - 30));
+  const lift = route.params?.exerciseId;
 
-  const [view, setView] = useState<BodyView>('front');
-  const [muscle, setMuscle] = useState<string | null>(null);
-  const [severity, setSeverity] = useState<PainSeverity | null>(null);
+  const [history, setHistory] = React.useState<Session[]>([]);
+  const [decided, setDecided] = React.useState<CoachDecision[]>([]);
+  const [plan, setPlan] = React.useState<CoachPlan | null>(null);
+  const [brief, setBrief] = React.useState<string[] | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    void Promise.all([db.loadHistory(), db.loadCoachLog(), db.loadCoachPlan(), db.loadCoachBrief()]).then(
+      ([h, d, p, b]) => {
+        if (!alive) return;
+        setHistory(h);
+        setDecided(d);
+        setPlan(p);
+        setBrief(b);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  function pick(m: string) {
-    haptics.tick();
-    setMuscle((cur) => (cur === m ? null : m));
-  }
-
-  function tell() {
-    if (!muscle || !severity) return;
-    haptics.confirm();
-    // The report is recorded and the week reshapes; the response screen READS what happened back.
-    void app.reportPain(muscle, severity);
-    navigation.replace('PainResponse', { muscle, severity, exerciseId: route.params?.exerciseId });
-  }
+  const profile = app.profile;
+  const facts = React.useMemo(
+    () =>
+      profile
+        ? coachFacts({
+            profile,
+            plan,
+            history,
+            decided,
+            ...(brief?.length ? { brief } : {}),
+            language: currentLocale(),
+          })
+        : null,
+    [profile, plan, history, decided, brief],
+  );
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <View style={styles.head}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={12}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
-        </Pressable>
-        <Text style={styles.title} accessibilityRole="header">{t('pain.whereTitle')}</Text>
-        <SegmentedControl
-          size="pill"
-          options={[
-            { value: 'front', label: t('ob.mapFront') },
-            { value: 'back', label: t('ob.mapBack') },
-          ]}
-          value={view}
-          onChange={(v) => {
-            const next = v as BodyView;
-            setView(next);
-            // The chosen muscle lives on the other face — turning the body lets it go, rather than
-            // reporting a shoulder she can no longer see.
-            setMuscle((cur) => (cur && viewOf(cur) !== next ? null : cur));
-          }}
-        />
-      </View>
-
-      {/* The one instruction on the screen, and it is a promise, not a how-to. */}
-      <Text style={styles.sub}>{t('pain.whereSub')}</Text>
-
-      <View
-        style={styles.stage}
-        onLayout={(e) => {
-          const w = Math.round(e.nativeEvent.layout.width);
-          setStageW((cur) => (cur === w ? cur : w));
-        }}
-      >
-        <BodyMapFigure
-          value={app.profile?.bodyMap ?? {}}
-          view={view}
-          width={figureW}
-          tenderMuscle={muscle}
-          hideStances
-          onPressMuscle={pick}
-        />
-      </View>
-
-      {/* HOW SHARP — three words a person can answer at a rack. Not a scale, not a score; the only
-          thing the answer decides is how long the muscle rests. */}
-      <View style={styles.sharp}>
-        <Legend size={11}>{t('pain.howSharp')}</Legend>
-        <View style={styles.grades}>
-          {PAIN_SEVERITIES.map((s) => {
-            const on = severity === s;
-            return (
-              <Pressable
-                key={s}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={t(`pain.grade_${s}`)}
-                onPress={() => {
-                  haptics.tick();
-                  setSeverity(s);
-                }}
-                style={({ pressed }) => [styles.grade, on && styles.gradeOn, { opacity: pressed ? press.opacity : 1 }]}
-              >
-                <Text style={[styles.gradeName, on && styles.gradeNameOn]} numberOfLines={1}>{t(`pain.grade_${s}`)}</Text>
-                <Text style={[styles.gradeNote, on && styles.gradeNoteOn]} numberOfLines={1}>{t(`pain.gradeNote_${s}`)}</Text>
-              </Pressable>
-            );
-          })}
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.head}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            hitSlop={10}
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          >
+            <Icon name="chevronLeft" size={22} color={color.onSurface} strokeWidth={2} />
+          </Pressable>
+          <Legend size={11} tone="muted">{t('pain.title')}</Legend>
+          <View style={styles.back} />
         </View>
-      </View>
+        {facts ? (
+          <Body
+            facts={facts}
+            entitled={app.entitlement.active}
+            lift={lift ? exerciseDisplayName(lift) : null}
+            onHurts={(h) => void app.reportPain(h.muscle, h.severity)}
+          />
+        ) : null}
+      </SafeAreaView>
+    </View>
+  );
+}
 
-      <View style={styles.foot}>
-        <Button
-          variant="primary"
-          size="act"
-          block
-          label={t('pain.tellCoach')}
-          disabled={!muscle || !severity}
-          onPress={tell}
-        />
-      </View>
-    </SafeAreaView>
+/**
+ * The conversation, mounted once her sheet exists.
+ *
+ * Split out for the same reason `CoachScreen` splits it: `useCoach` takes the facts, and a hook
+ * cannot be called conditionally.
+ */
+function Body({
+  facts,
+  entitled,
+  lift,
+  onHurts,
+}: {
+  facts: NonNullable<ReturnType<typeof coachFacts>>;
+  entitled: boolean;
+  lift: string | null;
+  onHurts: (h: { muscle: string; severity: 'twinge' | 'pain' | 'sharp' }) => void;
+}) {
+  const { t } = useCopy();
+  const coach = useCoach({
+    facts,
+    mode: 'chat',
+    entitled,
+    onAnswer: (answer) => {
+      // The ONE thing this screen does beyond talking: her testimony becomes a rest window. No
+      // `hurts`, no ease — a question about a niggle is not an injury report.
+      if (answer.hurts) onHurts(answer.hurts);
+    },
+  });
+  return (
+    <CoachChat
+      turns={coach.turns}
+      busy={coach.busy}
+      onSend={coach.send}
+      // Opened mid-session on a specific lift, the invitation names it — she is standing at the rack
+      // and should not have to explain where she is.
+      invitation={lift ? t('pain.inviteOnLift', { exercise: lift }) : t('pain.invite')}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, paddingTop: 16 },
-  title: { flex: 1, fontFamily: font.serif, fontSize: textScale.xl, color: color.textPrimary, textAlign: 'center' },
-  sub: { paddingHorizontal: 32, paddingTop: 14, fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  sharp: { paddingHorizontal: 32, gap: 12 },
-  grades: { flexDirection: 'row', gap: 8 },
-  grade: {
-    flex: 1,
-    height: 56,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.fillSubtle,
+  safe: { flex: 1 },
+  head: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+    justifyContent: 'space-between',
+    paddingHorizontal: s(16),
+    paddingVertical: s(10),
   },
-  // The chosen grade takes CLAY — the same tone the muscle it belongs to is wearing.
-  gradeOn: { backgroundColor: color.alert, borderColor: color.alert },
-  gradeName: { fontFamily: font.sansSemibold, fontSize: 14, color: color.textPrimary, textAlign: 'center' },
-  gradeNameOn: { color: color.onAccent }, // rtl-ok: merged onto gradeName, which sets textAlign
-  gradeNote: { fontFamily: font.sans, fontSize: 14, color: color.textMuted, textAlign: 'center' },
-  gradeNoteOn: { color: 'rgba(27,20,16,0.7)' }, // rtl-ok: merged onto gradeNote, which sets textAlign
-
-  foot: { paddingHorizontal: 26, paddingTop: 16, paddingBottom: 12 },
+  back: { width: s(32), height: s(32), alignItems: 'center', justifyContent: 'center' },
+  pressed: { backgroundColor: color.surface, borderRadius: s(16) },
 });

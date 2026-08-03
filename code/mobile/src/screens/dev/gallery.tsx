@@ -54,7 +54,7 @@ import { OnYourWristView } from '@/screens/watch/OnYourWrist';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { PainWhere } from '@/screens/pain/PainWhere';
-import { PainResponse } from '@/screens/pain/PainResponse';
+import { PlanWeek } from '@/components/PlanWeek';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { exerciseCues, exerciseDisplayName, EXERCISES } from '@/data/exercises';
 import { tg } from '@/i18n';
@@ -1733,8 +1733,26 @@ export const GALLERY: GalleryEntry[] = [
 
   // ── 13 · WHEN SOMETHING HURTS ──────────────────────────────────────────────────────────────
   { id: '13.1', label: 'Paused · the affordance', status: 'live', note: 'the door sits under the two acts', render: () => mount(SessionFlow, undefined, pausedFixture) },
-  { id: '13.2', label: 'Where, and how much', status: 'live', note: 'tap a muscle, then a grade', render: () => mount(PainWhere, { exerciseId: 'bb_bench_press' }) },
-  { id: '13.3', label: 'The engine responds', status: 'live', render: () => mount(PainResponse, { muscle: 'Shoulders', severity: 'pain', exerciseId: 'bb_bench_press' }) },
+  { id: '13.2', label: 'Something hurts — the conversation', status: 'live', note: 'the body map is gone; she tells the coach', render: () => mount(PainWhere, { exerciseId: 'bb_bench_press' }) },
+  /*
+   * ⚠️ `PlanWeek` was built, shipped on TWO screens, and was not in here — the founder could not
+   * look at the one component that shows her the programme. That is this file's own law
+   * (`everythingBuiltCanBeReached`) failing about the newest thing in the app.
+   */
+  { id: '1.6', label: 'The week the coach wrote', status: 'live', note: 'all four shapes, with the coach note on a row', render: () => (
+    <PlanWeek
+      units="kg"
+      plan={{ v: 2, sessions: [
+        { name: 'אימון 1: כוח וריצה', day: 'mon', blocks: [
+          { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [8, 10], load: 40, say: 'חזרה אחת לפני כישלון בסט האחרון.' }] },
+          { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'push_up', reps: [8, 12], load: null }] },
+          { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 5000, say: 'בקצב שאפשר לדבר בו.' }] },
+          { rounds: 3, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
+        ] },
+        { name: 'אימון 2', blocks: [{ rounds: 4, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [5, 5], load: 32.5 }] }] },
+      ] }}
+    />
+  ) },
 ];
 
 export const DEFAULT_SCREEN = '';

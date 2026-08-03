@@ -81,7 +81,21 @@ export interface Profile {
    * (`domain/painReport.effectiveBodyMap`), so when a window lapses the muscle returns to HER stance
    * with nothing to undo. Structural, so `domain/painReport` need not be imported here.
    */
-  painEases?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp'; fromMs: number; untilMs: number }[];
+  painEases?: {
+    muscle: string;
+    severity: 'twinge' | 'pain' | 'sharp';
+    fromMs: number;
+    untilMs: number;
+    /**
+     * When the coach was asked to check in on it, because the window had run out.
+     *
+     * ⛔ The window ending does NOT clear the ease — the founder's stone: *"after X time the system
+     * has to tell him the time is up, ask how he feels, and ask whether we can release the injury
+     * report."* A question about something already undone is not a question. So the rest stands,
+     * this marks that she has been asked once, and her answer is what ends it.
+     */
+    askedAt?: number;
+  }[];
   /** Engine v5 — minutes she has for a workout (the time-budget ceiling, S-64). Absent => 60. */
   workoutMinutes?: number;
   healthConnected: boolean;

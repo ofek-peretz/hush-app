@@ -799,14 +799,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const live = state.profile.painEases ?? [];
         const lapsed = live.filter((e) => e.untilMs <= Date.now());
         if (lapsed.length > 0) {
-          const cleared: Profile = { ...state.profile, painEases: activeEases(live, Date.now()) };
-          await db.saveProfile(cleared);
-          dispatch({ type: 'PROFILE_UPDATED', profile: cleared });
-          void track('pain_ease_lapsed', { muscles: lapsed.map((e) => e.muscle) });
-          void askCoachToRevise(
-            `${lapsed.map((e) => e.muscle).join(' and ')} has settled — the rest window she asked for is over. ` +
-              'Bring it back into her programme at whatever pace you think is right.',
-          );
+          /*
+           * ⛔ THE WINDOW ENDING IS A QUESTION FOR HER, NOT A FACT THE CLOCK DECIDES.
+           *
+           * ⚠️ FOUND TESTING THE FOUNDER'S FOUNDATION STONES, 2026-08-02. His words:
+           *
+           *   > *"Say the system thinks the athlete needs to rest X time — after X time the system
+           *   > has to REMEMBER and TELL him the time is up, and ASK HIM HOW HE FEELS, and whether
+           *   > we can release the injury report and put it back into the programme."*
+           *
+           * What this did instead: deleted the ease the moment the clock passed it, told the coach
+           * "bring it back at whatever pace you think is right", and said nothing at all to her. A
+           * timer decided she was healed, silently, and her programme changed underneath her.
+           *
+           * That is the app deciding — which is the one thing the whole AI move exists to stop, and
+           * it was doing it about an INJURY.
+           *
+           * ── WHY THE EASE IS NO LONGER CLEARED HERE ──────────────────────────────────────────────
+           * Clearing it was what made the question unaskable: once the muscle is back in the map,
+           * "may I bring it back?" is a question about something that has already happened. So the
+           * rest STAYS until she says otherwise, `askedAt` marks that she has been asked, and the
+           * coach's reply is what ends it — through the ordinary path, where she can also say no.
+           */
+          const askedNow = Date.now();
+          const marked: Profile = {
+            ...state.profile,
+            painEases: live.map((e) => (e.untilMs <= askedNow && !e.askedAt ? { ...e, askedAt: askedNow } : e)),
+          };
+          const toAsk = lapsed.filter((e) => !e.askedAt);
+          if (toAsk.length > 0) {
+            await db.saveProfile(marked);
+            dispatch({ type: 'PROFILE_UPDATED', profile: marked });
+            void track('pain_ease_lapsed', { muscles: toAsk.map((e) => e.muscle) });
+            void askCoachToRevise(
+              `The rest window on her ${toAsk.map((e) => e.muscle).join(' and ')} has just run out. ` +
+                'Tell her the time is up, ask her how it feels now, and ask whether she is happy for you to ' +
+                'bring it back into her programme. Do not change anything until she answers.',
+            );
+          }
         }
         // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
         // Saturday 20:30 local, regardless of workout completion. Finishing every workout early just

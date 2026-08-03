@@ -1079,7 +1079,10 @@
     "nothingNew": "Same swap you already have — nothing new to learn, nothing permanent. Adjust it any time in You › Body map.",
     "continueWith": "Continue with {{exercise}}",
     "skipToday": "Skip {{muscle}} today",
-    "gotIt": "Got it"
+    "gotIt": "Got it",
+    "title": "Something hurts",
+    "invite": "Tell me what hurts and I will take it from there.",
+    "inviteOnLift": "Tell me what hurts on the {{exercise}} and I will take it from there."
   },
   "notifAsk": {
     "title": "May I speak up — only when it matters?",

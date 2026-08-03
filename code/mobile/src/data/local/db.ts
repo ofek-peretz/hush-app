@@ -403,7 +403,10 @@ export const db = {
    * The plan is written BEFORE the log. If only one of the two survives a crash, the programme she
    * is about to train matters more than the record of why.
    */
-  async recordCoachAnswer(answer: { plan: CoachPlan | null; brief?: string[] }, at: string): Promise<void> {
+  async recordCoachAnswer(
+    answer: { plan: CoachPlan | null; brief?: string[]; notes?: CoachPlan['notes'] },
+    at: string,
+  ): Promise<void> {
     /*
      * ⚠️ THE BRIEF IS SAVED BEFORE THE EARLY RETURN, and that ordering is the whole feature.
      *
@@ -413,7 +416,20 @@ export const db = {
      * turns it exists for.
      */
     if (answer.brief?.length) await setJSON(K.coachBrief, answer.brief);
-    if (!answer.plan) return; // A turn that only spoke decided nothing else. Nothing more to record.
+    if (!answer.plan) {
+      /*
+       * ⛔ AND THE REASONS ARE WRITTEN EVEN WITH NO PROGRAMME.
+       *
+       * ⚠️ Found testing the founder's foundation stones, 2026-08-02: he asked the coach to HOLD a
+       * weight. It held — correctly attaching nothing, because nothing changed — and it wrote the
+       * reason. The reason was then dropped on this line, so the one decision she is least able to
+       * understand on her own arrived at the "Why?" screen as silence.
+       *
+       * A hold is a decision. The founder listed it himself, beside raising and lowering.
+       */
+      if (answer.notes?.length) await this.appendCoachDecisions(answer.notes, at);
+      return;
+    }
     await this.saveCoachPlan(answer.plan);
     await this.appendCoachDecisions(answer.plan.notes, at);
   },

@@ -261,9 +261,22 @@ export function useCoach({ facts, mode, entitled = false, onAnswer, onTrouble }:
 
       void askOnce(COACH_PLAN_SCHEMA, 'low')
         .then(async (first) => {
-          if (mode !== 'intake' || !first.ok) return first;
+          if (!first.ok) return first;
           const read = parseCoachPlan(first.text, facts);
           if (!read.ok || read.answer.plan) return first;
+          /*
+           * ⛔ AND THIS IS NO LONGER INTAKE-ONLY — founder, testing his own foundation stones,
+           * 2026-08-02. He asked in CHAT to move from the barbell to the machine. The coach reasoned
+           * it correctly ("you pressed 40 on the bar, start with 40 on the machine") and attached
+           * `sessions: 0`. She would read that she had moved, open her programme, and find the bar.
+           *
+           * It is the identical defect he caught in the intake — *"he says here is your plan and
+           * nothing is shown"* — and chat was excluded from the fix by one clause on this line,
+           * which is precisely where an athlete asks for a change.
+           *
+           * `next` now means the same thing on every occasion (see `howToAnswer`), so the signal is
+           * the same everywhere and this guard does not need to know which conversation it is in.
+           */
           if (read.answer.next !== 'built' && read.answer.learned?.daysPerWeek == null) return first;
           const retried = await askOnce(COACH_DECISION_SCHEMA);
           /*

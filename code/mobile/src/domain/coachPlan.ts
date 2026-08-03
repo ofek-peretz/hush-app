@@ -58,6 +58,9 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import { EXERCISES, type Exercise } from '@/data/exercises';
+
+/** Every muscle name the catalogue uses — the only vocabulary a rest window can be written in. */
+const MUSCLES = new Set<string>(EXERCISES.map((e) => e.muscle));
 import { MOVEMENTS, type Movement } from '@/data/movements';
 import { normalizeLoad } from '@/engine/loadMath';
 import type { CoachFacts } from './coachFacts';
@@ -168,6 +171,21 @@ export interface CoachAnswer {
   say: string;
   /** The programme, whole, when this turn decided one. `null` when the coach only spoke. */
   plan: CoachPlan | null;
+  /**
+   * The reasons, when this turn decided something that attached NO programme.
+   *
+   * A hold changes nothing and is still a decision — the founder listed it himself. When a plan is
+   * attached the reasons travel inside it (`plan.notes`); this carries them for the turns where
+   * there is no plan to put them in, so the "Why?" screen sees them either way.
+   */
+  notes?: NonNullable<CoachPlan['notes']>;
+  /**
+   * What she has just said hurts, when she said so — see `hurts` on the schema.
+   *
+   * The app writes the rest window from this. It is her testimony, reported by the only part of the
+   * product that hears her; nothing here decides whether it believes her.
+   */
+  hurts?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp' };
   /**
    * Which of its two intake moves the coach says it just made — see `next` on the schema.
    *
@@ -355,6 +373,28 @@ export const COACH_PLAN_SCHEMA = {
      * would be a field the answerer has no reason to think about.
      */
     next: { type: 'string', enum: ['asking', 'built'] },
+    /**
+     * ════ WHAT HURTS, WHEN SHE HAS JUST TOLD YOU ════
+     *
+     * ⛔ The body map is gone (founder, 2026-08-02: *"take them off and put a chat window with the
+     * AI in their place, where she can talk to it and update the injury"*). So nothing taps a
+     * muscle any more — she says it in words, and the coach is the only thing that hears words.
+     *
+     * Reported rather than parsed, for the same reason `learned` is: a regex over "my shoulder is
+     * killing me" in two languages is a second interpreter of the same sentence, and the one place
+     * it would go wrong is the one place it matters.
+     *
+     * `muscle` must be one of the muscle names the catalogue uses, or the app cannot rest anything.
+     */
+    hurts: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['muscle', 'severity'],
+      properties: {
+        muscle: { type: 'string' },
+        severity: { type: 'string', enum: ['twinge', 'pain', 'sharp'] },
+      },
+    },
     sessions: {
       type: 'array',
       items: {
@@ -525,6 +565,19 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    */
   const next =
     root.next === 'asking' || root.next === 'built' ? { next: root.next as 'asking' | 'built' } : {};
+  /*
+   * A muscle we cannot resolve is not a rest window — it is a typo that would silently switch off
+   * nothing at all. Checked against the catalogue's own names, so "shoulder" lands and "the bit
+   * behind my knee" is left for the coach to ask about in words.
+   */
+  const hurtRaw = isObj(root.hurts) ? root.hurts : null;
+  const hurts =
+    hurtRaw &&
+    typeof hurtRaw.muscle === 'string' &&
+    MUSCLES.has(hurtRaw.muscle) &&
+    (hurtRaw.severity === 'twinge' || hurtRaw.severity === 'pain' || hurtRaw.severity === 'sharp')
+      ? { hurts: { muscle: hurtRaw.muscle, severity: hurtRaw.severity as 'twinge' | 'pain' | 'sharp' } }
+      : {};
   const learned = readLearned(root.learned);
   /*
    * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
@@ -540,6 +593,34 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   const brief = lines.length > 0 ? { brief: lines } : {};
 
   /*
+   * ⛔ THE REASONS ARE READ BEFORE THE NO-PROGRAMME RETURN, AND THAT ORDERING IS THE FIX.
+   *
+   * ⚠️ FOUND BY TESTING THE FOUNDER'S OWN FOUNDATION STONES, 2026-08-02. He asked for a HOLD —
+   * *"stay on the same weight for another two weeks"* — and the coach did it properly: it changed
+   * nothing, which is correct, and it wrote the reason ("staying at 40 so you can consolidate ten
+   * clean reps before we go up").
+   *
+   * **The app threw the sentence away.** `notes` was parsed a hundred lines below the early return
+   * for a turn with no `sessions`, so a decision that changes nothing lost its explanation — and a
+   * hold is precisely the decision she is least able to understand without one. His stone says
+   * *"every decision the system makes must explain why"*, and this was the one decision type where
+   * that structurally could not happen.
+   *
+   * Same shape as the brief above it, for the same reason: the turns that decide nothing are not
+   * the turns that carry nothing.
+   */
+  const notes: NonNullable<CoachPlan['notes']> = [];
+  if (Array.isArray(root.notes)) {
+    for (const n of root.notes) {
+      // A malformed NOTE loses a sentence, not a decision — never fail a plan over prose.
+      if (!isObj(n)) continue;
+      if (typeof n.say !== 'string' || n.say.length === 0) continue;
+      notes.push({ ...(typeof n.ex === 'string' ? { ex: n.ex } : {}), say: n.say });
+    }
+  }
+  const spokenNotes = notes.length > 0 ? { notes } : {};
+
+  /*
    * NO `sessions` IS AN ANSWER, NOT A FAILURE — but an EMPTY `sessions` is a failure.
    *
    * Absent means the coach only spoke, which is most turns: a question answered, a clarification
@@ -551,7 +632,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief, ...spokenNotes, ...hurts }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -657,16 +738,6 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     sessions.push({ name: s.name, ...(s.day ? { day: s.day as Weekday } : {}), blocks });
   }
 
-  const notes: NonNullable<CoachPlan['notes']> = [];
-  if (Array.isArray(root.notes)) {
-    for (const n of root.notes) {
-      // A malformed NOTE loses a sentence, not a decision — never fail a plan over prose.
-      if (!isObj(n)) continue;
-      if (typeof n.say !== 'string' || n.say.length === 0) continue;
-      notes.push({ ...(typeof n.ex === 'string' ? { ex: n.ex } : {}), say: n.say });
-    }
-  }
-
   /*
    * ════ AND THE PROGRAMME ITSELF STATES HOW MANY DAYS A WEEK SHE TRAINS ════
    *
@@ -687,6 +758,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     answer: {
       say,
       ...next,
+      ...hurts,
       plan: { v: COACH_PLAN_VERSION, sessions, ...(notes.length ? { notes } : {}) },
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
       ...brief,

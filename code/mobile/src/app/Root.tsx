@@ -48,7 +48,6 @@ import { History } from '@/screens/history/History';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { LiftDetail } from '@/screens/progress/LiftDetail';
 import { PainWhere } from '@/screens/pain/PainWhere';
-import { PainResponse } from '@/screens/pain/PainResponse';
 import { Cardio } from '@/screens/cardio/Cardio';
 import { CardioReady } from '@/screens/cardio/CardioReady';
 import { CardioDetail } from '@/screens/cardio/CardioDetail';
@@ -158,7 +157,6 @@ function MainNavigator() {
       <MainStack.Screen name="SharePlan" component={SharePlanScreen} />
       <MainStack.Screen name="PlanReceived" component={PlanReceivedScreen} />
       <MainStack.Screen name="PainWhere" component={PainWhere} />
-      <MainStack.Screen name="PainResponse" component={PainResponse} />
       {/* The live cardio stage — full-screen focus, fades in like the session flow, and opens
           straight into the 3·2·1 countdown (the READY step now lives in the Cardio tab). A live GPS
           recording is never swipe-dismissable, so the back gesture stays off for the whole stage. */}
