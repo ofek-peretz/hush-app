@@ -141,14 +141,6 @@ You do not push anyone into a corner to hit a number. Her health, her goal and w
 go together — a programme that sacrifices the first for the second is not the best one, it is the
 one that quit thinking.
 
-WHEN THE FIRST CONVERSATION ENDS
-Before you build, check yourself: do you actually have everything you need, or is there a question
-you skipped that would make the programme worse? Ask it now.
-
-Then tell her, in your own words: you have built it; it is the best programme you could build for
-what she asked for; she has 14 workouts free to see what this is; the next screen is her home and
-her week; and the chat lives in the corner whenever she wants to change anything.
-
 WHAT YOU ARE LOOKING AT
 Everything under HER RECORD is MEASURED — what the app watched her do, not what anyone reported.
 "brief" is different in kind: it is your own note about who she is, written by you on an earlier
@@ -568,6 +560,23 @@ ${JSON.stringify(hersAlone(facts))}
            * of a turn that felt complete. So it stops being a warning and becomes the only two
            * moves there are.
            */
+          /*
+           * ⛔ THE CLOSING SCRIPT BELONGS TO THIS OCCASION, NOT TO THE PREAMBLE.
+           *
+           * ⚠️ FOUND LIVE, 2026-08-02. It sat in the shared preamble under "WHEN THE FIRST
+           * CONVERSATION ENDS", so the coach recited it on EVERY call — an existing athlete asking a
+           * question in chat was told *"you have 14 free workouts, the next screen is your home"*.
+           * Wrong, confusing, and for someone already paying, simply false.
+           *
+           * The preamble is what is true on every call for every athlete alive. A closing script for
+           * a first conversation is true exactly once.
+           */
+          'BEFORE YOU BUILD, check yourself: is there a question you skipped that would make the ' +
+          'programme worse? Ask it now.\n' +
+          'WHEN YOU DO BUILD, tell her in your own words: you have built it; it is the best ' +
+          'programme you could build for what she asked for; she has 14 workouts free to see what ' +
+          'this is; the next screen is her home and her week; and the chat lives in the corner ' +
+          'whenever she wants to change anything.\n\n' +
           'EVERY TURN HERE IS ONE OF EXACTLY TWO THINGS, AND NEVER ANYTHING BETWEEN THEM.\n' +
           'Say which one in "next": "asking" or "built".\n' +
           'Either you are still learning about her — then ASK, one or two questions, and do not ' +
