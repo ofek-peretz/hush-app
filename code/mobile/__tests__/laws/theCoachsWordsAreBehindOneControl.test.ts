@@ -86,7 +86,14 @@ describe('the control is on both stages, and opens onto something', () => {
      * control she can no longer reach is a feature deleted by accident — so the points became the
      * conversation's opening turn instead of a second sheet behind a second control.
      */
-    expect(flow()).toMatch(/onCoach=\{onLift && !confirm \? \(\) => setOverlay\('coach'\) : undefined\}/);
+    /*
+     * ⚠️ THE GATE MOVED OFF `onLift` IN THE AUDIT THAT FOLLOWED, and this assertion is what caught
+     * the two files disagreeing. `onLift` hid the disc on every item stage — a plank, a 400 m
+     * repeat, a carry — which is documented at length in
+     * `theCoachCanChangeTodayButNotYesterday`. Kept pointing at the CURRENT gate so a future
+     * narrowing has to come through here as well.
+     */
+    expect(flow()).toMatch(/onCoach=\{session\.currentExerciseId && !confirm \? \(\) => setOverlay\('coach'\) : undefined\}/);
     expect(flow()).toContain('<SessionCoach');
     expect(read('src/screens/session/SessionCoach.tsx')).toMatch(/useState<CoachTurn\[\]>\([\s\S]{0,40}session\.emphases\.map/);
   });

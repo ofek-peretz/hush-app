@@ -43,6 +43,7 @@
  */
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
+  Platform,
   View,
   Text,
   ScrollView,
@@ -455,9 +456,24 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    // LTR island — the numeric wheel never mirrors (see header). A no-op in the LTR
-    // build; under forceRTL it keeps digits ascending L→R and the offset math intact.
-    direction: 'ltr',
+    /*
+     * ⚠️ LTR ISLAND — AND IT HAS NEVER WORKED ON THE PLATFORM WE SHIP ON.
+     *
+     * `direction` is a CSS property, not a React Native style. RN Web honours it (which is why the
+     * gallery looks right); iOS ignores it and logs `Invalid style property of "direction"` on every
+     * render — 25 of them in one sweep of the gallery. The intent — keep the numeric wheel ascending
+     * L→R under `I18nManager.forceRTL(true)`, which `i18n/index.ts` DOES call for Hebrew — is real
+     * and is simply not achieved on device.
+     *
+     * ⛔ NOT BLIND-FIXED. The honest fix is `flexDirection: 'row-reverse'` under `I18nManager.isRTL`,
+     * and this is the control a sweating hand turns to log a set — the offset math the header
+     * describes is measured against this row's direction. Changing it without a device to turn the
+     * wheel on is how a touch target that works becomes one that does not.
+     *
+     * Platform-gated so web keeps the behaviour it actually has and iOS stops warning about a
+     * property it was already ignoring. Zero behaviour change on either. Left for a device pass.
+     */
+    ...(Platform.OS === 'web' ? { direction: 'ltr' as const } : null),
     // v7 1.4: NO box — the scale is framed by a hairline top and bottom, on the bare stage.
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -481,7 +497,8 @@ const styles = StyleSheet.create({
   numRow: { alignSelf: 'stretch', flex: 1, justifyContent: 'center', overflow: 'hidden' },
   /** The graduation, held at the foot of the frame and OUT of the touch path (see `numRow`). */
   ticksLayer: { position: 'absolute', left: 0, right: 0, bottom: TICK_INSET, alignItems: 'center' },
-  scroller: { direction: 'ltr' },
+  // Same story as `wrap` above — see the note there. Ignored on iOS, honoured on web.
+  scroller: { ...(Platform.OS === 'web' ? { direction: 'ltr' as const } : null) },
   // The numerals rest where the flow layout used to put them — clear of the graduation and the gap
   // that separated the two — now that the scroller owns the full frame height for touch (C.3).
   scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP_H + 8 },

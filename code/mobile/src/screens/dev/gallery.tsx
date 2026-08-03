@@ -1392,6 +1392,16 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
+  /*
+   * ⛔ `itemFixture` WAS DECLARED AND MOUNTED NOWHERE, and that is exactly how the hole below got
+   * in. 2.2f/2.2g/2.2h draw the item STAGES directly, without the chrome around them — so the one
+   * state that shows a plank INSIDE the running session had no entry, and the coach disc being
+   * hidden on every item stage was invisible to the only person who reads this gallery.
+   *
+   * Same law as `gallery-cannot-see-what-it-cannot-drive`, third time: an unused fixture is a state
+   * nobody looks at.
+   */
+  { id: '2.2q', label: 'An item, inside the session — with its chrome', status: 'live', note: 'a plank on the real stage: the coach disc must be here too, and for half an hour it was not', render: () => mount(SessionFlow, undefined, itemFixture) },
   { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },

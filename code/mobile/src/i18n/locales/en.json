@@ -1192,6 +1192,7 @@
     "skipped": "Taken {{name}} out of today.",
     "cannotSkip": "That is the last thing left today — skipping it ends the workout.",
     "nothingChanged": "Nothing there for me to change.",
-    "open": "Talk to your coach"
+    "open": "Talk to your coach",
+    "changed": "I have changed the rest of today."
   }
 }

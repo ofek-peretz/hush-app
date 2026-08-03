@@ -17,7 +17,6 @@ import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneGlyph';
 import { RouteTrace } from '@/components/RouteTrace';
 import { Icon } from '@/components/Icon';
-import { OptStack } from '@/components/onboarding/OptStack';
 import { color, stage, signal, ink, paper, cream, up, down, hold } from '@/design/tokens';
 
 function mount(el: React.ReactElement): ReactTestRenderer {
@@ -303,22 +302,15 @@ describe('READOUT: no accent hue — emphasis is distance from the ground', () =
 });
 
 describe('onboarding controls', () => {
-  it('OptStack leads with the radio and reports selection to VoiceOver', () => {
-    const r = mount(
-      <OptStack
-        value="intermediate"
-        onChange={() => {}}
-        options={[
-          { value: 'beginner', label: 'Beginner', desc: 'under 1 year' },
-          { value: 'intermediate', label: 'Intermediate', desc: '1–3 years' },
-          { value: 'advanced', label: 'Advanced', desc: '3+ years' },
-        ]}
-      />,
-    );
-    const radios = byRole(r, 'radio');
-    expect(radios.length).toBe(3);
-    expect(radios.map((n) => n.props.accessibilityState.selected)).toEqual([false, true, false]);
-  });
+  /*
+   * ⛔ THE `OptStack` CASE WAS DELETED WITH ITS COMPONENT, 2026-08-02.
+   *
+   * A stacked single-select — "Beginner / Intermediate / Advanced", with a radio and a one-line
+   * description each. It was imported by nothing in `src`: onboarding is the coach intake now, and
+   * she TELLS it how long she has been training. The component outlived the screens it was built
+   * for and was kept alive only by this test, which is the `theilSenSlope` pattern — a green
+   * assertion about code no athlete can reach.
+   */
 
   it('TextField is written on a rule, and its label is a legend', () => {
     const r = mount(<TextField block label="Name" value="Ofek" onChangeText={() => {}} placeholder="Your name" />);

@@ -115,10 +115,22 @@ export function SessionCoach({ onClose, onSwap }: {
         speak(landed > 0 ? t('sessionCoach.skipped', { name: exName }) : t('sessionCoach.cannotSkip'));
       },
     });
-    chips.push({
-      label: t('sessionCoach.chipBusy'),
-      onPress: () => { haptics.setLogged(); onClose(); session.markEquipmentOccupied(); },
-    });
+    /*
+     * ⚠️ ONLY WHERE IT CAN ACTUALLY DO SOMETHING. `markEquipmentOccupied` returns silently unless
+     * she is at the START of an exercise (`exerciseSetIndex === 0`) and something remains to move
+     * past — so offering it on set 2 was a chip that closed the window and did nothing.
+     *
+     * The condition is also true to the world: if she is on set 2 she is holding the equipment, so
+     * "it's taken" is not a thing she can mean.
+     */
+    const atStart = (session.setLabel?.n ?? 1) === 1;
+    const somethingAfter = (session.exerciseProgress?.index ?? 0) < (session.exerciseProgress?.total ?? 1) - 1;
+    if (atStart && somethingAfter) {
+      chips.push({
+        label: t('sessionCoach.chipBusy'),
+        onPress: () => { haptics.setLogged(); onClose(); session.markEquipmentOccupied(); },
+      });
+    }
   }
 
   const send = useCallback(
@@ -144,6 +156,13 @@ export function SessionCoach({ onClose, onSwap }: {
           setTurns((prev) => prev.map((tn) => (tn.id === mine.id ? { ...tn, pending: false } : tn)));
           const landed = update.today?.length ? session.reviseToday(update.today) : 0;
           if (update.say) speak(update.say);
+          /*
+           * ⚠️ A SCREEN THAT CHANGES UNDER HER WITH NOTHING SAID IS ALARMING — the prompt asks the
+           * coach to explain every edit, and this is what happens when it does not. `say` is
+           * required by the schema so it should never be missing, but "should never" is how the
+           * post-session call came back describing a programme it had not attached.
+           */
+          if (!update.say && landed > 0) speak(t('sessionCoach.changed'));
           // ⚠️ Said ONLY when the coach asked for changes and none of them landed. Silence here is
           // the app letting her walk away believing her workout changed when it did not.
           if (update.today?.length && landed === 0) speak(t('sessionCoach.nothingChanged'));

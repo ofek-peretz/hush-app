@@ -673,7 +673,18 @@ export function SessionFlow({ navigation, route }: Props) {
              * something, and the key points ride inside the window as its opening turn.
              */
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
-            onCoach={onLift && !confirm ? () => setOverlay('coach') : undefined}
+            /*
+             * ⛔ NOT GATED ON `onLift`, AND THAT WAS A REAL HOLE FOR HALF AN HOUR.
+             *
+             * The FORM disc is `onLift` because a plank has no film to play. I reused the same gate
+             * for the conversation and it hid the coach on every item stage — a plank, a 400 m
+             * repeat, a farmer's carry, five minutes of mobility. Measured: `exerciseById` is false
+             * for all four. She would have been mid-interval with the one door out of the workout
+             * missing, which is the exact state the door exists for.
+             *
+             * The right gate is "is there a step in front of her", not "is it a barbell".
+             */
+            onCoach={session.currentExerciseId && !confirm ? () => setOverlay('coach') : undefined}
           />
         )}
         {paceBeat ? (
@@ -2377,7 +2388,6 @@ const styles = StyleSheet.create({
   // Tall enough that the rest ring can never come up and touch the control.
   stageBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 14 },
   // A soft graphite disc, not a bordered box: found when looked for, silent otherwise.
-  pauseBtn: { backgroundColor: stage[1], borderRadius: radius.full, borderColor: 'transparent' },
   // The chrome disc — 38px, a `.08` cream veil behind a `.12` rim (handoff 2.2).
   stageDisc: {
     width: 38,
@@ -2421,7 +2431,6 @@ const styles = StyleSheet.create({
   // The chrome's centre group: [ordinal] · [elapsed] (handoff 2.2). A dim dot parts the ordinal
   // (where am I) from the clock (how long have I been here) — two facts, one line.
   stageBarCentre: { alignItems: 'center', gap: 3 },
-  stageBarDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#5a5346' },
   // The elapsed clock — mono, because it carries only digits and a colon (the two-voice law). Medium
   // weight, no tracking — mm:ss reads as a running instrument, matching the mock's LIFT ordinal.
   stageBarClock: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 26, lineHeight: 29, color: stage.ink0, textAlign: 'center' },
@@ -2441,7 +2450,6 @@ const styles = StyleSheet.create({
   supersetNext: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
-  loadBtnPressed: { backgroundColor: color.fillSubtleStrong },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
   // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,
   // cream); the "a side / per hand" suffix is a word (sans, quiet). It rode inline beside the hero
@@ -2469,8 +2477,6 @@ const styles = StyleSheet.create({
   instrDoneText: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   // Why / Δ — demoted below the instruction; quiet and optional, never competing with it.
   // minHeight keeps the quiet look while giving the tap a full 44pt target.
-  whyDeltaRow: { marginTop: 12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.md },
-  whyText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
   // 3 · THE ENGRAVED REP-RANGE BAND (handoff 2.2) — a floor and a ceiling, drawn as a rule with
   // two moss end-ticks and a moss bar between them. Moss is spent exactly once per set screen, here.
   // 268-wide rule; the numbers hang off each end, and the legend rides above. The word "reps" that
@@ -2585,16 +2591,8 @@ const styles = StyleSheet.create({
 
   /* ── 2.3b · EXERCISE DONE — a beat, centred, that hands over by itself. ── */
   beatHead: { alignItems: 'center', paddingTop: 28 },
-  beatBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28, marginTop: -24 },
 
   // The band, resolved: the span lit, the dot landed inside it.
-  doneBand: { width: 280, height: 24 },
-  doneBandRule: { position: 'absolute', left: 0, right: 0, top: 11.5, height: 1.5, backgroundColor: 'rgba(241,238,229,0.20)' },
-  doneBandSpan: { position: 'absolute', left: 98, width: 98, top: 10, height: 3, borderRadius: 1.5, backgroundColor: up.stage },
-  doneBandTick: { position: 'absolute', top: 3, width: 2, height: 18, backgroundColor: up.stage },
-  doneBandTickL: { left: 98 },
-  doneBandTickR: { left: 196 },
-  doneBandDot: { position: 'absolute', left: 140, top: 5, width: 14, height: 14, borderRadius: 7, backgroundColor: stage.ink0 },
   // Every pip filled — a lift is spent, and that is the whole statement.
   donePips: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   donePip: { width: 34, height: 10, borderRadius: 5, backgroundColor: up.stage },
@@ -2604,10 +2602,8 @@ const styles = StyleSheet.create({
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
   // The chained lift, quieter than the position it follows — news, not an instruction.
   setOf: { marginTop: 30, color: stage.ink1 },
-  setLabel: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, marginTop: 12, textAlign: 'left' },
 
   // Ghost actions
-  ghostRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
   ghost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
   ghostPressed: { backgroundColor: stage[1] },
   ghostLabel: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: stage.ink1, textAlign: 'left' },
@@ -2626,8 +2622,6 @@ const styles = StyleSheet.create({
 
   // Up next card
   // A crossing between two lifts: one centred legend, 76 down from the top of the frame.
-  crossingRow: { alignItems: 'center', paddingTop: 24 },
-  crossing: { color: stage.ink1 },
   // Form / Swap at a crossing — an equal pair of 52px outlines.
   stageOutline: {
     flex: 1,
@@ -2664,7 +2658,6 @@ const styles = StyleSheet.create({
   // + size when the load is a word ("Bodyweight"). It never renders alone.
   upWeightWord: { fontFamily: font.sansSemibold, fontSize: textScale.md }, // rtl-ok
   upWeightUnit: { fontFamily: font.mono, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
-  upDelta: { marginTop: 4 },
   /* ── The signature moment, on the rest card (mock 2.4). The full account played on the logged
      beat; here the next load stands in moss under an "Eased/Raised for you" pill — the one number
      the up-next law licenses between sets, because a corrected load is news, not a reminder. ── */
@@ -2714,9 +2707,6 @@ const styles = StyleSheet.create({
   corrEasedUp: { color: up.stage },
   corrEasedDown: { color: down.stage },
   corrEasedPillDown: { borderColor: 'rgba(126,178,214,0.45)' },
-  corrBeatFoot: { alignItems: 'center', gap: 9, marginTop: 6 },
-  corrBeatFootText: { fontFamily: font.sansMedium, fontSize: textScale.xs, letterSpacing: trackingPx(textScale.xs, tracking.legend), textTransform: 'uppercase', color: stage.ink1, textAlign: 'center' },
-  corrBeatProgressTrack: { width: 130, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)', overflow: 'hidden' },
 
   upActions: { flexDirection: 'row', gap: 10 },
 

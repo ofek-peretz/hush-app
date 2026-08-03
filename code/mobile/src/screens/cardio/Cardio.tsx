@@ -497,13 +497,15 @@ export function CardioLiveView(props: {
 
         {/* 3.4b · KILOMETRE LOGGED — fires over the run each km, clears itself. */}
         {kmMoment ? <KmMoment split={kmMoment} splits={splits} /> : null}
-      </SafeAreaView>        {points && props.say ? (
+
+        {/* The coach's words for this run, in full — see the control on the top line. */}
+        {points && props.say ? (
           <EmphasesSheet
             emphases={[{ ex: props.exerciseId ?? 'run_outdoor', say: props.say }]}
             onClose={() => setPoints(false)}
           />
         ) : null}
-
+      </SafeAreaView>
     </View>
   );
 }

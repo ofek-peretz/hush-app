@@ -204,6 +204,45 @@ describe('it never claims a change it did not make', () => {
   });
 });
 
+describe('the door is reachable, and every chip does something', () => {
+  /*
+   * ⛔ THREE HOLES FOUND IN THE AUDIT AFTER THIS SHIPPED, all of the same kind: a control that is
+   * offered and cannot act, or an act with no control. None was visible from the domain.
+   */
+  const flow = () => read('src/screens/session/SessionFlow.tsx');
+  const coach = () => read('src/screens/session/SessionCoach.tsx');
+
+  it('⚠️ the coach is reachable during a PLANK, a RUN and a CARRY — not only on a lift', () => {
+    /*
+     * The disc was gated on `onLift`, copied from the FORM control, which is `onLift` for a good
+     * reason: a plank has no film to play. Measured, `exerciseById` is false for `plank`,
+     * `run_outdoor`, `farmer_carry` and `mobility` — so the one door out of the workout was missing
+     * on every item stage, including mid-interval, which is exactly when she would reach for it.
+     */
+    expect(flow()).toContain("onCoach={session.currentExerciseId && !confirm ?");
+    expect(flow()).not.toMatch(/onCoach=\{onLift/);
+  });
+
+  it('⚠️ the "it is taken" chip is offered only where it can act', () => {
+    /*
+     * `markEquipmentOccupied` returns silently unless she is at the START of an exercise and there
+     * is something left to move past. The chip was shown whenever a lift was on the stage, so on
+     * set 2 it closed the window and did nothing.
+     *
+     * It is also true to the world: on set 2 she is holding the equipment, so "it's taken" is not
+     * a thing she can mean.
+     */
+    expect(coach()).toContain('if (atStart && somethingAfter) {');
+  });
+
+  it('⚠️ never changes the screen without saying so', () => {
+    // The founder's own rule, in the prompt: a screen that changes under her with nothing said is
+    // alarming. `say` is required by the schema — and "required" is how the post-session call came
+    // back describing a programme it had not attached.
+    expect(coach()).toContain('if (!update.say && landed > 0) speak');
+  });
+});
+
 describe('the wire carries what the coach writes', () => {
   it('parses a live edit off a real answer', () => {
     const r = parseCoachPlan(JSON.stringify({
