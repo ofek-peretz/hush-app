@@ -390,7 +390,9 @@
     "itemStop_female": "עצרי",
     "itemDone": "סיימתי",
     "itemCarrying": "נושאת {{load}} ק\"ג",
-    "superset": "סופרסט"
+    "superset": "סופרסט",
+    "repOfM": "חזרה {{n}} מתוך {{m}}",
+    "keyPoints": "דגשים"
   },
   "finishSheet": {
     "legend": "סיום אימון",

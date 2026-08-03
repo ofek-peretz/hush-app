@@ -63,6 +63,7 @@ function makeSession(setN: number, setM: number, result: Result) {
     currentTarget: { exerciseId: 'db_shoulder_press', setIndex: setN - 1, recommendedWeight: 14, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'db_shoulder_press',
     setLabel: { n: setN, m: setM },
+    emphases: [],
     nextSetLabel: { n: setN + 1, m: setM },
     globalProgress: { index: setN, total: 24 },
     exerciseProgress: { index: 1, total: 6 },

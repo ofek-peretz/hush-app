@@ -58,6 +58,7 @@ const restSession = {
   nextExercise: { id: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', equipment: 'dumbbell' },
   nextTarget: { exerciseId: 'db_shoulder_press', setIndex: 0, recommendedWeight: 14, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
   setLabel: { n: 4, m: 4 },
+  emphases: [],
   nextSetLabel: { n: 1, m: 3 },
   globalProgress: { index: 4, total: 24 },
   exerciseProgress: { index: 0, total: 6 },

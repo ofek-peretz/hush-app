@@ -108,6 +108,26 @@ function muscleFor(ex: string, t: (k: string) => string): string | null {
   return m ? t(`muscle.${m}`) : null;
 }
 
+/**
+ * ════ WHERE SHE IS IN A REPEATED ITEM ════
+ *
+ * Six 400 m repeats are six visits to this stage, and every one of them used to look identical —
+ * and identical to a brand new exercise. The set stage has printed "SET 2 OF 4" from the start;
+ * this one printed nothing, so an interval had no shape from the inside.
+ *
+ * Absent when `m` is 1, which is most items: a single 5 km run is not "rep 1 of 1", and saying so
+ * would put a number on the screen that means nothing.
+ */
+function RoundLine({ round }: { round?: { n: number; m: number } | null }) {
+  const { t } = useCopy();
+  if (!round || round.m <= 1) return null;
+  return (
+    <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.roundLine}>
+      {t('workout.repOfM', { n: round.n, m: round.m })}
+    </Legend>
+  );
+}
+
 function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
   return (
     <>
@@ -136,10 +156,12 @@ function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
 export function TimeStage({
   item,
   name,
+  round,
   onDone,
 }: {
   item: Extract<PlannedItem, { kind: 'time' }>;
   name: string;
+  round?: { n: number; m: number } | null;
   onDone: (actualSeconds: number) => void;
 }) {
   const { t } = useCopy();
@@ -178,6 +200,7 @@ export function TimeStage({
     <>
       <View style={styles.body}>
         <ItemName name={name} muscle={muscleFor(item.ex, t)} />
+        <RoundLine round={round} />
         <Text style={[styles.hero, heroType(figure)]} numberOfLines={1} accessibilityLabel={figure}>
           {figure}
         </Text>
@@ -208,11 +231,13 @@ export function TimeStage({
 export function DistanceStage({
   item,
   name,
+  round,
   onDone,
   measured = false,
 }: {
   item: Extract<PlannedItem, { kind: 'distance' }>;
   name: string;
+  round?: { n: number; m: number } | null;
   onDone: () => void;
   /**
    * The phone is going to MEASURE this one — a GPS movement, so the act starts the run rather than
@@ -228,6 +253,7 @@ export function DistanceStage({
     <>
       <View style={styles.body}>
         <ItemName name={name} muscle={muscleFor(item.ex, t)} />
+        <RoundLine round={round} />
         <View style={styles.figureRow}>
           <Text style={[styles.hero, heroType(figure)]} numberOfLines={1}>
             {figure}
@@ -266,10 +292,12 @@ export function DistanceStage({
 export function OpenStage({
   item,
   name,
+  round,
   onDone,
 }: {
   item: Extract<PlannedItem, { kind: 'open' }>;
   name: string;
+  round?: { n: number; m: number } | null;
   onDone: () => void;
 }) {
   const { t } = useCopy();
@@ -277,6 +305,7 @@ export function OpenStage({
     <>
       <View style={styles.body}>
         <ItemName name={name} muscle={muscleFor(item.ex, t)} />
+        <RoundLine round={round} />
         <Text style={styles.openHero}>{item.say ?? name}</Text>
       </View>
       <View style={styles.footer}>
@@ -304,6 +333,7 @@ const styles = StyleSheet.create({
   unit: { fontFamily: font.monoMedium, fontSize: 22, color: stage.ink2, textAlign: 'left' },
   // Matched to the set stage, measured: 12 / 29, the muscle in the label tone and the lift in cream.
   itemMuscle: { marginBottom: 4 },
+  roundLine: { marginTop: 10 },
   itemName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // The instruction: the coach's serif, resting in shadow beneath the fact she acts on.
   say: {

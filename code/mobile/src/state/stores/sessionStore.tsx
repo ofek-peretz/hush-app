@@ -62,6 +62,8 @@ function worthQueuing(e: unknown): boolean {
 // (day-one tier bootstraps + the learned per-lift INTER median + the learned pooled TRANSITION
 // median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
 // importer (Home, the watch plan, tests) keeps its single import point.
+import { emphasesOf, type Emphasis } from '@/domain/emphases';
+
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
 
@@ -294,6 +296,14 @@ export interface SessionView {
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
+  /**
+   * Everything the coach wrote about THIS workout, one line per exercise — the KEY POINTS control.
+   *
+   * Derived from the plan rather than stored, so it is right after a swap and right on a resumed
+   * session. Empty means the coach was quiet, and the control is absent rather than opening onto
+   * nothing (see `domain/emphases`).
+   */
+  emphases: Emphasis[];
   globalProgress: { index: number; total: number } | null;
   /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
   exerciseProgress: { index: number; total: number } | null;
@@ -1246,6 +1256,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ? exerciseById(next.exerciseId)?.name ?? exerciseDisplayName(next.exerciseId)
           : null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
+      emphases: emphasesOf(plan),
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
         ? (() => {

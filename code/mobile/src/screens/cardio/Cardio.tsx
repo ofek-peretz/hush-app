@@ -27,6 +27,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Legend, Button } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
+import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
 import { BottomSheet } from '@/components/BottomSheet';
 import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
@@ -223,6 +224,7 @@ export function Cardio({ navigation, route: nav }: Props) {
       hr={hr}
       watchPaired={watchPaired}
       {...(target?.say ? { say: target.say } : {})}
+      {...(target?.ex ? { exerciseId: target.ex } : {})}
       calories={calories}
       splits={splits}
       gps={gps}
@@ -323,6 +325,8 @@ export function CardioLiveView(props: {
    * conversation", the sentence that turns 5 km into a prescription, was handed over and dropped.
    */
   say?: string;
+  /** The exercise the instruction is about — names the point on the sheet. */
+  exerciseId?: string;
   paused: boolean;
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
@@ -333,6 +337,7 @@ export function CardioLiveView(props: {
   onFinish: () => void;
 }) {
   const { t } = useCopy();
+  const [points, setPoints] = useState(false);
   const metresUnit = t('cardio.metresUnit');
   const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment } = props;
   // One line, or none at all — see the block where it is drawn.
@@ -352,27 +357,41 @@ export function CardioLiveView(props: {
     <View style={styles.stage}>
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
         {/* "CARDIO" — a legend, a word: sans. */}
+        {/* Three parts, like the strength stage's bar: a spacer, the centred legend, and the
+            control — flexbox rather than an absolute `end`, so it flips with the language instead
+            of sitting on the right of a Hebrew screen. */}
         <View style={styles.liveTop}>
-          <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
+          <View style={styles.liveTopSpacer} />
+          <View style={styles.liveTopCentre}>
+            <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
+          </View>
+          {props.say ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('workout.keyPoints')}
+              hitSlop={8}
+              onPress={() => setPoints(true)}
+              style={({ pressed }) => [styles.pointsDisc, pressed && styles.pointsDiscPressed]}
+            >
+              <Icon name="speech" size={15} color={stageC.ink0} strokeWidth={1.7} />
+            </Pressable>
+          ) : (
+            <View style={styles.liveTopSpacer} />
+          )}
         </View>
 
         {/*
-          ⛔ THE COACH'S INSTRUCTION FOR THIS RUN — and it was being thrown away.
+          ════ THE COACH'S INSTRUCTION FOR THIS RUN — BEHIND THE CONTROL, NOT ON THE STAGE ════
 
-          `SessionFlow` has passed `target.say` into this screen since the day a prescribed run
-          started opening it, and this file did not contain the word `say` even once. So "at a pace
-          where you could hold a conversation" — the one sentence that turns 5 km into a
-          prescription rather than a distance — was handed over and dropped on the floor.
+          It used to be printed here, clamped to two lines, because it had been passed into this
+          screen for weeks and drawn nowhere. That fixed the disappearance and created a smaller
+          problem: a sentence longer than two lines was cut off mid-thought, and there was no way to
+          read the rest of it.
 
-          Same class as everything else found this week: written, wired, and drawn nowhere.
-
-          It sits under the legend and above the clock, because it is the thing she reads BEFORE she
-          starts moving and never needs again.
+          ⛔ FOUNDER, 2026-08-02: *"a KEY POINTS button… for cardio and for strength both."* Same
+          control, same sheet, same glyph as the strength stage — so wherever the coach has
+          something to say, it is in the same place, and the stage stays a stage. She is running.
         */}
-        {props.say ? (
-          <Text style={styles.coachSay} numberOfLines={2}>{props.say}</Text>
-        ) : null}
-
         <View style={styles.liveBody}>
           {/* the elapsed clock — the hero. Pure figures + ":" — mono. */}
           <Text style={styles.clock}>{fmtClock(elapsedSec)}</Text>
@@ -478,7 +497,13 @@ export function CardioLiveView(props: {
 
         {/* 3.4b · KILOMETRE LOGGED — fires over the run each km, clears itself. */}
         {kmMoment ? <KmMoment split={kmMoment} splits={splits} /> : null}
-      </SafeAreaView>
+      </SafeAreaView>        {points && props.say ? (
+          <EmphasesSheet
+            emphases={[{ ex: props.exerciseId ?? 'run_outdoor', say: props.say }]}
+            onClose={() => setPoints(false)}
+          />
+        ) : null}
+
     </View>
   );
 }
@@ -689,16 +714,17 @@ const styles = StyleSheet.create({
 
   // LIVE (3.4)
   // The coach speaking, on the stage: the serif it uses everywhere else it talks.
-  coachSay: {
-    fontFamily: font.serif,
-    fontSize: 16,
-    lineHeight: 23,
-    color: stageC.ink2,
-    textAlign: 'center',
-    paddingHorizontal: 28,
-    marginTop: 6,
+  // The 38px chrome disc, in the cardio stage's own inks — the same shape and the same weight as
+  // the strength stage's, because it is the same control.
+  pointsDisc: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(241,238,229,0.08)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.12)',
   },
-  liveTop: { alignItems: 'center', paddingTop: 14 },
+  pointsDiscPressed: { backgroundColor: 'rgba(241,238,229,0.14)' },
+  liveTop: { flexDirection: 'row', alignItems: 'center', paddingTop: 14, paddingHorizontal: 24 },
+  liveTopSpacer: { width: 38 },
+  liveTopCentre: { flex: 1, alignItems: 'center' },
   liveBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28 },
   // The elapsed clock is the lit thing on a run, exactly as the load is on a set: the BRIGHT
   // cream with a wide soft glow, never the plain ink.

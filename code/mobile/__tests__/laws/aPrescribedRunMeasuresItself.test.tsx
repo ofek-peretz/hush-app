@@ -86,6 +86,7 @@ function makeSession(item: PlannedItem, completeItem: jest.Mock) {
     currentExercise: null, currentExerciseId: (item as { ex: string }).ex, sessionExerciseIds: [],
     currentTarget: null, currentItem: item, nextItem: null, nextExerciseId: null,
     setLabel: { n: 1, m: 1 }, nextSetLabel: null, globalProgress: { index: 0, total: 4 },
+    emphases: [],
     exerciseProgress: { index: 0, total: 3 }, nextExercise: null, nextTarget: null,
     restSeconds: 60, restExtraSeconds: 0, watchLoggedSet: null, startedAtMs: Date.now() - 60_000,
     toLoad: false, canMarkOccupied: false, endResult: null, correction: null,
@@ -161,7 +162,9 @@ describe('the catalogue decides who measures', () => {
     c.press(tg('workout.itemStart'));
     // The real stage — map, pace, splits — carrying the coach's distance as its target, which is
     // what lets it end the run without asking.
-    expect(c.navigate).toHaveBeenCalledWith('CardioLive', { target: { metres: 5000, say: 'Conversation pace.' } });
+    // `ex` rides along so the run's KEY POINTS sheet can NAME the exercise its point is about —
+    // without it every cardio point would be titled "run_outdoor", including a row, a bike and a walk.
+    expect(c.navigate).toHaveBeenCalledWith('CardioLive', { target: { metres: 5000, ex: 'run_outdoor', say: 'Conversation pace.' } });
     // And nothing is recorded on the way out. She has not run yet.
     expect(c.completeItem).not.toHaveBeenCalled();
   });

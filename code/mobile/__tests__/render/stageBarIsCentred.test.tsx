@@ -59,6 +59,7 @@ function makeSession(setN: number) {
     currentTarget: { exerciseId: 'bb_bench_press', setIndex: setN - 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: setN, m: 4 },
+    emphases: [],
     nextSetLabel: { n: setN + 1, m: 4 },
     globalProgress: { index: setN, total: 24 },
     exerciseProgress: { index: 0, total: 6 },

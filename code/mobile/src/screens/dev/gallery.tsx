@@ -20,6 +20,7 @@ import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
+import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
 import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
 import { useCoach } from '@/screens/coach/useCoach';
@@ -145,6 +146,11 @@ const sessionFixture = {
   straightInto: null,
   nextExerciseId: 'bb_bench_press',
   setLabel: { n: 2, m: 4 },
+  /* What the coach wrote about this workout — behind the KEY POINTS disc, not on the stage. */
+  emphases: [
+    { ex: 'bb_bench_press', say: 'Leave one rep in the tank on the first two sets. The last one is the one I am reading.' },
+    { ex: 'db_row', say: 'Your right side has been the slower one for three weeks, so start every set on it.' },
+  ],
   globalProgress: { index: 1, total: 24 },
   exerciseProgress: { index: 0, total: 6 },
   nextExercise: null,
@@ -1343,6 +1349,32 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
+  { id: '2.2m', label: 'An interval — rep 3 of 6', status: 'live', note: 'the founder’s option B: six 400s used to be six identical screens, indistinguishable from a new exercise', render: () => (
+    <InApp>
+      <OnStage>
+        <DistanceStage
+          name="Run"
+          round={{ n: 3, m: 6 }}
+          item={{ kind: 'distance', ex: 'run_outdoor', metres: 400, say: 'Hard, but not a sprint — you should be able to hold this pace for all six.' }}
+          onDone={noop}
+        />
+      </OnStage>
+    </InApp>
+  ) },
+  { id: '2.2n', label: 'Key points — the coach’s words for this workout', status: 'live', note: 'behind the speech disc on both stages; absent entirely when the coach wrote nothing', render: () => (
+    <InApp>
+      <OnStage>
+        <EmphasesSheet
+          emphases={[
+            { ex: 'bb_bench_press', say: 'Leave one rep in the tank on the first two sets. The last one is the one I am reading.' },
+            { ex: 'db_row', say: 'Your right side has been the slower one for three weeks, so start every set on it.' },
+            { ex: 'run_outdoor', say: 'Easy pace. This is here to help you recover from Tuesday, not to add to it.' },
+          ]}
+          onClose={noop}
+        />
+      </OnStage>
+    </InApp>
+  ) },
   { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
@@ -1496,12 +1528,13 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '3.3c', label: 'Cardio record', status: 'live', render: cardioRecord },
-  { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach's line is on it", render: () => (
+  { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach's words are behind the speech disc, top end", render: () => (
     <InApp>
       <CardioLiveView
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
-        say="בקצב שאפשר לדבר בו — זה היום הקל של השבוע."
+        exerciseId="run_outdoor"
+        say="בקצב שאפשר לדבר בו — זה היום הקל של השבוע. אם את מתקשה לדבר, האטי; אני מודד את ההתאוששות שלך ביום שלישי, לא את הקצב של היום."
         hr={141}
         calories={318}
         splits={runSplits}

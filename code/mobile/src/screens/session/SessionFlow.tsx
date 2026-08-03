@@ -21,6 +21,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
+import { EmphasesSheet } from './EmphasesSheet';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
@@ -48,7 +49,7 @@ import { color, space, stage, font, textScale, tracking, trackingPx, signal, up,
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym';
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points';
 export type Confirm = { weight: number | null; reps: number; n: number; m: number };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -658,6 +659,10 @@ export function SessionFlow({ navigation, route }: Props) {
             onExit={openPause}
             onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
+            /* KEY POINTS (founder 2026-08-02) — the coach's own words about this workout, behind
+               one control instead of printed onto the stage. `undefined` when it wrote nothing:
+               a control that opens onto an empty sheet teaches her not to press it. */
+            onPoints={session.emphases.length > 0 ? () => setOverlay('points') : undefined}
           />
         )}
         {paceBeat ? (
@@ -669,7 +674,7 @@ export function SessionFlow({ navigation, route }: Props) {
             item={itemShape}
             onRun={(metres, say) => {
               leftForRunAtRef.current = Date.now();
-              navigation.navigate('CardioLive', { target: { metres, ...(say ? { say } : {}) } });
+              navigation.navigate('CardioLive', { target: { metres, ex: itemShape.ex, ...(say ? { say } : {}) } });
             }}
           />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
@@ -756,6 +761,9 @@ export function SessionFlow({ navigation, route }: Props) {
         </BottomSheet>
       ) : null}
 
+      {overlay === 'points' ? (
+        <EmphasesSheet emphases={session.emphases} onClose={() => setOverlay('none')} />
+      ) : null}
       {overlay === 'reasoning' ? (
         <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
       ) : null}
@@ -844,6 +852,23 @@ function ItemBeat({
 }) {
   const session = useSession();
   const name = session.currentExercise?.name ?? exerciseDisplayName(session.currentExerciseId);
+  /*
+   * ════ WHERE SHE IS IN A REPEATED ITEM — "REP 3 OF 6" ════
+   *
+   * ⛔ FOUNDER, 2026-08-02, choosing between three ways to run an interval: *"do B."*
+   *
+   * `6 × 400 m, 90 seconds walk` is a block of `rounds: 6`, which the machine expands into six
+   * steps. Each one opened this stage showing "400 m" and nothing else — so from her side the sixth
+   * rep was indistinguishable from the first, and from a brand new exercise. The set stage has said
+   * "SET 2 OF 4" since the beginning; a repeated hold or run said nothing at all.
+   *
+   * ⚠️ The alternative was to run the whole block INSIDE the cardio screen, which is better for her
+   * and touches the session machine — the most fragile thing in this app — to close six steps from
+   * another surface. His call was to fix the thing that actually hurts (not knowing where she is)
+   * and leave the machine alone. It also makes the bigger version an upgrade rather than a
+   * precondition.
+   */
+  const round = session.setLabel;
   const finish = useCallback(
     (done?: { seconds?: number; metres?: number }) => {
       haptics.setLogged();
@@ -856,7 +881,7 @@ function ItemBeat({
 
   switch (item.kind) {
     case 'time':
-      return <TimeStage item={item} name={name} onDone={(seconds) => finish({ seconds })} />;
+      return <TimeStage item={item} name={name} round={round} onDone={(seconds) => finish({ seconds })} />;
     case 'distance': {
       /**
        * ════ A RUN IS NOT A THING SHE CONFIRMS ════
@@ -874,6 +899,7 @@ function ItemBeat({
       const measured = isGpsMovement(item.ex);
       return (
         <DistanceStage
+          round={round}
           item={item}
           name={name}
           measured={measured}
@@ -882,7 +908,7 @@ function ItemBeat({
       );
     }
     case 'open':
-      return <OpenStage item={item} name={name} onDone={() => finish()} />;
+      return <OpenStage item={item} name={name} round={round} onDone={() => finish()} />;
   }
 }
 
@@ -919,6 +945,7 @@ function StageBar({
   onExit,
   onSwap,
   onDemo,
+  onPoints,
 }: {
   center?: string;
   ordinal?: string;
@@ -926,6 +953,8 @@ function StageBar({
   onExit: () => void;
   onSwap?: () => void;
   onDemo?: () => void;
+  /** The coach's key points for this workout. Absent when it wrote none — see `domain/emphases`. */
+  onPoints?: () => void;
 }) {
   const { t } = useCopy();
   const hasLabel = !!(ordinal || center);
@@ -963,6 +992,13 @@ function StageBar({
         {onDemo ? (
           <StageDisc accessibilityLabel={t('workout.form')} onPress={onDemo}>
             <Icon name="playCircle" size={15} color={stage.ink0} strokeWidth={1.8} />
+          </StageDisc>
+        ) : null}
+        {/* `speech` and not a lightbulb or an ℹ: this is not the app informing her, it is the
+            COACH talking. The glyph names the speaker, which is the whole distinction. */}
+        {onPoints ? (
+          <StageDisc accessibilityLabel={t('workout.keyPoints')} onPress={onPoints}>
+            <Icon name="speech" size={15} color={stage.ink0} strokeWidth={1.7} />
           </StageDisc>
         ) : null}
       </View>

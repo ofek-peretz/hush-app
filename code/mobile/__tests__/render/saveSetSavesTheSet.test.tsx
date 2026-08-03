@@ -63,6 +63,7 @@ function makeSession(completeSet: () => Promise<unknown>) {
     currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 36.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: 2, m: 4 },
+    emphases: [],
     globalProgress: { index: 1, total: 24 },
     exerciseProgress: { index: 0, total: 6 },
     nextExercise: null,

@@ -72,6 +72,7 @@ function makeSession(paused: boolean, onPause: () => void) {
     currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: 2, m: 4 },
+    emphases: [],
     globalProgress: { index: 1, total: 24 },
     exerciseProgress: { index: 0, total: 6 },
     nextExercise: null,

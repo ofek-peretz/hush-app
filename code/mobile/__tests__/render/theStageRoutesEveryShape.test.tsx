@@ -53,6 +53,7 @@ function makeSession(item: PlannedItem | null, completeItem = jest.fn(asyncNoop)
     nextItem: null,
     nextExerciseId: null,
     setLabel: { n: 1, m: 3 },
+    emphases: [],
     nextSetLabel: { n: 2, m: 3 },
     globalProgress: { index: 0, total: 12 },
     exerciseProgress: { index: 0, total: 4 },

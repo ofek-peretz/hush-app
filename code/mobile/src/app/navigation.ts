@@ -113,7 +113,7 @@ export type MainParamList = {
    * wrote — "5 km" inside a session — and it is what lets the phone end the run itself instead of
    * asking her to confirm a distance it is already measuring.
    */
-  CardioLive: { target?: { metres: number; say?: string } } | undefined;
+  CardioLive: { target?: { metres: number; say?: string; ex?: string } } | undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
   // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the

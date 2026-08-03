@@ -344,7 +344,9 @@
     "itemStop": "Stop",
     "itemDone": "Done",
     "itemCarrying": "Carrying {{load}} kg",
-    "superset": "Superset"
+    "superset": "Superset",
+    "repOfM": "REP {{n}} OF {{m}}",
+    "keyPoints": "KEY POINTS"
   },
   "finishSheet": {
     "legend": "End workout",
