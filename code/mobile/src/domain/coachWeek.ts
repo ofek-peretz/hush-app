@@ -26,6 +26,7 @@
  * Pure and I/O-free. Knows nothing about storage, the model, or any screen.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+import { REST_TRANSITION_S } from './restPrescription';
 import { exerciseDisplayName } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPlan';
@@ -34,6 +35,21 @@ import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPla
 const EXEC_S = 40;
 /** Rest between rounds when the coach did not prescribe one. */
 const DEFAULT_REST_S = 90;
+/**
+ * ⛔ WHAT IT COSTS TO GET FROM ONE EXERCISE TO THE NEXT (founder 2026-08-03):
+ *
+ *   > *"He gave a programme with 6 exercises — 4 sets on the first two and 3 on the rest — and says
+ *   > the estimated time is about 35 minutes. Obviously that is never realistic."*
+ *
+ * He was right, and the number is OURS rather than the coach's — this function computes it. It
+ * counted the work and the rest BETWEEN ROUNDS, and charged **zero** for the gap between one
+ * exercise and the next: finding the rack, changing the plates, waiting for the machine, walking
+ * across the floor. On his six-exercise session that is five transitions billed at nothing.
+ *
+ * `REST_TRANSITION_S` is the app's own answer to that question everywhere else — the tier the
+ * session machine rests her for when she crosses from one lift to another, and the median it learns
+ * from her actual sessions. Using anything else here would be a second opinion about the same gap.
+ */
 
 /** One workout in the coach's week, as a chip on Today would need it. */
 export interface CoachWorkout {
@@ -105,7 +121,12 @@ function timeOf(session: PlannedSession): { minutes: number; hasUncountedWork: b
     }
     // Rest sits BETWEEN rounds, so a block of one round has none — the same rule `planRun` runs by.
     seconds += rest * Math.max(0, block.rounds - 1);
-    seconds += block.restAfterS ?? 0;
+    /*
+     * ⚠️ AND BETWEEN BLOCKS. `restAfterS` is what the COACH asked for after this block — usually
+     * absent, and absent used to mean free. It is not free: she has to get to the next exercise.
+     * The last block has nothing after it, so it is not charged.
+     */
+    seconds += block.restAfterS ?? (block === session.blocks[session.blocks.length - 1] ? 0 : REST_TRANSITION_S);
   }
   return { minutes: Math.round(seconds / 60), hasUncountedWork: uncounted };
 }

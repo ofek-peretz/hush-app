@@ -35,6 +35,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { I18nManager } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Legend, Display, Body, Button, Stage } from '@/components/ds';
@@ -376,7 +377,20 @@ export function HomeView(props: HomeViewProps) {
               {/* THE NAME, in the coach's serif — with the change count in a moss pill beside it.
                   Tap the pill for the week's decisions (the WHY surface, where the undo lives). */}
               <View style={styles.titleRow}>
-                <Text style={styles.title} numberOfLines={1}>{bidi(props.dayName ?? '')}</Text>
+                {/*
+                  ⛔ TWO LINES, NOT ONE (founder 2026-08-03): *"on the TODAY screen it writes 'upper
+                  bo…' — the whole sentence isn't on the screen."*
+
+                  It was clamped to one line at 54px. That was survivable when the day's name came
+                  from our own short split table ("Upper A"); the COACH names sessions in words, in
+                  her language, and "פלג גוף עליון" does not fit on one 54px line beside a change
+                  pill. The first thing she reads each day was an ellipsis.
+
+                  Same fix and the same reason as the lift names below (A.15): the name is the one
+                  string on this screen that must never be cut, because it is what tells her what
+                  today IS.
+                */}
+                <Text style={styles.title} numberOfLines={2}>{bidi(props.dayName ?? '')}</Text>
                 {props.briefCount != null && props.briefCount > 0 ? (
                   <Pressable
                     accessibilityRole="button"
@@ -395,9 +409,16 @@ export function HomeView(props: HomeViewProps) {
                 ) : null}
               </View>
 
-              {/* The shape of the session, one line — "6 LIFTS · ~55 MIN". */}
+              {/* The shape of the session, one line — "6 LIFTS · ~55 MIN".
+
+                  ⛔ RAISED 12.5 → 15 (founder 2026-08-03): *"the text of X exercises and the
+                  estimated workout time is really small — please make it a bit bigger."*
+
+                  It is the SHAPE of her day — how much work and how long — and it was set smaller
+                  than the legends above it, so the one line that answers "have I got time for this?"
+                  was the hardest thing on the screen to read. */}
               {liftCount ? (
-                <Legend size={12.5} track={0.04} weight="regular" tone="onStage" style={styles.shapeLine}>
+                <Legend size={15} track={0.04} weight="regular" tone="onStage" style={styles.shapeLine}>
                   {props.planTimeUnknown
                     ? t('home.planShapeNoTime', { lifts: liftCount })
                     : t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })}
@@ -540,7 +561,7 @@ export function HomeView(props: HomeViewProps) {
                 <View pointerEvents="none" style={styles.chipFade}>
                   <Svg width="100%" height="100%">
                     <Defs>
-                      <SvgGradient id="chipFade" x1="0" y1="0" x2="1" y2="0">
+                      <SvgGradient id="chipFade" x1={I18nManager.isRTL ? '1' : '0'} y1="0" x2={I18nManager.isRTL ? '0' : '1'} y2="0">
                         <Stop offset="0" stopColor={color.bg} stopOpacity="0" />
                         <Stop offset="1" stopColor={color.bg} stopOpacity="1" />
                       </SvgGradient>
@@ -750,7 +771,8 @@ const styles = StyleSheet.create({
 
   // ── the title row ──
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  title: { flex: 1, fontFamily: font.serif, fontSize: 54, lineHeight: 54, color: color.textPrimary, textAlign: 'left' },
+  // `lineHeight` is tightened relative to the size so a two-line name stacks without a gulf.
+  title: { flex: 1, fontFamily: font.serif, fontSize: 54, lineHeight: 56, color: color.textPrimary, textAlign: 'left' },
   changePill: {
     flexDirection: 'row',
     alignItems: 'center',

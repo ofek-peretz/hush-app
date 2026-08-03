@@ -658,20 +658,21 @@ export function SessionFlow({ navigation, route }: Props) {
             elapsedFrom={session.startedAtMs}
             onExit={openPause}
             /*
-             * ⛔ THE SWAP DISC IS GONE, AND ITS JOB IS NOT (founder 2026-08-02):
+             * ⛔ THE SWAP DISC — REMOVED ON 2026-08-02, BACK ON 2026-08-03, AND BOTH WERE RIGHT.
              *
-             *   > *"I was wondering whether to add an AI window and remove SWAP. Then during the
-             *   > workout you can just ask the coach for anything and it happens."*
+             *   > *"I was wondering whether to add an AI window and remove SWAP."*  — and we did.
+             *   > *"In the workout, bring back the SWAP."*  — after he used it on the device.
              *
-             * Swap was one anticipated need with its own control; the coach serves every need,
-             * including the ones nobody anticipated. It survives as the first CHIP inside the
-             * window — same local code, same instant result, so nothing got slower (see
-             * `SessionCoach` for why the chips exist rather than a bare text field).
+             * The window was the right idea and the deletion was one step too far. A swap is the
+             * commonest thing she does at the rack, and putting it behind a disc, a sheet and a chip
+             * made the FASTEST action in the product slower than it had been. The chip stays, so the
+             * window still answers "swap this" in words; the one-tap door is a control again.
              *
-             * The disc opens the conversation whenever a lift is on the stage. `emphases` no longer
-             * gates it: what she can ASK does not depend on whether the coach happened to write
-             * something, and the key points ride inside the window as its opening turn.
+             * ⚠️ It is the one disc that COMES AND GOES — offered only before the first set of a
+             * lift (`isSwapMoment`), because a swap mid-exercise strands the sets she has already
+             * logged. That is what makes the bar's centring worth a test of its own.
              */
+            onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
             /*
              * ⛔ NOT GATED ON `onLift`, AND THAT WAS A REAL HOLE FOR HALF AN HOUR.
@@ -1482,7 +1483,20 @@ function ActiveSet({
                   (monoCarriesNoWords). It repeats what the Pressable's accessibilityHint already
                   says, so it is hidden from VoiceOver. Bodyweight has no weight to tap, so the pill
                   — and its "tap the WEIGHT" caption — is shown only for a loaded lift. */}
-              {!isBodyweight ? (
+              {/*
+                ⛔ ONLY ON THE FIRST SET OF THE SESSION (founder 2026-08-03): *"the 'tap to edit'
+                button should appear only on the first set of the workout and then disappear."*
+
+                It is a TEACHING label, and a label that explains a control steals the control's job
+                — his own law. Once she has seen it, the pill is a dashed frame under the number on
+                every set for the rest of her life, saying a thing she already knows.
+                `accessibilityHint` on the Pressable is untouched, so the door is still announced to
+                VoiceOver on every set; only the drawn caption goes quiet.
+
+                ⚠️ Gated on the SESSION's first step, not the exercise's — "set 1 of lift 4" is not a
+                first lesson, and showing it again there is the same noise one lift later.
+              */}
+              {!isBodyweight && (session.globalProgress?.index ?? 0) === 0 ? (
                 <View style={styles.heroEditPill} importantForAccessibility="no-hide-descendants">
                   <Icon name="pencil" size={12} color={stage.ink2} strokeWidth={1.8} />
                   <Legend size={10.5} track={0.14}>{t('workout.tapToEdit')}</Legend>

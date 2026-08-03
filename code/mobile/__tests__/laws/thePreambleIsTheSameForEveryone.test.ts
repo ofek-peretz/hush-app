@@ -189,7 +189,20 @@ describe('the stable half is worth caching at all', () => {
 
   it('names every shape and both id lists the coach is allowed to draw from', () => {
     const text = preamble();
-    for (const needle of ['"reps"', '"time"', '"distance"', '"open"', 'bb_bench_press', 'run_outdoor']) {
+    /*
+     * ⚠️ THE SHAPE NAMES ARE MATCHED AS WORDS, NOT AS QUOTED JSON — founder, 2026-08-03:
+     *
+     *   > *"You must go over the prompt and cancel every example, because it locks his choice."*
+     *
+     * They used to be checked as `'"distance"'`, which only passed because the prompt carried a
+     * worked JSON example. The examples are gone: `responseSchema` already enforces the shape, so
+     * they bought nothing and cost the thing the founder caught — a demonstrated `[8,12]` window
+     * that the coach copied, which silenced the correction screen for weeks.
+     *
+     * What must survive is the VOCABULARY: the four shape names and both id lists. That is the
+     * requirement, and it is what this now asserts.
+     */
+    for (const needle of ['reps', 'time', 'distance', 'open', 'bb_bench_press', 'run_outdoor']) {
       expect({ needle, present: text.includes(needle) }).toEqual({ needle, present: true });
     }
   });

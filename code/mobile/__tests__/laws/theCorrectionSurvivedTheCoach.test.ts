@@ -73,17 +73,26 @@ describe('the window the coach writes decides whether the product speaks', () =>
 describe('the prompt teaches the window, rather than demonstrating a wide one', () => {
   const prompt = () => read('src/domain/coachPrompt.ts');
 
-  it('⛔ the worked example is no longer five wide', () => {
-    // This exact string is what the coach copied. It is the whole bug.
-    expect(prompt()).not.toContain('"reps":[8,12]');
-    expect(prompt()).toContain('"reps":[8,10]');
+  it('⛔ demonstrates NO window at all — not a wide one, and not a narrow one either', () => {
+    /*
+     * The first version of this assertion required `"reps":[8,10]` — a NARROWER example in place of
+     * the wide one. The founder then made the general point, hours later:
+     *
+     *   > *"You gave it examples, and that is what drives its decisions. Cancel every example,
+     *   > because it locks his choice."*
+     *
+     * He is right, and this test was an instance of the mistake: replacing a bad demonstration with
+     * a good one still anchors the model on two specific numbers. The RULE has to carry it.
+     * `thePromptShowsNoExamples` holds the general case.
+     */
+    expect(prompt()).not.toMatch(/"reps"\s*:\s*\[\s*\d+\s*,\s*\d+\s*\]/);
   });
 
-  it('and says what the window IS, so the rule survives the example being reworded', () => {
-    // Matched on the mechanism it describes, not on phrasing — a law that pins prose breaks every
-    // time the prompt improves, which teaches people to edit the test instead of thinking.
+  it('and says what the window IS, which is what has to do the work now', () => {
+    // Matched on the mechanism it describes, not on phrasing — and `[\s\S]` because the prompt is
+    // hard-wrapped, so a rule can straddle a line break.
     expect(prompt()).toMatch(/two or three apart/);
-    expect(prompt()).toMatch(/clear the ceiling and it puts weight on the bar/i);
+    expect(prompt()).toMatch(/clear the ceiling[\s\S]{0,20}and it puts weight on the bar/i);
   });
 });
 

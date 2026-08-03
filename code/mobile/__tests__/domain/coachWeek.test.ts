@@ -7,6 +7,7 @@
  * in it. A conversion would delete a 5 km run, a 45-second plank and every `say` on the way past,
  * quietly, in a function that looked like plumbing.
  */
+import { REST_TRANSITION_S } from '@/domain/restPrescription';
 import { coachWeek, coachRows, coachSession, coachWorkoutId, coachPlanRows } from '@/domain/coachWeek';
 import { parseCoachPlan, type CoachPlan } from '@/domain/coachPlan';
 
@@ -72,10 +73,26 @@ describe('the week, as chips', () => {
 });
 
 describe('minutes are counted, never guessed', () => {
-  it('counts held time and reps, and rests only BETWEEN rounds', () => {
-    // Lower: 3 squat rounds (3×40s exec + 2×120s rest) + 2 rounds of [45s plank, open] + 1×60s rest.
+  it('counts held time, reps, rest between rounds — AND the walk between exercises', () => {
+    /*
+     * ⛔ THE LAST TERM IS NEW, AND ITS ABSENCE WAS A BUG THE FOUNDER CAUGHT ON A DEVICE (2026-08-03):
+     *
+     *   > *"He gave a programme with 6 exercises — 4 sets on the first two and 3 on the rest — and
+     *   > says the estimated time is about 35 minutes. Obviously that is never realistic."*
+     *
+     * This assertion USED to be the old sum, and it was green the whole time: the gap between one
+     * exercise and the next — finding the rack, changing plates, waiting for the machine — was
+     * billed at zero. On a six-exercise session that is five transitions costing nothing.
+     *
+     * `REST_TRANSITION_S` is the app's own answer to that gap everywhere else (it is the tier the
+     * session machine actually rests her for, and the median it learns from her sessions), so using
+     * anything else here would be a second opinion about the same question.
+     *
+     * Lower: 3 squat rounds (3×40s exec + 2×120s rest) + ONE transition + 2 rounds of
+     * [45s plank, open] + 1×60s rest. The last block is not charged — there is nothing to walk to.
+     */
     const lower = coachWeek(plan())[1];
-    expect(lower.minutes).toBe(Math.round((3 * 40 + 2 * 120 + 2 * 45 + 60) / 60));
+    expect(lower.minutes).toBe(Math.round((3 * 40 + 2 * 120 + REST_TRANSITION_S + 2 * 45 + 60) / 60));
     expect(lower.hasUncountedWork).toBe(false);
   });
 

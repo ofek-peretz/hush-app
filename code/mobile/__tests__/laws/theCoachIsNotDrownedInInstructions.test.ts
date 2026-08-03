@@ -97,7 +97,7 @@ describe('the prompt is instructions, not documentation', () => {
       'rest BETWEEN ROUNDS', // restS is not between items
       '0 means she goes straight on', // how a superset is written
       'Indoors', // time, because the phone measures nothing there
-      '"kind":"distance"', // metres, always
+      'always metres', // distance has one unit and it is not the athlete's
       '"notes"', // the "Why?" sheet, and next call's "decided"
       '"brief"', // the coach's only memory
       '"learned"', // the only way her sentences reach the app

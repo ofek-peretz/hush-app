@@ -74,11 +74,19 @@ describe('the wire — what has to be there or the answer never reaches her', ()
   });
 
   it('states the four shapes and that a distance is metres', () => {
-    // The vocabulary is the product. A programme that cannot be expressed cannot be run.
-    for (const shape of ['"kind":"reps"', '"kind":"time"', '"kind":"distance"', '"kind":"open"']) {
+    /*
+     * The vocabulary is the product. A programme that cannot be expressed cannot be run.
+     *
+     * ⚠️ MATCHED AS NAMES, NOT AS WORKED JSON — founder, 2026-08-03: *"cancel every example, it
+     * locks his choice."* The shapes used to be checked as `'"kind":"reps"'`, which only passed
+     * because the prompt carried a filled-in item. `responseSchema` already enforces the shape, so
+     * those examples bought nothing and cost the correction screen (see
+     * `theCorrectionSurvivedTheCoach`). What must survive is that each shape is NAMED.
+     */
+    for (const shape of ['reps', 'time', 'distance', 'open']) {
       expect(WHO).toContain(shape);
     }
-    expect(WHO).toMatch(/metres, always/);
+    expect(WHO).toMatch(/always metres/);
   });
 
   it('says that a session is blocks and a block is rounds, because there is no "sets" field', () => {

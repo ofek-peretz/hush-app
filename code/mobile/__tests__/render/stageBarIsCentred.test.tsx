@@ -141,26 +141,29 @@ function sideGroups(r: ReactTestRenderer) {
 }
 
 describe('the stage bar centres its middle group', () => {
-  it('⚠️ no longer carries a swap disc — the coach window took its job', () => {
+  it('⛔ carries the swap disc again — offered on set 1, absent on set 2', () => {
     /*
      * ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: a swap disc present on set 1 and absent on set 2,
      * which was the state that made the bar's centring intermittent (the sides carried different
      * numbers of discs).
      *
-     * FOUNDER, 2026-08-02: *"I was wondering whether to add an AI window and remove SWAP. Then
-     * during the workout you can just ask the coach for anything and it happens."* Swap was ONE
-     * anticipated need with its own control; the coach serves every need. It survives as the first
-     * chip inside the window — same local code, same instant result — so nothing she could do
-     * before became slower or impossible. See `SessionCoach`.
+     * FOUNDER, 2026-08-02: *"add an AI window and remove SWAP."* It was removed, and folded into
+     * the coach window as a chip.
      *
-     * ⚠️ The centring case this file exists for is BETTER now, not gone: the end side carries a
-     * fixed two discs instead of one-or-two. The next assertion is what actually holds it.
+     * ⛔ FOUNDER, 2026-08-03, after the device: *"in the workout, bring back the SWAP."* A swap is
+     * the commonest thing she does at the rack, and two taps and a sheet made the fastest action in
+     * the product slower than it was. The chip STAYS — the window must still answer "swap this" in
+     * words — but the one-tap door is a control again.
+     *
+     * So this file is back to watching the state that made the bar's centring intermittent: the end
+     * side carries two discs on set 1 and one on set 2.
      */
-    for (const setN of [1, 2]) {
-      expect(
-        draw(setN).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
-      ).toBe(0);
-    }
+    expect(
+      draw(1).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
+    ).toBeGreaterThan(0);
+    expect(
+      draw(2).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
+    ).toBe(0);
   });
 
   it('opens the coach from the bar, on every set', () => {

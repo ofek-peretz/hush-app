@@ -18,6 +18,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { I18nManager } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { GhostClimb, Legend, SegmentedControl, VolumeArea } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
@@ -100,7 +101,7 @@ export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onLift
         <View pointerEvents="none" style={styles.chipsFade}>
           <Svg width="100%" height="100%">
             <Defs>
-              <SvgGradient id="progChipFade" x1="0" y1="0" x2="1" y2="0">
+              <SvgGradient id="progChipFade" x1={I18nManager.isRTL ? '1' : '0'} y1="0" x2={I18nManager.isRTL ? '0' : '1'} y2="0">
                 <Stop offset="0" stopColor={color.bg} stopOpacity="0" />
                 <Stop offset="1" stopColor={color.bg} stopOpacity="1" />
               </SvgGradient>
