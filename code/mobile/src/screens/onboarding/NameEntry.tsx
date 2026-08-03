@@ -45,7 +45,7 @@ export function NameEntry({ navigation }: Props) {
     Keyboard.dismiss();
     app.setPendingName(name);
     app.setPendingSex(sex);
-    navigation.navigate('ConnectHealth', { sex });
+    navigation.navigate('Bodyweight', { sex });
   }
 
   return (

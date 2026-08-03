@@ -31,11 +31,20 @@ export type OnboardingParamList = {
   // founder 2026-07-12: Hebrew conjugates the second person, so the copy layer needs it
   // before the next screen speaks). Sex rides the params from here to the profile.
   NameEntry: undefined;
+  /*
+   * ⛔ WHAT SHE WEIGHS (founder 2026-08-03) — *"the coach didn't ask for my weight, and it's
+   * critical for it."* It was never asked by anyone: `coachFacts` spreads it conditionally, so an
+   * absent bodyweight is simply an absent line on the sheet and nothing is surprised by it.
+   *
+   * `sex` rides through because the step after this one needs it, exactly as it already rode from
+   * `NameEntry` — this screen is inserted into that relay, not bolted beside it.
+   */
+  Bodyweight: { sex: 'male' | 'female' };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
   // watch decides, as it always has.
-  ConnectHealth: { sex?: 'male' | 'female'; previewWrist?: WristOffer } | undefined;
+  ConnectHealth: { sex?: 'male' | 'female'; weightKg?: number; previewWrist?: WristOffer } | undefined;
   /*
    * ════ THE BODY MAP LEFT ONBOARDING ════
    *

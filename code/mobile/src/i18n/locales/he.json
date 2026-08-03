@@ -294,7 +294,11 @@
     "mapBandMine_female": "שלך — אני אף פעם לא דורסת אותו",
     "mapBandLine": "כל תרגיל {{muscle}} ינחת מעכשיו ב־{{band}}.",
     "mapOffLine": "אשאיר את {{muscle}} מחוץ לשבוע שלך. כל מה שהרווחת נשמר.",
-    "mapNormalLine": "{{muscle}} יושב בשבוע שלך כמו כל השאר."
+    "mapNormalLine": "{{muscle}} יושב בשבוע שלך כמו כל השאר.",
+    "weightLegend": "משקל גוף",
+    "weightTitle": "כמה אתה שוקל?",
+    "weightSub": "מתח, שכיבות שמיכה ומקבילים נקבעים ביחס אליו — וממנו נמדדת כל קריאה שתבוא.",
+    "weightTitle_female": "כמה את שוקלת?"
   },
   "menu": {
     "title": "תפריט",

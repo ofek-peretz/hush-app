@@ -50,6 +50,7 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
 export function ConnectHealth({ navigation, route }: Props) {
   const { t } = useCopy();
   const sex = route.params?.sex;
+  const weightKg = route.params?.weightKg;
   const [connected, setConnected] = useState(false);
   /**
    * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
@@ -150,6 +151,11 @@ export function ConnectHealth({ navigation, route }: Props) {
         units: unitsForDevice(Localization.getLocales()[0]),
         healthConnected: withHealth,
         sex,
+        /*
+         * ⛔ HER BODYWEIGHT, from the step before this one (founder 2026-08-03). Not optional in
+         * practice: `Bodyweight` is on the only path here, and `missingForCoach` is what proves it.
+         */
+        ...(weightKg != null ? { weightKg } : {}),
       },
     });
   }
@@ -157,7 +163,7 @@ export function ConnectHealth({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 3 }}
+      progress={{ index: 3, total: 4 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       voice={t('ob.healthSub')}

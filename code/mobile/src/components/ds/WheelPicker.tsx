@@ -192,6 +192,23 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const numTone = NUM_TONE[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
+  /**
+   * The measured width of the track. Feeds ONLY `sidePad`, the padding that centres the first
+   * detent — every offset, detent and index calculation uses the constant `itemW`.
+   *
+   * ⚠️ IN THE WEB HARNESS THIS NEVER LEAVES 0 — `onLayout` does not deliver there, on this View or
+   * on the ScrollView (both tried, 2026-08-03). So the gallery shows the wheel UNCENTRED, with the
+   * active numeral scrolled off to its absolute offset, and that is a harness artefact rather than
+   * a statement about the device.
+   *
+   * ⛔ WHAT THE HARNESS DID PROVE is the bug the founder reported: the track used to be gated on
+   * `width > 0`, so an unmeasured wheel drew NO NUMERALS AT ALL. That gate is gone, and the wheel
+   * now draws whether or not it is ever measured.
+   *
+   * ⏸️ WHAT ONLY A DEVICE CAN SAY: whether `onLayout` delivers on iOS. If it does, the wheel centres
+   * as it always did. If it does not, the numerals are drawn but off-centre — better than blank, and
+   * still wrong — and the fix is to stop deriving the centre from a measurement at all.
+   */
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
   const lastHapticRef = useRef(0);

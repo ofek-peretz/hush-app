@@ -276,10 +276,15 @@ it counts down and records what she actually held. GPS measures a distance outdo
 distance indoors only when the distance is the point (a 2 km row test); it comes back as asked.
 
 FOUR SHAPES:
-  reps      {"kind":"reps","ex":"bb_bench_press","reps":[8,12],"load":32.5}
+  reps      {"kind":"reps","ex":"bb_bench_press","reps":[8,10],"load":32.5}
   time      {"kind":"time","ex":"plank","seconds":45}
   distance  {"kind":"distance","ex":"run_outdoor","metres":5000}   metres, always
   open      {"kind":"open","ex":"mobility"}
+
+"reps" is a WINDOW, not a range of acceptable efforts: [floor, ceiling], two or three apart. The
+app reads it live — clear the ceiling and it puts weight on the bar for her next set and tells her
+why; fall under the floor and it takes weight off. A window five or six wide is one she can sit
+inside for ever, so nothing is ever decided and she is never told anything.
 
 Any item takes "say" — one line about HOW HARD, HOW FAST, or WHERE TO STOP. "A rep short of
 failure." "A pace where you could hold a conversation." "Stop two short on the last round." "This
