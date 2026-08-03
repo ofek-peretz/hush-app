@@ -549,7 +549,38 @@ const styles = StyleSheet.create({
    * neighbour's cell, not on its glyphs: at distance 1 the numeral is 24px, so its own text starts
    * further out than this box reaches.
    */
-  numCell: { width: NUM_CELL_W, marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2 },
+  /*
+   * ⛔ `flexShrink: 0` IS LOad-BEARING — founder, 2026-08-04: *"for large numbers it shows 13… and
+   * does not display the whole number."*
+   *
+   * The cell is deliberately WIDER than its detent (176 vs 96) with negative margins, so a five- or
+   * six-glyph value gets its natural width while the detent maths keeps working in `itemW`. But its
+   * parent `item` is `width: itemW`, and a flex child SHRINKS to its parent by default — so the
+   * 176px box was being squeezed back to 96 and `numberOfLines={1}` ellipsised it.
+   *
+   * Measured in the browser: "137.5" at the active size wants 144px, was given 96, and rendered as
+   * "137…". `NUM_CELL_W` was doing nothing at all.
+   *
+   * ⚠️ THIS IS THE SAME DEFECT THE FOUNDER PHOTOGRAPHED ON BUILD 36 ("82…"), returning by a
+   * different route: the fix then added this wider cell, and the 2026-07-28 layout rework
+   * (`the whole control takes the swipe`) put it inside a fixed-width flex parent that undid it. It
+   * was invisible until the numerals started rendering again, because before that nothing drew.
+   */
+  numCell: {
+    width: NUM_CELL_W,
+    /*
+     * ⛔ `maxWidth` IS THE LINE THAT MAKES THE WIDTH REAL. A `Text` carries `max-width: 100%` of its
+     * parent, and the parent here is one detent wide (96) — so `width: 176` computed to 96 and
+     * `numberOfLines={1}` ellipsised anything past three glyphs. Measured: "137.5" wanted 144px,
+     * was given 96, and drew as "137…" — the founder's *"it shows 13… for large numbers."*
+     *
+     * ⚠️ `flexShrink: 0` was tried first and did nothing: the box was not being SHRUNK by flex, it
+     * was being CAPPED. Two different mechanisms with the same symptom.
+     */
+    maxWidth: NUM_CELL_W,
+    marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2,
+    flexShrink: 0,
+  },
   num: {
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,

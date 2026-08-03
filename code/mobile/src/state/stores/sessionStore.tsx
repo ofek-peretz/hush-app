@@ -704,13 +704,38 @@ function isToLoad(plan: Step[], setIndex: number, sets: SetLog[]): boolean {
 
 /** Distinct lifts the athlete actually trained (logged ≥1 set) AND that the model raised — the
  *  truthful "lifts up" for the Complete summary (an early finish must not count untrained lifts). */
-function progressedLiftCount(plan: Step[], sets: SetLog[]): number {
+/**
+ * ════ LIFTS THE APP RAISED **THIS SESSION** ════
+ *
+ * ⛔ FOUND IN THE 2026-08-04 AUDIT — the sixth surface still reading the dead engine, and the one
+ * that reaches the wrist and the Lock Screen.
+ *
+ * It counted `target.reasonType === 'increase'`, a field `buildPlanFromCoach` never writes. So on
+ * every coach-built workout the closing frame said **0 lifts raised**, on both surfaces, whatever
+ * had happened.
+ *
+ * ⚠️ AND `reasonType` WAS THE WRONG FIELD EVEN IN THE ENGINE ERA. It is the WEEKLY decision — a load
+ * Loop 2 raised days ago, before she walked in. The label has always said "this session". The only
+ * thing that raises a load DURING a session is Loop 1, and Loop 1 rewrites the remaining steps'
+ * `recommendedWeight` in place.
+ *
+ * So the honest measure is the one that was always meant: an exercise whose prescribed load ENDS the
+ * session higher than it started it. That is era-independent — it reads what happened, not which
+ * engine wrote the plan — and it is why this now takes no `reasonType` at all.
+ */
+export function progressedLiftCount(plan: Step[], sets: SetLog[]): number {
   const trained = new Set(sets.map((s) => s.exerciseId));
-  return new Set(
-    plan
-      .filter((s) => s.target?.reasonType === 'increase' && trained.has(s.exerciseId))
-      .map((s) => s.exerciseId),
-  ).size;
+  const first = new Map<string, number>();
+  const last = new Map<string, number>();
+  for (const st of plan) {
+    const w = st.target?.recommendedWeight;
+    if (w == null || !trained.has(st.exerciseId)) continue;
+    if (!first.has(st.exerciseId)) first.set(st.exerciseId, w);
+    last.set(st.exerciseId, w);
+  }
+  let n = 0;
+  for (const [ex, start] of first) if ((last.get(ex) ?? start) > start) n += 1;
+  return n;
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {

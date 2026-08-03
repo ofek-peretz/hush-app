@@ -45,13 +45,13 @@ export function NameEntry({ navigation }: Props) {
     Keyboard.dismiss();
     app.setPendingName(name);
     app.setPendingSex(sex);
-    navigation.navigate('Bodyweight', { sex });
+    navigation.navigate('AboutYou', { sex });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 6 }}
+      progress={{ index: 1, total: 5 }}
       keyboard
       title={t('ob.nameTitle')}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}

@@ -1,60 +1,87 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * HOW OLD SHE IS, AND HOW LONG SHE HAS BEEN DOING THIS.
+ * HER BODY — the two numbers the coach cannot infer, on one screen, on two rules.
  *
- * ⛔ FOUNDER, 2026-08-03, listing what the coach must be given rather than left to ask for:
- * *"age, weight, sex, experience, training frequency, goal, injuries/limits, session length."*
+ * ⛔ FOUNDER, 2026-08-04: *"try to merge as many of the new screens as possible into one screen in
+ * onboarding — but sensibly, and with no scrolling."*
  *
- * The two on this step are the two that decide WEEK ONE. Everything after it is measured — her reps
- * move the load and the coach reads the record — but the first prescription has no history behind
- * it, and these are what make it an educated guess instead of a coin toss.
+ * This was `Bodyweight` and half of `AboutYou`. They belong together: both are facts about the body
+ * in front of the coach, both are a value out of a continuum, and both wear the same rule. Splitting
+ * them made the intake feel like a form with pages, which is the thing his Spotify note was about.
  *
- * ── WHY BOTH ON ONE SCREEN ──────────────────────────────────────────────────────────────────────
- * They answer the same question — *who am I writing this for?* — and splitting them would make the
- * intake feel like a form with pages. `domain/coachRequirements` holds the argument for why these
- * are a form at all; the short version is that a conversation cannot guarantee coverage.
+ * ── ⚠️ "NO SCROLLING" IS A MEASUREMENT, NOT AN INTENTION ────────────────────────────────────────
+ * Two rules cost 2 × (20 legend + 112 wheel) plus one 32 gap = 296px. The body opens at ~195 and the
+ * act sits at 775, so there is ~565 to spend. It fits with room to spare — measured in the browser,
+ * not estimated. A third rule would NOT fit, which is why experience moved to the next step.
  *
- * ── ⚠️ WHAT EXPERIENCE IS NOT ───────────────────────────────────────────────────────────────────
- * It is not a level she has to live up to, and the labels must not read as a ranking. It is one
- * fact — how long she has been lifting — and the descriptions say exactly that, in years, so nobody
- * has to decide whether they are "advanced".
+ * ── WHY A WHEEL AND NOT A KEYBOARD ──────────────────────────────────────────────────────────────
+ * The wheel is this product's measuring rule — the same control she turns to log a set, wearing the
+ * same graduation. A number pad would be faster to build and would make the first thing she does in
+ * Hush feel like filling in a web form. She is not entering data; she is setting a rule.
+ *
+ * ⚠️ Each opens on a plausible value rather than at the bottom of its range — she is adjusting, not
+ * counting up from nothing — and what she leaves them on IS the answer, so there is no way to reach
+ * the next screen having skipped either. That is the guarantee a conversation could not make; the
+ * argument for why these are a form at all lives in `domain/coachRequirements`.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Legend, SegmentedControl, WheelPicker } from '@/components/ds';
+import { Button, Legend, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import type { Experience } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 
-/** Where the age wheel opens — a place to turn from, not a default anybody keeps. */
-const OPENS_ON = 30;
+/** Where each rule opens — a place to turn from, not a default anybody keeps. */
+const WEIGHT_OPENS_ON = { kg: 70, lb: 155 } as const;
+const AGE_OPENS_ON = 30;
 
 export function AboutYou({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const [age, setAge] = useState<number>(app.profile?.age && app.profile.age > 0 ? app.profile.age : OPENS_ON);
-  const [experience, setExperience] = useState<Experience>(app.profile?.experience ?? 'beginner');
+  const units = app.profile?.units ?? 'kg';
+  const [weight, setWeight] = useState<number>(() => {
+    const known = app.profile?.weightKg;
+    if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
+    return WEIGHT_OPENS_ON[units];
+  });
+  const [age, setAge] = useState<number>(app.profile?.age && app.profile.age > 0 ? app.profile.age : AGE_OPENS_ON);
 
   function onContinue() {
-    navigation.navigate('YourWeek', { ...route.params, age, experience });
+    const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
+    // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
+    // `OnboardingInputs` and there must be ONE place that does.
+    navigation.navigate('YourTraining', { sex: route.params.sex, weightKg: kg, age });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 6 }}
+      progress={{ index: 2, total: 5 }}
       legend={t('ob.aboutLegend')}
       title={t('ob.aboutTitle')}
       headGap={28}
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
       <View style={styles.rows}>
+        <View style={styles.col}>
+          <Legend>{t('ob.weightLegend')}</Legend>
+          <WheelPicker
+            value={weight}
+            onChange={setWeight}
+            step={units === 'kg' ? 0.5 : 1}
+            min={units === 'kg' ? 30 : 66}
+            max={units === 'kg' ? 250 : 550}
+            size="lg"
+            ends="chevron"
+            label={t('ob.weightLegend')}
+            unit={units}
+          />
+        </View>
         <View style={styles.col}>
           <Legend>{t('ob.age')}</Legend>
           <WheelPicker
@@ -66,21 +93,6 @@ export function AboutYou({ navigation, route }: Props) {
             size="lg"
             ends="chevron"
             label={t('ob.age')}
-          />
-        </View>
-        <View style={styles.col}>
-          <Legend>{t('ob.experience')}</Legend>
-          {/* Years, not ranks — see the header. Nobody has to decide whether they are "advanced". */}
-          <SegmentedControl
-            block
-            size="lg"
-            options={[
-              { value: 'beginner', label: t('ob.expNew') },
-              { value: 'intermediate', label: t('ob.expSome') },
-              { value: 'advanced', label: t('ob.expYears') },
-            ]}
-            value={experience}
-            onChange={(v) => setExperience(v as Experience)}
           />
         </View>
       </View>

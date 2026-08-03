@@ -39,7 +39,7 @@ export type OnboardingParamList = {
    * `sex` rides through because the step after this one needs it, exactly as it already rode from
    * `NameEntry` — this screen is inserted into that relay, not bolted beside it.
    */
-  Bodyweight: { sex: 'male' | 'female' };
+
   /*
    * ⛔ THE REST OF WHAT THE COACH MUST BE GIVEN (founder 2026-08-03) — age, experience, how many
    * days, how long a session. `domain/coachRequirements` is the list and the argument.
@@ -47,8 +47,8 @@ export type OnboardingParamList = {
    * Each step carries everything gathered so far and adds its own, so `ConnectHealth` still
    * assembles the whole `OnboardingInputs` in ONE place — the relay `sex` has always ridden.
    */
-  AboutYou: { sex: 'male' | 'female'; weightKg: number };
-  YourWeek: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience };
+  AboutYou: { sex: 'male' | 'female' };
+  YourTraining: { sex: 'male' | 'female'; weightKg: number; age: number };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired

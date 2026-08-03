@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 /**
  * THE WHEEL — one size everywhere, no numeral ever truncated, the whole control takes the swipe.
  *
@@ -159,5 +161,54 @@ describe('⛔ the track draws WITHOUT being measured first', () => {
     const drawn = r.root.findAllByType(Text).map((t) => t.props.children).filter((c) => typeof c === 'string' || typeof c === 'number');
     expect(drawn.length).toBeGreaterThan(0);
     expect(drawn.map(String)).toContain('137.5');
+  });
+});
+
+describe('⛔ the numeral box is WIDER than its detent, and stays wider', () => {
+  /*
+   * FOUNDER, BUILD 36: *"the onboarding ruler reads 82…"*  → fixed by giving the numeral a 176px
+   * cell inside a 96px detent, with negative margins so the pitch maths is untouched.
+   * FOUNDER, 2026-08-04: *"for large numbers it shows 13… and does not display the whole number."*
+   *
+   * THE SAME DEFECT, BY A DIFFERENT ROUTE. `NUM_CELL_W` had stopped taking effect: a `Text` carries
+   * `max-width: 100%` of its parent, the parent is one detent wide, so `width: 176` computed to 96
+   * and `numberOfLines={1}` ellipsised. Measured in the browser: "137.5" wanted 144px and was given
+   * 96.
+   *
+   * ⚠️ `flexShrink: 0` was tried first and changed nothing — the box was not being SHRUNK, it was
+   * being CAPPED. Two mechanisms, one symptom, and only the second one was the cause.
+   *
+   * ⚠️ AND IT WAS INVISIBLE FOR WEEKS because the wheel drew no numerals at all (the `width > 0`
+   * gate). One bug hid the other; fixing the first is what surfaced this.
+   */
+  it('declares a maxWidth, or the width is a suggestion the parent overrules', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src/components/ds/WheelPicker.tsx'), 'utf8');
+    expect(src).toMatch(/maxWidth: NUM_CELL_W/);
+    expect(src).toMatch(/width: NUM_CELL_W/);
+  });
+
+  it('and the cell is genuinely wider than the detent it sits in', () => {
+    // If these ever converge the negative margins go to zero and the truncation returns silently.
+    const r = draw('lg', 137.5);
+    const texts = r.root.findAllByType(Text);
+    const widths = texts.map((t) => flat(t.props.style).width).filter((w): w is number => typeof w === 'number');
+    const cells = r.root.findAllByType(ScrollView)[0].findAllByType(View)
+      .map((v) => flat(v.props.style).width).filter((w): w is number => typeof w === 'number');
+    const detent = Math.min(...cells.filter((w) => w > 0));
+    expect(Math.max(...widths)).toBeGreaterThan(detent);
+  });
+
+  it('⚠️ fits the widest value the app can prescribe without an ellipsis', () => {
+    /*
+     * Six glyphs is the ceiling: a load can reach "482.5" and an age "95". The assertion is on the
+     * ARITHMETIC rather than on a render, because the harness cannot measure a glyph — the browser
+     * sweep is what confirmed the pixels, and this keeps the budget from being trimmed away later.
+     */
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src/components/ds/WheelPicker.tsx'), 'utf8');
+    const cell = Number(/const NUM_CELL_W = (\d+)/.exec(src)![1]);
+    const item = Number(/const ITEM_W = \{ md: (\d+)/.exec(src)![1]);
+    // "137.5" measured 144px at the active size; six glyphs needs more, and the cell must clear it.
+    expect(cell).toBeGreaterThanOrEqual(176);
+    expect(cell).toBeGreaterThan(item);
   });
 });

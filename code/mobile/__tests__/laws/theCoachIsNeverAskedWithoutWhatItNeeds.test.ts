@@ -122,7 +122,7 @@ describe('onboarding asks for every one of them', () => {
      * it and this fails — which is the whole guarantee, since the original bug was a fact nothing
      * anywhere collected.
      */
-    const flow = ['NameEntry', 'Bodyweight', 'AboutYou', 'YourWeek', 'ConnectHealth']
+    const flow = ['NameEntry', 'AboutYou', 'YourTraining', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -135,20 +135,24 @@ describe('onboarding asks for every one of them', () => {
   it('sex is asked on NameEntry, and carried forward', () => {
     const src = read('src/screens/onboarding/NameEntry.tsx');
     expect(src).toContain("t('ob.sex')");
-    expect(src).toContain("navigation.navigate('Bodyweight', { sex })");
+    expect(src).toContain("navigation.navigate('AboutYou', { sex })");
   });
 
-  it('⚠️ bodyweight has its own step, ON THE ONLY PATH THROUGH', () => {
+  it('⚠️ the two rules sit ON THE ONLY PATH THROUGH', () => {
     /*
-     * A step that can be skipped is not a guarantee. `NameEntry` goes to `Bodyweight` and nowhere
-     * else, and `Bodyweight` goes on to `ConnectHealth` carrying the number — so there is no route
-     * to the coach that misses it.
+     * A step that can be skipped is not a guarantee. `NameEntry` goes to `AboutYou` and nowhere
+     * else; `AboutYou` goes to `YourTraining` carrying both numbers; `YourTraining` goes to
+     * `ConnectHealth` carrying everything. There is no route to the coach that misses one.
+     *
+     * ⚠️ MERGED 2026-08-04 on the founder's instruction — `Bodyweight` and the age half of the old
+     * `AboutYou` are one screen now, because they answer the same question and splitting them made
+     * the intake read as a form with pages.
      */
-    const src = read('src/screens/onboarding/Bodyweight.tsx');
-    expect(src).toContain('<WheelPicker');
-    expect(src).toContain("navigation.navigate('AboutYou', { sex: route.params.sex, weightKg: kg })");
-    // …and it is registered, or the route is a type that resolves to a blank screen.
-    expect(read('src/app/Root.tsx')).toContain('name="Bodyweight"');
+    const src = read('src/screens/onboarding/AboutYou.tsx');
+    expect(src.match(/<WheelPicker/g)).toHaveLength(2);
+    expect(src).toContain("navigation.navigate('YourTraining', { sex: route.params.sex, weightKg: kg, age })");
+    expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
+    expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
   });
 
   it('and ConnectHealth puts it into the inputs the profile is built from', () => {
@@ -160,8 +164,9 @@ describe('onboarding asks for every one of them', () => {
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {
     // She is adjusting, not counting up from 30 kg. A rule that opens at its floor is a rule she has
     // to scroll before she can answer, which is how a form becomes a chore.
-    const src = read('src/screens/onboarding/Bodyweight.tsx');
-    expect(src).toMatch(/OPENS_ON = \{ kg: \d+, lb: \d+ \}/);
+    const src = read('src/screens/onboarding/AboutYou.tsx');
+    expect(src).toMatch(/WEIGHT_OPENS_ON = \{ kg: \d+, lb: \d+ \}/);
+    expect(src).toMatch(/AGE_OPENS_ON = \d+/);
     expect(src).toMatch(/min=\{units === 'kg' \? 30 : 66\}/);
   });
 

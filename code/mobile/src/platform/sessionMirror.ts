@@ -429,10 +429,17 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0);
 
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
-    // Lifts progressed = distinct exercises the model raised this session.
-    const up = new Set(
-      steps.filter((s) => s.reasonType === 'increase').map((s) => s.exerciseName),
-    ).size;
+    /*
+     * ⛔ THE FALLBACK READ THE DEAD ENGINE TOO (2026-08-04 audit). `reasonType` is never written on a
+     * coach-built plan, so this branch produced 0 for every coach athlete — on the wrist and on the
+     * Lock Screen, which is where a closing frame is actually read.
+     *
+     * `progressedLifts` is the measured answer (`progressedLiftCount` — a load that ends the session
+     * higher than it started it, which is what "raised this session" has always meant). This is only
+     * reached when the caller supplies nothing, and 0 is the honest answer then: an unmeasured count
+     * is not a count.
+     */
+    const up = 0;
     const startedMs = inp.sessionStartedAtMs ?? null;
     const summary: MirrorSummary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',

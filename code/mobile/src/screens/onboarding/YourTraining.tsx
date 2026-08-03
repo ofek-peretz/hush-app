@@ -1,6 +1,14 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * HOW MANY DAYS, AND HOW LONG EACH ONE IS.
+ * HER TRAINING — how long she has done it, how many days, and how long each one is.
+ *
+ * ⛔ FOUNDER, 2026-08-04: *"merge as many of the new screens as possible into one — sensibly, and
+ * with no scrolling."* This absorbed the experience question from `AboutYou`, which kept the two
+ * RULES (bodyweight and age) and handed the three CHOICES here. One screen answers "what is her
+ * body", the next answers "what is her training", and neither scrolls.
+ *
+ * ⚠️ Three segmented controls cost 3 × (20 + 48) + 2 × 32 gaps = 268px against a ~565px body — the
+ * lightest of the three steps, which is why it took the extra question rather than the other one.
  *
  * ⛔ FOUNDER, 2026-08-03: *"training frequency… session length — I don't know how critical it is,
  * most people like 45–60 minutes."*
@@ -28,9 +36,10 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button, Legend, SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import type { Experience } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
-type Props = NativeStackScreenProps<OnboardingParamList, 'YourWeek'>;
+type Props = NativeStackScreenProps<OnboardingParamList, 'YourTraining'>;
 
 /**
  * The four session lengths.
@@ -42,20 +51,21 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'YourWeek'>;
  */
 const LENGTHS = [30, 45, 60, 75] as const;
 
-export function YourWeek({ navigation, route }: Props) {
+export function YourTraining({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const [experience, setExperience] = useState<Experience>(app.profile?.experience ?? 'beginner');
   const [days, setDays] = useState<number>(app.profile?.daysPerWeek && app.profile.daysPerWeek > 0 ? app.profile.daysPerWeek : 3);
   const [minutes, setMinutes] = useState<number>(app.profile?.workoutMinutes ?? 60);
 
   function onContinue() {
-    navigation.navigate('ConnectHealth', { ...route.params, daysPerWeek: days, workoutMinutes: minutes });
+    navigation.navigate('ConnectHealth', { ...route.params, experience, daysPerWeek: days, workoutMinutes: minutes });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 4, total: 6 }}
+      progress={{ index: 3, total: 5 }}
       legend={t('ob.weekLegend')}
       title={t('ob.weekTitle')}
       voice={t('ob.weekSub')}
@@ -63,6 +73,21 @@ export function YourWeek({ navigation, route }: Props) {
       footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
     >
       <View style={styles.rows}>
+        {/* Years, not ranks — nobody has to decide whether they are "advanced". */}
+        <View style={styles.col}>
+          <Legend>{t('ob.experience')}</Legend>
+          <SegmentedControl
+            block
+            size="lg"
+            options={[
+              { value: 'beginner', label: t('ob.expNew') },
+              { value: 'intermediate', label: t('ob.expSome') },
+              { value: 'advanced', label: t('ob.expYears') },
+            ]}
+            value={experience}
+            onChange={(v) => setExperience(v as Experience)}
+          />
+        </View>
         <View style={styles.col}>
           <Legend>{t('ob.daysPerWeek')}</Legend>
           <SegmentedControl

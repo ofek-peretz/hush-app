@@ -17,9 +17,8 @@ import { HushTabBar } from '@/app/HushTabBar';
 import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
-import { Bodyweight } from '@/screens/onboarding/Bodyweight';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
-import { YourWeek } from '@/screens/onboarding/YourWeek';
+import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
@@ -1209,9 +1208,8 @@ export const GALLERY: GalleryEntry[] = [
    * weight, and it's critical for it."* Nobody asked — `coachFacts` spreads it conditionally, so an
    * absent bodyweight was an absent line on the sheet and nothing anywhere was surprised.
    */
-  { id: '1.2c', label: 'About you — age + experience', status: 'live', note: 'the two facts that decide WEEK ONE; everything after it is measured', render: () => mount(AboutYou, { sex: 'female', weightKg: 62 }) },
-  { id: '1.2d', label: 'Your week — days + session length', status: 'live', note: 'the screen his "it decided 4 workouts without asking" ruling was about — now it ASKS', render: () => mount(YourWeek, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate' }) },
-  { id: '1.2b', label: 'Bodyweight', status: 'live', note: 'a form where a conversation could not guarantee coverage — and the wheel, because it is the same rule she turns to log a set', render: () => mount(Bodyweight, { sex: 'female' }) },
+  { id: '1.2c', label: 'Her body — bodyweight + age', status: 'live', note: 'two rules on one screen, merged 2026-08-04; a third would not fit without scrolling', render: () => mount(AboutYou, { sex: 'female' }) },
+  { id: '1.2d', label: 'Her training — experience + days + length', status: 'live', note: 'the screen his "it decided 4 workouts without asking" ruling was about — now it ASKS', render: () => mount(YourTraining, { sex: 'female', weightKg: 62, age: 34 }) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
