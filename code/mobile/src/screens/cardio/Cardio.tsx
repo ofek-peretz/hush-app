@@ -25,6 +25,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
+import { RangeMark } from '@/components/RangeMark';
 import { Legend, Button } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
@@ -679,6 +680,17 @@ export function CardioComplete(props: {
   const kmUnit = t('cardio.km');
   const { navigation, gait, elapsedSec, distanceKm, avgHr, splits, route } = props;
   const avgPace = distanceKm >= 0.05 ? elapsedSec / distanceKm : 0;
+  const perKmLabel = t('cardio.perKm');
+  /*
+   * "TUESDAY 4 AUGUST" — composed part by part to dodge the locale's comma, exactly as CardioDetail
+   * does it. A poster carries a date; a screenshot with none is a picture of nothing in particular.
+   */
+  const started = new Date(props.startedAt || Date.now());
+  const dateLabel = [
+    started.toLocaleDateString(undefined, { weekday: 'long' }),
+    started.toLocaleDateString(undefined, { day: 'numeric' }),
+    started.toLocaleDateString(undefined, { month: 'long' }),
+  ].join(' ');
   const hasRoute = route.length >= MIN_ROUTE_POINTS;
 
   // Persist the recorded activity exactly once, on mount (sealed from the engine). Route / splits /
@@ -720,16 +732,76 @@ export function CardioComplete(props: {
     <View style={styles.stage}>
       <SafeAreaView style={styles.stageSafe} edges={['top', 'bottom']}>
         <View style={styles.doneBody}>
-          <View style={styles.savedRow}>
-            <Icon name="checkCheck" size={15} color={signal[0]} strokeWidth={2.4} />
-            <Legend size={RUN_SMALL_PT} tone="accent">{t('cardio.savedLegend')}</Legend>
+          {/*
+            ⛔ THE RUN'S POSTER (founder 2026-08-04). Same grammar as the workout's, one screen over:
+            wordmark, date, name, one enormous figure, the facts, and DONE. No share control —
+            *"SHARE makes us look like we want publicity; they can screenshot it and post it."*
+
+            Everything above the act is screenshot-safe: no back arrow, no title bar, the mark
+            carried whole. A phone screen is 9:16, and this is what goes on a story.
+          */}
+          <View style={styles.posterMark}>
+            <RangeMark />
+            <Text style={styles.posterWord}>hush</Text>
           </View>
-          <Text style={styles.savedTitle}>{t('cardio.savedTitle')}</Text>
+
+          <View style={styles.posterFill} />
+
+          <Text style={styles.posterDate}>{dateLabel.toUpperCase()}</Text>
+          {/*
+            ⛔ THE TITLE IS THE MOVEMENT, NEVER THE PRESCRIPTION (founder 2026-08-04): *"at the top
+            it says Easy 6k but the example covered 5.2 km."* A name with a number in it can always
+            disagree with the number under it — and it disagrees exactly when she stopped short,
+            which is the moment a poster must not be caught arguing with her.
+          */}
+          <Text style={styles.posterName}>{t(gaitFromPace(avgPace) === 'walk' ? 'cardio.walk' : 'cardio.run')}</Text>
 
           <View style={styles.doneHero}>
             <Text style={styles.doneHeroNum}>{distanceKm.toFixed(1)}</Text>
             <Text style={[styles.doneHeroUnit, !monoCanDraw(kmUnit) && styles.unitWord]}>{kmUnit}</Text>
           </View>
+
+          {/*
+            ⛔ PACE IS A HERO LINE, NOT SMALL PRINT (founder 2026-08-04): *"the pace per kilometre
+            appears in very small type, and that small type is something I forbid."* It is the number
+            a runner reads first, and it was set at eleven points wedged between two other things.
+
+            ⚠️ Absent on a run too short to have an average — `avgPace` is 0 there, and "0:00 /km" is
+            a fabrication rather than a measurement.
+          */}
+          {avgPace > 0 ? (
+            <View style={styles.posterPace}>
+              <Text style={styles.posterPaceNum}>{fmtPace(avgPace)}</Text>
+              <Text style={[styles.posterPaceUnit, !monoCanDraw(perKmLabel) && styles.unitWord]}>{perKmLabel}</Text>
+            </View>
+          ) : null}
+
+          {/*
+            ⛔ THE SHAPE OF THE RUN, AND NOT THE ROUTE (founder 2026-08-04, choosing B).
+
+            *"Is this map any good at all? It looks like a drawing from one point to another — it
+            isn't remotely clear that it's a route of anything."* He was judging a sketch I drew by
+            hand rather than `RouteTrace`, which projects the real fixes — but the conclusion holds
+            for the real one too: **a polyline with no streets under it is legible to exactly one
+            person, the woman who ran it, and she already knows.** A poster is read by strangers in
+            two seconds.
+
+            The splits are not: one bar per kilometre, and the shape of the effort is there in the
+            dimension that actually describes a run. The trace keeps its home in the run's own
+            record — which is also the first screen ever to mount it.
+
+            ⚠️ AND HIS MAP RULING STANDS UNTOUCHED (`RouteTrace`, 2026-07-12, "do not reopen"): no
+            map SDK, ever. This decision did not go near it.
+          */}
+          {splits.length > 0 ? (
+            <View style={styles.doneShape} accessibilityRole="image" accessibilityLabel={t('cardio.shapeLabel', { count: splits.length })}>
+              {splits.map((sp) => {
+                const best = Math.min(...splits.map((x) => x.paceSec));
+                const h = Math.max(0.26, Math.min(1, best / Math.max(1, sp.paceSec)));
+                return <View key={sp.km} style={[styles.shapeBar, { height: `${h * 100}%` }]} />;
+              })}
+            </View>
+          ) : null}
 
           <View style={styles.doneRow}>
             <DoneStat value={fmtClock(elapsedSec)} label={t('cardio.timeShort')} />
@@ -739,6 +811,8 @@ export function CardioComplete(props: {
                 average heart rate is not a run with a blank one. */}
             {avgHr != null ? <DoneStat value={Math.round(avgHr)} label={t('cardio.avgHrShort')} icon="heart" /> : null}
           </View>
+
+          <View style={styles.posterFill} />
         </View>
 
         <View style={styles.doneFooter}>
@@ -903,9 +977,40 @@ const styles = StyleSheet.create({
   sheetActions: { marginTop: 22, gap: 10 },
 
   // DONE (3.4c)
-  doneBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 26, paddingHorizontal: 34 },
-  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  savedTitle: { fontFamily: font.serif, fontSize: 40, lineHeight: 44, color: stageC.ink0, textAlign: 'center' },
+  /*
+   * ════ THE RUN'S POSTER (founder 2026-08-04) ════
+   *
+   * `justifyContent: 'center'` is gone: the poster has a TOP (the mark) and a BOTTOM (the facts),
+   * with two flexible spacers between, so it fills a 9:16 frame the way a poster does rather than
+   * clustering in the middle of one. Every figure is sized to be read in a screenshot on somebody
+   * else's phone — nothing here is under 11.5.
+   */
+  doneBody: { flex: 1, alignItems: 'center', gap: 20, paddingHorizontal: 34 },
+  posterFill: { flex: 1 },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
+  posterWord: { fontFamily: font.serif, fontSize: 20, color: stageC.ink0, textAlign: 'left' },
+  posterDate: {
+    fontFamily: font.sansMedium,
+    fontSize: 11.5,
+    letterSpacing: 1.9,
+    color: stageC.ink2,
+    textAlign: 'center',
+  },
+  posterName: { fontFamily: font.serif, fontSize: 34, lineHeight: 38, color: stageC.ink0, textAlign: 'center', marginTop: -8 },
+  posterPace: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8, marginTop: -12 },
+  posterPaceNum: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 38,
+    lineHeight: 42,
+    letterSpacing: -0.9,
+    includeFontPadding: false,
+    color: signal[0],
+    textAlign: 'left',
+  },
+  posterPaceUnit: { fontFamily: font.mono, fontSize: 16, color: stageC.ink2, textAlign: 'left' },
+  /* The same instrument as the live stage's, so a run looks the same finished as it did inside it. */
+  doneShape: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 46, width: '100%', maxWidth: 300 },
   doneHero: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
   doneHeroNum: {
     fontFamily: font.monoMedium,

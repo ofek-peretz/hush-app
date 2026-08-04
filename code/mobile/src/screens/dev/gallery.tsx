@@ -1977,6 +1977,43 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
+  /*
+    ⚠️ A WALK, AND A RUN TOO SHORT TO HAVE A PACE. Two states of the poster no harness can produce
+    by running the stage: the title is derived from the average pace, and the pace line is absent
+    below the distance floor — "0:00 /km" is a fabrication, not a measurement.
+  */
+  { id: '3.4g', label: 'Cardio — done, a walk', status: 'live', note: 'the title follows the PACE; nobody was asked', render: () => (
+    <InApp>
+      <CardioComplete
+        preview
+        navigation={{ goBack: noop, navigate: noop } as never}
+        gait="walk"
+        startedAt={new Date(daysAgo(0)).toISOString()}
+        elapsedSec={52 * 60}
+        distanceKm={4.4}
+        avgHr={null}
+        calories={190}
+        splits={runSplits.map((sp) => ({ ...sp, paceSec: 700, durationSec: 700, gait: 'walk' as const }))}
+        route={[]}
+      />
+    </InApp>
+  ) },
+  { id: '3.4h', label: 'Cardio — done, too short for a pace', status: 'live', note: 'no pace line, no bars — and no zeros standing in for them', render: () => (
+    <InApp>
+      <CardioComplete
+        preview
+        navigation={{ goBack: noop, navigate: noop } as never}
+        gait="run"
+        startedAt={new Date(daysAgo(0)).toISOString()}
+        elapsedSec={44}
+        distanceKm={0.02}
+        avgHr={null}
+        calories={4}
+        splits={[]}
+        route={[]}
+      />
+    </InApp>
+  ) },
   { id: '3.5', label: 'The week is done', status: 'live', render: () => <InApp><UnderTabs active={0}>{weekDoneView}</UnderTabs></InApp> },
   { id: '3.6b', label: 'Progress — day one', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
   { id: '3.6c', label: 'The next twelve', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
