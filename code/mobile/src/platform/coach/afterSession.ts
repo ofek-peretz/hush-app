@@ -305,6 +305,25 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
        * programme back would answer "my shoulder is tight" with a rewritten month and bill for it.
        */
       (occasion.kind === 'in_session' ? COACH_PLAN_SCHEMA : COACH_DECISION_SCHEMA) as unknown as Record<string, unknown>,
+      /*
+       * ⛔ SHE IS STANDING AT THE RACK — measured 2026-08-04, move 3 of the founder's plan.
+       *
+       * This call had NO thinking level, so it took Gemini's default and the Worker's slow path:
+       * **no hedge for 20 seconds and a 110s budget.** The chat has used `low` since the day it
+       * shipped — hedge at 1.8s, median about three seconds — and the in-session call is the SAME
+       * interaction: she typed something and is watching the screen for an answer. Except here she
+       * is also holding a barbell.
+       *
+       * ⚠️ ONLY `in_session`. Thinking level buys PROGRAMME quality — measured: `low` on a
+       * post-session call answered in 3.9s and wrote a one-exercise week. But `in_session` is not
+       * writing a programme: its schema is `COACH_PLAN_SCHEMA`, where `sessions` is optional, and
+       * what it actually produces is "drop this, ease that" against a session already running.
+       * A far smaller judgement, and the one place in the app where seconds are felt as seconds.
+       *
+       * `after_session` and `revise` keep the default deliberately: she has left the screen for one,
+       * and the other rebuilds her whole programme.
+       */
+      occasion.kind === 'in_session' ? 'low' : undefined,
     );
     if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: reply.reason });
 
