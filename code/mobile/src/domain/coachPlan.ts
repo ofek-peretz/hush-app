@@ -65,6 +65,7 @@ import { MOVEMENTS, type Movement } from '@/data/movements';
 import { normalizeLoad } from '@/engine/loadMath';
 import type { CoachFacts } from './coachFacts';
 import { LIVE_EDIT_VERBS, type LiveEdit } from './liveRevision';
+import { orderPlanByStation } from './stationOrder';
 
 /**
  * Bumped from 1 when the shape widened past lifts. Version 1 could not describe a run and never
@@ -955,13 +956,23 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
        * because a title of "" is worse than no title: every surface would draw a blank heading where
        * it used to draw a sensible fallback.
        */
-      plan: {
+      /*
+       * ⛔ THE WALK IS ORDERED HERE — one seam, so every path gets it: the first programme, the
+       * post-session decision, a chat turn that rebuilds. See `domain/stationOrder` for the bounds
+       * and for why this is code rather than a prompt rule (it was a prompt rule twice, and failed
+       * in opposite directions both times).
+       *
+       * ⚠️ NOT applied to a `today` edit. That changes a session she is STANDING IN — she is already
+       * at a station, and reordering what is left under her feet is the one place this would be felt
+       * rather than unnoticed.
+       */
+      plan: orderPlanByStation({
         v: COACH_PLAN_VERSION,
         ...(typeof root.title === 'string' && root.title.trim() ? { title: root.title.trim() } : {}),
         ...(typeof root.why === 'string' && root.why.trim() ? { why: root.why.trim() } : {}),
         sessions,
         ...(notes.length ? { notes } : {}),
-      },
+      }),
       ...(days != null ? { learned: { ...learned.learned, daysPerWeek: days } } : learned),
       ...brief,
     },

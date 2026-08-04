@@ -130,63 +130,27 @@ describe('the prompt tells the truth about where its words land', () => {
   });
 });
 
-describe('⛔ the station rule is a SECOND PASS on order, never a rule about choosing', () => {
+describe('⛔ the station rule is NOT in the prompt, and must not come back', () => {
   /*
-   * ⛔⛔ I GOT THIS WRONG ON THE FIRST ATTEMPT, AND THE SIMULATION SHOWED IT.
+   * ⛔⛔ ATTEMPTED HERE TWICE, FAILED IN OPPOSITE DIRECTIONS BOTH TIMES.
    *
-   * The founder asked for one thing and I wrote another. My rule read *"FINISH A STATION BEFORE
-   * LEAVING IT — two lifts on the same bar, rack or machine go together"*, which is a rule the coach
-   * applies WHILE CHOOSING. So it chose to suit the rule: an upper-body session came back as **five
-   * dumbbell lifts in a row.**
+   *   · *"FINISH A STATION BEFORE LEAVING IT"* — applied while CHOOSING. An upper session came back
+   *     as five dumbbell lifts in a row. The founder: *"That is exactly what I said I did not want."*
+   *   · Rewritten as a second pass over the finished order — the coach did not do it. A single
+   *     generation does not reliably re-read and revise its own output, and no rewording changes it.
    *
-   * His reply: *"Five dumbbell exercises in a row?! That's nearly the whole workout turning into
-   * dumbbells. That is exactly what I said I did not want."*
-   *
-   * ── WHAT HE ACTUALLY ASKED FOR ─────────────────────────────────────────────────────────────────
-   *   > *"I want the programmes to be exactly what he builds. But once he has built them, he should
-   *   > check whether the ORDER can be arranged better for equipment use. That's all. It must not
-   *   > affect which programmes he chooses."*
-   *
-   * His own example is the precise shape of it: face pull (cable) → dumbbell → cable lats → cable
-   * biceps. The fix is not "put the cables together" — it is **swap the dumbbell lift with the cable
-   * biceps**, so the cable work runs on without a return trip. Two lifts move. Nothing else.
-   *
-   * ⚠️ AND IT WAS NOT THE MODEL. The model did exactly what it was told. This is the difference
-   * between a constraint on SELECTION and a pass over ORDER, and I wrote the first one while
-   * believing I had written the second.
+   * It lives in `domain/stationOrder` now, where the bounds are code and every one of them is
+   * tested. **A prompt rule about equipment leaks into selection every time** — that is the lesson,
+   * and this law exists to stop the next person re-adding one because it reads harmlessly.
    */
-  it('is stated as something done AFTER the session is built', () => {
-    expect(preamble()).toMatch(/ORDER, ONCE THE SESSION IS BUILT/);
-    expect(preamble()).toMatch(/Pick the lifts you were always going to pick/);
+  it('names no equipment rule at all', () => {
+    expect(preamble()).not.toMatch(/FINISH A STATION/i);
+    expect(preamble()).not.toMatch(/same bar, rack or machine/i);
+    expect(preamble()).not.toMatch(/ORDER, ONCE THE SESSION IS BUILT/i);
+    expect(preamble()).not.toMatch(/group by[\s\S]{0,4}equipment/i);
   });
 
-  it('⛔ forbids it changing WHICH lifts were chosen', () => {
-    // The exact failure: the rule leaked into selection and the session became one station.
-    expect(preamble()).toMatch(/may never change WHICH lifts you picked/);
-  });
-
-  it('⛔ and says out loud that it is not a reason to group by equipment', () => {
-    /*
-     * Without this line the instruction reads as "prefer equipment runs", which is how five dumbbell
-     * lifts happened. A soft rule needs its ceiling named, not just its floor.
-     */
-    // `[\s\S]` because the prompt is hard-wrapped and this clause straddles a line break.
-    expect(preamble()).toMatch(/not a reason to group by[\s\S]{0,4}equipment/);
-  });
-
-  it('⚠️ and the OLD wording is gone, not merely softened', () => {
-    // "Finish a station before leaving it" is a selection heuristic however it is qualified.
-    expect(preamble()).not.toMatch(/FINISH A STATION BEFORE LEAVING IT/);
-    /*
-     * ⚠️ MATCHED ON THE EQUIPMENT PHRASE, NOT ON "go together" — the founder's own health stone says
-     * *"her health, her goal and what she asked for go together"*, and a law broad enough to catch
-     * that would be deleting his words to satisfy itself.
-     */
-    expect(preamble()).not.toMatch(/same bar, rack or machine/);
-  });
-
-  it('describes the fix as a SWAP — the smallest change that removes the return trip', () => {
-    // Not "reorder the session", which invites a rewrite. Two lifts change places.
-    expect(preamble()).toMatch(/swap the two lifts that fix it/);
+  it('and the reason it is absent is written where someone would look to add it', () => {
+    expect(read('src/domain/coachPrompt.ts')).toMatch(/THE STATION RULE IS NOT IN THIS FILE/);
   });
 });

@@ -38,6 +38,23 @@ import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_BRIEF_LINES, COACH_PLAN_SCHEMA } from './coachPlan';
 import { REST_UNSTATED_S } from './restPrescription';
 
+/*
+ * ⛔ THE STATION RULE IS NOT IN THIS FILE, AND ITS ABSENCE IS DELIBERATE (2026-08-04).
+ *
+ * The founder asked for one thing — *"once he has built them, check whether the ORDER can be
+ * arranged better for equipment use; it must not affect which programmes he chooses"* — and it was
+ * attempted here twice, failing in opposite directions each time:
+ *
+ *   · As *"finish a station before leaving it"*, the coach applied it while CHOOSING and returned a
+ *     session of five dumbbell lifts. *"That is exactly what I said I did not want."*
+ *   · Rewritten as a second pass over the finished order, the coach did not do it at all. A single
+ *     generation does not reliably re-read and revise its own output, and no rewording fixes that.
+ *
+ * ⚠️ SO IT LIVES IN `domain/stationOrder`, WHERE IT CAN BE BOUNDED AND PROVEN — and it must NOT be
+ * re-added here. A prompt rule about equipment leaks into selection every time; that is the whole
+ * lesson. `theWalkIsOrderedNotTheProgramme` holds the code version, bounds and all.
+ */
+
 /**
  * The language she reads, as a WORD rather than a tag.
  *
@@ -225,10 +242,6 @@ train from — get one of them wrong and the best answer you could give never re
   an intake that did not finish), and then you ask, and you do not fill in a number on her behalf.
   Her session length is a budget: what you write has to fit inside it.
 - She trains in a gym with a barbell unless her brief says otherwise.
-- ORDER, ONCE THE SESSION IS BUILT. Pick the lifts you were always going to pick. Then read the order
-  back once: where it sends her BACK to a station she already left, swap the two lifts that fix it.
-  That is all of it — it may never change WHICH lifts you picked, and is not a reason to group by
-  equipment.
 - THE REP BAND YOU SET IS ENFORCED. During the set, if her reps fall outside it, the app corrects
   the load on the spot — so a band is an instruction to the machine as well as to her.
 - WHAT SHE IS TRAINING FOR IS WHAT THE PROGRAMME IS FOR. If her brief names a race, a sport or a
