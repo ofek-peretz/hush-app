@@ -187,6 +187,63 @@ export function kcalForKm(km: number, gait: CardioGait, weightKg: number | null 
   return km * KCAL_PER_KG_KM[gait] * weightKg;
 }
 
+/**
+ * ════ NOBODY IS ASKED WHETHER THEY ARE RUNNING — THE PACE ALREADY SAID ════
+ *
+ * ⛔ FOUNDER, 2026-08-04: *"about cardio — does she have to define a run or a walk? Or can we just
+ * derive the calories / heart rate from the GPS distance?"*
+ *
+ * She never was asked (v7 opens straight into tracking) and the app has been billing every activity
+ * at the RUNNING rate ever since: 1.03 kcal/kg/km against a walk's 0.55, so an hour's walk was
+ * reported at nearly twice its true cost. The picker was removed and the constant it used to set was
+ * left frozen on one value.
+ *
+ * ── ⚠️ WHY A THRESHOLD IS THE WRONG SHAPE, AND WHAT REPLACES IT ─────────────────────────────────
+ * "Slower than X is a walk" has to be wrong somewhere, and it is wrong by 87% at the boundary: a
+ * slow jogger one second the wrong side of it loses half her calories.
+ *
+ * The physiology says not to draw the line at all. ACSM's walking equation gives a NET cost of
+ * ~0.5 kcal/kg/km and holds to 6.4 km/h; the running equation gives ~1.0 and holds from 8 km/h.
+ * Between them neither applies, because between them the two gaits genuinely cost different amounts
+ * and pace alone cannot say which one is happening. So that span is INTERPOLATED — the estimate
+ * moves continuously through the region where the truth is unknown, instead of jumping.
+ *
+ * The result has no cliff anywhere, needs no question, and — because it is applied per segment —
+ * counts a run with walking breaks correctly without anyone doing anything.
+ */
+/** Where ACSM's walking equation stops being valid: 6.4 km/h. */
+const WALK_PACE_S = 3600 / 6.4;
+/** …and where its running equation starts: 8 km/h. */
+const RUN_PACE_S = 3600 / 8;
+
+/** Net kcal per kg per km at this pace (sec/km). Continuous — see the header. */
+export function kcalPerKgKm(paceSecPerKm: number): number {
+  const run = KCAL_PER_KG_KM.run;
+  const walk = KCAL_PER_KG_KM.walk;
+  // A pace of zero is "not moving", which credits no distance anywhere — the rate is irrelevant, and
+  // the running constant is the safe answer for a caller that asks anyway.
+  if (!isFinite(paceSecPerKm) || paceSecPerKm <= 0) return run;
+  if (paceSecPerKm <= RUN_PACE_S) return run;
+  if (paceSecPerKm >= WALK_PACE_S) return walk;
+  const t = (paceSecPerKm - RUN_PACE_S) / (WALK_PACE_S - RUN_PACE_S);
+  return run + (walk - run) * t;
+}
+
+/**
+ * The label for a finished kilometre, from its own pace. DISPLAY ONLY — the calories never round
+ * through it, because rounding a continuous estimate into two buckets would put back the cliff the
+ * function above exists to remove.
+ */
+export function gaitFromPace(paceSecPerKm: number): CardioGait {
+  return paceSecPerKm > (RUN_PACE_S + WALK_PACE_S) / 2 ? 'walk' : 'run';
+}
+
+/** The calories a single credited segment is worth, billed at its own pace. */
+export function kcalForSegment(km: number, paceSecPerKm: number, weightKg: number | null | undefined): number {
+  if (!weightKg || weightKg <= 0) return 0;
+  return km * kcalPerKgKm(paceSecPerKm) * weightKg;
+}
+
 /** mm:ss (or h:mm:ss past an hour). */
 export function fmtClock(totalSec: number): string {
   const s = Math.max(0, Math.round(totalSec));

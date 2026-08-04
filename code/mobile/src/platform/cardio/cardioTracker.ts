@@ -67,7 +67,7 @@ import { liveHeartRate } from '@/domain/heartRate';
 const HR_POLL_MS = 5_000;
 
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
-export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, movementCredit, segmentCounts } from './cardioMath';
+export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, kcalForSegment, kcalPerKgKm, gaitFromPace, movementCredit, segmentCounts } from './cardioMath';
 export type { CardioSample, GpsState } from './cardioRun';
 export { heartRateReadings } from './cardioRun';
 

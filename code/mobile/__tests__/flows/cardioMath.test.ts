@@ -14,6 +14,9 @@ import {
   MIN_MOVING_RUN,
   MIN_DEPARTURE_M,
   kcalForKm,
+  kcalPerKgKm,
+  gaitFromPace,
+  kcalForSegment,
   haversineM,
   fmtPace,
   fmtClock,
@@ -254,5 +257,70 @@ describe('pace/clock formatting stays honest at the edges', () => {
     expect(fmtPace(342)).toBe('5:42');
     expect(fmtClock(39)).toBe('0:39');
     expect(fmtClock(3671)).toBe('1:01:11');
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * NOBODY IS ASKED WHETHER THEY ARE RUNNING.
+ *
+ * ⛔ FOUNDER, 2026-08-04: *"does she have to define a run or a walk? Or can we just derive it from
+ * the GPS distance?"* — and she never was asked. The v7 cardio stage opens straight into tracking
+ * with `gait` hard-coded to 'run', so every walk was billed at the running rate: 1.03 kcal/kg/km
+ * against 0.55, nearly double, for as long as the picker has been gone.
+ *
+ * ── ⚠️ WHY THESE TESTS ARE ABOUT THE MIDDLE ─────────────────────────────────────────────────────
+ * The two ends are arithmetic. The interesting property is that there is NO CLIFF: a threshold has
+ * to be wrong somewhere and at 8 km/h it is wrong by 87%, which is a jogger losing half her
+ * calories to one second of pace. ACSM's walking equation holds to 6.4 km/h and its running
+ * equation from 8; between them neither applies, and the estimate moves continuously through the
+ * span rather than jumping across it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('the gait is measured, not declared', () => {
+  const RUN = 3600 / 12; // 12 km/h — unambiguously running
+  const WALK = 3600 / 5; // 5 km/h — unambiguously walking
+
+  it('a real run bills at the running rate and a real walk at the walking one', () => {
+    expect(kcalPerKgKm(RUN)).toBeCloseTo(1.03, 3);
+    expect(kcalPerKgKm(WALK)).toBeCloseTo(0.55, 3);
+  });
+
+  it('⛔ and NOWHERE between them is there a cliff', () => {
+    // Walked across the whole ambiguous span one second of pace at a time: no neighbouring pair may
+    // differ by more than a hair. This is the assertion a threshold cannot pass.
+    let prev = kcalPerKgKm(RUN);
+    for (let p = 3600 / 12; p <= 3600 / 4; p += 1) {
+      const here = kcalPerKgKm(p);
+      expect(Math.abs(here - prev)).toBeLessThan(0.005);
+      prev = here;
+    }
+  });
+
+  it('and it never goes the wrong way — slower is never worth MORE per km', () => {
+    for (let p = 3600 / 12; p <= 3600 / 4; p += 5) {
+      expect(kcalPerKgKm(p + 5)).toBeLessThanOrEqual(kcalPerKgKm(p) + 1e-9);
+    }
+  });
+
+  it('⚠️ a pace of zero is "not moving", and answers rather than throwing', () => {
+    // It is reachable: `paceSec` is blanked the moment movement stops. No distance is credited
+    // there either, so the rate it returns is never actually spent — but NaN would poison the total.
+    expect(Number.isFinite(kcalPerKgKm(0))).toBe(true);
+    expect(Number.isFinite(kcalPerKgKm(Number.NaN))).toBe(true);
+  });
+
+  it('the honesty rule survives: no bodyweight, no calories', () => {
+    expect(kcalForSegment(5, RUN, null)).toBe(0);
+    expect(kcalForSegment(5, RUN, 0)).toBe(0);
+    expect(kcalForSegment(5, RUN, 80)).toBeCloseTo(412, 0);
+  });
+
+  it('⚠️ the LABEL is allowed a threshold because nothing is billed through it', () => {
+    // A kilometre is tagged "walk" or not for the eye. The calories never round through this — that
+    // is the whole point of the continuous rate above.
+    expect(gaitFromPace(WALK)).toBe('walk');
+    expect(gaitFromPace(RUN)).toBe('run');
+    expect(gaitFromPace(0)).toBe('run'); // an activity too short to have a pace
   });
 });

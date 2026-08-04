@@ -25,7 +25,8 @@ import {
   MIN_SPEED_MS,
   fmtPace,
   haversineM,
-  kcalForKm,
+  kcalForSegment,
+  gaitFromPace,
   movementCredit,
   segmentCounts,
 } from './cardioMath';
@@ -283,7 +284,13 @@ export function ingestFix(fix: Fix): void {
   }
   if (!credit.counts) return;
 
-  const g = s.gait;
+  /*
+   * ⛔ THE GAIT IS MEASURED, NOT DECLARED (founder 2026-08-04). `s.gait` is a fixed 'run' — the
+   * picker was deleted in v7 and the constant it used to set was left frozen, so a walk was billed
+   * at the running rate: nearly double. The pace is right here and already smoothed; it is the
+   * answer to the question nobody is being asked.
+   */
+  const rate = s.paceSec;
   // The trace records only fixes that COUNTED — the same gate as the distance, so the drawn route
   // can never disagree with the kilometres beside it. The first point of a segment is seeded too,
   // so a resumed leg starts where the athlete stands.
@@ -294,14 +301,14 @@ export function ingestFix(fix: Fix): void {
   if (s.route.length === 0) s.route.push({ lat: prev.lat, lon: prev.lon });
   s.route.push({ lat: latitude, lon: longitude });
   s.distM += segM;
-  s.cal += kcalForKm(segM / 1000, g, s.weightKg);
+  s.cal += kcalForSegment(segM / 1000, rate, s.weightKg);
   const kmDone = Math.floor(s.distM / 1000);
   if (kmDone > s.lastKm) {
     s.lastKm = kmDone;
     const nowSec = elapsedSec();
     const sec = nowSec - s.splitStartSec;
     s.splitStartSec = nowSec;
-    s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: g }];
+    s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: gaitFromPace(sec) }];
     /**
      * …and it is ANNOUNCED (founder 2026-07-29: "in cardio, a notification for every kilometre").
      * Delivered now, not scheduled: the split has already happened. The on-screen moment (3.4b)

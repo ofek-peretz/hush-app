@@ -35,7 +35,7 @@ import { monoCanDraw } from '@/design/monoVoice';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useCardioTracker, fmtClock, fmtPace, type GpsState } from '@/platform/cardio/cardioTracker';
+import { useCardioTracker, fmtClock, fmtPace, gaitFromPace, type GpsState } from '@/platform/cardio/cardioTracker';
 import { cardioPerformed } from '@/domain/cardio';
 import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
 import { useFocusedStatusBar } from '@/platform/statusBar';
@@ -593,7 +593,15 @@ export function CardioComplete(props: {
     const activity: CardioActivity = {
       kind: 'cardio',
       id: `cardio_${Date.now()}`,
-      gait,
+      /*
+       * ⛔ THE ACTIVITY IS LABELLED BY WHAT IT WAS, NOT BY WHAT SHE PICKED (founder 2026-08-04) —
+       * there is no picker, and `gait` has been a hard-coded 'run' since v7, so every walk in her
+       * history was filed as a run. Its own average pace is a better witness than a constant.
+       *
+       * `avgPace` is 0 on an activity too short to have one; `gaitFromPace` answers 'run' there,
+       * which is the value that was being written anyway.
+       */
+      gait: gaitFromPace(avgPace),
       startedAt: props.startedAt || new Date().toISOString(),
       durationSec: Math.round(elapsedSec),
       distanceKm: Math.round(distanceKm * 100) / 100,
