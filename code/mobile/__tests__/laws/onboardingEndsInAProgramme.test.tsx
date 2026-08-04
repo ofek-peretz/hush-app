@@ -57,9 +57,37 @@ describe('the last step builds, it does not chat', () => {
 });
 
 describe('the ordering that a first run always breaks', () => {
-  it('⛔ writes the profile BEFORE it asks — the sheet is built from a Profile', () => {
+  it('⛔⛔ writes NO profile — Root would swap the navigator out mid-build', () => {
+    /*
+     * ⚠️ THIS ASSERTION SAID THE OPPOSITE FOR ONE COMMIT, AND THE OPPOSITE WAS A SHIPPED BUG.
+     *
+     * `Root` renders the main app the instant `app.profile` exists (`Root.tsx`). A profile written
+     * here swaps the navigator out WHILE THE COACH IS STILL THINKING — so she never sees
+     * `ProgramCreated`, which is the founder's own device report: *"it moved me straight to the
+     * transition screen without showing me the plan."*
+     *
+     * I rebuilt that bug from scratch while removing it, hours after quoting the law that warns
+     * about it, and then wrote a test asserting the broken ordering was correct. A law can be
+     * confidently wrong; this is what that looks like.
+     *
+     * The sheet does not need a stored profile — it needs a `Profile`-SHAPED object, and this screen
+     * assembles one in memory. `ProgramCreated` writes it when she accepts.
+     */
     const src = building();
-    expect(src.indexOf('await app.completeOnboarding(inputs)')).toBeLessThan(src.indexOf('askCoach('));
+    expect(src).not.toContain('completeOnboarding');
+    expect(src).toContain('const profile = React.useMemo<Profile>(');
+    expect(read('src/app/Root.tsx')).toContain('{app.profile ? <MainNavigator /> : <OnboardingNavigator />}');
+    // …and the screen that DOES write it is the one she taps through.
+    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain('await app.completeOnboarding(inputs)');
+  });
+
+  it('⚠️ the assembled profile carries every fact onboarding collected', () => {
+    // An in-memory profile that drops a field is the same bug as a sheet that drops one — silent,
+    // and only visible as a worse first programme.
+    const src = building();
+    for (const f of ['weightKg', 'age', 'experience', 'daysPerWeek', 'workoutMinutes', 'sex', 'goalText', 'limitsText']) {
+      expect({ f, carried: src.includes(f) }).toEqual({ f, carried: true });
+    }
   });
 
   it('⛔ invents NO programme when the coach cannot be reached', () => {

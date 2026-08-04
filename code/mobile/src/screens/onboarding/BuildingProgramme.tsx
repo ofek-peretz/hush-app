@@ -34,7 +34,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { askCoach } from '@/platform/coach/coachClient';
 import { coachFacts } from '@/domain/coachFacts';
@@ -42,6 +41,7 @@ import { coachRequest } from '@/domain/coachPrompt';
 import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
 import { currentLocale } from '@/i18n';
 import { color, font } from '@/design/tokens';
+import type { Profile } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
@@ -51,7 +51,6 @@ const LINE_MS = 2600;
 
 export function BuildingProgramme({ navigation, route }: Props) {
   const { t } = useCopy();
-  const app = useApp();
   const { inputs } = route.params;
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
@@ -83,14 +82,44 @@ export function BuildingProgramme({ navigation, route }: Props) {
 
   const lineStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
+  /*
+   * ⛔ HER PROFILE AS IT **WILL** BE — ASSEMBLED, NOT WRITTEN.
+   *
+   * `Root` renders the main app the instant `app.profile` exists (`Root.tsx:284`). Writing it here
+   * would swap the navigator out from under this screen WHILE THE COACH IS STILL THINKING, and she
+   * would never see her programme at all.
+   *
+   * ⚠️ I DID EXACTLY THAT IN THE FIRST DRAFT OF THIS SCREEN, hours after quoting the law that warns
+   * about it. It is the founder's own device bug — *"it moved me straight to the transition screen
+   * without showing me the plan"* — rebuilt from scratch by the person removing it.
+   *
+   * And the ordering is the honest one anyway: an athlete with a profile and no programme is an
+   * account with nothing in it, which is precisely what a crash between the two would leave behind.
+   * `ProgramCreated` writes the profile when she accepts.
+   */
+  const profile = React.useMemo<Profile>(
+    () => ({
+      name: inputs.name,
+      sex: inputs.sex,
+      weightKg: inputs.weightKg,
+      startWeightKg: inputs.weightKg,
+      age: inputs.age,
+      experience: inputs.experience,
+      units: inputs.units,
+      goal: inputs.goal,
+      daysPerWeek: inputs.daysPerWeek,
+      workoutMinutes: inputs.workoutMinutes,
+      healthConnected: inputs.healthConnected,
+      repBand: '8-10',
+      ...(inputs.goalText ? { goalText: inputs.goalText } : {}),
+      ...(inputs.limitsText ? { limitsText: inputs.limitsText } : {}),
+    }),
+    [inputs],
+  );
+
   const build = useCallback(async () => {
     setFailed(false);
     try {
-      // The profile has to exist before the sheet can be built from it — this is the moment
-      // onboarding's answers become an athlete.
-      await app.completeOnboarding(inputs);
-      const profile = await db.loadProfile();
-      if (!profile) { setFailed(true); return; }
       const facts = coachFacts({ profile, plan: null, history: [], language: currentLocale() });
       const reply = await askCoach(
         coachRequest({ facts, ask: { kind: 'first_programme' } }),
@@ -104,7 +133,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
     } catch {
       setFailed(true);
     }
-  }, [app, inputs, navigation]);
+  }, [inputs, navigation, profile]);
 
   useEffect(() => {
     if (started.current) return;
@@ -113,8 +142,13 @@ export function BuildingProgramme({ navigation, route }: Props) {
   }, [build]);
 
   return (
+    /*
+     * ⛔ NO PROGRESS COUNTER. Every step before this said "4 of 6" because she could answer it and
+     * move on. This one she cannot: it is the RESULT of the six, not a seventh. A counter here
+     * would promise a step she never takes, and "7 of 7" beside a screen that is waiting reads as a
+     * stall rather than an arrival.
+     */
     <OnboardingScaffold
-      progress={{ index: 7, total: 7 }}
       legend={t(failed ? 'ob.buildingFailedLegend' : 'ob.buildingLegend')}
       title={t(failed ? 'ob.buildingFailedTitle' : 'ob.buildingTitle')}
       headGap={32}
