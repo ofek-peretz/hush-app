@@ -22,6 +22,7 @@ import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { WhatFor } from '@/screens/onboarding/WhatFor';
 import { Limits } from '@/screens/onboarding/Limits';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
+import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { WheelPicker } from '@/components/ds';
@@ -51,7 +52,6 @@ import { HistoryView } from '@/screens/history/History';
 import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { CoachScreen } from '@/screens/coach/CoachScreen';
-import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
@@ -1309,7 +1309,12 @@ export const GALLERY: GalleryEntry[] = [
    * looked at in the gallery — which is how a body map nobody wanted survived in the step directly
    * before one of them.
    */
-  { id: '0.0', label: 'The conversation — onboarding', status: 'live', note: 'the real onboarding step, chrome and all — not the chat component', render: () => mount(CoachIntake, { inputs: onboardingInputs }) },
+  /*
+   * ⛔ 0.0 WAS THE ONBOARDING CONVERSATION AND IT IS DELETED (founder 2026-08-04): *"take the chat
+   * out of the front door."* What replaced it is 0.0e — one call, and a wait that shows her own
+   * answers being considered rather than a spinner.
+   */
+  { id: '0.0e', label: 'Building her programme', status: 'live', note: 'where the intake chat was: one call, and the wait shows HER facts, not a percentage nobody can measure', render: () => mount(BuildingProgramme, { inputs: onboardingInputs }) },
   { id: '0.0b', label: 'The conversation — from Today', status: 'live', note: 'the real screen behind the corner of Today', render: () => mount(CoachScreen) },
   { id: '0.0d', label: 'The conversation — LIVE (a tool, not a design target)', status: 'live', note: 'talks to the real Worker; with no token it shows the not-sent state honestly', render: () => (
     <InApp>

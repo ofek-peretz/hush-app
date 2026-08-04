@@ -293,7 +293,15 @@
     "limitsChipBack": "My back",
     "limitsChipWrist": "A wrist",
     "buildingLegend": "BUILDING",
-    "buildingTitle": "Reading what you told me."
+    "buildingTitle": "Reading what you told me.",
+    "buildingDays": "{{n}} days a week.",
+    "buildingMinutes": "{{n}} minutes a session.",
+    "buildingFor": "For: {{what}}",
+    "buildingAround": "Planning around: {{what}}",
+    "buildingFailedLegend": "NOT BUILT",
+    "buildingFailedTitle": "I did not reach my coach.",
+    "buildingFailedSub": "Nothing is lost — everything you told me is saved.",
+    "buildingRetry": "Ask again"
   },
   "menu": {
     "title": "Menu",

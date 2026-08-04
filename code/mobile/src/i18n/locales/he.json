@@ -337,7 +337,16 @@
     "forTitle_female": "בשביל מה את מתאמנת?",
     "forSub_female": "זה הדבר היחיד שקובע את כל השאר. תגידי את זה איך שבא לך.",
     "limitsSub_female": "פציעות, דברים שנתקעים, כל מה שאת לא מוכנה לעשות. אני בונה סביב זה, לא מעליו.",
-    "limitsPlaceholder_female": "או ספרי לי במילים שלך"
+    "limitsPlaceholder_female": "או ספרי לי במילים שלך",
+    "buildingDays": "{{n}} ימים בשבוע.",
+    "buildingMinutes": "{{n}} דקות לאימון.",
+    "buildingFor": "בשביל: {{what}}",
+    "buildingAround": "בונה סביב: {{what}}",
+    "buildingFailedLegend": "לא נבנה",
+    "buildingFailedTitle": "לא הגעתי למאמן.",
+    "buildingFailedSub": "שום דבר לא אבד — כל מה שסיפרת שמור.",
+    "buildingRetry": "שאל שוב",
+    "buildingRetry_female": "שאלי שוב"
   },
   "menu": {
     "title": "תפריט",

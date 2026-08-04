@@ -133,7 +133,7 @@ export function ConnectHealth({ navigation, route }: Props) {
      * genuinely cannot supply: her units, which the PHONE already knows and should never be a
      * question at all.
      */
-    navigation.navigate('CoachIntake', {
+    navigation.navigate('BuildingProgramme', {
       inputs: {
         // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
         goal: 'build_muscle',

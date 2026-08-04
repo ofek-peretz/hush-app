@@ -422,7 +422,15 @@ export type CoachAsk =
   /** She said something. Answer it. The whole conversation so far, hers last. */
   | { kind: 'chat'; turns: CoachSaid[] }
   /** The intake conversation — no record yet, and the brief is being built. */
-  | { kind: 'intake'; turns: CoachSaid[] };
+  | { kind: 'intake'; turns: CoachSaid[] }
+  /**
+   * ⛔ HER FIRST PROGRAMME, BUILT IN ONE CALL — founder 2026-08-04, deleting the intake chat.
+   *
+   * There is no conversation to answer. Onboarding asked her six facts on a form and two questions
+   * in her own words, and all eight are already on the sheet. The coach's job here is not to talk;
+   * it is to BUILD, immediately, from what it has.
+   */
+  | { kind: 'first_programme' };
 
 /**
  * The conversation, as text.
@@ -587,6 +595,35 @@ ${JSON.stringify(hersAlone(facts))}
           `${conversation(ask.turns)}\n\n` +
           'Answer her. Attach "sessions" only if this turn actually changes her programme; most ' +
           'do not, and a question answered is a complete reply.',
+      });
+      break;
+    case 'first_programme':
+      blocks.push({
+        text:
+          /*
+           * ════ NO CONVERSATION, AND THAT IS THE POINT ════
+           *
+           * ⛔ FOUNDER, 2026-08-04: *"take the chat out of the front door."* The intake conversation
+           * is deleted. Everything it used to gather is on her sheet before this call is made — six
+           * facts from a form, and two answers in her own words (`trainingFor`, `limits`).
+           *
+           * So this ask does not open a dialogue. It says: you have her, build.
+           *
+           * ⚠️ AND IT MUST BUILD ON THIS TURN. The chat could ask another question; this cannot —
+           * she is looking at a screen that promised her a programme. `sessions` is required by the
+           * schema on this call for exactly that reason, the same guarantee the post-session call
+           * needed when it once described a change it had not attached.
+           */
+          'BUILD HER FIRST PROGRAMME NOW. Everything you are going to be told about her is already ' +
+          'above: what she is training for and what to plan around are in her own words, and the ' +
+          'rest of her sheet is measured or given. There is no conversation and there will not be ' +
+          'one before she trains — she is looking at a screen that is waiting for this.\n\n' +
+          'She has never trained with you, so nothing here is a change: every load is an opening ' +
+          'position you chose, and "notes" is where you say why you chose it. Name the programme ' +
+          '("title") and say in one line why it is this one ("why").\n\n' +
+          '"say" is the first thing she will ever read from you. Two or three sentences: what you ' +
+          'have built her and what happens next. Not a greeting, not a list of what you can do.\n' +
+          '"sessions" IS REQUIRED ON THIS TURN. "brief" too — it is your only memory of her.',
       });
       break;
     case 'intake':

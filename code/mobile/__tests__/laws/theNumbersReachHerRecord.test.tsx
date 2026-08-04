@@ -29,7 +29,6 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { applyLearned } from '@/domain/coachLearned';
-import { CoachIntake } from '@/screens/onboarding/CoachIntake';
 import { db } from '@/data/local/db';
 import { initI18n, tg } from '@/i18n';
 import type { OnboardingInputs, Profile } from '@/data/local/models';
@@ -145,77 +144,15 @@ describe('and it does not tell the coach its own news', () => {
   });
 });
 
-describe('the intake carries them out of the conversation', () => {
-  const inputs: OnboardingInputs = {
-    goal: 'build_muscle',
-    // The placeholder `ConnectHealth` hands over, because the field is not optional and the first
-    // sheet needs a number. It is a guess about her, and it survives exactly until she speaks.
-    daysPerWeek: 4,
-    units: 'kg', healthConnected: false, name: 'Dana', sex: 'female',
-  };
-
-  const METRICS: Metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
-
-  function mount() {
-    const nav = { replace: jest.fn(), navigate: jest.fn(), goBack: jest.fn() };
-    let tree!: renderer.ReactTestRenderer;
-    act(() => {
-      tree = renderer.create(
-        <SafeAreaProvider initialMetrics={METRICS}>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <CoachIntake navigation={nav as any} route={{ key: 'k', name: 'CoachIntake', params: { inputs } } as any} />
-        </SafeAreaProvider>,
-      );
-    });
-    const composer = () => tree.root.findAll((n) => typeof n.props?.onChangeText === 'function' && typeof n.props?.value === 'string')[0];
-    /*
-     * Both controls found by LABEL rather than by position. This used to take the last button on the
-     * screen, which was the send control only for as long as the send control was the last button —
-     * and the programme's own accept control now sits below it.
-     */
-    const send = () => tree.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.send'))[0];
-    const accept = () => tree.root.findAll((n) => n.props?.label === tg('coach.accept'))[0];
-    return {
-      nav,
-      async accept() {
-        await act(async () => { accept().props.onPress(); });
-      },
-      async say(text: string) {
-        act(() => composer().props.onChangeText(text));
-        await act(async () => { send().props.onPress(); await Promise.resolve(); await Promise.resolve(); });
-      },
-    };
-  }
-
-  it('accumulates across turns and hands them on with the rest', async () => {
-    // She says her weight in the second turn and the programme arrives in the fifth. There is no
-    // profile in between — writing one would swap the navigator out mid-sentence — so the facts
-    // have to survive the conversation.
-    const c = mount();
-    askCoach.mockResolvedValue({ ok: true, model: 'm', usage: null, text: reply({ learned: { weightKg: 58 } }) });
-    await c.say('I weigh 58');
-    expect(c.nav.replace).not.toHaveBeenCalled();
-
-    askCoach.mockResolvedValue({ ok: true, model: 'm', usage: null, text: reply({ learned: { minutes: 45 } }) });
-    await c.say('about 45 minutes');
-
-    askCoach.mockResolvedValue({
-      ok: true, model: 'm', usage: null,
-      text: reply({
-        sessions: ['A', 'B', 'C'].map((name) => ({ name, blocks: [{ rounds: 3, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 30 }] }] })),
-      }),
-    });
-    await c.say('three days');
-    /*
-     * ⚠️ AND SHE HAS TO ACCEPT IT NOW. The screen used to hand over the instant a programme arrived;
-     * the founder overruled that on build 39 (*"without asking whether this is what I want"*), so
-     * the week is shown in the conversation and her acceptance is what moves her on. The facts
-     * still have to survive all of it, which is what this law is about.
-     */
-    await c.accept();
-
-    expect(c.nav.replace).toHaveBeenCalledWith('ProgramCreated', {
-      inputs: { ...inputs, weightKg: 58, workoutMinutes: 45, daysPerWeek: 3 },
-    });
-  });
-});
+/*
+ * ⛔ THE SCREEN HALF OF THIS LAW IS DELETED WITH THE SCREEN, 2026-08-04.
+ *
+ * It mounted `CoachIntake` and drove a conversation to prove that what she SAID accumulated across
+ * turns and reached the profile. There is no intake conversation any more (founder: *"take the chat
+ * out of the front door"*) — her bodyweight, days and minutes come off a form now, and
+ * `theCoachIsNeverAskedWithoutWhatItNeeds` is what guarantees they arrive.
+ *
+ * ⚠️ THE DOMAIN HALF ABOVE IS UNTOUCHED AND STILL LOAD-BEARING. `learnedFrom` still runs on every
+ * CHAT turn in Today and every in-session turn: she can still tell the coach she weighs 70 now, and
+ * that still has to reach her record. What went away is one caller, not the guarantee.
+ */

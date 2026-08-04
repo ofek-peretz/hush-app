@@ -41,7 +41,7 @@ import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { WhatFor } from '@/screens/onboarding/WhatFor';
 import { Limits } from '@/screens/onboarding/Limits';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
-import { CoachIntake } from '@/screens/onboarding/CoachIntake';
+import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
@@ -124,7 +124,7 @@ function OnboardingNavigator() {
       {/* The body map (Rev 7) — a vertical list, so the default horizontal back-swipe is fine. */}
       {/* THE INTAKE. Swipe-back is left ON: nothing is committed until a plan lands, so returning
           to the body map is as reversible as every step before it. */}
-      <OnboardingStack.Screen name="CoachIntake" component={CoachIntake} />
+      <OnboardingStack.Screen name="BuildingProgramme" component={BuildingProgramme} />
       {/* The build/ready step is the ONE place with no way back: the program exists. */}
       <OnboardingStack.Screen
         name="ProgramCreated"

@@ -95,7 +95,14 @@ export type OnboardingParamList = {
   // where she is asked the things only she knows, by the thing that will act on them.
   // The profile is NOT written here: `Root` swaps navigators the instant it exists, which would
   // take this screen out from under her mid-conversation. See `CoachIntake`.
-  CoachIntake: { inputs: OnboardingInputs };
+  /*
+   * ⛔ `CoachIntake` IS DELETED (founder 2026-08-04): *"take the chat out of the front door."*
+   *
+   * The intake was a conversation because the coach had to gather everything itself. It does not any
+   * more — six facts come off a form and two come from her own words — so what replaced it makes ONE
+   * call and hands her a programme.
+   */
+  BuildingProgramme: { inputs: OnboardingInputs };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
   ProgramCreated: { inputs: OnboardingInputs };
 };
