@@ -16,7 +16,6 @@ import { SessionContext } from '@/state/stores/sessionStore';
 import { HushTabBar } from '@/app/HushTabBar';
 import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
-import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { YourGoal } from '@/screens/onboarding/YourGoal';
@@ -1223,13 +1222,20 @@ const todayView = (
 export const GALLERY: GalleryEntry[] = [
   // ── 01 · ARRIVE ────────────────────────────────────────────────────────────────────────────
   { id: '1.1', label: 'Sign in', status: 'live', render: () => mount(Authentication) },
-  { id: '1.2', label: 'Name + sex', status: 'live', render: () => mount(NameEntry) },
   /*
    * ⛔ THE ONE NUMBER THE COACH CANNOT INFER (founder 2026-08-03): *"the coach didn't ask for my
    * weight, and it's critical for it."* Nobody asked — `coachFacts` spreads it conditionally, so an
    * absent bodyweight was an absent line on the sheet and nothing anywhere was surprised.
    */
-  { id: '1.2c', label: 'Her body — bodyweight + age', status: 'live', note: 'two rules on one screen, merged 2026-08-04; a third would not fit without scrolling', render: () => mount(AboutYou, { sex: 'female' }) },
+  /*
+    ⛔ ONE SCREEN, FOUR ANSWERS (2026-08-04). `NameEntry` is merged in here and deleted — measured in
+    taps, it was a keyboard the product did not need to raise plus a single tap.
+
+    ⚠️ THE FIRST STATE IS THE ONE THAT MATTERS AND NO HARNESS PRODUCES IT: Apple hands us a name on
+    first authorization, so most athletes land on a FILLED field. `app.pendingName()` is null in the
+    gallery, which draws the other case — so both are entries here.
+  */
+  { id: '1.2c', label: 'About you — nothing known yet', status: 'live', note: 'no name from the provider; sex unchosen, so Continue waits', render: () => mount(AboutYou) },
   { id: '1.2d', label: 'Her training — experience + days + length', status: 'live', note: 'the screen his "it decided 4 workouts without asking" ruling was about — now it ASKS', render: () => mount(YourTraining, { sex: 'female', weightKg: 62, age: 34 }) },
   { id: '1.2e', label: 'Her goal + her limits — one screen, no prose', status: 'live', note: 'was two screens; the paragraphs were what made them two', render: () => mount(YourGoal, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60 }) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },

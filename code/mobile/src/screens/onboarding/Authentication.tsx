@@ -81,7 +81,7 @@ export function Authentication({ navigation }: Props) {
       await app.signIn(provider);
       // Continuing IS the agreement (see header) — recorded before the first question.
       void app.acceptConsent();
-      navigation.navigate('NameEntry');
+      navigation.navigate('AboutYou');
     } catch (e) {
       if (!(e instanceof SignInCanceledError)) setError(true);
     } finally {

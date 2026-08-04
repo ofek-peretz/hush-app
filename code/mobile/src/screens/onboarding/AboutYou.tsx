@@ -1,35 +1,30 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * HER BODY — the two numbers the coach cannot infer, on one screen, on two rules.
+ * ABOUT YOU — name, sex, bodyweight, age. One screen.
  *
- * ⛔ FOUNDER, 2026-08-04: *"try to merge as many of the new screens as possible into one screen in
- * onboarding — but sensibly, and with no scrolling."*
+ * ⛔ FOUNDER, 2026-08-04, rejecting a proposal that would have added a line of the coach's voice to
+ * every step: *"not good enough. That's a lot of copy, and onboarding is something people fill in
+ * and move on from."*
  *
- * This was `Bodyweight` and half of `AboutYou`. They belong together: both are facts about the body
- * in front of the coach, both are a value out of a continuum, and both wear the same rule. Splitting
- * them made the intake feel like a form with pages, which is the thing his Spotify note was about.
+ * So the intake was measured in TAPS instead, and two of the slowest things in it turned out to be
+ * answers the app already had.
  *
- * ── ⚠️ "NO SCROLLING" IS A MEASUREMENT, NOT AN INTENTION ────────────────────────────────────────
- * Two rules cost 2 × (20 legend + 112 wheel) plus one 32 gap = 296px. The body opens at ~195 and the
- * act sits at 775, so there is ~565 to spend. It fits with room to spare — measured in the browser,
- * not estimated. A third rule would NOT fit, which is why experience moved to the next step.
+ * ── ⛔ NAMEENTRY IS MERGED INTO THIS SCREEN AND DELETED ─────────────────────────────────────────
+ * It asked two things — a name and a sex — and one of them is a single tap while the other is a
+ * keyboard the product did not need to raise (see below). What was left did not justify a screen of
+ * its own, and five answering screens became four.
  *
- * ── WHY A WHEEL AND NOT A KEYBOARD ──────────────────────────────────────────────────────────────
- * The wheel is this product's measuring rule — the same control she turns to log a set, wearing the
- * same graduation. A number pad would be faster to build and would make the first thing she does in
- * Hush feel like filling in a web form. She is not entering data; she is setting a rule.
- *
- * ⚠️ Each opens on a plausible value rather than at the bottom of its range — she is adjusting, not
- * counting up from nothing — and what she leaves them on IS the answer, so there is no way to reach
- * the next screen having skipped either. That is the guarantee a conversation could not make; the
- * argument for why these are a form at all lives in `domain/coachRequirements`.
+ * ⚠️ THE ORDER IS DELIBERATE: the name and the sex come FIRST on the page, above the wheels, because
+ * sex is published the moment it is picked and every Hebrew sentence from here on conjugates against
+ * it. She answers it before she reads anything that depends on it, exactly as she did when it had
+ * its own screen.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Legend, WheelPicker } from '@/components/ds';
+import { Button, Legend, WheelPicker, TextField, SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -40,10 +35,31 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 const WEIGHT_OPENS_ON = { kg: 70, lb: 155 } as const;
 const AGE_OPENS_ON = 30;
 
-export function AboutYou({ navigation, route }: Props) {
+export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
+  /*
+   * ⛔ THE NAME IS ALREADY OURS (founder 2026-08-04): *"onboarding is something people fill in and
+   * move on."*
+   *
+   * `AuthResult` carries `name` — Apple returns it on first authorization — and `appStore` catches
+   * it into `pendingNameRef` the moment she signs in. The screen that asked for it initialised its
+   * field from `app.profile?.name`, which **does not exist yet during onboarding**, so the field she
+   * landed on was always empty. She retyped a name the product had been handed one screen earlier.
+   *
+   * Editable, obviously. But for most people the first screen of the app now needs no keyboard.
+   */
+  const [name, setName] = useState(app.pendingName() ?? '');
+  /*
+   * ⛔ AND SEX HAS NO DEFAULT. It was `'male'`.
+   *
+   * A woman who does not notice gets an app that addresses her in the wrong gender in every line of
+   * Hebrew it will ever write her — silently, for ever, because Hebrew conjugates the second person
+   * and the whole copy layer keys off this one value. One extra tap for a man is not a price; it is
+   * the removal of the worst default in the product.
+   */
+  const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
   const [weight, setWeight] = useState<number>(() => {
     const known = app.profile?.weightKg;
     if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
@@ -51,23 +67,68 @@ export function AboutYou({ navigation, route }: Props) {
   });
   const [age, setAge] = useState<number>(app.profile?.age && app.profile.age > 0 ? app.profile.age : AGE_OPENS_ON);
 
+  function pickSex(v: string) {
+    const next = v as 'female' | 'male';
+    setSex(next);
+    // The rest of onboarding speaks to this person — in Hebrew, in their gender. Published the
+    // moment it is picked, not at the end: the screens that follow already address her directly.
+    app.setPendingSex(next);
+  }
+
   function onContinue() {
+    if (!sex) return;
+    Keyboard.dismiss();
+    app.setPendingName(name);
+    app.setPendingSex(sex);
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('YourTraining', { sex: route.params.sex, weightKg: kg, age });
+    navigation.navigate('YourTraining', { sex, weightKg: kg, age });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 5 }}
-      legend={t('ob.aboutLegend')}
+      progress={{ index: 1, total: 4 }}
+      keyboard
       title={t('ob.aboutTitle')}
-      headGap={28}
-      footer={<Button variant="primary" size="lg" block label={t('ob.continue')} onPress={onContinue} />}
+      headGap={26}
+      footer={
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          label={t('ob.continue')}
+          onPress={onContinue}
+          /* Sex has no default, so there is genuinely nothing to continue with until she picks. */
+          disabled={!sex}
+        />
+      }
     >
       <View style={styles.rows}>
+        {/*
+          ⚠️ NO LABEL OVER THE FIELD OR THE SEGMENT. The headline names the screen and both controls
+          say what they are — a placeholder of "Your name", and two labelled choices. A label that
+          explains a control steals the control's job (the founder's own law), and this screen now
+          carries four answers: every line it does not need is one it cannot afford.
+        */}
+        <TextField
+          block
+          value={name}
+          onChangeText={setName}
+          placeholder={t('ob.namePlaceholder')}
+          autoCapitalize="words"
+          autoCorrect={false}
+          maxLength={40}
+          returnKeyType="done"
+        />
+        <SegmentedControl
+          block
+          size="lg"
+          options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
+          value={sex ?? ''}
+          onChange={pickSex}
+        />
         <View style={styles.col}>
           <Legend>{t('ob.weightLegend')}</Legend>
           <WheelPicker
@@ -100,6 +161,6 @@ export function AboutYou({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  rows: { gap: 32 },
+  rows: { gap: 22 },
   col: { gap: 12 },
 });

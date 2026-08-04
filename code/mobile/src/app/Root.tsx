@@ -35,7 +35,6 @@ import { track } from '@/platform/telemetry';
 import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
-import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { YourGoal } from '@/screens/onboarding/YourGoal';
@@ -110,7 +109,6 @@ function OnboardingNavigator() {
       }}
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
-      <OnboardingStack.Screen name="NameEntry" component={NameEntry} />
       <OnboardingStack.Screen name="AboutYou" component={AboutYou} />
       <OnboardingStack.Screen name="YourTraining" component={YourTraining} />
       <OnboardingStack.Screen name="YourGoal" component={YourGoal} />

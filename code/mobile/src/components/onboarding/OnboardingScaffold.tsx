@@ -154,8 +154,15 @@ export function OnboardingScaffold({
                 <View key={i} style={[styles.seg, i < progress.index ? styles.segOn : styles.segOff]} />
               ))}
             </View>
-            {/* v7: the mono step counter sits at the end of the progress rail. */}
-            <Text style={styles.count}>{`${progress.index}/${progress.total}`}</Text>
+            {/*
+              ⛔ THE STEP COUNTER IS DELETED (founder 2026-08-04): *"onboarding is something people
+              fill in and move on from."*
+
+              "1/5" is a chore meter — it tells her how much is LEFT of the boring part, which is a
+              thing only a boring part needs to say. The rail beside it shows exactly the same
+              progress without counting it, and the difference between the two is the difference
+              between a horizon and a queue.
+            */}
           </>
         ) : null}
       </View>
@@ -186,8 +193,6 @@ const styles = StyleSheet.create({
   segOn: { backgroundColor: color.textPrimary },
   // The steps ahead: a 15% cream rail, not the 10% fill used for control grounds.
   segOff: { backgroundColor: 'rgba(241,238,229,0.15)' },
-  // "3/6" at the END of the progress rail — the rail mirrors, so the counter follows it.
-  count: { fontFamily: font.monoMedium, fontSize: textScale['2xs'], color: color.textMuted, textAlign: 'right' },
 
   // flexGrow (not flex) — the content keeps its natural height and only takes the full
   // viewport when it is SHORTER than it, which is what makes the page read as static.

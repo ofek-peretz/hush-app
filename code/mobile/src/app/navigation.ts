@@ -27,17 +27,14 @@ export type OnboardingParamList = {
   // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
   // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
-  // "How should I address you?" — the NAME and the GENDER (moved here from Body data,
-  // founder 2026-07-12: Hebrew conjugates the second person, so the copy layer needs it
-  // before the next screen speaks). Sex rides the params from here to the profile.
-  NameEntry: undefined;
   /*
    * ⛔ WHAT SHE WEIGHS (founder 2026-08-03) — *"the coach didn't ask for my weight, and it's
    * critical for it."* It was never asked by anyone: `coachFacts` spreads it conditionally, so an
    * absent bodyweight is simply an absent line on the sheet and nothing is surprised by it.
    *
-   * `sex` rides through because the step after this one needs it, exactly as it already rode from
-   * `NameEntry` — this screen is inserted into that relay, not bolted beside it.
+   * ⚠️ AND IT IS ALSO WHERE `sex` AND HER NAME ARE ANSWERED (2026-08-04) — the screen that asked for
+   * those is merged in here. The relay to the profile therefore STARTS on this step rather than
+   * passing through it.
    */
 
   /*
@@ -47,7 +44,11 @@ export type OnboardingParamList = {
    * Each step carries everything gathered so far and adds its own, so `ConnectHealth` still
    * assembles the whole `OnboardingInputs` in ONE place — the relay `sex` has always ridden.
    */
-  AboutYou: { sex: 'male' | 'female' };
+  /*
+   * ⛔ NO PARAMS (2026-08-04). `sex` used to ride in from `NameEntry`; that screen is merged into
+   * this one, so the answer is made here and leaves here. The relay starts one step later.
+   */
+  AboutYou: undefined;
   YourTraining: { sex: 'male' | 'female'; weightKg: number; age: number };
   /*
    * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front

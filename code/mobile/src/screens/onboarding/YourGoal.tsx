@@ -52,7 +52,7 @@ export function YourGoal({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 4, total: 5 }}
+      progress={{ index: 3, total: 4 }}
       keyboard
       legend={t('ob.forLegend')}
       title={t('ob.forTitle')}

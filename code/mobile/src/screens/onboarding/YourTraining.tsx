@@ -65,7 +65,7 @@ export function YourTraining({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 5 }}
+      progress={{ index: 2, total: 4 }}
       legend={t('ob.weekLegend')}
       title={t('ob.weekTitle')}
       headGap={28}

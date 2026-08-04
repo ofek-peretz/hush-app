@@ -122,20 +122,48 @@ describe('onboarding asks for every one of them', () => {
      * it and this fails — which is the whole guarantee, since the original bug was a fact nothing
      * anywhere collected.
      */
-    const flow = ['NameEntry', 'AboutYou', 'YourTraining', 'YourGoal', 'ConnectHealth']
+    /* ⚠️ `NameEntry` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-04) — four answering
+       screens now, not five. The list is the PATH, so it changes when the path does; what may not
+       change is that every requirement is still collected on it. */
+    const flow = ['AboutYou', 'YourTraining', 'YourGoal', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
-      // `sex` is the one whose state variable is named after the copy key rather than the field.
-      const asked = r.key === 'sex' ? flow.includes("t('ob.sex')") : new RegExp(`\\b${r.key}\\b`).test(flow);
+      /*
+       * ⚠️ `sex` IS PROBED BY ITS CHOICES, NOT BY ITS LABEL. It used to be found via `t('ob.sex')` —
+       * the legend over the control — and that legend is deleted: the headline names the screen and
+       * two labelled choices need no third word above them. The law is that sex is COLLECTED on the
+       * path, so it asks after the control rather than after the caption that used to sit on it.
+       */
+      const asked = r.key === 'sex' ? flow.includes("t('ob.female')") : new RegExp(`\\b${r.key}\\b`).test(flow);
       expect({ key: r.key, asked }).toEqual({ key: r.key, asked: true });
     }
   });
 
-  it('sex is asked on NameEntry, and carried forward', () => {
-    const src = read('src/screens/onboarding/NameEntry.tsx');
-    expect(src).toContain("t('ob.sex')");
-    expect(src).toContain("navigation.navigate('AboutYou', { sex })");
+  it('⛔ sex is asked with NO DEFAULT, and the act waits for it', () => {
+    /*
+     * ⛔ IT DEFAULTED TO `'male'` (founder 2026-08-04, the tap audit). A woman who did not notice
+     * got an app that addressed her in the wrong gender in every line of Hebrew it would ever write
+     * her — silently, for ever, because Hebrew conjugates the second person and the whole copy layer
+     * keys off this single value.
+     *
+     * One extra tap for a man is not a price. It is the removal of the worst default in the product,
+     * and the assertion is on the ABSENCE of the fallback rather than on the control.
+     */
+    const src = read('src/screens/onboarding/AboutYou.tsx');
+    expect(src).toContain("useState<'female' | 'male' | null>(app.profile?.sex ?? null)");
+    expect(src).not.toMatch(/\?\?\s*'male'/);
+    expect(src).toContain('disabled={!sex}');
+  });
+
+  it('⚠️ and the NAME she was already handed is filled in, not asked for again', () => {
+    /*
+     * `AuthResult` carries `name` (Apple returns it on first authorization) and `appStore` catches
+     * it into `pendingNameRef` at sign-in. The screen that asked for it read `app.profile?.name` —
+     * which does not exist during onboarding — so its field was ALWAYS empty and she retyped a name
+     * the product had been given one screen earlier.
+     */
+    expect(read('src/screens/onboarding/AboutYou.tsx')).toContain('useState(app.pendingName()');
   });
 
   it('⚠️ the two rules sit ON THE ONLY PATH THROUGH', () => {
@@ -150,9 +178,13 @@ describe('onboarding asks for every one of them', () => {
      */
     const src = read('src/screens/onboarding/AboutYou.tsx');
     expect(src.match(/<WheelPicker/g)).toHaveLength(2);
-    expect(src).toContain("navigation.navigate('YourTraining', { sex: route.params.sex, weightKg: kg, age })");
+    expect(src).toContain("navigation.navigate('YourTraining', { sex, weightKg: kg, age })");
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
     expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
+    /* ⚠️ AND THE DELETED SCREEN IS GONE FROM THE NAVIGATOR, not merely unrouted — a screen left
+       registered is a screen a deep link can still reach. */
+    expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
+    expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('AboutYou')");
   });
 
   it('and ConnectHealth puts it into the inputs the profile is built from', () => {
