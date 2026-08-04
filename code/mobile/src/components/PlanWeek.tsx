@@ -32,13 +32,35 @@ import { View, StyleSheet } from 'react-native';
 
 import { Legend, Body, Caption } from '@/components/ds';
 import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
-import { color, s, radius } from '@/design/tokens';
+import { color, font, s, radius } from '@/design/tokens';
 import { useCopy } from '@/i18n/useCopy';
 import type { CoachPlan } from '@/domain/coachPlan';
 
 export function PlanWeek({ plan, units }: { plan: CoachPlan | null; units: 'kg' | 'lb' }) {
   const { t } = useCopy();
   const week = React.useMemo(() => coachWeek(plan), [plan]);
+  /*
+   * ⛔ THE COACH'S REASON FOR THIS LIFT BEING HERE (founder's plan, move 4): *"the thing that makes
+   * us different has to land in the first 60 seconds."*
+   *
+   * The four-week simulation produced this on the FIRST programme, before she had trained once:
+   *
+   *   > *"landmine_press → Replaces barbell overhead press to allow overhead pushing without
+   *   > shoulder clicking."*
+   *
+   * That is the entire wedge — it decides, and it says why — and **she never saw it.** `notes` went
+   * to the coach log, which surfaces in the Why sheet and the Saturday letter. Both are days away
+   * from the screen where she meets her programme, and one is behind a tap.
+   *
+   * ⚠️ NOT THE SAME AS `say`, and the row shows both. `say` is HOW to do the lift ("a rep short of
+   * failure"); a note is WHY the lift is there at all. Every other app can write the first. Only
+   * one that decided the programme can write the second.
+   */
+  const reasons = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of plan?.notes ?? []) if (n.ex && !m.has(n.ex)) m.set(n.ex, n.say);
+    return m;
+  }, [plan]);
   if (!plan || week.length === 0) return null;
 
   return (
@@ -64,6 +86,10 @@ export function PlanWeek({ plan, units }: { plan: CoachPlan | null; units: 'kg' 
                   <Caption tone="muted">{ask(r)}</Caption>
                 </View>
                 {rows[i]?.say ? <Caption tone="muted" style={styles.say}>{rows[i].say}</Caption> : null}
+                {/* The coach's own italic — the same voice its notes wear everywhere else. */}
+                {reasons.get(r.exerciseId) ? (
+                  <Caption tone="muted" style={styles.reason}>{reasons.get(r.exerciseId)}</Caption>
+                ) : null}
               </View>
             ))}
           </View>
@@ -103,4 +129,7 @@ const styles = StyleSheet.create({
   // exercise name may wrap, but "3×8–10 · 40" may not.
   name: { flexShrink: 1 },
   say: { opacity: 0.85 },
+  // A REASON is the coach speaking, so it wears the coach's face — the serif italic its notes carry
+  // on the Why sheet and in the Saturday letter. Set apart from `say` above, which is an instruction.
+  reason: { fontFamily: font.serif, fontStyle: 'italic', opacity: 0.9, marginTop: 3, textAlign: 'left' },
 });

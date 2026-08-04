@@ -24,6 +24,7 @@ import { Limits } from '@/screens/onboarding/Limits';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
+import { PlanWeek } from '@/components/PlanWeek';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { WheelPicker } from '@/components/ds';
 import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
@@ -1225,6 +1226,33 @@ export const GALLERY: GalleryEntry[] = [
   // 1.4 · ABOUT YOU + YOUR WEEK — deleted 2026-08-01. Two wheel pickers asking a coach's
   // questions one screen before a coach; the intake prompt asks for both now.
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
+  /*
+   * ⛔ 1.5 READS THE PLAN FROM THE DB, WHICH THE HARNESS DOES NOT HAVE — so the week it exists to
+   * present has never been visible in here. This is the same blind spot that hid the coach disc and
+   * the wheel: what the gallery cannot drive, nobody looks at.
+   *
+   * The plan below is real output from the four-week simulation, notes and all.
+   */
+  { id: '1.5b', label: 'The week she is handed — with the coach reasons', status: 'live', note: 'move 4: the wedge in the first 60 seconds. `say` is HOW to do it; the italic line is WHY it is here at all', render: () => (
+    <InApp>
+      <PlanWeek units="kg" plan={{
+        v: 2,
+        title: 'Back & Shoulder Volume Split',
+        sessions: [
+          { name: 'Upper — Back Focus', day: 'mon', blocks: [
+            { rounds: 4, restS: 90, items: [{ kind: 'reps', ex: 'bb_row', reps: [8, 10], load: 32.5, say: 'One rep short of failure on the last set.' }] },
+            { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'landmine_press', reps: [8, 10], load: 20 }] },
+            { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'lat_pulldown', reps: [8, 10], load: 35 }] },
+            { rounds: 3, restS: 60, items: [{ kind: 'reps', ex: 'face_pull', reps: [12, 15], load: 15 }] },
+          ] },
+        ],
+        notes: [
+          { ex: 'landmine_press', say: 'Replaces barbell overhead press so you can push overhead without the shoulder clicking.' },
+          { ex: 'bb_row', say: 'Your main back builder — everything else this session is built around it.' },
+        ],
+      }} />
+    </InApp>
+  ) },
   { id: '1.6', label: 'Bring your history', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
 
   // ── 02 · TRAIN ─────────────────────────────────────────────────────────────────────────────
