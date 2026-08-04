@@ -158,6 +158,7 @@ const sessionFixture = {
     { ex: 'db_row', say: 'Your right side has been the slower one for three weeks, so start every set on it.' },
   ],
   reviseToday: () => 0,
+  lastTime: { ago: 4, loadKg: 32.5, reps: [9, 9, 8] },
   globalProgress: { index: 1, total: 24 },
   exerciseProgress: { index: 0, total: 6 },
   nextExercise: null,

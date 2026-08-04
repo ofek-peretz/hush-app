@@ -88,6 +88,7 @@ function makeSession(item: PlannedItem, completeItem: jest.Mock) {
     setLabel: { n: 1, m: 1 }, nextSetLabel: null, globalProgress: { index: 0, total: 4 },
     emphases: [],
     reviseToday: () => 0,
+    lastTime: null,
     exerciseProgress: { index: 0, total: 3 }, nextExercise: null, nextTarget: null,
     restSeconds: 60, restExtraSeconds: 0, watchLoggedSet: null, startedAtMs: Date.now() - 60_000,
     toLoad: false, canMarkOccupied: false, endResult: null, correction: null,

@@ -64,6 +64,7 @@ function worthQueuing(e: unknown): boolean {
 // importer (Home, the watch plan, tests) keeps its single import point.
 import { emphasesOf, type Emphasis } from '@/domain/emphases';
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
+import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
@@ -305,6 +306,14 @@ export interface SessionView {
    * nothing (see `domain/emphases`).
    */
   emphases: Emphasis[];
+  /**
+   * ⛔ WHAT SHE DID LAST TIME ON THE LIFT IN FRONT OF HER (founder 2026-08-04).
+   *
+   * The one number a gym app is asked for most, and the EVIDENCE for the load the coach chose — it
+   * turns the number on the stage from an instruction into a conclusion she can check. Null on a
+   * lift she has never done, which is a real state and not a hole to fill.
+   */
+  lastTime: LastTime | null;
   globalProgress: { index: number; total: number } | null;
   /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
   exerciseProgress: { index: number; total: number } | null;
@@ -1291,6 +1300,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           : null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
       emphases: emphasesOf(plan),
+      /*
+       * ⚠️ THE LIVE SESSION IS EXCLUDED BY ID. History is written as she goes, so without this
+       * "last time" would become "the set you just did" — useless and wrong.
+       */
+      lastTime: lastTimeOn(current?.exerciseId ?? null, historyRef.current, {
+        excludeSessionId: sessionRef.current?.id,
+      }),
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
         ? (() => {

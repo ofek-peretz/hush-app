@@ -60,6 +60,7 @@ const restSession = {
   setLabel: { n: 4, m: 4 },
   emphases: [],
   reviseToday: () => 0,
+  lastTime: null,
   nextSetLabel: { n: 1, m: 3 },
   globalProgress: { index: 4, total: 24 },
   exerciseProgress: { index: 0, total: 6 },

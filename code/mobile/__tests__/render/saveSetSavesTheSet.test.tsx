@@ -65,6 +65,7 @@ function makeSession(completeSet: () => Promise<unknown>) {
     setLabel: { n: 2, m: 4 },
     emphases: [],
     reviseToday: () => 0,
+    lastTime: null,
     globalProgress: { index: 1, total: 24 },
     exerciseProgress: { index: 0, total: 6 },
     nextExercise: null,

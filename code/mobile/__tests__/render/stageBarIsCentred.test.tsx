@@ -61,6 +61,7 @@ function makeSession(setN: number) {
     setLabel: { n: setN, m: 4 },
     emphases: [],
     reviseToday: () => 0,
+    lastTime: null,
     nextSetLabel: { n: setN + 1, m: 4 },
     globalProgress: { index: setN, total: 24 },
     exerciseProgress: { index: 0, total: 6 },

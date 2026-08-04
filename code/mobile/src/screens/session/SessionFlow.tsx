@@ -1347,6 +1347,7 @@ function ActiveSet({
   const group = ex?.muscle ?? '';
   const total = session.exerciseProgress?.total ?? 1;
   const exNo = (session.exerciseProgress?.index ?? 0) + 1; // exercise ordinal among distinct exercises
+  const lastTime = session.lastTime;
   const setN = session.setLabel?.n ?? 1;
   const setM = session.setLabel?.m ?? 1;
 
@@ -1569,6 +1570,40 @@ function ActiveSet({
         <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.setOf}>
           {t('workout.setOfM', { n: setN, m: setM })}
         </Legend>
+
+        {/*
+          ⛔ WHAT SHE DID LAST TIME — founder 2026-08-04, on the plan to beat the competition:
+          *"the set screen is where she spends 95% of her time; if it isn't better than Strong's,
+          nothing else matters."*
+
+          Measured: logging a set as prescribed is ONE tap here, which matches the best loggers.
+          What was missing is the thing she came to this screen wanting — the last time she did this
+          lift and what she got.
+
+          ⚠️ AND IT IS NOT PARITY. In a logger, last time is there because SHE picks today's weight.
+          Here the COACH picked it, so last time is the EVIDENCE for the number already on the
+          stage — it turns "34 kg" from an instruction into a conclusion she can check, at no cost
+          and without asking. That has been one tap away in the Why sheet the whole time, and one tap
+          is where things go to be unread.
+
+          Quiet on purpose: the hero is the load, and this is the footnote that justifies it.
+        */}
+        {/*
+          ⚠️ A `Text`, NOT A `Legend`: the Legend uppercases, and it turned the unit into "32.5KG"
+          while the hero two lines above says "kg". A unit is a measurement, and the app writes
+          measurements one way everywhere (`monoCarriesNoWords` / the two-voice law). Same size and
+          tracking as a legend, without the transform.
+        */}
+        {lastTime ? (
+          <Text style={styles.lastTime}>
+            {t('workout.lastTime', {
+              ago: lastTime.ago,
+              load: lastTime.loadKg == null ? t('workout.bodyweightShort') : displayWeight(lastTime.loadKg, units),
+              unit: lastTime.loadKg == null ? '' : unitLabel(units),
+              reps: lastTime.reps.join('·'),
+            })}
+          </Text>
+        ) : null}
       </View>
 
       {/* `pointerEvents` stops the finger; it does NOT stop VoiceOver, which would happily focus and
@@ -1642,6 +1677,7 @@ function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => 
   if (!target) return <View style={styles.center} />;
 
   const exName = ex?.name ?? exerciseDisplayName(session.currentExerciseId);
+  const lastTime = session.lastTime;
   const setN = session.setLabel?.n ?? 1;
   const setM = session.setLabel?.m ?? 1;
   const isBodyweight = planned.weight == null;
@@ -2668,6 +2704,15 @@ const styles = StyleSheet.create({
 
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
   // The chained lift, quieter than the position it follows — news, not an instruction.
+  // Under the position, in the quietest ink on the stage — a footnote, not a second fact.
+  lastTime: {
+    marginTop: 10,
+    fontFamily: font.sansMedium,
+    fontSize: 13,
+    letterSpacing: trackingPx(13, tracking.legend),
+    color: stage.ink2,
+    textAlign: 'center',
+  },
   setOf: { marginTop: 30, color: stage.ink1 },
 
   // Ghost actions

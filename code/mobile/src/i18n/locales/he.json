@@ -444,7 +444,9 @@
     "itemCarrying": "נושאת {{load}} ק\"ג",
     "superset": "סופרסט",
     "repOfM": "חזרה {{n}} מתוך {{m}}",
-    "keyPoints": "דגשים"
+    "keyPoints": "דגשים",
+    "lastTime": "בפעם הקודמת · {{load}}{{unit}} × {{reps}} · לפני {{ago}} ימים",
+    "bodyweightShort": "משקל גוף"
   },
   "finishSheet": {
     "legend": "סיום אימון",

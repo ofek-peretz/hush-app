@@ -389,7 +389,9 @@
     "itemCarrying": "Carrying {{load}} kg",
     "superset": "Superset",
     "repOfM": "REP {{n}} OF {{m}}",
-    "keyPoints": "KEY POINTS"
+    "keyPoints": "KEY POINTS",
+    "lastTime": "LAST TIME · {{load}}{{unit}} × {{reps}} · {{ago}}D AGO",
+    "bodyweightShort": "BW"
   },
   "finishSheet": {
     "legend": "End workout",
