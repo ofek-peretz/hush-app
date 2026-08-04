@@ -1307,6 +1307,23 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
+  /* ⛔ THE THIRD OUTCOME, AND IT IS THE COMMONEST ONE (founder 2026-08-04). 2.3 above mounts a
+     correction, so for a year this page could only ever show the band on a set that MISSED — and so
+     could the app. A set that lands where it was asked to had no picture anywhere, which is how it
+     stayed missing: nothing here could produce the state, so nobody looked at it. */
+  { id: '2.3d', label: 'The set that landed', status: 'live', note: 'in the band — cream, and the load holds', render: () => (
+    <InApp>
+      <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] }} />
+    </InApp>
+  ) },
+  /* ⚠️ OUT OF THE BAND WITH THE LOAD HELD — the case the correction reveal cannot draw. Two
+     corrections per lift is the cap, there is none after the last set, and the rail can cancel a
+     raise: in all three her reps left the band and nothing moved. The dot must still be outside. */
+  { id: '2.3e', label: 'Out of the band, load held', status: 'live', note: 'the correction budget is spent — honest, not silent', render: () => (
+    <InApp>
+      <Logged units="kg" confirm={{ weight: 34, reps: 13, n: 3, m: 4, band: [8, 10] }} />
+    </InApp>
+  ) },
   /* THE BEAT THAT NOBODY COULD SEE. 2.3 above mounts `Logged` WITH a correction, so only the
      correction form was ever on this page — the plain "Set recorded" form had no entry at all, and
      survived a whole rebuild unlooked-at until the founder met it on a device (C.13). It no longer

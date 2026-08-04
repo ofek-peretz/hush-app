@@ -410,6 +410,7 @@
     "pauseAction": "השהיית אימון",
     "correctedUp": "עשית {{reps}}. הטווח שלך נגמר ב־{{edge}}, אז הוספתי משקל.",
     "correctedDown": "עשית {{reps}}. הטווח שלך מתחיל ב־{{edge}}, אז הורדתי משקל.",
+    "landedInside": "סט {{n}} נחת בתוך הטווח שלך",
     "landedBelow": "סט {{n}} נחת מתחת לטווח שלך",
     "landedAbove": "סט {{n}} נחת מעל הטווח שלך",
     "easedForYou": "הוקל עבורך",

@@ -47,12 +47,31 @@ import { restWithSample, restedSeconds } from '@/domain/restPrescription';
 import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, radius, press, line, motion, directionTone } from '@/design/tokens';
+import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
 type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'coach';
-export type Confirm = { weight: number | null; reps: number; n: number; m: number };
+export type Confirm = {
+  weight: number | null;
+  reps: number;
+  n: number;
+  m: number;
+  /**
+   * ⛔ HER BAND — [Tlo, Thi], the IMMUTABLE one, never the reps she edited (founder, 2026-08-04).
+   *
+   * *"I really did say that if the athlete is inside the range there would be a confirmation of
+   * landing inside the range; if it falls out at the bottom that's blue and the weight comes down,
+   * and the same going out at the top, in green."*
+   *
+   * Only the two ends were ever built, because both hung off Loop 1 — and Loop 1 fires ONLY when
+   * the reps leave the band. So the case that happens most had no picture at all, and the band she
+   * is being measured against was invisible on the beat that measures her against it.
+   *
+   * Absent on a step with no rep prescription (a hold, a distance), where there is no band.
+   */
+  band?: [number, number];
+};
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
 /** 2.4d holds the screen a beat longer than a capture: it is showing a plan changing, not a log. */
@@ -153,14 +172,27 @@ export function SessionFlow({ navigation, route }: Props) {
    *   · a CORRECTION — the set moved the next load. The most distinctive thing the product does.
    *   · the LAST SET of a lift — finishing a lift is a thing that happened; finishing a set is a
    *     thing that keeps happening.
+   *   · IN THE BAND — the set landed where it was asked to, and the mark says so.
    * Anything else goes straight to rest.
    *
-   * Worth stating plainly, because it is the consequence: a set that lands INSIDE the band produces
-   * no correction (`sessionStore` builds one only when Loop 1 actually moved the load), so nothing
-   * follows it at all. That is the intent — silence is the product agreeing with her.
+   * ⛔⛔ THE THIRD LINE IS THE FOUNDER'S CORRECTION OF MY READING OF THE FIRST TWO (2026-08-04):
+   *
+   *   > *"I really did say that if the athlete is inside the range there would be a confirmation of
+   *   > landing inside the range."*
+   *
+   * His build-36 note names the thing he wanted in its second half — *"the one that matters is
+   * whether she landed inside or outside her band"* — and I acted only on the first half. I deleted
+   * a beat that restated the set she had just done ("14 kg × 8 · Set recorded") and put nothing in
+   * its place, so the in-band case, which is most sets, showed her nothing at all. The instruction
+   * was to REPLACE the restatement with the band, not to remove the beat.
+   *
+   * ⚠️ What made it survive is that the deletion looked like the founder's own law — silence is the
+   * product agreeing with her — and it reads perfectly well as long as you never ask what the
+   * athlete learns from the sets she gets right.
    */
   const beatSpeaks =
-    confirm != null && (beatCorrection != null || (confirm.n >= confirm.m && confirm.m > 1));
+    confirm != null &&
+    (beatCorrection != null || (confirm.n >= confirm.m && confirm.m > 1) || bandPlacement(confirm) != null);
 
   const [editing, setEditing] = useState(false);
   /**
@@ -406,6 +438,11 @@ export function SessionFlow({ navigation, route }: Props) {
       reps: tgt.recommendedReps,
       n: session.setLabel?.n ?? 1,
       m: session.setLabel?.m ?? 1,
+      // `repBandLo/Hi` and NOT `recommendedReps`: the edit wheel writes her performed reps into the
+      // latter, so reading it would make every set land dead-centre in a band of itself.
+      ...(tgt.repBandLo != null && tgt.repBandHi != null
+        ? { band: [tgt.repBandLo, tgt.repBandHi] as [number, number] }
+        : {}),
     });
   }
   /**
@@ -1796,6 +1833,33 @@ export function Logged({
   if (correction) {
     return <CorrectionBeat units={units} confirm={confirm} correction={correction} />;
   }
+  /*
+   * ⛔ THE THIRD STATE — THE SET THAT LANDED WHERE IT WAS ASKED TO (founder, 2026-08-04).
+   *
+   * The band and its dot were built only for the two edges, because both were drawn from a Loop 1
+   * CORRECTION — and Loop 1 by definition never fires inside the band. So the outcome that happens
+   * on most sets of most workouts had no picture, and the athlete only ever saw the instrument that
+   * measures her on the rare occasions it disagreed with her.
+   *
+   * `hold` is already a colour in this product's law (down = blue, hold = cream, raise = moss);
+   * this is the one surface that was never given the middle one.
+   */
+  const held = bandPlacement(confirm);
+  if (held) {
+    /*
+     * ⚠️ THE MARK IS THE WHOLE BEAT — no weight, no rep count, no "Set recorded".
+     *
+     * Those three are exactly what he had deleted, and re-printing them under the band would be the
+     * old screen with a graphic on top. She just performed the set; she does not need it read back.
+     * What she cannot see without this is WHERE it landed, which is the one thing the app knows and
+     * she does not.
+     */
+    return (
+      <View style={styles.loggedRoot}>
+        <BandMark tone={held.tone} left={held.left} legend={t(`workout.${held.legend}`, { n: confirm.n })} />
+      </View>
+    );
+  }
   return (
     <View style={styles.loggedRoot}>
       <View style={styles.loggedHead}>
@@ -1887,6 +1951,17 @@ function RestLearned({ took, was, now, nextSet }: { took: number; was: number; n
  * releases at once), so the question can never read as a toll.
  */
 function ExerciseDone({ confirm }: { confirm: Confirm }) {
+  const { t } = useCopy();
+  /*
+   * ⚠️ AND THE BAND IS HERE TOO (founder 2026-08-04). Without it this beat is the one place a set
+   * lands and is not told where — the LAST set of every lift, which is a quarter of her workout.
+   *
+   * The two marks are not a duplication: the pips say the LIFT is finished, the band says where its
+   * final set fell. This beat's documented problem was that it "had nothing to say"; the effort
+   * question that used to fill it was deleted, and this is the honest thing to put in its place —
+   * a fact, not a question.
+   */
+  const placed = bandPlacement(confirm);
   return (
     <View style={styles.beatHead}>
       {/* Every pip filled: the lift is spent. It used to be the subject of a question; now it is
@@ -1896,12 +1971,73 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
           <View key={i} style={styles.donePip} />
         ))}
       </View>
+      {placed ? (
+        <BandMark tone={placed.tone} left={placed.left} legend={t(`workout.${placed.legend}`, { n: confirm.n })} />
+      ) : null}
     </View>
   );
 }
 
 
 
+
+/* --------------------------------------------------- The band, and where she landed on it */
+/**
+ * ════ ONE INSTRUMENT, THREE OUTCOMES ════
+ *
+ * The rep band with a dot on it. It was drawn only when Loop 1 moved the load, which meant it was
+ * only ever drawn when she MISSED — and the founder's ruling is that all three outcomes wear it:
+ * inside is cream and the load holds, out of the bottom is blue and the load comes down, out of the
+ * top is moss and it goes up.
+ *
+ * ⚠️ THE DOT IS PLACED FROM THE REPS, NOT FROM THE DECISION. Those are usually the same thing and
+ * once in a while they are not: the correction budget is two per lift, there is none after the last
+ * set, and the rail can cancel a raise. In every one of those the reps still left the band and the
+ * load still held — and the honest picture is a dot outside the band beside a load that did not
+ * move. Reading the placement off the correction would have drawn her a set that landed perfectly.
+ */
+const BAND_X_LO = 98; // where the moss span starts, in the 280-wide track
+const BAND_X_HI = 182; // …and ends
+const BAND_DOT = 14;
+
+/** Where the dot sits and what colour it is, or null on a step with no band. Pure — and exported
+ *  so the gallery can drive all three states, which is the only way anyone sees two of them. */
+export function bandPlacement(
+  confirm: Confirm,
+): { left: number; tone: string; legend: 'landedInside' | 'landedBelow' | 'landedAbove' } | null {
+  if (!confirm.band) return null;
+  const [lo, hi] = confirm.band;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return null;
+  const reps = confirm.reps;
+  // Outside: the fixed positions the correction reveal has always used — the distance off the end
+  // is not a measurement (12 reps over is not twice as far as 6), so it does not scale.
+  if (reps < lo) return { left: 30, tone: down.stage, legend: 'landedBelow' };
+  if (reps > hi) return { left: 240, tone: up.stage, legend: 'landedAbove' };
+  // Inside: proportional, so a set at the top of the band LOOKS like a set at the top of the band —
+  // which is the only warning she gets that the load is about to be raised.
+  const t = hi === lo ? 0.5 : (reps - lo) / (hi - lo);
+  return { left: BAND_X_LO + t * (BAND_X_HI - BAND_X_LO) - BAND_DOT / 2, tone: hold.stage, legend: 'landedInside' };
+}
+
+function BandMark({ tone, left, legend }: { tone: string; left: number; legend: string }) {
+  const enter = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
+  }, [enter]);
+  const dotIn = useAnimatedStyle(() => ({ opacity: enter.value, transform: [{ scale: enter.value }] }));
+  return (
+    <View style={styles.corrBeatTop}>
+      <View style={styles.corrBeatBand}>
+        <View style={styles.corrBeatBandLine} />
+        <View style={[styles.corrBeatBandSpan, { backgroundColor: tone, opacity: 0.55 }]} />
+        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickLo, { backgroundColor: tone, opacity: 0.55 }]} />
+        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickHi, { backgroundColor: tone, opacity: 0.55 }]} />
+        <Animated.View style={[styles.corrBeatDot, { left, backgroundColor: tone }, dotIn]} />
+      </View>
+      <Text style={styles.corrBeatLegend}>{legend.toUpperCase()}</Text>
+    </View>
+  );
+}
 
 /* ------------------------------------------------------ The correction reveal (2.3) */
 /**
@@ -1931,9 +2067,10 @@ function CorrectionBeat({
   const to = displayWeight(correction.to, units);
   const below = correction.direction === 'down'; // eased: reps landed below the band
   const legend = t(below ? 'workout.landedBelow' : 'workout.landedAbove', { n: confirm.n });
-  // The dot sits where her reps landed relative to the band: below the low edge (left of the moss
-  // segment) when eased, above the high edge (right of it) when raised.
-  const dotStyle = below ? styles.corrBeatDotLow : styles.corrBeatDotHigh;
+  // The dot sits where her reps landed relative to the band — ONE placement rule, shared with the
+  // held beat, so the two cannot drift apart. `correction.band` rather than `confirm.band`: the
+  // correction carries the band it was actually decided against.
+  const placed = bandPlacement({ ...confirm, reps: correction.reps, band: correction.band });
   /* ════ DIRECTION IS A COLOUR, AND AN EASED LOAD IS BLUE (founder 2026-07-28) ════
      The whole beat was moss whichever way the load went — the RAISE colour announcing a cut. A fall
      is not a failure: Loop 1 matched the weight to the body that showed up today, and told in the
@@ -1946,23 +2083,13 @@ function CorrectionBeat({
   useEffect(() => {
     enter.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
   }, [enter]);
-  const dotIn = useAnimatedStyle(() => ({ opacity: enter.value, transform: [{ scale: enter.value }] }));
   const numsIn = useAnimatedStyle(() => ({
     opacity: enter.value,
     transform: [{ translateY: (1 - enter.value) * 16 }],
   }));
   return (
     <View style={styles.corrBeatRoot}>
-      <View style={styles.corrBeatTop}>
-        <View style={styles.corrBeatBand}>
-          <View style={styles.corrBeatBandLine} />
-          <View style={[styles.corrBeatBandSpan, { backgroundColor: tone, opacity: 0.55 }]} />
-          <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickLo, { backgroundColor: tone, opacity: 0.55 }]} />
-          <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickHi, { backgroundColor: tone, opacity: 0.55 }]} />
-          <Animated.View style={[styles.corrBeatDot, dotStyle, { backgroundColor: tone }, dotIn]} />
-        </View>
-        <Text style={styles.corrBeatLegend}>{legend.toUpperCase()}</Text>
-      </View>
+      <BandMark tone={tone} left={placed?.left ?? (below ? 30 : 240)} legend={legend.toUpperCase()} />
       <Animated.View style={[styles.corrBeatNums, numsIn]}>
         <Text style={styles.corrBeatFrom}>{from}</Text>
         <Text style={[styles.corrBeatTo, { color: tone, textShadowColor: tone }]}>{to}</Text>
@@ -2693,7 +2820,7 @@ const styles = StyleSheet.create({
   paceNow: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: up.stage, textAlign: 'left' },
 
   /* ── 2.3b · EXERCISE DONE — a beat, centred, that hands over by itself. ── */
-  beatHead: { alignItems: 'center', paddingTop: 28 },
+  beatHead: { alignItems: 'center', paddingTop: 28, gap: 34 },
 
   // The band, resolved: the span lit, the dot landed inside it.
   // Every pip filled — a lift is spent, and that is the whole statement.
@@ -2791,8 +2918,6 @@ const styles = StyleSheet.create({
   corrBeatBandTickLo: { left: 98 },
   corrBeatBandTickHi: { left: 182 },
   corrBeatDot: { position: 'absolute', top: 5, width: 14, height: 14, borderRadius: 7 },
-  corrBeatDotLow: { left: 30 }, // eased — reps landed below the band's low edge
-  corrBeatDotHigh: { left: 240 }, // raised — reps landed above the band's high edge
   corrBeatLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.wide), textTransform: 'uppercase', color: stage.ink1, textAlign: 'center' },
   corrBeatNums: { flexDirection: 'row', alignItems: 'baseline', gap: 18 },
   corrBeatFrom: {

@@ -361,6 +361,7 @@
     "pauseAction": "Pause workout",
     "correctedUp": "You did {{reps}}. Your range tops out at {{edge}}, so I added weight.",
     "correctedDown": "You did {{reps}}. Your range starts at {{edge}}, so I took weight off.",
+    "landedInside": "Set {{n}} landed inside your band",
     "landedBelow": "Set {{n}} landed below your band",
     "landedAbove": "Set {{n}} landed above your band",
     "easedForYou": "Eased for you",
