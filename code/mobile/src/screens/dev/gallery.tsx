@@ -1796,6 +1796,8 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach's words are behind the speech disc, top end", render: () => (
     <InApp>
       <CardioLiveView
+
+        paceSec={342}
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
         exerciseId="run_outdoor"
@@ -1819,12 +1821,71 @@ export const GALLERY: GalleryEntry[] = [
   // The screen B.6 lives on. It had no entry because the countdown was buried in the container —
   // so the legend read "ריצה · מתחיל" (wrong order, masculine to every woman) where nothing could
   // look at it. Switch the gallery to Hebrew to read it in the person it is actually spoken in.
+  /*
+    ⛔ A RUN THE COACH WROTE — the band spans the WHOLE distance instead of resetting every kilometre,
+    and the run wears its own name instead of the word "cardio". Unreachable in a live harness twice
+    over: it needs a prescribed target on the route AND a GPS fix to move the dot along it.
+  */
+  { id: '3.4e', label: 'Cardio — a run the coach wrote', status: 'live', note: 'the band is the whole 6 km; the name is the coach’s', render: () => (
+    <InApp>
+      <CardioLiveView
+        paceSec={342}
+        elapsedSec={26 * 60 + 14}
+        distanceKm={4.62}
+        targetMetres={6000}
+        runName="Easy 6k"
+        exerciseId="run_outdoor"
+        say="בקצב שאפשר לדבר בו — זה היום הקל של השבוע."
+        hr={141}
+        calories={318}
+        splits={runSplits}
+        gps="ready"
+        watchPaired
+        paused={false}
+        confirmEnd={false}
+        kmMoment={null}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⚠️ THE FIRST KILOMETRE, BEFORE ANY SPLIT EXISTS. The shape must be ABSENT here — not an empty
+    frame — which is the one thing the rhythm law on this stage was originally written about.
+  */
+  { id: '3.4f', label: 'Cardio — the first kilometre', status: 'live', note: 'no bars yet, and no empty frame where they will be', render: () => (
+    <InApp>
+      <CardioLiveView
+        paceSec={0}
+        elapsedSec={92}
+        distanceKm={0.31}
+        hr={null}
+        calories={22}
+        splits={[]}
+        gps="acquiring"
+        watchPaired={false}
+        paused={false}
+        confirmEnd={false}
+        kmMoment={null}
+        onPause={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
   { id: '3.4d', label: 'Cardio — 3·2·1', status: 'live', note: 'the countdown legend — B.6', render: () => <InApp><CardioCountdown count={2} /></InApp> },
   // B.8's two doors. 3.4 mounts the run UNPAUSED, so neither the pause stage's end control nor
   // the confirmation behind it could be read — and "סיים ושמור" (masculine) was on both.
   { id: '3.4e', label: 'Cardio — paused', status: 'live', note: 'the finish control — B.8', render: () => (
     <InApp>
       <CardioLiveView
+
+        paceSec={342}
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
         hr={141}
@@ -1846,6 +1907,8 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.4f', label: 'Cardio — end sheet', status: 'live', note: 'the confirmation behind the finish — B.8', render: () => (
     <InApp>
       <CardioLiveView
+
+        paceSec={342}
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
         hr={141}
@@ -1870,6 +1933,8 @@ export const GALLERY: GalleryEntry[] = [
   { id: '3.4g', label: 'Cardio — live, no watch', status: 'live', note: 'no heart readout at all — C.19', render: () => (
     <InApp>
       <CardioLiveView
+
+        paceSec={342}
         elapsedSec={26 * 60 + 14}
         distanceKm={4.62}
         hr={null}

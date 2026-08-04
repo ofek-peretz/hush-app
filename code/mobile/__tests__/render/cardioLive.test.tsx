@@ -99,24 +99,40 @@ function liveBody(r: ReactTestRenderer): ReactTestInstance {
 
 describe('nothing on the stage is abandoned by what stands above it', () => {
   /**
-   * The canonical stage is three children — clock, band, stat row. A fixed-height slot that draws
-   * nothing is a fourth, and it is invisible in every way except the one that mattered: it pushed
-   * the stat row's rule 80 px away from the band and left it hanging on its own.
+   * ⛔ THE LAW IS "EVERY CHILD DRAWS", NOT "THERE ARE THREE OF THEM".
+   *
+   * The original defect was a fixed-height GPS slot that drew nothing — invisible in every way
+   * except the one that mattered: it pushed the stat row's rule 80 px from the band and left it
+   * hanging on its own. The count was how that was caught; it was never the rule.
+   *
+   * The run's SHAPE joined the body on 2026-08-04 (founder: the split bars), so the count is four
+   * once a kilometre has landed — and THREE before one has, because a bar chart with no bars in it
+   * is exactly the empty slot this law was written about.
    */
-  it('with a GPS lock the body has exactly the canonical THREE children', () => {
-    expect(liveBody(mount(<CardioLiveView {...live} />)).props.children.filter(Boolean)).toHaveLength(3);
+  it('with a GPS lock and kilometres logged, every child of the body draws', () => {
+    expect(liveBody(mount(<CardioLiveView
+  paceSec={342} {...live} />)).props.children.filter(Boolean)).toHaveLength(4);
+  });
+
+  it('⛔ …and before the first kilometre the SHAPE is absent, not an empty frame', () => {
+    expect(liveBody(mount(<CardioLiveView
+  paceSec={342} {...live} splits={[]} />)).props.children.filter(Boolean)).toHaveLength(3);
   });
 
   it('…and no empty element is left standing in for the silent GPS line', () => {
-    const r = mount(<CardioLiveView {...live} />);
+    const r = mount(<CardioLiveView
+  paceSec={342} {...live} />);
     expect(said(r)).not.toContain(label('cardio.gpsAcquiring'));
     expect(said(r)).not.toContain(label('cardio.gpsOff'));
   });
 
   it('but a phone WITHOUT a fix still says so, in the same place', () => {
-    expect(said(mount(<CardioLiveView {...live} gps="acquiring" />))).toContain(label('cardio.gpsAcquiring'));
-    expect(said(mount(<CardioLiveView {...live} gps="denied" />))).toContain(label('cardio.gpsOff'));
-    expect(said(mount(<CardioLiveView {...live} gps="unavailable" />))).toContain(label('cardio.gpsOff'));
+    expect(said(mount(<CardioLiveView
+  paceSec={342} {...live} gps="acquiring" />))).toContain(label('cardio.gpsAcquiring'));
+    expect(said(mount(<CardioLiveView
+  paceSec={342} {...live} gps="denied" />))).toContain(label('cardio.gpsOff'));
+    expect(said(mount(<CardioLiveView
+  paceSec={342} {...live} gps="unavailable" />))).toContain(label('cardio.gpsOff'));
   });
 });
 
@@ -129,7 +145,8 @@ describe('Hush does not name a measurement it has no instrument for', () => {
   });
 
   it('NO WATCH: the heart is gone from the row — not an em-dash sitting in its seat', () => {
-    const row = said(mount(<CardioLiveView {...live} hr={null} watchPaired={false} />));
+    const row = said(mount(<CardioLiveView
+  paceSec={342} {...live} hr={null} watchPaired={false} />));
     expect(row).not.toContain(label('cardio.hrShort'));
     expect(row).not.toContain('—');
     // …and the two facts her phone CAN measure are untouched.
@@ -138,13 +155,15 @@ describe('Hush does not name a measurement it has no instrument for', () => {
   });
 
   it('A PAIRED WATCH, no beat yet: the seat is real and it waits', () => {
-    const row = said(mount(<CardioLiveView {...live} hr={null} watchPaired />));
+    const row = said(mount(<CardioLiveView
+  paceSec={342} {...live} hr={null} watchPaired />));
     expect(row).toContain(label('cardio.hrShort'));
     expect(row).toContain('—');
   });
 
   it('A READING, whatever the flag says: presence can be UNKNOWN, a heartbeat cannot', () => {
-    const row = said(mount(<CardioLiveView {...live} hr={141} watchPaired={false} />));
+    const row = said(mount(<CardioLiveView
+  paceSec={342} {...live} hr={141} watchPaired={false} />));
     expect(row).toContain(label('cardio.hrShort'));
     expect(row).toContain('141');
   });

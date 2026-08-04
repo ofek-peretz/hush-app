@@ -31,6 +31,7 @@ import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
 import { BottomSheet } from '@/components/BottomSheet';
 import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
+import { movementById } from '@/data/movements';
 import { monoCanDraw } from '@/design/monoVoice';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
@@ -67,8 +68,8 @@ export function Cardio({ navigation, route: nav }: Props) {
   // The unit words, read once: each rides a MONO slot in the handoff and hands over to sans in a
   // script mono cannot draw (see `unitWord`).
   const metresUnit = t('cardio.metresUnit');
-  const perKm = t('cardio.perKm');
   const kmUnit = t('cardio.km');
+  const perKm = t('cardio.perKm');
   const app = useApp();
   // Foreground-only GPS (no background-location entitlement yet): the screen stays awake for the
   // whole cardio surface so a live activity never loses its fix mid-run.
@@ -225,6 +226,17 @@ export function Cardio({ navigation, route: nav }: Props) {
       watchPaired={watchPaired}
       {...(target?.say ? { say: target.say } : {})}
       {...(target?.ex ? { exerciseId: target.ex } : {})}
+      paceSec={paceSec}
+      {...(target?.metres ? { targetMetres: target.metres } : {})}
+      /*
+       * ⛔ THE RUN'S OWN NAME. `target.ex` is a MOVEMENT id (`run_outdoor`, `walk_outdoor`), and
+       * `movementById` holds the word for it — so a prescribed run says "Run" where a free one says
+       * "Cardio", and a session that is a run is not filed under a category.
+       *
+       * ⚠️ Absent on a run she started herself, which is the common case: there is no coach behind
+       * it and naming it would be the app inventing a purpose she did not give it.
+       */
+      {...(target?.ex && movementById(target.ex) ? { runName: movementById(target.ex)!.name } : {})}
       calories={calories}
       splits={splits}
       gps={gps}
@@ -327,6 +339,19 @@ export function CardioLiveView(props: {
   say?: string;
   /** The exercise the instruction is about — names the point on the sheet. */
   exerciseId?: string;
+  /**
+   * ⛔ HER PACE (founder 2026-08-04) — sec/km, smoothed, and 0 the moment she stops moving.
+   *
+   * The number every runner reads first, computed every second since the tracker was written, and
+   * drawn NOWHERE on the running screen: it appeared on the pause stage and in the split pill, which
+   * are the two places she is not running. The stat row's third seat was spent on "4 km" — the same
+   * fact the band above it was already drawing.
+   */
+  paceSec: number;
+  /** The distance the coach prescribed, in metres, when it prescribed one. */
+  targetMetres?: number;
+  /** The coach's name for this run — drawn in the chrome, so the run is a thing rather than "cardio". */
+  runName?: string;
   paused: boolean;
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
@@ -339,6 +364,7 @@ export function CardioLiveView(props: {
   const { t } = useCopy();
   const [points, setPoints] = useState(false);
   const metresUnit = t('cardio.metresUnit');
+  const kmUnit = t('cardio.km');
   const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment } = props;
   // One line, or none at all — see the block where it is drawn.
   const gpsNote =
@@ -348,8 +374,18 @@ export function CardioLiveView(props: {
         ? t('cardio.gpsOff')
         : null;
   const metresTotal = distanceKm * 1000;
-  const metresIntoKm = metresTotal % 1000; // 0–1000 within the current kilometre
-  const dotFrac = Math.max(0, Math.min(1, metresIntoKm / 1000));
+  /*
+   * ⛔ THE BAND IS THE WHOLE RUN WHEN THERE IS AN END TO DRAW (founder 2026-08-04).
+   *
+   * It has always shown the CURRENT kilometre — right for a run she started herself, because a free
+   * run has no end and inventing one would be the app deciding how far she is going. But when the
+   * coach prescribed a distance the run HAS an end, and a band that keeps resetting every kilometre
+   * refuses to tell her how much of it is left.
+   */
+  const target = props.targetMetres && props.targetMetres > 0 ? props.targetMetres : null;
+  const spanM = target ?? 1000;
+  const metresIntoSpan = target ? Math.min(metresTotal, target) : metresTotal % 1000;
+  const dotFrac = Math.max(0, Math.min(1, metresIntoSpan / spanM));
   const kmDone = Math.floor(distanceKm);
   const lastSplit = splits[splits.length - 1];
 
@@ -360,10 +396,36 @@ export function CardioLiveView(props: {
         {/* Three parts, like the strength stage's bar: a spacer, the centred legend, and the
             control — flexbox rather than an absolute `end`, so it flips with the language instead
             of sitting on the right of a Hebrew screen. */}
+        {/*
+          ⛔ PAUSE IS A DISC IN THE CHROME NOW (founder 2026-08-04):
+
+            > *"Why is there such a huge PAUSE button there in the first place? We could do pause
+            > like on the strength screen and then use all the enormous space we'd have. That button
+            > is asking for trouble — somebody could press it by accident during cardio and not
+            > notice at all."*
+
+          He is right about the hazard, and it is worse here than anywhere else in the product: a
+          paused strength set is obvious the moment she looks, and a paused RUN keeps looking like a
+          run — same screen, clock stopped, kilometres quietly not being counted. A 338×64 target at
+          the bottom edge is exactly where a phone is gripped and pushed into a pocket.
+
+          Same disc, same corner and the same glyph as the strength stage's, so one gesture pauses
+          any work in this product — and it opens the SAME paused stage it always did. Nothing about
+          stopping or finishing a run changed except the size of the target that starts it.
+        */}
         <View style={styles.liveTop}>
-          <View style={styles.liveTopSpacer} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('cardio.pause')}
+            hitSlop={8}
+            onPress={props.onPause}
+            style={({ pressed }) => [styles.pointsDisc, pressed && styles.pointsDiscPressed]}
+          >
+            <Icon name="pause" size={15} color={stageC.ink0} filled />
+          </Pressable>
           <View style={styles.liveTopCentre}>
-            <Legend size={RUN_LEGEND_PT} tone="onStage">{t('cardio.liveLegend')}</Legend>
+            {/* The run's own name when the coach wrote one — a run with a purpose is not "cardio". */}
+            <Legend size={RUN_LEGEND_PT} tone="onStage">{props.runName ?? t('cardio.liveLegend')}</Legend>
           </View>
           {props.say ? (
             <Pressable
@@ -399,8 +461,12 @@ export function CardioLiveView(props: {
           {/* the 1,000 m band — the dot travels the current kilometre, metres riding under it. */}
           <View style={styles.band}>
             <View style={styles.bandLabels}>
-              <Legend size={RUN_SMALL_PT} track={0}>0</Legend>
-              <Legend size={RUN_SMALL_PT} track={0}>{t('cardio.bandEnd')}</Legend>
+              <Legend size={RUN_SMALL_PT} track={0}>
+                {target ? '0' : t('cardio.kmOrdinal', { n: kmDone + 1 })}
+              </Legend>
+              <Legend size={RUN_SMALL_PT} track={0}>
+                {target ? t('cardio.targetEnd', { km: +(target / 1000).toFixed(2) }) : t('cardio.bandEnd')}
+              </Legend>
             </View>
             <View style={styles.bandLine} />
             <View style={styles.bandCapL} />
@@ -408,8 +474,14 @@ export function CardioLiveView(props: {
             <View style={[styles.bandFill, { width: `${dotFrac * 100}%` }]} />
             <View style={[styles.bandDot, { left: `${dotFrac * 100}%` }]} />
             <View style={[styles.bandMetres, { left: `${dotFrac * 100}%` }]}>
-              <Text style={styles.bandMetresNum}>{Math.round(metresIntoKm)}</Text>
-              <Text style={[styles.bandMetresUnit, !monoCanDraw(metresUnit) && styles.unitWord]}> {metresUnit}</Text>
+              {/* Inside a prescribed run the readout is KILOMETRES COVERED, because that is what the
+                  band is measuring; inside a free one it is metres into this kilometre. */}
+              <Text style={styles.bandMetresNum}>
+                {target ? distanceKm.toFixed(2) : Math.round(metresIntoSpan)}
+              </Text>
+              <Text style={[styles.bandMetresUnit, !monoCanDraw(target ? kmUnit : metresUnit) && styles.unitWord]}>
+                {` ${target ? kmUnit : metresUnit}`}
+              </Text>
             </View>
           </View>
 
@@ -427,9 +499,45 @@ export function CardioLiveView(props: {
               line for the whole run without ever moving. */}
           {gpsNote ? <Text style={styles.gpsStatus}>{gpsNote}</Text> : null}
 
-          {/* one readable row: kilometre · heart · burn */}
+          {/*
+            ⛔ THE SHAPE OF THE RUN — one bar per kilometre, taller = faster (founder 2026-08-04,
+            approving the drawn proposal).
+
+            Every kilometre has been stored with the time it took since the tracker was written, and
+            the only place it surfaced was a pill announcing the one that had just landed. She could
+            not see the run she was in the middle of.
+
+            ⚠️ IT MUST STAY FURNITURE. At 8 km/h nothing may compete with the clock, so there are no
+            numbers on it, no axis, no labels — a texture, read at a glance or not at all. Heights
+            are relative to her own fastest kilometre, never to a table.
+          */}
+          {splits.length > 0 ? (
+            <View style={styles.shape} accessibilityRole="image" accessibilityLabel={t('cardio.shapeLabel', { count: splits.length })}>
+              {splits.map((sp) => {
+                const best = Math.min(...splits.map((x) => x.paceSec));
+                // A slower kilometre is a shorter bar; the floor keeps the slowest one visible
+                // rather than collapsing it to a line she cannot see.
+                const h = Math.max(0.26, Math.min(1, best / Math.max(1, sp.paceSec)));
+                return <View key={sp.km} style={[styles.shapeBar, { height: `${h * 100}%` }]} />;
+              })}
+              {/* The kilometre she is inside, growing as she runs it. */}
+              <View style={[styles.shapeBar, styles.shapeBarLive, { height: `${Math.max(0.12, dotFrac) * 100}%` }]} />
+            </View>
+          ) : null}
+
+          {/*
+            ⛔ PACE TAKES THE SEAT THAT WAS REPEATING THE BAND (founder 2026-08-04).
+
+            The row read "kilometre · heart · burn" — and the kilometre is the same fact the band
+            directly above it draws, twice over (the count, and the metres riding under the dot). So
+            the one seat that could hold the number every runner reads first was spent saying
+            something already on the screen.
+
+            ⚠️ It blanks itself the moment she stops moving — the honesty gate that stops a phone on
+            a table reporting a 5:39 — and `fmtPace` draws "--:--" there rather than a stale figure.
+          */}
           <View style={styles.liveRow}>
-            <LiveStat value={kmDone} label={t('cardio.km')} />
+            <LiveStat value={fmtPace(props.paceSec)} label={t('cardio.perKm')} />
             {/* ════ NO INSTRUMENT, NO READOUT (founder C.19) ════
                 It always drew, showing "—" to every athlete without an Apple Watch — a permanent
                 empty seat for a measurement their phone cannot take. It is gone for them now. */}
@@ -440,25 +548,16 @@ export function CardioLiveView(props: {
           </View>
         </View>
 
-        <View style={styles.liveFooter}>
-          {/* the split pill — a kilometre just logged, at the pace it took. */}
-          {lastSplit ? (
-            <View style={styles.splitPill}>
-              <Icon name="checkCheck" size={14} color={signal[0]} strokeWidth={2.4} />
-              <Legend size={RUN_SMALL_PT} track={0.04} tone="accent">
-                {t('cardio.splitLogged', { km: lastSplit.km, pace: fmtPace(lastSplit.paceSec) })}
-              </Legend>
-            </View>
-          ) : null}
-          <Button
-            variant="onstage"
-            size="act"
-            block
-            label={t('cardio.pause')}
-            onPress={props.onPause}
-            leading={<Icon name="pause" size={18} color={stageC[0]} />}
-          />
-        </View>
+        {/*
+          ⛔ THE FOOTER IS GONE, AND SO IS THE SPLIT PILL.
+
+          The pill said "kilometre 4 logged · 5:38" — which the bars now draw for every kilometre,
+          the 3.4b moment already announces as it happens, and the per-km push already delivers to a
+          pocket. Four statements of one fact; the quietest one is the one that survives.
+
+          With the button and the pill both gone the stage has one act (the disc in the chrome) and
+          the body takes the whole screen — which is what the founder freed it for.
+        */}
 
         {/* 13.1 · PAUSED — the SAME stage the gym session raises. One pause screen for the whole
             product: same mark, same sentence, same two acts. What differs is only what is stated
@@ -765,6 +864,20 @@ const styles = StyleSheet.create({
   bandMetres: { position: 'absolute', top: 34, marginLeft: -36, flexDirection: 'row', alignItems: 'baseline', width: 88, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
   bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 25, color: signal[0], textAlign: 'left' },
   bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 25, color: signal[0], textAlign: 'left' },
+
+  /*
+   * ⛔ THE SHAPE OF THE RUN — furniture, and it has to stay furniture (founder 2026-08-04).
+   *
+   * At eight kilometres an hour nothing may compete with the clock. No numbers on it, no axis, no
+   * labels: a texture read at a glance or not at all. The one lit bar is the kilometre she is
+   * standing in, which is the only part of it that is news.
+   *
+   * ⚠️ It draws NOTHING before the first kilometre lands, rather than an empty frame — an axis with
+   * no data on it is a promise the screen has not kept yet.
+   */
+  shape: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 38, width: '100%', maxWidth: 310 },
+  shapeBar: { flex: 1, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.22)' },
+  shapeBarLive: { backgroundColor: signal[0], opacity: 0.55 },
 
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
 
