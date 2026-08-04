@@ -82,7 +82,16 @@ describe('and it reaches the stage', () => {
   const flow = () => read('src/screens/session/SessionFlow.tsx');
 
   it('⛔ is drawn on the set screen, with no tap', () => {
-    expect(flow()).toContain("{t('workout.lastTime', {");
+    /*
+     * ⚠️ THE FORM CHANGED ON 2026-08-04, THE LAW DID NOT. It was one line — "LAST TIME · 4 DAYS AGO
+     * · 57.5 KG · 8·8·7·6" — at ten points, which is the exact type the founder ruled off this
+     * screen. Its REPS are the ghost row under her own sets now, where the comparison stands under
+     * the number it is about; only the LOAD is still a line, because the row cannot carry it.
+     *
+     * Both halves are asserted, because losing either would put the evidence back behind a tap.
+     */
+    expect(flow()).toContain("{t('workout.lastLoad', {"); // the load
+    expect(flow()).toContain('lastReps: lastTime.reps'); // …and the reps, into the row
     expect(flow()).toContain('const lastTime = session.lastTime;');
   });
 
@@ -92,11 +101,21 @@ describe('and it reaches the stage', () => {
     expect(store).toContain('excludeSessionId: sessionRef.current?.id,');
   });
 
-  it('⚠️ is a Text, not a Legend — a unit is written the same way everywhere', () => {
-    // The Legend uppercases, and it turned the unit into "32.5KG" while the hero two lines above
-    // says "kg". Measured in the browser before it was changed.
-    expect(flow()).toContain('⚠️ A `Text`, NOT A `Legend`');
-    expect(flow()).not.toMatch(/<Legend[^>]*styles\.lastTime/);
+  it('⚠️ the unit is written the same way here as on the hero — nothing uppercases it', () => {
+    /*
+     * ⛔ AND THIS CAUGHT ME REINTRODUCING IT. The original defect was a `Legend`, which uppercases:
+     * it rendered "32.5KG" four lines under a hero that says "kg". I removed the Legend, then wrote
+     * `textTransform: 'uppercase'` into the style of the line that replaced it.
+     *
+     * So the law is asserted against the STYLE now, not against the component — the component was
+     * never the cause.
+     */
+    // `textTransform:` with its colon — a DECLARATION. The bare word appears in the comment that
+    // explains why it must not be there, and matching that would make the law unfixable.
+    const at = flow().indexOf('lastLoad: {');
+    const style = flow().slice(at, flow().indexOf('},', at));
+    expect(style).not.toContain('textTransform:');
+    expect(flow()).not.toMatch(/<Legend[^>]*styles\.lastLoad/);
   });
 
   it('says nothing at all on a lift she has never done', () => {
@@ -108,7 +127,13 @@ describe('and it reaches the stage', () => {
   it('is written in both languages', () => {
     for (const loc of ['en', 'he']) {
       const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as { workout: Record<string, string> };
-      expect(copy.workout.lastTime).toMatch(/\{\{load\}\}[\s\S]*\{\{reps\}\}[\s\S]*\{\{ago\}\}/);
+      /*
+       * ⚠️ `lastTime` IS DELETED, not merely unused — the reps and the "N days ago" it carried are
+       * the ghost row now. Dead copy in a locale file is the thing that comes back into a screen a
+       * year later because someone finds the key and assumes it belongs somewhere.
+       */
+      expect(copy.workout.lastTime).toBeUndefined();
+      expect(copy.workout.lastLoad).toMatch(/\{\{load\}\}[\s\S]*\{\{unit\}\}/);
       expect(copy.workout.bodyweightShort).toBeTruthy();
     }
   });

@@ -387,7 +387,7 @@
     "superset": "Superset",
     "repOfM": "REP {{n}} OF {{m}}",
     "keyPoints": "KEY POINTS",
-    "lastTime": "LAST TIME · {{load}}{{unit}} × {{reps}} · {{ago}}D AGO",
+    "lastLoad": "LAST TIME · {{load}}{{unit}}",
     "bodyweightShort": "BW"
   },
   "finishSheet": {

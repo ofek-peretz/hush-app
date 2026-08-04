@@ -48,6 +48,7 @@ import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
+import { setRow } from '@/domain/setRow';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
@@ -1394,6 +1395,27 @@ function ActiveSet({
   // reps, so the band must be read from repBandLo/Hi (mirrors Home.tsx's fallback ladder).
   const bandLo = target.repBandLo ?? target.recommendedReps ?? 8;
   const bandHi = target.repBandHi ?? bandLo;
+
+  /*
+   * ⛔ THE LIFT AS A ROW OF FIGURES (`domain/setRow`) — what replaced the rep-band graphic and the
+   * ten-point "last time" line. Her sets this session over last time's, read by POSITION so set 2
+   * sits under set 2.
+   */
+  /*
+   * ⚠️ NOT MEMOISED, AND IT MUST NOT BE. `if (editing) return <EditSet …>` sits a few lines above,
+   * so a hook here is a CONDITIONAL hook — React renders fewer hooks the moment the edit door opens
+   * and the stage tears down mid-render. Four slots of array work is nothing; a hook past an early
+   * return is a crash.
+   */
+  const slots = setRow({
+    totalSets: setM,
+    currentSetIndex: setN - 1,
+    done: session.setsSoFar,
+    band: isBodyweight ? null : [bandLo, bandHi],
+    ...(lastTime ? { lastReps: lastTime.reps } : {}),
+  });
+  /* One sentence for VoiceOver, because a row of bare digits announces as a row of bare digits. */
+  const setsLabel = t('workout.setOfM', { n: setN, m: setM });
   const weight = displayWeight(target.recommendedWeight, units);
   const reason = target.reasonType; // 'increase' | 'hold' | 'decrease' | undefined
   const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
@@ -1560,34 +1582,31 @@ function ActiveSet({
             {/* 2 · INSTRUCTION — folded into the hero's inline "N a side / per hand" annex (mock 2.2
                   carries the equipment figure beside the load, not as a separate chip below it). */}
 
-            {/* 3 · REPS — the execution target, as an engraved band (handoff 2.2). Absent on a
-                  bodyweight lift: the reps ARE the hero above, and repeating them here would say
-                  the same thing twice.
-                  The old pill said ONE number (× N). The engine v5 target is a BAND — a floor she
-                  must clear and a ceiling that means "too light" — so the band is what the athlete
-                  should read, not a single figure. Moss is spent exactly once on this screen, here:
-                  the range is the one thing the stage marks in the accent. The floor/ceiling are the
-                  only translated-free facts (digits), so they are mono; "reps" and the legend are
-                  words, so they are sans (the two-voice law). */}
+            {/*
+              ⛔ 3 · THE ASK, AS A NUMBER — the band graphic is DELETED (founder 2026-08-04).
+
+              *"During a workout everything has to be maximally clear on the screen. There can't be a
+              lot of copy and certainly not small type — everything has to be clear and exact in how
+              it is laid out."*
+
+              What stood here was 250 px of rule, two ticks and a legend, to say "6 to 8". At arm's
+              length, sweating, the graphic carried nothing the two digits did not — and it spent the
+              widest element on the stage to do it. Set as a figure it reads from twice the distance
+              in a fifth of the width, and the moss goes with it, so the accent is still spent exactly
+              once on this screen.
+
+              Absent on a bodyweight lift: the reps ARE the hero above, and repeating them here would
+              say the same thing twice.
+            */}
             {!isBodyweight ? (
               <View
-                style={styles.repBand}
+                style={styles.ask}
                 accessible
                 accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
               >
-                <Legend size={14} track={0.2} align="center" style={styles.repBandLegend}>{t('workout.repRange')}</Legend>
-                <View style={styles.repBandRule}>
-                  <View style={styles.repBandBase} />
-                  <View style={styles.repBandBar} />
-                  <View style={[styles.repBandTick, styles.repBandTickL]} />
-                  <View style={[styles.repBandTick, styles.repBandTickR]} />
-                  {/* The word "reps" USED TO SIT BETWEEN THE TWO NUMBERS and it was the label
-                      explaining its own control (founder 2026-07-29). "REP RANGE" is directly
-                      above it saying the same thing, and nothing else on this screen is counted in
-                      anything but reps. Deleted; the legend it duplicated grew instead. */}
-                  <Text style={[styles.repBandNum, styles.repBandNumL]}>{bandLo}</Text>
-                  <Text style={[styles.repBandNum, styles.repBandNumR]}>{bandHi}</Text>
-                </View>
+                <Text style={styles.askNum}>{`${bandLo}–${bandHi}`}</Text>
+                {/* A WORD, so it is sans — mono cannot draw Hebrew at all (the two-voice law). */}
+                <Text style={styles.askWord}>{t('workout.repsUnit').toUpperCase()}</Text>
               </View>
             ) : null}
 
@@ -1600,44 +1619,53 @@ function ActiveSet({
                   the correction, so nothing the athlete could reach has been taken away. */}
           </>
 
-        {/* WHERE YOU ARE IN THE LIFT, IN WORDS (v7 2.2). The dots were a good mark and the wrong
-            one HERE: this stage already spends its moss on the rep band, and a row of pips under it
-            put a second graphic where the eye wanted a fact. The handoff prints the sentence —
-            "SET 2 OF 4" — in the chrome's own mono, and that reads at a glance from the bar. */}
-        <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.setOf}>
-          {t('workout.setOfM', { n: setN, m: setM })}
-        </Legend>
-
         {/*
-          ⛔ WHAT SHE DID LAST TIME — founder 2026-08-04, on the plan to beat the competition:
-          *"the set screen is where she spends 95% of her time; if it isn't better than Strong's,
-          nothing else matters."*
+          ⛔ THE FOUR SETS, IN FIGURES — and this DELETES "SET 3 OF 4" (founder 2026-08-04).
 
-          Measured: logging a set as prescribed is ONE tap here, which matches the best loggers.
-          What was missing is the thing she came to this screen wanting — the last time she did this
-          lift and what she got.
+          The line said where she was; the row says where she is AND what happened in each set she
+          has finished, in type twice the size, with last time's directly beneath. A line of text
+          that a graphic already states is the thing his copy law exists to remove.
 
-          ⚠️ AND IT IS NOT PARITY. In a logger, last time is there because SHE picks today's weight.
-          Here the COACH picked it, so last time is the EVIDENCE for the number already on the
-          stage — it turns "34 kg" from an instruction into a conclusion she can check, at no cost
-          and without asking. That has been one tap away in the Why sheet the whole time, and one tap
-          is where things go to be unread.
+          ⚠️ NOTHING IS LABELLED. Position IS the set number — that is what lets the sentence go.
 
-          Quiet on purpose: the hero is the load, and this is the footnote that justifies it.
+          ⚠️ AND THE GHOST ROW REPLACES THE SMALL PRINT. "LAST TIME · 4 DAYS AGO · 57.5 KG · 8·8·7·6"
+          was a ten-point line at the foot of the screen holding the one comparison that matters. Set
+          under its own number at the SAME SIZE and dimmed instead, it stops being a footnote and
+          becomes a comparison standing where the eye already is.
         */}
+        {slots.length ? (
+          <View style={styles.sets} accessibilityRole="summary" accessibilityLabel={setsLabel}>
+            {slots.map((slot, i) => (
+              <View key={i} style={styles.setCol}>
+                <Text
+                  style={[
+                    styles.setNum,
+                    slot.reps == null && styles.setNumTodo,
+                    slot.landing === 'above' && styles.setNumUp,
+                    slot.landing === 'below' && styles.setNumDown,
+                  ]}
+                >
+                  {slot.reps == null ? '–' : slot.reps}
+                </Text>
+                <Text style={styles.setGhost}>{slot.ghost == null ? ' ' : slot.ghost}</Text>
+                {/* The set she is standing in. A rule, not a colour: the figures above already
+                    spend colour on the verdict, and a second hue here would argue with it. */}
+                <View style={[styles.setMark, !slot.current && styles.setMarkOff]} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/*
-          ⚠️ A `Text`, NOT A `Legend`: the Legend uppercases, and it turned the unit into "32.5KG"
-          while the hero two lines above says "kg". A unit is a measurement, and the app writes
-          measurements one way everywhere (`monoCarriesNoWords` / the two-voice law). Same size and
-          tracking as a legend, without the transform.
+          The LOAD she used last time — the only part of the old line the row above cannot carry, and
+          the evidence for the number on the stage. One short line, at legend size rather than the
+          ten points it was set at.
         */}
         {lastTime ? (
-          <Text style={styles.lastTime}>
-            {t('workout.lastTime', {
-              ago: lastTime.ago,
+          <Text style={styles.lastLoad}>
+            {t('workout.lastLoad', {
               load: lastTime.loadKg == null ? t('workout.bodyweightShort') : displayWeight(lastTime.loadKg, units),
               unit: lastTime.loadKg == null ? '' : unitLabel(units),
-              reps: lastTime.reps.join('·'),
             })}
           </Text>
         ) : null}
@@ -2832,6 +2860,76 @@ const styles = StyleSheet.create({
   // "SET 2 OF 4" — the position, in the chrome's mono, 30px under the band.
   // The chained lift, quieter than the position it follows — news, not an instruction.
   // Under the position, in the quietest ink on the stage — a footnote, not a second fact.
+  /*
+   * ════ EVERY SIZE BELOW IS A FLOOR THE FOUNDER SET, NOT A TASTE ════
+   *
+   * *"There can't be a lot of copy and certainly not small type — everything has to be clear and
+   * exact. You have a tendency to use small type that can barely be seen."* (2026-08-04)
+   *
+   * The ask is 30 — twice the size of the two numbers the deleted band held. The set figures are 34,
+   * the ghosts the SAME 34 at 38% opacity (dimmed, never shrunk: a small number is unreadable, a
+   * quiet one is merely quiet), and the last-load line is 13 where its predecessor was 10.5.
+   */
+  ask: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 18 },
+  askNum: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 30,
+    letterSpacing: trackingPx(30, tracking.tight),
+    color: up.stage,
+    includeFontPadding: false,
+    textAlign: 'left',
+  },
+  askWord: {
+    fontFamily: font.sansMedium,
+    fontSize: 14,
+    letterSpacing: trackingPx(14, tracking.legend),
+    color: stage.ink2,
+    textAlign: 'left',
+  },
+
+  sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 'auto' },
+  setCol: { flex: 1, alignItems: 'center' },
+  setNum: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 34,
+    lineHeight: 39,
+    color: stage.ink0,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  setNumTodo: { color: stage.ink2, opacity: 0.45 },
+  setNumUp: { color: up.stage },
+  setNumDown: { color: down.stage },
+  setGhost: {
+    fontFamily: font.mono,
+    fontVariant: ['tabular-nums'],
+    fontSize: 34,
+    lineHeight: 39,
+    color: stage.ink1,
+    opacity: 0.38,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  setMark: { marginTop: 8, width: 26, height: 2.5, borderRadius: 2, backgroundColor: up.stage },
+  setMarkOff: { backgroundColor: 'transparent' },
+  /* ⚠️ SANS. It holds a translated phrase ("LAST TIME · …") and mono cannot draw Hebrew at all —
+     the same reason its predecessor was sans, caught again by `monoCarriesNoWords`. */
+  lastLoad: {
+    marginTop: 14,
+    fontFamily: font.sansMedium,
+    fontSize: 13,
+    letterSpacing: trackingPx(13, tracking.legend),
+    /*
+     * ⛔ NO `textTransform`. It would render "32.5KG" while the hero four lines above says "kg" —
+     * the exact defect `lastTimeIsOnTheStage` was written for when this line was a `Legend`, and I
+     * reintroduced it in the style of its replacement. The English copy is already capitalised where
+     * it wants to be; Hebrew has no case to transform.
+     */
+    color: stage.ink2,
+    textAlign: 'center',
+  },
   lastTime: {
     marginTop: 10,
     fontFamily: font.sansMedium,

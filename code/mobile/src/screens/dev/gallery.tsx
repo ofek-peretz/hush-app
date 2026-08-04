@@ -159,6 +159,10 @@ const sessionFixture = {
   ],
   reviseToday: () => 0,
   lastTime: { ago: 4, loadKg: 32.5, reps: [9, 9, 8] },
+  /* ⚠️ TWO SETS ALREADY DONE, so the set row draws its filled slots and its ghosts. An empty array
+     here would make every entry on this page look like set 1 of a lift she has never done — which
+     is exactly the blindness the row was built to end. */
+  setsSoFar: [9, 8],
   globalProgress: { index: 1, total: 24 },
   exerciseProgress: { index: 0, total: 6 },
   nextExercise: null,
@@ -1314,6 +1318,28 @@ export const GALLERY: GalleryEntry[] = [
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
   { id: '2.1e', label: "When the day won't fit", status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
   { id: '2.2', label: 'The set', status: 'live', render: () => mount(SessionFlow) },
+  /* ⛔ THE ROW OF FIGURES, IN THE STATES A LIVE SESSION CANNOT BE ASKED FOR (2026-08-04). The row is
+     the whole set stage now — it replaced the rep-band graphic AND "SET 3 OF 4" — and three of its
+     states are unreachable by simply running a workout in the harness. */
+  { id: '2.2h', label: 'The set — a lift she has never done', status: 'live', note: 'no ghosts at all, and no last-load line', render: () =>
+    mount(SessionFlow, undefined, { ...sessionFixture, lastTime: null, setsSoFar: [] }) },
+  { id: '2.2i', label: 'The set — a rep down, and a rep up', status: 'live', note: 'moss above the band, blue below — the landing law, on her own sets', render: () =>
+    mount(SessionFlow, undefined, {
+      ...sessionFixture,
+      setsSoFar: [11, 6],
+      setLabel: { n: 3, m: 4 },
+      lastTime: { ago: 4, loadKg: 32.5, reps: [9, 9, 8, 8] },
+    }) },
+  /* ⚠️ AND THE SET COUNT CHANGED. The coach writes four sets this week where it wrote two last week;
+     the surplus slots must carry NO ghost rather than repeating the last one, which would tell her
+     she did a set she never did. Nothing in a live harness changes a set count mid-history. */
+  { id: '2.2j', label: 'The set — the coach changed the set count', status: 'live', note: 'the extra slots have no ghost, and invent none', render: () =>
+    mount(SessionFlow, undefined, {
+      ...sessionFixture,
+      setsSoFar: [9],
+      setLabel: { n: 2, m: 4 },
+      lastTime: { ago: 6, loadKg: 30, reps: [9, 8] },
+    }) },
   /* THE CASE THAT WAS INVISIBLE. Every fixture here held a two-digit whole load, so nobody could
      see that a decimal — or plain 100 kg — pushed the figure and its per-side annex off the screen
      (founder, build 36 · C.9). A widest-load entry is now standing furniture: 137.5 on a barbell is

@@ -60,6 +60,9 @@ function makeSession(setN: number, setM: number, result: Result) {
     currentExercise: { id: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', equipment: 'dumbbell' },
     currentExerciseId: 'db_shoulder_press',
     sessionExerciseIds: ['db_shoulder_press'],
+    /* ⚠️ Two sets already logged, so the set row draws filled slots — an absent array
+       would make every fixture on the stage look like set 1 of a lift never done. */
+    setsSoFar: [9, 8],
     currentTarget: { exerciseId: 'db_shoulder_press', setIndex: setN - 1, recommendedWeight: 14, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'db_shoulder_press',
     setLabel: { n: setN, m: setM },

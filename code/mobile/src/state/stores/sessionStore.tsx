@@ -314,6 +314,18 @@ export interface SessionView {
    * lift she has never done, which is a real state and not a hole to fill.
    */
   lastTime: LastTime | null;
+  /**
+   * ⛔ WHAT SHE HAS ALREADY DONE ON THIS LIFT, THIS SESSION — in the order she did it.
+   *
+   * The set stage draws her sets as a row of large figures (`domain/setRow`), which is what replaced
+   * the rep-band graphic and the ten-point "last time" line. Until now the screen could not see a
+   * single set she had performed: the logged sets live on the session and the view was never handed
+   * them, so set 3 looked exactly like set 1.
+   *
+   * Reps only. The row is about how the lift is GOING, and a load column beside it would be the
+   * second graphic this stage keeps rejecting.
+   */
+  setsSoFar: number[];
   globalProgress: { index: number; total: number } | null;
   /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
   exerciseProgress: { index: number; total: number } | null;
@@ -1307,6 +1319,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       lastTime: lastTimeOn(current?.exerciseId ?? null, historyRef.current, {
         excludeSessionId: sessionRef.current?.id,
       }),
+      /*
+       * ⚠️ FILTERED BY EXERCISE AND ORDERED BY `setIndex`, not by the order they were written. A
+       * resumed session appends in write order, and a row read from that would put set 3's reps in
+       * slot 1 the moment anything was logged out of sequence.
+       */
+      setsSoFar: current
+        ? (state.session?.sets ?? [])
+            .filter((x) => x.exerciseId === current.exerciseId)
+            .slice()
+            .sort((a, b) => a.setIndex - b.setIndex)
+            .map((x) => x.actualReps)
+        : [],
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
         ? (() => {

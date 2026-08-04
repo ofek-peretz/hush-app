@@ -440,7 +440,7 @@
     "superset": "סופרסט",
     "repOfM": "חזרה {{n}} מתוך {{m}}",
     "keyPoints": "דגשים",
-    "lastTime": "בפעם הקודמת · {{load}}{{unit}} × {{reps}} · לפני {{ago}} ימים",
+    "lastLoad": "בפעם הקודמת · {{load}}{{unit}}",
     "bodyweightShort": "משקל גוף"
   },
   "finishSheet": {

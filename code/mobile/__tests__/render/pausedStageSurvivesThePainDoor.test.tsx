@@ -69,6 +69,9 @@ function makeSession(paused: boolean, onPause: () => void) {
     currentExercise: { id: 'bb_bench_press', name: 'Bench Press', muscle: 'Chest', equipment: 'barbell' },
     currentExerciseId: 'bb_bench_press',
     sessionExerciseIds: ['bb_bench_press'],
+    /* ⚠️ Two sets already logged, so the set row draws filled slots — an absent array
+       would make every fixture on the stage look like set 1 of a lift never done. */
+    setsSoFar: [9, 8],
     currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: 2, m: 4 },
