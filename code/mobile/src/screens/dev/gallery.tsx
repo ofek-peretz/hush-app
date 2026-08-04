@@ -1596,6 +1596,20 @@ export const GALLERY: GalleryEntry[] = [
   { id: '2.5', label: 'What this session earned', status: 'live', render: () => (
     <InApp>
       <SessionEarned
+        /* ⛔ THE POSTER — the facts this screen leads with (founder 2026-08-04). */
+        poster={{
+          hero: { kind: 'tonnes', value: 4.2 },
+          minutes: 58,
+          kcal: 412,
+          tonnes: 4.2,
+          sets: 19,
+          lifts: [
+          { exerciseId: 'bb_back_squat', load: 60, unit: 'kg', reps: [8, 7, 8, 7] },
+          { exerciseId: 'bb_rdl', load: 50, unit: 'kg', reps: [9, 8, 8] },
+          { exerciseId: 'leg_press', load: 120, unit: 'kg', reps: [11, 10, 10] },
+          ],
+        }}
+        workoutName="Lower A"
         savedLegend="Upper A · Saved"
         partial={false}
         durationLabel="52"
@@ -1611,6 +1625,72 @@ export const GALLERY: GalleryEntry[] = [
             reason: { key: 'explain.rungOutOfReach.text', params: { ex: 'Barbell Row' } } },
         ]}
         volume={[{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } }]}
+        onDone={noop}
+        onRecord={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⛔ THE POSTER WHEN SHE BROKE SOMETHING. A record takes the largest figure — and nothing in a live
+    harness can set an all-time best, because that needs a HISTORY the poster is read against. Two of
+    the three states below were unreachable before this entry existed.
+  */
+  { id: '2.5b', label: 'The poster — a new best', status: 'live', note: 'the record takes the hero; the tonnage drops to the row', render: () => (
+    <InApp>
+      <SessionEarned
+        poster={{
+          hero: { kind: 'record', exerciseId: 'bb_back_squat', value: 60, unit: 'kg', reps: 8, delta: 2.5 },
+          minutes: 58,
+          kcal: 412,
+          tonnes: 4.2,
+          sets: 19,
+          lifts: [
+            { exerciseId: 'bb_back_squat', load: 60, unit: 'kg', reps: [8, 7, 8, 7] },
+            { exerciseId: 'bb_rdl', load: 50, unit: 'kg', reps: [9, 8, 8] },
+          ],
+        }}
+        workoutName="Lower A"
+        savedLegend="Lower A · Saved"
+        partial={false}
+        durationLabel="58"
+        kcal={412}
+        tonnes={4.2}
+        answered
+        decisions={[]}
+        volume={[]}
+        onDone={noop}
+        onRecord={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⚠️ AND A SESSION WITH NO LOAD IN IT. Tonnes is 0, and leading the one screen meant to make her
+    proud with "0.0 t" would be a report of nothing — so the hero falls through to the set count.
+  */
+  { id: '2.5c', label: 'The poster — a bodyweight session', status: 'live', note: 'never "0.0 t"; the sets carry it', render: () => (
+    <InApp>
+      <SessionEarned
+        poster={{
+          hero: { kind: 'sets', value: 14 },
+          minutes: 34,
+          kcal: 240,
+          tonnes: 0,
+          sets: 14,
+          lifts: [
+            { exerciseId: 'pull_up', load: null, unit: '', reps: [8, 7, 6] },
+            { exerciseId: 'push_up', load: null, unit: '', reps: [20, 18, 15] },
+            { exerciseId: 'plank', load: null, unit: '', reps: [1, 1] },
+          ],
+        }}
+        workoutName="Upper — bodyweight"
+        savedLegend="Upper · Saved"
+        partial={false}
+        durationLabel="34"
+        kcal={240}
+        tonnes={0}
+        answered
+        decisions={[]}
+        volume={[]}
         onDone={noop}
         onRecord={noop}
       />

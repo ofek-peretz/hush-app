@@ -47,6 +47,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Button, Legend } from '@/components/ds';
+import { RangeMark } from '@/components/RangeMark';
+import { sessionPoster } from '@/domain/sessionPoster';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { monoCanDraw } from '@/design/monoVoice';
@@ -690,6 +692,24 @@ export function WellDone({ navigation, route }: Props) {
       kcal={kcal}
       tonnes={tonnes}
       /*
+       * ⛔ THE POSTER. `history` already carries the just-saved session at index 0, which is what
+       * `recordCardFromHistory` reads to decide whether this workout set an all-time best — so the
+       * record and the receipt come from the same read the rest of this screen uses.
+       */
+      poster={
+        session && session.sets.length > 0
+          ? sessionPoster({
+              session,
+              history: history ?? [],
+              units: app.profile?.units ?? 'kg',
+              durationMs,
+              kcal,
+            })
+          : null
+      }
+      workoutName={summary?.workoutName ?? session?.programDayName ?? null}
+      units={app.profile?.units ?? 'kg'}
+      /*
        * The COACH's rows now, with the engine's kept behind them.
        *
        * `decisions` is what the between-session fold used to produce and it is empty for ever —
@@ -724,6 +744,9 @@ export function SessionEarned({
   durationLabel,
   kcal,
   tonnes,
+  poster,
+  workoutName,
+  units,
   decisions,
   volume,
   answered,
@@ -736,6 +759,16 @@ export function SessionEarned({
   durationLabel: string;
   kcal: number | null;
   tonnes: number;
+  /**
+   * ⛔ THE POSTER (founder 2026-08-04) — the facts this screen leads with, from `domain/sessionPoster`.
+   *
+   * ⚠️ NULLABLE, NOT OPTIONAL. There is no second layout to fall back to: the ledger-only screen it
+   * replaced is deleted, and a `?` here would let a call site quietly render a workout's close as an
+   * empty page. `null` means "no work logged", and the poster simply does not draw.
+   */
+  poster: import('@/domain/sessionPoster').SessionPoster | null;
+  workoutName?: string | null;
+  units?: 'kg' | 'lb';
   decisions: EarnedLine[];
   volume: VolumeMove[];
   /** The engine has answered. Only then is an empty ledger a verdict ("everything held") rather
@@ -756,38 +789,108 @@ export function SessionEarned({
     <View style={styles.root}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.savedRow}>
-            <Icon name="check" size={15} color={up.stage} strokeWidth={2.4} />
-            <Legend size={11.5} tone="accent">{savedLegend}</Legend>
-          </View>
-          {/* The big line stands alone (founder 2026-07-12). "I'll account for the shortened
-              session in your next recommendation" is a promise the athlete has already been
-              given — at the moment they chose to end early, on the confirm sheet, which is the
-              only moment it could have changed their mind. Repeating it under the finish line
-              turns a closing beat into an explanation. */}
-          <Text style={styles.resultTitle} accessibilityRole="header">{partial ? t('complete.partialTitle') : t('complete.thatsTheWork')}</Text>
-
           {/*
-            ════ WHAT IT COST — THE THREE FACTS, AT THE SIZE OF FACTS ════
+            ════════════════════════════════════════════════════════════════════════════════════════
+            ⛔ THE POSTER (founder 2026-08-04). *"This is the moment the athlete finishes a workout
+            and wants to photograph it for social — and right now our finish screen looks like a
+            list of decisions and conclusions. It doesn't invite anyone at all to be proud."*
 
-            ⛔ FOUNDER, 2026-08-02: *"enlarge the workout time, the calories and the weight lifted to
-            a bigger and clearer size, and give them a clearer colour."*
+            Everything above the footer is screenshot-safe: no back arrow, no title bar, the
+            wordmark carried whole. A phone screen is 9:16 — the exact shape of a story — so the
+            fix was never a share button. It was making the screen worth photographing.
 
-            They were three 13.5pt muted legends on one line — the type this app uses for LABELS,
-            in the tone it uses for things that are not the point. So the only three measurements a
-            finished workout produces were set smaller than the word "minutes" beside them.
-
-            They are figures now, and they are drawn the way every other figure in this product is:
-            the number in mono at the measurement size, the unit beside it small and quiet. Cream on
-            the stage, not the muted grey — the number is the fact, the word is the label.
+            ⚠️ AND THE LEDGER IS STILL HERE, directly below. *"I'm not saying we shouldn't give
+            access to the decisions."* Putting them behind a tap would have been a third control on
+            a closing beat; **scrolling is access**, and it costs nothing.
+            ════════════════════════════════════════════════════════════════════════════════════════
           */}
-          <View style={styles.factRow}>
-            <Fact value={durationLabel} unit={t('common.minShort')} />
-            {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} /> : null}
-            {tonnes > 0 ? (
-              <Fact value={tonnes.toFixed(1)} unit={`${t('weekly.tonneUnit')} ${t('complete.movedShort')}`} />
-            ) : null}
-          </View>
+          {poster ? (
+            <View style={styles.poster}>
+              {/* The mark, so a screenshot carries the product without a word of advertising. */}
+              <View style={styles.posterMark}>
+                <RangeMark />
+                <Text style={styles.posterWord}>hush</Text>
+              </View>
+
+              <Legend size={12} track={0.2} align="center" style={styles.posterLegend}>{savedLegend}</Legend>
+
+              {poster.hero.kind === 'record' ? (
+                <>
+                  {/* A record takes the poster: it is the one thing more postable than a total. */}
+                  <View style={styles.bestPill}>
+                    <Text style={styles.bestPillText}>{t('complete.newBest')}</Text>
+                  </View>
+                  <Text style={styles.posterName} numberOfLines={2}>
+                    {bidi(exerciseDisplayName(poster.hero.exerciseId))}
+                  </Text>
+                  <View style={styles.heroRow}>
+                    <Text style={styles.heroNum}>{poster.hero.value}</Text>
+                    <Text style={styles.heroUnit}>{poster.hero.unit}</Text>
+                  </View>
+                  <Text style={styles.heroLabel}>
+                    {poster.hero.delta != null
+                      ? t('complete.bestBy', { reps: poster.hero.reps, delta: poster.hero.delta, unit: poster.hero.unit })
+                      : t('complete.bestReps', { reps: poster.hero.reps })}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  {workoutName ? (
+                    <Text style={styles.posterName} numberOfLines={2}>{bidi(workoutName)}</Text>
+                  ) : null}
+                  <View style={styles.heroRow}>
+                    <Text style={styles.heroNum}>
+                      {poster.hero.kind === 'tonnes' ? poster.hero.value.toFixed(1) : String(poster.hero.value)}
+                    </Text>
+                    {/* ⚠️ SANS. "t" is a translated WORD ("טון"), and mono cannot draw Hebrew at
+                        all — the same two-voice split the set stage makes between a unit that is a
+                        symbol (kg/lb, mono) and one that is a word. `monoCarriesNoWords` caught it. */}
+                    {poster.hero.kind === 'tonnes' ? (
+                      <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.heroLabel}>
+                    {poster.hero.kind === 'tonnes' ? t('complete.movedShort') : t('complete.setsLabel')}
+                  </Text>
+                </>
+              )}
+
+              {/*
+                THE THREE FACTS, as figures. A record poster swaps calories for the tonnage, because
+                the tonnage has just lost the hero slot and is the more distinctive of the two.
+              */}
+              <View style={styles.posterStats}>
+                <Fact value={durationLabel} unit={t('common.minShort')} />
+                {poster.hero.kind === 'record' && poster.tonnes > 0 ? (
+                  <Fact value={poster.tonnes.toFixed(1)} unit={`${t('weekly.tonneUnit')} ${t('complete.movedShort')}`} />
+                ) : kcal != null ? (
+                  <Fact value={String(kcal)} unit={t('complete.kcal')} />
+                ) : null}
+                <Fact value={String(poster.sets)} unit={t('complete.setsLabel')} />
+              </View>
+
+              {/*
+                THE RECEIPT — what makes a screenshot credible rather than decorative: anyone reading
+                the story can see what was actually done. Quiet, and never the subject.
+              */}
+              {poster.lifts.length ? (
+                <View style={styles.receipt}>
+                  {poster.lifts.map((l) => (
+                    <View key={l.exerciseId} style={styles.receiptRow}>
+                      <Text style={styles.receiptName} numberOfLines={1}>{bidi(exerciseDisplayName(l.exerciseId))}</Text>
+                      <Text style={styles.receiptFigure}>
+                        {l.load == null
+                          ? l.reps.join('·')
+                          : `${l.load}${l.unit} × ${l.reps.join('·')}`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {partial ? <Text style={styles.posterPartial}>{t('complete.partialTitle')}</Text> : null}
+            </View>
+          ) : null}
 
           {/* THE DECISIONS — one ruled line per lift the engine moved, the load's from→to on the end
               edge and the sentence that earned it beneath, in the coach's italic serif.
@@ -1045,6 +1148,92 @@ const styles = StyleSheet.create({
 
   // v7 2.5 · THE DECISIONS — a ruled ledger. Each line opens on a hairline, so the block reads as
   // a record rather than a stack of cards, and the last line closes it.
+  /*
+   * ════ THE POSTER (founder 2026-08-04) ════
+   *
+   * Every figure here is sized to be read in a screenshot on somebody else's phone, which is the
+   * only screen in this app with that requirement. His standing rule applies hardest here: *"there
+   * can't be a lot of copy and certainly not small type."* Nothing below 12.5.
+   */
+  poster: { alignItems: 'center', paddingTop: 8 },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  posterWord: { fontFamily: font.serif, fontSize: 20, color: stage.ink0, textAlign: 'left' },
+  posterLegend: { marginTop: 22, color: stage.ink2 },
+  posterName: {
+    marginTop: 6,
+    fontFamily: font.serif,
+    fontSize: 36,
+    lineHeight: 41,
+    letterSpacing: trackingPx(36, tracking.display),
+    color: stage.ink0,
+    textAlign: 'center',
+  },
+  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 18 },
+  heroNum: {
+    fontFamily: font.monoSemibold,
+    fontVariant: ['tabular-nums'],
+    fontSize: 92,
+    lineHeight: 96,
+    letterSpacing: trackingPx(92, tracking.display),
+    color: stage.ink0,
+    includeFontPadding: false,
+    textAlign: 'left',
+  },
+  heroUnit: { fontFamily: font.mono, fontSize: 24, color: stage.ink1, textAlign: 'left' },
+  heroUnitWord: { fontFamily: font.sans, fontSize: 24, color: stage.ink1, textAlign: 'left' },
+  heroLabel: {
+    marginTop: 8,
+    fontFamily: font.sansMedium,
+    fontSize: 13,
+    letterSpacing: trackingPx(13, tracking.legend),
+    textTransform: 'uppercase',
+    color: stage.ink2,
+    textAlign: 'center',
+  },
+  bestPill: {
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(169,196,159,0.12)',
+  },
+  bestPillText: {
+    fontFamily: font.sansMedium,
+    fontSize: 12.5,
+    letterSpacing: trackingPx(12.5, tracking.legend),
+    textTransform: 'uppercase',
+    color: up.stage,
+    textAlign: 'left',
+  },
+  posterStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginTop: 26,
+    paddingVertical: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(241,238,229,0.12)',
+  },
+  receipt: { alignSelf: 'stretch', marginTop: 18, gap: 10 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 14 },
+  receiptName: { flex: 1, fontFamily: font.sans, fontSize: 15, color: stage.ink1, textAlign: 'left' },
+  receiptFigure: {
+    fontFamily: font.mono,
+    fontVariant: ['tabular-nums'],
+    fontSize: 14,
+    color: stage.ink1,
+    textAlign: 'left',
+  },
+  posterPartial: {
+    marginTop: 20,
+    fontFamily: font.serif,
+    fontSize: 17,
+    lineHeight: 24,
+    color: stage.ink1,
+    textAlign: 'center',
+  },
+
   earned: { marginTop: 22 },
   earnedRow: {
     gap: 5,

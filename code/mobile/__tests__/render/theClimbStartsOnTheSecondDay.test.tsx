@@ -141,6 +141,20 @@ describe('the reason a muscle earned a set is spoken in her language', () => {
 
   const earned = (
     <SessionEarned
+      /* ⛔ THE POSTER — the facts this screen leads with (founder 2026-08-04). */
+      poster={{
+        hero: { kind: 'tonnes', value: 4.2 },
+        minutes: 58,
+        kcal: 412,
+        tonnes: 4.2,
+        sets: 19,
+        lifts: [
+        { exerciseId: 'bb_back_squat', load: 60, unit: 'kg', reps: [8, 7, 8, 7] },
+        { exerciseId: 'bb_rdl', load: 50, unit: 'kg', reps: [9, 8, 8] },
+        { exerciseId: 'leg_press', load: 120, unit: 'kg', reps: [11, 10, 10] },
+        ],
+      }}
+      workoutName="Lower A"
       savedLegend="Upper A · Saved"
       partial={false}
       durationLabel="58"
