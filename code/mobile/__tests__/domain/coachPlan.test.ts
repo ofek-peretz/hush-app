@@ -213,10 +213,38 @@ describe('no answer arrived — the update waits, nothing is written', () => {
       .toBe('session_malformed');
     expect(unreadable(one({ ex: 'no_such_thing' }))).toBe('unknown_exercise');
     expect(unreadable(one({ kind: 'vibes' }))).toBe('unknown_kind');
-    expect(unreadable(one({ reps: [8] }))).toBe('not_a_number');
-    expect(unreadable(one({ load: 'heavy' }))).toBe('not_a_number');
-    expect(unreadable(one({ kind: 'time', seconds: 'a while' }))).toBe('not_a_number');
-    expect(unreadable(one({ kind: 'distance', metres: null }))).toBe('not_a_number');
+    /*
+     * ⛔ A MALFORMED ITEM IS NO LONGER FATAL — 2026-08-04, found by the first four-week simulation.
+     *
+     * `required` on an item is `['kind','ex']` and Gemini's schema subset has no `oneOf`, so the
+     * model may legally answer `{kind:'time', ex:'warm_up'}` with no `seconds`. **It did** — and the
+     * parse threw away a complete, correct four-day programme over one missing warm-up duration.
+     * The athlete was told her update was waiting.
+     *
+     * So these four now PARSE, with the bad item skipped and counted in `snapped`. A dropped warm-up
+     * is a smaller harm than a dropped week by an enormous margin, and the alternative was measured
+     * at 1 lost reply in 17.
+     *
+     * ⚠️ THE SHAPE ERRORS ABOVE ARE STILL FATAL, and the line between them is deliberate: a bad
+     * `rounds`, a nameless session or an unknown lift are errors about the PROGRAMME's structure —
+     * there is no coherent thing left to run. A bad item is one row of it.
+     */
+    const survives = (o: Record<string, unknown>) => {
+      const r = parseCoachPlan(one(o), facts);
+      expect(r.ok).toBe(true);
+      return r.ok ? r.snapped : 0;
+    };
+    expect(survives({ reps: [8] })).toBeGreaterThan(0);
+    expect(survives({ load: 'heavy' })).toBeGreaterThan(0);
+    expect(survives({ kind: 'time', seconds: 'a while' })).toBeGreaterThan(0);
+    expect(survives({ kind: 'distance', metres: null })).toBeGreaterThan(0);
+  });
+
+  it('⚠️ but a reply whose items are ALL malformed still has no programme in it', () => {
+    // The floor: skipping is a repair, not a way to accept nothing. With every item gone there is no
+    // block, with no block there is no session, and a reply with no session is `no_sessions`.
+    const r = parseCoachPlan(one({ kind: 'time', seconds: 'a while' }), facts);
+    expect(r.ok && r.answer.plan?.sessions.length).toBeFalsy();
   });
 
   it('refuses to guess which lift a near-miss id meant', () => {

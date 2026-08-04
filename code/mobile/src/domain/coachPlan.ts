@@ -774,7 +774,8 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   let snapped = 0;
 
   /** One item, or the reason it could not be read. Returns a discriminated result, never throws. */
-  function readItem(raw: unknown): { ok: true; item: PlannedItem } | { ok: false; reason: UnreadableReason; at?: string } {
+  /** `item: null` means "this one is malformed — skip it and keep the rest". See the note below. */
+  function readItem(raw: unknown): { ok: true; item: PlannedItem | null } | { ok: false; reason: UnreadableReason; at?: string } {
     if (!isObj(raw)) return { ok: false, reason: 'item_malformed' };
     if (typeof raw.ex !== 'string') return { ok: false, reason: 'item_malformed' };
     const lift = liftById.get(raw.ex);
@@ -793,34 +794,41 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       return onRung;
     };
 
+    /*
+     * ⛔ A MALFORMED ITEM IS DROPPED, NOT A REASON TO DISCARD THE WEEK — found by the four-week
+     * simulation, 2026-08-04, which is the first time this code was ever run for more than one call.
+     *
+     * `required` on the item is `['kind','ex']`. The per-shape fields cannot be conditionally
+     * required — Gemini's schema subset has no `oneOf` — so the model may legally answer
+     * `{kind:'time', ex:'warm_up'}` with no `seconds`. It did. And the parse returned
+     * `not_a_number` for the WHOLE reply, so a complete, correct, four-day programme was thrown away
+     * over one missing warm-up duration, and the athlete was told her update was waiting.
+     *
+     * ⚠️ `geminiSchema.test.ts` already carries the law for this class — *"a schema that permits
+     * what the parse refuses is an athlete told her update is waiting, for ever"* — and the hole
+     * survived it, because the law checks the ROUND TRIP of a well-formed reply. Only a real model
+     * answering a real question produced the malformed one.
+     *
+     * ⛔ THE ITEM GOES, THE PROGRAMME STAYS. `null` here means "skip this item"; `snapped` counts it
+     * so the loss is visible rather than silent. A dropped warm-up is a smaller harm than a dropped
+     * week by an enormous margin, and the alternative was measured: 1 in 17 calls lost entirely.
+     */
     switch (raw.kind) {
       case 'reps': {
-        if (!Array.isArray(raw.reps) || raw.reps.length !== 2 || !raw.reps.every(isInt)) {
-          return { ok: false, reason: 'not_a_number', at: raw.ex };
-        }
-        /*
-         * ⚠️ AN ABSENT LOAD IS BODYWEIGHT, NOT A MALFORMED ONE. This read `!== null`, so a `load`
-         * the coach simply left out — which the schema permits, and which is the natural thing to
-         * write for a push-up or a dead bug — failed the check and **the entire programme was
-         * thrown away**: one omitted optional field on one item of one block, and she gets no week.
-         *
-         * Found on the first live intake that produced a real plan (2026-08-02): three good
-         * sessions rejected on `dead_bug`. Every other shape already asked `!= null` here; only reps
-         * was strict, and only reps has a load that is meaningfully absent.
-         */
-        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        if (!Array.isArray(raw.reps) || raw.reps.length !== 2 || !raw.reps.every(isInt)) return { ok: true, item: null };
+        if (raw.load != null && !isNum(raw.load)) return { ok: true, item: null };
         const [lo, hi] = raw.reps as number[];
         return { ok: true, item: { kind: 'reps', ex: raw.ex, reps: [lo, hi], load: settle(raw.load) ?? null, ...say } };
       }
       case 'time': {
-        if (!isInt(raw.seconds)) return { ok: false, reason: 'not_a_number', at: raw.ex };
-        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        if (!isInt(raw.seconds)) return { ok: true, item: null };
+        if (raw.load != null && !isNum(raw.load)) return { ok: true, item: null };
         const load = settle(raw.load as number | null | undefined);
         return { ok: true, item: { kind: 'time', ex: raw.ex, seconds: raw.seconds, ...(load != null ? { load } : {}), ...say } };
       }
       case 'distance': {
-        if (!isInt(raw.metres)) return { ok: false, reason: 'not_a_number', at: raw.ex };
-        if (raw.load != null && !isNum(raw.load)) return { ok: false, reason: 'not_a_number', at: raw.ex };
+        if (!isInt(raw.metres)) return { ok: true, item: null };
+        if (raw.load != null && !isNum(raw.load)) return { ok: true, item: null };
         const load = settle(raw.load as number | null | undefined);
         return { ok: true, item: { kind: 'distance', ex: raw.ex, metres: raw.metres, ...(load != null ? { load } : {}), ...say } };
       }
@@ -855,8 +863,16 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       for (const raw of b.items) {
         const read = readItem(raw);
         if (!read.ok) return read;
+        // `null` = malformed and skipped. Counted, so the loss shows up rather than vanishing.
+        if (read.item === null) { snapped += 1; continue; }
         items.push(read.item);
       }
+      /*
+       * ⚠️ A BLOCK THAT LOSES EVERY ITEM IS DROPPED, NOT KEPT EMPTY. An empty block would run as a
+       * rest timer attached to nothing — `runSteps` would expand it into no steps and the session
+       * would silently be shorter than the one she was shown.
+       */
+      if (items.length === 0) continue;
       blocks.push({
         rounds: b.rounds,
         ...(b.restS != null ? { restS: b.restS } : {}),
@@ -864,6 +880,13 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
         items,
       });
     }
+    /*
+     * ⚠️ AND A SESSION THAT LOST EVERY BLOCK IS DROPPED TOO. She would otherwise be shown a named
+     * workout with nothing in it — a row on Today that opens onto an empty stage. If that leaves no
+     * sessions at all, the reply has no programme in it and `no_sessions` says so honestly below,
+     * which is the same answer as if the coach had attached nothing.
+     */
+    if (blocks.length === 0) continue;
     sessions.push({ name: s.name, ...(s.day ? { day: s.day as Weekday } : {}), blocks });
   }
 
