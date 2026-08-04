@@ -33,6 +33,7 @@ import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
 import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { comebackAfterGap } from '@/domain/comeback';
+import { trainingDays } from '@/domain/trainingDays';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
 import { OnYourWristView } from '@/screens/watch/OnYourWrist';
@@ -208,6 +209,19 @@ export function Home({ navigation, route }: Props) {
       alive = false;
     };
   }, []);
+  /*
+   * ⛔ THE DAYS SHE TRAINS — DERIVED, NEVER ASKED (founder 2026-08-04, the third of his three
+   * questions about the week column). `null` until the pattern is earned, and Home draws his
+   * numbered column while it is.
+   *
+   * ⚠️ Computed from `saved`, which arrives asynchronously, so it is `null` on the very first frame
+   * of every launch too — the same answer as "not enough history", and the right one: a column that
+   * flashed weekdays in and out on load would be worse than one that never named them.
+   */
+  const patternDays = useMemo(
+    () => trainingDays(saved ?? [], app.profile?.daysPerWeek, Date.now()),
+    [saved, app.profile?.daysPerWeek],
+  );
   // Which lifts the engine touched this week AND WHICH WAY — so Today can light their figure in the
   // direction it moved (founder 2026-07-29; it used to be one ochre for all three, which named a
   // change and refused to say whether the load had gone up or down). Empty in week one.
@@ -802,6 +816,18 @@ export function Home({ navigation, route }: Props) {
        * doing. Today is where she looks every morning, so it is where the name has to live.
        */
       programTitle={coachPlan?.title ?? null}
+      /*
+       * ⛔ AND ITS REASON (founder 2026-08-04). `why` is written by the coach for every programme,
+       * stored, and sent back to it every week — and it was drawn on exactly one screen, the one
+       * right after onboarding. It is the difference between a programme and a list of workouts.
+       */
+      programWhy={coachPlan?.why ?? null}
+      /*
+       * ⚠️ THE DAYS SHE TRAINS, WATCHED — never asked (`domain/trainingDays`). `null` is a real and
+       * common answer, and it is what makes the column number its rows instead of naming weekdays:
+       * the week EARNS its days rather than being assigned them.
+       */
+      trainingDays={patternDays}
       briefCount={briefCount}
       undoable={undoable}
       onUndoSwap={async () => {

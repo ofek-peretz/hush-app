@@ -209,23 +209,25 @@ describe('the week is on the page, and it is a door', () => {
   });
 
   /**
-   * ONE CONTROL, ONE ACT (2026-07-17). This used to assert the opposite — "a second tap on the
-   * QUEUED chip opens its plan — swap, pin and the form clip" — and it was stale twice over: swap
-   * and pin were deleted with the edit screen (S-73), and the hidden second tap was a guessing game
-   * the view itself admitted to ("an athlete cannot be expected to guess the second"), paid for
-   * with a line of instructions underneath.
+   * ⛔ THE QUEUED ROW IS NOT A CONTROL AT ALL (2026-08-04, the week-column rebuild).
    *
-   * The plan's door is the meta line now (it says "6 exercises", so it is the obvious thing to
-   * press to see them). A chip queues. That is the whole of it.
+   * This used to assert that a second tap on the queued CHIP did nothing — one control, one act.
+   * In the column the queued session is not a chip to press: it is the row that has OPENED, and it
+   * holds the lifts, the change pill and the act. There is nothing left to choose about it.
+   *
+   * The law survives in a stronger form: **the open row exposes no button that queues it again.**
+   * A control whose only effect is to re-select what is already selected is a control that does
+   * nothing, and this screen has one act.
    */
-  it('the QUEUED chip does not hide a second act — it just queues', () => {
+  it('the QUEUED workout has no chooser of its own — it is already the open row', () => {
     const chosen: string[] = [];
     const r = mount(
       <HomeView {...props({ onChooseWorkout: (id: string) => void chosen.push(id) })} />,
     );
-    act(() => {
-      byLabel(r, 'Pull A')!.props.onPress(); // Pull A === dayName, i.e. already queued
-    });
+    // Pull A === dayName, i.e. the open row. It is drawn, and it is not pressable.
+    expect(texts(r).join(' ')).toContain('Pull A');
+    expect(byLabel(r, 'Pull A')).toBeNull();
+    expect(chosen).toEqual([]);
   });
 
   /**
@@ -425,12 +427,15 @@ describe('the week is on the page, and it is a door', () => {
         })}
       />,
     );
+    /*
+     * ⚠️ IN THE COLUMN THE SELECTED ROW IS NOT PRESSABLE AT ALL, so the assertion is sharper than it
+     * was: exactly ONE of the twins is a control, and it is the one that is not open. Matched on the
+     * name, both would have opened — and a tap meant to queue the second would have hit the first.
+     */
     const chips = r.root.findAll((n) => n.props?.accessibilityLabel === 'Upper' && typeof n.props.onPress === 'function');
-    act(() => chips[1].props.onPress()); // the one that is NOT queued
+    expect(chips).toHaveLength(1);
+    act(() => chips[0].props.onPress()); // the one that is NOT queued
     expect(chosen).toEqual(['day_2']);
-    // The law is the SELECTED state: matching on the name would light both twins as queued. It is
-    // read from the id, so exactly one is.
-    expect(chips.filter((c) => c.props.accessibilityState?.selected)).toHaveLength(1);
   });
 
   /**
@@ -451,68 +456,83 @@ describe('the week is on the page, and it is a door', () => {
     expect(chosen).toEqual([]);
   });
 
-  it('a trained workout wears the MOSS check, and the queued one LIFTS — never confusable', () => {
-    // Under v7 "All Dark" the queued chip LIFTS off the dark stage toward the light: it is a PAPER
-    // pill (cream ground, dark ink), not the harsh #fff — cream copy on #fff would be invisible.
-    // The done chip is the other pole: a moss check on a moss veil. The one law that must hold is
-    // that the two never share a colour — no paper on the done chip, no moss on the queued one.
+  it('⛔ a trained workout wears the MOSS check, and it wears it even when it is the open row', () => {
+    /*
+     * ════ DONE OUTRANKS QUEUED (founder A.16: *"a completed workout's chip stays white, reads like
+     * another workout still to do"*) ════
+     *
+     * The chips said this with a paper pill against a moss veil. The column has no pills: emphasis
+     * is DISTANCE FROM THE GROUND, so the queued row simply rises off the stage and everything else
+     * lies flat. That removes the collision the founder caught — a record cannot put on an offer's
+     * pill when there is no pill — and leaves one place it can still happen: **she taps a finished
+     * session to re-read it, and the row opens exactly as an offer does.**
+     *
+     * So the law is now about the MARK. A workout she has trained carries the moss check wherever it
+     * is drawn, open or closed, and one she has not carries none. The act is refused separately.
+     */
     const r = mount(<HomeView {...props()} />);
+    const done = colors(byLabel(r, 'Push A')!);
+    expect(done).toContain(color.up); // the lit moss check — the single accent, and the verdict
+    const todo = colors(byLabel(r, 'Legs A')!);
+    expect(todo).not.toContain(color.up); // a check means DONE and nothing else
 
-    // Done: the moss mark on the moss veil. (Its LABEL is cream, as all legible copy is — it is
-    // the MARK that carries the verdict, not the text.)
-    const doneChip = colors(byLabel(r, 'Push A')!);
-    expect(doneChip).toContain(color.up); // the lit moss check/border (== the single accent)
-    expect(doneChip).not.toContain(color.paper); // done is moss, never the queued paper pill
-
-    // Queued: the paper pill, and no check — a check means DONE and nothing else.
-    const queuedChip = colors(byLabel(r, 'Pull A')!);
-    expect(queuedChip).toContain(color.paper);
-    expect(queuedChip).not.toContain(color.up); // no moss on the queued chip at all
+    // …and the same workout as the OPEN row: still checked, still unmistakably a record.
+    const open = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
+    expect(byLabel(open, 'Push A')).toBeNull(); // it is the open row, not a control
+    const anyMoss = open.root
+      .findAll((n) => n.props?.color === color.up || n.props?.strokeWidth === 2.6)
+      .length;
+    expect(anyMoss).toBeGreaterThan(0);
   });
 
-  /**
-   * ════ DONE OUTRANKS QUEUED (founder A.16: "a completed workout's chip stays white, reads like
-   * another workout still to do") ════
-   *
-   * The two states were both real and the styles were simply applied in the wrong order — `current`
-   * last, so it won. A finished workout can be SELECTED (tapping it re-reads its plan, founder
-   * 2026-07-17), and the moment it was, it put on the cream pill of something still to do. The check
-   * icon was left arguing against the whole rest of the chip.
-   *
-   * The law is not about which style object wins. It is that a record may never wear the skin of an
-   * offer — whatever else is true of it.
-   */
-  it('a DONE workout that is also the selection never wears the queued paper pill', () => {
-    const r = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
-    const chip = byLabel(r, 'Push A')!;
-    expect(chip.props.accessibilityState?.selected).toBe(true); // it IS the selection…
-    expect(colors(chip)).not.toContain(color.paper); // …and it is still, unmistakably, done
-    expect(colors(chip)).toContain(color.up);
+  it('⚠️ and a done workout is never offered again: the act refuses it', () => {
+    // The other half of A.16, and the half that actually protects her history. Selecting a finished
+    // session shows its plan; it never puts a Begin under it.
+    const said = texts(mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />)).join(' ');
+    expect(said).not.toContain(tg('home.begin', { name: bidi('Push A') }));
   });
 
-  it('a done chip is struck through — the mark and the type agree', () => {
+  it('⚠️ a done row’s TYPE agrees with its mark — it recedes, it is not an offer in cream', () => {
+    /*
+     * The chips said this with a strike-through, and the founder's point was that *the mark and the
+     * type agree*: a check on a row set exactly like the ones still to do makes the check argue
+     * with everything around it.
+     *
+     * The column says it by weight instead — a trained session's name lies in the muted ink the
+     * stage keeps for things that are not the point, and a pending one stands in the tone above it.
+     * A strike-through through a whole day of the week would read as cancelled rather than done.
+     */
     const r = mount(<HomeView {...props()} />);
-    const struck = (label: string) =>
+    const tone = (label: string) =>
       r.root
         .findAll((n) => n.props?.accessibilityLabel === label)
-        .some((n) =>
-          n.findAll((c) => {
-            const s = c.props.style;
-            const flat = Array.isArray(s) ? Object.assign({}, ...s.filter(Boolean)) : s;
-            return flat?.textDecorationLine === 'line-through';
-          }).length > 0,
-        );
-    expect(struck('Push A')).toBe(true); // done
-    expect(struck('Legs A')).toBe(false); // still to do
+        .flatMap((n) => n.findAll((c) => typeof c.props?.children === 'string'))
+        .map((c) => {
+          const st = c.props.style;
+          const flat = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
+          return flat?.color as string | undefined;
+        })
+        .filter(Boolean);
+    expect(tone('Push A')).toContain(color.textMuted); // done — receded
+    expect(tone('Legs A')).toContain(color.textSecondary); // still to do — a step brighter
   });
 
   /**
-   * "A completed workout may not belong in the row of pending ones at all" (founder A.16). It
-   * doesn't: it falls to the end. Today answers "what is up next", so the strip has to LEAD with
-   * what is left. This is the canonical v7 handoff's own move — on the wrist the done workout is
-   * struck through and pushed to the foot of the list with `margin-top:auto`.
+   * ⛔ THIS LAW DIED WITH THE STRIP, AND ITS REASON DIED WITH IT (2026-08-04).
+   *
+   * It said: *"a completed workout may not belong in the row of pending ones at all"* (founder
+   * A.16) — so finished workouts fell to the end and the strip led with what was left. That was
+   * right for a horizontal CHOOSER, whose only job was to offer what was next.
+   *
+   * The column is not a chooser. It is the week, in the order the week happens, and Sunday comes
+   * before Tuesday whether or not Sunday is finished. **Reordering it by done-ness would destroy
+   * the one thing it exists to say.** What is next is answered by the row that opens, which is a
+   * better answer than a sort order ever was.
+   *
+   * Kept, inverted, so nobody re-adds the sort: the order is the WEEK's, and a done workout holds
+   * its own day.
    */
-  it('the strip leads with what is LEFT — finished workouts fall to the end', () => {
+  it('⛔ the column keeps the week’s order — a finished workout does NOT fall to the end', () => {
     const r = mount(
       <HomeView
         {...props({
@@ -529,7 +549,9 @@ describe('the week is on the page, and it is a door', () => {
       .findAll((n) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props.onPress === 'function')
       .map((n) => n.props.accessibilityLabel as string)
       .filter((l) => ['Push A', 'Pull A', 'Legs A', 'Push B'].includes(l));
-    expect(order).toEqual(['Pull A', 'Push B', 'Push A', 'Legs A']);
+    // No pattern in this fixture → the column numbers the coach's own order and keeps it whole.
+    // (Pull A is `dayName`, so it is the OPEN row and therefore not a control — hence its absence.)
+    expect(order).toEqual(['Push A', 'Legs A', 'Push B']);
   });
 });
 
@@ -620,8 +642,17 @@ describe('the screen does not stutter', () => {
     // the same fact. (The meter survives only in RECOVERY, where "3 / 3" is the closing verdict.)
     const counted = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('/ 3'));
     expect(counted).toHaveLength(0);
-    const r = mount(<HomeView {...props()} />);
-    for (const w of WORKOUTS) expect(byLabel(r, w.name)).not.toBeNull();
+    /*
+     * ⚠️ AND THIS LAW STOPPED A METER GOING BACK IN. The 2026-08-04 proposal put "1 of 4" beside
+     * Begin; the column already says it — one row per session, the trained ones checked — so the
+     * meter would have been a second picture of the same fact, which is the founder's own law about
+     * this screen. It was not built.
+     *
+     * Asked of the WEEK rather than of the controls: the queued session is the open row and is
+     * therefore not pressable, so "every workout is a control" is no longer the right question.
+     */
+    const said = texts(mount(<HomeView {...props()} />)).join(' ');
+    for (const w of WORKOUTS) expect(said).toContain(w.name);
   });
 
   it('an INTERRUPTED session keeps its name — there it is a fact, not an echo', () => {

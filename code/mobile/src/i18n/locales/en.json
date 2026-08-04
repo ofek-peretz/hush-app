@@ -57,6 +57,8 @@
     "briefChangesShort_one": "1 change",
     "briefChangesShort_other": "{{count}} changes",
     "weekLabel": "Week {{n}}",
+    "programEyebrow_one": "Week {{week}} · one day",
+    "programEyebrow_other": "Week {{week}} · {{count}} days",
     "weekComplete": "Week {{n}} complete",
     "begin": "Begin {{name}}",
     "continueWorkout": "Continue {{name}}",

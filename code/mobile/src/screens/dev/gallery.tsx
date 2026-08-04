@@ -1056,6 +1056,9 @@ const weekDoneView = (
  */
 function TodayDriven() {
   const [chosen, setChosen] = React.useState('d1');
+  /* ⚠️ AN EARNED PATTERN, so tapping exercises the WEEK form. Without it this fixture would only
+     ever draw the numbered column, and the day-placement rules would be undriveable here. */
+  const days = React.useMemo(() => new Set(['sun', 'tue', 'thu', 'sat'] as const), []);
   const [rows, setRows] = React.useState<HomePlanLift[] | null>(null);
 
   const workouts = [
@@ -1119,6 +1122,9 @@ function TodayDriven() {
       name="Erez"
       dayName={name}
       dayId={chosen}
+      trainingDays={days}
+      programTitle="Twelve weeks to the half"
+      programWhy="You gave me a date, so the lifting serves the running and the long day is protected."
       muscles=""
       trainedThisWeek={2}
       startError={false}
@@ -1157,8 +1163,12 @@ const todayView = (
   <HomeView
     resting={false}
     name="Erez"
-    /* The coach's own name for the programme — it replaces the "MONDAY · UP NEXT" eyebrow. */
+    /* The coach's own name for the programme — it is the HEADLINE now (2026-08-04). */
     programTitle="Twelve weeks to the half"
+    programWhy="You gave me a date, so the lifting serves the running and the long day is protected."
+    /* ⚠️ AN EARNED PATTERN. Absent, this fixture would draw the numbered column and the week form
+       would have no entry on the page at all — which is how the chips' own states used to hide. */
+    trainingDays={new Set(['sun', 'tue', 'thu', 'sat'] as const)}
     dayName="Upper A"
     dayId="d0"
     muscles="Chest · Shoulders · Triceps"
@@ -1181,8 +1191,6 @@ const todayView = (
       { id: 'd1', name: 'Lower A', muscles: '' },
       { id: 'd2', name: 'Upper B', muscles: '' },
       { id: 'd3', name: 'Lower B', muscles: '' },
-      { id: 'd4', name: 'Upper C', muscles: '' },
-      { id: 'd5', name: 'Lower C', muscles: '' },
     ]}
     brief={null}
     briefCount={3}
@@ -1258,7 +1266,49 @@ export const GALLERY: GalleryEntry[] = [
   // learning length (the handoff's own four) rather than reading a programme it does not have.
   { id: '2.0', label: 'First workout — the first four', status: 'live', note: 'shown over 2.2', render: () => mount(SessionFlow, { previewFirstGym: 4 }) },
   { id: '2.1', label: 'Today', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView}</UnderTabs></InApp> },
-  { id: '2.1a', label: 'Today — driven', status: 'live', note: 'tap the chips: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done chip', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
+  /* ⛔ THE WEEK BEFORE IT KNOWS HER — the founder's own N-workouts model, and the state EVERY new
+     athlete is in for a fortnight. `trainingDays` returns null until the pattern is earned, and
+     nothing in a live harness can produce two weeks of history: without an entry here this is the
+     form of Home most first-time users see and nobody on the team ever looks at. */
+  { id: '2.1c', label: 'Today — week one, no days yet', status: 'live', note: 'the column NUMBERS its rows; no rest rows are invented', render: () => (
+    <InApp><UnderTabs active={0}>
+      {React.cloneElement(todayView, { trainingDays: null, weekNumber: 1, briefCount: 0, trialLeft: 4 })}
+    </UnderTabs></InApp>
+  ) },
+  /* ⚠️ A DONE SESSION AS THE OPEN ROW — founder A.16, in the one place it can still happen: she taps
+     a finished workout to re-read it and the row opens exactly as an offer does. */
+  { id: '2.1d', label: 'Today — a finished session, re-read', status: 'live', note: 'the check holds, and the act refuses it', render: () => (
+    <InApp><UnderTabs active={0}>
+      {React.cloneElement(todayView, {
+        dayId: 'd0',
+        dayName: 'Upper A',
+        dayDone: true,
+        workouts: [
+          { id: 'd0', name: 'Upper A', muscles: '', done: true },
+          { id: 'd1', name: 'Lower A', muscles: '' },
+          { id: 'd2', name: 'Upper B', muscles: '' },
+          { id: 'd3', name: 'Lower B', muscles: '' },
+        ],
+      })}
+    </UnderTabs></InApp>
+  ) },
+  /* ⚠️ AND A WEEK THE COACH DATED ITSELF — an endurance plan names every day for a reason, and the
+     column must place each session on ITS day rather than on her habit. No hypertrophy fixture can
+     show this, because a hypertrophy week carries no days at all. */
+  { id: '2.1e', label: 'Today — a week the coach dated', status: 'live', note: 'coach days outrank her pattern', render: () => (
+    <InApp><UnderTabs active={0}>
+      {React.cloneElement(todayView, {
+        dayId: 'd1',
+        dayName: 'Tempo + Core',
+        workouts: [
+          { id: 'd0', name: 'Easy 6k', muscles: '', day: 'sun', done: true },
+          { id: 'd1', name: 'Tempo + Core', muscles: '', day: 'wed' },
+          { id: 'd2', name: 'Long run', muscles: '', day: 'fri' },
+        ],
+      })}
+    </UnderTabs></InApp>
+  ) },
+  { id: '2.1a', label: 'Today — driven', status: 'live', note: 'tap the ROWS: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done row', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
   { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
   { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },

@@ -97,11 +97,17 @@ describe('and it reaches two screens, not one', () => {
   it('⚠️ and so does TODAY, where she looks every morning', () => {
     /*
      * Drawn only on the day it arrives, a name is an announcement rather than a thing she is doing.
-     * On Today it replaces the "MONDAY · UP NEXT" eyebrow — two facts she already had (her phone
-     * shows the day; the whole screen is what is next) for one nothing else answers.
+     *
+     * ⚠️ IT WAS THE EYEBROW AND IT IS THE HEADLINE NOW (founder 2026-08-04, the week-column
+     * rebuild). Same law, moved up: the name went from replacing "MONDAY · UP NEXT" in the chrome's
+     * mono to being the largest type on the screen, in the coach's serif. The old assertion pinned
+     * `.toUpperCase()`, which was about the eyebrow's styling and not about the law at all.
      */
     expect(read('src/screens/home/Home.tsx')).toContain('programTitle={coachPlan?.title ?? null}');
-    expect(read('src/screens/home/HomeView.tsx')).toContain('props.programTitle ? props.programTitle.toUpperCase()');
+    expect(read('src/screens/home/HomeView.tsx')).toContain('<Text style={styles.programName}');
+    // …and its REASON with it, which is the half that was never drawn anywhere she looks.
+    expect(read('src/screens/home/Home.tsx')).toContain('programWhy={coachPlan?.why ?? null}');
+    expect(read('src/screens/home/HomeView.tsx')).toContain('<Text style={styles.programWhy}');
   });
 
   it('and both fall back cleanly when there is no name', () => {

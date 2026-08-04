@@ -4,26 +4,33 @@
  * The first tab under the bar (Today · Cardio · Progress · You). It answers the only two questions
  * an open earns — what is up next, and what did Hush change — and offers the one act:
  *
- *   hush (range-mark + serif)     — the wordmark, with the account avatar opposite it
- *   UP NEXT                       — a quiet mono-styled eyebrow; the engine has no days (register L7)
- *   Upper A            · N CHANGES· the workout name in the coach's serif, the change count in a moss
- *                                   pill beside it — tap it for the week's decisions (the WHY)
- *   N LIFTS · ~M MIN              — the shape of the session, one line
- *   lift · load · scheme          · each lift with its form-clip glyph; a CHANGED load stands in moss
- *   [Upper A][Lower A]…           · the week's workouts as a horizontal chooser; the queued one is cream
- *   Begin Upper A                 · the one act — cream standing on the dark stage
+ *   hush (range-mark + serif)     — the wordmark, with the coach's door opposite it
+ *   WEEK 3 · FOUR DAYS            — the shape of the week, in the chrome's mono
+ *   Shoulders, rebuilt            — THE PROGRAMME, in the coach's serif. The headline.
+ *   its `why`, one or two lines   — the coach's reason for the whole thing, in its own serif
+ *   SUN  Upper A               ✓  · the week as a COLUMN she reads down (`components/WeekColumn`)
+ *   TUE  Lower A    · N CHANGES   ·   …the queued row OPENS and holds the shape, the lifts and
+ *        5 LIFTS · ~58 MIN        ·   the change pill. Every other row is one line.
+ *        lift · load · scheme     ·   a CHANGED load stands in the direction it moved
+ *   WED  ———                      · a day with nothing on it: a letter and a rule, never the word
+ *   Begin Lower A                 · the one act — cream standing on the dark stage, pinned
  *   N WORKOUTS LEFT IN YOUR TRIAL · one quiet line, gone when the trial is
+ *
+ * ⛔ REBUILT 2026-08-04. It used to open on the QUEUED WORKOUT with the week reduced to a horizontal
+ * strip of chips — *"the way I chose is like a to-do list, and that wasn't right"* (founder). The two
+ * questions an athlete actually opens the app with, *what am I on?* and *where am I in the week?*,
+ * were both unanswerable, while *what is today called?* took the largest type on the screen.
+ *
+ * ⚠️ AND THE WEEKDAYS ARE EARNED, NEVER ASKED — `domain/trainingDays`. Until the pattern exists the
+ * column numbers its rows, which is the founder's own N-workouts model, unchanged.
  *
  * WHY THE STRUCTURE CHANGED (founder v7, 2026-07-22). The old Home led with a brief CARD (the
  * engine's sentence in a framed box) and closed with a week CARD (the chips inside a second frame).
- * v7 dissolves both frames into the page: the change count becomes a pill on the title, and the
- * chips become an inline scroller under the plan. Nothing is a card on the stage now — the stage
- * itself is lit, and emphasis is standing in that light (cream) versus resting in shadow.
+ * v7 dissolved both frames into the page. Nothing is a card on the stage — the stage itself is lit,
+ * and emphasis is standing in that light versus resting in shadow. The open row of the week column
+ * is the one thing that RISES off it, which is the same law spent on the one row that has an act.
  *
- * THE NAME IS BACK, big, in the serif — this is the coach naming the session, and it is the one
- * place the workout's name is set as a headline. The button says it again as it starts it; the lit
- * chip says it a third time only while it is the selection. Cardio is its own TAB now, so the run
- * link that used to sit under the act is gone from here.
+ * Cardio is its own TAB now, so the run link that used to sit under the act is gone from here.
  *
  * Rest state centers "Recovery." with the completed-week meter and the one fact recovery waits on —
  * when the next week opens. There, and only there, Open training keeps its card: on a day with no
@@ -39,6 +46,8 @@ import { I18nManager } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Legend, Display, Body, Button, Stage } from '@/components/ds';
+import { WeekColumn } from '@/components/WeekColumn';
+import type { Weekday } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import type { Line } from '@/domain/voice';
@@ -163,6 +172,18 @@ export interface HomeViewProps {
    *  Null / 0 in a steady week, where no pill shows. */
   /** The coach's name for the programme she is on. Null until it has named one. */
   programTitle?: string | null;
+  /**
+   * The coach's reason for the whole programme — its `why`.
+   *
+   * ⚠️ OPTIONAL AND OFTEN ABSENT: an older plan carries no `why`, and a blank line where a reason
+   * should be reads as a failure rather than as a plan that predates the field.
+   */
+  programWhy?: string | null;
+  /**
+   * The weekdays she trains on, or absent while the pattern is still being earned.
+   * Absent → the column NUMBERS its rows instead (see `WeekColumn`), which is week one.
+   */
+  trainingDays?: Set<Weekday> | null;
   briefCount: number | null;
   /** This week's update has not been opened yet — the pill wears a small unseen dot. */
   briefUnseen: boolean;
@@ -384,12 +405,43 @@ export function HomeView(props: HomeViewProps) {
                 ⚠️ Falls back to the old line when the coach has not named it, because `title` is
                 optional and an empty eyebrow is worse than a redundant one.
               */}
+              {/*
+                ⛔ REBUILT 2026-08-04 — THE PROGRAMME TAKES THE HEADLINE AND THE WEEK BECOMES A WEEK.
+
+                The founder, on the drawn proposal: *"you're right that the way I chose is like a
+                to-do list."* Home used to open on the QUEUED WORKOUT, with the week reduced to a
+                horizontal strip of chips and no days in it at all — so the two questions an athlete
+                opens the app with (*what am I on?* and *where am I in the week?*) were both
+                unanswerable, while the one she already knew (*what is today called?*) took the
+                largest type on the screen.
+
+                Now the eyebrow states the week's shape, the headline is the PROGRAMME the coach
+                named, its reason sits under it in the coach's own serif, and the week is a column
+                she can read down. The queued workout keeps everything it had — it is the row that
+                opens (`WeekColumn`), and it holds the lifts.
+              */}
               <Legend track={0.18}>
-                {props.programTitle ? props.programTitle.toUpperCase() : `${restWeekday} · ${t('home.upNext')}`}
+                {props.weekNumber != null && props.workouts.length > 0
+                  ? t('home.programEyebrow', { week: props.weekNumber, count: props.workouts.length })
+                  : `${restWeekday} · ${t('home.upNext')}`}
               </Legend>
 
-              {/* THE NAME, in the coach's serif — with the change count in a moss pill beside it.
-                  Tap the pill for the week's decisions (the WHY surface, where the undo lives). */}
+              {props.programTitle ? (
+                <Text style={styles.programName} numberOfLines={2}>{bidi(props.programTitle)}</Text>
+              ) : null}
+
+              {/*
+                ⛔ THE COACH'S REASON FOR THE WHOLE PROGRAMME. Written by it, stored, sent back to it
+                every week — and drawn on exactly one screen, the one right after onboarding, which
+                she sees once and never again. It is the difference between a programme and a list.
+              */}
+              {props.programWhy ? (
+                <Text style={styles.programWhy} numberOfLines={3}>{props.programWhy}</Text>
+              ) : null}
+
+              {/* legacy title row — kept mounted only when the coach has NOT named the programme,
+                  so an older plan still leads with the workout it is offering rather than nothing. */}
+              {props.programTitle ? null : (
               <View style={styles.titleRow}>
                 {/*
                   ⛔ TWO LINES, NOT ONE (founder 2026-08-03): *"on the TODAY screen it writes 'upper
@@ -422,6 +474,7 @@ export function HomeView(props: HomeViewProps) {
                   </Pressable>
                 ) : null}
               </View>
+              )}
 
               {/* The shape of the session, one line — "6 LIFTS · ~55 MIN".
 
@@ -431,13 +484,34 @@ export function HomeView(props: HomeViewProps) {
                   It is the SHAPE of her day — how much work and how long — and it was set smaller
                   than the legends above it, so the one line that answers "have I got time for this?"
                   was the hardest thing on the screen to read. */}
-              {liftCount ? (
-                <Legend size={15} track={0.04} weight="regular" tone="onStage" style={styles.shapeLine}>
-                  {props.planTimeUnknown
-                    ? t('home.planShapeNoTime', { lifts: liftCount })
-                    : t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })}
-                </Legend>
-              ) : null}
+              {/*
+                ⛔ THE WEEK, AS A WEEK (founder 2026-08-04). What stood here was a horizontal strip
+                of chips with the day letters on them — a chooser, not a week — and the lifts of the
+                chosen one sat above it in no relation to anything.
+
+                The column inverts that: the week is the page, and the queued session is the row
+                that OPENS and holds the lifts. Everything the chips could do, a row does; what a
+                row can also do is be a Tuesday.
+
+                ⚠️ `selectedId` falls back to matching by NAME because `dayId` is absent on an
+                engine-era plan, which is exactly what the chips did and for the same reason.
+              */}
+              <WeekColumn
+                workouts={props.workouts}
+                selectedId={props.dayId ?? props.workouts.find((w) => w.name === props.dayName)?.id ?? null}
+                days={props.trainingDays}
+                onChoose={props.onChooseWorkout}
+                changes={props.briefCount}
+                onChanges={props.onWeeklyUpdate}
+                inert={!!props.resumable}
+                shape={
+                  liftCount
+                    ? props.planTimeUnknown
+                      ? t('home.planShapeNoTime', { lifts: liftCount })
+                      : t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })
+                    : null
+                }
+              >
 
               {/* TODAY'S LIFTS — a table the eye scans down. Each row: form-clip glyph + name on the
                   start edge, the load in a mono column on the end edge (moss if the engine changed it). */}
@@ -500,91 +574,7 @@ export function HomeView(props: HomeViewProps) {
                 </Text>
               ) : null}
 
-              {/* THE CHOOSER — the week's workouts as a horizontal scroller. The queued one is cream
-                  (standing in the light); a done one is struck through and stands aside; the rest
-                  rest in shadow. One act: a tap selects, and the plan above repaints. A done workout
-                  can be read but not started again; an interrupted session freezes the row (the CTA
-                  disagrees). */}
-              {props.workouts.length ? (
-                <View style={styles.chipStrip}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chips}
-                  accessibilityLabel={t('home.weekChips')}
-                >
-                  {whatIsLeftFirst(props.workouts).map((w) => {
-                    const isDone = !!w.done;
-                    const current = props.dayId != null ? w.id === props.dayId : w.name === props.dayName;
-                    const inert = !!props.resumable;
-                    return (
-                      <Pressable
-                        key={w.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={w.name}
-                        accessibilityState={{ selected: current, disabled: inert }}
-                        disabled={inert}
-                        onPress={() => {
-                          if (inert) return;
-                          haptics.tick();
-                          props.onChooseWorkout(w.id);
-                        }}
-                        style={({ pressed }) => [
-                          styles.chip,
-                          // ════ DONE OUTRANKS QUEUED (founder A.16) ════
-                          // `current` used to be applied LAST, so a finished workout the athlete
-                          // tapped to re-read put on the cream queued pill — "a completed workout's
-                          // chip stays white, reads like another workout still to do". A record
-                          // cannot wear the skin of an offer, whatever else is true of it. Selection
-                          // on a done chip is said with a moss ring instead: it is still the thing
-                          // the plan below belongs to, and it is still finished.
-                          !isDone && current && styles.chipCurrent,
-                          isDone && styles.chipDone,
-                          isDone && current && styles.chipDoneCurrent,
-                          pressed && styles.pressedDim,
-                        ]}
-                      >
-                        {isDone ? <Icon name="check" size={13} color={color.up} strokeWidth={2.6} /> : null}
-                        {/* ⚠️ THE DAY THE COACH PUT IT ON — decided, stored, sent back to the coach,
-                            and never once shown to her. A hypertrophy week names no days and this is
-                            simply absent; an endurance plan names all of them, and without this the
-                            long run that belongs on Sunday was handed over on a Wednesday because
-                            Wednesday came next in the list. Three letters, in the chip's own voice,
-                            ahead of the name because that is the order she reads it in. */}
-                        {w.day ? (
-                          <Text style={[styles.chipDay, current && !isDone && styles.chipTextCurrent]}>
-                            {t(`weekday.${w.day}`).toUpperCase()}
-                          </Text>
-                        ) : null}
-                        <Text
-                          style={[
-                            styles.chipText,
-                            !isDone && current && styles.chipTextCurrent,
-                            isDone && styles.chipTextDone,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {bidi(w.name)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-                {/* The strip runs off the page rather than stopping — a 52px fade at the end
-                    edge says "there is more here" without a scrollbar or an arrow. */}
-                <View pointerEvents="none" style={styles.chipFade}>
-                  <Svg width="100%" height="100%">
-                    <Defs>
-                      <SvgGradient id="chipFade" x1={I18nManager.isRTL ? '1' : '0'} y1="0" x2={I18nManager.isRTL ? '0' : '1'} y2="0">
-                        <Stop offset="0" stopColor={color.bg} stopOpacity="0" />
-                        <Stop offset="1" stopColor={color.bg} stopOpacity="1" />
-                      </SvgGradient>
-                    </Defs>
-                    <Rect x="0" y="0" width="100%" height="100%" fill="url(#chipFade)" />
-                  </Svg>
-                </View>
-                </View>
-              ) : null}
+              </WeekColumn>
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
@@ -784,6 +774,21 @@ const styles = StyleSheet.create({
   pressedDim: { opacity: 0.62 },
 
   // ── the title row ──
+  /*
+   * ⚠️ 38, NOT THE 54 THE WORKOUT NAME USED TO TAKE. A programme is named in words the coach chose
+   * ("Shoulders, rebuilt" / "כתפיים, מהיסוד") and it has to survive two lines in Hebrew without
+   * pushing the week below the fold. The founder's floor is that nothing be SMALL; this is the
+   * largest type on the screen and stays it.
+   */
+  programName: { fontFamily: font.serif, fontSize: 38, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
+  programWhy: {
+    marginTop: 8,
+    fontFamily: font.serif,
+    fontSize: 16,
+    lineHeight: 23,
+    color: color.textSecondary,
+    textAlign: 'left',
+  },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   // `lineHeight` is tightened relative to the size so a two-line name stacks without a gulf.
   title: { flex: 1, fontFamily: font.serif, fontSize: 54, lineHeight: 56, color: color.textPrimary, textAlign: 'left' },
