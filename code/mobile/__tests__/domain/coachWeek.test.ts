@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 /**
  * ════ WHAT THE SURFACES READ ONCE THE COACH OWNS THE PROGRAMME ════
  *
@@ -92,7 +94,16 @@ describe('minutes are counted, never guessed', () => {
      * [45s plank, open] + 1×60s rest. The last block is not charged — there is nothing to walk to.
      */
     const lower = coachWeek(plan())[1];
-    expect(lower.minutes).toBe(Math.round((3 * 40 + 2 * 120 + REST_TRANSITION_S + 2 * 45 + 60) / 60));
+    /*
+     * ⚠️ `EXEC_S` IS READ FROM THE SOURCE, not restated as 40. It was corrected to 70 on build 41 —
+     * the old value described the time a set takes to PERFORM, which is about half what the set
+     * costs her once the rack, the plates and the logging are counted. A test that hard-codes a
+     * constant fails when the constant is FIXED, which teaches people to edit the test.
+     */
+    const EXEC_S = Number(/const EXEC_S = (\d+)/.exec(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'src/domain/coachWeek.ts'), 'utf8'),
+    )![1]);
+    expect(lower.minutes).toBe(Math.round((3 * EXEC_S + 2 * 120 + REST_TRANSITION_S + 2 * 45 + 60) / 60));
     expect(lower.hasUncountedWork).toBe(false);
   });
 

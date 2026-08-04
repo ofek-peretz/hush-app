@@ -659,7 +659,20 @@ export function coachCatalogue(): FactCatalogueEntry[] {
  * exist, and nothing recorded is ever orphaned.
  */
 const NOT_YET_OFFERED = new Set([
+  // The machines — every one measures and records differently, and none has a screen yet.
   'cycle_outdoor', 'cycle_stationary', 'row_erg', 'elliptical', 'stair_climber', 'swim', 'jump_rope',
+  /*
+   * ⛔ AND THE FIELD WORK, on the founder's scope call after build 41:
+   *
+   *   > *"Take out the sprints and all the various cardio things. I want us to focus on the gym
+   *   > alone, and cardio is walking / running, that's it. We need to go back to the source and be
+   *   > the best gym-only app there is, and establish ourselves there."*
+   *
+   * Sprints, shuttles, jumps and sled work are not gym-floor training, and every one of them is a
+   * screen we have not designed and a measurement the phone cannot take. Leaving them on offer let
+   * the coach write a session the app cannot run.
+   */
+  'sprint', 'shuttle_run', 'box_jump', 'broad_jump', 'sled_push',
 ]);
 
 export function coachMovements(): FactMovement[] {

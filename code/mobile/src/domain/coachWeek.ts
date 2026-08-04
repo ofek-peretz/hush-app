@@ -31,8 +31,26 @@ import { exerciseDisplayName } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPlan';
 
-/** Seconds a single rep-set takes to perform, before rest. The same order the engine assumes. */
-const EXEC_S = 40;
+/**
+ * ════ WHAT ONE SET COSTS, BESIDES ITS REST ════
+ *
+ * ⛔ FOUNDER, ON BUILD 41: *"the home screen still shows about 35 minutes for a longer workout."*
+ *
+ * It was 40 seconds, described as "seconds a single rep-set takes to PERFORM". That is roughly right
+ * for the lifting and roughly half of what the set actually costs her: she walks to the rack, loads
+ * it or sets the pin, does the reps, racks it, and writes it down. None of that is rest, and none of
+ * it was counted — so a six-exercise session came out at three quarters of its real length.
+ *
+ * 70 seconds is the set CYCLE minus its rest. It is still a constant and still a guess, but it is a
+ * guess about the right thing.
+ *
+ * ⏸️ IT SHOULD BE MEASURED, AND IT CAN BE. Every `SetLog` carries `persistedAt`, so the gap between
+ * consecutive sets minus the rest she actually took IS this number, per athlete — the same shape as
+ * `restPrescription`, which already learns her median rest instead of assuming one. Left as a
+ * constant because a new athlete has no history and would need one anyway; worth learning the day
+ * the estimate matters more than it does now.
+ */
+const EXEC_S = 70;
 /** Rest between rounds when the coach did not prescribe one. */
 const DEFAULT_REST_S = 90;
 /**

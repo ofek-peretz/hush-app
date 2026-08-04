@@ -191,23 +191,6 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   const numTone = NUM_TONE[size];
   const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
   const listRef = useRef<ScrollView>(null);
-  /**
-   * The measured width of the track. Feeds ONLY `sidePad`, the padding that centres the first
-   * detent — every offset, detent and index calculation uses the constant `itemW`.
-   *
-   * ⚠️ IN THE WEB HARNESS THIS NEVER LEAVES 0 — `onLayout` does not deliver there, on this View or
-   * on the ScrollView (both tried, 2026-08-03). So the gallery shows the wheel UNCENTRED, with the
-   * active numeral scrolled off to its absolute offset, and that is a harness artefact rather than
-   * a statement about the device.
-   *
-   * ⛔ WHAT THE HARNESS DID PROVE is the bug the founder reported: the track used to be gated on
-   * `width > 0`, so an unmeasured wheel drew NO NUMERALS AT ALL. That gate is gone, and the wheel
-   * now draws whether or not it is ever measured.
-   *
-   * ⏸️ WHAT ONLY A DEVICE CAN SAY: whether `onLayout` delivers on iOS. If it does, the wheel centres
-   * as it always did. If it does not, the numerals are drawn but off-centre — better than blank, and
-   * still wrong — and the fix is to stop deriving the centre from a measurement at all.
-   */
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
   const lastHapticRef = useRef(0);
@@ -226,26 +209,17 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
   // Position the wheel on the controlled value — the single writer. The window is
   // re-anchored FIRST so the target cells exist when the scroll lands (content size is
   // constant, so the offset itself never depends on what is rendered).
-  /*
-   * ⛔ NO LONGER GUARDED ON THE MEASUREMENT — same bug as the track above, one layer down.
-   *
-   * `if (width === 0) return;` meant an unmeasured wheel never scrolled to its own value. With the
-   * track drawing unconditionally, that left the numerals rendered at their absolute offset — 137.5
-   * sat at x≈26,400 — which looks exactly like the blank wheel it replaced.
-   *
-   * The offset does not need the width: `wheelOffset` is `index × itemW`, and `itemW` is a constant.
-   * `sidePad` still centres the first detent once the measurement lands, and changing it changes the
-   * content size, which re-fires this through `onContentSizeChange`.
-   */
   const positionToValue = useCallback(() => {
+    if (width === 0) return;
     const target = indexOfValue(value);
     lastIndexRef.current = target;
     setActiveIndex(target);
     setAnchor(target);
     listRef.current?.scrollTo({ x: wheelOffset(target, itemW), animated: false });
-  }, [indexOfValue, value, itemW]);
+  }, [width, indexOfValue, value, itemW]);
 
   useEffect(() => {
+    if (width === 0) return;
     if (indexOfValue(value) === lastIndexRef.current) return;
     const raf = requestAnimationFrame(positionToValue);
     return () => cancelAnimationFrame(raf);
@@ -328,27 +302,8 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
       <View style={styles.scale} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {/* The numerals — a scrolling readout, five at a time. */}
         <View style={styles.numRow}>
-          {/*
-            ⛔ THE TRACK NO LONGER WAITS TO BE MEASURED — founder, build 40: *"on the edit-exercise
-            screen the numbers have vanished from the rulers."*
-
-            It was `{width > 0 ? <ScrollView …> : null}`, and `width` comes from the `onLayout` on
-            the row above. When that measurement does not arrive, the wheel renders its frame, its
-            graduation and its carets — and **not one numeral, ever.** Measured in the browser: the
-            numeral row is 334px wide with zero children, on the editor and on a bare wheel alike.
-
-            ⚠️ AND THE GATE BOUGHT NOTHING. `itemW` is a CONSTANT (`ITEM_W[size]`) — every offset,
-            detent and index calculation is independent of the measured width. The only thing `width`
-            feeds is `sidePad`, the padding that centres the first detent, and that already falls
-            back to 0. So the track can draw immediately and re-centre when the measurement lands:
-            changing `sidePad` changes the content size, which fires `onContentSizeChange`, which is
-            already wired to `positionToValue`.
-
-            ⛔ AND THE LAW COULD NOT SEE IT. `everyWheelIsTheSameWheel` calls `onLayout` ITSELF with a
-            hard-coded 390 — it supplies the exact input that is missing in the real app. A harness
-            that provides the broken step tests everything except the break.
-          */}
-          <ScrollView
+          {width > 0 ? (
+            <ScrollView
               ref={listRef}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -408,6 +363,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
               })}
               <View style={{ width: (values.length - win.end) * itemW }} />
             </ScrollView>
+          ) : null}
         </View>
 
         {/* The engraved tick strip — a fixed, even graduation, struck at centre by one moss tick.
@@ -499,20 +455,9 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    /*
-     * ⛔ THE `direction: 'ltr'` "LTR ISLAND" IS GONE — it never worked on ANY platform.
-     *
-     * `direction` is a CSS property, not a React Native style. iOS ignores it and logs `Invalid
-     * style property of "direction"`; **React Native Web logs the same warning**, which is how this
-     * was finally settled — a Platform gate was tried first on the belief that web honoured it, and
-     * the web sweep warned anyway. Neither runtime applies it. It was decoration on a comment.
-     *
-     * ⏸️ THE INTENT WAS REAL AND IS STILL UNMET: keep the numeric wheel ascending L→R under
-     * `I18nManager.forceRTL(true)`, which `i18n/index.ts` DOES call for Hebrew. The honest fix is
-     * `flexDirection: 'row-reverse'` under `I18nManager.isRTL` — and this is the control a sweating
-     * hand turns to log a set, with offset maths measured against this row's direction, so it needs
-     * a device to turn the wheel on. Deleting a no-op is safe; guessing at the replacement is not.
-     */
+    // LTR island — the numeric wheel never mirrors (see header). A no-op in the LTR
+    // build; under forceRTL it keeps digits ascending L→R and the offset math intact.
+    direction: 'ltr',
     // v7 1.4: NO box — the scale is framed by a hairline top and bottom, on the bare stage.
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -536,8 +481,7 @@ const styles = StyleSheet.create({
   numRow: { alignSelf: 'stretch', flex: 1, justifyContent: 'center', overflow: 'hidden' },
   /** The graduation, held at the foot of the frame and OUT of the touch path (see `numRow`). */
   ticksLayer: { position: 'absolute', left: 0, right: 0, bottom: TICK_INSET, alignItems: 'center' },
-  // Same story as `wrap` above — see the note there. The property was a no-op on both runtimes.
-  scroller: {},
+  scroller: { direction: 'ltr' },
   // The numerals rest where the flow layout used to put them — clear of the graduation and the gap
   // that separated the two — now that the scroller owns the full frame height for touch (C.3).
   scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP_H + 8 },
@@ -549,38 +493,7 @@ const styles = StyleSheet.create({
    * neighbour's cell, not on its glyphs: at distance 1 the numeral is 24px, so its own text starts
    * further out than this box reaches.
    */
-  /*
-   * ⛔ `flexShrink: 0` IS LOad-BEARING — founder, 2026-08-04: *"for large numbers it shows 13… and
-   * does not display the whole number."*
-   *
-   * The cell is deliberately WIDER than its detent (176 vs 96) with negative margins, so a five- or
-   * six-glyph value gets its natural width while the detent maths keeps working in `itemW`. But its
-   * parent `item` is `width: itemW`, and a flex child SHRINKS to its parent by default — so the
-   * 176px box was being squeezed back to 96 and `numberOfLines={1}` ellipsised it.
-   *
-   * Measured in the browser: "137.5" at the active size wants 144px, was given 96, and rendered as
-   * "137…". `NUM_CELL_W` was doing nothing at all.
-   *
-   * ⚠️ THIS IS THE SAME DEFECT THE FOUNDER PHOTOGRAPHED ON BUILD 36 ("82…"), returning by a
-   * different route: the fix then added this wider cell, and the 2026-07-28 layout rework
-   * (`the whole control takes the swipe`) put it inside a fixed-width flex parent that undid it. It
-   * was invisible until the numerals started rendering again, because before that nothing drew.
-   */
-  numCell: {
-    width: NUM_CELL_W,
-    /*
-     * ⛔ `maxWidth` IS THE LINE THAT MAKES THE WIDTH REAL. A `Text` carries `max-width: 100%` of its
-     * parent, and the parent here is one detent wide (96) — so `width: 176` computed to 96 and
-     * `numberOfLines={1}` ellipsised anything past three glyphs. Measured: "137.5" wanted 144px,
-     * was given 96, and drew as "137…" — the founder's *"it shows 13… for large numbers."*
-     *
-     * ⚠️ `flexShrink: 0` was tried first and did nothing: the box was not being SHRUNK by flex, it
-     * was being CAPPED. Two different mechanisms with the same symptom.
-     */
-    maxWidth: NUM_CELL_W,
-    marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2,
-    flexShrink: 0,
-  },
+  numCell: { width: NUM_CELL_W, marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2 },
   num: {
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,

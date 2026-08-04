@@ -79,7 +79,6 @@ export function AboutYou({ navigation, route }: Props) {
             size="lg"
             ends="chevron"
             label={t('ob.weightLegend')}
-            unit={units}
           />
         </View>
         <View style={styles.col}>

@@ -59,6 +59,27 @@ export function Limits({ navigation, route }: Props) {
       }
     >
       <View style={styles.rows}>
+        {/*
+          ⛔ THE FIELD IS ABOVE THE CHIPS (founder, build 41): *"when you come to type in onboarding,
+          you can't see the text window."*
+
+          It was below them, near the foot of the body — so the keyboard rose over the one thing she
+          was trying to look at. Above them it sits high on the screen and stays visible with the
+          keyboard up.
+
+          ⚠️ And it is the better order anyway: the ANSWER comes first and the suggestions sit under
+          it, rather than a row of options standing between the question and the place to reply.
+        */}
+        <TextField
+          block
+          value={text}
+          onChangeText={setText}
+          placeholder={t('ob.limitsPlaceholder')}
+          multiline
+          maxLength={300}
+          returnKeyType="done"
+          onSubmitEditing={onContinue}
+        />
         <AnswerChips
           options={[
             t('ob.limitsChipNone'),
@@ -69,16 +90,6 @@ export function Limits({ navigation, route }: Props) {
           ]}
           onPick={setText}
           picked={text}
-        />
-        <TextField
-          block
-          value={text}
-          onChangeText={setText}
-          placeholder={t('ob.limitsPlaceholder')}
-          multiline
-          maxLength={300}
-          returnKeyType="done"
-          onSubmitEditing={onContinue}
         />
       </View>
     </OnboardingScaffold>

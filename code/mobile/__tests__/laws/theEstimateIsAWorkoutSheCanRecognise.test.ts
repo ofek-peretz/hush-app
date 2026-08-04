@@ -1,4 +1,10 @@
+import fs from 'fs';
+import path from 'path';
 import { coachWeek } from '@/domain/coachWeek';
+
+const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
+/** The set-cycle constant, read from the source so a corrected value does not fail the wrong test. */
+const EXEC = () => Number(/const EXEC_S = (\d+)/.exec(read('src/domain/coachWeek.ts'))![1]);
 import { REST_TRANSITION_S } from '@/domain/restPrescription';
 import type { CoachPlan } from '@/domain/coachPlan';
 
@@ -45,16 +51,30 @@ describe('the gap between exercises is not free', () => {
      *   rests = (4-1)+(4-1)+(3-1)×4 = 14 between-round rests
      * Anything the estimate has beyond that is the transitions, and there must be exactly five.
      */
-    const EXEC_S = 40;
+    /*
+     * ⚠️ READ FROM THE SOURCE, not restated. This test asserted a literal 40 and broke the day the
+     * constant was corrected to 70 — which is a test measuring the implementation instead of the
+     * behaviour. What it is actually about is that there are FIVE transitions, and that survives any
+     * value of `EXEC_S`.
+     */
+    const EXEC_S = Number(/const EXEC_S = (\d+)/.exec(read('src/domain/coachWeek.ts'))![1]);
     const withoutTransitions = (20 * EXEC_S + 14 * 90) / 60;
     const gained = week().minutes - withoutTransitions;
     expect(Math.round((gained * 60) / REST_TRANSITION_S)).toBe(5);
   });
 
   it('⚠️ the estimate is no longer one a person would laugh at', () => {
-    // Not a pinned number — a floor. Twenty working sets with ninety seconds between them cannot be
-    // a 35-minute session, and that is the whole complaint.
-    expect(week().minutes).toBeGreaterThan(40);
+    /*
+     * A FLOOR, not a pinned number — twenty working sets with ninety seconds between them cannot be
+     * a 35-minute session.
+     *
+     * ⛔ RAISED TO 50 ON BUILD 41. The founder reported the SAME complaint after the transition fix:
+     * *"it still shows about 35 minutes for a longer workout."* `EXEC_S` was 40 and described as the
+     * time a set takes to PERFORM — right for the lifting, and about half of what the set costs her:
+     * she walks to the rack, loads it, does the reps, racks it, writes it down. None of that is
+     * rest, and none of it was counted.
+     */
+    expect(week().minutes).toBeGreaterThan(50);
   });
 
   it('a single-block session is charged no transition at all', () => {
@@ -63,7 +83,7 @@ describe('the gap between exercises is not free', () => {
       v: 2,
       sessions: [{ name: 'A', blocks: [{ rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'x', reps: [8, 10], load: 40 }] }] }],
     };
-    expect(coachWeek(one)[0].minutes).toBe(Math.round((3 * 40 + 2 * 90) / 60));
+    expect(coachWeek(one)[0].minutes).toBe(Math.round((3 * EXEC() + 2 * 90) / 60));
   });
 
   it('honours a transition the COACH asked for, over our default', () => {
@@ -78,6 +98,6 @@ describe('the gap between exercises is not free', () => {
         ],
       }],
     };
-    expect(coachWeek(stated)[0].minutes).toBe(Math.round((2 * 40 + 300) / 60));
+    expect(coachWeek(stated)[0].minutes).toBe(Math.round((2 * EXEC() + 300) / 60));
   });
 });

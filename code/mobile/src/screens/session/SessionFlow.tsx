@@ -994,10 +994,28 @@ function StageBar({
   const hasClock = elapsedFrom != null;
   return (
     <View style={styles.stageBar}>
+      {/*
+        ⛔ TWO A SIDE, NOT ONE AND THREE (founder 2026-08-04): *"in the workout the SWAP appears on
+        top of the LIFT."*
+
+        Measured: with pause alone on the left and swap + form + coach on the right, the end group
+        needed 130px, the centre's ordinal ran to x=253, and the swap disc began at x=236 — a 17px
+        overlap on the one line that tells her where she is.
+
+        Both sides carry `flex: 1`, so the centre only stays centred while they are the same width.
+        The coach moves across rather than the centre giving way: pause and the coach are both ways
+        OUT of the set, swap and form are both about the lift in front of her. Symmetric, and the
+        grouping is the honest one.
+      */}
       <View style={styles.stageBarSide}>
         <StageDisc accessibilityLabel={t('workout.pauseAction')} onPress={onExit}>
           <Icon name="pause" size={15} color={stage.ink0} filled />
         </StageDisc>
+        {onCoach ? (
+          <StageDisc accessibilityLabel={t('sessionCoach.open')} onPress={onCoach}>
+            <Icon name="speech" size={15} color={stage.ink0} strokeWidth={1.7} />
+          </StageDisc>
+        ) : null}
       </View>
       {/* ════ TWO FACTS, STACKED — NOT A ROW (founder 2026-07-28) ════
           They sat side by side, parted by a dot, both at 15 px: "LIFT 1 / 6 · 24:18". One line, two
@@ -1030,11 +1048,6 @@ function StageBar({
         {/* `speech` and not a lightbulb or an ℹ: this is not the app informing her, it is the
             COACH talking. The glyph names the speaker, which is the whole distinction — and since
             the founder's ruling it is literally true: pressing it opens a conversation. */}
-        {onCoach ? (
-          <StageDisc accessibilityLabel={t('sessionCoach.open')} onPress={onCoach}>
-            <Icon name="speech" size={15} color={stage.ink0} strokeWidth={1.7} />
-          </StageDisc>
-        ) : null}
       </View>
     </View>
   );

@@ -119,3 +119,30 @@ describe('⛔ the fourth instance — the Why sheet inside the workout', () => {
     expect(flow()).toContain('Math.abs(Number(coachCase.delta ?? 0))');
   });
 });
+
+describe('⛔ and on day one there is nothing to have changed', () => {
+  /*
+   * FOUNDER, BUILD 41: *"it still says there is a number of changes on the TODAY screen."*
+   *
+   * `coachBrief` counts the coach's DECISIONS this week — and the prompt deliberately asks for one
+   * per lift on the FIRST programme, *"where every choice is a decision she has no history to
+   * explain it with."* The instruction is right; the label was wrong. On day one those are six
+   * OPENING POSITIONS, not six changes, and she was being told her week had changed before she had
+   * a week.
+   *
+   * ⚠️ A CHANGE IS A DIFFERENCE BETWEEN TWO PROGRAMMES. With no previous plan there is no
+   * difference — which is the same pair `coachLoadDirections` reads for the arrows two lines below.
+   */
+  it('the pill counts nothing until there is a programme to compare against', () => {
+    const src = read('src/screens/home/Home.tsx');
+    expect(src).toContain('setBriefCount(before && fromCoach ? fromCoach.count : null);');
+    // …and `before` is the stored previous plan, not something derived on the spot.
+    expect(src).toContain('db.loadCoachPlanPrev()');
+  });
+
+  it('⚠️ and the pill is hidden on a null count, not drawn as zero', () => {
+    // `null` and `0` must not read the same: one is "no comparison yet", the other is "compared,
+    // nothing moved" — and only the second is worth a row on her screen.
+    expect(read('src/screens/home/HomeView.tsx')).toContain('props.briefCount != null && props.briefCount > 0 ?');
+  });
+});

@@ -131,84 +131,37 @@ describe('the whole control takes the swipe (C.3)', () => {
   });
 });
 
-describe('⛔ the track draws WITHOUT being measured first', () => {
-  /*
-   * FOUNDER, BUILD 40: *"on the edit-exercise screen the numbers have vanished from the rulers."*
-   *
-   * The track was `{width > 0 ? <ScrollView …> : null}`, and `width` came from an `onLayout`. When
-   * that measurement did not arrive, the wheel drew its frame, its graduation and its carets — and
-   * not one numeral, ever. Measured in the browser: the numeral row was 334px wide with **zero**
-   * children, on the editor and on a bare wheel alike.
-   *
-   * The gate bought nothing. `itemW` is a CONSTANT — every offset, detent and index calculation is
-   * independent of the measured width. `width` feeds only `sidePad`, which already falls back to 0.
-   *
-   * ── ⚠️ AND WHY EVERY TEST ABOVE STAYED GREEN THROUGH IT ─────────────────────────────────────
-   * `draw()` calls `onLayout` ITSELF, with a hard-coded 390 — it supplies the exact input that was
-   * missing in the real app. A harness that provides the broken step tests everything except the
-   * break. So this one mounts the wheel and NEVER measures it, which is the state a real screen was
-   * actually in.
-   */
-  it('renders its numerals with no onLayout at all', () => {
-    let r!: ReactTestRenderer;
-    act(() => {
-      r = renderer.create(
-        <WheelPicker value={137.5} onChange={() => {}} step={0.5} min={0} max={500} size="lg" label="Load" />,
-      );
-    });
-    mounted.push(r);
-    // NO onLayout fired — this is the whole point.
-    const drawn = r.root.findAllByType(Text).map((t) => t.props.children).filter((c) => typeof c === 'string' || typeof c === 'number');
-    expect(drawn.length).toBeGreaterThan(0);
-    expect(drawn.map(String)).toContain('137.5');
-  });
-});
-
-describe('⛔ the numeral box is WIDER than its detent, and stays wider', () => {
-  /*
-   * FOUNDER, BUILD 36: *"the onboarding ruler reads 82…"*  → fixed by giving the numeral a 176px
-   * cell inside a 96px detent, with negative margins so the pitch maths is untouched.
-   * FOUNDER, 2026-08-04: *"for large numbers it shows 13… and does not display the whole number."*
-   *
-   * THE SAME DEFECT, BY A DIFFERENT ROUTE. `NUM_CELL_W` had stopped taking effect: a `Text` carries
-   * `max-width: 100%` of its parent, the parent is one detent wide, so `width: 176` computed to 96
-   * and `numberOfLines={1}` ellipsised. Measured in the browser: "137.5" wanted 144px and was given
-   * 96.
-   *
-   * ⚠️ `flexShrink: 0` was tried first and changed nothing — the box was not being SHRUNK, it was
-   * being CAPPED. Two mechanisms, one symptom, and only the second one was the cause.
-   *
-   * ⚠️ AND IT WAS INVISIBLE FOR WEEKS because the wheel drew no numerals at all (the `width > 0`
-   * gate). One bug hid the other; fixing the first is what surfaced this.
-   */
-  it('declares a maxWidth, or the width is a suggestion the parent overrules', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src/components/ds/WheelPicker.tsx'), 'utf8');
-    expect(src).toMatch(/maxWidth: NUM_CELL_W/);
-    expect(src).toMatch(/width: NUM_CELL_W/);
-  });
-
-  it('and the cell is genuinely wider than the detent it sits in', () => {
-    // If these ever converge the negative margins go to zero and the truncation returns silently.
-    const r = draw('lg', 137.5);
-    const texts = r.root.findAllByType(Text);
-    const widths = texts.map((t) => flat(t.props.style).width).filter((w): w is number => typeof w === 'number');
-    const cells = r.root.findAllByType(ScrollView)[0].findAllByType(View)
-      .map((v) => flat(v.props.style).width).filter((w): w is number => typeof w === 'number');
-    const detent = Math.min(...cells.filter((w) => w > 0));
-    expect(Math.max(...widths)).toBeGreaterThan(detent);
-  });
-
-  it('⚠️ fits the widest value the app can prescribe without an ellipsis', () => {
-    /*
-     * Six glyphs is the ceiling: a load can reach "482.5" and an age "95". The assertion is on the
-     * ARITHMETIC rather than on a render, because the harness cannot measure a glyph — the browser
-     * sweep is what confirmed the pixels, and this keeps the budget from being trimmed away later.
-     */
-    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src/components/ds/WheelPicker.tsx'), 'utf8');
-    const cell = Number(/const NUM_CELL_W = (\d+)/.exec(src)![1]);
-    const item = Number(/const ITEM_W = \{ md: (\d+)/.exec(src)![1]);
-    // "137.5" measured 144px at the active size; six glyphs needs more, and the cell must clear it.
-    expect(cell).toBeGreaterThanOrEqual(176);
-    expect(cell).toBeGreaterThan(item);
-  });
-});
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ TWO LAWS STOOD HERE AND BOTH ENFORCED A MISTAKE. 2026-08-04.
+ *
+ * FOUNDER, after build 41: *"the rulers don't show their text… I don't know why you touched the
+ * rulers in the first place — everything worked perfectly before."*
+ *
+ * He is right, and here is the whole chain:
+ *
+ *   1. He reported something wrong with the wheel on build 40.
+ *   2. I opened the browser harness, MEASURED that the numeral row was empty, and found the cause:
+ *      the track was gated on `width > 0` and `onLayout` never delivered.
+ *   3. I removed the gate, then found the numerals capped by their parent, and removed that too.
+ *   4. Build 41 shipped with a wheel that is worse than the one before it.
+ *
+ * ── ⚠️ WHAT I ACTUALLY MEASURED ────────────────────────────────────────────────────────────────
+ * **`onLayout` never fires in React Native Web.** I established that myself, in this session, and
+ * wrote it in a comment — and then went on treating the blank numeral row as a statement about the
+ * device. It was not. It was the harness failing to do the one thing the wheel depends on.
+ *
+ * **A harness that cannot reproduce a platform's behaviour is not evidence about that platform.**
+ * The browser is excellent at finding missing elements, wrong copy and clipped text. It is worthless
+ * for anything downstream of a native layout callback, and this control is entirely downstream of
+ * one.
+ *
+ * ── AND THE TESTS MADE IT WORSE, NOT BETTER ─────────────────────────────────────────────────────
+ * I wrote a law asserting the track renders with no `onLayout` at all — which encoded the harness's
+ * limitation as a product requirement. It passed, it looked rigorous, and it locked in the damage.
+ * A law written from a harness artefact is a harness artefact with a test runner attached.
+ *
+ * **The file is reverted to `cb9a4b6`, its last state before I touched it.** The tests above still
+ * hold: they are about geometry the renderer can answer, which is what this file was always for.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */

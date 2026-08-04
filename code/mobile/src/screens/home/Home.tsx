@@ -413,7 +413,19 @@ export function Home({ navigation, route }: Props) {
          * a change — and shows no pill at all; 0 is "this week, nothing changed", a verdict she is
          * owed.
          */
-        setBriefCount(fromCoach ? fromCoach.count : null);
+        /*
+         * ⛔ NO PREVIOUS PROGRAMME MEANS NOTHING CHANGED (founder, build 41): *"it still says there
+         * is a number of changes on the TODAY screen."*
+         *
+         * `coachBrief` counts the coach's DECISIONS this week, and the prompt asks it to write one
+         * per lift on the FIRST programme — *"where every choice is a decision she has no history to
+         * explain it with."* Correct instruction, wrong label: on day one those are six OPENING
+         * positions, not six changes. She was being told her week had changed before she had a week.
+         *
+         * A change is a difference between this programme and the one before it, so with no `before`
+         * there is no count — the same pair `coachLoadDirections` reads two lines down.
+         */
+        setBriefCount(before && fromCoach ? fromCoach.count : null);
         /*
          * THE UNSEEN DOT, from one comparison. A decision newer than her last visit to the letter is
          * news she has not read. There is no second "seen" flag to write and therefore none to fall

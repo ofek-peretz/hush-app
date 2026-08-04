@@ -68,16 +68,17 @@ export function WhatFor({ navigation, route }: Props) {
       }
     >
       <View style={styles.rows}>
-        <AnswerChips
-          options={[
-            t('ob.forChipMuscle'),
-            t('ob.forChipStrong'),
-            t('ob.forChipRace'),
-            t('ob.forChipBack'),
-          ]}
-          onPick={setText}
-          picked={text}
-        />
+        {/*
+          ⛔ THE FIELD IS ABOVE THE CHIPS (founder, build 41): *"when you come to type in onboarding,
+          you can't see the text window."*
+
+          It was below them, near the foot of the body — so the keyboard rose over the one thing she
+          was trying to look at. Above them it sits high on the screen and stays visible with the
+          keyboard up.
+
+          ⚠️ And it is the better order anyway: the ANSWER comes first and the suggestions sit under
+          it, rather than a row of options standing between the question and the place to reply.
+        */}
         <TextField
           block
           value={text}
@@ -87,6 +88,21 @@ export function WhatFor({ navigation, route }: Props) {
           maxLength={200}
           returnKeyType="done"
           onSubmitEditing={onContinue}
+        />
+        <AnswerChips
+          /*
+           * ⛔ NO "A RACE" (founder, build 41): *"we need to go back to the source and be the best
+           * gym-only app there is."* Offering a race as a starting point invites a goal the app
+           * cannot serve — the conditioning it needs is exactly what was just taken off the coach's
+           * menu. She can still TYPE it, and the coach will answer honestly about what it can do.
+           */
+          options={[
+            t('ob.forChipMuscle'),
+            t('ob.forChipStrong'),
+            t('ob.forChipBack'),
+          ]}
+          onPick={setText}
+          picked={text}
         />
       </View>
     </OnboardingScaffold>
