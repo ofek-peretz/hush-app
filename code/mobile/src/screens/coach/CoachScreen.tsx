@@ -29,19 +29,20 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import React from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { CoachChat } from './CoachChat';
 import { useCoach } from './useCoach';
 import { Icon } from '@/components/Icon';
+import { RangeMark } from '@/components/RangeMark';
 import { Legend } from '@/components/ds';
 import { coachFacts } from '@/domain/coachFacts';
 import { db } from '@/data/local/db';
 import { health } from '@/platform/health';
 import type { ExternalWorkout } from '@/platform/health/healthModel';
-import { color, s } from '@/design/tokens';
+import { color, s, font } from '@/design/tokens';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
@@ -124,7 +125,21 @@ export function CoachScreen({ navigation }: Props) {
           >
             <Icon name="chevronLeft" size={22} color={color.onSurface} strokeWidth={2} />
           </Pressable>
-          <Legend size={11} tone="muted">{t('coach.title')}</Legend>
+          {/*
+            ⛔ THE PRODUCT SIGNS ITS NAME HERE (founder 2026-08-04, on the chat's design).
+
+            The centre held the word "Coach" at eleven points in the muted tone — a label naming a
+            section of an app. This is the ONE surface where the product speaks in the first person,
+            and it was the only one with no identity at the top at all.
+
+            The mark and the wordmark instead: a screenshot of a conversation then carries the
+            product, which is worth more than any share button — and "Coach" was a label explaining
+            a screen whose entire content already says what it is.
+          */}
+          <View style={styles.mark}>
+            <RangeMark />
+            <Text style={styles.markWord}>hush</Text>
+          </View>
           {/* A spacer the width of the control opposite, so the title sits on the screen's centre
               rather than the centre of what is left over. */}
           <View style={styles.back} />
@@ -173,6 +188,16 @@ function Body({
       busy={coach.busy}
       onSend={coach.send}
       invitation={t('coach.openReturning')}
+      /*
+       * ⛔ THREE OPENERS (founder 2026-08-04). A blank field asks her to invent a question about a
+       * thing she has never had a conversation with. They say what KIND of thing this is for — the
+       * same law as the onboarding answers and as the workout window: **let the control speak.**
+       *
+       * ⚠️ They FILL the field rather than sending it, which is the whole difference between an
+       * opener and a menu: "my knee hurts" is the start of a sentence only she can finish, and a
+       * chip that fired it as-is would be three canned questions wearing a conversation's clothes.
+       */
+      openers={[t('coach.chipHurts'), t('coach.chipDays'), t('coach.chipSwap')]}
     />
   );
 }
@@ -188,5 +213,7 @@ const styles = StyleSheet.create({
     paddingVertical: s(10),
   },
   back: { width: s(32), height: s(32), alignItems: 'center', justifyContent: 'center' },
+  mark: { flexDirection: 'row', alignItems: 'center', gap: s(7) },
+  markWord: { fontFamily: font.serif, fontSize: s(19), color: color.textPrimary, textAlign: 'left' },
   pressed: { backgroundColor: color.surface, borderRadius: s(16) },
 });

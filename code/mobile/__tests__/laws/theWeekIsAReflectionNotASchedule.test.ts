@@ -1,5 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import { weekRows, type WeekColumnWorkout } from '@/components/WeekColumn';
 import type { Weekday } from '@/domain/coachPlan';
+
+const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -137,5 +141,36 @@ describe('the open row', () => {
     const rows = weekRows([W('a', undefined, true), W('b')], new Set<Weekday>(['sun', 'tue']), 'b', label);
     const done = rows.find((r) => r.kind === 'workout' && r.workout.id === 'a');
     expect(done?.kind === 'workout' && done.workout.done).toBe(true);
+  });
+});
+
+describe('⛔ the day label is a WORD, and the general law cannot see it', () => {
+  it('the letter is set in sans, never in mono', () => {
+    /*
+     * ⛔ SHIPPED BROKEN FOR A DAY. The label is `t('weekday.sun')` — "SUN" in English and **"א׳" in
+     * Hebrew** — and it was drawn in IBM Plex Mono, which has no Hebrew glyphs at all. Every Hebrew
+     * athlete's week was rendered in a silent system fallback, in the gutter of the first screen she
+     * opens.
+     *
+     * ⚠️ `monoCarriesNoWords` MISSED IT, and the reason is worth keeping. That law is a source
+     * reader: it matches a `t(…)` sitting beside a mono style in the same JSX. Here the string
+     * arrives through `weekRows(…, weekdayLabel)`, one indirection away — invisible to it. It caught
+     * the identical line in `PlanWeek` the instant that one was written inline, which is what sent me
+     * back to this file.
+     *
+     * So this assertion exists exactly where the general law goes blind: a component that receives
+     * its translated strings through a function.
+     */
+    const src = read('src/components/WeekColumn.tsx');
+    const at = src.indexOf('  letter: {');
+    const style = src.slice(at, src.indexOf('},', at));
+    expect(style).toContain('font.sansMedium');
+    expect(style).not.toContain('font.mono');
+  });
+
+  it('…and so is the one on the programme screens, which draw the same gutter', () => {
+    const src = read('src/components/PlanWeek.tsx');
+    const at = src.indexOf('  day: {');
+    expect(src.slice(at, src.indexOf('},', at))).toContain('font.sansMedium');
   });
 });

@@ -44,7 +44,7 @@ import { Icon } from '@/components/Icon';
 import { Legend, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { textStart } from '@/i18n/bidi';
-import { color, font, radius, space, stage } from '@/design/tokens';
+import { color, font, radius, space, stage, signal } from '@/design/tokens';
 import { pickCoachImage, MAX_IMAGES_PER_TURN, type CoachImage } from '@/platform/coach/coachImage';
 import { PlanWeek } from '@/components/PlanWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
@@ -167,21 +167,31 @@ function Turn({ turn }: { turn: CoachTurn }) {
 }
 
 /**
- * The coach is composing.
+ * ════ THE COACH IS WORKING — AND IT IS NOT THREE DOTS (founder 2026-08-04) ════
  *
- * Three static dots rather than an animation. A model can take many seconds, and a looping
- * animation over that long reads as a stuck app rather than a working one — the app's own law
- * ("the final seconds are felt, not flashed") is the same instinct: motion is for a moment, not a
- * wait.
+ * ⛔ Three pulsing dots is the single most generic object it is possible to put in a product. It is
+ * the universal sign for *an AI is thinking*, and the whole positioning of this app — the founder's
+ * own, repeatedly — is that it is not one of those:
+ *
+ *   > *"I think we've turned the product into just another generic AI app."*
+ *
+ * What stands there instead is the brand's own glyph: the RANGE MARK, a measured span between two
+ * end ticks. It says the same thing a waiting indicator has to say — something is happening, this
+ * takes a moment — in a mark nobody else can use, and it happens to be literally true of what is
+ * going on behind it. The product measures.
+ *
+ * ⚠️ STILL STATIC. A model can take many seconds and a loop over that long reads as a stuck app
+ * rather than a working one, which is the same instinct as "the final seconds are felt, not
+ * flashed". The mark does not spin, pulse or crawl.
  */
 function Thinking() {
   const { t } = useCopy();
   return (
     <View style={styles.coachTurn} accessibilityLabel={t('coach.thinking')}>
-      <View style={styles.dots}>
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
+      <View style={styles.working}>
+        <View style={styles.workTick} />
+        <View style={styles.workBar} />
+        <View style={styles.workTick} />
       </View>
     </View>
   );
@@ -227,9 +237,21 @@ export interface CoachChatProps {
    * everything else, which is the half only the coach can serve.
    */
   chips?: { label: string; onPress: () => void }[];
+  /**
+   * ⛔ OPENERS — offered only while the thread is EMPTY (founder 2026-08-04).
+   *
+   * Different from `chips` in the one way that matters: a chip is an ACTION (swap this, skip this),
+   * an opener is the start of a SENTENCE. Tapping one fills the field and leaves the cursor in it,
+   * because "my knee hurts" is a thing only she can finish — sending it as written would be three
+   * canned questions wearing a conversation's clothes.
+   *
+   * ⚠️ They go the moment she speaks. After the first turn the conversation itself is the prompt,
+   * and a row of suggestions under a live thread is a product that does not trust it.
+   */
+  openers?: string[];
 }
 
-export function CoachChat({ turns, busy = false, onSend, invitation, plan, units = 'kg', onAccept, chips }: CoachChatProps) {
+export function CoachChat({ turns, busy = false, onSend, invitation, plan, units = 'kg', onAccept, chips, openers }: CoachChatProps) {
   const { t } = useCopy();
   const [draft, setDraft] = useState('');
   const [attached, setAttached] = useState<CoachImage[]>([]);
@@ -309,6 +331,26 @@ export function CoachChat({ turns, busy = false, onSend, invitation, plan, units
           </View>
         ) : null}
       </ScrollView>
+
+      {/*
+        The openers, above the composer and only over an empty thread. Same shape as the workout
+        window's chips, so the two doors into the coach look like one thing.
+      */}
+      {openers && openers.length > 0 && turns.length === 0 ? (
+        <View style={styles.openers}>
+          {openers.map((o) => (
+            <Pressable
+              key={o}
+              accessibilityRole="button"
+              accessibilityLabel={o}
+              onPress={() => setDraft(o)}
+              style={({ pressed }) => [styles.opener, pressed && styles.openerPressed]}
+            >
+              <Text style={styles.openerText}>{o}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {attached.length > 0 ? (
         <View style={styles.attachments}>
@@ -424,8 +466,26 @@ const styles = StyleSheet.create({
   },
   failedNote: { paddingEnd: 2 },
 
-  dots: { flexDirection: 'row', gap: 6, paddingVertical: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: stage.ink2 },
+  /* The range mark, at rest: two end ticks and the span between them. Not three dots. */
+  working: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 10 },
+  workTick: { width: 1.5, height: 11, backgroundColor: signal[0] },
+  workBar: { width: 46, height: 1.5, backgroundColor: signal[0] },
+
+  openers: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], paddingHorizontal: space[4], paddingBottom: space[3] },
+  opener: {
+    paddingHorizontal: space[4],
+    paddingVertical: space[3],
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.border,
+  },
+  /* ⚠️ A WASH, NOT A FADE. `aPressNeverDimsWhatYouPressed` caught the 0.6 I wrote here: a word at
+     60% does not read as "pressed", it reads as disabled. The fill changes UNDER the label. */
+  openerPressed: { backgroundColor: color.fillSubtle, borderColor: color.borderStrong },
+  /* ⚠️ 15, not the 12 a chip usually gets. The founder's floor: nothing on a screen she reads is
+     allowed to be small, and this is the first thing she is offered on the surface that IS the
+     product's voice. */
+  openerText: { fontFamily: font.sans, fontSize: 15, color: stage.ink1, textAlign: 'left' },
 
   /* The invitation is the ROOM, not a turn — it owns the space above an empty thread. */
   invite: { paddingTop: space[9], paddingBottom: space[6], gap: space[5] },

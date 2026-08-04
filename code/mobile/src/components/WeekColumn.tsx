@@ -242,9 +242,21 @@ const styles = StyleSheet.create({
   week: { marginTop: space[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: 13 },
   ruled: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
+  /*
+   * ⛔ SANS, NOT MONO — and `monoCarriesNoWords` could not see this one.
+   *
+   * The label is `t('weekday.sun')`, which is "SUN" in English and **"א׳" in Hebrew**. IBM Plex Mono
+   * has no Hebrew glyphs at all, so every Hebrew athlete's week was drawn in a silent system
+   * fallback: the wrong face, in the gutter of the first screen she opens.
+   *
+   * ⚠️ THE LAW MISSED IT BECAUSE THE `t()` CALL IS IN A CALLBACK. It is a source reader and it
+   * matches a `t(…)` sitting next to a mono style in the same JSX — here the string arrives through
+   * `weekRows(…, weekdayLabel)`, one indirection away. It caught the identical line in `PlanWeek`
+   * the moment that one was written inline, which is what sent me back to look at this one.
+   */
   letter: {
     width: 40,
-    fontFamily: font.monoMedium,
+    fontFamily: font.sansMedium,
     fontSize: 13,
     letterSpacing: trackingPx(13, tracking.legend),
     color: stage.ink2,

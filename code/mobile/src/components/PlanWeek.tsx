@@ -28,7 +28,7 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
 import { Legend, Body, Caption } from '@/components/ds';
 import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
@@ -65,7 +65,7 @@ export function PlanWeek({ plan, units }: { plan: CoachPlan | null; units: 'kg' 
 
   return (
     <View style={styles.week}>
-      {week.map((w) => {
+      {week.map((w, i) => {
         /*
          * `coachRows` carries the coach's sentence; `coachPlanRows` carries the formatted ask. They
          * are the same list in the same order — paired by index rather than re-formatted here,
@@ -75,9 +75,28 @@ export function PlanWeek({ plan, units }: { plan: CoachPlan | null; units: 'kg' 
         const shown = coachPlanRows(rows, units) ?? [];
         return (
           <View key={w.id} style={styles.session}>
+            {/*
+              ⛔ NO CARD (founder 2026-08-04, reviewing the screens against Today).
+
+              Every session sat in a `color.surface` box, which is the one thing v7 removed from the
+              whole product: *"nothing is a card on the stage now — the stage itself is lit, and
+              emphasis is standing in that light versus resting in shadow."* Three framed boxes on a
+              dark page is the form the app abandoned, still drawn on the two screens where she meets
+              her programme.
+
+              ⚠️ WHAT DID NOT CHANGE IS THE STRUCTURE, and that was the question worth asking. Today's
+              column opens ONE session and reduces the rest to a line, because it answers *what am I
+              doing today*. These two screens answer *what is this whole programme* — so every session
+              stays expanded. Same grammar, different job; making them identical would have made both
+              worse.
+            */}
             <View style={styles.sessionHead}>
-              <Body>{w.name}</Body>
-              {w.day ? <Legend size={10} tone="muted">{t(`weekday.${w.day}`)}</Legend> : null}
+              {w.day ? (
+                <Text style={styles.day}>{t(`weekday.${w.day}`).toUpperCase()}</Text>
+              ) : (
+                <Text style={styles.day}>{String(i + 1).padStart(2, '0')}</Text>
+              )}
+              <Text style={styles.sessionName} numberOfLines={2}>{w.name}</Text>
             </View>
             {shown.map((r, i) => (
               <View key={`${r.exerciseId}-${i}`} style={styles.row}>
@@ -85,10 +104,12 @@ export function PlanWeek({ plan, units }: { plan: CoachPlan | null; units: 'kg' 
                   <Body style={styles.name}>{r.name}</Body>
                   <Caption tone="muted">{ask(r)}</Caption>
                 </View>
-                {rows[i]?.say ? <Caption tone="muted" style={styles.say}>{rows[i].say}</Caption> : null}
+                {/* ⚠️ 15, not the 13 a Caption gives. *"Certainly not small type"* — and the coach's
+                    instruction is the whole reason this screen is not a table of numbers. */}
+                {rows[i]?.say ? <Text style={styles.say}>{rows[i].say}</Text> : null}
                 {/* The coach's own italic — the same voice its notes wear everywhere else. */}
                 {reasons.get(r.exerciseId) ? (
-                  <Caption tone="muted" style={styles.reason}>{reasons.get(r.exerciseId)}</Caption>
+                  <Text style={styles.reason}>{reasons.get(r.exerciseId)}</Text>
                 ) : null}
               </View>
             ))}
@@ -114,22 +135,29 @@ function ask(r: { sets: number; band: [number, number]; load: number | null; det
 }
 
 const styles = StyleSheet.create({
-  week: { gap: s(14) },
-  session: {
-    backgroundColor: color.surface,
-    borderRadius: radius.md,
-    paddingVertical: s(12),
-    paddingHorizontal: s(14),
-    gap: s(8),
+  week: { gap: s(26) },
+  session: { gap: s(10) },
+  sessionHead: { flexDirection: 'row', alignItems: 'baseline', gap: s(12) },
+  /* The same gutter the week column uses, so a session reads the same on both surfaces. */
+  /* ⚠️ SANS. The weekday is a translated WORD ("א׳"), and mono cannot draw Hebrew — the same split
+     the whole app makes between a measurement and a word. `monoCarriesNoWords` caught this one. */
+  day: {
+    width: s(40),
+    fontFamily: font.sansMedium,
+    fontSize: s(13),
+    letterSpacing: 1.6,
+    color: color.textMuted,
+    textAlign: 'left',
   },
-  sessionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: s(8) },
-  row: { gap: s(2) },
+  sessionName: { flex: 1, fontFamily: font.serif, fontSize: s(21), lineHeight: s(25), color: color.textPrimary, textAlign: 'left' },
+  /* Ruled rather than boxed — the same table Today draws its lifts in. */
+  row: { gap: s(3), paddingVertical: s(9), borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border, marginStart: s(52) },
   rowLine: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: s(10) },
   // The name yields the row's width to the figure beside it, never the other way round: a long
   // exercise name may wrap, but "3×8–10 · 40" may not.
   name: { flexShrink: 1 },
-  say: { opacity: 0.85 },
+  say: { fontFamily: font.sans, fontSize: s(15), lineHeight: s(21), color: color.textSecondary, textAlign: 'left' },
   // A REASON is the coach speaking, so it wears the coach's face — the serif italic its notes carry
   // on the Why sheet and in the Saturday letter. Set apart from `say` above, which is an instruction.
-  reason: { fontFamily: font.serif, fontStyle: 'italic', opacity: 0.9, marginTop: 3, textAlign: 'left' },
+  reason: { fontFamily: font.serif, fontStyle: 'italic', fontSize: s(15), lineHeight: s(21), color: color.textSecondary, marginTop: s(3), textAlign: 'left' },
 });
