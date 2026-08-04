@@ -298,6 +298,10 @@ bench is one block, one item, rounds 4. A circuit of three, three times through,
 three items, rounds 3. "restS" is rest BETWEEN ROUNDS: 0 means she goes straight on, which is how a
 superset is written; omitted runs a flat ${REST_UNSTATED_S}s, so state it when it matters.
 
+⚠️ A block of two or more items is a CIRCUIT — she alternates between them round after round. Pair
+only lifts she can reach without moving: two items on different stations means crossing the gym
+between every set, and a full gym gives one of them away by round two. Otherwise, separate blocks.
+
 Indoors the phone measures nothing, so use "time": it counts down and records what she actually
 held. GPS measures a distance outdoors only, on a run or a walk.
 

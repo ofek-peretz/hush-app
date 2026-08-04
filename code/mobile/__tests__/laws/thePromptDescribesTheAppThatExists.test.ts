@@ -153,4 +153,21 @@ describe('⛔ the station rule is NOT in the prompt, and must not come back', ()
   it('and the reason it is absent is written where someone would look to add it', () => {
     expect(read('src/domain/coachPrompt.ts')).toMatch(/THE STATION RULE IS NOT IN THIS FILE/);
   });
+
+  it('⚠️ but a CIRCUIT across two stations is named, and that is a different thing', () => {
+    /*
+     * ⛔ FOUND BY RUNNING THE ORDERED OUTPUT, 2026-08-04. Two sessions still stranded a lift at the
+     * far end, and the reorder was right to leave them: the rep pattern `9·11·9·11·9·11` shows the
+     * coach had written a lateral raise and a face pull as a two-item CIRCUIT — a dumbbell and a
+     * cable, alternated three times through. Six crossings of the gym, by design.
+     *
+     * `stationOrder` cannot fix that and must not: reordering items inside a block changes the
+     * TRAINING, which is its one forbidden move. So this belongs in the prompt — and unlike the
+     * station rule it is safe there, because it is about the SHAPE of a block, not about which lifts
+     * to choose. Alternating between a rack and a cable every forty seconds is bad in an empty gym
+     * too.
+     */
+    expect(preamble()).toMatch(/A block of two or more items is a CIRCUIT/);
+    expect(preamble()).toMatch(/Pair[\s\S]{0,4}only lifts she can reach without moving/);
+  });
 });

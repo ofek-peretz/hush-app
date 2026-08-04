@@ -65,6 +65,40 @@ function stationOf(block: PlannedBlock): string {
   return exerciseById(first.ex)?.equipment ?? 'floor';
 }
 
+/**
+ * ════ THE SECOND LAYER: COMPOUND BEFORE ISOLATION, INSIDE A STATION ════
+ *
+ * ⛔ FOUNDER, 2026-08-04, looking at the first ordered output: *"in the first example the dumbbells
+ * are shoulders first and then chest. Isn't the opposite more logical? But only if it doesn't hurt
+ * the sort you already did, because that one seems to be working."*
+ *
+ * He is right about the training: a lateral raise before an incline press spends the shoulder on the
+ * small movement and then asks it to stabilise the big one.
+ *
+ * ── ⚠️ WHY IT CANNOT HURT THE STATION SORT, AND THIS IS THE WHOLE POINT ─────────────────────────
+ * It only ever reorders blocks INSIDE one contiguous run of the same station. A run's boundaries do
+ * not move, so the sequence of stations she walks is byte-identical before and after — it is not
+ * "unlikely to break it", it is arithmetically incapable of breaking it. `stationChanges` is
+ * asserted equal across this pass, not merely non-worse.
+ *
+ * ⚠️ STABLE, so a run whose blocks are all compound or all isolation comes back untouched and in the
+ * coach's own order. This ranks two kinds of movement; it does not have an opinion about which
+ * compound comes first.
+ */
+const ISOLATION = new Set<string>([
+  'fly', 'curl', 'elbow_extension', 'lateral_raise', 'front_raise', 'rear_delt', 'shrug',
+  'knee_extension', 'knee_flexion', 'calf_straight', 'calf_bent', 'abduction', 'adduction',
+  'kickback', 'crunch', 'leg_raise', 'rotation', 'anti_extension',
+]);
+
+/** 0 = compound (multi-joint), 1 = isolation. Anything unknown ranks as compound: an unrecognised
+ *  movement is more likely a main lift than an accessory, and ranking it late would bury it. */
+function weightOf(block: PlannedBlock): number {
+  const first = block.items[0];
+  const pattern = first ? exerciseById(first.ex)?.pattern : undefined;
+  return pattern && ISOLATION.has(pattern) ? 1 : 0;
+}
+
 /** How many times she changes station walking this order. The number being minimised. */
 export function stationChanges(blocks: PlannedBlock[]): number {
   let n = 0;
@@ -81,11 +115,16 @@ export function stationChanges(blocks: PlannedBlock[]): number {
  * whether anything happened, and an unchanged session must not look like a decision.
  */
 export function orderByStation(blocks: PlannedBlock[]): PlannedBlock[] {
-  if (blocks.length < 4) return blocks; // nothing to gain before four stations
   let best = blocks;
   let bestScore = stationChanges(blocks);
 
-  for (let swap = 0; swap < MAX_SWAPS; swap += 1) {
+  /*
+   * ⚠️ THE STATION SWAP NEEDS FOUR BLOCKS TO BE WORTH ANYTHING — with three there is no return trip
+   * a swap can remove that reordering would not simply relocate. The COMPOUND pass below has no such
+   * floor and runs on every session: a three-lift day still benefits from pressing before flying,
+   * and skipping the whole function for short sessions would have silently excluded them.
+   */
+  for (let swap = 0; blocks.length >= 4 && swap < MAX_SWAPS; swap += 1) {
     let found: PlannedBlock[] | null = null;
     let foundScore = bestScore;
     // From index 1: the opener never moves (bound 2).
@@ -101,7 +140,42 @@ export function orderByStation(blocks: PlannedBlock[]): PlannedBlock[] {
     best = found;
     bestScore = foundScore;
   }
-  return best;
+  return compoundFirstWithinRuns(best, bestScore);
+}
+
+/**
+ * Compound before isolation, inside each run of one station.
+ *
+ * ⚠️ The opener still never moves (bound 2) — it is excluded from its own run's sort rather than
+ * being allowed to drift, because "the first lift of the session" outranks "compounds first".
+ */
+function compoundFirstWithinRuns(blocks: PlannedBlock[], changesBefore: number): PlannedBlock[] {
+  const out = [...blocks];
+  let i = 0;
+  let touched = false;
+  while (i < out.length) {
+    let j = i;
+    while (j + 1 < out.length && stationOf(out[j + 1]) === stationOf(out[i])) j += 1;
+    // `from` skips index 0 so the opener holds its place even inside a run.
+    const from = i === 0 ? 1 : i;
+    if (j > from) {
+      const run = out.slice(from, j + 1);
+      const sorted = [...run].sort((a, b) => weightOf(a) - weightOf(b)); // stable
+      if (sorted.some((b, k) => b !== run[k])) {
+        out.splice(from, run.length, ...sorted);
+        touched = true;
+      }
+    }
+    i = j + 1;
+  }
+  if (!touched) return blocks;
+  /*
+   * ⛔ THE GUARANTEE, ASSERTED AT RUNTIME AND NOT ONLY IN A TEST. The founder's condition was
+   * *"only if it doesn't hurt the sort you already did"*. Sorting inside a run cannot change the
+   * station sequence — but if a future edit ever made it possible, the walk is what matters and the
+   * reorder is abandoned rather than shipped.
+   */
+  return stationChanges(out) === changesBefore ? out : blocks;
 }
 
 /**
