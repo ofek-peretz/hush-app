@@ -139,6 +139,18 @@ function showPlan(plan: CoachPlan, say: string) {
   for (const n of plan.notes ?? []) line(`  NOTE  ${n.ex ?? '—'} → ${n.say}`);
 }
 
+/** Every call's token usage, so the four weeks also answer "what does she cost". */
+const bill: { kind: string; in: number; out: number; think: number }[] = [];
+function tally(kind: string, usage: Record<string, number> | null) {
+  if (!usage) return;
+  bill.push({
+    kind,
+    in: usage.promptTokenCount ?? 0,
+    out: usage.candidatesTokenCount ?? 0,
+    think: usage.thoughtsTokenCount ?? 0,
+  });
+}
+
 describe('four weeks with the real coach', () => {
   it('builds, trains, and decides — sixteen sessions', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -158,6 +170,7 @@ describe('four weeks with the real coach', () => {
       }),
       COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
     );
+    tally('first_programme', first.ok ? first.usage : null);
     if (!first.ok) { line(`  ⛔ FAILED: ${first.reason}`); return; }
     const built = parseCoachPlan(first.text);
     if (!built.ok || !built.answer.plan) { line(`  ⛔ UNREADABLE: ${built.ok ? 'no plan' : built.reason}`); return; }
@@ -191,6 +204,7 @@ describe('four weeks with the real coach', () => {
           }),
           COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
         );
+        tally('after_session', reply.ok ? reply.usage : null);
         if (!reply.ok) { line(`      ⛔ call failed: ${reply.reason}`); continue; }
         const parsed = parseCoachPlan(reply.text);
         if (!parsed.ok) { line(`      ⛔ unreadable: ${parsed.reason}`); continue; }
@@ -202,6 +216,28 @@ describe('four weeks with the real coach', () => {
         if (parsed.answer.brief?.length) brief = parsed.answer.brief;
       }
     }
+
+    rule();
+    line('WHAT SHE COST — every call, in tokens');
+    rule();
+    /*
+     * gemini-3.6-flash, per MTok: $1.50 in, $7.50 out. ⚠️ THINKING BILLS AT THE OUTPUT RATE and is
+     * usually the largest line — any estimate that counts only the visible reply is wrong by a
+     * factor, which is documented and was measured at 2.5× once already.
+     */
+    const IN = 1.5 / 1e6;
+    const OUT = 7.5 / 1e6;
+    let tin = 0, tout = 0, tthink = 0;
+    for (const b of bill) { tin += b.in; tout += b.out; tthink += b.think; }
+    const cost = tin * IN + (tout + tthink) * OUT;
+    line(`  calls billed          ${bill.length}`);
+    line(`  prompt tokens         ${tin.toLocaleString()}`);
+    line(`  visible output        ${tout.toLocaleString()}`);
+    line(`  THINKING (billed out) ${tthink.toLocaleString()}`);
+    line(`  cost, four weeks      $${cost.toFixed(4)}`);
+    line(`  → per athlete-year    $${(cost * 13).toFixed(2)}   (4 weeks × 13)`);
+    const first0 = bill[0];
+    if (first0) line(`  the BUILD alone       in ${first0.in.toLocaleString()} · out ${first0.out.toLocaleString()} · think ${first0.think.toLocaleString()}`);
 
     rule();
     line('AFTER FOUR WEEKS — the programme she is now on');

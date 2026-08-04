@@ -229,8 +229,14 @@ describe('no answer arrived — the update waits, nothing is written', () => {
      * `rounds`, a nameless session or an unknown lift are errors about the PROGRAMME's structure —
      * there is no coherent thing left to run. A bad item is one row of it.
      */
-    const survives = (o: Record<string, unknown>) => {
-      const r = parseCoachPlan(one(o), facts);
+    const good = { kind: 'reps', ex: 'bb_bench_press', reps: [8, 10], load: 40 };
+    /** A real week: several good items, one broken — the case the simulation actually produced. */
+    const withOneBad = (bad: Record<string, unknown>) => wrap([{
+      name: 'D',
+      blocks: [{ rounds: 3, items: [good, good, good, { kind: 'reps', ex: 'db_row', ...bad }] }],
+    }]);
+    const survives = (bad: Record<string, unknown>) => {
+      const r = parseCoachPlan(withOneBad(bad), facts);
       expect(r.ok).toBe(true);
       return r.ok ? r.snapped : 0;
     };
@@ -240,11 +246,32 @@ describe('no answer arrived — the update waits, nothing is written', () => {
     expect(survives({ kind: 'distance', metres: null })).toBeGreaterThan(0);
   });
 
-  it('⚠️ but a reply whose items are ALL malformed still has no programme in it', () => {
-    // The floor: skipping is a repair, not a way to accept nothing. With every item gone there is no
-    // block, with no block there is no session, and a reply with no session is `no_sessions`.
-    const r = parseCoachPlan(one({ kind: 'time', seconds: 'a while' }), facts);
-    expect(r.ok && r.answer.plan?.sessions.length).toBeFalsy();
+  it('⛔ but a reply that loses MORE than it keeps is refused entirely', () => {
+    /*
+     * ⚠️ THE FOUR-WEEK SIMULATION CAUGHT THIS, and it caught it in the version of the fix ABOVE.
+     * Skipping malformed items without a floor turned a full four-day week into a ONE-PLANK
+     * programme, silently, and the run carried on training against it.
+     *
+     * That is strictly worse than the bug the skipping was added to fix. A discarded reply is
+     * VISIBLE — she is told her update is waiting, keeps the good programme she has, and the
+     * foreground retry asks again. A mutilated one is invisible and permanent.
+     */
+    const bad = { kind: 'reps', ex: 'db_row', reps: [8] };
+    const mostlyRubble = wrap([{ name: 'D', blocks: [{ rounds: 3, items: [bad, bad, bad, { kind: 'reps', ex: 'bb_bench_press', reps: [8, 10], load: 40 }] }] }]);
+    expect(unreadable(mostlyRubble)).toBe('not_a_number');
+  });
+
+  it('⛔ and a session that loses a whole block is refused, however small the loss looks', () => {
+    // The coach never writes a block it means to be empty. One emptied block is enough of a signal
+    // on its own — it is how the one-plank week began.
+    const emptied = wrap([{
+      name: 'D',
+      blocks: [
+        { rounds: 3, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 10], load: 40 }] },
+        { rounds: 3, items: [{ kind: 'time', ex: 'plank' }] },
+      ],
+    }]);
+    expect(unreadable(emptied)).toBe('not_a_number');
   });
 
   it('refuses to guess which lift a near-miss id meant', () => {

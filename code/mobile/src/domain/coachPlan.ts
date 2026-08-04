@@ -840,6 +840,10 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
   }
 
   const sessions: PlannedSession[] = [];
+  /** Blocks emptied by skipped items — the measure of how much of the reply was rubble. */
+  let lostBlocks = 0;
+  /** Items that survived. The threshold below is a ratio, not a count: a big week may lose more. */
+  let keptItems = 0;
   for (const s of root.sessions) {
     if (!isObj(s)) return { ok: false, reason: 'session_malformed' };
     if (typeof s.name !== 'string' || s.name.length === 0) return { ok: false, reason: 'session_malformed' };
@@ -865,6 +869,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
         if (!read.ok) return read;
         // `null` = malformed and skipped. Counted, so the loss shows up rather than vanishing.
         if (read.item === null) { snapped += 1; continue; }
+        keptItems += 1;
         items.push(read.item);
       }
       /*
@@ -872,7 +877,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
        * rest timer attached to nothing — `runSteps` would expand it into no steps and the session
        * would silently be shorter than the one she was shown.
        */
-      if (items.length === 0) continue;
+      if (items.length === 0) { lostBlocks += 1; continue; }
       blocks.push({
         rounds: b.rounds,
         ...(b.restS != null ? { restS: b.restS } : {}),
@@ -886,7 +891,22 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
      * sessions at all, the reply has no programme in it and `no_sessions` says so honestly below,
      * which is the same answer as if the coach had attached nothing.
      */
-    if (blocks.length === 0) continue;
+    /*
+     * ⛔ A SESSION THAT LOST EVERY BLOCK MEANS THE REPLY IS BROKEN, NOT THAT SHE HAS A SHORTER WEEK.
+     *
+     * ⚠️ THIS RETURNED `continue` FOR ONE COMMIT AND THE FOUR-WEEK SIMULATION CAUGHT WHAT THAT DOES:
+     * a reply whose items were mostly malformed came back as a **one-plank programme**, and the run
+     * carried on training against it. The coach had written a full four-day week; she would have
+     * opened the app to a single plank and no explanation.
+     *
+     * That is strictly worse than the bug the skipping was added to fix. A discarded reply is
+     * VISIBLE — she is told her update is waiting and keeps the good programme she already has,
+     * and the foreground retry asks again. A mutilated one is invisible and permanent.
+     *
+     * So skipping stays a REPAIR for the small case (a warm-up with no `seconds`, which is what
+     * actually happens) and stops being a way to accept rubble.
+     */
+    if (blocks.length === 0) return { ok: false, reason: 'not_a_number', at: s.name };
     sessions.push({ name: s.name, ...(s.day ? { day: s.day as Weekday } : {}), blocks });
   }
 
@@ -904,6 +924,24 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * happens. (`0` cannot occur: an empty `sessions` was refused above.)
    */
   const days = learned.learned?.daysPerWeek ?? (sessions.length <= 7 ? sessions.length : undefined);
+
+  /*
+   * ⛔ SKIPPING IS A REPAIR, NOT A TOLERANCE FOR RUBBLE.
+   *
+   * One item lost out of thirty is a warm-up with no `seconds` — the real, measured case, and worth
+   * absorbing rather than throwing away a good week. A reply that loses MORE than it keeps is not a
+   * programme with a hole in it; it is a broken answer that happens to parse.
+   *
+   * ⚠️ `lostBlocks` counts blocks emptied entirely. Even one is a strong signal — the coach does not
+   * write a block it means to be empty — and combined with the ratio it catches the case the
+   * four-week simulation found, where a full four-day week arrived as a single plank.
+   *
+   * Refusing is the SAFE outcome: she is told her update is waiting, keeps the good programme she
+   * already has, and the foreground retry asks again. Accepting rubble is silent and permanent.
+   */
+  if (sessions.length > 0 && (snapped > keptItems || lostBlocks > 0)) {
+    return { ok: false, reason: 'not_a_number', at: 'too much of the reply was unreadable' };
+  }
 
   return {
     ok: true,
