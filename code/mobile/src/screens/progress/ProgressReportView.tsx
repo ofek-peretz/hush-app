@@ -5,20 +5,17 @@
  *
  * Used by the **Progress** screen in both its windows: all-time (Home / Recovery) and the last
  * 12 weeks (the every-12-weeks notification, `window: 'quarter'`). They differ only in `legend`,
- * `title`, which entries they pass, and whether the milestones gallery is shown.
+ * `title`, which entries they pass, and whether the log's door is offered at the foot.
  */
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Legend, Badge, LoadDelta, Sparkline } from '@/components/ds';
-import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
-import type { EarnedMilestone, NextMilestone } from '@/domain/milestones';
-import { milestoneCopy } from '@/domain/milestoneCopy';
 import type { Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 
@@ -32,15 +29,21 @@ interface Props {
   loaded: boolean; // false while history is still loading (suppresses the empty state)
   units: Units;
   onBack?: () => void;
-  /** The milestones gallery (Progress screen only — the quarterly report stays a pure
-   *  peak-weight comparison): earned emblems + each family's single next silhouette. */
-  milestones?: { earned: EarnedMilestone[]; next: NextMilestone[] } | null;
+  /**
+   * ⛔ GONE (2026-08-04). It drew earned emblems and each family's NEXT silhouette; the founder cut
+   * the gallery, and the silhouettes were the half that should never return — the outline of a
+   * thing she has not earned is a nudge, on the one surface that states only what was measured.
+   *
+   * The prop is kept and ignored so the two call sites still typecheck while the quarterly report
+   * is untouched; nothing reads it.
+   */
+  milestones?: unknown;
   /** Opens the full session log. History is no longer a tab (v7) — this is its one door,
    *  at the foot of the all-time report. Omitted in the quarterly window. */
   onHistory?: () => void;
 }
 
-export function ProgressReportView({ title, legend, entries, loaded, units, onBack, milestones, onHistory }: Props) {
+export function ProgressReportView({ title, legend, entries, loaded, units, onBack, onHistory }: Props) {
   const { t } = useCopy();
   // The header total is a kg story — bodyweight (reps-mode) gains are real progress
   // but never counted as "kg added".
@@ -169,39 +172,22 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
               })}
             </View>
 
-            {/* milestones — earned stamps (newest first) + each family's next silhouette */}
-            {milestones && (milestones.earned.length > 0 || milestones.next.length > 0) ? (
-              <View style={styles.milestones}>
-                <Legend>{t('milestones.gallery')}</Legend>
-                <View style={styles.emblemGrid}>
-                  {milestones.earned
-                    .slice()
-                    .reverse()
-                    .map((m) => {
-                      const mc = milestoneCopy(m, t, units);
-                      return (
-                        <View key={m.id} style={styles.emblemCell}>
-                          <MilestoneEmblem size={88} value={mc.value} caption={mc.caption} glyph={mc.glyph} />
-                          <Text style={styles.emblemTitle} numberOfLines={2}>{mc.title}</Text>
-                          <Text style={styles.emblemFoot}>
-                            {new Date(m.earnedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  {milestones.next.map((n) => {
-                    const mc = milestoneCopy(n.milestone, t, units);
-                    return (
-                      <View key={n.milestone.id} style={styles.emblemCell}>
-                        <MilestoneEmblem size={88} tone="locked" value={mc.value} caption={mc.caption} glyph={mc.glyph} />
-                        <Text style={[styles.emblemTitle, styles.emblemLocked]} numberOfLines={2}>{mc.title}</Text>
-                        <Text style={styles.emblemFoot}>{toGoLabel(n, t, units)}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
+            {/*
+              ⛔ THE MILESTONE GALLERY IS DELETED, AND IT WAS ALREADY DEAD (founder 2026-08-04).
+
+              *"A collection of milestones… nobody is ever going to open it."* He is right about the
+              gallery, and there is a sharper fact underneath: the only caller passes
+              `milestones={null}`, so this block had not drawn on any device for weeks. It was a
+              screenful of code kept alive by a prop nobody set.
+
+              ⚠️ AND HALF OF IT SHOULD NOT COME BACK. The earned stamps are facts about her. The
+              `next` SILHOUETTES were not: showing an athlete the outline of a thing she has not
+              earned is a progress bar for a mechanic she never opted into, on a surface whose whole
+              claim is that it states only what was measured.
+
+              The all-time badges on `ProgressLifts` are what she actually sees, and they are the
+              earned half by construction.
+            */}
 
             {/* The one door to the full log — History is no longer a tab (v7). A quiet row at the
                 foot of the all-time report, never on the 12-week window. */}
@@ -221,18 +207,6 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-/** "12 kg to go" / "עוד 13 אימונים" — the silhouette's live distance, in the family's unit. */
-function toGoLabel(n: NextMilestone, t: (k: string, p?: Record<string, unknown>) => string, units: Units): string {
-  const remaining = Math.max(0, n.target - n.current);
-  const amount =
-    n.milestone.family === 'count'
-      ? `${remaining} ${t('milestones.workoutsCaption').toLowerCase()}`
-      : n.milestone.family === 'tonnage'
-        ? `${Math.ceil(remaining / 1000).toLocaleString()} ${t('milestones.tonnesCaption').toLowerCase()}`
-        : `${displayWeight(remaining, units) ?? remaining} ${unitLabel(units)}`;
-  return t('milestones.toGo', { amount });
 }
 
 const styles = StyleSheet.create({
@@ -295,10 +269,4 @@ const styles = StyleSheet.create({
   },
   historyText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
 
-  milestones: { marginTop: 30, paddingTop: 22, borderTopWidth: 1, borderTopColor: color.border },
-  emblemGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16 },
-  emblemCell: { width: '33.33%', alignItems: 'center', paddingHorizontal: 6, marginBottom: 22 },
-  emblemTitle: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], color: color.textPrimary, textAlign: 'center', marginTop: 10, lineHeight: textScale['2xs'] * 1.35 },
-  emblemLocked: { color: color.textMuted },
-  emblemFoot: { fontFamily: font.sans, fontVariant: ['tabular-nums'], fontSize: 14, color: color.textTertiary, marginTop: 3, textAlign: 'left' },
 });

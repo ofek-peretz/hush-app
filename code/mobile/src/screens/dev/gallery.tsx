@@ -714,10 +714,14 @@ const progressView = (
   <ProgressLifts
     loaded
     units="kg"
+    /* ⚠️ `deltaKg` and `currentKg` ARE THE FIGURES THE PAGE NOW LEADS WITH — this fixture carried
+       neither, so the claim read every lift as "not moved" and the harness drew the starting-point
+       state over a set of obvious gains. A fixture missing the newest field is how a redesign gets
+       reviewed against the wrong screen. */
     entries={[
-      { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 47.5, series: [40, 41, 44, 44, 47.5] },
-      { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 30, periodPeakKg: 41, series: [30, 34, 34, 38, 41] },
-      { exerciseId: 'bb_deadlift', mode: 'weight', initialPeakKg: 70, periodPeakKg: 92.5, series: [70, 80, 85, 90, 92.5] },
+      { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 47.5, currentKg: 47.5, deltaKg: 7.5, series: [40, 41, 44, 44, 47.5] },
+      { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 30, periodPeakKg: 41, currentKg: 41, deltaKg: 11, series: [30, 34, 34, 38, 41] },
+      { exerciseId: 'bb_deadlift', mode: 'weight', initialPeakKg: 70, periodPeakKg: 92.5, currentKg: 92.5, deltaKg: 22.5, series: [70, 80, 85, 90, 92.5] },
     ] as never}
     aggregate={{
       liftedKg: 186000,
@@ -1716,6 +1720,32 @@ export const GALLERY: GalleryEntry[] = [
    *
    * This is the real shape, and the screen draws it.
    */
+  /*
+    ⛔ THE CLAIM'S OTHER TWO STATES. The sentence is derived from the table, so the standing fixture
+    can only ever show one of them — and the two it cannot show are the ones a screen gets wrong: a
+    mixed month, and an athlete who has not gained yet. Neither is reachable by using the app.
+  */
+  { id: '3.2f', label: 'Progress — a mixed month', status: 'live', note: 'the claim counts, and does not round up', render: () => (
+    <InApp><UnderTabs active={2}>
+      {React.cloneElement(progressView, {
+        entries: [
+          { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 47.5, currentKg: 47.5, deltaKg: 7.5, series: [40, 44, 47.5] },
+          { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 41, periodPeakKg: 41, currentKg: 41, deltaKg: 0, series: [41, 41, 41] },
+          { exerciseId: 'bb_deadlift', mode: 'weight', initialPeakKg: 92.5, periodPeakKg: 92.5, currentKg: 85, deltaKg: 0, series: [92.5, 92.5, 85] },
+        ] as never,
+      })}
+    </UnderTabs></InApp>
+  ) },
+  { id: '3.2g', label: 'Progress — nothing has moved yet', status: 'live', note: 'her starting point, never a "+0"', render: () => (
+    <InApp><UnderTabs active={2}>
+      {React.cloneElement(progressView, {
+        entries: [
+          { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 40, currentKg: 40, deltaKg: 0, series: [40, 40] },
+          { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 30, periodPeakKg: 30, currentKg: 30, deltaKg: 0, series: [30, 30] },
+        ] as never,
+      })}
+    </UnderTabs></InApp>
+  ) },
   { id: '3.2e', label: 'Progress — the all-time report', status: 'live', note: 'peak vs where she is now, per lift', render: () => (
     <InApp>
       <ProgressReportView
