@@ -130,41 +130,63 @@ describe('the prompt tells the truth about where its words land', () => {
   });
 });
 
-describe('⛔ a crowded gym is part of the programme', () => {
+describe('⛔ the station rule is a SECOND PASS on order, never a rule about choosing', () => {
   /*
-   * FOUNDER, 2026-08-04, and he was precise about the boundary:
+   * ⛔⛔ I GOT THIS WRONG ON THE FIRST ATTEMPT, AND THE SIMULATION SHOWED IT.
    *
-   *   > *"If it wants to give cable chest, then rear delts on a different machine, then come back to
-   *   > cable chest in another variation — better to do both cable chest variations first and only
-   *   > then move. Gyms today are packed; the aim is that she doesn't take a station, leave it, and
-   *   > have to come back to find it taken. But I do NOT want it putting the whole workout on one
-   *   > machine or reordering the session. It's a convenience nobody feels, and behind the scenes it
-   *   > is maximum quality — I'm saying this as an advanced lifter."*
+   * The founder asked for one thing and I wrote another. My rule read *"FINISH A STATION BEFORE
+   * LEAVING IT — two lifts on the same bar, rack or machine go together"*, which is a rule the coach
+   * applies WHILE CHOOSING. So it chose to suit the rule: an upper-body session came back as **five
+   * dumbbell lifts in a row.**
    *
-   * ── ⚠️ WHY THIS IS A PROMPT RULE AND NOT A REORDER ─────────────────────────────────────────────
-   * He noted it was bad when the deterministic engine did it. It was — because the engine had to
-   * decide mechanically, with no idea WHY a lift was placed where it was. The coach knows: fatigue
-   * order, supersets, what it is building the session around. An app that reordered the coach's
-   * session would be the deleted engine coming back through a side door and forming an opinion about
-   * her training.
+   * His reply: *"Five dumbbell exercises in a row?! That's nearly the whole workout turning into
+   * dumbbells. That is exactly what I said I did not want."*
    *
-   * So it is stated as a TIE-BREAKER between orders that are already equally good, with both of his
-   * limits named — because a rule this soft is exactly the kind a model over-applies.
+   * ── WHAT HE ACTUALLY ASKED FOR ─────────────────────────────────────────────────────────────────
+   *   > *"I want the programmes to be exactly what he builds. But once he has built them, he should
+   *   > check whether the ORDER can be arranged better for equipment use. That's all. It must not
+   *   > affect which programmes he chooses."*
+   *
+   * His own example is the precise shape of it: face pull (cable) → dumbbell → cable lats → cable
+   * biceps. The fix is not "put the cables together" — it is **swap the dumbbell lift with the cable
+   * biceps**, so the cable work runs on without a return trip. Two lifts move. Nothing else.
+   *
+   * ⚠️ AND IT WAS NOT THE MODEL. The model did exactly what it was told. This is the difference
+   * between a constraint on SELECTION and a pass over ORDER, and I wrote the first one while
+   * believing I had written the second.
    */
-  it('the rule is in the wire section, where the non-negotiables live', () => {
-    const wire = preamble().slice(preamble().indexOf('THE ONLY THINGS THAT ARE NOT YOURS TO CHOOSE'));
-    expect(wire).toContain('FINISH A STATION BEFORE LEAVING IT');
+  it('is stated as something done AFTER the session is built', () => {
+    expect(preamble()).toMatch(/ORDER, ONCE THE SESSION IS BUILT/);
+    expect(preamble()).toMatch(/Pick the lifts you were always going to pick/);
   });
 
-  it('⚠️ and names BOTH limits he drew, or a model will take it too far', () => {
-    // Without these it becomes "one machine for the whole session", which is worse than the problem.
-    expect(preamble()).toMatch(/tie-breaker between[\s\S]{0,20}equally good orders/i);
-    expect(preamble()).toMatch(/do not build a session around one station/i);
+  it('⛔ forbids it changing WHICH lifts were chosen', () => {
+    // The exact failure: the rule leaked into selection and the session became one station.
+    expect(preamble()).toMatch(/may never change WHICH lifts you picked/);
   });
 
-  it('says WHY, so it is judgement rather than a rule to satisfy', () => {
-    // "She loses it the moment she walks away" is the whole reason. A rule with no reason is one a
-    // model applies literally in the cases it was not meant for.
-    expect(preamble()).toMatch(/she\s*\n?\s*loses it the moment she walks away/i);
+  it('⛔ and says out loud that it is not a reason to group by equipment', () => {
+    /*
+     * Without this line the instruction reads as "prefer equipment runs", which is how five dumbbell
+     * lifts happened. A soft rule needs its ceiling named, not just its floor.
+     */
+    // `[\s\S]` because the prompt is hard-wrapped and this clause straddles a line break.
+    expect(preamble()).toMatch(/not a reason to group by[\s\S]{0,4}equipment/);
+  });
+
+  it('⚠️ and the OLD wording is gone, not merely softened', () => {
+    // "Finish a station before leaving it" is a selection heuristic however it is qualified.
+    expect(preamble()).not.toMatch(/FINISH A STATION BEFORE LEAVING IT/);
+    /*
+     * ⚠️ MATCHED ON THE EQUIPMENT PHRASE, NOT ON "go together" — the founder's own health stone says
+     * *"her health, her goal and what she asked for go together"*, and a law broad enough to catch
+     * that would be deleting his words to satisfy itself.
+     */
+    expect(preamble()).not.toMatch(/same bar, rack or machine/);
+  });
+
+  it('describes the fix as a SWAP — the smallest change that removes the return trip', () => {
+    // Not "reorder the session", which invites a rewrite. Two lifts change places.
+    expect(preamble()).toMatch(/swap the two lifts that fix it/);
   });
 });
