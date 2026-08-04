@@ -61,7 +61,7 @@ export function AboutYou({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 6 }}
+      progress={{ index: 2, total: 5 }}
       legend={t('ob.aboutLegend')}
       title={t('ob.aboutTitle')}
       headGap={28}

@@ -129,3 +129,42 @@ describe('the prompt tells the truth about where its words land', () => {
     expect(text()).toMatch(/On an "open" item it IS the screen/);
   });
 });
+
+describe('⛔ a crowded gym is part of the programme', () => {
+  /*
+   * FOUNDER, 2026-08-04, and he was precise about the boundary:
+   *
+   *   > *"If it wants to give cable chest, then rear delts on a different machine, then come back to
+   *   > cable chest in another variation — better to do both cable chest variations first and only
+   *   > then move. Gyms today are packed; the aim is that she doesn't take a station, leave it, and
+   *   > have to come back to find it taken. But I do NOT want it putting the whole workout on one
+   *   > machine or reordering the session. It's a convenience nobody feels, and behind the scenes it
+   *   > is maximum quality — I'm saying this as an advanced lifter."*
+   *
+   * ── ⚠️ WHY THIS IS A PROMPT RULE AND NOT A REORDER ─────────────────────────────────────────────
+   * He noted it was bad when the deterministic engine did it. It was — because the engine had to
+   * decide mechanically, with no idea WHY a lift was placed where it was. The coach knows: fatigue
+   * order, supersets, what it is building the session around. An app that reordered the coach's
+   * session would be the deleted engine coming back through a side door and forming an opinion about
+   * her training.
+   *
+   * So it is stated as a TIE-BREAKER between orders that are already equally good, with both of his
+   * limits named — because a rule this soft is exactly the kind a model over-applies.
+   */
+  it('the rule is in the wire section, where the non-negotiables live', () => {
+    const wire = preamble().slice(preamble().indexOf('THE ONLY THINGS THAT ARE NOT YOURS TO CHOOSE'));
+    expect(wire).toContain('FINISH A STATION BEFORE LEAVING IT');
+  });
+
+  it('⚠️ and names BOTH limits he drew, or a model will take it too far', () => {
+    // Without these it becomes "one machine for the whole session", which is worse than the problem.
+    expect(preamble()).toMatch(/tie-breaker between[\s\S]{0,20}equally good orders/i);
+    expect(preamble()).toMatch(/do not build a session around one station/i);
+  });
+
+  it('says WHY, so it is judgement rather than a rule to satisfy', () => {
+    // "She loses it the moment she walks away" is the whole reason. A rule with no reason is one a
+    // model applies literally in the cases it was not meant for.
+    expect(preamble()).toMatch(/she\s*\n?\s*loses it the moment she walks away/i);
+  });
+});

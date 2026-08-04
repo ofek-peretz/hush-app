@@ -55,8 +55,7 @@ export type OnboardingParamList = {
    * is a wheel or a choice; these two are prose, and they are the whole of what the intake
    * conversation was still doing.
    */
-  WhatFor: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number };
-  Limits: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number; goal: string };
+  YourGoal: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired

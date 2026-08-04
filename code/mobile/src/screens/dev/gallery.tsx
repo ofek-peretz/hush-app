@@ -19,8 +19,7 @@ import { Authentication } from '@/screens/onboarding/Authentication';
 import { NameEntry } from '@/screens/onboarding/NameEntry';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { YourTraining } from '@/screens/onboarding/YourTraining';
-import { WhatFor } from '@/screens/onboarding/WhatFor';
-import { Limits } from '@/screens/onboarding/Limits';
+import { YourGoal } from '@/screens/onboarding/YourGoal';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -1216,8 +1215,7 @@ export const GALLERY: GalleryEntry[] = [
    */
   { id: '1.2c', label: 'Her body — bodyweight + age', status: 'live', note: 'two rules on one screen, merged 2026-08-04; a third would not fit without scrolling', render: () => mount(AboutYou, { sex: 'female' }) },
   { id: '1.2d', label: 'Her training — experience + days + length', status: 'live', note: 'the screen his "it decided 4 workouts without asking" ruling was about — now it ASKS', render: () => mount(YourTraining, { sex: 'female', weightKg: 62, age: 34 }) },
-  { id: '1.2e', label: 'What for — her words, with the chips speaking', status: 'live', note: 'the intake chat is deleted; this is one of the two things a form could not hold', render: () => mount(WhatFor, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60 }) },
-  { id: '1.2f', label: 'Limits — what hurts, what she will not do', status: 'live', note: '"Nothing" is a chip, so the common case is one tap AND an explicit answer', render: () => mount(Limits, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60, goal: 'A race' }) },
+  { id: '1.2e', label: 'Her goal + her limits — one screen, no prose', status: 'live', note: 'was two screens; the paragraphs were what made them two', render: () => mount(YourGoal, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60 }) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.

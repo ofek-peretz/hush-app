@@ -122,7 +122,7 @@ describe('onboarding asks for every one of them', () => {
      * it and this fails — which is the whole guarantee, since the original bug was a fact nothing
      * anywhere collected.
      */
-    const flow = ['NameEntry', 'AboutYou', 'YourTraining', 'ConnectHealth']
+    const flow = ['NameEntry', 'AboutYou', 'YourTraining', 'YourGoal', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -173,7 +173,15 @@ describe('onboarding asks for every one of them', () => {
   it('is written in both languages, and to HER in Hebrew', () => {
     for (const loc of ['en', 'he']) {
       const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as { ob: Record<string, string> };
-      for (const k of ['weightLegend', 'weightTitle', 'weightSub']) expect(copy.ob[k]).toBeTruthy();
+      /*
+       * ⚠️ `weightSub` IS GONE, AND THAT IS THE POINT (founder 2026-08-04): *"take the text off the
+       * top and leave only titles — nobody reads whole sentences in onboarding."* Every explanatory
+       * line in the intake was deleted; what a step still needs is its LEGEND and its TITLE.
+       *
+       * The one exception is the Health step, whose line is a promise about her data rather than
+       * prose — `theV4WorldIsGoneFromTheCopy` holds that one, and it caught me deleting it.
+       */
+      for (const k of ['weightLegend', 'weightTitle']) expect(copy.ob[k]).toBeTruthy();
     }
     /*
      * The Hebrew base form is MASCULINE, so a feminine variant is what makes the screen speak to her

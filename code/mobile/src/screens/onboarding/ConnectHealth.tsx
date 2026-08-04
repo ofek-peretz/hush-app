@@ -180,9 +180,21 @@ export function ConnectHealth({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 6, total: 6 }}
+      progress={{ index: 5, total: 5 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
+      /*
+       * ⛔ THIS ONE LINE STAYS, AND IT IS THE EXCEPTION TO THE FOUNDER'S OWN INSTRUCTION.
+       *
+       * *"Take the text off the top and leave only titles — nobody reads whole sentences in
+       * onboarding."* He is right about every other step, and all of them lost their prose. This is
+       * not prose: **"I show it. It never decides a weight."** is a PROMISE about what happens to
+       * her health data, made at the only moment she is deciding whether to hand it over.
+       *
+       * `theV4WorldIsGoneFromTheCopy` asserts it, and it caught me deleting it — HealthKit is not a
+       * model input (founder ruling), and the screen that asks for the permission is where that has
+       * to be said.
+       */
       voice={t('ob.healthSub')}
       headGap={32}
       footer={
