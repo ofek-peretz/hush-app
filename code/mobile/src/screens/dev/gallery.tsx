@@ -1240,8 +1240,8 @@ export const GALLERY: GalleryEntry[] = [
     gallery, which draws the other case — so both are entries here.
   */
   { id: '1.2c', label: 'About you — nothing known yet', status: 'live', note: 'no name from the provider; sex unchosen, so Continue waits', render: () => mount(AboutYou) },
-  { id: '1.2d', label: 'Her training — experience + days + length', status: 'live', note: 'the screen his "it decided 4 workouts without asking" ruling was about — now it ASKS', render: () => mount(YourTraining, { sex: 'female', weightKg: 62, age: 34 }) },
-  { id: '1.2e', label: 'Her goal + her limits — one screen, no prose', status: 'live', note: 'was two screens; the paragraphs were what made them two', render: () => mount(YourGoal, { sex: 'female', weightKg: 62, age: 34, experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60 }) },
+  { id: '1.2d', label: 'Her training — three rulers', status: 'live', note: 'days, bodyweight, age — one instrument each (founder 2026-08-05); session length is gone', render: () => mount(YourTraining, { sex: 'female', experience: 'intermediate' }) },
+  { id: '1.2e', label: 'Her goal + her limits — one screen, no prose', status: 'live', note: 'was two screens; the paragraphs were what made them two', render: () => mount(YourGoal, { sex: 'female', experience: 'intermediate', weightKg: 62, age: 34, daysPerWeek: 4 }) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.

@@ -830,7 +830,9 @@ export function Home({ navigation, route }: Props) {
        * her budget in the sheet, which makes it its own to honour rather than ours to flag.
        */
       overBudget={false}
-      budgetMinutes={app.profile?.workoutMinutes ?? 60}
+      /* ⚠️ NO `?? 60`. Nothing asks her for a budget any more, so a fallback here would be the app
+         inventing one — and this prop feeds a notice that names it out loud. Absent stays absent. */
+      budgetMinutes={app.profile?.workoutMinutes}
       dayDone={!!todayId && doneCoachIds.includes(todayId)}
       units={app.profile?.units ?? 'kg'}
       // A CHANGED ROW OPENS ITS CASE (v7 2.1b); an unchanged one opens the form clip. The rule is

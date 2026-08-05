@@ -1,11 +1,19 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * HER TRAINING — how long she has done it, how many days, and how long each one is.
+ * HER TRAINING — the three numbers she sets: days a week, bodyweight, age.
  *
- * ⛔ FOUNDER, 2026-08-04: *"merge as many of the new screens as possible into one — sensibly, and
- * with no scrolling."* This absorbed the experience question from `AboutYou`, which kept the two
- * RULES (bodyweight and age) and handed the three CHOICES here. One screen answers "what is her
- * body", the next answers "what is her training", and neither scrolls.
+ * ⛔ FOUNDER, 2026-08-05: *"make one screen of 3 rulers — DAYS A WEEK together with BODYWEIGHT and
+ * AGE — and then move the years of experience to the screen with the name and the sex."*
+ *
+ * The split before this one put the two RULES on `AboutYou` and the three CHOICES here, which read
+ * as "what is her body" then "what is her training". His is better and the reason is the
+ * instrument: **days, bodyweight and age are all one number on a scale**, and asking two of them
+ * with a wheel and the third with five buttons was one question wearing two costumes. Experience
+ * is not a number at all, so it goes where the other things she IS are answered.
+ *
+ * ⚠️ THE WHEEL ITSELF IS UNTOUCHED, on his explicit instruction: *"don't touch the functionality of
+ * the rulers, they work perfectly — just add a ruler where one is needed, exactly like the
+ * others."* Days is the same `WheelPicker` with a smaller range, not a new control.
  *
  * ⚠️ Three segmented controls cost 3 × (20 + 48) + 2 × 32 gaps = 268px against a ~565px body — the
  * lightest of the three steps, which is why it took the extra question rather than the other one.

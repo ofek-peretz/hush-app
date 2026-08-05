@@ -60,8 +60,9 @@ describe('every fact onboarding collects is named to the coach', () => {
      * the coach knowing what it is.
      */
     for (const r of REQUIRED_FOR_COACH) {
-      const onWire = r.key === 'workoutMinutes' ? 'minutes' : r.key;
-      expect({ key: r.key, named: names(onWire) }).toEqual({ key: r.key, named: true });
+      // ⚠️ The `minutes` rename went with `workoutMinutes` when it left the list — see the sister
+      // assertion in `theCoachIsNeverAskedWithoutWhatItNeeds`.
+      expect({ key: r.key, named: names(r.key) }).toEqual({ key: r.key, named: true });
     }
   });
 

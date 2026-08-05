@@ -36,8 +36,16 @@ describe('what the coach cannot work without', () => {
   it('names each requirement with the reason it is one', () => {
     // The list is the contract. A requirement with no stated reason is one nobody can argue with
     // later, which is how a floor becomes a questionnaire.
+    /*
+     * ⛔ FIVE SINCE 2026-08-05. `workoutMinutes` was the sixth and it left with the question that
+     * collected it — the founder removed session length from onboarding because she cannot answer
+     * it before her first session, so the coach sets the budget itself (never under 45).
+     *
+     * ⚠️ A FACT NOTHING ASKS FOR CANNOT SIT IN A LIST OF "what she must be asked". `missingForCoach`
+     * would have reported it missing for every athlete alive, for ever.
+     */
     expect(REQUIRED_FOR_COACH.map((r) => r.key)).toEqual([
-      'sex', 'weightKg', 'age', 'experience', 'daysPerWeek', 'workoutMinutes',
+      'sex', 'weightKg', 'age', 'experience', 'daysPerWeek',
     ]);
     for (const r of REQUIRED_FOR_COACH) expect(r.why.length).toBeGreaterThan(20);
   });
@@ -50,7 +58,9 @@ describe('what the coach cannot work without', () => {
   it('⚠️ NO profile is missing everything, not nothing', () => {
     // `undefined` here means onboarding has not run. Answering "nothing is missing" would be the
     // exact hole this file exists to close, and it is the answer a naive `Object.keys` filter gives.
-    const every = ['sex', 'weightKg', 'age', 'experience', 'daysPerWeek', 'workoutMinutes'];
+    /* ⛔ FIVE, NOT SIX (2026-08-05). Session length is no longer something she is asked for, so it
+       cannot be something she is MISSING — a warning that is always on is a warning nobody reads. */
+    const every = ['sex', 'weightKg', 'age', 'experience', 'daysPerWeek'];
     expect(missingForCoach(null)).toEqual(every);
     expect(missingForCoach(undefined)).toEqual(every);
   });
@@ -96,10 +106,10 @@ describe('the fact actually reaches the sheet', () => {
     const facts = coachFacts({ profile: full, history: [], cardio: [], program: null } as never);
     const athlete = (facts as { athlete: Record<string, unknown> }).athlete;
     for (const r of REQUIRED_FOR_COACH) {
-      // `workoutMinutes` is named `minutes` on the wire — the sheet is written for the coach to
-      // read, not to mirror our field names. Everything else keeps its name.
-      const onWire = r.key === 'workoutMinutes' ? 'minutes' : r.key;
-      expect({ key: r.key, sent: athlete[onWire] !== undefined }).toEqual({ key: r.key, sent: true });
+      // ⚠️ `workoutMinutes` used to need a rename here (it is `minutes` on the wire). It left the
+      // list on 2026-08-05 — the coach sets the budget itself now — so every remaining requirement
+      // keeps its own name, and the special case went with it.
+      expect({ key: r.key, sent: athlete[r.key] !== undefined }).toEqual({ key: r.key, sent: true });
     }
   });
 

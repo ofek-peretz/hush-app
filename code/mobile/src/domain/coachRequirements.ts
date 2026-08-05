@@ -41,7 +41,7 @@ import type { Profile } from '@/data/local/models';
 
 /** One fact the coach cannot work without, and the reason it is on this list. */
 export interface CoachRequirement {
-  key: 'sex' | 'weightKg' | 'age' | 'experience' | 'daysPerWeek' | 'workoutMinutes';
+  key: 'sex' | 'weightKg' | 'age' | 'experience' | 'daysPerWeek';
   /** Why the coach cannot do its job without it — for the reader, not for the athlete. */
   why: string;
 }
@@ -96,15 +96,20 @@ export const REQUIRED_FOR_COACH: readonly CoachRequirement[] = [
      */
     why: 'the shape of the week — and it must be HER answer, never a placeholder the app invented',
   },
-  {
-    key: 'workoutMinutes',
-    /*
-     * ⛔ FOUNDER, 2026-08-03: *"session length — I don't know how critical it is, most people like
-     * 45–60 minutes."* It is critical, and there is evidence: he was handed a six-exercise session
-     * the app called 35 minutes. The coach cannot size a session against a budget nobody told it.
-     */
-    why: 'how much fits in a session — six exercises or four is this number and nothing else',
-  },
+  /*
+   * ⛔ `workoutMinutes` IS NO LONGER REQUIRED (founder 2026-08-05) — and leaving it here would have
+   * made this list disagree with the app the day the question was removed.
+   *
+   * It was added on 2026-08-03 for a good reason (*"he was handed a six-exercise session the app
+   * called 35 minutes"* — the coach cannot size a session against a budget nobody told it), and the
+   * reason has not gone away. What changed is WHOSE number it is. He removed the question because
+   * she cannot answer it before her first session, so the coach sets the budget itself now, never
+   * under 45 — see the "minutes" rule in `coachPrompt`.
+   *
+   * ⚠️ THIS LIST IS "WHAT SHE MUST BE ASKED". A fact nothing asks for cannot sit in it: `missingForCoach`
+   * would report it missing for every athlete alive, for ever, and a warning that is always on is a
+   * warning nobody reads.
+   */
 ] as const;
 
 /**
@@ -121,7 +126,7 @@ export function missingForCoach(profile: Profile | null | undefined): CoachRequi
     // A bodyweight of 0 is absence wearing a number — the shape `weightKg?: number` cannot say so.
     // Every numeric requirement has the same failure mode: a 0 that means "nobody asked" rather
     // than a real answer. `daysPerWeek` is the one the founder actually caught, as a placeholder.
-    if (r.key === 'weightKg' || r.key === 'age' || r.key === 'daysPerWeek' || r.key === 'workoutMinutes') {
+    if (r.key === 'weightKg' || r.key === 'age' || r.key === 'daysPerWeek') {
       return typeof v !== 'number' || !Number.isFinite(v) || v <= 0;
     }
     return v == null;

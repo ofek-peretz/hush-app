@@ -1,6 +1,10 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ABOUT YOU — name, sex, bodyweight, age. One screen.
+ * ABOUT YOU — name, sex, and how long she has trained. One screen.
+ *
+ * ⛔ RESHAPED 2026-08-05 (founder): *"make one screen of 3 rulers — DAYS A WEEK together with
+ * BODYWEIGHT and AGE — and then move the years of experience to the screen with the name and the
+ * sex."* This screen asks the three things she IS; `YourTraining` asks the three she SETS.
  *
  * ⛔ FOUNDER, 2026-08-04, rejecting a proposal that would have added a line of the coach's voice to
  * every step: *"not good enough. That's a lot of copy, and onboarding is something people fill in
@@ -38,7 +42,6 @@ const WEIGHT_OPENS_ON = { kg: 70, lb: 155 } as const;
 export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const units = app.profile?.units ?? 'kg';
   /*
    * ⛔ THE NAME IS ALREADY OURS (founder 2026-08-04): *"onboarding is something people fill in and
    * move on."*

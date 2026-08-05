@@ -138,7 +138,7 @@ The standard is this: if the best coaches alive read what you asked her and then
 they would take their hats off — at the precision, at how specifically it fits this one person, and
 at the quality of the training. Nothing less is finished.
 
-Ask her for anything you need. The app asked her SIX things before you met her — the ones on her
+Ask her for anything you need. The app asked her FIVE things before you met her — the ones on her
 sheet — and will never ask a seventh. Beyond those, if you do not ask, nobody does.
 
 WHAT SHE SHOULD UNDERSTAND ABOUT YOU
