@@ -93,8 +93,22 @@ describe('the control is on both stages, and opens onto something', () => {
      * `theCoachCanChangeTodayButNotYesterday`. Kept pointing at the CURRENT gate so a future
      * narrowing has to come through here as well.
      */
-    expect(flow()).toMatch(/onCoach=\{session\.currentExerciseId && !confirm \? \(\) => setOverlay\('coach'\) : undefined\}/);
+    /*
+     * ⛔ THE DOOR MOVED TO THE PAUSED STAGE (founder 2026-08-05): *"take the AI screen off the
+     * workout — leave it only for the case of an injury. Remove the button from every workout state
+     * except the injury state."*
+     *
+     * ⚠️ THE CLAIM IS UNCHANGED AND IS WHAT IS ASSERTED: the coach's words are behind exactly ONE
+     * control inside a workout, and that control opens onto something. Which screen holds it is his
+     * to arrange; that it exists, and that nothing else in the session is a second door, is not.
+     *
+     * And it is still reachable during a plank, a run and a carry — the gate that used to be
+     * `onLift` is gone entirely rather than narrowed, because PAUSE is available on every step.
+     */
+    expect(flow()).toContain("onCoach={overlay === 'endConfirm' ? undefined : () => setOverlay('coach')}");
     expect(flow()).toContain('<SessionCoach');
+    // …and there is exactly one of them: the live set carries no opener at all now.
+    expect(flow().match(/setOverlay\('coach'\)/g)).toHaveLength(1);
     expect(read('src/screens/session/SessionCoach.tsx')).toMatch(/useState<CoachTurn\[\]>\([\s\S]{0,40}session\.emphases\.map/);
   });
 

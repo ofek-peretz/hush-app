@@ -42,9 +42,20 @@ interface Props {
    * muscle Hush prescribes), and the door then simply does not draw.
    */
   onPain?: () => void;
+  /**
+   * ⛔ THE COACH, HERE AND NOWHERE ELSE IN A WORKOUT (founder 2026-08-05): *"take the AI screen off
+   * the workout — leave it only for the case of an injury. Remove the button from every workout
+   * state except the injury state."*
+   *
+   * It was a disc on every live set. What it added over the pain door beside it was a place to have
+   * a conversation while standing at a loaded bar; what it cost was a second thing to look at on
+   * the one screen that is supposed to hold a single number. Both doors are here now, at the foot
+   * of a session that is standing still — which is when talking is a reasonable thing to be doing.
+   */
+  onCoach?: () => void;
 }
 
-export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPain }: Props) {
+export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPain, onCoach }: Props) {
   const { t } = useCopy();
 
   return (
@@ -84,6 +95,19 @@ export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPa
         {/* THE DOOR. Set apart at the foot of the page, in the tone the whole of §13 is written in.
             It is not a third act — pain is not a peer of resume and end. It is a door, and one you
             only find if you are looking for it. */}
+        {onCoach ? (
+          <View style={styles.doorRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('sessionCoach.open')}
+              onPress={onCoach}
+              style={({ pressed }) => [styles.door, { opacity: pressed ? press.opacity : 1 }]}
+            >
+              <Icon name="speech" size={16} color={color.textMuted} strokeWidth={1.8} />
+              <Text style={styles.doorText}>{t('sessionCoach.open')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {onPain ? (
           <View style={styles.doorRow}>
             <Pressable

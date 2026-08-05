@@ -21,10 +21,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
-import { SessionCoach } from './SessionCoach';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { SessionCoach } from './SessionCoach';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
@@ -737,17 +737,21 @@ export function SessionFlow({ navigation, route }: Props) {
             onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
             /*
-             * ⛔ NOT GATED ON `onLift`, AND THAT WAS A REAL HOLE FOR HALF AN HOUR.
+             * ⛔ THE COACH IS NOT ON THE STAGE ANY MORE (founder 2026-08-05): *"I suggest you take
+             * the AI screen off the workout — leave it only for the case of an injury. Remove the
+             * button from every workout state except the injury state."*
              *
-             * The FORM disc is `onLift` because a plank has no film to play. I reused the same gate
-             * for the conversation and it hid the coach on every item stage — a plank, a 400 m
-             * repeat, a farmer's carry, five minutes of mobility. Measured: `exerciseById` is false
-             * for all four. She would have been mid-interval with the one door out of the workout
-             * missing, which is the exact state the door exists for.
+             * It was a disc in the top-left of every live set, and the argument for it was that
+             * something can always go wrong mid-workout. That is true and it is what the INJURY
+             * door is for — "something feels off", on the pause screen, which reports to the coach
+             * and gets a decision back. What the chat added on top of that was a place to have a
+             * conversation while standing at a loaded bar.
              *
-             * The right gate is "is there a step in front of her", not "is it a barbell".
+             * ⚠️ AND THE OVERLAY WENT WITH IT, not just the button. This was the only door into
+             * `overlay === 'coach'`; leaving the room behind a removed door is how a screen becomes
+             * unreachable code that still has to be maintained — the shape three audits in this
+             * batch have already found. The coach is one tap from Today, where she is not mid-set.
              */
-            onCoach={session.currentExerciseId && !confirm ? () => setOverlay('coach') : undefined}
           />
         )}
         {paceBeat ? (
@@ -810,6 +814,7 @@ export function SessionFlow({ navigation, route }: Props) {
           onResume={resume}
           endLabel={t('pauseSheet.endSession')}
           onEnd={() => setOverlay('endConfirm')}
+          onCoach={overlay === 'endConfirm' ? undefined : () => setOverlay('coach')}
           onPain={
             // Hidden while the guard is up — one question at a time.
             overlay === 'endConfirm'
@@ -846,12 +851,12 @@ export function SessionFlow({ navigation, route }: Props) {
         </BottomSheet>
       ) : null}
 
+      {/* ⚠️ THE COACH'S ONE DOOR INSIDE A WORKOUT — opened from the PAUSED stage, never from a live
+          set. See `PausedStage.onCoach` for the founder's ruling. Closing returns to the pause it
+          was opened from, because the session is still standing still behind it. */}
       {overlay === 'coach' ? (
-        <BottomSheet onClose={() => setOverlay('none')} heightFraction={0.92}>
-          <SessionCoach
-            onClose={() => setOverlay('none')}
-            onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
-          />
+        <BottomSheet onClose={() => setOverlay('pause')} heightFraction={0.92}>
+          <SessionCoach onClose={() => setOverlay('pause')} />
         </BottomSheet>
       ) : null}
       {overlay === 'reasoning' ? (

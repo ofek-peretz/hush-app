@@ -219,8 +219,15 @@ describe('the door is reachable, and every chip does something', () => {
      * `run_outdoor`, `farmer_carry` and `mobility` — so the one door out of the workout was missing
      * on every item stage, including mid-interval, which is exactly when she would reach for it.
      */
-    expect(flow()).toContain("onCoach={session.currentExerciseId && !confirm ?");
+    /*
+     * ⛔ AND THE GATE IS GONE ALTOGETHER (founder 2026-08-05) — the door moved to the PAUSED stage,
+     * which is reachable from every step including mid-interval. The bug this test was written for
+     * (a plank with no way out of the workout) is closed more completely than by any gate: there is
+     * no per-step condition left to get wrong.
+     */
+    expect(flow()).toContain("onCoach={overlay === 'endConfirm' ? undefined : () => setOverlay('coach')}");
     expect(flow()).not.toMatch(/onCoach=\{onLift/);
+    expect(flow()).not.toMatch(/onCoach=\{session\.currentExerciseId/);
   });
 
   it('⚠️ the "it is taken" chip is offered only where it can act', () => {

@@ -171,13 +171,19 @@ describe('the stage bar centres its middle group', () => {
     ).toBe(0);
   });
 
-  it('opens the coach from the bar, on every set', () => {
-    // What replaced it, and unlike the swap it does NOT come and go — what she can ask does not
-    // depend on which set she is on.
+  it('⛔ carries NO coach opener — it moved to the paused stage', () => {
+    /*
+     * FOUNDER, 2026-08-05: *"take the AI screen off the workout — leave it only for the case of an
+     * injury. Remove the button from every workout state except the injury state."*
+     *
+     * A disc sat here on every live set. What it added over the pain door on the pause screen was a
+     * place to have a conversation while standing at a loaded bar; what it cost was a second thing
+     * to look at on the one screen that is supposed to hold a single number.
+     */
     for (const setN of [1, 2]) {
       expect(
         draw(setN).root.findAll((n) => n.props.accessibilityLabel === tg('sessionCoach.open')).length,
-      ).toBeGreaterThan(0);
+      ).toBe(0);
     }
   });
 

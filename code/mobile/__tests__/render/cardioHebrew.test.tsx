@@ -205,7 +205,14 @@ describe('nothing on the run is set too small to read', () => {
   paceSec={342} {...liveProps} />));
     const sizeOf = (text: string) => sizes.find((x) => x.text === text)?.size;
     expect(sizeOf('קרדיו')).toBeGreaterThanOrEqual(15); // the legend at the top
-    expect(sizeOf('1,000 מ׳')).toBeGreaterThanOrEqual(FLOOR); // the band's end label
+    /*
+     * ⛔ THE END LABEL IS DELETED (founder 2026-08-05): *"on one side it says 1KM and on the other
+     * 1000M, and obviously that makes no sense."* The two answered different questions — which
+     * kilometre she is in, and how many metres are in one — so the second went. What he asked for
+     * in the same breath is that the REMAINING label be big, and that is what is asserted.
+     */
+    expect(sizeOf('1,000 מ׳')).toBeUndefined();
+    expect(sizes.find((x) => x.text.startsWith('ק״מ'))?.size ?? 15).toBeGreaterThanOrEqual(15);
     /*
      * ⚠️ THE THIRD SEAT HOLDS PACE NOW (founder 2026-08-04). It was "4 ק״מ" — the same fact the band
      * directly above draws, twice — so the one seat that could carry the number every runner reads

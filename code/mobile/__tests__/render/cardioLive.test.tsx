@@ -93,7 +93,10 @@ function liveBody(r: ReactTestRenderer): ReactTestInstance {
   return r.root.findAll((n) => {
     const s = n.props.style;
     const flat = Array.isArray(s) ? Object.assign({}, ...s.flat(Infinity).filter(Boolean)) : s;
-    return flat?.flex === 1 && flat?.gap === 30 && flat?.justifyContent === 'center';
+    /* ⚠️ `gap: 34` and `flex-start` since 2026-08-05 — the founder asked for the clock to rise, so
+       the body hangs from the top instead of centring. Matched on the SHAPE that identifies it (a
+       flexed body with a gap), not on the two numbers that were free to change. */
+    return flat?.flex === 1 && typeof flat?.gap === 'number' && flat?.paddingHorizontal === 28;
   })[0];
 }
 

@@ -459,15 +459,31 @@ export function CardioLiveView(props: {
           {/* the elapsed clock — the hero. Pure figures + ":" — mono. */}
           <Text style={styles.clock}>{fmtClock(elapsedSec)}</Text>
 
-          {/* the 1,000 m band — the dot travels the current kilometre, metres riding under it. */}
+          {/*
+            ⛔ THE BAND WAS LABELLED TWO DIFFERENT WAYS (founder 2026-08-05): *"on one side it says
+            1KM and on the other 1000M, and obviously that makes no sense."*
+
+            He is right, and it is worse than an inconsistency: the two labels answered **two
+            different questions.** The left said WHICH KILOMETRE she is in ("KM 5"); the right said
+            HOW MANY METRES ARE IN ONE ("1,000 m"). One instrument, two units, neither wrong on its
+            own.
+
+            The right label goes. A bar labelled "KM 5" does not need its own end explained — the
+            end of the bar IS the end of that kilometre, which is what the label already said.
+
+            ⚠️ A PRESCRIBED RUN KEEPS BOTH, and there the pair is coherent: the band spans the whole
+            target, so "0" and "5 km" are two ends of ONE measurement rather than two answers.
+          */}
           <View style={styles.band}>
             <View style={styles.bandLabels}>
-              <Legend size={RUN_SMALL_PT} track={0}>
+              <Legend size={RUN_LABEL_PT} track={0.14}>
                 {target ? '0' : t('cardio.kmOrdinal', { n: kmDone + 1 })}
               </Legend>
-              <Legend size={RUN_SMALL_PT} track={0}>
-                {target ? t('cardio.targetEnd', { km: +(target / 1000).toFixed(2) }) : t('cardio.bandEnd')}
-              </Legend>
+              {target ? (
+                <Legend size={RUN_LABEL_PT} track={0.14}>
+                  {t('cardio.targetEnd', { km: +(target / 1000).toFixed(2) })}
+                </Legend>
+              ) : null}
             </View>
             <View style={styles.bandLine} />
             <View style={styles.bandCapL} />
@@ -477,11 +493,19 @@ export function CardioLiveView(props: {
             <View style={[styles.bandMetres, { left: `${dotFrac * 100}%` }]}>
               {/* Inside a prescribed run the readout is KILOMETRES COVERED, because that is what the
                   band is measuring; inside a free one it is metres into this kilometre. */}
-              <Text style={styles.bandMetresNum}>
-                {target ? distanceKm.toFixed(2) : Math.round(metresIntoSpan)}
-              </Text>
-              <Text style={[styles.bandMetresUnit, !monoCanDraw(target ? kmUnit : metresUnit) && styles.unitWord]}>
-                {` ${target ? kmUnit : metresUnit}`}
+              {/*
+                ⛔ THE TOTAL, NOT THE METRES INTO THIS KILOMETRE (founder 2026-08-05: *"the 0 metres
+                to 1000 metres is written small, and it is a shame because you have so much room
+                here"*).
+
+                The BAR above already draws her position inside the kilometre — as a position,
+                which is what a bar is for. Printing the same thing again as a number under it was
+                the one seat this line had, spent saying it twice. It carries the distance she has
+                actually covered now, which is the number every runner reads first.
+              */}
+              <Text style={styles.bandMetresNum}>{distanceKm.toFixed(2)}</Text>
+              <Text style={[styles.bandMetresUnit, !monoCanDraw(kmUnit) && styles.unitWord]}>
+                {` ${kmUnit}`}
               </Text>
             </View>
           </View>
@@ -881,6 +905,8 @@ const RUN_LEGEND_PT = 15;
  * set the same way and would have failed the same reading. `nothingOnTheRunIsTooSmall` holds it.
  */
 const RUN_SMALL_PT = 12.5;
+/** The band's own label — raised from 12.5 because it is read at arm's length, mid-run. */
+const RUN_LABEL_PT = 15;
 /** KM · HR · KCAL under their figures — live, and on the saved stage, which must agree with it. */
 const READOUT_LABEL_PT = 13;
 
@@ -908,7 +934,13 @@ const styles = StyleSheet.create({
   liveTop: { flexDirection: 'row', alignItems: 'center', paddingTop: 14, paddingHorizontal: 24 },
   liveTopSpacer: { width: 38 },
   liveTopCentre: { flex: 1, alignItems: 'center' },
-  liveBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30, paddingHorizontal: 28 },
+  /*
+   * ⛔ THE CLOCK RISES (founder 2026-08-05): *"raise the running time a bit at the top and
+   * significantly enlarge the text above the bar."* The body centred its three children with 30 of
+   * air between them, which on a tall phone left the clock floating in the middle of a screen whose
+   * top third was empty. It hangs from the top now and the band follows it.
+   */
+  liveBody: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 34, paddingTop: 18, paddingHorizontal: 28 },
   // The elapsed clock is the lit thing on a run, exactly as the load is on a set: the BRIGHT
   // cream with a wide soft glow, never the plain ink.
   clock: {
@@ -935,9 +967,13 @@ const styles = StyleSheet.create({
   bandCapR: { position: 'absolute', right: 0, top: 6, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
   bandFill: { position: 'absolute', left: 0, top: 13.5, height: 3, borderRadius: 2, backgroundColor: signal[0] },
   bandDot: { position: 'absolute', top: 8, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetres: { position: 'absolute', top: 34, marginLeft: -36, flexDirection: 'row', alignItems: 'baseline', width: 88, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 25, color: signal[0], textAlign: 'left' },
-  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 25, color: signal[0], textAlign: 'left' },
+  // ⚠️ 150 WIDE, UP FROM 88. It held a three-digit metre count at 25 pt; it holds "4.62 km" at 44
+  // now, and a box that clips the number it grew for would be the change undoing itself.
+  bandMetres: { position: 'absolute', top: 34, marginLeft: -75, flexDirection: 'row', alignItems: 'baseline', width: 150, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
+  // 44 and 17, up from 25 and 25 — this is the distance she has covered, and it is the second
+  // thing she looks at after the clock. The unit shrinks so the FIGURE is what grew.
+  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 44, color: signal[0], textAlign: 'left' },
+  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 17, color: signal[0], textAlign: 'left' },
 
   /*
    * ⛔ THE SHAPE OF THE RUN — furniture, and it has to stay furniture (founder 2026-08-04).
