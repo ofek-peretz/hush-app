@@ -681,7 +681,12 @@ final class WatchModel: ObservableObject {
   /// acknowledgement anyway would be Hush stating, in its own voice, that it had acted when it had
   /// not. The wrist takes the flag with a haptic either way — she was heard — and only claims the
   /// ease when the phone is there to make it.
-  @discardableResult
+  /**
+   * How a pain report travelled. Declared here rather than inside the doc comment below, because an
+   * attribute must be ADJACENT to the declaration it applies to — see the note on `reportPain`.
+   */
+  enum PainReport { case delivered, queued }
+
   /**
    * ⛔ THE REPORT IS ALWAYS TAKEN (rebuilt 2026-08-05 — see `WatchSessionManager.transferIntent`).
    *
@@ -699,8 +704,7 @@ final class WatchModel: ObservableObject {
    * queued report gets an acknowledgement that claims nothing about the programme — because
    * nothing about the programme has happened yet.
    */
-  enum PainReport { case delivered, queued }
-
+  @discardableResult
   func reportPain(_ area: String, severity: String) -> PainReport {
     onEntryHaptic.send(.paused) // a quiet acknowledgement that the flag was taken
     let intent = painIntent(area: area, severity: severity)

@@ -117,3 +117,59 @@ describe('⛔ the wrist owns its floor', () => {
     expect(wrong).toEqual([]);
   });
 });
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AN Attribute SITS ON THE DECLARATION IT APPLIES TO — build 43's compile failure.
+ *
+ * `'@discardableResult' attribute cannot be applied to this declaration`, twice, and the build died
+ * before it produced an artifact.
+ *
+ * I inserted a doc comment and an `enum` between a pre-existing `@discardableResult` and the
+ * `func reportPain` it belonged to. My edit anchored on the function signature; the attribute was
+ * on the line ABOVE it, outside the text I matched — so it silently re-attached itself to the enum,
+ * which is not a declaration that can carry it.
+ *
+ * ⚠️ EVERY CHECK I HAD RUN PASSED. Brace balance was correct, argument order was correct, the
+ * symbol was reachable, the type-check was green — because none of them read Swift. **There is no
+ * compiler in this environment, so an insertion that separates an attribute from its declaration
+ * is invisible until EAS spends nine minutes discovering it.**
+ *
+ * This is the cheapest possible guard against the whole family: an attribute line must be followed
+ * by another attribute, or by something a declaration can start with. Never by a comment, never by
+ * a blank line, never by a type.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ Swift attributes touch their declarations', () => {
+  const SWIFT = ['WatchModel.swift', 'WatchScreens.swift', 'WatchSessionManager.swift', 'WatchStore.swift', 'WatchCopy.swift', 'LocalWorkoutEngine.swift', 'WorkoutRuntime.swift'];
+
+  it('nothing is inserted between an attribute and what it applies to', () => {
+    const bad: string[] = [];
+    for (const file of SWIFT) {
+      const path = join(__dirname, '../../targets/watch', file);
+      let lines: string[];
+      try {
+        lines = readFileSync(path, 'utf8').split('\n');
+      } catch {
+        continue; // a file that is not there is not a violation
+      }
+      lines.forEach((line, i) => {
+        /*
+         * Only attributes that stand ALONE on their line can be orphaned — `@State private var x`
+         * and `@MainActor final class Y` carry their declaration with them. The parenthesised form
+         * (`@available(iOS 16, *)`) counts too, and that is the one a narrower rule would miss.
+         */
+        if (!/^\s*@\w+(\([^)]*\))?\s*$/.test(line)) return;
+        // Look past nothing: the very next line must be the declaration, or another attribute.
+        const next = (lines[i + 1] ?? '').trim();
+        const ok =
+          /^@/.test(next) ||
+          /^(public|private|internal|fileprivate|open|static|final|override|nonisolated|convenience|required|dynamic|lazy|weak|unowned|func|var|let|init|subscript|deinit|class|struct|enum|extension|actor|protocol|typealias|case|associatedtype)\b/.test(
+            next,
+          );
+        if (!ok) bad.push(`${file}:${i + 1} — @attribute followed by: ${next.slice(0, 60) || '(blank line)'}`);
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+});
