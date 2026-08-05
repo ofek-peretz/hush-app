@@ -45,10 +45,12 @@ export interface DraggableWeekRowProps {
   onPickUp?: () => void;
   /** Dropped, with the row's own centre in column coordinates. The parent decides the target. */
   onDrop?: (id: string, centreY: number) => void;
+  /** The gesture is over, however it ended — the parent puts the column back to rest. */
+  onSettle?: () => void;
   children: React.ReactNode;
 }
 
-export function DraggableWeekRow({ id, disabled, onMeasure, onPickUp, onDrop, children }: DraggableWeekRowProps) {
+export function DraggableWeekRow({ id, disabled, onMeasure, onPickUp, onDrop, onSettle, children }: DraggableWeekRowProps) {
   const dy = useSharedValue(0);
   const lifted = useSharedValue(0);
   const box = React.useRef({ y: 0, height: 0 });
@@ -66,6 +68,10 @@ export function DraggableWeekRow({ id, disabled, onMeasure, onPickUp, onDrop, ch
     },
     [id, onDrop],
   );
+
+  const settle = React.useCallback(() => {
+    onSettle?.();
+  }, [onSettle]);
 
   const pickUp = React.useCallback(() => {
     haptics.tick();
@@ -86,15 +92,29 @@ export function DraggableWeekRow({ id, disabled, onMeasure, onPickUp, onDrop, ch
         })
         .onEnd((e) => {
           runOnJS(release)(e.translationY);
-          /*
-           * ⚠️ IT SPRINGS BACK TO ZERO ALWAYS, and the parent re-renders it into its new place.
-           * Leaving it translated and letting the re-render arrive would double the movement for
-           * one frame — the row would appear to jump past the day she chose.
-           */
+        })
+        /*
+         * ⛔ `onFinalize`, NOT `onEnd` — found in the audit, 2026-08-05.
+         *
+         * `onEnd` runs when a gesture completes. It does NOT run when one is CANCELLED, and a pan
+         * inside a ScrollView is cancelled routinely: a finger that leaves the screen, a call
+         * arriving, the scroll winning the race. Every one of those would have left `lifted` at 1
+         * and the parent's `dragging` flag set — so the row would stay raised and **every empty day
+         * would keep showing a moss drop slot, for ever, until she left the screen.**
+         *
+         * `onFinalize` runs on both paths. The reset belongs here and the WRITE stays in `onEnd`,
+         * because a cancelled drag must move nothing.
+         *
+         * ⚠️ AND IT SPRINGS BACK TO ZERO ALWAYS. The parent re-renders the row into its new place;
+         * leaving it translated and letting the re-render arrive would double the movement for one
+         * frame — the row would appear to jump past the day she chose.
+         */
+        .onFinalize(() => {
           dy.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) });
           lifted.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) });
+          runOnJS(settle)();
         }),
-    [id, disabled, dy, lifted, pickUp, release],
+    [id, disabled, dy, lifted, pickUp, release, settle],
   );
 
   const style = useAnimatedStyle(() => ({

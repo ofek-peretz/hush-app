@@ -173,11 +173,24 @@ export function WeekColumn(props: WeekColumnProps) {
    */
   const boxes = React.useRef<MeasuredRow[]>([]);
   const [dragging, setDragging] = React.useState<string | null>(null);
+  /*
+   * ⛔ A NUMBERED WEEK CANNOT BE DRAGGED (audit, 2026-08-05). Without a pattern the rows stand for
+   * POSITIONS, not weekdays — `dropTarget` correctly returns null there, so the row would lift under
+   * her finger, spring back and change nothing. **A gesture that is offered and does nothing is
+   * worse than one that is not offered**, because it reads as a bug in the app rather than a limit
+   * of the week.
+   */
+  const canDrag = !!props.onMoveToDay && !props.inert && !!props.days && props.days.size > 0;
   const rows = React.useMemo(
     () => weekRows(props.workouts, props.days, props.selectedId, (d) => t(`weekday.${d}`).toUpperCase()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.workouts, props.days, props.selectedId, t],
   );
+
+  /* Layout is reported per index; a week that shrinks would otherwise keep stale trailing bands. */
+  React.useEffect(() => {
+    boxes.current.length = rows.length;
+  }, [rows.length]);
 
   return (
     <View style={styles.week}>
@@ -229,10 +242,11 @@ export function WeekColumn(props: WeekColumnProps) {
             <DraggableWeekRow
               key={w.id}
               id={w.id}
-              disabled={!!props.inert || !props.onMoveToDay}
+              disabled={!canDrag}
               onMeasure={measure}
               onPickUp={() => setDragging(w.id)}
               onDrop={drop}
+              onSettle={() => setDragging(null)}
             >
             <View style={[styles.open, dragging === w.id && styles.lifted]}>
               <Pressable
@@ -285,10 +299,11 @@ export function WeekColumn(props: WeekColumnProps) {
           <DraggableWeekRow
             key={w.id}
             id={w.id}
-            disabled={!!props.inert || !props.onMoveToDay}
+            disabled={!canDrag}
             onMeasure={measure}
             onPickUp={() => setDragging(w.id)}
             onDrop={drop}
+            onSettle={() => setDragging(null)}
           >
           <Pressable
             accessibilityRole="button"

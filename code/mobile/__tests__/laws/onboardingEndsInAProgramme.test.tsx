@@ -112,7 +112,18 @@ describe('the ordering that a first run always breaks', () => {
     // founder hit as "here is your plan" over an empty screen.
     const src = building();
     expect(src).toContain('await db.recordCoachAnswer(');
-    expect(src.indexOf('await db.recordCoachAnswer(')).toBeLessThan(src.indexOf("navigation.replace('ProgramCreated'"));
+    /*
+     * ⚠️ ASSERTED AS A DEPENDENCY, NOT AS A SOURCE POSITION (2026-08-05). This compared the two
+     * offsets in the file, which held while both lived in `build()` — and the navigation moved into
+     * an effect when the simulation's reveal was gated on the fill finishing, so the LINE order
+     * flipped while the ORDER OF EVENTS did not.
+     *
+     * The chain is: the write is awaited → `setBuilt` → the rows fill → `revealed` → navigate.
+     * Every link is checked, so the position in the file is free to change again.
+     */
+    expect(src).toMatch(/await db\.recordCoachAnswer\([\s\S]{0,600}setBuilt\(/);
+    expect(src).toMatch(/if \(!revealed\) return;[\s\S]{0,400}navigation\.replace\('ProgramCreated'/);
+    expect(src).toContain('const filled = !!built && shownMuscles >= built.muscles.length;');
   });
 
   it('⛔ lands on the screen that SHOWS her the week', () => {

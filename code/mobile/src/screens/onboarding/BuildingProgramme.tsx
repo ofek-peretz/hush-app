@@ -120,6 +120,32 @@ export function BuildingProgramme({ navigation, route }: Props) {
   }, [shownMuscles, built]);
 
   /*
+   * ⛔ THE NAME WAITS FOR THE FILL (found in the audit, 2026-08-05).
+   *
+   * `setBuilt` handed the view a name AND the real rows in one render — and the view draws the name
+   * INSTEAD of the list, because a named programme is movement three. So the fast fill the founder
+   * asked for (*"show the muscle name and then all the exercises chosen for it, with the weight,
+   * reps and sets"*) rendered for zero frames: the list was replaced the instant it became real.
+   *
+   * The reveal is gated on the fill finishing. Then the name holds long enough to read, and only
+   * then does the screen move on.
+   */
+  const filled = !!built && shownMuscles >= built.muscles.length;
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!filled || revealed) return;
+    const id = setTimeout(() => setRevealed(true), 320);
+    return () => clearTimeout(id);
+  }, [filled, revealed]);
+  useEffect(() => {
+    if (!revealed) return;
+    // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
+    // and one that outstays the work is the dragging he asked me to avoid.
+    const id = setTimeout(() => navigation.replace('ProgramCreated', { inputs }), REVEAL_MS);
+    return () => clearTimeout(id);
+  }, [revealed, navigation, inputs]);
+
+  /*
    * ⛔ HER PROFILE AS IT **WILL** BE — ASSEMBLED, NOT WRITTEN.
    *
    * `Root` renders the main app the instant `app.profile` exists (`Root.tsx:284`). Writing it here
@@ -179,9 +205,6 @@ export function BuildingProgramme({ navigation, route }: Props) {
         lifts: plan.sessions.reduce((n, x) => n + x.blocks.reduce((m, b) => m + b.items.length, 0), 0),
       });
       setShownMuscles(1);
-      // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
-      // and one that outstays the work is the dragging he asked me to avoid.
-      setTimeout(() => navigation.replace('ProgramCreated', { inputs }), REVEAL_MS);
     } catch {
       setFailed(true);
     }
@@ -232,9 +255,9 @@ export function BuildingProgramme({ navigation, route }: Props) {
       unit={unitLabel(inputs.units)}
       fill={fill}
       muscles={muscles}
-      programmeName={built?.name ?? null}
+      programmeName={revealed ? built?.name ?? null : null}
       summary={
-        built?.name
+        revealed && built?.name
           ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })
           : null
       }
