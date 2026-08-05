@@ -145,5 +145,20 @@ final class PhoneSessionDelegate: NSObject, WCSessionDelegate {
   // at-least-once; the JS reconciler is idempotent and acks each one).
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     if let record = userInfo["record"] as? String { onSessionRecord(record) }
+    /*
+     * ⛔ AN INTENT CAN ARRIVE ON THE DURABLE CHANNEL TOO (2026-08-05).
+     *
+     * Intents normally ride `sendMessage`, which is reachable-only — correct for a `complete_set`,
+     * which is a proposal against LIVE state and must never be replayed late. **A report of pain is
+     * not live state.** It is true whether or not the phone was listening, and the founder found it
+     * being dropped: every one of his watch screenshots has the aeroplane glyph, and the report
+     * silently went nowhere.
+     *
+     * ⚠️ THIS LINE IS THE HALF THAT IS EASY TO FORGET. The wrist queuing it and the phone never
+     * looking for it here is the WT14 shape exactly — a wrist intent that reaches the phone and
+     * dies — and it would have failed identically: no crash, no log, nothing on the screen.
+     * `everyWristIntentLandsSomewhere` is the law that exists because of it.
+     */
+    if let intent = userInfo["intent"] as? String { onIntent(intent) }
   }
 }

@@ -887,7 +887,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const now = Date.now();
         // Newest-wins by construction: the old ease is kept only if it is for another muscle, so
         // reporting the same one again REPLACES its window rather than stacking two.
-        const kept = activeEases(state.profile.painEases, now).filter((e) => e.muscle !== muscle);
+        const active = activeEases(state.profile.painEases, now);
+        const kept = active.filter((e) => e.muscle !== muscle);
+        /*
+         * ⚠️ THE SAME REPORT, ARRIVING TWICE (2026-08-05).
+         *
+         * A wrist report now travels on the DURABLE channel so it survives a locker and a flight
+         * mode — and that channel is at-least-once. `watchBridge` rejects a repeated `intentId`,
+         * but its `seen` set is in memory, so a delivery that lands after an app restart gets
+         * through. The state above is idempotent by construction (the old ease is replaced, never
+         * stacked); **the coach call below is not.** Two calls is two bills and two revisions that
+         * can disagree.
+         *
+         * So the revision fires only when something actually changed. An identical ease already
+         * standing for this muscle at this severity means the coach has already been told.
+         */
+        const already = active.some((e) => e.muscle === muscle && e.severity === severity);
         const profile: Profile = { ...state.profile, painEases: [...kept, easeFor(muscle, severity, now)] };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
@@ -903,7 +918,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * Fire and forget: the ease is already saved and is in her sheet regardless, so the worst
          * case is that the revision arrives later rather than never.
          */
-        void askCoachToRevise(`her ${muscle} hurts (${severity}) and is eased until it settles`);
+        if (!already) void askCoachToRevise(`her ${muscle} hurts (${severity}) and is eased until it settles`);
       },
 
       async updateProfileInfo(fields) {

@@ -271,6 +271,22 @@ enum WatchCopy {
   static var easedSwapped: String { L("easedSwapped", "Its lifts → swapped") }
   static var easedRests: String { L("easedRests", "Resting for now") }
 
+  /*
+   * ⛔ WT14c · THE REPORT IS TAKEN AND THE PHONE HAS NOT SEEN IT YET (2026-08-05).
+   *
+   * WT15 above says what the PHONE DID — the muscle rests, its lifts are swapped — and neither is
+   * true until the phone has the report. With the phone away (a standalone workout, or the
+   * founder's own test on a watch in aeroplane mode) the report used to be dropped and she was
+   * returned to Paused having apparently pressed nothing. It queues on the durable channel now,
+   * which needs a screen stating the two things that ARE true and claiming nothing else.
+   */
+  static func painNoted(_ area: String) -> String {
+    L("painNoted", "Noted — your \(area.lowercased()).", ["muscle": muscle(area)])
+  }
+  static var painWhenPhoneBack: String {
+    L("painWhenPhoneBack", "I\u{2019}ll tell your coach the moment your phone is back.")
+  }
+
   // WT7 · THE FIRST FOUR — the lobby, the first time. She has no history, so there is nothing to
   // report and nothing to compare: the honest line is what the engine is about to DO.
   static var firstWorkout: String { L("firstWorkout", "FIRST WORKOUT") }

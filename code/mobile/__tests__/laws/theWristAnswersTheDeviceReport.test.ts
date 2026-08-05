@@ -141,7 +141,13 @@ describe('the layout law — nothing gets cut off again', () => {
     // The container exists and takes its actions at a higher layout priority than its body.
     const at = src.indexOf('struct WristScreen<');
     expect(at).toBeGreaterThan(-1);
-    const decl = src.slice(at, at + 1400);
+    /*
+     * ⚠️ SLICED TO THE STRUCT, NOT TO 1,400 CHARACTERS. The magic number was fine until the
+     * container grew the note explaining why the action zone owns the floor (2026-08-05), which
+     * pushed `.layoutPriority(1)` out of the window — so this failed on a file where the claim was
+     * still perfectly true. A law that reads source has to be bounded by the source's own shape.
+     */
+    const decl = src.slice(at, src.indexOf('extension WristScreen'));
     expect(decl).toContain('.layoutPriority(1)');
     // And it is actually used — by every screen that ends in a button.
     expect((src.match(/WristScreen \{/g) ?? []).length).toBeGreaterThan(10);

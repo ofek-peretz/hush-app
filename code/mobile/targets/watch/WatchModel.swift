@@ -682,11 +682,54 @@ final class WatchModel: ObservableObject {
   /// not. The wrist takes the flag with a haptic either way — she was heard — and only claims the
   /// ease when the phone is there to make it.
   @discardableResult
-  func reportPain(_ area: String, severity: String) -> Bool {
+  /**
+   * ⛔ THE REPORT IS ALWAYS TAKEN (rebuilt 2026-08-05 — see `WatchSessionManager.transferIntent`).
+   *
+   * This guarded on `localEngine == nil, manager.isReachable` and returned false otherwise, which
+   * meant a pain report was silently dropped in the two situations where it matters most: a
+   * STANDALONE workout (she left the phone in a locker) and no connection (the founder's own test,
+   * on a watch in aeroplane mode). She tapped through two screens and landed back where she
+   * started, having reported nothing.
+   *
+   * Nothing is guarded now. The report goes onto the durable channel and arrives whenever the pair
+   * next syncs — the same guarantee a finished workout gets.
+   *
+   * ⚠️ THE RETURN VALUE STILL MATTERS, and it is no longer a Bool. WT15 says what the PHONE DID
+   * ("the muscle rests, its lifts are swapped"), and that is only true once the phone has it. A
+   * queued report gets an acknowledgement that claims nothing about the programme — because
+   * nothing about the programme has happened yet.
+   */
+  enum PainReport { case delivered, queued }
+
+  func reportPain(_ area: String, severity: String) -> PainReport {
     onEntryHaptic.send(.paused) // a quiet acknowledgement that the flag was taken
-    guard localEngine == nil, manager.isReachable else { return false }
-    sendIntent(type: "report_pain", area: area, severity: severity)
-    return true
+    let intent = painIntent(area: area, severity: severity)
+    guard let json = WatchWire.encodeIntent(intent) else { return .queued }
+    if localEngine == nil, manager.isReachable {
+      manager.send(intentJSON: json)
+      return .delivered
+    }
+    manager.transferIntent(json, intentId: intent.intentId)
+    return .queued
+  }
+
+  /// The one intent built by hand — `sendIntent` both builds AND sends, and this needs the built
+  /// value to choose its channel and to key the in-flight check by `intentId`.
+  private func painIntent(area: String, severity: String) -> WireIntent {
+    WireIntent(
+      v: WATCH_PROTOCOL_VERSION,
+      type: "report_pain",
+      intentId: UUID().uuidString,
+      issuedAt: ISO8601DateFormatter().string(from: Date()),
+      expectedGlobalIndex: nil,
+      actualReps: nil,
+      actualWeight: nil,
+      workoutId: nil,
+      exerciseId: nil,
+      seconds: nil,
+      severity: severity,
+      area: area
+    )
   }
 
   func dismissComplete() {

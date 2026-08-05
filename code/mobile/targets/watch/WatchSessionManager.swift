@@ -23,6 +23,35 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
     WCSession.isSupported() ? WCSession.default.isReachable : false
   }
 
+  /**
+   * ⛔ A REPORT OF PAIN IS A FACT, NOT A PROPOSAL — so it takes the DURABLE channel.
+   *
+   * FOUNDER, 2026-08-05: *"when you press injury mode on the watch it shows the area picker and the
+   * pain level, which is fine — but when I press it nothing happens."*
+   *
+   * Nothing was broken in the screens. `WatchModel.reportPain` guarded on `manager.isReachable` and
+   * returned false, and **every one of his watch screenshots has the aeroplane glyph in the corner**
+   * — so the intent was never sent, the acknowledgement was correctly suppressed, and the flow
+   * simply returned her to Paused as though she had pressed nothing.
+   *
+   * The reachable-only rule above is right for what it was written for: a `complete_set` is a
+   * proposal against LIVE state and must never be replayed late after a reconnect. **A muscle that
+   * hurts is not live state.** It is true whether or not the phone is listening, it is still true
+   * ten minutes later, and it is the single most important thing this watch can say. It belongs on
+   * the same at-least-once channel as a finished session record.
+   *
+   * ⚠️ Keyed by `intentId` so the in-flight check dedupes a double tap, exactly as records are.
+   */
+  func transferIntent(_ json: String, intentId: String) {
+    guard WCSession.isSupported() else { return }
+    let session = WCSession.default
+    let inFlight = session.outstandingUserInfoTransfers.contains {
+      ($0.userInfo["recordId"] as? String) == intentId
+    }
+    guard !inFlight else { return }
+    session.transferUserInfo(["intent": json, "recordId": intentId])
+  }
+
   /// Send a proposed intent to the phone. Reachable only, never queued.
   func send(intentJSON json: String) {
     guard WCSession.isSupported() else { return }
