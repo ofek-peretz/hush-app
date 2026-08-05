@@ -351,6 +351,14 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       exerciseId: 'db_bench_press', exerciseName: 'DB Bench', exerciseGroup: 'chest',
       setIndexInExercise: 0, totalSetsInExercise: 3, globalIndex: 0, targetWeight: 20, targetReps: 8,
       targetRepsHi: 10,
+      /*
+       * ⚠️ THE SAMPLE CARRIES HISTORY ON PURPOSE (2026-08-04). This law reads the keys a real TS
+       * value can put on the wire, so a field the builder only emits WHEN THERE IS HISTORY is
+       * invisible to it unless the sample has some — and it caught exactly that the moment
+       * `lastReps` was added. A sample without history would have let the wrist decode a field the
+       * phone had never been proven to send.
+       */
+      lastReps: [8, 8, 7], lastLoadKg: 20,
       blockId: 'b1', reasonType: 'increase', reasonDelta: 2.5, loadSetup: null, restInterS: 90,
     };
     const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step] };

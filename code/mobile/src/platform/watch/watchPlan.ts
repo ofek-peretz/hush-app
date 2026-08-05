@@ -12,7 +12,8 @@
  * (exerciseById + loadSetup), keeping the wrist presentation identical whether a
  * set is mirrored live or executed locally.
  */
-import type { ProgramDay, SetTarget } from '@/data/local/models';
+import type { ProgramDay, SetTarget, Session } from '@/data/local/models';
+import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { exerciseById } from '@/data/exercises';
 import type { PlannedItem } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
@@ -34,7 +35,35 @@ function contentHash(workouts: WatchPlanWorkout[]): string {
   return `plan_${(h >>> 0).toString(36)}`;
 }
 
-function buildSteps(day: ProgramDay, targets: SetTarget[], restInterSFor?: (exerciseId: string) => number): WatchPlanStep[] {
+/**
+ * ⛔ WHAT SHE DID LAST TIME, FOR THE PLAN (founder 2026-08-04): *"send the history for a standalone
+ * workout too."*
+ *
+ * ⚠️ MEMOISED PER LIFT. `lastTimeOn` walks her whole history, and a step-by-step call would walk it
+ * once per SET — twenty-four times for a six-lift week, on the main thread, every time the snapshot
+ * is rebuilt on focus. Six is the honest number.
+ */
+/** The two history fields a step carries, or nothing at all when there is no history to carry. */
+function lastFields(last: LastTime | null | undefined): { lastReps?: number[]; lastLoadKg?: number | null } {
+  if (!last || last.reps.length === 0) return {};
+  return { lastReps: last.reps, lastLoadKg: last.loadKg };
+}
+
+function lastTimeLookup(history: Session[] | undefined): (exerciseId: string) => LastTime | null {
+  const seen = new Map<string, LastTime | null>();
+  return (exerciseId: string) => {
+    if (!history || history.length === 0) return null;
+    if (!seen.has(exerciseId)) seen.set(exerciseId, lastTimeOn(exerciseId, history));
+    return seen.get(exerciseId) ?? null;
+  };
+}
+
+function buildSteps(
+  day: ProgramDay,
+  targets: SetTarget[],
+  restInterSFor?: (exerciseId: string) => number,
+  lastOf?: (exerciseId: string) => LastTime | null,
+): WatchPlanStep[] {
   const find = (exerciseId: string, setIndex: number): SetTarget =>
     targets.find((t) => t.exerciseId === exerciseId && t.setIndex === setIndex) ?? {
       exerciseId,
@@ -56,6 +85,7 @@ function buildSteps(day: ProgramDay, targets: SetTarget[], restInterSFor?: (exer
         setIndexInExercise: s,
         totalSetsInExercise: slot.setCount,
         globalIndex: global,
+        ...lastFields(lastOf?.(slot.exerciseId)),
         targetWeight: target.recommendedWeight,
         targetReps: target.recommendedReps,
         // Her band's ceiling, so the wrist can draw the same ruler standalone that it draws mirrored.
@@ -95,17 +125,24 @@ export interface WatchPlanInputs {
   restInterS: number;
   restTransitionS: number;
   restInterSFor?: (exerciseId: string) => number;
+  /**
+   * Her saved sessions — so a STANDALONE workout draws last time's reps in the set row exactly as a
+   * mirrored one does. Absent ⇒ the steps carry no history and the wrist draws dashes, which is the
+   * same state as a lift she has never done.
+   */
+  history?: Session[];
 }
 
 /** Build the snapshot, or null when nothing remains to execute (all done / no
  *  targets available) — the watch keeps its previous plan in that case. */
 export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot | null {
   const workouts: WatchPlanWorkout[] = [];
+  const lastOf = lastTimeLookup(inp.history);
   for (const day of inp.days) {
     if (day.isRest || day.completed) continue;
     const targets = inp.targetsByDay[day.id];
     if (!targets) continue;
-    const steps = buildSteps(day, targets, inp.restInterSFor);
+    const steps = buildSteps(day, targets, inp.restInterSFor, lastOf);
     if (steps.length === 0) continue;
     workouts.push({
       id: day.id,
@@ -152,8 +189,11 @@ export function buildCoachWatchPlan(inp: {
   nowMs: number;
   restInterS: number;
   restTransitionS: number;
+  /** Her saved sessions — the standalone set row's ghosts. See `WatchPlanInputs.history`. */
+  history?: Session[];
 }): WatchPlanSnapshot | null {
   const workouts: WatchPlanWorkout[] = [];
+  const lastOf = lastTimeLookup(inp.history);
 
   for (const session of inp.sessions) {
     const everyItemIsALift = session.blocks.every((b) => b.items.every((i) => i.kind === 'reps'));
@@ -174,6 +214,7 @@ export function buildCoachWatchPlan(inp: {
             setIndexInExercise: r,
             totalSetsInExercise: block.rounds,
             globalIndex: global,
+            ...lastFields(lastOf(item.ex)),
             targetWeight: item.load,
             targetReps: item.reps[0],
             // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.

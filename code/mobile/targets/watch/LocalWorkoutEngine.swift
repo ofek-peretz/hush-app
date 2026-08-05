@@ -383,14 +383,13 @@ final class LocalWorkoutEngine {
       setsSoFar: currentBlockSets(cur.exerciseId).map { $0.actualReps },
       loadsSoFar: currentBlockSets(cur.exerciseId).map { $0.actualWeight },
       /*
-       * ⚠️ AND LAST TIME IS GENUINELY ABSENT HERE, not forgotten. The wrist carries the PLAN, never
-       * the history — `lastTimeOn` reads sessions the watch has never been given. So a standalone
-       * set draws its slots as dashes, which is the same state as a lift she has never done and is
-       * already what the row is designed to say. Explicitly nil rather than omitted, so the next
-       * person reads a decision instead of an oversight.
+       * ⛔ AND LAST TIME COMES OFF THE STEP (founder 2026-08-04). It used to be nil here with a
+       * comment explaining that the wrist carries the plan and never the history — true, and the
+       * wrong conclusion: the PHONE has the history and builds the plan, so it simply had to put it
+       * in. A standalone set now draws the same ghosts a mirrored one does.
        */
-      lastReps: nil,
-      lastLoadKg: nil,
+      lastReps: cur.lastReps,
+      lastLoadKg: cur.lastLoadKg,
       restEndsAt: nil,
       restRemainingS: nil,
       restTotalS: nil,

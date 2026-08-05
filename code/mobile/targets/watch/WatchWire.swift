@@ -242,6 +242,17 @@ struct WirePlanStep: Codable, Equatable {
   var targetReps: Int
   /// The TOP of her band — without it the standalone projector cannot draw the rep ruler.
   var targetRepsHi: Int?
+  /*
+   * ⛔ WHAT SHE DID LAST TIME ON THIS LIFT (founder 2026-08-04): *"send the history for a standalone
+   * workout too."* Without these the phone-in-a-locker athlete saw dashes in the set row where a
+   * mirrored session shows last time's reps — the one asymmetry left between the two surfaces, and
+   * only she would ever have met it.
+   *
+   * ⚠️ Optional, and the plan schema is NOT bumped: an old watch ignores keys it does not know, and
+   * a new watch reading an old plan decodes nil, which draws exactly what it drew before.
+   */
+  var lastReps: [Int]?
+  var lastLoadKg: Double?
   var blockId: String?
   /// Advisory load-change reason ("increase" | "decrease") + magnitude (kg).
   var reasonType: String?

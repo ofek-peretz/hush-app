@@ -319,10 +319,24 @@ export function Home({ navigation, route }: Props) {
     void (async () => {
       // S-17 — the standalone watch plan ships HER learned rests, not a tier bootstrap. The phone is
       // the sole authority (S-48), so the wrist gets the same timer the phone would run.
-      refreshLearnedRests(await db.loadHistory().catch(() => []));
+      /*
+       * ⚠️ ONE READ, TWO USES. `refreshLearnedRests` already needed the history; the standalone plan
+       * now needs it too, for last time's reps on the wrist's set row. Reading it twice on every
+       * focus of the first screen of the app is the kind of cost nobody notices until a cold start
+       * on an old phone.
+       */
+      const history = await db.loadHistory().catch(() => []);
+      refreshLearnedRests(history);
       if (cancelled) return;
       setWatchPlan(
         buildCoachWatchPlan({
+          /*
+           * ⛔ THE HISTORY GOES TO THE WRIST (founder 2026-08-04): *"send the history for a
+           * standalone workout too."* Without it a phone-in-a-locker workout drew dashes where a
+           * mirrored one drew last time's reps — an asymmetry between the two surfaces that only
+           * the athlete the standalone runtime exists FOR would ever meet.
+           */
+          history,
           sessions: coachWorkouts
             .filter((w) => !doneCoachIds.includes(w.id))
             .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),

@@ -123,6 +123,26 @@ export interface WatchPlanStep {
    * WT2's "8 … 10" collapsed to "8". Optional so a stale watch build simply keeps collapsing it.
    */
   targetRepsHi?: number;
+  /**
+   * ⛔ WHAT SHE DID LAST TIME ON THIS LIFT (founder 2026-08-04): *"send the history for a standalone
+   * workout too."*
+   *
+   * The mirror carries it, so a phone-run set draws last time's reps in the row; a STANDALONE set
+   * drew dashes, because the plan snapshot is everything the wrist gets when the phone is in a
+   * locker — and it carried no history at all. That asymmetry was a choice I had left open; this
+   * closes it.
+   *
+   * ⚠️ REPEATED ON EVERY SET OF A LIFT rather than held in a per-workout map. It is a few hundred
+   * bytes across a whole week, and it means the wrist's projector reads `cur.lastReps` off the step
+   * it already has — no lookup, no second index to keep in step. The Swift side is the half I cannot
+   * compile here, so the simplest thing that works there wins.
+   *
+   * ⚠️ OPTIONAL, AND THE PLAN SCHEMA IS NOT BUMPED: an older watch ignores keys it does not know,
+   * and a newer watch reading an older plan decodes nil — which draws exactly what it drew before.
+   */
+  lastReps?: number[];
+  /** …and the load she finished that lift on. Absent = bodyweight, or no history. */
+  lastLoadKg?: number | null;
   /** Backend block id — carried through to the record so a reconciled set syncs
    *  to the right block, exactly like a phone-logged one. */
   blockId?: string;
