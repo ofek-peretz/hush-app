@@ -37,6 +37,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { BuildingProgrammeView, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
 import { COACH_SHAPE_SCHEMA, parseCoachShape, type CoachPlan, type CoachShape } from '@/domain/coachPlan';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
+import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { db } from '@/data/local/db';
 import { askCoach } from '@/platform/coach/coachClient';
@@ -119,7 +120,9 @@ export function BuildingProgramme({ navigation, route }: Props) {
      * were never going to be drawn, and the fill would appear to stall for three whole seconds
      * before the name arrived. Same source as the render, or the clock is timing a different screen.
      */
-    const sketchedCount = sketch ? new Set(sketch.days.flatMap((d) => d.muscles)).size : 0;
+    const sketchedCount = sketch
+      ? new Set(sketch.days.flatMap((d) => d.muscles).filter((m) => CANONICAL_MUSCLE_ORDER.includes(m))).size
+      : 0;
     const total = built ? built.muscles.length : sketchedCount || PLACEHOLDER_MUSCLES.length;
     if (shownMuscles >= total) return;
     /* ⚠️ FAST ONCE THE ANSWER IS IN HAND — his own instruction: it must not drag on after the
@@ -291,7 +294,18 @@ export function BuildingProgramme({ navigation, route }: Props) {
    *     the first few seconds.
    */
   const waitingRows = [{ name: '' }, { name: '' }];
-  const sketched: string[] = sketch ? [...new Set(sketch.days.flatMap((d) => d.muscles))] : [];
+  /*
+   * ⛔ THE COACH'S MUSCLE NAMES ARE FILTERED AGAINST THE CATALOGUE (audit, 2026-08-05).
+   *
+   * Call A returns muscle names as free text. The view prints them through `t('muscle.<name>')`, and
+   * i18next returns the KEY when it does not know one — so a coach that wrote "Pecs" or "Delts"
+   * would have put **"muscle.Pecs" on the first screen of her programme**, and nothing would have
+   * failed anywhere. Anything the catalogue does not know is dropped rather than drawn; if that
+   * leaves nothing, the catalogue's own list carries the wait exactly as it did before.
+   */
+  const sketched: string[] = sketch
+    ? [...new Set(sketch.days.flatMap((d) => d.muscles))].filter((m) => CANONICAL_MUSCLE_ORDER.includes(m))
+    : [];
   const muscles: BuildMuscle[] = built
     ? built.muscles.slice(0, shownMuscles)
     : (sketched.length > 0 ? sketched : PLACEHOLDER_MUSCLES)

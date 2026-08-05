@@ -670,7 +670,21 @@ ${JSON.stringify(hersAlone(facts))}
           'on why it is this one ("why").\n\n' +
           '⛔ NO LOADS, NO REP RANGES, NO EXERCISES. You are choosing the SHAPE; you will be asked for ' +
           'the exercises and the weights in the next breath, and a weight named here would be a ' +
-          'second answer about what she lifts.',
+          'second answer about what she lifts.\n\n' +
+          /*
+           * ⚠️ THE PREAMBLE DESCRIBES FIELDS THIS TURN CANNOT USE (found in the audit, 2026-08-05).
+           *
+           * The cacheable half explains "sessions", "notes", "brief", "hurts" and "today" in prose,
+           * because it is byte-identical on every call — that is the whole mechanism, and it is not
+           * going to be branched. But this turn is answered against `COACH_SHAPE_SCHEMA`, which has
+           * none of them. Structured output makes emitting one impossible; being told at length
+           * about fields it cannot fill is still a contradiction sitting in its instructions, and
+           * this project has already measured what contradictory instructions do to an answer.
+           *
+           * One sentence resolves it, on the one turn where it is true.
+           */
+          'The fields described above — "sessions", "notes", "brief" — belong to the NEXT turn. This ' +
+          'one answers with a title, a reason and the days, and nothing else.',
       });
       break;
     case 'first_fill':
