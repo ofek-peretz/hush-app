@@ -72,7 +72,16 @@ function languageName(tag: string): string {
 }
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
-export const COACH_PROMPT_VERSION = 16;
+/*
+ * ⛔ 17 — the session-length rule changed (2026-08-05). The preamble told the coach to ASK when
+ * "minutes" was absent, and after the founder removed that question from onboarding, absent became
+ * the state of every new athlete: the coach would have opened by asking the one thing he had just
+ * decided she should not be asked. It sets the budget itself now, with his floor.
+ *
+ * ⚠️ A CHANGED PREAMBLE IS A COLD CACHE FOR EVERYONE, once. That is the documented price of
+ * touching the cacheable half and the reason this constant exists.
+ */
+export const COACH_PROMPT_VERSION = 17;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -237,10 +246,11 @@ train from — get one of them wrong and the best answer you could give never re
   Anything you want that is not there, say so in words and prescribe the nearest thing that is.
 - "equipment" gives each equipment's step and its floor. A load that is not the floor plus a whole
   number of steps is a load she cannot physically set on the machine in front of her.
-- "daysPerWeek" and "minutes" are HER OWN ANSWERS, given before you met her — do not ask her again
-  for something she has already told the app. ABSENT means she was never asked (an older athlete, or
-  an intake that did not finish), and then you ask, and you do not fill in a number on her behalf.
-  Her session length is a budget: what you write has to fit inside it.
+- "daysPerWeek" is HER OWN ANSWER, given before you met her. Do not ask again, and
+  do not fill in a number on her behalf if it is absent: ask.
+- "minutes" is a BUDGET and it is YOURS. Nothing asks her for it — she cannot answer it before her
+  first session. Present means she said it herself and you write inside it;
+  absent means you choose, never under 45. Do not ask.
 - She trains in a gym with a barbell unless her brief says otherwise.
 - THE REP BAND YOU SET IS ENFORCED. During the set, if her reps fall outside it, the app corrects
   the load on the spot — so a band is an instruction to the machine as well as to her.
@@ -791,7 +801,7 @@ ${JSON.stringify(hersAlone(facts))}
            * preamble. A prompt assembled from parts goes stale in parts.
            */
           'HER SHEET ALREADY HAS her sex, her age, her bodyweight, how long she has trained, her ' +
-          'days a week and her session length — she gave those on a form before you met her, so ' +
+          'days a week — she gave those on a form before you met her, so ' +
           'never ask for one of them again. What is missing is everything a form cannot hold: what ' +
           'she is training FOR, what has hurt, what she will not do, what her gym has. ' +
           'What you need is your judgement; how you ask is your ' +

@@ -322,13 +322,15 @@
     "forChipMuscle": "לבנות שריר",
     "forChipStrong": "להתחזק",
     "forChipBack": "לחזור אחרי הפסקה",
-    "limitsLegend": "לפני שאני מתחיל",
-    "limitsTitle": "משהו שאני צריך לדעת?",
+    "limitsLegend": "דבר אחד אחרון",
+    "limitsTitle": "יש משהו שתעדיף שאאמן סביבו?",
     "limitsPlaceholder": "או ספר לי במילים שלך",
     "limitsChipNone": "שום דבר",
     "limitsChipKnee": "ברך",
     "limitsChipShoulder": "כתף",
     "limitsChipBack": "הגב",
+    "limitsChipNeck": "צוואר",
+    "limitsChipCalves": "תאומים",
     "buildingLegend": "בונה",
     "buildingTitle": "קורא את מה שסיפרת לי.",
     "forTitle_female": "בשביל מה את מתאמנת?",
@@ -343,7 +345,8 @@
     "buildingRetry": "שאל שוב",
     "buildingRetry_female": "שאלי שוב",
     "healthSub": "אני מציג אותם. הם לא קובעים משקל.",
-    "healthSub_female": "אני מציגה אותם. הם לא קובעים משקל."
+    "healthSub_female": "אני מציגה אותם. הם לא קובעים משקל.",
+    "limitsTitle_female": "יש משהו שתעדיפי שאאמן סביבו?"
   },
   "menu": {
     "title": "תפריט",

@@ -107,12 +107,24 @@ export function YourGoal({ navigation, route }: Props) {
             the coach can tell "she said nothing hurts" from "nobody asked her", which are different
             facts and lead to different first programmes.
           */}
+          {/*
+            ⛔ THE CHIPS ARE THE AREAS PEOPLE ACTUALLY SKIP (founder 2026-08-05): *"I suggest making
+            it 'injuries or certain areas you would rather not train?' and then chips of the most
+            common areas people don't want to train — calves for example, or other areas where it is
+            common that people don't like working on them."*
+
+            Two things were merged, and merging them is the insight: **to the programme, a knee that
+            hurts and a calf she refuses have the same effect** — do not put load there. Asking them
+            as two questions would have been asking twice for one answer.
+          */}
           <AnswerChips
             options={[
               t('ob.limitsChipNone'),
               t('ob.limitsChipKnee'),
               t('ob.limitsChipShoulder'),
               t('ob.limitsChipBack'),
+              t('ob.limitsChipCalves'),
+              t('ob.limitsChipNeck'),
             ]}
             onPick={setLimits}
             picked={limits}

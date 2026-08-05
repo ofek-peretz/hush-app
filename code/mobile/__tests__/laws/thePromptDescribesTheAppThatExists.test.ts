@@ -76,12 +76,25 @@ describe('the prompt tells the truth about who asks her things', () => {
     // re-asking is how an intake tells her it was not listening.
     expect(text()).not.toMatch(/this\s*\n?\s*app never will/);
     // `[\s\S]` because the prompt is hard-wrapped and a rule can straddle a line break.
-    expect(text()).toMatch(/do not ask her again[\s\S]{0,4}for something she has already told the app/);
+    expect(text()).toMatch(/Do not ask again, and\s+do not fill in a number on her behalf/);
   });
 
   it('and still forbids inventing a number when one is genuinely absent', () => {
     // The rule that must survive the rewrite — this is the founder's own "it decided 4 workouts".
-    expect(text()).toMatch(/do not fill in a number on her behalf/);
+    /*
+     * ⛔ THE WORDING MOVED WHEN SESSION LENGTH LEFT THE FORM (2026-08-05). The rule used to cover
+     * "daysPerWeek" AND "minutes" in one sentence — both were her answers, both absent meant "she
+     * was never asked". Then the founder removed the length question entirely, so absent became the
+     * state of EVERY new athlete and telling the coach to ask would have made it open by asking the
+     * one thing he had just decided she should not be asked.
+     *
+     * ⚠️ THE CLAIM IS UNCHANGED FOR EVERYTHING SHE STILL ANSWERS: the app never fills in a number
+     * on her behalf. What changed is that MINUTES is no longer one of her answers — it is the
+     * coach's budget, with his 45-minute floor.
+     */
+    expect(text()).toMatch(/do not fill in a number on her behalf if it is absent: ask/);
+    // ⚠️ AND NOTHING ASKS HER FOR MINUTES ANY MORE — the prompt must not claim it does.
+    expect(text()).toMatch(/Nothing asks her for it/);
   });
 });
 

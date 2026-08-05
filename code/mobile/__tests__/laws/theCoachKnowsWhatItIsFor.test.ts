@@ -78,8 +78,19 @@ describe('the wire — what has to be there or the answer never reaches her', ()
      * put `daysPerWeek: 4` on a sheet labelled MEASURED. Omitting the number is only half the fix —
      * a model with no days and a job to do will pick a number, and would be right to.
      */
-    expect(WHO).toMatch(/ABSENT means she was never asked/);
-    expect(WHO).toMatch(/do not fill in a number on her behalf/);
+    /*
+     * ⛔ THE WORDING MOVED WHEN SESSION LENGTH LEFT THE FORM (2026-08-05). The rule used to cover
+     * "daysPerWeek" AND "minutes" in one sentence — both were her answers, both absent meant "she
+     * was never asked". Then the founder removed the length question entirely, so absent became the
+     * state of EVERY new athlete and telling the coach to ask would have made it open by asking the
+     * one thing he had just decided she should not be asked.
+     *
+     * ⚠️ THE CLAIM IS UNCHANGED FOR EVERYTHING SHE STILL ANSWERS: the app never fills in a number
+     * on her behalf. What changed is that MINUTES is no longer one of her answers — it is the
+     * coach's budget, with his 45-minute floor.
+     */
+    expect(WHO).toMatch(/do not fill in a number on her behalf if it is absent: ask/);
+    expect(WHO).toMatch(/absent means you choose, never under 45/);
   });
 
   it('states the four shapes and that a distance is metres', () => {

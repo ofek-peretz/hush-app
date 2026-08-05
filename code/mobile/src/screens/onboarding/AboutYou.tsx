@@ -24,16 +24,16 @@ import React, { useState } from 'react';
 import { View, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Legend, WheelPicker, TextField, SegmentedControl } from '@/components/ds';
+import { Button, Legend, TextField, SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import type { Experience } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 
 /** Where each rule opens — a place to turn from, not a default anybody keeps. */
 const WEIGHT_OPENS_ON = { kg: 70, lb: 155 } as const;
-const AGE_OPENS_ON = 30;
 
 export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
@@ -60,12 +60,7 @@ export function AboutYou({ navigation }: Props) {
    * the removal of the worst default in the product.
    */
   const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
-  const [weight, setWeight] = useState<number>(() => {
-    const known = app.profile?.weightKg;
-    if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
-    return WEIGHT_OPENS_ON[units];
-  });
-  const [age, setAge] = useState<number>(app.profile?.age && app.profile.age > 0 ? app.profile.age : AGE_OPENS_ON);
+  const [experience, setExperience] = useState<Experience>(app.profile?.experience ?? 'beginner');
 
   function pickSex(v: string) {
     const next = v as 'female' | 'male';
@@ -80,10 +75,10 @@ export function AboutYou({ navigation }: Props) {
     Keyboard.dismiss();
     app.setPendingName(name);
     app.setPendingSex(sex);
-    const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
-    // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('YourTraining', { sex, weightKg: kg, age });
+    // `OnboardingInputs` and there must be ONE place that does. The lb→kg conversion went with the
+    // weight wheel to `YourTraining`; there is still exactly one place it happens.
+    navigation.navigate('YourTraining', { sex, experience });
   }
 
   return (
@@ -129,30 +124,28 @@ export function AboutYou({ navigation }: Props) {
           value={sex ?? ''}
           onChange={pickSex}
         />
+        {/*
+          ⛔ EXPERIENCE MOVED HERE (founder 2026-08-05): *"move the years of experience to the screen
+          with the name and the sex."*
+
+          He is right about what belongs together. This screen asks the three things she IS — her
+          name, her sex, how long she has trained — and none of them is a number she sets. The next
+          screen asks the three she SETS, on one instrument each. Bodyweight and age went with it.
+
+          Years, not ranks: nobody has to decide whether they are "advanced".
+        */}
         <View style={styles.col}>
-          <Legend>{t('ob.weightLegend')}</Legend>
-          <WheelPicker
-            value={weight}
-            onChange={setWeight}
-            step={units === 'kg' ? 0.5 : 1}
-            min={units === 'kg' ? 30 : 66}
-            max={units === 'kg' ? 250 : 550}
+          <Legend>{t('ob.experience')}</Legend>
+          <SegmentedControl
+            block
             size="lg"
-            ends="chevron"
-            label={t('ob.weightLegend')}
-          />
-        </View>
-        <View style={styles.col}>
-          <Legend>{t('ob.age')}</Legend>
-          <WheelPicker
-            value={age}
-            onChange={setAge}
-            step={1}
-            min={14}
-            max={95}
-            size="lg"
-            ends="chevron"
-            label={t('ob.age')}
+            options={[
+              { value: 'beginner', label: t('ob.expNew') },
+              { value: 'intermediate', label: t('ob.expSome') },
+              { value: 'advanced', label: t('ob.expYears') },
+            ]}
+            value={experience}
+            onChange={(v) => setExperience(v as Experience)}
           />
         </View>
       </View>

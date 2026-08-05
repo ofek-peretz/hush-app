@@ -70,8 +70,20 @@ describe('the sheet says what is known and nothing else', () => {
      * and it would be right to. The bound has to name the case.
      */
     const text = preamble();
-    expect(text).toMatch(/ABSENT means she was never asked/);
-    expect(text).toContain('do not fill in a number on her behalf');
+    /*
+     * ⛔ THE WORDING MOVED WHEN SESSION LENGTH LEFT THE FORM (2026-08-05). The rule used to cover
+     * "daysPerWeek" AND "minutes" in one sentence — both were her answers, both absent meant "she
+     * was never asked". Then the founder removed the length question entirely, so absent became the
+     * state of EVERY new athlete and telling the coach to ask would have made it open by asking the
+     * one thing he had just decided she should not be asked.
+     *
+     * ⚠️ THE CLAIM IS UNCHANGED FOR EVERYTHING SHE STILL ANSWERS: the app never fills in a number
+     * on her behalf. What changed is that MINUTES is no longer one of her answers — it is the
+     * coach's budget, with his 45-minute floor.
+     */
+    expect(text).toContain('do not fill in a number on her behalf if it is absent: ask');
+    // …and the one number that is NOT hers carries its floor instead.
+    expect(text).toMatch(/absent means you choose, never under 45/);
   });
 
   it('the placeholder that started it cannot come back unnoticed', () => {

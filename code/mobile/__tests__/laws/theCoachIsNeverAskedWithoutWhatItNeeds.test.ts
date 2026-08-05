@@ -176,9 +176,20 @@ describe('onboarding asks for every one of them', () => {
      * `AboutYou` are one screen now, because they answer the same question and splitting them made
      * the intake read as a form with pages.
      */
-    const src = read('src/screens/onboarding/AboutYou.tsx');
-    expect(src.match(/<WheelPicker/g)).toHaveLength(2);
-    expect(src).toContain("navigation.navigate('YourTraining', { sex, weightKg: kg, age })");
+    /*
+     * ⛔ THE THREE WHEELS MOVED TO `YourTraining` (founder 2026-08-05): *"make one screen of 3
+     * rulers — DAYS A WEEK together with BODYWEIGHT and AGE — and move the years of experience to
+     * the screen with the name and the sex."*
+     *
+     * The law's claim is unchanged and is what is asserted: **there is no route to the coach that
+     * misses one of them.** Which screen holds which is his to arrange; that every one is carried
+     * forward is not.
+     */
+    const about = read('src/screens/onboarding/AboutYou.tsx');
+    expect(about).toContain("navigation.navigate('YourTraining', { sex, experience })");
+    const training = read('src/screens/onboarding/YourTraining.tsx');
+    expect(training.match(/<WheelPicker/g)).toHaveLength(3);
+    expect(training).toContain("navigation.navigate('YourGoal', { ...route.params, weightKg: kg, age, daysPerWeek: days })");
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
     expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
     /* ⚠️ AND THE DELETED SCREEN IS GONE FROM THE NAVIGATOR, not merely unrouted — a screen left
@@ -196,10 +207,13 @@ describe('onboarding asks for every one of them', () => {
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {
     // She is adjusting, not counting up from 30 kg. A rule that opens at its floor is a rule she has
     // to scroll before she can answer, which is how a form becomes a chore.
-    const src = read('src/screens/onboarding/AboutYou.tsx');
-    expect(src).toMatch(/WEIGHT_OPENS_ON = \{ kg: \d+, lb: \d+ \}/);
+    const src = read('src/screens/onboarding/YourTraining.tsx');
+    expect(src).toMatch(/WEIGHT_OPENS_ON: Record<'kg' \| 'lb', number> = \{ kg: \d+, lb: \d+ \}/);
     expect(src).toMatch(/AGE_OPENS_ON = \d+/);
     expect(src).toMatch(/min=\{units === 'kg' \? 30 : 66\}/);
+    // ⚠️ And the same for the wheel that was a segmented control until 2026-08-05: three days a
+    // week is where most people land, and a ruler that opens at its floor is one she has to scroll.
+    expect(src).toMatch(/DAYS_OPENS_ON = \d+/);
   });
 
   it('is written in both languages, and to HER in Hebrew', () => {

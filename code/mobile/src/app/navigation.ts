@@ -49,14 +49,29 @@ export type OnboardingParamList = {
    * this one, so the answer is made here and leaves here. The relay starts one step later.
    */
   AboutYou: undefined;
-  YourTraining: { sex: 'male' | 'female'; weightKg: number; age: number };
+  /*
+   * ⛔ RESHUFFLED 2026-08-05 (founder): *"make one screen of 3 rulers — DAYS A WEEK together with
+   * BODYWEIGHT and AGE — and then move the years of experience to the screen with the name and the
+   * sex."*
+   *
+   * So `AboutYou` now carries the three things she IS (name, sex, experience) and `YourTraining`
+   * carries the three she SETS, on one instrument each. Bodyweight and age travel one step later
+   * than they used to; nothing else about the relay changes.
+   */
+  YourTraining: { sex: 'male' | 'female'; experience: Experience };
   /*
    * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front
    * door). What she is training FOR, and what hurts or is refused. Everything else onboarding needs
    * is a wheel or a choice; these two are prose, and they are the whole of what the intake
    * conversation was still doing.
    */
-  YourGoal: { sex: 'male' | 'female'; weightKg: number; age: number; experience: Experience; daysPerWeek: number; workoutMinutes: number };
+  /*
+   * ⛔ `workoutMinutes` IS GONE (founder 2026-08-05). He proposed defaulting it to an hour; I
+   * argued it should leave the form entirely — *"the athlete cannot answer how long she wants to be
+   * in a gym before her first session"* — and he agreed: *"fine, take it out. Just make it at least
+   * 45 minutes, because less than that is too light."* The floor lives on the coach now.
+   */
+  YourGoal: { sex: 'male' | 'female'; experience: Experience; weightKg: number; age: number; daysPerWeek: number };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
