@@ -1,4 +1,4 @@
-import { setRow, landingOf } from '@/domain/setRow';
+import { setRow, landingOf, currentBlockSets } from '@/domain/setRow';
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -111,5 +111,41 @@ describe('⛔ and it never invents a figure', () => {
 
   it('a zero-set exercise draws nothing rather than throwing', () => {
     expect(setRow({ totalSets: 0, currentSetIndex: 0, done: [], band: [6, 8] })).toEqual([]);
+  });
+});
+
+describe('⛔ a lift the coach split across TWO blocks', () => {
+  /*
+   * FOUND IN THE 2026-08-04 HERMETIC PASS, and it is not hypothetical: the founder's own note on the
+   * deleted effort question records that it *"fired once per BLOCK, so a lift the coach split across
+   * two blocks asked twice"* — so the plan genuinely produces this shape.
+   *
+   * `setIndex` is the round WITHIN a block, so the second block restarts it at 0. Collecting every
+   * set of the lift put block one's reps into block two's row: three figures from work she finished
+   * twenty minutes earlier, presented as this block's.
+   *
+   * ⚠️ `blockId` cannot do the filtering — it is the BACKEND's id, optional, and absent on a
+   * coach-run session. What is always true is the ORDER.
+   */
+  const S = (setIndex: number, reps: number) => ({ setIndex, reps });
+
+  it('takes only the trailing run — the one that begins at the last set 0', () => {
+    const logged = [S(0, 8), S(1, 7), S(2, 7), S(0, 10), S(1, 9)];
+    expect(currentBlockSets(logged).map((x) => x.reps)).toEqual([10, 9]);
+  });
+
+  it('a lift in ONE block is untouched', () => {
+    const logged = [S(0, 8), S(1, 7), S(2, 7)];
+    expect(currentBlockSets(logged).map((x) => x.reps)).toEqual([8, 7, 7]);
+  });
+
+  it('nothing logged yet is an empty row, not a crash', () => {
+    expect(currentBlockSets([])).toEqual([]);
+  });
+
+  it('⚠️ THREE blocks of the same lift keeps the LAST, not the second', () => {
+    // The loop must not stop at the first restart it finds.
+    const logged = [S(0, 8), S(0, 9), S(1, 9), S(0, 12)];
+    expect(currentBlockSets(logged).map((x) => x.reps)).toEqual([12]);
   });
 });

@@ -442,14 +442,21 @@ function liftPosition(steps: MirrorStep[], idx: number): { index: number; count:
  * how a row ends up showing another lift's numbers.
  */
 function soFarOnLift(steps: MirrorStep[], logged: MirrorLoggedSet[] | undefined, exerciseName: string) {
-  const reps: number[] = [];
-  const loads: (number | null)[] = [];
+  /*
+   * ⛔ SCOPED TO THE BLOCK (found in the 2026-08-04 hermetic pass). `setIndexInExercise` restarts at
+   * 0 for a lift the coach split across two blocks, so collecting every set of the lift put block
+   * one's reps into block two's row — three figures from work she finished twenty minutes earlier.
+   * The plan runs front to back, so the current block is the trailing run beginning at the last 0.
+   */
+  const picked: { reps: number; weight: number | null; at: number }[] = [];
   (logged ?? []).forEach((set, i) => {
     if (steps[i]?.exerciseName !== exerciseName) return;
-    reps.push(set.reps);
-    loads.push(set.weight);
+    picked.push({ reps: set.reps, weight: set.weight, at: steps[i]?.setIndexInExercise ?? 0 });
   });
-  return { reps, loads };
+  let start = 0;
+  for (let i = 0; i < picked.length; i += 1) if (picked[i].at === 0) start = i;
+  const block = picked.slice(start);
+  return { reps: block.map((x) => x.reps), loads: block.map((x) => x.weight) };
 }
 
 /** The four fields the wrist's set row needs, assembled once for every phase. */

@@ -103,3 +103,25 @@ export function setRow(opts: {
     };
   });
 }
+
+/**
+ * ⛔ THE SETS OF THE CURRENT BLOCK ONLY — not every set of this lift today.
+ *
+ * FOUND IN THE 2026-08-04 HERMETIC PASS. `setsSoFar` is every logged set whose exercise matches the
+ * one on the stage, sorted by `setIndex` — and `setIndex` is the round WITHIN A BLOCK, so a lift the
+ * coach split across two blocks restarts it at 0. Block two's row then drew block one's reps: three
+ * figures that belong to work she finished twenty minutes earlier, presented as this block's.
+ *
+ * ⚠️ AND IT IS NOT HYPOTHETICAL. The founder's own note on the deleted effort question records it —
+ * *"it fired once per BLOCK, so a lift the coach split across two blocks asked twice"* — so the plan
+ * genuinely produces this shape.
+ *
+ * `blockId` cannot do the filtering: it is the BACKEND's id, optional, and absent on a coach-run
+ * session. What is always true is the ORDER — the plan is executed front to back, so the current
+ * block's sets are the trailing run that begins at the last `setIndex === 0`.
+ */
+export function currentBlockSets<T extends { setIndex: number }>(sets: T[]): T[] {
+  let start = 0;
+  for (let i = 0; i < sets.length; i += 1) if (sets[i].setIndex === 0) start = i;
+  return sets.slice(start);
+}

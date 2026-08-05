@@ -310,6 +310,21 @@ final class LocalWorkoutEngine {
     return (max(curRun, 1), max(runs, 1))
   }
 
+  /**
+   * ⛔ THE CURRENT BLOCK'S SETS OF ONE LIFT — not every set of it today.
+   *
+   * `setIndex` is the round WITHIN a block, so a lift the coach split across two blocks restarts it
+   * at 0 and collecting them all put block one's reps into block two's row. The plan runs front to
+   * back, so the current block is the trailing run that begins at the last `setIndex == 0`. Port of
+   * the phone's `currentBlockSets`, and the same bug it was written for.
+   */
+  private func currentBlockSets(_ exerciseId: String) -> [WireRecordSet] {
+    let all = state.sets.filter { $0.exerciseId == exerciseId }
+    var start = 0
+    for (i, s) in all.enumerated() where s.setIndex == 0 { start = i }
+    return all.isEmpty ? [] : Array(all[start...])
+  }
+
   /// TO-LOAD vs LOADED (port of the phone's isToLoad, pure over the logged sets).
   private func toLoad(_ cur: WirePlanStep) -> Bool {
     guard let target = cur.targetWeight else { return false } // bodyweight
@@ -365,8 +380,8 @@ final class LocalWorkoutEngine {
        * `watchWireParity` exists precisely because the last field added here was forgotten and the
        * phone-absent athlete quietly saw less.
        */
-      setsSoFar: state.sets.filter { $0.exerciseId == cur.exerciseId }.map { $0.actualReps },
-      loadsSoFar: state.sets.filter { $0.exerciseId == cur.exerciseId }.map { $0.actualWeight },
+      setsSoFar: currentBlockSets(cur.exerciseId).map { $0.actualReps },
+      loadsSoFar: currentBlockSets(cur.exerciseId).map { $0.actualWeight },
       /*
        * ⚠️ AND LAST TIME IS GENUINELY ABSENT HERE, not forgotten. The wrist carries the PLAN, never
        * the history — `lastTimeOn` reads sessions the watch has never been given. So a standalone

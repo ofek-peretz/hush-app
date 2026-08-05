@@ -65,6 +65,7 @@ function worthQueuing(e: unknown): boolean {
 import { emphasesOf, type Emphasis } from '@/domain/emphases';
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
+import { currentBlockSets } from '@/domain/setRow';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
@@ -133,6 +134,15 @@ export function deferCurrentExercise(plan: Step[], fromIndex: number): Step[] {
   const reordered = [...runs.slice(0, cur), runs[cur + 1], runs[cur], ...runs.slice(cur + 2)];
   const flat = reordered.flat();
   return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
+}
+
+/**
+ * The logged sets of ONE lift, scoped to the block she is in — see `currentBlockSets` for why the
+ * block matters. One helper because the reps and the loads must never disagree about which sets
+ * they are describing.
+ */
+function currentBlockSetsOf(sets: SetLog[] | undefined, exerciseId: string): SetLog[] {
+  return currentBlockSets((sets ?? []).filter((x) => x.exerciseId === exerciseId));
 }
 
 interface InternalState {
@@ -1344,20 +1354,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        * resumed session appends in write order, and a row read from that would put set 3's reps in
        * slot 1 the moment anything was logged out of sequence.
        */
-      setsSoFar: current
-        ? (state.session?.sets ?? [])
-            .filter((x) => x.exerciseId === current.exerciseId)
-            .slice()
-            .sort((a, b) => a.setIndex - b.setIndex)
-            .map((x) => x.actualReps)
-        : [],
-      loadsSoFar: current
-        ? (state.session?.sets ?? [])
-            .filter((x) => x.exerciseId === current.exerciseId)
-            .slice()
-            .sort((a, b) => a.setIndex - b.setIndex)
-            .map((x) => x.actualWeight ?? null)
-        : [],
+      /*
+       * ⛔ THE CURRENT BLOCK'S SETS, NOT EVERY SET OF THIS LIFT TODAY (found 2026-08-04). `setIndex`
+       * is the round WITHIN a block, so a lift the coach split across two blocks restarts at 0 and a
+       * plain sort interleaved the two — block two's row drew block one's reps. `currentBlockSets`
+       * takes the trailing run that begins at the last `setIndex === 0`, which is what the plan's
+       * front-to-back execution guarantees.
+       */
+      setsSoFar: current ? currentBlockSetsOf(state.session?.sets, current.exerciseId).map((x) => x.actualReps) : [],
+      loadsSoFar: current ? currentBlockSetsOf(state.session?.sets, current.exerciseId).map((x) => x.actualWeight ?? null) : [],
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
         ? (() => {

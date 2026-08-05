@@ -2553,14 +2553,20 @@ struct CompleteScreen: View {
           TallyMark()
           /*
            * ⛔ THE WORKOUT'S NAME, NOT A MOOD (founder 2026-08-04, applying the phone's poster to the
-           * wrist). `summary.workoutName` has ridden the wire the whole time and this screen never
+           * wrist). `WireMirror.workoutName` has ridden the wire the whole time and this screen never
            * drew it: **"That's the work." is a mood; "Lower A" is a fact**, and the tally mark above
            * it has already said the work is done.
+           *
+           * ⚠️ IT IS ON THE MIRROR, NOT ON THE SUMMARY. I wrote `summary?.workoutName` and that field
+           * does not exist — `WireSummary` carries the figures, `WireLobby` and `WireRecord` carry a
+           * name of their own, and the live mirror carries this one. A Swift compile error I could
+           * not have seen without a build, found by reading the struct rather than trusting the
+           * spelling.
            *
            * ⚠️ The sentence stands in when the name is absent, which is what a standalone workout
            * with no phone-side programme looks like.
            */
-          Text(mirror.summary?.workoutName ?? WatchCopy.thatsTheWork)
+          Text(mirror.workoutName ?? WatchCopy.thatsTheWork)
             .font(.system(size: Fit.s(23), design: .serif))
             .foregroundStyle(Palette.ink0)
             .multilineTextAlignment(.center)
