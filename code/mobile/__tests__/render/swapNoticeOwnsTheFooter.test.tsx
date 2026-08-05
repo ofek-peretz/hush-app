@@ -56,6 +56,7 @@ const restSession = {
   /* ⚠️ Two sets already logged, so the set row draws filled slots — an absent array
      would make every fixture on the stage look like set 1 of a lift never done. */
   setsSoFar: [9, 8],
+    loadsSoFar: [34, 34],
   currentTarget: { exerciseId: 'bb_bench_press', setIndex: 3, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
   nextExerciseId: 'db_shoulder_press',
   nextExercise: { id: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', equipment: 'dumbbell' },

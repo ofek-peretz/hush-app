@@ -162,6 +162,9 @@ const sessionFixture = {
      here would make every entry on this page look like set 1 of a lift she has never done — which
      is exactly the blindness the row was built to end. */
   setsSoFar: [9, 8],
+  /* The loads she lifted them at — index-aligned with the reps above, and what the hero's delta is
+     measured against when Loop 1 has moved the bar mid-lift. */
+  loadsSoFar: [34, 34],
   globalProgress: { index: 1, total: 24 },
   exerciseProgress: { index: 0, total: 6 },
   nextExercise: null,
@@ -1333,6 +1336,34 @@ export const GALLERY: GalleryEntry[] = [
      states are unreachable by simply running a workout in the harness. */
   { id: '2.2h', label: 'The set — a lift she has never done', status: 'live', note: 'no ghosts at all, and no last-load line', render: () =>
     mount(SessionFlow, undefined, { ...sessionFixture, lastTime: null, setsSoFar: [] }) },
+  /* ⛔ THE LOAD'S NEWS, IN ITS THREE STATES (founder 2026-08-04). None is reachable by running the
+     harness: the first needs a HISTORY to compare against, the second needs Loop 1 to have fired
+     mid-lift, and the third — silence — is the one that looks like nothing is wired. */
+  { id: '2.2k', label: 'The set — heavier than last time', status: 'live', note: 'set 1: ↑1.5 against last week, and the per-side line is up', render: () =>
+    mount(SessionFlow, undefined, {
+      ...sessionFixture,
+      setsSoFar: [],
+      loadsSoFar: [],
+      setLabel: { n: 1, m: 4 },
+      lastTime: { ago: 4, loadKg: 32.5, reps: [8, 8, 7, 6] },
+    }) },
+  { id: '2.2l', label: 'The set — Loop 1 eased it mid-lift', status: 'live', note: '↓2.5 against the SET BEFORE, and the per-side returns because the bar must be re-loaded', render: () =>
+    mount(SessionFlow, undefined, {
+      ...sessionFixture,
+      setsSoFar: [9, 5],
+      loadsSoFar: [34, 34],
+      setLabel: { n: 3, m: 4 },
+      currentTarget: { ...sessionFixture.currentTarget!, recommendedWeight: 31.5 },
+      lastTime: { ago: 4, loadKg: 30, reps: [8, 8, 7, 6] },
+    }) },
+  { id: '2.2m', label: 'The set — nothing moved', status: 'live', note: 'no delta, no per-side: three things on the screen', render: () =>
+    mount(SessionFlow, undefined, {
+      ...sessionFixture,
+      setsSoFar: [8, 7],
+      loadsSoFar: [34, 34],
+      setLabel: { n: 3, m: 4 },
+      lastTime: { ago: 4, loadKg: 34, reps: [8, 8, 7, 6] },
+    }) },
   { id: '2.2i', label: 'The set — a rep down, and a rep up', status: 'live', note: 'moss above the band, blue below — the landing law, on her own sets', render: () =>
     mount(SessionFlow, undefined, {
       ...sessionFixture,

@@ -47,7 +47,8 @@ describe('the row she reads', () => {
   it('two done, two ahead — and the ones ahead are EMPTY, not zero', () => {
     const row = setRow({ ...base, done: [8, 7], lastReps: [8, 8, 7, 6] });
     expect(row.map((s) => s.reps)).toEqual([8, 7, null, null]);
-    // A zero would read as a set she did and failed. Absence is the only honest value.
+    // A zero would read as a set she did and failed. Absence is the only honest value — and it is
+    // what lets the view fall through to the ghost rather than drawing a number she did not make.
     expect(row[2].reps).toBeNull();
     expect(row[2].landing).toBeNull();
   });
@@ -58,11 +59,21 @@ describe('the row she reads', () => {
     expect(row.map((s) => s.current)).toEqual([false, false, true, false]);
   });
 
-  it('⚠️ the ghost row is read BY POSITION — set 2 sits under set 2', () => {
-    // The whole point of the row: the comparison is in place. Set 2 today (7) under set 2 last time
-    // (8) is the sentence "you are a rep down", written in two digits and no words.
+  it('⛔ the ghost is read BY POSITION, and a slot HANDS OVER (founder 2026-08-04)', () => {
+    /*
+     * ⛔ *"Instead of two rows, why not one row where each set simply replaces the number from the
+     * previous workout?"*
+     *
+     * Because **the comparison matters before the set, not after.** She reads slot 3 while walking
+     * to the bar; the moment she has lifted, last time's number is history, and holding a second row
+     * open to keep showing it is paying rent on a fact that has stopped being useful.
+     *
+     * So the model is unchanged and the VIEW picks: `reps` when she has one, `ghost` until then. The
+     * pairing by position is what makes that legal — slot 2 can only ever hand over to slot 2.
+     */
     const row = setRow({ ...base, done: [8, 7], lastReps: [8, 8, 7, 6] });
     expect(row.map((s) => s.ghost)).toEqual([8, 8, 7, 6]);
+    expect(row.map((s) => s.reps ?? s.ghost)).toEqual([8, 7, 7, 6]); // what the one row draws
   });
 });
 

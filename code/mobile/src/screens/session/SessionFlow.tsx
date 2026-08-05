@@ -49,6 +49,7 @@ import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
 import { setRow } from '@/domain/setRow';
+import { loadNews, showsPerSide } from '@/domain/loadNews';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
@@ -1414,6 +1415,24 @@ function ActiveSet({
     band: isBodyweight ? null : [bandLo, bandHi],
     ...(lastTime ? { lastReps: lastTime.reps } : {}),
   });
+  /*
+   * ⛔ WHAT CHANGED ABOUT THIS BAR (founder 2026-08-04): *"we show how many reps were done, but not
+   * how much weight was lifted last time."*
+   *
+   * A row of last time's reps with no load beside it invites the wrong conclusion — 8 at 32.5 kg is
+   * not better than 7 at 34. The delta rides on the hero, where the thing being compared already is,
+   * and it is ABSENT on every set where nothing moved, which is most of them.
+   */
+  const news = loadNews({
+    currentLoadKg: target.recommendedWeight,
+    /* ⚠️ `?? []` — `loadsSoFar` is a required field so the app cannot omit it, but a render fixture
+       built by hand always lags the newest one, and a crash on the set stage is unforgivable. Same
+       reasoning as `setRow`'s optional `done`. */
+    ...((session.loadsSoFar ?? []).length > 0
+      ? { previousSetKg: (session.loadsSoFar ?? [])[(session.loadsSoFar ?? []).length - 1] }
+      : {}),
+    ...(lastTime && lastTime.loadKg != null ? { lastTimeKg: lastTime.loadKg } : {}),
+  });
   /* One sentence for VoiceOver, because a row of bare digits announces as a row of bare digits. */
   const setsLabel = t('workout.setOfM', { n: setN, m: setM });
   const weight = displayWeight(target.recommendedWeight, units);
@@ -1536,6 +1555,23 @@ function ActiveSet({
                       {heroValue}
                     </Text>
                     <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
+                    {/*
+                      ⚠️ THE ARROW AND THE FIGURE, AND NO WORD. "↑1.5" is the fact; "up 1.5 from last
+                      time" is a sentence about it. On the first set it compares to last time, and
+                      mid-lift to the set before — `loadNews` decides which, and she is never shown
+                      both.
+                    */}
+                    {news ? (
+                      <Text
+                        style={[styles.heroNews, { color: directionTone(news.direction) }]}
+                        accessibilityLabel={t(news.direction === 'up' ? 'workout.loadUpBy' : 'workout.loadDownBy', {
+                          delta: displayWeight(news.deltaKg, units),
+                          unit: unitLabel(units),
+                        })}
+                      >
+                        {`${news.direction === 'up' ? '↑' : '↓'}${displayWeight(news.deltaKg, units)}`}
+                      </Text>
+                    ) : null}
                   </View>
                   {/* THE ANNEX SITS UNDER THE FIGURE, NOT BESIDE IT (founder, build 36 — C.9).
                       Inline, it was pushed off the screen by every load that was not a two-digit
@@ -1543,7 +1579,16 @@ function ActiveSet({
                       same at 7.5 kg and at 137.5, and the hero keeps its full designed size instead
                       of shrinking to make room for a secondary fact — which serves "the one thing
                       standing fully in the light" better than the inline row ever did. */}
-                  {annex ? (
+                  {/*
+                    ⛔ THE PER-SIDE FIGURE IS NOT NEWS ON EVERY SET (founder 2026-08-04). It stays —
+                    his own ruling is that the athlete never calculates, and deleting it puts
+                    `(34 − 20) ÷ 2` back in her head at the rack. But she loads the bar ONCE, and on
+                    the sets after that it is a fact she acted on five minutes ago.
+
+                    ⚠️ It returns the instant the load moves, because that is when the bar has to be
+                    re-loaded and this becomes the most useful line on the screen.
+                  */}
+                  {annex && showsPerSide({ setNumber: setN, news }) ? (
                     <Text style={styles.heroAnnex}>
                       <Text style={styles.heroAnnexValue}>{annex.value}</Text>
                       {` ${annex.suffix}`}
@@ -1635,40 +1680,57 @@ function ActiveSet({
         */}
         {slots.length ? (
           <View style={styles.sets} accessibilityRole="summary" accessibilityLabel={setsLabel}>
-            {slots.map((slot, i) => (
-              <View key={i} style={styles.setCol}>
-                <Text
-                  style={[
-                    styles.setNum,
-                    slot.reps == null && styles.setNumTodo,
-                    slot.landing === 'above' && styles.setNumUp,
-                    slot.landing === 'below' && styles.setNumDown,
-                  ]}
-                >
-                  {slot.reps == null ? '–' : slot.reps}
-                </Text>
-                <Text style={styles.setGhost}>{slot.ghost == null ? ' ' : slot.ghost}</Text>
-                {/* The set she is standing in. A rule, not a colour: the figures above already
-                    spend colour on the verdict, and a second hue here would argue with it. */}
-                <View style={[styles.setMark, !slot.current && styles.setMarkOff]} />
-              </View>
-            ))}
+            {slots.map((slot, i) => {
+              /*
+               * ⛔ ONE ROW, AND THE SLOT CHANGES HANDS (founder 2026-08-04): *"instead of two rows,
+               * why not one row where each set simply replaces the number from the previous
+               * workout?"*
+               *
+               * Because **the comparison matters before the set, not after.** She reads slot 3 while
+               * walking to the bar — that is when last time's number is worth anything. The moment
+               * she has lifted, it is history, and holding a second row open to keep showing it is
+               * paying rent on a fact that has stopped being useful.
+               *
+               * So a slot holds LAST TIME'S number, dimmed, until she replaces it with her own. The
+               * one she is standing on is the number to beat, and it costs no pixels: the same slot
+               * doing a second job.
+               */
+              const done = slot.reps != null;
+              const shown = done ? slot.reps : slot.ghost;
+              return (
+                <View key={i} style={styles.setCol}>
+                  <Text
+                    style={[
+                      styles.setNum,
+                      !done && styles.setNumGhost,
+                      done && slot.landing === 'above' && styles.setNumUp,
+                      done && slot.landing === 'below' && styles.setNumDown,
+                    ]}
+                  >
+                    {/* A dash where there is no history at all — never a zero, which is a set she
+                        did and failed rather than a set nobody has a record of. */}
+                    {shown == null ? '–' : shown}
+                  </Text>
+                  {/* The set she is standing in. A rule, not a colour: the figures already spend
+                      colour on the verdict, and a second hue here would argue with it. */}
+                  <View style={[styles.setMark, !slot.current && styles.setMarkOff]} />
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
         {/*
-          The LOAD she used last time — the only part of the old line the row above cannot carry, and
-          the evidence for the number on the stage. One short line, at legend size rather than the
-          ten points it was set at.
+          ⛔ AND THE "LAST TIME · 57.5 KG" LINE IS DELETED (founder 2026-08-04).
+
+          The hero carries the comparison now — `↑1.5`, in the direction's colour — and printing the
+          absolute weight underneath states the same fact a second time in a form she has to do
+          arithmetic on. Two statements of one thing is exactly the excess this screen has been
+          losing all week.
+
+          ⚠️ The evidence did not go with it: the reps are the row's ghosts and the load is the
+          delta. Nothing that was reachable is now behind a tap.
         */}
-        {lastTime ? (
-          <Text style={styles.lastLoad}>
-            {t('workout.lastLoad', {
-              load: lastTime.loadKg == null ? t('workout.bodyweightShort') : displayWeight(lastTime.loadKg, units),
-              unit: lastTime.loadKg == null ? '' : unitLabel(units),
-            })}
-          </Text>
-        ) : null}
       </View>
 
       {/* `pointerEvents` stops the finger; it does NOT stop VoiceOver, which would happily focus and
@@ -2880,6 +2942,15 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     textAlign: 'left',
   },
+  /* The delta rides the hero's own baseline — no line of its own, because it has no vertical cost. */
+  heroNews: {
+    fontFamily: font.monoSemibold,
+    fontVariant: ['tabular-nums'],
+    fontSize: 22,
+    marginStart: 8,
+    includeFontPadding: false,
+    textAlign: 'left',
+  },
   askWord: {
     fontFamily: font.sansMedium,
     fontSize: 14,
@@ -2893,43 +2964,23 @@ const styles = StyleSheet.create({
   setNum: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 34,
-    lineHeight: 39,
+    /* ⚠️ 38, up from 34. The second row's height went into the first row's size — the founder's own
+       arithmetic when he proposed the single row. */
+    fontSize: 38,
+    lineHeight: 43,
     color: stage.ink0,
     includeFontPadding: false,
     textAlign: 'center',
   },
-  setNumTodo: { color: stage.ink2, opacity: 0.45 },
+  /* Last time's number, still standing in the slot: dimmed rather than shrunk. A small number is
+     unreadable; a quiet one is merely quiet — the founder's floor, applied to a ghost. */
+  setNumGhost: { fontFamily: font.mono, color: stage.ink1, opacity: 0.4, textAlign: 'center' },
   setNumUp: { color: up.stage },
   setNumDown: { color: down.stage },
-  setGhost: {
-    fontFamily: font.mono,
-    fontVariant: ['tabular-nums'],
-    fontSize: 34,
-    lineHeight: 39,
-    color: stage.ink1,
-    opacity: 0.38,
-    includeFontPadding: false,
-    textAlign: 'center',
-  },
   setMark: { marginTop: 8, width: 26, height: 2.5, borderRadius: 2, backgroundColor: up.stage },
   setMarkOff: { backgroundColor: 'transparent' },
   /* ⚠️ SANS. It holds a translated phrase ("LAST TIME · …") and mono cannot draw Hebrew at all —
      the same reason its predecessor was sans, caught again by `monoCarriesNoWords`. */
-  lastLoad: {
-    marginTop: 14,
-    fontFamily: font.sansMedium,
-    fontSize: 13,
-    letterSpacing: trackingPx(13, tracking.legend),
-    /*
-     * ⛔ NO `textTransform`. It would render "32.5KG" while the hero four lines above says "kg" —
-     * the exact defect `lastTimeIsOnTheStage` was written for when this line was a `Legend`, and I
-     * reintroduced it in the style of its replacement. The English copy is already capitalised where
-     * it wants to be; Hebrew has no case to transform.
-     */
-    color: stage.ink2,
-    textAlign: 'center',
-  },
   lastTime: {
     marginTop: 10,
     fontFamily: font.sansMedium,

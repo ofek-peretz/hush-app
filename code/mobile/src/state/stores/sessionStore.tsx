@@ -326,6 +326,15 @@ export interface SessionView {
    * second graphic this stage keeps rejecting.
    */
   setsSoFar: number[];
+  /**
+   * ⛔ AND THE LOADS SHE LIFTED THEM AT (founder 2026-08-04): *"we show how many reps were done, but
+   * we are not showing how much weight was lifted."*
+   *
+   * The set stage compares the load in front of her to the one on the PREVIOUS set of this lift —
+   * a Loop 1 correction is the change she has to act on, and it outranks last week. Same order,
+   * same filter, same session as `setsSoFar`, so the two arrays are index-aligned by construction.
+   */
+  loadsSoFar: (number | null)[];
   globalProgress: { index: number; total: number } | null;
   /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
   exerciseProgress: { index: number; total: number } | null;
@@ -1330,6 +1339,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             .slice()
             .sort((a, b) => a.setIndex - b.setIndex)
             .map((x) => x.actualReps)
+        : [],
+      loadsSoFar: current
+        ? (state.session?.sets ?? [])
+            .filter((x) => x.exerciseId === current.exerciseId)
+            .slice()
+            .sort((a, b) => a.setIndex - b.setIndex)
+            .map((x) => x.actualWeight ?? null)
         : [],
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current

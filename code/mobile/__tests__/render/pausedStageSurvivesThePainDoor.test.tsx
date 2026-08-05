@@ -72,6 +72,7 @@ function makeSession(paused: boolean, onPause: () => void) {
     /* ⚠️ Two sets already logged, so the set row draws filled slots — an absent array
        would make every fixture on the stage look like set 1 of a lift never done. */
     setsSoFar: [9, 8],
+    loadsSoFar: [34, 34],
     currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     nextExerciseId: 'bb_bench_press',
     setLabel: { n: 2, m: 4 },

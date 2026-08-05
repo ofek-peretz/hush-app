@@ -83,14 +83,12 @@ describe('and it reaches the stage', () => {
 
   it('⛔ is drawn on the set screen, with no tap', () => {
     /*
-     * ⚠️ THE FORM CHANGED ON 2026-08-04, THE LAW DID NOT. It was one line — "LAST TIME · 4 DAYS AGO
-     * · 57.5 KG · 8·8·7·6" — at ten points, which is the exact type the founder ruled off this
-     * screen. Its REPS are the ghost row under her own sets now, where the comparison stands under
-     * the number it is about; only the LOAD is still a line, because the row cannot carry it.
-     *
-     * Both halves are asserted, because losing either would put the evidence back behind a tap.
+     * ⚠️ THE FORM CHANGED AGAIN ON 2026-08-04, AND THE LAW HELD BOTH TIMES. The reps went from a
+     * ten-point line, to a ghost ROW under her own, to a single row where last time's number sits in
+     * the slot until she replaces it. And the LOAD stopped being a line at all: it is a delta on the
+     * hero now (`↑1.5`), because "32.5 last time" is a sum she has to do and the delta is the fact.
      */
-    expect(flow()).toContain("{t('workout.lastLoad', {"); // the load
+    expect(flow()).toContain('lastTimeKg: lastTime.loadKg'); // the load, as news on the hero
     expect(flow()).toContain('lastReps: lastTime.reps'); // …and the reps, into the row
     expect(flow()).toContain('const lastTime = session.lastTime;');
   });
@@ -99,6 +97,12 @@ describe('and it reaches the stage', () => {
     const store = read('src/state/stores/sessionStore.tsx');
     expect(store).toContain('lastTime: lastTimeOn(current?.exerciseId ?? null, historyRef.current, {');
     expect(store).toContain('excludeSessionId: sessionRef.current?.id,');
+  });
+
+  it('⚠️ the delta is absent when nothing moved, rather than a zero', () => {
+    // It sits on the largest figure on the screen; a "↑0" there is a claim about her training at the
+    // size of a fist. `loadNews` returns null and the view draws nothing at all.
+    expect(flow()).toContain('{news ? (');
   });
 
   it('⚠️ the unit is written the same way here as on the hero — nothing uppercases it', () => {
@@ -112,16 +116,22 @@ describe('and it reaches the stage', () => {
      */
     // `textTransform:` with its colon — a DECLARATION. The bare word appears in the comment that
     // explains why it must not be there, and matching that would make the law unfixable.
-    const at = flow().indexOf('lastLoad: {');
+    const at = flow().indexOf('heroNews: {');
     const style = flow().slice(at, flow().indexOf('},', at));
     expect(style).not.toContain('textTransform:');
-    expect(flow()).not.toMatch(/<Legend[^>]*styles\.lastLoad/);
   });
 
-  it('says nothing at all on a lift she has never done', () => {
-    // A "last time —" with a dash is a row that answers nothing and costs a line of a stage whose
-    // whole job is one fact.
-    expect(flow()).toContain('{lastTime ? (');
+  it('⛔ says nothing at all on a lift she has never done', () => {
+    /*
+     * No history → no delta and no ghosts. `loadNews` returns null without a comparison, and the row
+     * falls through to a dash rather than a zero — a zero is a set she did and failed.
+     *
+     * ⚠️ The "LAST TIME · 57.5 KG" line that used to carry this is DELETED: the hero states the
+     * comparison now, and printing the absolute weight underneath said the same fact twice in the
+     * form she has to do arithmetic on.
+     */
+    expect(flow()).not.toContain('styles.lastLoad');
+    expect(flow()).toContain("shown == null ? '–' : shown");
   });
 
   it('is written in both languages', () => {
@@ -133,7 +143,10 @@ describe('and it reaches the stage', () => {
        * year later because someone finds the key and assumes it belongs somewhere.
        */
       expect(copy.workout.lastTime).toBeUndefined();
-      expect(copy.workout.lastLoad).toMatch(/\{\{load\}\}[\s\S]*\{\{unit\}\}/);
+      expect(copy.workout.lastLoad).toBeUndefined(); // deleted with the line, not left unused
+      /* The delta's screen-reader sentence — the glyph is "↑1.5" and VoiceOver gets words. */
+      expect(copy.workout.loadUpBy).toMatch(/\{\{delta\}\}[\s\S]*\{\{unit\}\}/);
+      expect(copy.workout.loadDownBy).toBeTruthy();
       expect(copy.workout.bodyweightShort).toBeTruthy();
     }
   });

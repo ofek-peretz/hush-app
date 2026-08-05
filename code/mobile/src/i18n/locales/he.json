@@ -438,7 +438,8 @@
     "superset": "סופרסט",
     "repOfM": "חזרה {{n}} מתוך {{m}}",
     "keyPoints": "דגשים",
-    "lastLoad": "בפעם הקודמת · {{load}}{{unit}}",
+    "loadUpBy": "עלייה של {{delta}}{{unit}}",
+    "loadDownBy": "ירידה של {{delta}}{{unit}}",
     "bodyweightShort": "משקל גוף"
   },
   "finishSheet": {
