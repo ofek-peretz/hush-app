@@ -1,9 +1,28 @@
 /**
  * THE MONO VOICE CARRIES FIGURES, NEVER WORDS — and in Hebrew it is not a matter of taste.
  *
- * Two-voice law (design/tokens.ts): Hanken Grotesk for everything the product SAYS, JetBrains Mono
- * for everything it MEASURES. That law was being broken quietly, and the app's second language is
- * where it showed: **JetBrains Mono contains no Hebrew glyphs at all**. Every mono-styled string
+ * Two-voice law (design/tokens.ts): the sans/serif faces for everything the product SAYS, the mono
+ * face for everything it MEASURES. That law was being broken quietly, and the app's second language
+ * is where it showed: **the mono face contains no Hebrew glyphs at all**.
+ *
+ * ── ⚠️ MEASURED, 2026-08-05, BECAUSE THE FOUNDER ASKED WHETHER THIS IS EVEN FOUNDED ─────────────
+ * It is, and the evidence had drifted: this header said JETBRAINS Mono, and the app ships IBM Plex
+ * Mono. Same conclusion, wrong file named — so the cmap of the font actually in `node_modules` was
+ * read rather than trusted:
+ *
+ *   · IBM Plex Mono     930 glyphs — alef, mem, qof, geresh: ALL ABSENT
+ *   · Assistant (sans)  431 glyphs — every one present
+ *   · Frank Ruhl (serif) 520 glyphs — every one present
+ *
+ * So a Hebrew word in a mono style is not "slightly off". There is no glyph, and the OS substitutes
+ * a face of its own choosing, mid-line.
+ *
+ * ── ⚠️ AND THE FLIP SIDE, WHICH THIS TEST DOES NOT POLICE ───────────────────────────────────────
+ * The same read found `↑` and `↓` present in MONO and absent from BOTH Hebrew faces. A symbol must
+ * therefore travel the OTHER way — the load delta's `↑1.5` is mono for exactly that reason, and
+ * moving it to sans "for consistency" would tofu it. Every arrow in the app was checked and every
+ * one is mono today; there is no test for it because a rule with no violations and no obvious way
+ * to acquire one is a comment, not a law. Every mono-styled string
  * that carried a translated word — "סט 1 מתוך 4", "משקל גוף", "9.5 בכל צד", "קק״ל", the milestone's
  * own date — fell back to whatever face the OS could find, mid-sentence, in an app whose entire
  * claim is that it is precisely made. The founder saw it as "a different font in the middle of the
