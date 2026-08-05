@@ -171,7 +171,21 @@ describe('the reason a muscle earned a set is spoken in her language', () => {
   );
 
   it('the sentence names the muscle in the same words the row does', () => {
-    const said = texts(mount(earned)).join(' ');
+    const r = mount(earned);
+    /*
+     * ⛔ THE ROWS MOVED BEHIND A BOX (founder 2026-08-05) — so the test presses it. The law here is
+     * about the WORDS in the row, not about where the row lives; the Hebrew athlete must read the
+     * muscle in her language in both the title and the sentence under it, wherever they are drawn.
+     */
+    act(() => {
+      for (const node of r.root.findAll((n) => typeof n.props?.accessibilityLabel === 'string')) {
+        if (/החלט|decision/i.test(String(node.props.accessibilityLabel)) && typeof node.props.onPress === 'function') {
+          node.props.onPress();
+          break;
+        }
+      }
+    });
+    const said = texts(r).join(' ');
     const muscle = tg('muscle.Chest');
     // The TITLE has always been translated; the law is that the reason under it agrees — so the
     // word appears twice, once in each.

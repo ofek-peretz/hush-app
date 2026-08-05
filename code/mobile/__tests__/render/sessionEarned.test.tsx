@@ -54,6 +54,23 @@ function draw(props: { decisions?: EarnedLine[]; volume?: VolumeMove[]; answered
     );
   });
   mounted.push(r);
+  /*
+   * ⛔ THE DECISIONS MOVED BEHIND A DOOR (founder 2026-08-05): *"underneath, a nicely framed box
+   * saying X decisions were made based on this workout, and pressing it opens the screen of what
+   * changed."*
+   *
+   * So this presses it. Every assertion below is about what the ROWS say, which is unchanged and is
+   * what this suite exists for — the four kinds of news, each drawn as itself. What the poster does
+   * with them before she asks is a different law (`aCountAndItsRowsAreOneDerivation`).
+   */
+  act(() => {
+    for (const node of r.root.findAll((n) => typeof n.props?.accessibilityLabel === 'string')) {
+      if (/decision/i.test(String(node.props.accessibilityLabel)) && typeof node.props.onPress === 'function') {
+        node.props.onPress();
+        break;
+      }
+    }
+  });
   return r.root
     .findAllByType(Text)
     .map((n) => {

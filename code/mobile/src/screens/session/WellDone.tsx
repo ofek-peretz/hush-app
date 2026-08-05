@@ -72,7 +72,7 @@ import { milestone as milestoneHaptic } from '@/platform/haptics';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import type { Session, SetLog } from '@/data/local/models';
 import type { Explanation } from '@/engine/weeklyView';
-import { space, stage, font, textScale, tracking, trackingPx, up, down } from '@/design/tokens';
+import { space, stage, signal, font, textScale, tracking, trackingPx, up, down } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
@@ -799,6 +799,8 @@ export function SessionEarned({
    *  whole card module exists to refuse. */
 }) {
   const { t } = useCopy();
+  /** Whether "what changed" is open over the poster. Closed until she asks (founder 2026-08-05). */
+  const [sheetOpen, setSheetOpen] = useState(false);
   /** The word a held lift wears — read once so the face check below is done once. */
   const holdsWord = t('complete.holds');
   const nothingDecided = decisions.length === 0 && volume.length === 0;
@@ -845,11 +847,15 @@ export function SessionEarned({
                     <Text style={styles.heroNum}>{poster.hero.value}</Text>
                     <Text style={styles.heroUnit}>{poster.hero.unit}</Text>
                   </View>
-                  <Text style={styles.heroLabel}>
-                    {poster.hero.delta != null
-                      ? t('complete.bestBy', { reps: poster.hero.reps, delta: poster.hero.delta, unit: poster.hero.unit })
-                      : t('complete.bestReps', { reps: poster.hero.reps })}
-                  </Text>
+                  {/*
+                    ⛔ THE FOOTNOTE IS DELETED (founder 2026-08-05): *"and for a new record, take off
+                    the × 8 reps · up 3.5 kg — it is just stuck there and not interesting."*
+
+                    He is right and the reason is the screen's own logic: this poster exists because
+                    a number is the story. A rep count and a delta underneath it are the ARGUMENT for
+                    why the number is a record, and nobody photographs an argument. The delta is
+                    still on the set stage, where she needed it while the bar was in front of her.
+                  */}
                 </>
               ) : (
                 <>
@@ -877,46 +883,107 @@ export function SessionEarned({
                 THE THREE FACTS, as figures. A record poster swaps calories for the tonnage, because
                 the tonnage has just lost the hero slot and is the more distinctive of the two.
               */}
+              {/*
+                ⛔ TWO FACTS, NOT THREE (founder 2026-08-05): *"how long the workout was and how many
+                calories were burned, ONLY."*
+
+                The set count went with the receipt below it. Eleven sets is a number she cannot do
+                anything with and cannot feel — minutes and calories are both things she spent.
+
+                ⚠️ A RECORD POSTER STILL SHOWS THE TONNAGE, because the tonnage has just lost the hero
+                slot to the record and is the more distinctive of the two.
+              */}
               <View style={styles.posterStats}>
                 <Fact value={durationLabel} unit={t('common.minShort')} />
                 {poster.hero.kind === 'record' && poster.tonnes > 0 ? (
                   <Fact value={poster.tonnes.toFixed(1)} unit={`${t('weekly.tonneUnit')} ${t('complete.movedShort')}`} />
-                ) : kcal != null ? (
-                  <Fact value={String(kcal)} unit={t('complete.kcal')} />
                 ) : null}
-                <Fact value={String(poster.sets)} unit={t('complete.setsLabel')} />
+                {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} /> : null}
               </View>
 
               {/*
-                THE RECEIPT — what makes a screenshot credible rather than decorative: anyone reading
-                the story can see what was actually done. Quiet, and never the subject.
+                ⛔ THE RECEIPT IS DELETED (founder 2026-08-05): *"all the exercises and their sets and
+                how much weight was lifted on every single exercise — nobody is interested in that."*
+
+                It was defended as what makes a screenshot credible rather than decorative. That was
+                a reason to keep it on a SHARE card, and there is no share card: he has now said
+                twice that these are screens you screenshot, not screens you share from. Ten rows of
+                "45kg × 8·8·8·8" at 12 points was the small type in his photograph and the reason
+                the coach's decisions were pushed under the fold.
+
+                ⚠️ Nothing is lost — it is the session record, one press away, where a table belongs.
               */}
-              {poster.lifts.length ? (
-                <View style={styles.receipt}>
-                  {poster.lifts.map((l) => (
-                    <View key={l.exerciseId} style={styles.receiptRow}>
-                      <Text style={styles.receiptName} numberOfLines={1}>{bidi(exerciseDisplayName(l.exerciseId))}</Text>
-                      <Text style={styles.receiptFigure}>
-                        {l.load == null
-                          ? l.reps.join('·')
-                          : `${l.load}${l.unit} × ${l.reps.join('·')}`}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
 
               {partial ? <Text style={styles.posterPartial}>{t('complete.partialTitle')}</Text> : null}
             </View>
           ) : null}
 
-          {/* THE DECISIONS — one ruled line per lift the engine moved, the load's from→to on the end
-              edge and the sentence that earned it beneath, in the coach's italic serif.
+          {/*
+            ⛔ THE DECISIONS GO BEHIND A DOOR (founder 2026-08-05):
 
-              An EMPTY list is a verdict, not a gap: every lift held at what she lifted (S-24). The
-              screen says that in one line rather than showing nothing and letting the athlete
-              wonder whether the engine ran at all. */}
-          {!nothingDecided ? (
+              > *"Underneath, a nicely framed box saying X decisions were made based on this
+              > workout, and pressing it opens the screen you showed of what changed. And if not,
+              > there is the option to press finish workout."*
+
+            They used to be the tail of this scroll, which is how they ended up UNDER the Done
+            button in his screenshot — the work in front, the reasoning below the fold, and the
+            reasoning arriving fifteen seconds late on top of that. A box states the count where the
+            eye already is and holds the rows until she wants them.
+
+            ⚠️ THE COUNT IS THE ROWS' OWN LENGTH. Not a second derivation — that is precisely the
+            defect this same batch fixed on the Mirror, where a count and its rows updated by
+            different rules and the screen printed "10 changes" over nothing.
+          */}
+          {answered ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                nothingDecided
+                  ? t('complete.everythingHeld')
+                  : t('complete.decisionsCount', { count: decisions.length + volume.length })
+              }
+              disabled={nothingDecided}
+              onPress={() => setSheetOpen(true)}
+              style={({ pressed }) => [styles.decisionBox, pressed && !nothingDecided && styles.decisionBoxPressed]}
+            >
+              {nothingDecided ? (
+                /* ⚠️ A HOLD IS A VERDICT AND SHE IS OWED IT — but it is not a DOOR, because there is
+                   nothing behind it. Same box, no chevron, not pressable. */
+                <Text style={styles.decisionHeld}>{t('complete.everythingHeld')}</Text>
+              ) : (
+                <>
+                  <View style={styles.decisionLead}>
+                    <Text style={styles.decisionNum}>{String(decisions.length + volume.length)}</Text>
+                    <View style={styles.decisionWords}>
+                      <Text style={styles.decisionWord}>
+                        {t('complete.decisionsWord', { count: decisions.length + volume.length })}
+                      </Text>
+                      <Text style={styles.decisionFrom}>{t('complete.decisionsFrom')}</Text>
+                    </View>
+                  </View>
+                  <Icon name="chevronRight" size={18} color={signal[0]} strokeWidth={2} />
+                </>
+              )}
+            </Pressable>
+          ) : null}
+        </ScrollView>
+
+        {/* WHAT CHANGED — the rows, when she asks for them. */}
+        {sheetOpen ? (
+          <View style={styles.sheetWrap}>
+            <View style={styles.sheetHead}>
+              <Legend size={11} track={0.2}>{t('complete.decisionsFrom')}</Legend>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+                onPress={() => setSheetOpen(false)}
+                hitSlop={10}
+                style={({ pressed }) => [styles.sheetClose, pressed && styles.ghostPressed]}
+              >
+                <Icon name="close" size={18} color={stage.ink0} strokeWidth={2} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.earned}>
               {decisions.map((d) => (
                 <View key={d.key} style={styles.earnedRow}>
@@ -985,18 +1052,16 @@ export function SessionEarned({
                 );
               })}
             </View>
-          ) : answered ? (
-            <View style={styles.earned}>
-              <View style={styles.earnedRow}>
-                <Text style={styles.earnedReason}>{t('complete.everythingHeld')}</Text>
-              </View>
-            </View>
-          ) : null}
-        </ScrollView>
+            </ScrollView>
+          </View>
+        ) : null}
 
         <View style={styles.footer}>
-          {/* IMG_8260: the cream action first, "View session record" as a quiet ghost link beneath it. */}
-          <Button variant="primary" size="lg" block label={t('complete.done')} onPress={onDone} />
+          {/* IMG_8260: the cream action first, "View session record" as a quiet ghost link beneath it.
+              ⛔ "Finish workout", not "Done" (founder 2026-08-05): the box above is now the other
+              thing she can do here, and two controls called Done and "3 decisions ›" do not tell
+              her which one ends the workout. It says what happens. */}
+          <Button variant="primary" size="lg" block label={t('complete.finishWorkout')} onPress={onDone} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('complete.viewRecord')}
@@ -1256,6 +1321,40 @@ const styles = StyleSheet.create({
     color: stage.ink1,
     textAlign: 'center',
   },
+
+  /* ── THE DECISIONS BOX — the only control on the poster that opens anything. ──
+   *
+   * A moss rim and a moss wash, which is the accent spent once on this screen: the palette's law is
+   * that moss means A DECISION MADE, and this box is literally a count of them. It is the one place
+   * on the finish screen where the app claims to have done something.
+   */
+  decisionBox: {
+    marginTop: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 17,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(169,196,159,0.42)',
+    backgroundColor: 'rgba(169,196,159,0.06)',
+  },
+  decisionBoxPressed: { backgroundColor: 'rgba(169,196,159,0.13)' },
+  decisionLead: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  decisionNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: signal[0], textAlign: 'left' },
+  decisionWords: { flex: 1, gap: 1 },
+  decisionWord: { fontFamily: font.sansSemibold, fontSize: 15, color: stage.ink0, textAlign: 'left' },
+  decisionFrom: { fontFamily: font.sans, fontSize: 13, color: stage.ink2, textAlign: 'left' },
+  // A held week: the same frame, no figure, no chevron — a verdict rather than a door.
+  decisionHeld: { flex: 1, fontFamily: font.serif, fontSize: 16, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
+
+  /* ── …and what it opens. Full-bleed over the poster, because the rows are the subject once
+   *    she has asked for them — not a card peeking over the thing she was reading. ── */
+  sheetWrap: { ...StyleSheet.absoluteFillObject, backgroundColor: stage[0], paddingTop: 8 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 16, paddingBottom: 4 },
+  sheetClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(241,238,229,0.10)', alignItems: 'center', justifyContent: 'center' },
+  sheetScroll: { paddingHorizontal: 26, paddingBottom: 40 },
 
   earned: { marginTop: 22 },
   earnedRow: {
