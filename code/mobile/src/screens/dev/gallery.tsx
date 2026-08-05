@@ -39,6 +39,7 @@ import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import { askAfterSession } from '@/platform/coach/afterSession';
 import type { Session } from '@/data/local/models';
 import { db } from '@/data/local/db';
+import { PreWorkoutView } from '@/screens/plan/PreWorkout';
 import { SessionFlow, Logged } from '@/screens/session/SessionFlow';
 import { SessionScan, SessionEarned } from '@/screens/session/WellDone';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
@@ -1327,6 +1328,62 @@ export const GALLERY: GalleryEntry[] = [
   ) },
   { id: '2.1a', label: 'Today — driven', status: 'live', note: 'tap the ROWS: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done row', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
   { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
+  /*
+    ⛔ 2.1c · THE PRE-WORKOUT CARD (founder 2026-08-05) — what a day on the week board opens, and
+    where the lift table went when it left Today. Three entries, because the three states differ in
+    the only thing that matters: whether the act is offered.
+  */
+  { id: '2.1c', label: 'Pre-workout', status: 'live', note: 'the lifts, the changes, and the one act', render: () => (
+    <InApp>
+      <PreWorkoutView
+        name="Upper Body A"
+        dayLabel="Monday"
+        shape="6 LIFTS · ~50 MIN"
+        units="kg"
+        changes={2}
+        lifts={[
+          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 57.5, sets: 4, band: [8, 10], changed: 'up' },
+          { exerciseId: 'bb_row', name: 'Barbell Row', load: 45, sets: 4, band: [8, 10] },
+          { exerciseId: 'lat_pulldown', name: 'Lat Pulldown', load: 42.5, sets: 3, band: [8, 10], changed: 'down' },
+          { exerciseId: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', load: 16, sets: 3, band: [8, 10] },
+          { exerciseId: 'lateral_raise', name: 'Lateral Raise', load: 7, sets: 3, band: [10, 12] },
+          { exerciseId: 'tri_pushdown', name: 'Triceps Pushdown', load: 20, sets: 3, band: [10, 12] },
+        ]}
+        onForm={noop} onWhy={noop} onChanges={noop} onStart={noop} onClose={noop}
+      />
+    </InApp>
+  ) },
+  /* ⚠️ A FINISHED SESSION she opened to re-read. The plan is hers to read; the act is refused —
+     a record must never wear an offer's clothes (founder 2026-07-11). */
+  { id: '2.1d', label: 'Pre-workout — already trained', status: 'live', note: 'a record, not an offer', render: () => (
+    <InApp>
+      <PreWorkoutView
+        name="Lower Body A" dayLabel="Wednesday" shape="5 LIFTS · ~45 MIN" units="kg" done
+        lifts={[
+          { exerciseId: 'leg_press', name: 'Leg Press', load: 100, sets: 4, band: [10, 12] },
+          { exerciseId: 'leg_extension', name: 'Leg Extension', load: 50, sets: 3, band: [10, 12] },
+        ]}
+        onForm={noop} onStart={noop} onClose={noop}
+      />
+    </InApp>
+  ) },
+  /* ⚠️ AND A WEEK WITH NO DAYS YET — the commonest state for a new athlete, and the one a live
+     harness cannot reach because it takes a fortnight of history to leave it. No day label, no
+     change pill: nothing has been compared against anything. */
+  { id: '2.1e', label: 'Pre-workout — week one', status: 'live', note: 'no day, no changes: nothing to compare yet', render: () => (
+    <InApp>
+      <PreWorkoutView
+        name="Full Body A" shape="5 LIFTS · ~45 MIN" units="kg" changes={0}
+        lifts={[
+          { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', load: 40, sets: 3, band: [8, 10] },
+          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 30, sets: 3, band: [8, 10] },
+          { exerciseId: 'pull_up', name: 'Pull-up', load: null, sets: 3, band: [5, 8] },
+        ]}
+        onForm={noop} onStart={noop} onClose={noop}
+      />
+    </InApp>
+  ) },
+
   { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
   { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
   { id: '2.1e', label: "When the day won't fit", status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },

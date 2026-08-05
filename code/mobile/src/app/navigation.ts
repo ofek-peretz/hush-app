@@ -196,6 +196,15 @@ export type MainParamList = {
   // (domain/planShare is an allow-list). `SharePlan` is opened from You; `PlanReceived` is opened
   // by the link itself, and carries the encoded token rather than a decoded plan so the screen
   // does the reading — an unreadable token must never have produced a route in the first place.
+  /**
+   * ⛔ THE PRE-WORKOUT CARD (founder 2026-08-05) — what a day on the week board opens.
+   *
+   * It carries only an ID. The workout, its lifts, its changes and its loads are all read live from
+   * the same places Today reads them, because a card that carried a SNAPSHOT would go stale the
+   * moment the coach answered a session finished on another device — and this is the screen she
+   * stands in front of deciding whether the numbers are right.
+   */
+  PreWorkout: { workoutId: string };
   SharePlan: undefined;
   PlanReceived: { token: string };
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent

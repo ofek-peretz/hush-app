@@ -513,56 +513,20 @@ export function HomeView(props: HomeViewProps) {
                 }
               >
 
-              {/* TODAY'S LIFTS — a table the eye scans down. Each row: form-clip glyph + name on the
-                  start edge, the load in a mono column on the end edge (moss if the engine changed it). */}
-              {props.plan?.length ? (
-                <View style={styles.plan}>
-                  {props.plan.map((lift, i) => (
-                    <Pressable
-                      key={`${lift.exerciseId}_${i}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        lift.pending ? lift.name : `${lift.name} · ${planFigureLabel(lift, props.units)}`
-                      }
-                      accessibilityHint={t('workout.form')}
-                      onPress={() => props.onForm(lift.exerciseId)}
-                      style={({ pressed }) => [
-                        styles.planRow,
-                        // The table is CLOSED — the last row carries the bottom rule, so the plan
-                        // reads as a block of facts rather than a list that trails off.
-                        i === props.plan!.length - 1 && styles.planRowLast,
-                        pressed && styles.pressedDim,
-                      ]}
-                    >
-                      <View style={styles.planLeft}>
-                        <Icon name="playCircle" size={15} color={color.textMuted} strokeWidth={1.5} />
-                        {/* THE NAME WRAPS, IT DOES NOT TRUNCATE (founder A.15). It was clamped to
-                            one line, so "Overhead Triceps Extension" arrived as "Overhead Triceps
-                            Ex…" — and an ellipsis on the first screen of the day hides the one word
-                            that distinguishes two lifts of the same family. A second line costs
-                            nothing here: the row already stands 54 px tall. */}
-                        <Text style={styles.planName}>{bidi(lift.name)}</Text>
-                      </View>
-                      {/* A CHANGED load stands lit IN ITS OWN DIRECTION and carries its unit and
-                          scheme in shadow; an unchanged row is one quiet tone end to end.
-                          A PENDING row draws no figure at all — see `pending`. */}
-                      {lift.pending ? null : (
-                        <Text style={styles.planFigure} numberOfLines={1}>
-                          <Text style={[lift.changed ? styles.figureChanged : styles.figureQuiet, lift.changed ? { color: directionTone(lift.changed) } : null]}>
-                            {figureLoad(lift, props.units)}
-                          </Text>
-                          <Text style={[styles.figureMeta, styles.figureUnit]}>{figureUnit(lift, props.units)}</Text>
-                          <Text style={[styles.figureMeta, lift.changed ? styles.figureScheme : styles.figureQuiet]}>
-                            {figureScheme(lift)}
-                          </Text>
-                        </Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.planLoading} />
-              )}
+              {/*
+                ⛔ THE LIFT TABLE LEFT THIS SCREEN (founder 2026-08-05): *"you cannot see that there
+                are other workouts besides the first one, because the rest are hidden in the scroll
+                below."*
+
+                The card was tall because it printed all six lifts — and THAT is what pushed
+                workouts 02, 03 and 04 under the fold, not the number of workouts. So the table
+                moved to `screens/plan/PreWorkout`, the screen she opens once she has decided to
+                train, where it arrives with the coach's reasoning attached. Today is a week she can
+                see in one screen again.
+
+                ⚠️ Nothing is behind a tap that was not already: every row of the column opens that
+                card, including this one.
+              */}
 
               {/* S-3 · the day genuinely cannot fit her minutes. The engine has already cut everything
                   it legally can (a muscle's last lift is protected), so it says so plainly and offers

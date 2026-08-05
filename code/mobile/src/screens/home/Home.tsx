@@ -828,7 +828,18 @@ export function Home({ navigation, route }: Props) {
       onResume={onResume}
       onStart={onStart}
       workouts={workouts}
-      onChooseWorkout={setChosenId}
+      /*
+       * ⛔ A ROW OPENS THE CARD (founder 2026-08-05): *"pressing a day with a workout opens a
+       * full-screen card with the workout's content … and then pressing that starts the workout."*
+       *
+       * It used to only SELECT — the tapped row opened in place and its lifts unfolded underneath,
+       * which is what made Today too tall to show the week. The selection still happens, so the
+       * board keeps marking where she is; it is simply no longer the whole act.
+       */
+      onChooseWorkout={(id) => {
+        setChosenId(id);
+        navigation.navigate('PreWorkout', { workoutId: id });
+      }}
       /*
        * Never written since the coach took the week: `weekBriefing` assembled a sentence out of
        * deltas and the coach writes its own. `HomeView` does not render it either — it has read

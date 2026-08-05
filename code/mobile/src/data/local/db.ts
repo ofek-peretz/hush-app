@@ -390,6 +390,34 @@ export const db = {
     }
     await setJSON(K.coachPlan, p);
   },
+  /**
+   * ⛔ SHE MOVED A WORKOUT TO ANOTHER DAY — and this must NOT look like the coach deciding.
+   *
+   * `saveCoachPlan` rotates two anchors on every write: `coachPlanPrev` and the week's own. That is
+   * exactly right when a programme ARRIVES, and exactly wrong here. Writing her drag through it
+   * would make the previous programme equal to the current one, so the next real plan would diff
+   * against the wrong week and **every change the coach then made would go uncounted** — the pill
+   * would read zero on the week it mattered most.
+   *
+   * ⚠️ AND THE COACH DID NOT DO THIS. A day assignment she chose is not a decision to report in a
+   * letter titled "what I changed". It rides back to the coach on the next call inside the plan, so
+   * it stops proposing the day she rejected — which is all the memory it needs.
+   *
+   * One field, one write, no rotation.
+   */
+  saveCoachPlanDays: async (days: Record<string, string>) => {
+    const plan = await getJSON<CoachPlan>(K.coachPlan);
+    if (!plan) return;
+    const next: CoachPlan = {
+      ...plan,
+      sessions: plan.sessions.map((s, i) => {
+        const day = days[`coach_${i}`];
+        return day ? { ...s, day: day as CoachPlan['sessions'][number]['day'] } : s;
+      }),
+    };
+    await setJSON(K.coachPlan, next);
+  },
+
   loadCoachPlanPrev: () => getJSON<CoachPlan>(K.coachPlanPrev),
   /** The programme this week opened on — the pair both change counters read. See `coachPlanWeek`. */
   loadCoachPlanWeek: async (): Promise<CoachPlan | null> =>

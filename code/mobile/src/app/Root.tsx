@@ -57,6 +57,7 @@ import { Progress } from '@/screens/progress/Progress';
 import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
+import { PreWorkoutScreen } from '@/screens/plan/PreWorkoutScreen';
 import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
 import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
 
@@ -158,6 +159,8 @@ function MainNavigator() {
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />
+      {/* The pre-workout card — what a day on the week board opens (founder 2026-08-05). */}
+      <MainStack.Screen name="PreWorkout" component={PreWorkoutScreen} />
       <MainStack.Screen name="SharePlan" component={SharePlanScreen} />
       <MainStack.Screen name="PlanReceived" component={PlanReceivedScreen} />
       <MainStack.Screen name="PainWhere" component={PainWhere} />

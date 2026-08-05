@@ -184,6 +184,12 @@ describe('the app says what it does', () => {
   });
 });
 
+  /*
+   * ⛔ SEVEN ASSERTIONS MOVED OUT ON 2026-08-05, NOT DELETED. The lift table left this screen
+   * (founder: *"you cannot see that there are other workouts besides the first one"*) — the card
+   * was tall because it printed all six lifts. Every claim they made is still a claim, and it is
+   * made against the screen that draws the table now: `__tests__/render/preWorkoutCard.test.tsx`.
+   */
 describe('the week is on the page, and it is a door', () => {
   it('every workout of the week is a chip', () => {
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
@@ -208,172 +214,9 @@ describe('the week is on the page, and it is a door', () => {
      */
   });
 
-  /**
-   * ⛔ THE QUEUED ROW IS NOT A CONTROL AT ALL (2026-08-04, the week-column rebuild).
-   *
-   * This used to assert that a second tap on the queued CHIP did nothing — one control, one act.
-   * In the column the queued session is not a chip to press: it is the row that has OPENED, and it
-   * holds the lifts, the change pill and the act. There is nothing left to choose about it.
-   *
-   * The law survives in a stronger form: **the open row exposes no button that queues it again.**
-   * A control whose only effect is to re-select what is already selected is a control that does
-   * nothing, and this screen has one act.
-   */
-  it('the QUEUED workout has no chooser of its own — it is already the open row', () => {
-    const chosen: string[] = [];
-    const r = mount(
-      <HomeView {...props({ onChooseWorkout: (id: string) => void chosen.push(id) })} />,
-    );
-    // Pull A === dayName, i.e. the open row. It is drawn, and it is not pressable.
-    expect(texts(r).join(' ')).toContain('Pull A');
-    expect(byLabel(r, 'Pull A')).toBeNull();
-    expect(chosen).toEqual([]);
-  });
 
-  /**
-   * THE PLAN IS ON THE PAGE (founder 2026-07-17: "the athlete should know, already from Home, what
-   * is waiting for him in today's workout"). There is no door to it any more, and no screen behind
-   * one: the lifts and the loads Hush set are simply here. `ProgramDetail` — which listed the same
-   * lifts and left the LOAD out, the one number the engine decided — is deleted.
-   */
-  it("today's lifts are on Home, with the loads the engine set", () => {
-    const r = mount(
-      <HomeView
-        {...props({
-          plan: [
-            { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] },
-            { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, band: [10, 12] as [number, number] },
-          ],
-        })}
-      />,
-    );
-    const said = texts(r).join(' ');
-    expect(said).toContain('Bench Press');
-    // v7 splits the figure into styled spans — the load (moss when changed), its unit, and the
-    // scheme — so assert the facts rather than one glued string: the load, and the BAND (not Tlo).
-    expect(said).toContain('80');
-    expect(said).toContain('3×8–10');
-    // A bodyweight lift states the reps and invents no weight.
-    expect(said).toContain('3×10–12');
-    expect(said).not.toMatch(/null|undefined|NaN/);
-  });
 
-  it('a lift row opens its form clip — the last job the deleted plan screen was doing', () => {
-    const formed: string[] = [];
-    const r = mount(
-      <HomeView
-        {...props({
-          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
-          onForm: (id: string) => void formed.push(id),
-        })}
-      />,
-    );
-    act(() => byLabel(r, 'Bench Press · 80 kg · 3×8–10')!.props.onPress());
-    expect(formed).toEqual(['bb_bench_press']);
-  });
 
-  /**
-   * ════ THE UNIT IS BESIDE THE LOAD (founder A.5, build 36: "the unit is missing") ════
-   *
-   * v7 2.1 removed it deliberately — the plan is a column of loads in one declared unit, and six
-   * "kg"s turn a scannable column into six sentences. He overturned that on the device. The row
-   * already ends in a scheme ("· 3×8–10"), so the number was never standing alone in a bare column;
-   * it was a bare number inside a sentence, and a weight without a unit is not a weight.
-   */
-  it('every load on Today names its unit — and a bodyweight lift names none', () => {
-    const kg = texts(
-      mount(
-        <HomeView
-          {...props({
-            plan: [
-              { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] },
-              { exerciseId: 'pull_up', name: 'Pull-Up', load: null, sets: 3, band: [10, 12] as [number, number] },
-            ],
-          })}
-        />,
-      ),
-    ).join('|');
-    expect(kg).toContain(' kg');
-    // Exactly one — the loaded lift's. A bodyweight row invents no unit for a weight it has not got.
-    expect(kg.match(/ kg/g)).toHaveLength(1);
-
-    // …and it follows HER setting, not the stored kg.
-    const lb = texts(
-      mount(
-        <HomeView
-          {...props({
-            units: 'lb',
-            plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
-          })}
-        />,
-      ),
-    ).join('|');
-    expect(lb).toContain(' lb');
-    expect(lb).not.toContain(' kg');
-  });
-
-  /**
-   * ════ A LIFT'S NAME IS NEVER CLIPPED (founder A.15: "a long exercise name truncates with an
-   * ellipsis — needs a real solution") ════
-   *
-   * The real solution is that it wraps. The name was clamped to one line, so the catalog's longest
-   * ("Overhead Triceps Extension") arrived as "Overhead Triceps Ex…" — and the tail is exactly the
-   * word that separates two lifts of the same family. The FIGURE stays on one line: it is the fact
-   * the row exists for and it must never wrap away from its own load.
-   */
-  it('a long lift name wraps — nothing on the plan is clamped to one line', () => {
-    const r = mount(
-      <HomeView
-        {...props({
-          plan: [
-            { exerciseId: 'oh_tri_ext', name: 'Overhead Triceps Extension', load: 27.5, sets: 3, band: [10, 12] as [number, number] },
-          ],
-        })}
-      />,
-    );
-    const said = texts(r).join(' ');
-    expect(said).toContain('Overhead Triceps Extension'); // whole, in the tree
-    // …and the node carrying it is unclamped, which is the only thing that decides whether RN
-    // ellipsises it. (A one-line clamp is invisible to a text assertion — the string is still there.)
-    // (the name is BiDi-isolated, so match on containment, not equality)
-    const name = r.root.findAll((n) =>
-      n.children.some((c) => typeof c === 'string' && c.includes('Overhead Triceps Extension')),
-    );
-    expect(name.length).toBeGreaterThan(0);
-    expect(name.every((n) => n.props.numberOfLines == null)).toBe(true);
-  });
-
-  /**
-   * …and the other half of A.15, which is what actually decides how often it has to wrap: the
-   * figure's META MAY NOT COMPETE WITH ITS LOAD for the row's width. The load carries the founder's
-   * 2026-07-28 enlargement (17 pt); the unit and the scheme are captions on it and stay at the
-   * canonical 13.5. Set at the same size, the figure took 158 of the row's 330 px and pushed
-   * "Dumbbell Romanian Deadlift" onto a THIRD line. This is a measurement jest cannot make, so the
-   * law is held where it is decided — in the type sizes.
-   */
-  it('the unit and the scheme are set smaller than the load they annotate', () => {
-    const r = mount(
-      <HomeView
-        {...props({
-          plan: [{ exerciseId: 'bb_bench_press', name: 'Bench Press', load: 80, sets: 3, band: [8, 10] as [number, number] }],
-        })}
-      />,
-    );
-    const size = (fragment: string): number => {
-      const node = r.root.findAll((n) => n.children.some((c) => typeof c === 'string' && c.includes(fragment)))[0];
-      const s = node.props.style;
-      const flat = Array.isArray(s) ? Object.assign({}, ...s.flat(Infinity).filter(Boolean)) : s;
-      // The load's own span carries no size — it inherits the figure's. Walk up for it.
-      if (flat?.fontSize) return flat.fontSize;
-      const parent = r.root.findAll((n) => n.findAll((c) => c === node).length > 0 && n.props.style);
-      const pf = parent.map((p) => (Array.isArray(p.props.style) ? Object.assign({}, ...p.props.style.flat(Infinity).filter(Boolean)) : p.props.style));
-      return pf.map((x) => x?.fontSize).filter(Boolean).pop() as number;
-    };
-    const load = size('80');
-    expect(load).toBe(17); // the founder's enlargement, unchanged
-    expect(size('kg')).toBeLessThan(load);
-    expect(size('3×8–10')).toBeLessThan(load);
-  });
 
   /**
    * A finished workout is a RECORD, not an offer (founder 2026-07-11) — and a record can be read.
@@ -552,39 +395,6 @@ describe('the week is on the page, and it is a door', () => {
     // No pattern in this fixture → the column numbers the coach's own order and keeps it whole.
     // (Pull A is `dayName`, so it is the OPEN row and therefore not a control — hence its absence.)
     expect(order).toEqual(['Push A', 'Legs A', 'Push B']);
-  });
-});
-
-/**
- * THE LIST HOLDS ITS PLACE WHILE THE FIGURES ARRIVE (founder A.12 — "tapping the chips flickers").
- * The container's half of this law lives in `__tests__/domain/homePlan.test.ts`; this is the view's:
- * a pending row is a real row with a real name, and it draws NO figure — a blank column must never
- * be read as a lift that carries no weight.
- */
-describe('a chip tap repaints the plan without emptying it', () => {
-  const PENDING = [
-    { exerciseId: 'bb_bench_press', name: 'Bench Press', load: null, sets: 4, band: [8, 8] as [number, number], pending: true },
-    { exerciseId: 'bb_row', name: 'Barbell Row', load: null, sets: 4, band: [8, 8] as [number, number], pending: true },
-  ];
-
-  it('pending rows still name their lifts', () => {
-    const said = texts(mount(<HomeView {...props({ plan: PENDING })} />)).join(' ');
-    expect(said).toContain('Bench Press');
-    expect(said).toContain('Barbell Row');
-  });
-
-  it('…and state no load, no unit and no scheme until the engine has answered', () => {
-    const said = texts(mount(<HomeView {...props({ plan: PENDING })} />)).join('|');
-    expect(said).not.toContain('4×8');
-    expect(said).not.toContain(' kg');
-    expect(said).not.toMatch(/null|undefined|NaN/);
-  });
-
-  it('a pending row is still a door to the form clip', () => {
-    const formed: string[] = [];
-    const r = mount(<HomeView {...props({ plan: PENDING, onForm: (id: string) => void formed.push(id) })} />);
-    act(() => byLabel(r, 'Bench Press')!.props.onPress());
-    expect(formed).toEqual(['bb_bench_press']);
   });
 });
 
