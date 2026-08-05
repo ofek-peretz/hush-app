@@ -138,17 +138,36 @@ describe('the wait is honest', () => {
      * is trying to get away from — and a wait that is evidence something is being done with what she
      * typed. Every line is a value she gave two screens ago.
      */
+    /*
+     * ⛔ THE FOUR FADING SENTENCES BECAME A SIMULATION (founder 2026-08-05). The claim is
+     * unchanged and is now made in numbers rather than in prose: the screen opens on HER three
+     * answers — days, bodyweight, age — each ruler travelling from zero to the figure she set.
+     */
     const src = building();
-    for (const key of ['ob.buildingDays', 'ob.buildingMinutes', 'ob.buildingFor', 'ob.buildingAround']) {
-      expect({ key, used: src.includes(key) }).toEqual({ key, used: true });
-    }
-    expect(src).toContain('inputs.goalText');
-    expect(src).toContain('inputs.limitsText');
+    expect(src).toContain('days={inputs.daysPerWeek}');
+    expect(src).toContain('inputs.weightKg');
+    expect(src).toContain('inputs.age');
   });
 
-  it('⚠️ holds on the last fact rather than looping the list', () => {
-    // A list that starts again reads as a stall dressed up as activity.
-    expect(building()).toContain('Math.min(i + 1, lines.length - 1)');
+  it('⛔ it never draws a lift the coach has not sent', () => {
+    /*
+     * The line this screen must not cross. Animating plausible-looking exercises over a call that
+     * has not returned would be the app performing work it had not done — on the one screen whose
+     * entire job is showing her what it did.
+     *
+     * The muscles ARE real (the catalogue knows them without asking anyone) and their rows stand as
+     * dashes until the answer lands, which is why the placeholder carries names and nothing else.
+     */
+    const src = building();
+    expect(src).toContain('PLACEHOLDER_MUSCLES');
+    expect(src).toMatch(/PLACEHOLDER_MUSCLES\.slice\(0, shownMuscles\)\.map\(\(m\) => \(\{ muscle: m, lifts: \[\{ name: '' \}, \{ name: '' \}\] \}\)\)/);
+    // …and the real rows only ever come from the parsed plan.
+    expect(src).toContain('muscles: buildMuscles(plan, inputs.units)');
+  });
+
+  it('⚠ and it does not drag on once the programme is built', () => {
+    // His own instruction. The fill is 90 ms a row once the answer is in hand, whatever is left.
+    expect(building()).toContain('built ? 90 : MUSCLE_MS');
   });
 
   it('and offers to ask again when it fails, keeping what she typed', () => {

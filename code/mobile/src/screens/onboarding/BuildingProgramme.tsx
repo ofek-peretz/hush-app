@@ -34,6 +34,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { BuildingProgrammeView, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
+import type { CoachPlan } from '@/domain/coachPlan';
+import { muscleOf, exerciseDisplayName } from '@/data/exercises';
+import { displayWeight, unitLabel } from '@/domain/schedule';
 import { db } from '@/data/local/db';
 import { askCoach } from '@/platform/coach/coachClient';
 import { coachFacts } from '@/domain/coachFacts';
@@ -47,7 +51,18 @@ import type { OnboardingParamList } from '@/app/navigation';
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
 
 /** How long each considered line holds before the next replaces it. */
-const LINE_MS = 2600;
+/** The rulers own the opening beat — long enough to read three figures land. */
+const RULER_MS = 2200;
+/** A muscle a second while the coach is still thinking; 90 ms once its answer is in hand. */
+const MUSCLE_MS = 900;
+/** Long enough to READ the name. A reveal she cannot see is not a reveal. */
+const REVEAL_MS = 1800;
+/**
+ * ⚠️ THE MUSCLES A PROGRAMME COVERS, which the app knows without asking anyone — so the screen
+ * has something TRUE to draw during the wait rather than a spinner. Their lifts stand as dashes
+ * until the coach answers; nothing here is a guess about what it will say.
+ */
+const PLACEHOLDER_MUSCLES: readonly string[] = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps'];
 
 export function BuildingProgramme({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -56,31 +71,53 @@ export function BuildingProgramme({ navigation, route }: Props) {
   const started = useRef(false);
 
   /*
-   * WHAT IS BEING CONSIDERED — her own answers, in order. Never a generic stage name: the whole
-   * point is that she recognises every line as something she typed.
+   * ⛔ THE FADING LIST IS GONE (founder 2026-08-05): *"the loading screen is not good enough and
+   * needs redesigning — maybe actually show a simulation of the building process."*
+   *
+   * It cycled four sentences of her own answers, which was right about the PRINCIPLE (never generic
+   * AI noise; every line something she typed) and thin about the execution: four sentences over
+   * ninety seconds is a caption on a wait. The principle survives whole in the rulers — they are
+   * her three numbers, travelling — and the muscles after them are the app showing its work.
    */
-  const lines = [
-    t('ob.buildingDays', { n: inputs.daysPerWeek }),
-    t('ob.buildingMinutes', { n: inputs.workoutMinutes ?? 60 }),
-    ...(inputs.goalText ? [t('ob.buildingFor', { what: inputs.goalText })] : []),
-    ...(inputs.limitsText ? [t('ob.buildingAround', { what: inputs.limitsText })] : []),
-  ];
-  const [line, setLine] = useState(0);
-  const fade = useSharedValue(1);
+  /*
+   * ⛔ THE SIMULATION (founder 2026-08-05) — see `BuildingProgrammeView` for the three movements.
+   *
+   * This holds the CLOCK; the view holds the drawing. What matters here is that neither one ever
+   * gets ahead of the truth:
+   *
+   *   · `fill` runs 0 → 1 over the first beat and is entirely honest — those are her own numbers.
+   *   · the MUSCLES then arrive one at a time, and they are real: the catalogue knows which muscles
+   *     a programme covers without asking anyone. Their lifts stand as DASHES.
+   *   · when the coach's answer lands, the rows fill fast (90 ms each) and the programme is NAMED.
+   *
+   * ⚠️ NOTHING INVENTS A LIFT. Animating plausible-looking exercises over a call that has not
+   * returned would be the app performing work it had not done, on the one screen whose entire job
+   * is showing her what it did.
+   */
+  const [fill, setFill] = useState(0);
+  const [shownMuscles, setShownMuscles] = useState(0);
+  const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: string | null; lifts: number } | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      fade.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }, () => {
-        fade.value = withTiming(1, { duration: 260 });
-      });
-      // Held, not looped past the end: the last fact stays up rather than starting the list again,
-      // which would read as a stall dressed up as activity.
-      setTimeout(() => setLine((i) => Math.min(i + 1, lines.length - 1)), 260);
-    }, LINE_MS);
-    return () => clearInterval(id);
-  }, [fade, lines.length]);
+    const t0 = setTimeout(() => setFill(1), 120);
+    // The rulers own the first beat; then the muscles begin arriving whether or not the coach has
+    // answered, because the muscles are ours to know.
+    const t1 = setTimeout(() => setShownMuscles(1), RULER_MS);
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+    };
+  }, []);
 
-  const lineStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  useEffect(() => {
+    if (shownMuscles === 0) return;
+    const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
+    if (shownMuscles >= total) return;
+    /* ⚠️ FAST ONCE THE ANSWER IS IN HAND — his own instruction: it must not drag on after the
+       programme is built. Slow while waiting, so the screen still has somewhere to go. */
+    const id = setTimeout(() => setShownMuscles((n) => n + 1), built ? 90 : MUSCLE_MS);
+    return () => clearTimeout(id);
+  }, [shownMuscles, built]);
 
   /*
    * ⛔ HER PROFILE AS IT **WILL** BE — ASSEMBLED, NOT WRITTEN.
@@ -129,7 +166,22 @@ export function BuildingProgramme({ navigation, route }: Props) {
       const parsed = parseCoachPlan(reply.text);
       if (!parsed.ok || !parsed.answer.plan) { setFailed(true); return; }
       await db.recordCoachAnswer(parsed.answer, new Date().toISOString());
-      navigation.replace('ProgramCreated', { inputs });
+      /*
+       * ⛔ THE ANSWER BECOMES THE SIMULATION'S SUBJECT before it becomes a navigation. The screen
+       * has been drawing muscles with dashes; now it draws the real lifts, fast, and names the
+       * programme — which is the beat the founder asked for and the one thing `CoachPlan` has
+       * always carried and nothing has ever shown at full size.
+       */
+      const plan = parsed.answer.plan;
+      setBuilt({
+        muscles: buildMuscles(plan, inputs.units),
+        name: plan.title ?? null,
+        lifts: plan.sessions.reduce((n, x) => n + x.blocks.reduce((m, b) => m + b.items.length, 0), 0),
+      });
+      setShownMuscles(1);
+      // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
+      // and one that outstays the work is the dragging he asked me to avoid.
+      setTimeout(() => navigation.replace('ProgramCreated', { inputs }), REVEAL_MS);
     } catch {
       setFailed(true);
     }
@@ -141,32 +193,80 @@ export function BuildingProgramme({ navigation, route }: Props) {
     void build();
   }, [build]);
 
-  return (
-    /*
-     * ⛔ NO PROGRESS COUNTER. Every step before this said "4 of 6" because she could answer it and
-     * move on. This one she cannot: it is the RESULT of the six, not a seventh. A counter here
-     * would promise a step she never takes, and "7 of 7" beside a screen that is waiting reads as a
-     * stall rather than an arrival.
-     */
-    <OnboardingScaffold
-      legend={t(failed ? 'ob.buildingFailedLegend' : 'ob.buildingLegend')}
-      title={t(failed ? 'ob.buildingFailedTitle' : 'ob.buildingTitle')}
-      headGap={32}
-      footer={
-        failed ? (
-          <Button variant="primary" size="lg" block label={t('ob.buildingRetry')} onPress={() => void build()} />
-        ) : undefined
-      }
-    >
-      {failed ? (
+  /*
+   * ⛔ THE FAILURE KEEPS THE SCAFFOLD; THE BUILD DOES NOT.
+   *
+   * A failed call is a message and a retry button — the scaffold's shape, which every other step of
+   * onboarding wears, is exactly right for that. The SIMULATION is not a step: it is the result of
+   * the six she answered, and it needs the whole screen. Wrapping it in a titled scaffold would put
+   * "Reading what you told me." above a screen whose entire job is showing her the reading happen.
+   */
+  if (failed) {
+    return (
+      <OnboardingScaffold
+        legend={t('ob.buildingFailedLegend')}
+        title={t('ob.buildingFailedTitle')}
+        headGap={32}
+        footer={<Button variant="primary" size="lg" block label={t('ob.buildingRetry')} onPress={() => void build()} />}
+      >
         <Text style={styles.failed}>{t('ob.buildingFailedSub')}</Text>
-      ) : (
-        <Animated.View style={[styles.considering, lineStyle]}>
-          <Text style={styles.line}>{lines[line]}</Text>
-        </Animated.View>
-      )}
-    </OnboardingScaffold>
+      </OnboardingScaffold>
+    );
+  }
+
+  /*
+   * ⚠️ WHAT IS DRAWN IS ALWAYS WHAT IS KNOWN. Before the answer: her three numbers, then the real
+   * muscles with dashed rows. After it: the real lifts, fast, and the programme's name.
+   */
+  const muscles: BuildMuscle[] = built
+    ? built.muscles.slice(0, shownMuscles)
+    : PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: [{ name: '' }, { name: '' }] }));
+
+  /* ⚠️ `weightKg` and `age` are optional on the intake type; a ruler with no number to travel to
+     sits at zero rather than crashing on the last screen before her programme. */
+  return (
+    <BuildingProgrammeView
+      days={inputs.daysPerWeek}
+      weight={Math.round(displayWeight(inputs.weightKg ?? 0, inputs.units) ?? 0)}
+      age={inputs.age ?? 0}
+      unit={unitLabel(inputs.units)}
+      fill={fill}
+      muscles={muscles}
+      programmeName={built?.name ?? null}
+      summary={
+        built?.name
+          ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })
+          : null
+      }
+    />
   );
+}
+
+/**
+ * The coach's answer, grouped by muscle — his correction: *"show the muscle name and then all the
+ * exercises chosen for that muscle, with the weight, reps and sets."*
+ *
+ * ⚠️ FIRST OCCURRENCE WINS per lift, the same reading every other surface makes: a lift the coach
+ * put on two days is one prescription, not two.
+ */
+export function buildMuscles(plan: CoachPlan, units: 'kg' | 'lb'): BuildMuscle[] {
+  const byMuscle = new Map<string, BuildLift[]>();
+  const seen = new Set<string>();
+  for (const session of plan.sessions) {
+    for (const block of session.blocks) {
+      for (const item of block.items) {
+        if (item.kind !== 'reps' || seen.has(item.ex)) continue;
+        seen.add(item.ex);
+        const m = muscleOf(item.ex) ?? 'Other';
+        const load = item.load == null ? null : `${String(+((displayWeight(item.load, units) ?? 0).toFixed(2)))} ${unitLabel(units)}`;
+        const [lo, hi] = item.reps;
+        const scheme = `${block.rounds} × ${hi > lo ? `${lo}–${hi}` : lo}`;
+        const row: BuildLift = { name: exerciseDisplayName(item.ex), load, scheme };
+        byMuscle.set(m, [...(byMuscle.get(m) ?? []), row]);
+      }
+    }
+  }
+  return [...byMuscle].map(([muscle, lifts]) => ({ muscle, lifts }));
 }
 
 const styles = StyleSheet.create({
