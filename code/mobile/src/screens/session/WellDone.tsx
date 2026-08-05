@@ -770,6 +770,7 @@ export function SessionEarned({
   answered,
   onDone,
   onRecord,
+  previewSheetOpen,
 }: {
   savedLegend: string;
   /** Ended early with real work logged — the closing sentence says so instead. */
@@ -797,10 +798,18 @@ export function SessionEarned({
   /** Offered only when this session set a real record (§9.1) — there is no card for a session that
    *  set none, and a share button that had nothing true to put on one would be the fabrication the
    *  whole card module exists to refuse. */
+  /**
+   * ⚠️ GALLERY ONLY — opens "what changed" on mount so the harness can draw it.
+   *
+   * The gallery cannot press a button, and **a state nobody can produce is a state nobody looks
+   * at** — which is precisely how the lift-done beat shipped as four dots on a black screen. Never
+   * set in the app.
+   */
+  previewSheetOpen?: boolean;
 }) {
   const { t } = useCopy();
   /** Whether "what changed" is open over the poster. Closed until she asks (founder 2026-08-05). */
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(previewSheetOpen ?? false);
   /** The word a held lift wears — read once so the face check below is done once. */
   const holdsWord = t('complete.holds');
   const nothingDecided = decisions.length === 0 && volume.length === 0;
@@ -934,7 +943,24 @@ export function SessionEarned({
             defect this same batch fixed on the Mirror, where a count and its rows updated by
             different rules and the screen printed "10 changes" over nothing.
           */}
-          {answered ? (
+          {!answered ? (
+            /*
+             * ⚠️ THE FIFTEEN SECONDS BEFORE THE BOX EXISTS.
+             *
+             * `answered` is false while the coach's call is out, and nothing was drawn there — so
+             * the box appeared out of nowhere under her thumb, or never at all if she tapped
+             * Finish first. **The most valuable thing on the screen was invisible to anyone
+             * quick.**
+             *
+             * A quiet line, in the box's own slot, holding its place. It states what is happening
+             * and claims nothing: there is no count yet, and a count is a claim. It is not a
+             * control and it never blocks Finish — she may leave, and the decisions are on Today
+             * and in the Saturday letter either way.
+             */
+            <View style={[styles.decisionBox, styles.decisionBoxThinking]}>
+              <Text style={styles.decisionHeld}>{t('complete.stillReading')}</Text>
+            </View>
+          ) : (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -965,7 +991,7 @@ export function SessionEarned({
                 </>
               )}
             </Pressable>
-          ) : null}
+          )}
         </ScrollView>
 
         {/* WHAT CHANGED — the rows, when she asks for them. */}
@@ -1303,16 +1329,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(241,238,229,0.12)',
   },
-  receipt: { alignSelf: 'stretch', marginTop: 18, gap: 10 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 14 },
-  receiptName: { flex: 1, fontFamily: font.sans, fontSize: 15, color: stage.ink1, textAlign: 'left' },
-  receiptFigure: {
-    fontFamily: font.mono,
-    fontVariant: ['tabular-nums'],
-    fontSize: 14,
-    color: stage.ink1,
-    textAlign: 'left',
-  },
   posterPartial: {
     marginTop: 20,
     fontFamily: font.serif,
@@ -1341,6 +1357,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(169,196,159,0.06)',
   },
   decisionBoxPressed: { backgroundColor: 'rgba(169,196,159,0.13)' },
+  // Waiting is not a decision, so it does not wear the accent — a plain rim, holding the slot.
+  decisionBoxThinking: { borderColor: 'rgba(241,238,229,0.16)', backgroundColor: 'transparent' },
   decisionLead: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   decisionNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: signal[0], textAlign: 'left' },
   decisionWords: { flex: 1, gap: 1 },

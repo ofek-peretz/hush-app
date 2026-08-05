@@ -25,6 +25,7 @@ import type { Entitlement } from '@/domain/entitlement';
 // Type-only for the decision shape; `appendDecisions` is the pure accumulator that owns the cap.
 import { appendDecisions, type CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan } from '@/domain/coachPlan';
+import { currentWeekOpen } from '@/domain/weekCadence';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
 import type { CoachQuotaState } from '@/domain/coachQuota';
 
@@ -91,6 +92,18 @@ const K = {
   /* The one before it. Kept for exactly one reason — see `saveCoachPlan`: the direction a load
    * moved is a fact about TWO programmes, and the founder's law says a direction is a colour. */
   coachPlanPrev: 'hush.coach.plan.prev',
+  /*
+   * ⛔ THE PROGRAMME AS IT STOOD WHEN THIS WEEK OPENED — the other end of "what changed this week".
+   *
+   * `coachPlanPrev` is the plan before the LAST call, and the coach now answers after every
+   * workout. So by Wednesday it is one session old, which is the right window for Today's pill
+   * ("what that workout changed") and the wrong one for a letter titled "what changed this week":
+   * the Mirror would report the last session and call it the week.
+   *
+   * Both surfaces read THIS instead, so they cannot drift — which is the whole of
+   * `thePillAndTheLetterCountTheSameThing`, and the third time that law has been re-opened.
+   */
+  coachPlanWeek: 'hush.coach.plan.week',
   /* When she last opened the Saturday letter, as epoch ms. The changes pill wears an unseen dot
    * until a decision newer than this exists — one comparison, no second flag to fall out of step. */
   coachLetterSeen: 'hush.coach.letter.seen',
@@ -360,9 +373,27 @@ export const db = {
      */
     const outgoing = await getJSON<CoachPlan>(K.coachPlan);
     if (outgoing) await setJSON(K.coachPlanPrev, outgoing);
+    /*
+     * …AND THE WEEK'S ANCHOR, ROTATED ONCE PER WEEK RATHER THAN ONCE PER CALL.
+     *
+     * On the first save after Saturday 20:30, the OUTGOING plan is by definition the one she
+     * carried into this week — so that is what the anchor becomes, stamped with the week it
+     * belongs to. Every later save in the same week leaves it alone.
+     *
+     * ⚠️ `outgoing` may be absent on the very first programme, and then there is no anchor and no
+     * count — which is correct: a first programme is a starting point, not a set of changes.
+     */
+    if (outgoing) {
+      const weekOpen = currentWeekOpen(Date.now());
+      const anchor = await getJSON<{ at: number; plan: CoachPlan }>(K.coachPlanWeek);
+      if (!anchor || anchor.at < weekOpen) await setJSON(K.coachPlanWeek, { at: weekOpen, plan: outgoing });
+    }
     await setJSON(K.coachPlan, p);
   },
   loadCoachPlanPrev: () => getJSON<CoachPlan>(K.coachPlanPrev),
+  /** The programme this week opened on — the pair both change counters read. See `coachPlanWeek`. */
+  loadCoachPlanWeek: async (): Promise<CoachPlan | null> =>
+    (await getJSON<{ at: number; plan: CoachPlan }>(K.coachPlanWeek))?.plan ?? null,
 
   /* ── How the last post-session call went ───────────────────────────────────────────────────── */
 

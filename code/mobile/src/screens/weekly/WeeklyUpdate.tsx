@@ -33,6 +33,8 @@ import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { coachBrief } from '@/domain/coachEarned';
+import { coachChanges } from '@/domain/coachWeek';
+import type { CoachPlan } from '@/domain/coachPlan';
 import type { CoachDecision } from '@/domain/coachLog';
 import { track } from '@/platform/telemetry';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
@@ -212,7 +214,20 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    */
   const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
   const fromCoach = React.useMemo(() => coachBrief(coachLog, app.weekOpenMs), [coachLog, app.weekOpenMs]);
-  const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;
+  /*
+   * ⛔ THE TWO PROGRAMMES, BECAUSE A CHANGE IS THE DIFFERENCE BETWEEN THEM (2026-08-05).
+   *
+   * ⚠️ THIS FILE ALREADY CARRIES THE SCAR. Its own note two blocks up records the 2026-08-03 bug:
+   * *"1 CHANGE on Today, NOTHING CHANGED in here — two screens counting two different things."*
+   * Fixing Today's pill to count measured differences and leaving this on `fromCoach.count` would
+   * have re-opened exactly that, in the opposite direction: Today saying 2 and the letter saying 10.
+   *
+   * So both screens ask `coachChanges`, and the rows below ARE those changes rather than a parallel
+   * list that happens to be about the same week.
+   */
+  const [plans, setPlans] = useState<{ now: CoachPlan | null; before: CoachPlan | null }>({ now: null, before: null });
+  const changes = React.useMemo(() => coachChanges(plans.now, plans.before), [plans]);
+  const changedCount = changes?.length ?? 0;
   const steady = loaded && changedCount === 0;
   useEffect(() => {
     if (!steady) return;
@@ -294,11 +309,16 @@ export function WeeklyUpdate({ navigation, route }: Props) {
     let active = true;
     void (async () => {
       try {
-        const [history, weekPlan] = await Promise.all([
+        const [history, weekPlan, prevPlan] = await Promise.all([
           db.loadHistory(),
           db.loadCoachPlan().catch(() => null),
+          // The programme this WEEK opened on — the other half of every change on this screen, and
+          // the same pair Today's pill reads. `coachPlanPrev` is one SESSION old, which would make
+          // a letter about the week report only its last workout.
+          db.loadCoachPlanWeek().catch(() => null),
         ]);
         if (!active) return;
+        setPlans({ now: weekPlan ?? null, before: prevPlan ?? null });
         /*
          * ⛔ THIS BAND WAS MEASURING THE WRONG WEEK (founder 2026-08-05, same screenshot as above:
          * "0/4 workouts, 0 t moved" on a day he had trained).
@@ -376,19 +396,38 @@ export function WeeklyUpdate({ navigation, route }: Props) {
      * control stealing the job of the thing underneath it (the founder's law: let the control
      * speak). So the sentence is simply on the row.
      */
-    if (fromCoach) {
-      const rows: LetterRow[] = fromCoach.lines.map((l, i) => ({
-        key: l.ex ?? `note_${i}`,
-        name: l.ex ? exerciseDisplayName(l.ex) : '',
-        from: '',
-        to: '',
-        suffix: '',
-        dir: 'hold' as LoadDirection,
-        magnitude: 0,
-        slotId: null,
-        line: l.say,
-      }));
-      return rows;
+    if (changes) {
+      /*
+       * ⛔ A ROW IS A CHANGE, AND ITS SENTENCE IS THE COACH'S (rebuilt 2026-08-05).
+       *
+       * These used to be the coach's NOTES — one row per thing it wrote about, which meant a lift
+       * it held and explained got a row in a letter titled "What changed". The founder's ruling:
+       * *"a change is only if there is a drop or a raise or added sets or anything else."*
+       *
+       * So the rows are the measured differences, and the coach's sentence is JOINED to the lift it
+       * is about. A change with no sentence still draws — the figure is a fact and she is owed it —
+       * and a sentence with no change is not in a letter about changes.
+       *
+       * ⚠️ THE COUNT IS `changes.length` AND SO IS THIS. One derivation, which is the whole point.
+       */
+      const saidFor = new Map((fromCoach?.lines ?? []).filter((l) => l.ex).map((l) => [l.ex as string, l.say]));
+      const rows: LetterRow[] = changes.map((c) => {
+        const structural = c.kind === 'added' || c.kind === 'dropped';
+        return {
+          key: `${c.ex}:${c.kind}`,
+          name: exerciseDisplayName(c.ex),
+          from: structural || c.from == null ? '' : String(+c.from.toFixed(2)),
+          to: structural || c.to == null ? '' : String(+c.to.toFixed(2)),
+          suffix: c.kind === 'sets' ? t('weekly.setsUnit') : '',
+          // A lift arriving or leaving has no direction — it did not move, it appeared. It reads in
+          // the neutral tone, which is the same three-way law every other surface obeys.
+          dir: (c.direction ?? 'hold') as LoadDirection,
+          magnitude: c.from != null && c.to != null ? Math.abs(c.to - c.from) : 0,
+          slotId: null,
+          line: saidFor.get(c.ex) ?? (structural ? t(c.kind === 'added' ? 'weekly.liftAdded' : 'weekly.liftDropped') : null),
+        };
+      });
+      return rows.sort((a, b) => b.magnitude - a.magnitude);
     }
     const lifts = (view?.workouts ?? []).flatMap((w) => w.lifts.filter((l) => l.change));
     const rows: LetterRow[] = lifts.map((l) => {
@@ -446,7 +485,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
      * **A count and its rows must be one derivation.** The dependency is the fix; the memo was
      * never the problem, its list was.
      */
-  }, [fromCoach, view, units, t]);
+  }, [changes, fromCoach, view, units, t]);
   const shown = showAll ? allChanges : allChanges.slice(0, LETTER_ROWS);
 
   return (

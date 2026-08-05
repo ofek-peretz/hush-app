@@ -1441,6 +1441,26 @@ export const GALLERY: GalleryEntry[] = [
       <Logged units="kg" confirm={{ weight: 34, reps: 13, n: 3, m: 4, band: [8, 10] }} />
     </InApp>
   ) },
+  /*
+     ⛔ THE LIFT-DONE BEAT, AND THE STATE THAT SHIPPED AS A BLANK SCREEN (founder 2026-08-05):
+     *"the exercise-finished screen shows a black screen with only dots at the top."*
+
+     It drew the pips and then a band mark that only exists when the step HAS a band — so on a fixed
+     rep count, a hold or a distance, the entire screen was four green dots for 1.4 seconds. **This
+     page could not produce it**, which is the whole reason it survived: the last set of a lift only
+     happens inside a live session, and a live session almost always has a band. Two entries now,
+     because the difference between them is the bug.
+  */
+  { id: '2.3f', label: 'The lift is done', status: 'live', note: 'every pip filled, the lift named, the band under it', render: () => (
+    <InApp>
+      <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 4, m: 4, band: [8, 10], lift: 'bb_bench_press' }} />
+    </InApp>
+  ) },
+  { id: '2.3g', label: 'The lift is done — no band', status: 'live', note: '⚠️ this was four dots on black; the name is the floor now', render: () => (
+    <InApp>
+      <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 4, m: 4, lift: 'bb_bench_press' }} />
+    </InApp>
+  ) },
   /* THE BEAT THAT NOBODY COULD SEE. 2.3 above mounts `Logged` WITH a correction, so only the
      correction form was ever on this page — the plain "Set recorded" form had no entry at all, and
      survived a whole rebuild unlooked-at until the founder met it on a device (C.13). It no longer
@@ -1666,6 +1686,81 @@ export const GALLERY: GalleryEntry[] = [
             reason: { key: 'explain.rungOutOfReach.text', params: { ex: 'Barbell Row' } } },
         ]}
         volume={[{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } }]}
+        onDone={noop}
+        onRecord={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⛔ WHAT THE BOX OPENS — and the harness cannot press it, so it is handed the open state.
+    The decisions moved behind a door on 2026-08-05 (founder: *"a nicely framed box saying X
+    decisions were made … pressing it opens the screen of what changed"*), which means the rows
+    themselves left this page unless something could raise them. Same seam as `previewPlan`.
+  */
+  { id: '2.5d', label: 'What changed — opened', status: 'live', note: 'the rows the decisions box holds', render: () => (
+    <InApp>
+      <SessionEarned
+        poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
+        workoutName="Lower A"
+        savedLegend="Upper A · Saved"
+        partial={false}
+        durationLabel="52"
+        kcal={412}
+        tonnes={11.7}
+        answered
+        previewSheetOpen
+        decisions={[
+          { key: 'bb_bench_press', name: 'Barbell Bench Press', from: '34', to: '41', held: false,
+            reason: { key: 'explain.progressLoad.text', params: { ex: 'Barbell Bench Press', delta: 7 } } },
+          { key: 'lat_pulldown', name: 'Lat Pulldown', from: null, to: null, held: false, silent: true,
+            reason: { text: 'Your last set fell to six reps, so I have taken this back to 42.5 kg.' } },
+        ]}
+        volume={[{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: { key: 'explain.volumeUp.text', params: { muscle: 'chest' } } }]}
+        onDone={noop}
+        onRecord={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⚠️ A WEEK WHERE NOTHING NEEDED CHANGING. The same frame, no figure, no chevron, not pressable
+    — a hold is a verdict she is owed, but it is not a door, because there is nothing behind it.
+  */
+  { id: '2.5e', label: 'The poster — nothing changed', status: 'live', note: 'a verdict, not a door', render: () => (
+    <InApp>
+      <SessionEarned
+        poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
+        workoutName="Lower A"
+        savedLegend="Upper A · Saved"
+        partial={false}
+        durationLabel="52"
+        kcal={412}
+        tonnes={4.2}
+        answered
+        decisions={[]}
+        volume={[]}
+        onDone={noop}
+        onRecord={noop}
+      />
+    </InApp>
+  ) },
+  /*
+    ⚠️ AND THE COACH HAS NOT ANSWERED YET. `answered` is false for about fifteen seconds after a
+    real workout — the box draws NOTHING there, because a count is a claim and there is no count.
+    The one state a live harness always races past.
+  */
+  { id: '2.5f', label: 'The poster — still thinking', status: 'live', note: 'no box: a count with no answer behind it is a claim', render: () => (
+    <InApp>
+      <SessionEarned
+        poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
+        workoutName="Lower A"
+        savedLegend="Upper A · Saved"
+        partial={false}
+        durationLabel="52"
+        kcal={412}
+        tonnes={4.2}
+        answered={false}
+        decisions={[]}
+        volume={[]}
         onDone={noop}
         onRecord={noop}
       />

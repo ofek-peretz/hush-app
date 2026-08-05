@@ -3009,15 +3009,6 @@ const styles = StyleSheet.create({
   caliper: { flexDirection: 'row', alignItems: 'stretch', gap: 14 },
   caliperTick: { width: 1.6, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.32)' },
   caliperCol: { alignItems: 'center', paddingVertical: 4 },
-  askNum: {
-    fontFamily: font.monoMedium,
-    fontVariant: ['tabular-nums'],
-    fontSize: 30,
-    letterSpacing: trackingPx(30, tracking.tight),
-    color: up.stage,
-    includeFontPadding: false,
-    textAlign: 'left',
-  },
   /* The delta rides the hero's own baseline — no line of its own, because it has no vertical cost. */
   heroNews: {
     fontFamily: font.monoSemibold,
@@ -3025,13 +3016,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     marginStart: 8,
     includeFontPadding: false,
-    textAlign: 'left',
-  },
-  askWord: {
-    fontFamily: font.sansMedium,
-    fontSize: 14,
-    letterSpacing: trackingPx(14, tracking.legend),
-    color: stage.ink2,
     textAlign: 'left',
   },
 

@@ -54,8 +54,30 @@ describe('the letter reads the same number the pill did', () => {
     expect(letter()).toContain('const steady = loaded && changedCount === 0;');
   });
 
-  it('and `changedCount` prefers the coach, falling back to the engine only when there is none', () => {
-    expect(letter()).toContain('const changedCount = fromCoach ? fromCoach.count : view?.changedCount ?? 0;');
+  /**
+   * ⛔ STRENGTHENED 2026-08-05. This pinned `fromCoach ? fromCoach.count : view?.changedCount ?? 0`,
+   * which was the right fix at the time — both surfaces read the coach's log. Then Today's pill
+   * moved to counting measured DIFFERENCES (a hold is not a change) and this line did not, which
+   * would have re-opened this very law's bug in the opposite direction: Today saying 2 and the
+   * letter saying 10.
+   *
+   * Both now ask `coachChanges`, and the letter's ROWS are those changes rather than a parallel
+   * list about the same week — so the count and its rows are one derivation on both screens.
+   */
+  it('and `changedCount` is the measured difference, the same one the pill counts', () => {
+    expect(letter()).toContain('const changes = React.useMemo(() => coachChanges(plans.now, plans.before)');
+    expect(letter()).toContain('const changedCount = changes?.length ?? 0;');
+    /*
+     * ⚠️ AND BOTH READ THE WEEK'S ANCHOR, not `coachPlanPrev`.
+     *
+     * The coach answers after EVERY workout, so `prev` is one session old by Wednesday. Counting
+     * against it gives Today the right number ("what that workout changed") and the letter the
+     * wrong one — a screen titled "what changed this week" reporting only its last session. Both
+     * ask `loadCoachPlanWeek`, which rotates once per week rather than once per call.
+     */
+    expect(read('src/screens/home/Home.tsx')).toContain('coachChanges(coachPlan, weekAnchor)');
+    expect(read('src/screens/home/Home.tsx')).toContain('db.loadCoachPlanWeek()');
+    expect(letter()).toContain('db.loadCoachPlanWeek()');
   });
 
   it('⚠️ the count is declared BEFORE the flag that uses it', () => {
@@ -142,11 +164,13 @@ describe('⛔ and on day one there is nothing to have changed', () => {
    * moved, because the count was counting the coach's NOTES and a hold gets a note. See
    * `aCountAndItsRowsAreOneDerivation`.
    */
-  it('the pill counts differences against the previous programme, and nothing before there is one', () => {
+  it('the pill counts differences against the week it opened on, and nothing before there is one', () => {
     const src = read('src/screens/home/Home.tsx');
-    expect(src).toContain('setBriefCount(coachChanges(coachPlan, before)?.length ?? null);');
-    // …and `before` is the stored previous plan, not something derived on the spot.
-    expect(src).toContain('db.loadCoachPlanPrev()');
+    expect(src).toContain('setBriefCount(coachChanges(coachPlan, weekAnchor)?.length ?? null);');
+    // …and the anchor is stored, not derived on the spot — and it is absent on the first
+    // programme, which is what makes the count `null` rather than zero on day one.
+    expect(src).toContain('db.loadCoachPlanWeek()');
+    expect(read('src/data/local/db.ts')).toContain('if (!anchor || anchor.at < weekOpen)');
   });
 
   it('⚠️ and the pill is hidden on a null count, not drawn as zero', () => {

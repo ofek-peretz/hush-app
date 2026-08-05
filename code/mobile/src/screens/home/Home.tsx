@@ -387,10 +387,12 @@ export function Home({ navigation, route }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const [log, before, letterSeen] = await Promise.all([
+        const [log, before, letterSeen, weekAnchor] = await Promise.all([
           db.loadCoachLog().catch(() => null),
           db.loadCoachPlanPrev().catch(() => null),
           db.loadCoachLetterSeen().catch(() => null),
+          // The programme this WEEK opened on — what the pill counts against. See `coachPlanWeek`.
+          db.loadCoachPlanWeek().catch(() => null),
         ]);
         if (cancelled) return;
         const fromCoach = coachBrief(log, app.weekOpenMs);
@@ -464,7 +466,7 @@ export function Home({ navigation, route }: Props) {
          * programmes the app already holds — see its header for why this cannot be asked of the
          * coach — and a hold is not in the answer.
          */
-        setBriefCount(coachChanges(coachPlan, before)?.length ?? null);
+        setBriefCount(coachChanges(coachPlan, weekAnchor)?.length ?? null);
         /*
          * THE UNSEEN DOT, from one comparison. A decision newer than her last visit to the letter is
          * news she has not read. There is no second "seen" flag to write and therefore none to fall

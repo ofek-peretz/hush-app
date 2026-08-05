@@ -112,7 +112,11 @@ describe('⛔ the count and the rows cannot drift', () => {
     // while the count beside them recomputed and printed 10.
     const src = mirror();
     const memo = src.slice(src.indexOf('const allChanges'), src.indexOf('const shown'));
-    expect(memo).toMatch(/\}, \[fromCoach[^\]]*\]\)/);
+    const deps = memo.match(/\}, \[([^\]]*)\]\)/)?.[1] ?? '';
+    // Both inputs the rows are built from. `changes` is the list itself; `fromCoach` carries the
+    // sentence joined onto each row, and either one arriving late used to leave the rows empty.
+    expect(deps).toContain('changes');
+    expect(deps).toContain('fromCoach');
   });
 
   it("the week's band opens where the week opens", () => {
