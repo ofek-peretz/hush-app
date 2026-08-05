@@ -47,9 +47,17 @@ export interface PreWorkoutProps {
   shape?: string | null;
   lifts: PlanLift[];
   units: 'kg' | 'lb';
-  /** How many of these the coach changed — the moss pill, and the door into the Mirror. */
+  /**
+   * ⛔ HOW MANY OF *THESE* LIFTS MOVED — and it is a FACT, not a door (audit, 2026-08-05).
+   *
+   * The first cut made it a button into the Mirror, which re-opened the bug I had spent the morning
+   * fixing on the other two screens: the pill would say "2 changes" about this workout and land her
+   * on a letter saying "5 changes" about the week. **Two screens, two answers, one word.**
+   *
+   * The ROWS are the doors — each changed lift opens its own reason — so the pill has nothing to
+   * hide behind it and no reason to be pressable. It states what the list beneath it shows.
+   */
   changes?: number | null;
-  onChanges?: () => void;
   onForm: (exerciseId: string) => void;
   onWhy?: (exerciseId: string) => void;
   onStart: () => void;
@@ -93,17 +101,11 @@ export function PreWorkoutView(props: PreWorkoutProps) {
           <View style={styles.metaRow}>
             {props.shape ? <Legend size={11} track={0.18}>{props.shape}</Legend> : null}
             {changed ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('home.briefChanges', { count: props.changes! })}
-                onPress={props.onChanges}
-                hitSlop={8}
-                style={({ pressed }) => [styles.pill, pressed && styles.dim]}
-              >
+              <View style={styles.pill}>
                 <Legend size={11} track={0.08} weight="semibold" tone="accent">
                   {t('home.briefChangesShort', { count: props.changes! })}
                 </Legend>
-              </Pressable>
+              </View>
             ) : null}
           </View>
 

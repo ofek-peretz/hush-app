@@ -610,32 +610,15 @@ function RangeMark() {
   );
 }
 
-/**
- * The load, formatted for display — "41", "" for bodyweight.
- */
-function figureLoad(lift: HomePlanLift, units: 'kg' | 'lb'): string {
-  // A pre-written figure carries its own numbers; a load column beside it would print twice.
-  if (lift.detail != null) return '';
-  if (lift.load == null) return '';
-  const w = displayWeight(lift.load, units);
-  return w == null ? '' : String(+w.toFixed(2));
-}
-
-/**
- * The unit, in shadow beside the load — " kg" / " lb", and nothing at all for a bodyweight lift.
+/*
+ * ⛔ THE FIGURE ASSEMBLY LEFT WITH THE TABLE (2026-08-05). `figureLoad`, `figureUnit`,
+ * `figureScheme` and `planFigureLabel` are the one place the app decides how a prescription READS
+ * — "54 kg · 4×8–10" — and they now live in `components/PlanLifts`, beside the rows they format.
  *
- * ════ THE UNIT IS BACK (founder A.16→A.5, 2026-07-29: "the unit is missing") ════
- * v7 2.1 took it off on the argument that the plan is a COLUMN of loads in one declared unit, so
- * repeating "kg" six times turns a scannable column into six sentences. The founder overturned
- * that on the device, and he is right for a reason the argument missed: this is the FIRST screen
- * of the day, and every row already ends in a scheme ("· 4×8–10"), so the number was never alone
- * in a bare column — it was a bare number inside a sentence. It is set in the muted tone the
- * scheme wears, so the LOAD is still the only lit thing in the figure.
+ * ⚠️ LEAVING A SECOND COPY HERE IS EXACTLY THE DRIFT `bandOf` HAD TO BE INVENTED TO END: two
+ * ladders for one fact, eight hundred lines apart, and the shorter one winning on the screen that
+ * mattered. The table is not on this screen any more; neither is its vocabulary.
  */
-function figureUnit(lift: HomePlanLift, units: 'kg' | 'lb'): string {
-  if (lift.detail != null) return '';
-  return lift.load == null ? '' : ` ${unitLabel(units)}`;
-}
 
 /**
  * The week's workouts with WHAT IS LEFT FIRST — finished ones fall to the end of the strip
@@ -653,19 +636,6 @@ function whatIsLeftFirst(workouts: HomeWorkoutOption[]): HomeWorkoutOption[] {
   return [...workouts.filter((w) => !w.done), ...workouts.filter((w) => w.done)];
 }
 
-/** The scheme, tight and with an EN-dash range: " · 4×8–10" (leading separator when a load precedes). */
-function figureScheme(lift: HomePlanLift): string {
-  if (lift.detail != null) return lift.detail;
-  const [lo, hi] = lift.band;
-  const scheme = `${lift.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
-  return lift.load == null ? scheme : ` · ${scheme}`;
-}
-
-/** The whole right-hand figure, as one string, for the row's accessibility label. */
-function planFigureLabel(lift: HomePlanLift, units: 'kg' | 'lb'): string {
-  const load = figureLoad(lift, units);
-  return load ? `${load}${figureUnit(lift, units)}${figureScheme(lift)}` : figureScheme(lift);
-}
 
 /** The short weekday label for the day strip's column i (0 = Sunday), in the active locale. */
 function weekdayShort(i: number): string {
@@ -683,6 +653,10 @@ function RestFact({ value, label, accent }: { value: string; label: string; acce
   );
 }
 
+/* ⚠️ Twelve style keys left with the lift table on 2026-08-05 — `plan`, `planRow`, `planName`,
+   `planFigure` and the five `figure*` spans among them. They are in `components/PlanLifts` now.
+   An orphaned style is what `styles.ask` became when the band graphic was deleted around it, and
+   it then rendered the second largest figure on the set screen at the platform default for a week. */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
@@ -772,46 +746,20 @@ const styles = StyleSheet.create({
   shapeLine: { color: color.textSecondary },
 
   // ── the plan table ──
-  plan: { marginTop: 2 },
-  planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    // THE PLAN IS THE POINT OF THIS SCREEN (founder 2026-07-28). It was set as a dense list — 44 px
-    // rows, a 15 pt name, a 13.5 pt load — under a card that had room to spare. She reads it to
-    // decide whether to go to the gym; it should be the easiest thing here to read, not the
-    // tightest.
-    minHeight: 54,
-    paddingVertical: 14,
-    paddingHorizontal: 2,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(241,238,229,0.10)',
-  },
-  planRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.10)' },
   // The FIGURE is never squeezed: it is the fact the row exists for. The name shrinks and
   // truncates around it (handoff: the load span is `flex:none; white-space:nowrap`).
-  planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
   // A.15 — no `numberOfLines` on the name: it WRAPS. `lineHeight` is set so a two-line name reads
   // as one label rather than two rows of text.
-  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.md, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
-  planFigure: { flexGrow: 0, flexShrink: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, textAlign: 'right' },
-  figureQuiet: { color: color.textSecondary, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   // ── the figure's META: the unit and the scheme ──
   // The LOAD keeps the founder's 2026-07-28 enlargement (17 pt — "she reads it to decide whether to
   // go to the gym"). Its meta does not: the canonical handoff sets the whole figure at 13.5, and
   // once the unit joined the row (A.5) a 17 pt scheme was taking half the row's width from the
   // NAME, which is what pushed a long name onto a third line (A.15). Small meta is also the
   // hierarchy this row is supposed to have — one lit fact, everything else in shadow.
-  figureMeta: { fontSize: 13.5 },
   // The unit is a caption on the number, never part of the fact the engine decided — so it wears
   // the muted tone whether or not the load moved.
-  figureUnit: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   // The face only — the COLOUR is `directionTone(lift.changed)` at the call site, so this row can
   // never hold an opinion about direction that the rest of the app does not share.
-  figureChanged: { fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
-  figureScheme: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
-  planLoading: { height: 168 },
   // S-3 — a quiet note, not an alarm. Sans (it carries words), secondary ink, sits under the plan.
   overBudgetNote: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, textAlign: 'left', marginTop: 10 },
   doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 4 },

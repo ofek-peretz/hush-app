@@ -271,14 +271,19 @@ describe('the week is on the page, and it is a door', () => {
       />,
     );
     /*
-     * ⚠️ IN THE COLUMN THE SELECTED ROW IS NOT PRESSABLE AT ALL, so the assertion is sharper than it
-     * was: exactly ONE of the twins is a control, and it is the one that is not open. Matched on the
-     * name, both would have opened — and a tap meant to queue the second would have hit the first.
+     * ⚠️ BOTH TWINS ARE CONTROLS NOW (2026-08-05). The open row became pressable when the
+     * pre-workout card landed — his rule is *"pressing a day with a workout opens the card"*, and it
+     * held for six days of the week and failed on the one she is standing in.
+     *
+     * The law is unchanged and is exactly the point: matched on the NAME the two are
+     * indistinguishable, so each must report its own ID. A row that queued the other one would be
+     * the bug this test was written for, and it is now reachable from two rows instead of one.
      */
     const chips = r.root.findAll((n) => n.props?.accessibilityLabel === 'Upper' && typeof n.props.onPress === 'function');
-    expect(chips).toHaveLength(1);
-    act(() => chips[0].props.onPress()); // the one that is NOT queued
-    expect(chosen).toEqual(['day_2']);
+    expect(chips).toHaveLength(2);
+    act(() => chips.forEach((c) => c.props.onPress()));
+    // The open row reports day_1 and the closed one day_2 — neither reports the other's.
+    expect([...chosen].sort()).toEqual(['day_1', 'day_2']);
   });
 
   /**
@@ -321,7 +326,9 @@ describe('the week is on the page, and it is a door', () => {
 
     // …and the same workout as the OPEN row: still checked, still unmistakably a record.
     const open = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
-    expect(byLabel(open, 'Push A')).toBeNull(); // it is the open row, not a control
+    // ⚠️ The open row IS a control now — it opens the pre-workout card like every other day
+    // (2026-08-05). What this test is about is the MARK, and the mark is what is asserted below.
+    expect(byLabel(open, 'Push A')).not.toBeNull();
     const anyMoss = open.root
       .findAll((n) => n.props?.color === color.up || n.props?.strokeWidth === 2.6)
       .length;
@@ -392,9 +399,15 @@ describe('the week is on the page, and it is a door', () => {
       .findAll((n) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props.onPress === 'function')
       .map((n) => n.props.accessibilityLabel as string)
       .filter((l) => ['Push A', 'Pull A', 'Legs A', 'Push B'].includes(l));
-    // No pattern in this fixture → the column numbers the coach's own order and keeps it whole.
-    // (Pull A is `dayName`, so it is the OPEN row and therefore not a control — hence its absence.)
-    expect(order).toEqual(['Push A', 'Legs A', 'Push B']);
+    /*
+     * No pattern in this fixture → the column numbers the coach's own order and keeps it whole.
+     *
+     * ⚠️ PULL A IS BACK IN THIS LIST (2026-08-05). It is `dayName`, so it is the OPEN row — which
+     * used not to be a control, and now is: every day with a workout opens the pre-workout card,
+     * including the one she is standing in. The law is about ORDER, and the order is what a
+     * finished workout must not change: **the done ones are still in their own places.**
+     */
+    expect(order).toEqual(['Push A', 'Pull A', 'Legs A', 'Push B']);
   });
 });
 

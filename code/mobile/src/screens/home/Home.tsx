@@ -33,7 +33,8 @@ import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
 import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { comebackAfterGap } from '@/domain/comeback';
-import { trainingDays } from '@/domain/trainingDays';
+import { trainingDays, WEEK_ORDER } from '@/domain/trainingDays';
+import { daysAfterStarting } from '@/domain/weekBoard';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
 import { OnYourWristView } from '@/screens/watch/OnYourWrist';
@@ -663,6 +664,18 @@ export function Home({ navigation, route }: Props) {
        * there is nothing to ask anyone for, which is why this has no network wait and no prefetch
        * behind it any more.
        */
+      /*
+       * ⛔ ONE MECHANISM, EVERY DOOR (audit, 2026-08-05). The pre-workout card records the day-swap
+       * when she starts a session that sits elsewhere in the week; Begin here starts a session too,
+       * and it was not recording it. Two ways to start and only one of them told the board is
+       * exactly the drift `weekBoard` exists as a single function to prevent.
+       *
+       * ⚠️ `null` — the ordinary case, where the queued session is already on today — costs a
+       * comparison and no write. Fire and forget: a storage failure must never stand between the
+       * tap and the first set.
+       */
+      const movedDays = daysAfterStarting(coachWorkouts, todayId, WEEK_ORDER[new Date().getDay()]);
+      if (movedDays) void db.saveCoachPlanDays(movedDays).catch(() => {});
       const planned = coachSession(coachPlan, todayId);
       if (!planned) {
         setStartError(true);

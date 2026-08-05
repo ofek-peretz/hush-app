@@ -18,7 +18,11 @@ import type { PlanLift } from '@/components/PlanLifts';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachWeek, coachRows, coachPlanRows, coachLoadDirections } from '@/domain/coachWeek';
+import { coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, coachChanges } from '@/domain/coachWeek';
+import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
+import type { ChangedLiftCase } from '@/domain/changedLiftCase';
+import { currentLocale } from '@/i18n';
+import { View, StyleSheet } from 'react-native';
 import { daysAfterStarting } from '@/domain/weekBoard';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 import type { CoachPlan, Weekday } from '@/domain/coachPlan';
@@ -34,19 +38,47 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   const [plan, setPlan] = useState<CoachPlan | null>(null);
   const [directions, setDirections] = useState<Record<string, LoadDirection>>({});
   const [doneIds, setDoneIds] = useState<string[]>([]);
+  /** The programme this week opened on — the other half of every change, as everywhere else. */
+  const [weekPlan, setWeekPlan] = useState<CoachPlan | null>(null);
+  /**
+   * ⛔ THE ROW OPENS THE LIFT'S OWN REASON (audit, 2026-08-05).
+   *
+   * The first cut sent `onWhy` to the Mirror — the whole week's letter — which is the wrong
+   * explanation for the row she pressed and the same "two screens, two answers" shape I had spent
+   * the morning removing from the pill. This is the SAME sheet Today opens, built from the same
+   * `coachChangedCase`, so a lift explains itself identically from either door.
+   */
+  const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
+  const [whyFor, setWhyFor] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [now, before, history, weekOpenMs] = await Promise.all([
+      const [now, before, history, weekOpenMs, log] = await Promise.all([
         db.loadCoachPlan().catch(() => null),
         db.loadCoachPlanWeek().catch(() => null),
         db.loadHistory().catch(() => []),
         db.loadWeekOpen().catch(() => null),
+        db.loadCoachLog().catch(() => null),
       ]);
       if (!alive) return;
       setPlan(now ?? null);
-      setDirections(coachLoadDirections(now, before) as Record<string, LoadDirection>);
+      setWeekPlan(before ?? null);
+      const dirs = coachLoadDirections(now, before) as Record<string, LoadDirection>;
+      setDirections(dirs);
+      /*
+       * The coach's own sentence, matched to the lift by the note it wrote — exactly as Home does.
+       * ⚠️ A lift with a direction and NO note keeps its colour and simply has no sheet: the colour
+       * is a fact we derived, and inventing a sentence under it would be the app arguing on the
+       * coach's behalf.
+       */
+      const saidFor = new Map((log ?? []).filter((d) => d.ex).map((d) => [d.ex as string, d.say]));
+      const cases: Record<string, ChangedLiftCase> = {};
+      for (const ex of Object.keys(dirs)) {
+        const c = coachChangedCase(ex, now, before, saidFor.get(ex), units);
+        if (c) cases[ex] = c;
+      }
+      setWhyByExercise(cases);
       // ⚠️ THE SAME DERIVATION HOME USES — a session logged since the week opened, against the
       // coach's own id. Two readings of "done" on two screens is how a finished workout comes to
       // wear an offer's clothes on one of them.
@@ -70,8 +102,19 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
     return rows.map((r) => ({ ...r, ...(directions[r.exerciseId] ? { changed: directions[r.exerciseId] } : {}) }));
   }, [plan, workout, units, directions]);
 
-  /** How many of THESE lifts moved — the pill on this card is about this workout, not the week. */
-  const changes = lifts.filter((l) => l.changed && l.changed !== 'hold').length;
+  /**
+   * How many of THESE lifts the coach changed — this workout, not the week.
+   *
+   * ⚠️ IT ASKS `coachChanges`, THE SAME FUNCTION TODAY AND THE MIRROR ASK, filtered to the lifts on
+   * this card. Counting `changed !== 'hold'` off the direction map would have been a THIRD
+   * definition of the word "change" in one product — it misses a set count that moved and a lift
+   * that arrived, both of which the founder named explicitly: *"a change is only if there is a drop
+   * or a raise or added sets or anything else."*
+   */
+  const changes = React.useMemo(() => {
+    const mine = new Set(lifts.map((l) => l.exerciseId));
+    return (coachChanges(plan, weekPlan) ?? []).filter((c) => mine.has(c.ex)).length;
+  }, [plan, weekPlan, lifts]);
 
   // Rounded to five, exactly as Today rounds it — "~50 min" on two screens must be the same 50.
   const minutes = workout ? Math.max(5, Math.round(workout.minutes / 5) * 5) : 0;
@@ -79,7 +122,8 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   if (!workout) return null;
 
   return (
-    <PreWorkoutView
+    <View style={StyleSheet.absoluteFill}>
+      <PreWorkoutView
       name={workout.name}
       dayLabel={workout.day ? t(`weekday.${workout.day}`) : null}
       shape={
@@ -92,9 +136,8 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       lifts={lifts}
       units={units}
       changes={changes}
-      onChanges={() => navigation.navigate('WeeklyUpdate')}
       onForm={(exerciseId) => navigation.navigate('WorkoutDetail', { exerciseId } as never)}
-      onWhy={() => navigation.navigate('WeeklyUpdate')}
+      onWhy={(exerciseId) => (whyByExercise[exerciseId] ? setWhyFor(exerciseId) : navigation.navigate('WorkoutDetail', { exerciseId } as never))}
       done={doneIds.includes(workout.id)}
       onClose={() => navigation.goBack()}
       onStart={() => {
@@ -112,6 +155,12 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
         if (moved) void db.saveCoachPlanDays(moved).catch(() => {});
         navigation.replace('SessionFlow', { workoutId: workout.id } as never);
       }}
-    />
+      />
+      {whyFor && whyByExercise[whyFor] ? (
+        <View style={StyleSheet.absoluteFill}>
+          <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />
+        </View>
+      ) : null}
+    </View>
   );
 }

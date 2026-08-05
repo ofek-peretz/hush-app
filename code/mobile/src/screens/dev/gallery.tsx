@@ -1349,7 +1349,7 @@ export const GALLERY: GalleryEntry[] = [
           { exerciseId: 'lateral_raise', name: 'Lateral Raise', load: 7, sets: 3, band: [10, 12] },
           { exerciseId: 'tri_pushdown', name: 'Triceps Pushdown', load: 20, sets: 3, band: [10, 12] },
         ]}
-        onForm={noop} onWhy={noop} onChanges={noop} onStart={noop} onClose={noop}
+        onForm={noop} onWhy={noop} onStart={noop} onClose={noop}
       />
     </InApp>
   ) },

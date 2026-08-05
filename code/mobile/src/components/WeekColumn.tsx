@@ -172,8 +172,29 @@ export function WeekColumn(props: WeekColumnProps) {
         const w = row.workout;
         if (row.open) {
           return (
+            /*
+             * ⛔ THE OPEN ROW OPENS THE CARD TOO (audit, 2026-08-05).
+             *
+             * Every CLOSED row was a Pressable and this one was not — so his rule, *"pressing a day
+             * with a workout opens a full-screen card"*, held for six days of the week and failed on
+             * the one she is standing in. She could START today's workout (the Begin button below)
+             * but she could not READ it, which is the whole reason the card exists.
+             *
+             * ⚠️ The HEAD is the target, not the whole block: the change pill inside it is its own
+             * control, and a press area wrapping a press area swallows the inner one.
+             */
             <View key={w.id} style={styles.open}>
-              <View style={styles.openHead}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={w.name}
+                disabled={!!props.inert}
+                onPress={() => {
+                  if (props.inert) return;
+                  haptics.tick();
+                  props.onChoose(w.id);
+                }}
+                style={({ pressed }) => [styles.openHead, pressed && styles.dim]}
+              >
                 <Text style={[styles.letter, styles.letterNow]}>{row.label}</Text>
                 <Text style={styles.openName} numberOfLines={2}>{bidi(w.name)}</Text>
                 {/*
@@ -200,7 +221,7 @@ export function WeekColumn(props: WeekColumnProps) {
                     </Legend>
                   </Pressable>
                 ) : null}
-              </View>
+              </Pressable>
               {props.shape ? <Text style={styles.openShape}>{props.shape}</Text> : null}
               {props.children}
             </View>
