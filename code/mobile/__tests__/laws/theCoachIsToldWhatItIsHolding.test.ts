@@ -37,7 +37,9 @@ describe('the unit is stated, because getting it wrong loads a bar', () => {
     // The trap is specific: the sheet tells the coach she reads lb. Without this line that is an
     // instruction to write lb.
     expect(text()).toMatch(/that field is only how the app DISPLAYS them/);
-    expect(text()).toMatch(/"units" is how she reads weights,\s*\n?not how you write them/);
+    // ⚠️ Newline-tolerant: the clause wraps wherever the paragraph above it happens to end, and
+    // the 2026-08-05 pass moved it. The CLAIM is the sentence, never where the line breaks.
+    expect(text()).toMatch(/"units" is how she\s+reads weights, not how you write them/);
   });
 
   it('and the rule sits with the other things that are NOT the coach\'s to choose', () => {
@@ -82,6 +84,6 @@ describe('every fact onboarding collects is named to the coach', () => {
 
   it('⚠️ says these six are ALL the app asks, so the coach knows what is left to it', () => {
     // `[\s\S]` because the prompt is hard-wrapped and this rule straddles a line break.
-    expect(text()).toMatch(/the only questions this[\s\S]{0,4}app asks/);
+    expect(text()).toMatch(/the only questions this app\s+asks/);
   });
 });

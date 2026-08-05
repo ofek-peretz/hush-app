@@ -139,7 +139,7 @@ describe('the prompt tells the truth about where its words land', () => {
   });
 
   it('and says what an `open` item is, since there the sentence IS the screen', () => {
-    expect(text()).toMatch(/On an "open" item it IS the screen/);
+    expect(text()).toMatch(/On an "open" item your sentence IS the screen/);
   });
 });
 
