@@ -101,3 +101,61 @@ export function daysAfterStarting(
 ): Record<string, Weekday> | null {
   return moveWorkoutToDay(workouts, startedId, today);
 }
+
+/* ──────────────────────────────────────────────────────── WHERE A DRAGGED ROW ACTUALLY LANDED */
+
+/** One row of the drawn column, as it measured itself. */
+export interface MeasuredRow {
+  /** The weekday this row stands for, or absent on a numbered week that has no days yet. */
+  day?: Weekday;
+  y: number;
+  height: number;
+}
+
+/**
+ * ⛔ WHICH ROW A DROP LANDED ON — and why this is arithmetic on MEASURED facts.
+ *
+ * The obvious implementation divides the drag distance by a row height. **The rows are not the same
+ * height.** The open row carries a name, a shape line and a change pill and stands roughly three
+ * times a closed row; a rest day is a letter and a hairline and stands shorter than either. Dividing
+ * by any single number puts the session on the wrong day for most of the week — and it would do it
+ * silently: she drops it on Wednesday and finds it on Thursday.
+ *
+ * So the answer is whichever row's band contains the dragged row's centre.
+ *
+ * ⚠️ A DROP PAST EITHER END CLAMPS rather than returning nothing. A finger that travels above the
+ * first row or below the last has expressed a direction perfectly clearly, and refusing it would
+ * make the top and bottom days the two hardest to reach — which is exactly where Sunday and
+ * Saturday live.
+ *
+ * ⚠️ `null` only when there is nothing to land on: a column with no measured days at all, which is
+ * the numbered week-one arrangement. There, dragging means nothing and must do nothing.
+ */
+export function dropTarget(rows: readonly MeasuredRow[], centreY: number): Weekday | null {
+  const withDays = rows.filter((r) => r.day && WEEK_ORDER.includes(r.day));
+  if (withDays.length === 0) return null;
+  const ordered = [...withDays].sort((a, b) => a.y - b.y);
+
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  if (centreY <= first.y) return first.day!;
+  if (centreY >= last.y + last.height) return last.day!;
+
+  for (const r of ordered) {
+    if (centreY >= r.y && centreY < r.y + r.height) return r.day!;
+  }
+  /*
+   * Between two rows — the gap a margin leaves. It belongs to the nearer of the two: a drop in the
+   * seam is still a drop somewhere, and the alternative is a gesture that quietly does nothing.
+   */
+  let best = ordered[0];
+  let bestGap = Number.POSITIVE_INFINITY;
+  for (const r of ordered) {
+    const gap = Math.abs(centreY - (r.y + r.height / 2));
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = r;
+    }
+  }
+  return best.day!;
+}

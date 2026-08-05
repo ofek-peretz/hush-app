@@ -165,6 +165,11 @@ export interface HomeViewProps {
   onStart: () => void;
   workouts: HomeWorkoutOption[];
   onChooseWorkout: (id: string) => void;
+  /**
+   * ⛔ SHE DRAGGED ONE ONTO ANOTHER DAY (founder 2026-08-05). Absent = the board is read-only,
+   * which is what week one is: with no pattern the rows are numbered and there are no days.
+   */
+  onMoveToDay?: (id: string, day: Weekday) => void;
   /** Hush's sentence(s) about what it did to this week's plan (domain/weekBriefing). Held for the
    *  WHY surface the change pill opens; null while the engine's record is still being read. */
   brief: Line[] | null;
@@ -501,6 +506,7 @@ export function HomeView(props: HomeViewProps) {
                 selectedId={props.dayId ?? props.workouts.find((w) => w.name === props.dayName)?.id ?? null}
                 days={props.trainingDays}
                 onChoose={props.onChooseWorkout}
+                onMoveToDay={props.onMoveToDay}
                 changes={props.briefCount}
                 onChanges={props.onWeeklyUpdate}
                 inert={!!props.resumable}

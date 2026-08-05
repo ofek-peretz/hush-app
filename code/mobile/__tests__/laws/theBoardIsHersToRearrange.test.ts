@@ -12,7 +12,7 @@
  * she cannot rearrange without checking.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-import { moveWorkoutToDay, daysAfterStarting, type BoardWorkout } from '@/domain/weekBoard';
+import { moveWorkoutToDay, daysAfterStarting, dropTarget, type BoardWorkout, type MeasuredRow } from '@/domain/weekBoard';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 
 const week: BoardWorkout[] = [
@@ -88,5 +88,77 @@ describe('⛔ …and starting a different day’s workout is the same move', () 
   it('it IS the drag — one mechanism, two doors', () => {
     // Not "behaves like": the same function, so the two can never disagree.
     expect(daysAfterStarting(week, 'c', 'mon')).toEqual(moveWorkoutToDay(week, 'c', 'mon'));
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AND WHERE A DROP LANDED — arithmetic on MEASURED rows, never on a row-height constant.
+ *
+ * The rows are not the same height. The open row carries a name, a shape line and a change pill and
+ * stands about three times a closed one; a rest day is a letter and a hairline and stands shorter
+ * than either. **Dividing the drag distance by any single number puts the session on the wrong day
+ * for most of the week** — and silently: she drops it on Wednesday and finds it on Thursday.
+ *
+ * ⚠️ THIS IS THE HALF A DEVICE CANNOT TEST FOR ME. There is no simulator in this suite and no Xcode
+ * in this project, so the gesture is verified by reading and the ARITHMETIC is verified here.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ where a dragged row lands', () => {
+  /* A real week: Monday open (tall), the rest closed, Tuesday and Thursday resting (short). */
+  const rows: MeasuredRow[] = [
+    { day: 'sun', y: 0, height: 44 },
+    { day: 'mon', y: 44, height: 150 }, // the open row
+    { day: 'tue', y: 194, height: 38 },
+    { day: 'wed', y: 232, height: 44 },
+    { day: 'thu', y: 276, height: 38 },
+    { day: 'fri', y: 314, height: 44 },
+    { day: 'sat', y: 358, height: 44 },
+  ];
+
+  it('lands on the row whose band holds the centre', () => {
+    expect(dropTarget(rows, 10)).toBe('sun');
+    expect(dropTarget(rows, 120)).toBe('mon');
+    expect(dropTarget(rows, 250)).toBe('wed');
+    expect(dropTarget(rows, 380)).toBe('sat');
+  });
+
+  it('⛔ a uniform row height would have got this wrong', () => {
+    /*
+     * The bug this exists to prevent, made concrete. At 44 px a row, a centre of 250 is "row 5" —
+     * Thursday. It is Wednesday, because the open row above it is 150 px tall. The two answers
+     * differ by a day, on the commonest layout the board has.
+     */
+    expect(Math.floor(250 / 44)).toBe(5);
+    expect(rows[5].day).toBe('fri');
+    expect(dropTarget(rows, 250)).toBe('wed');
+  });
+
+  it('⚠️ a drop past either end clamps rather than doing nothing', () => {
+    // Refusing them would make Sunday and Saturday the two hardest days to reach.
+    expect(dropTarget(rows, -80)).toBe('sun');
+    expect(dropTarget(rows, 9000)).toBe('sat');
+  });
+
+  it('⚠️ a drop in the seam between two rows belongs to the nearer one', () => {
+    const gapped: MeasuredRow[] = [
+      { day: 'sun', y: 0, height: 40 },
+      { day: 'mon', y: 60, height: 40 },
+    ];
+    expect(dropTarget(gapped, 48)).toBe('sun');
+    expect(dropTarget(gapped, 56)).toBe('mon');
+  });
+
+  it('⚠️ a column with no days at all cannot be dropped on', () => {
+    // Week one: the rows are NUMBERED, there are no weekdays, and dragging must mean nothing.
+    expect(dropTarget([{ y: 0, height: 44 }, { y: 44, height: 44 }], 20)).toBeNull();
+    expect(dropTarget([], 20)).toBeNull();
+  });
+
+  it('the two halves compose — a measured drop resolves to a real move', () => {
+    const target = dropTarget(rows, 250)!;
+    const out = moveWorkoutToDay([{ id: 'a', day: 'mon' }, { id: 'b', day: 'wed' }], 'a', target)!;
+    expect(out.a).toBe('wed');
+    expect(out.b).toBe('mon');
   });
 });

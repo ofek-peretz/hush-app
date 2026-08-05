@@ -43,6 +43,8 @@ import { bidi } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
 import * as haptics from '@/platform/haptics';
 import { WEEK_ORDER } from '@/domain/trainingDays';
+import { DraggableWeekRow } from '@/components/DraggableWeekRow';
+import { dropTarget, type MeasuredRow } from '@/domain/weekBoard';
 import type { Weekday } from '@/domain/coachPlan';
 import { color, font, space, stage, tracking, trackingPx, signal, radius } from '@/design/tokens';
 
@@ -78,12 +80,26 @@ export interface WeekColumnProps {
   shape?: string | null;
   /** Frozen while a session is resumable: the queue is not hers to change mid-workout. */
   inert?: boolean;
+  /**
+   * ⛔ SHE MOVED ONE (founder 2026-08-05): *"the athlete can change it herself by dragging from one
+   * day to another and swapping."*
+   *
+   * Absent = the column is read-only, which is what week one is: with no pattern the rows are
+   * NUMBERED and there are no days to drag between, so the gesture would mean nothing.
+   */
+  onMoveToDay?: (id: string, day: Weekday) => void;
 }
 
 /** What each row of the drawn column is. Exported so the law can assert the arrangement directly. */
 export type WeekRow =
-  | { kind: 'workout'; label: string; workout: WeekColumnWorkout; open: boolean }
-  | { kind: 'empty'; label: string };
+  /**
+   * ⚠️ `day` IS THE WEEKDAY, `label` IS WHAT IT PRINTS — and they are not the same thing. The
+   * label is `t('weekday.sun')`, which is "SUN" in English and "א׳" in Hebrew; a drop resolved
+   * against it would be resolving against a translation. Absent on the numbered week-one
+   * arrangement, where the rows stand for positions rather than days.
+   */
+  | { kind: 'workout'; label: string; day?: Weekday; workout: WeekColumnWorkout; open: boolean }
+  | { kind: 'empty'; label: string; day?: Weekday };
 
 /**
  * The rows to draw, in the order she reads them. Pure, and the whole design decision.
@@ -140,13 +156,23 @@ export function weekRows(
   return WEEK_ORDER.map((d) => {
     const w = placed.get(d);
     return w
-      ? { kind: 'workout' as const, label: weekdayLabel(d), workout: w, open: open(w) }
-      : { kind: 'empty' as const, label: weekdayLabel(d) };
+      ? { kind: 'workout' as const, label: weekdayLabel(d), day: d, workout: w, open: open(w) }
+      : { kind: 'empty' as const, label: weekdayLabel(d), day: d };
   });
 }
 
 export function WeekColumn(props: WeekColumnProps) {
   const { t } = useCopy();
+  /*
+   * WHERE EACH ROW ACTUALLY IS. The rows are not the same height — the open one stands about three
+   * times a closed one and a rest day stands shorter than either — so a drop is resolved against
+   * measurements rather than against a row-height constant. See `dropTarget`.
+   *
+   * A ref rather than state: it is written on every layout pass and read only when a finger lifts,
+   * so re-rendering the column on each measurement would be work nobody watches.
+   */
+  const boxes = React.useRef<MeasuredRow[]>([]);
+  const [dragging, setDragging] = React.useState<string | null>(null);
   const rows = React.useMemo(
     () => weekRows(props.workouts, props.days, props.selectedId, (d) => t(`weekday.${d}`).toUpperCase()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,16 +182,33 @@ export function WeekColumn(props: WeekColumnProps) {
   return (
     <View style={styles.week}>
       {rows.map((row, i) => {
+        /* Each row hands the column its band as it lays out; a rest day is a target, not a handle. */
+        const measure = (y: number, height: number) => {
+          boxes.current[i] = { y, height, ...(row.day ? { day: row.day } : {}) };
+        };
+        const drop = (id: string, centreY: number) => {
+          setDragging(null);
+          const to = dropTarget(boxes.current.filter(Boolean), centreY);
+          if (to) props.onMoveToDay?.(id, to);
+        };
         if (row.kind === 'empty') {
           /*
            * A day with nothing on it. Not a control and not a message — a letter and a rule, which
            * is the smallest true statement the screen can make about a Wednesday.
            */
           return (
-            <View key={`e${i}`} style={[styles.row, i > 0 && styles.ruled]} importantForAccessibility="no">
-              <Text style={[styles.letter, styles.letterFaint]}>{row.label}</Text>
-              <View style={styles.hairline} />
-            </View>
+            <DraggableWeekRow key={`e${i}`} onMeasure={measure}>
+              <View
+                style={[styles.row, i > 0 && styles.ruled, dragging ? styles.openDay : null]}
+                importantForAccessibility="no"
+              >
+                <Text style={[styles.letter, styles.letterFaint]}>{row.label}</Text>
+                {/* ⚠️ WHILE A ROW IS IN THE AIR an empty day shows it can take one — a moss outline
+                    where the hairline was. It is the only thing on this screen that appears because
+                    of a gesture, and it disappears the moment she lets go. */}
+                {dragging ? <View style={styles.dropSlot} /> : <View style={styles.hairline} />}
+              </View>
+            </DraggableWeekRow>
           );
         }
 
@@ -183,7 +226,15 @@ export function WeekColumn(props: WeekColumnProps) {
              * ⚠️ The HEAD is the target, not the whole block: the change pill inside it is its own
              * control, and a press area wrapping a press area swallows the inner one.
              */
-            <View key={w.id} style={styles.open}>
+            <DraggableWeekRow
+              key={w.id}
+              id={w.id}
+              disabled={!!props.inert || !props.onMoveToDay}
+              onMeasure={measure}
+              onPickUp={() => setDragging(w.id)}
+              onDrop={drop}
+            >
+            <View style={[styles.open, dragging === w.id && styles.lifted]}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={w.name}
@@ -225,13 +276,21 @@ export function WeekColumn(props: WeekColumnProps) {
               {props.shape ? <Text style={styles.openShape}>{props.shape}</Text> : null}
               {props.children}
             </View>
+            </DraggableWeekRow>
           );
         }
 
         const done = !!w.done;
         return (
-          <Pressable
+          <DraggableWeekRow
             key={w.id}
+            id={w.id}
+            disabled={!!props.inert || !props.onMoveToDay}
+            onMeasure={measure}
+            onPickUp={() => setDragging(w.id)}
+            onDrop={drop}
+          >
+          <Pressable
             accessibilityRole="button"
             accessibilityLabel={w.name}
             accessibilityState={{ selected: false, disabled: !!props.inert }}
@@ -241,12 +300,18 @@ export function WeekColumn(props: WeekColumnProps) {
               haptics.tick();
               props.onChoose(w.id);
             }}
-            style={({ pressed }) => [styles.row, i > 0 && styles.ruled, pressed && styles.dim]}
+            style={({ pressed }) => [
+              styles.row,
+              i > 0 && styles.ruled,
+              pressed && styles.dim,
+              dragging === w.id && styles.lifted,
+            ]}
           >
             <Text style={[styles.letter, done ? styles.letterWas : styles.letterFaint]}>{row.label}</Text>
             <Text style={[styles.name, done && styles.nameDone]} numberOfLines={1}>{bidi(w.name)}</Text>
             {done ? <Icon name="check" size={15} color={signal[0]} strokeWidth={2.6} /> : null}
           </Pressable>
+          </DraggableWeekRow>
         );
       })}
     </View>
@@ -318,6 +383,23 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: stage.ink2,
     textAlign: 'left',
+  },
+  /* ── WHILE A ROW IS IN THE AIR ──
+   * The column says nothing about dragging until she is dragging. An empty day then shows it can
+   * take one — a moss outline where its hairline was — and every other row simply holds still.
+   * This is the only thing on Today that appears because of a gesture. */
+  openDay: {},
+  /* The row in her hand: it stands ON the ground rather than in it, which is this product's one
+     way of saying emphasis — distance from the ground, never a hue. */
+  lifted: { backgroundColor: stage[1], borderRadius: radius.lg },
+  dropSlot: {
+    flex: 1,
+    height: 34,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(169,196,159,0.55)',
+    backgroundColor: 'rgba(169,196,159,0.05)',
   },
   pill: {
     paddingHorizontal: 10,

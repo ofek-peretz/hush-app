@@ -34,7 +34,7 @@ import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { comebackAfterGap } from '@/domain/comeback';
 import { trainingDays, WEEK_ORDER } from '@/domain/trainingDays';
-import { daysAfterStarting } from '@/domain/weekBoard';
+import { daysAfterStarting, moveWorkoutToDay } from '@/domain/weekBoard';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
 import { OnYourWristView } from '@/screens/watch/OnYourWrist';
@@ -849,6 +849,20 @@ export function Home({ navigation, route }: Props) {
        * which is what made Today too tall to show the week. The selection still happens, so the
        * board keeps marking where she is; it is simply no longer the whole act.
        */
+      /*
+       * ⛔ THE DRAG'S OWN DOOR ONTO `weekBoard` (founder 2026-08-05). The same function Begin uses,
+       * so a session moved by a finger and a session moved by being trained end up in the same
+       * place by the same rule.
+       *
+       * ⚠️ `saveCoachPlanDays`, NOT `saveCoachPlan` — see its note. Writing her drag through the
+       * ordinary path would rotate the change-diff anchors and make the next real programme diff
+       * against the wrong week, so every change the coach then made would go uncounted.
+       */
+      onMoveToDay={(id, day) => {
+        const moved = moveWorkoutToDay(coachWorkouts, id, day);
+        if (!moved) return;
+        void db.saveCoachPlanDays(moved).then(() => db.loadCoachPlan()).then((p) => setCoachPlan(p ?? null)).catch(() => {});
+      }}
       onChooseWorkout={(id) => {
         setChosenId(id);
         navigation.navigate('PreWorkout', { workoutId: id });
