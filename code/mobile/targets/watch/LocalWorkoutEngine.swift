@@ -359,6 +359,23 @@ final class LocalWorkoutEngine {
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
       targetRepsHi: cur.targetRepsHi, // the band's ceiling, so the ruler draws standalone too
+      /*
+       * ⛔ HER OWN SETS, PROJECTED LOCALLY (2026-08-04). The wrist logs its own sets when the phone
+       * is in a locker, so the row of figures works standalone exactly as it does mirrored — and
+       * `watchWireParity` exists precisely because the last field added here was forgotten and the
+       * phone-absent athlete quietly saw less.
+       */
+      setsSoFar: state.sets.filter { $0.exerciseId == cur.exerciseId }.map { $0.actualReps },
+      loadsSoFar: state.sets.filter { $0.exerciseId == cur.exerciseId }.map { $0.actualWeight },
+      /*
+       * ⚠️ AND LAST TIME IS GENUINELY ABSENT HERE, not forgotten. The wrist carries the PLAN, never
+       * the history — `lastTimeOn` reads sessions the watch has never been given. So a standalone
+       * set draws its slots as dashes, which is the same state as a lift she has never done and is
+       * already what the row is designed to say. Explicitly nil rather than omitted, so the next
+       * person reads a decision instead of an oversight.
+       */
+      lastReps: nil,
+      lastLoadKg: nil,
       restEndsAt: nil,
       restRemainingS: nil,
       restTotalS: nil,

@@ -125,6 +125,20 @@ struct WireMirror: Codable, Equatable {
   /// The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same 8–10
   /// rep-range ruler the phone's stage does (WT2). Nil when the target is a single rep count.
   var targetRepsHi: Int?
+  /*
+   * ⛔ HER OWN SETS ON THIS LIFT, AND LAST TIME'S (2026-08-04). The wrist drew four dots — filled,
+   * ringed, empty — which say HOW MANY sets are behind her and never WHAT HAPPENED in them, while
+   * the phone printed the figures. These four close that.
+   *
+   * ⚠️ ALL OPTIONAL, AND THE SCHEMA IS NOT BUMPED. `mirrorToWire` is a spread and Swift's decoder
+   * ignores keys it does not know, so a NEW phone talking to an OLD watch is a no-op, and an OLD
+   * phone talking to a new watch decodes these as nil — which draws exactly what the wrist drew
+   * before. A version bump would have made both directions a hard stop instead.
+   */
+  var setsSoFar: [Int]?
+  var loadsSoFar: [Double?]?
+  var lastReps: [Int]?
+  var lastLoadKg: Double?
   var restEndsAt: String?
   var restRemainingS: Int?
   var restTotalS: Int?

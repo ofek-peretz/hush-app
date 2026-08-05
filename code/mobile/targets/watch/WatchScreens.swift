@@ -358,21 +358,48 @@ enum TapGate {
   }
 }
 
+/** How far the seated button's rounded bottom is pushed past the display edge. */
+private let SEAT_BLEED: CGFloat = 16
+
 struct StageButton: View {
   enum Kind { case primary, moss, onstage, quiet, danger, ghost }
   let title: String
   var kind: Kind = .primary
   var height: CGFloat = 44
   var fontSize: CGFloat = 16
+  /**
+   * ⚠️ THE BUTTON IS THE FLOOR OF THE SCREEN (founder 2026-08-04): *"I have no problem with you
+   * sitting it right on the bottom of the screen instead of a button floating in the air."*
+   *
+   * Full-bleed, rounded at the top, and its BOTTOM corners pushed past the display edge by
+   * `SEAT_BLEED` so the case's own curve finishes the shape. That is deliberately built from
+   * `RoundedRectangle` and a negative padding rather than from `UnevenRoundedRectangle`, which is
+   * watchOS 10 — this target carries no `@available` guards anywhere, so its floor is unknown to me
+   * and an unverifiable API is not worth a nicer corner.
+   *
+   * ⚠️ DECLARED BEFORE `action`: the memberwise initialiser is positional and a trailing closure
+   * binds to the LAST parameter, so a flag after it would swallow the closure.
+   */
+  var seated: Bool = false
   let action: () -> Void
   var body: some View {
     Button(action: { TapGate.pass(action) }) {
       Text(title)
         .font(.system(size: fontSize, weight: .semibold))
         .frame(maxWidth: .infinity).frame(height: Fit.s(height)) // taller targets on larger cases
+        .padding(.bottom, seated ? Wrist.foot + SEAT_BLEED : 0)
         .foregroundStyle(fg)
         .background(bg)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        /*
+         * ⚠️ CANCELS THE CONTAINER'S GUTTERS RATHER THAN REMOVING THEM. `WristScreen` pads every
+         * screen by `Wrist.side` and `Wrist.foot`; taking those off the container would silently
+         * un-pad the screens that have no actions at all (the glance, the read-back, WT3). The
+         * seated button reaches the edge by paying the padding back with negative margins of its
+         * own, so exactly one screen changes.
+         */
+        .padding(.bottom, seated ? -(Wrist.foot + SEAT_BLEED) : 0)
+        .padding(.horizontal, seated ? -Wrist.side : 0)
     }
     .buttonStyle(.plain)
   }
@@ -1555,7 +1582,7 @@ struct ActiveSetScreen: View {
   private var footer: some View {
     // Mock WT2: a single full-width "Complete set" (cream). In Edit (WT9) it becomes a moss "Done"
     // that commits the set — the gentle-confirm fill, distinct from the cream that advances the work.
-    StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: Wrist.action, fontSize: 15) {
+    StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: Wrist.action, fontSize: 15, seated: true) {
       if editing { commit() } else { onComplete() }
     }
   }

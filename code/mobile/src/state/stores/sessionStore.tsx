@@ -985,6 +985,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // it must print what was LIFTED, not what was asked for (they differ the moment an athlete
       // edits a set).
       loggedSets: loggedSets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
+      /*
+       * ⛔ WHAT SHE DID LAST TIME, ONTO THE WIRE (2026-08-04). The phone's set stage has drawn this
+       * for a week and the wrist drew four dots that only counted. Read through the SAME call the
+       * phone's view uses — a second lookup here would eventually disagree with it about what "last
+       * time" means, and the two surfaces are in the same workout.
+       */
+      lastTime: lastTimeOn(
+        plan.find((st) => st.globalIndex === machine.setIndex)?.exerciseId ?? null,
+        historyRef.current,
+        { excludeSessionId: sessionRef.current?.id },
+      ),
       progressedLifts: progressedLiftCount(plan, loggedSets),
       toLoad: isToLoad(plan, machine.setIndex, loggedSets),
       // THE SIGNATURE MOMENT — through the ONE projection, so the wrist and the phone cannot

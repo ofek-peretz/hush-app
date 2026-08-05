@@ -194,6 +194,20 @@ export interface SessionMirror {
   /** The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same
    *  8–10 rep-range ruler the phone's stage does (WT2). Null when the target is a single rep. */
   targetRepsHi: number | null;
+  /**
+   * ⛔ HER OWN SETS ON THIS LIFT, THIS SESSION — reps in order (2026-08-04).
+   *
+   * The wrist drew four dots: filled, ringed, empty. They said HOW MANY sets were behind her and
+   * never WHAT HAPPENED in them, while the phone printed the figures. These two fields close that,
+   * and they are what the single row hands over from.
+   */
+  setsSoFar: number[];
+  /** The same sets' loads, index-aligned — what the hero's delta measures against mid-lift. */
+  loadsSoFar: (number | null)[];
+  /** Last time's reps on this lift, in order. Empty on a lift she has never done. */
+  lastReps: number[];
+  /** …and the load she finished it on. `null` = bodyweight, or no history at all. */
+  lastLoadKg: number | null;
   /** Absolute instant the current rest ends (ISO); null unless resting. */
   restEndsAt: string | null;
   /** Convenience snapshot derived from restEndsAt at projection time. */
@@ -303,6 +317,15 @@ export interface MirrorInputs {
   /** The logged sets themselves, in step order — the ACTUAL weight/reps behind the read-back's
    *  best-set line. Omitted ⇒ the read-back falls back to the prescription. */
   loggedSets?: MirrorLoggedSet[];
+  /**
+   * ⛔ WHAT SHE DID LAST TIME ON THE LIFT IN FRONT OF HER (founder 2026-08-04, bringing the wrist
+   * up to the phone's set screen). `lastTimeOn` already computes it for the phone; passing it here
+   * is what lets the wrist draw the same row of figures rather than four dots that only count.
+   *
+   * ⚠️ OPTIONAL, AND ABSENT IS THE NORMAL STATE for a lift she has never done. The wrist draws a
+   * dash there — never a zero, which is a set she did and failed.
+   */
+  lastTime?: { loadKg: number | null; reps: number[] } | null;
   /** Distinct lifts the athlete actually trained AND that the model raised — the
    *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
   progressedLifts?: number;
@@ -411,6 +434,35 @@ function liftPosition(steps: MirrorStep[], idx: number): { index: number; count:
  *
  * Pure and total: never throws, never reads a clock other than `nowMs`.
  */
+/**
+ * Her sets on the CURRENT lift, this session — reps and loads, in order.
+ *
+ * ⚠️ `loggedSets` is index-aligned with `steps`, so the exercise is read from the step rather than
+ * from the set: a logged set carries no exercise id of its own, and pairing them any other way is
+ * how a row ends up showing another lift's numbers.
+ */
+function soFarOnLift(steps: MirrorStep[], logged: MirrorLoggedSet[] | undefined, exerciseName: string) {
+  const reps: number[] = [];
+  const loads: (number | null)[] = [];
+  (logged ?? []).forEach((set, i) => {
+    if (steps[i]?.exerciseName !== exerciseName) return;
+    reps.push(set.reps);
+    loads.push(set.weight);
+  });
+  return { reps, loads };
+}
+
+/** The four fields the wrist's set row needs, assembled once for every phase. */
+function soFarFields(steps: MirrorStep[], inp: MirrorInputs, exerciseName: string) {
+  const { reps, loads } = soFarOnLift(steps, inp.loggedSets, exerciseName);
+  return {
+    setsSoFar: reps,
+    loadsSoFar: loads,
+    lastReps: inp.lastTime?.reps ?? [],
+    lastLoadKg: inp.lastTime?.loadKg ?? null,
+  };
+}
+
 export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const { steps, total, machine, restInterS, restTransitionS, restStartedAtMs, nowMs } = inp;
   const workoutName = inp.workoutName ?? '';
@@ -470,6 +522,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
       targetRepsHi: cur.repBandHi ?? null,
+      ...soFarFields(steps, inp, cur.exerciseName),
       restEndsAt: null,
       restRemainingS: null,
       nextExerciseName: null,
@@ -548,6 +601,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   return {
     schema: MIRROR_SCHEMA_VERSION,
     phase,
+    ...soFarFields(steps, inp, cur.exerciseName),
     exerciseName: cur.exerciseName,
     exerciseGroup: cur.exerciseGroup ?? '',
     setLabel,

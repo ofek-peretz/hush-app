@@ -84,7 +84,12 @@ const PHASE_FOR: Record<WatchIntentType, SessionMirror['phase'] | null> = {
 
 function mirrorIn(phase: SessionMirror['phase']): SessionMirror {
   return {
-    schema: 1, phase, exerciseName: 'Bench', setLabel: 'Set 1 of 3',
+    schema: 1,
+  /* The wrist's set row (2026-08-04) — her own sets, and last time's, which the dots never said. */
+  setsSoFar: [],
+  loadsSoFar: [],
+  lastReps: [],
+  lastLoadKg: null, phase, exerciseName: 'Bench', setLabel: 'Set 1 of 3',
     globalIndex: 0, totalSets: 3, targetWeight: 60, targetReps: 8,
     restEndsAt: phase.startsWith('rest') ? new Date(NOW + 60_000).toISOString() : null,
     restRemainingS: phase.startsWith('rest') ? 60 : null,

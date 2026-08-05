@@ -1643,16 +1643,29 @@ function ActiveSet({
               Absent on a bodyweight lift: the reps ARE the hero above, and repeating them here would
               say the same thing twice.
             */}
+            {/*
+              ⛔ THE BAND LOST THE ACCENT (founder 2026-08-04): *"why are we putting the reps in
+              green as a hero? It is only the rep range that follows from the weight."*
+
+              He is right, and the reason is the palette's own law: **moss means "a decision
+              made"** — and the LOAD is by far the bigger decision, yet it wore cream while the
+              band that follows from it wore the accent. The eye was being sent to the second most
+              important number on the screen.
+
+              So the band is a quiet `× 6–8` — the notation every programme in the world is
+              written in, reading as part of the load's own sentence rather than as a second
+              headline. **Colour on this stage now means something HAPPENED**: a load that moved,
+              or a set that landed outside its band. On a quiet set there is no accent at all,
+              which is what makes the accent worth looking at.
+            */}
             {!isBodyweight ? (
-              <View
+              <Text
                 style={styles.ask}
                 accessible
                 accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
               >
-                <Text style={styles.askNum}>{`${bandLo}–${bandHi}`}</Text>
-                {/* A WORD, so it is sans — mono cannot draw Hebrew at all (the two-voice law). */}
-                <Text style={styles.askWord}>{t('workout.repsUnit').toUpperCase()}</Text>
-              </View>
+                {`× ${bandLo}–${bandHi}`}
+              </Text>
             ) : null}
 
             {/* 4 · THE REASON IS NOT ON THIS SCREEN (v7 2.2).
@@ -1696,9 +1709,20 @@ function ActiveSet({
                * doing a second job.
                */
               const done = slot.reps != null;
+              /*
+               * ⛔ A SLOT SPEAKS ONLY WHEN IT HAS SOMETHING TO SAY (founder 2026-08-04): *"it still
+               * looks like a lot of numbers."* He was right, and the four ghosts were the same
+               * mistake as the per-side line on set two — **a number that is not news yet.**
+               *
+               * She needs the ghost of the set she is ABOUT TO DO; the ones further along are last
+               * week's shape, and she will meet them when she reaches them. So a slot draws a figure
+               * when it is DONE or CURRENT, and a dot otherwise. Seven numerals became four.
+               */
+              const speaks = done || slot.current;
               const shown = done ? slot.reps : slot.ghost;
               return (
                 <View key={i} style={styles.setCol}>
+                  {speaks ? (
                   <Text
                     style={[
                       styles.setNum,
@@ -1711,6 +1735,9 @@ function ActiveSet({
                         did and failed rather than a set nobody has a record of. */}
                     {shown == null ? '–' : shown}
                   </Text>
+                  ) : (
+                    <View style={styles.setDot} />
+                  )}
                   {/* The set she is standing in. A rule, not a colour: the figures already spend
                       colour on the verdict, and a second hue here would argue with it. */}
                   <View style={[styles.setMark, !slot.current && styles.setMarkOff]} />
@@ -2960,7 +2987,9 @@ const styles = StyleSheet.create({
   },
 
   sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 'auto' },
-  setCol: { flex: 1, alignItems: 'center' },
+  setCol: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 43 },
+  /* A set she has not reached: present, and saying nothing. */
+  setDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.28)' },
   setNum: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
@@ -2977,7 +3006,9 @@ const styles = StyleSheet.create({
   setNumGhost: { fontFamily: font.mono, color: stage.ink1, opacity: 0.4, textAlign: 'center' },
   setNumUp: { color: up.stage },
   setNumDown: { color: down.stage },
-  setMark: { marginTop: 8, width: 26, height: 2.5, borderRadius: 2, backgroundColor: up.stage },
+  /* ⚠️ CREAM, not moss. It marks WHERE SHE IS, which is not a decision the app made — and the
+     accent on this stage is now reserved for a thing that happened. */
+  setMark: { marginTop: 8, width: 26, height: 2.5, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.55)' },
   setMarkOff: { backgroundColor: 'transparent' },
   /* ⚠️ SANS. It holds a translated phrase ("LAST TIME · …") and mono cannot draw Hebrew at all —
      the same reason its predecessor was sans, caught again by `monoCarriesNoWords`. */
