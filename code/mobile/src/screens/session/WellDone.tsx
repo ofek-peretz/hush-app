@@ -181,6 +181,21 @@ export interface EarnedLine {
   to: string | null;
   /** Held at the load she lifted — no arrow, the word and the figure (S-24). */
   held: boolean;
+  /**
+   * ⛔ THE ROW HAS NO FIGURE COLUMN AT ALL — which is NOT the same as holding (2026-08-05).
+   *
+   * FOUNDER, from a screenshot of the finish screen: the verdict column read `Leg Extension ·
+   * holds` directly above the coach's own sentence, *"Raised starting load to 50 kg after clearing
+   * 17 and 13 reps."* The screen contradicted itself in two adjacent lines.
+   *
+   * Every coach row was built with `held: true`, and the comment justifying it was right about the
+   * reason and wrong about the consequence: there is no from→to to draw because the coach states a
+   * programme rather than a delta. But `held` does not mean "no arrow" to the RENDERER — it means
+   * print the word "holds", which is a verdict, and it was being printed on lifts that moved.
+   *
+   * `silent` is the state that was missing: nothing in the figure column. The reason is the row.
+   */
+  silent?: boolean;
   reason: EarnedReason;
 }
 
@@ -424,7 +439,10 @@ export function WellDone({ navigation, route }: Props) {
             name: l.ex ? exerciseDisplayName(l.ex) : '',
             from: null,
             to: null,
-            held: true,
+            held: false,
+            // ⛔ SILENT, NOT HELD — see `EarnedLine.silent`. This said `held: true` and printed the
+            // word "holds" over sentences that said "Raised".
+            silent: true,
             reason: { text: l.say },
           }))
         : [],
@@ -907,6 +925,10 @@ export function SessionEarned({
                     {/* The held verdict puts a WORD in a mono slot — which the handoff does, and
                         which mono can only draw in a Latin script. When it cannot, the whole figure
                         hands over to sans rather than falling back mid-line (monoCarriesNoWords). */}
+                    {/* ⛔ A SILENT ROW DRAWS NO COLUMN. Not "holds", not an empty arrow — nothing.
+                        The coach's sentence beneath is the whole row, and any word here is a
+                        verdict the app invented about a decision it did not make. */}
+                    {d.silent ? null : (
                     <Text style={[styles.earnedFigure, !monoCanDraw(holdsWord) && styles.earnedFigureSans]}>
                       {d.held ? (
                         <>
@@ -920,6 +942,7 @@ export function SessionEarned({
                         </>
                       )}
                     </Text>
+                    )}
                   </View>
                   <Text style={styles.earnedReason}>
                     {'text' in d.reason ? d.reason.text : t(d.reason.key, d.reason.params)}

@@ -21,7 +21,7 @@ import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChanges, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
@@ -453,7 +453,18 @@ export function Home({ navigation, route }: Props) {
          * A change is a difference between this programme and the one before it, so with no `before`
          * there is no count — the same pair `coachLoadDirections` reads two lines down.
          */
-        setBriefCount(before && fromCoach ? fromCoach.count : null);
+        /*
+         * ⛔ AND IT COUNTS DIFFERENCES, NOT SENTENCES (founder 2026-08-05): *"it says 6 changes, but
+         * when you go in you see there is no change — it just decided to continue with the same
+         * weight… and now it suddenly jumped from 6 to 10."*
+         *
+         * `fromCoach.count` is how many things the coach wrote a NOTE about, and a coach that holds
+         * a lift and explains why has written a note without changing anything. Two sessions in a
+         * week write twice as many notes, which is the jump he saw. `coachChanges` subtracts the two
+         * programmes the app already holds — see its header for why this cannot be asked of the
+         * coach — and a hold is not in the answer.
+         */
+        setBriefCount(coachChanges(coachPlan, before)?.length ?? null);
         /*
          * THE UNSEEN DOT, from one comparison. A decision newer than her last visit to the letter is
          * news she has not read. There is no second "seen" flag to write and therefore none to fall

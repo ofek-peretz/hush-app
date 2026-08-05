@@ -133,9 +133,18 @@ describe('⛔ and on day one there is nothing to have changed', () => {
    * ⚠️ A CHANGE IS A DIFFERENCE BETWEEN TWO PROGRAMMES. With no previous plan there is no
    * difference — which is the same pair `coachLoadDirections` reads for the arrows two lines below.
    */
-  it('the pill counts nothing until there is a programme to compare against', () => {
+  /**
+   * ⛔ AND ON 2026-08-05 THE COUNT STOPPED BEING `fromCoach.count` ALTOGETHER.
+   *
+   * This law's claim — nothing to compare against means no count — is unchanged and is now carried
+   * by `coachChanges`, which returns `null` without a previous plan for exactly this reason. What
+   * changed is what a change IS: the founder saw "6 changes" over a programme where nothing had
+   * moved, because the count was counting the coach's NOTES and a hold gets a note. See
+   * `aCountAndItsRowsAreOneDerivation`.
+   */
+  it('the pill counts differences against the previous programme, and nothing before there is one', () => {
     const src = read('src/screens/home/Home.tsx');
-    expect(src).toContain('setBriefCount(before && fromCoach ? fromCoach.count : null);');
+    expect(src).toContain('setBriefCount(coachChanges(coachPlan, before)?.length ?? null);');
     // …and `before` is the stored previous plan, not something derived on the spot.
     expect(src).toContain('db.loadCoachPlanPrev()');
   });

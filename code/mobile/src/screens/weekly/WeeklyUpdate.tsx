@@ -299,11 +299,25 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           db.loadCoachPlan().catch(() => null),
         ]);
         if (!active) return;
-        const weekEnd = currentWeekOpen(Date.now());
-        const weekStart = weekEnd - 7 * 24 * 60 * 60 * 1000;
+        /*
+         * ⛔ THIS BAND WAS MEASURING THE WRONG WEEK (founder 2026-08-05, same screenshot as above:
+         * "0/4 workouts, 0 t moved" on a day he had trained).
+         *
+         * `currentWeekOpen(now)` is the most recent Saturday 20:30 — the START of the week she is
+         * in. It was being used as `weekEnd`, so the window was the seven days BEFORE it: the week
+         * that had already closed. Every session since Saturday counted as zero.
+         *
+         * ⚠️ AND THE CHANGES ABOVE IT WERE ALREADY READING THIS WEEK. `coachBrief` filters on
+         * `weekOpenMs`, which is this same instant used correctly as an opening. So one screen was
+         * reporting a completed week's work above a current week's decisions — a mismatch nothing
+         * could show except by producing exactly the contradiction he photographed.
+         *
+         * One window, and it is the one the changes come from.
+         */
+        const weekStart = currentWeekOpen(Date.now());
         const inWeek = (history ?? []).filter((s) => {
           const at = new Date(s.startedAt).getTime();
-          return at >= weekStart && at < weekEnd;
+          return at >= weekStart;
         });
         // "N/M workouts" counts whole workouts trained (the workout-count rule: trained !== false).
         const done = inWeek.filter((s) => s.trained !== false).length;
@@ -416,7 +430,23 @@ export function WeeklyUpdate({ navigation, route }: Props) {
       });
     }
     return rows.sort((a, b) => b.magnitude - a.magnitude);
-  }, [view, units, t]);
+    /*
+     * ⛔ `fromCoach` WAS MISSING FROM THIS LIST, AND THAT IS THE WHOLE BUG (founder 2026-08-05):
+     *
+     *   > *"It shows 10 changes, but when you press it THE MIRROR opens and it says 0 workouts of 4
+     *   > were done, 0 tonnes lifted, but that the AI read the sessions and decided on 10 changes —
+     *   > it's obvious to you that this isn't right. And it doesn't show the changes at all."*
+     *
+     * The rows and the count came from the same object and disagreed anyway, because only one of
+     * them was memoised. This runs once, on the first render, while `coachLog` is still `null` —
+     * so `fromCoach` is null, it takes the dead engine's branch, `view` is null, and it produces
+     * an empty array. `changedCount` two lines above is a plain expression, so it recomputed the
+     * instant the log landed and printed 10.
+     *
+     * **A count and its rows must be one derivation.** The dependency is the fix; the memo was
+     * never the problem, its list was.
+     */
+  }, [fromCoach, view, units, t]);
   const shown = showAll ? allChanges : allChanges.slice(0, LETTER_ROWS);
 
   return (

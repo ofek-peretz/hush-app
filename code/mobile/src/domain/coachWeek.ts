@@ -418,3 +418,93 @@ export function coachChangedCase(
     sessions: [],
   };
 }
+
+/* ────────────────────────────────────────────────── WHAT ACTUALLY CHANGED, AS A MEASURED DIFF */
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * A CHANGE IS A DIFFERENCE BETWEEN TWO PROGRAMMES — NOT A SENTENCE THE COACH WROTE.
+ *
+ * ⛔ FOUNDER, 2026-08-05:
+ *
+ *   > *"After the workout it says 6 changes, but when you go in and check you see there is no
+ *   > change — it just decided to continue with the same weight. A change is only if there is a
+ *   > drop or a raise or added sets or anything else. And now it suddenly jumped from 6 changes to
+ *   > 10 for some reason."*
+ *
+ * Both halves of that are one bug. The pill counted `coachBrief().count`, which is **how many
+ * things the coach wrote a note about** — and a coach that holds a lift and explains why has
+ * written a note without making a change. The jump from six to ten is the same arithmetic: a second
+ * session added four more notes.
+ *
+ * ── WHY THIS CANNOT BE ASKED OF THE COACH ───────────────────────────────────────────────────────
+ * The obvious fix is a `changed: true` field on each note. **Rejected**, for the reason
+ * `coachLoadDirections` already gives: the coach states a PROGRAMME, and any field where it also
+ * states what it did to the programme is a field that can disagree with the programme. The app
+ * holds both weeks. It can subtract them, and a subtraction cannot be wrong about itself.
+ *
+ * ── WHAT COUNTS ─────────────────────────────────────────────────────────────────────────────────
+ * A load that moved, a set count that moved, a lift that arrived, a lift that left. Four kinds,
+ * all of them things she would notice standing in the gym. **A hold is not among them**, which is
+ * the founder's sentence turned into code.
+ *
+ * ⚠️ FIRST-EVER PLAN IS `null`, NEVER ZERO. There is nothing to subtract from, and "0 changes" on
+ * the week a programme arrives would be the app reporting on itself before it had done anything.
+ * The same distinction `coachBrief` draws, for the same reason.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export type CoachChangeKind = 'load' | 'sets' | 'added' | 'dropped';
+
+export interface CoachChange {
+  ex: string;
+  kind: CoachChangeKind;
+  /** Which way it went. A lift that arrived or left has no direction — it is not a move. */
+  direction?: 'up' | 'down';
+  from?: number;
+  to?: number;
+}
+
+/** Every lift's load and set count in a plan; first occurrence wins, as `coachLoadDirections` does. */
+function liftShape(plan: CoachPlan): Map<string, { load: number | null; sets: number }> {
+  const out = new Map<string, { load: number | null; sets: number }>();
+  for (const session of plan.sessions) {
+    for (const block of session.blocks) {
+      for (const item of block.items) {
+        if (item.kind !== 'reps') continue;
+        const prev = out.get(item.ex);
+        // A lift split across two blocks is ONE prescription with the rounds added up — the same
+        // reading `currentBlockSets` had to learn on the set screen, for the same reason.
+        if (prev) prev.sets += block.rounds;
+        else out.set(item.ex, { load: item.load, sets: block.rounds });
+      }
+    }
+  }
+  return out;
+}
+
+export function coachChanges(
+  now: CoachPlan | null | undefined,
+  before: CoachPlan | null | undefined,
+): CoachChange[] | null {
+  if (!now) return null;
+  if (!before) return null; // the first programme is a starting point, not a set of changes
+  const then = liftShape(before);
+  const next = liftShape(now);
+  const out: CoachChange[] = [];
+
+  for (const [ex, cur] of next) {
+    const was = then.get(ex);
+    if (!was) {
+      out.push({ ex, kind: 'added' });
+      continue;
+    }
+    if (cur.load != null && was.load != null && Math.abs(cur.load - was.load) >= 1e-6) {
+      out.push({ ex, kind: 'load', direction: cur.load > was.load ? 'up' : 'down', from: was.load, to: cur.load });
+    }
+    if (cur.sets !== was.sets) {
+      out.push({ ex, kind: 'sets', direction: cur.sets > was.sets ? 'up' : 'down', from: was.sets, to: cur.sets });
+    }
+  }
+  for (const ex of then.keys()) if (!next.has(ex)) out.push({ ex, kind: 'dropped' });
+  return out;
+}
