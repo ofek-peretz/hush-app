@@ -58,7 +58,16 @@ const CANONICAL: Array<[string, string]> = [
   ['CR1 · READY', 'WatchCopy.startCardio'],
   ['CR2 · LIVE', 'struct CardioStageScreen'],
   ['CR3 · KM LOGGED', 'struct KmLoggedScreen'],
-  ['CR4 · DONE', 'WatchCopy.thatsTheDistance'],
+  /*
+   * ⚠️ IDENTIFIED BY THE SCREEN, NOT BY A SENTENCE IN IT (2026-08-04). The marker was
+   * `WatchCopy.thatsTheDistance` — "That's the distance." — and that line was deleted when the run's
+   * close took the phone poster's grammar: the mark and the enormous figure say what the sentence
+   * said, in a block the 41 mm case could not spare.
+   *
+   * The law is that the SCREEN still exists, so it now asks after the screen. A marker made of copy
+   * fails every time the copy changes, which is not what this file is for.
+   */
+  ['CR4 · DONE', 'struct CardioCompleteScreen'],
 ];
 
 describe('every screen the design names still exists', () => {

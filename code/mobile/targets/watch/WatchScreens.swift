@@ -64,8 +64,15 @@ enum Wrist {
   static let head: CGFloat = 20
   /// A primary action. Big enough to hit with a wet thumb, on the smallest case.
   static let action: CGFloat = 44
-  /// The type floor. Below this a word on a wrist is decoration.
-  static let legend: CGFloat = 10
+  /*
+   * ⛔ THE TYPE FLOOR IS ELEVEN (founder 2026-08-04): *"if something is very small, either enlarge
+   * it, design it differently, or remove it — we must never reach a state where something on the
+   * watch is unclear."*
+   *
+   * It was ten, and the wrist is the surface where the rule matters most: held at arm's length,
+   * glanced at mid-set, in a gym's own bad light. One point is a large fraction of a 41 mm case.
+   */
+  static let legend: CGFloat = 11
   static let label: CGFloat = 11
   static let body: CGFloat = 14
 }
@@ -525,6 +532,29 @@ private struct DrawCheck: View {
   var size: CGFloat = 22
   var body: some View {
     Image(systemName: "checkmark").font(.system(size: size, weight: .bold)).foregroundStyle(Palette.up)
+  }
+}
+
+/**
+ * The brand's range mark, small enough to sit beside a wordmark: a rule between two end ticks.
+ *
+ * ⚠️ CREAM, NOT OCHRE. I reached for ochre because that is how I had drawn it — and this palette
+ * says in its own words that *"ochre is retired: v7's tokens.ts holds none"*. The phone's
+ * `RangeMark` defaults to `color.textPrimary` too, so cream is not a compromise here; it is what
+ * the component actually is on both surfaces.
+ */
+private struct RangeGlyph: View {
+  var body: some View {
+    ZStack {
+      Rectangle().fill(Palette.ink0).frame(width: 20, height: 1.3)
+      HStack {
+        Rectangle().fill(Palette.ink0).frame(width: 1.3, height: 9)
+        Spacer()
+        Rectangle().fill(Palette.ink0).frame(width: 1.3, height: 9)
+      }
+      .frame(width: 20)
+    }
+    .frame(width: 20, height: 9)
   }
 }
 
@@ -1425,36 +1455,162 @@ struct ActiveSetScreen: View {
   ///
   /// BODYWEIGHT is the one exercise where the load is NOT the hero (founder 2026-07-11): an athlete
   /// on a pull-up knows they are lifting themselves. The rep count takes the mark instead.
+  /**
+   * The load, what changed about it, what counts as done, and how the lift is going — in that
+   * order, because that is the order she needs them in.
+   *
+   * ⛔ REBUILT 2026-08-04. What stood here was the load, a 124-point rep RULER, a per-side line and
+   * an 8.5-point pill: four blocks under the hero on the smallest screen in the product, three of
+   * them below the founder's type floor. The ruler was a chart doing a number's job — deleted from
+   * the phone the day before for exactly that — and the SET DOTS said how many sets were behind her
+   * while never saying what happened in them.
+   *
+   * BODYWEIGHT is the one lift where the load is not the hero (founder 2026-07-11): an athlete on a
+   * pull-up knows what they are lifting, so the rep count takes the mark.
+   */
   private var readout: some View {
-    VStack(spacing: 5) {
+    VStack(spacing: 4) {
       if let wt = shownWeight {
         Button { TapGate.pass { enterEdit(.weight) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(fmtW(wt)).font(.system(size: Fit.s(50), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
-            Text(WatchCopy.kg).font(.system(size: Fit.s(16), design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text(fmtW(wt)).font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
+            Text(WatchCopy.kg).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
+            newsMark
           }
           .lineLimit(1).minimumScaleFactor(0.5)
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        repRuler
-        perSideLine
-        tapToEditPill
+        bandLine
+        setFigures
+        if showsPerSide { perSideLine }
+        if firstSetOfSession { tapToEditPill }
       } else {
         Button { TapGate.pass { enterEdit(.reps) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text("\(shownReps)").font(.system(size: Fit.s(50), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
-            Text(WatchCopy.reps).font(.system(size: Fit.s(16), design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text("\(shownReps)").font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
+            Text(WatchCopy.reps).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
           }
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         Legend(WatchCopy.bodyweightQuiet, size: Wrist.legend)
-        tapToEditPill
+        setFigures
+        if firstSetOfSession { tapToEditPill }
       }
     }
     .frame(maxWidth: .infinity)
   }
+
+  /**
+   * ⛔ WHAT CHANGED ABOUT THIS BAR — the phone's `domain/loadNews`, in Swift.
+   *
+   * A row of last time's reps means nothing without the load they were lifted at: 8 at 32.5 kg is
+   * not worse than 7 at 34. `↑1.5` IS that fact, where "32.5 last time" is a sum she has to do.
+   *
+   * ⚠️ MID-LIFT IT COMPARES TO THE SET BEFORE, and only on the first set to last time — a Loop 1
+   * correction is the change she has to act on while standing at a bar that needs re-loading, and
+   * context never outranks an instruction. She is never shown both.
+   *
+   * ⚠️ AND IT IS NIL ON MOST SETS. Rounded before comparing, because plate maths and unit conversion
+   * leave two identical weights differing in the fifteenth decimal — and a "↑0" on the largest
+   * figure on the screen is a claim about her training at the size of a fist.
+   */
+  private var newsKg: Double? {
+    guard let cur = mirror.targetWeight else { return nil }
+    let against: Double?
+    if let prev = (mirror.loadsSoFar ?? []).last, let p = prev {
+      against = p
+    } else {
+      against = mirror.lastLoadKg
+    }
+    guard let a = against else { return nil }
+    let d = ((cur * 100).rounded() - (a * 100).rounded()) / 100
+    return d == 0 ? nil : d
+  }
+
+  @ViewBuilder private var newsMark: some View {
+    if let d = newsKg {
+      Text((d > 0 ? "↑" : "↓") + fmtW(abs(d)))
+        .font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).monospacedDigit()
+        .foregroundStyle(d > 0 ? Palette.up : Palette.down)
+        .padding(.leading, 2)
+    }
+  }
+
+  /**
+   * ⛔ THE BAND, AND IT IS NOT THE ACCENT (founder 2026-08-04): *"why are we putting the reps in
+   * green as a hero? It is only the range that follows from the weight."*
+   *
+   * The palette's law is that moss means A DECISION MADE — and the LOAD is the bigger decision by
+   * far, yet it wore cream while the band that follows from it wore the accent. `× 6–8` in quiet
+   * ink reads as part of the load's own sentence, which is how every programme in the world writes
+   * it. Colour on this stage now means something HAPPENED.
+   */
+  @ViewBuilder private var bandLine: some View {
+    let lo = mirror.targetReps
+    let hi = mirror.targetRepsHi ?? lo
+    Text(hi > lo ? "× \(lo)–\(hi)" : "× \(lo)")
+      .font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).monospacedDigit()
+      .foregroundStyle(Palette.ink1)
+  }
+
+  /**
+   * ⛔ HER SETS, AS FIGURES — and a slot speaks only when it has something to say.
+   *
+   * The dots said how many sets were behind her. This says that AND what happened in them, at four
+   * times the size: a slot holds LAST TIME'S number, dimmed, until she replaces it with her own.
+   *
+   * ⚠️ THE SETS AHEAD ARE A DOT. She needs the ghost of the set she is about to do; the ones further
+   * along are last week's shape and she will meet them when she gets there — the same rule as the
+   * per-side line, which is the founder's own: state it when it is news.
+   *
+   * ⚠️ A slot with no history at all draws a DASH, never a zero — a zero is a set she did and failed.
+   */
+  private var setFigures: some View {
+    let m = max(mirror.setsInExercise ?? 1, 1)
+    let cur = mirror.setNumber ?? 1
+    let done = mirror.setsSoFar ?? []
+    let ghosts = mirror.lastReps ?? []
+    let lo = mirror.targetReps
+    let hi = mirror.targetRepsHi ?? lo
+    return HStack(spacing: 0) {
+      ForEach(0..<m, id: \.self) { i in
+        VStack(spacing: 3) {
+          if i < done.count {
+            let r = done[i]
+            Text("\(r)")
+              .font(.system(size: Fit.s(23), weight: .medium, design: .monospaced)).monospacedDigit()
+              .foregroundStyle(r > hi ? Palette.up : (r < lo ? Palette.down : Palette.ink0))
+          } else if i == cur - 1 {
+            Text(i < ghosts.count ? "\(ghosts[i])" : "–")
+              .font(.system(size: Fit.s(23), design: .monospaced)).monospacedDigit()
+              .foregroundStyle(Palette.ink1).opacity(0.45)
+          } else {
+            Circle().fill(Palette.ink0.opacity(0.28)).frame(width: 5, height: 5)
+              .frame(height: Fit.s(23))
+          }
+          // Where she is. A rule, not a colour: the figures already spend colour on the verdict.
+          Capsule()
+            .fill(i == cur - 1 ? Palette.ink0.opacity(0.55) : Color.clear)
+            .frame(width: 18, height: 2)
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+  }
+
+  /// The first set of the SESSION — the teaching moment for the edit door, and only that.
+  private var firstSetOfSession: Bool { mirror.globalIndex == 0 }
+
+  /**
+   * ⛔ THE PER-SIDE FIGURE IS NOT NEWS ON EVERY SET. It stays — the founder's ruling is that the
+   * athlete never calculates — but she loads the bar ONCE, and after that it is a fact she acted on
+   * five minutes ago occupying a row on the smallest screen in the product.
+   *
+   * ⚠️ It returns the instant the load moves, because that is when the bar must be re-loaded.
+   */
+  private var showsPerSide: Bool { (mirror.setNumber ?? 1) <= 1 || newsKg != nil }
 
   /// "12 kg a side" — the figure she acts on at the rack, at 13 pt instead of 9.5.
   ///
@@ -1474,7 +1630,7 @@ struct ActiveSetScreen: View {
     HStack(spacing: 5) {
       Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(Palette.ink2)
       Text(WatchCopy.tapWeightToEdit.uppercased())
-        .font(.system(size: 8.5, weight: .medium, design: .monospaced)).tracking(0.9)
+        .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
         .foregroundStyle(Palette.ink2)
     }
     .padding(.vertical, 3).padding(.horizontal, 9)
@@ -1484,39 +1640,13 @@ struct ActiveSetScreen: View {
     )
   }
 
-  /// The rep band as a ruler: a moss bar with two end caps, the floor + ceiling in moss mono,
-  /// "reps" between them. Collapses to a single centred count when there is no band.
-  @ViewBuilder private var repRuler: some View {
-    let lo = mirror.targetReps
-    let hi = mirror.targetRepsHi ?? lo
-    if hi > lo {
-      VStack(spacing: 1) {
-        ZStack {
-          Capsule().fill(Palette.ink0.opacity(0.16)).frame(height: 2)
-          HStack {
-            Capsule().fill(Palette.signal).frame(width: 2, height: 14)
-            Spacer()
-            Capsule().fill(Palette.signal).frame(width: 2, height: 14)
-          }
-          Capsule().fill(Palette.signal).frame(height: 3)
-        }
-        .frame(width: Fit.s(126))
-        HStack(alignment: .top) {
-          Text("\(lo)").font(.system(size: Fit.s(17), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
-          Spacer()
-          Text(WatchCopy.reps).font(.system(size: 10)).foregroundStyle(Palette.ink2).padding(.top, 4)
-          Spacer()
-          Text("\(hi)").font(.system(size: Fit.s(17), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
-        }
-        .frame(width: Fit.s(126))
-      }
-    } else {
-      HStack(alignment: .firstTextBaseline, spacing: 4) {
-        Text("\(lo)").font(.system(size: Fit.s(17), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.signal)
-        Text(WatchCopy.reps).font(.system(size: 10)).foregroundStyle(Palette.ink2)
-      }
-    }
-  }
+  /*
+   * ⛔ THE REP RULER IS DELETED (founder 2026-08-04, having deleted it from the phone the day
+   * before). 124 points of rule, two end caps, two 17-point figures and a 10-point word — to say
+   * "6 to 8". It was a chart doing a number's job on a 6-inch screen; here it was a chart doing a
+   * number's job on the smallest screen in the product, and it cost a whole block above a button
+   * that had already been squeezed once. `bandLine` says the same thing in one quiet line.
+   */
 
   /*
    * ════ WT9 · EDIT SET — TWO HALVES, NOT A BOULDER AND A PEBBLE ════
@@ -1534,23 +1664,52 @@ struct ActiveSetScreen: View {
    * four times the size. Same information, half the shouting, both targets full width.
    */
   private var editor: some View {
+    /*
+     * ⛔ REBUILT 2026-08-04 (founder): *"the edit-set screen needs a complete redo — too much green.
+     * And what is written ASKED, does that apply to the weight too? Right now it looks marked on the
+     * weight while it says a rep range."*
+     *
+     * He caught two things and they were both mine.
+     *
+     * THE BAND WAS FLOATING ABOVE THE ROWS, and the KG row is the one wearing the active border —
+     * so "6–8" read as a range for the WEIGHT. **A weight has no band.** It rides inside the reps
+     * row's own legend now, where the number it describes is, and it cannot be read as anything else.
+     *
+     * AND THE MOSS: the palette's law is that moss means A DECISION MADE, and it is the app's
+     * decision. **This screen is hers** — she is overruling the prescription. So the active row is
+     * marked in cream, the crown hint is muted, and the only moss left is on Done, where the app
+     * finally does something.
+     */
     VStack(spacing: 7) {
       if !bodyweight {
-        editRow(unit: WatchCopy.kg, value: fmtW(w), active: field == .weight) { field = .weight }
+        editRow(unit: WatchCopy.kg, band: nil, value: fmtW(w), active: field == .weight) { field = .weight }
       }
-      editRow(unit: WatchCopy.reps, value: "\(Int(r))", active: bodyweight || field == .reps) { field = .reps }
+      editRow(unit: WatchCopy.reps, band: bandLabel, value: "\(Int(r))", active: bodyweight || field == .reps) { field = .reps }
       crownHint
     }
     .frame(maxWidth: .infinity)
   }
 
+  /// "6–8" — what was ASKED, carried inside the reps row so it can only describe the reps.
+  private var bandLabel: String? {
+    let lo = mirror.targetReps
+    let hi = mirror.targetRepsHi ?? lo
+    return hi > lo ? "\(lo)–\(hi)" : nil
+  }
+
   /// One half of the editor: a legend, a figure, and a border that says whether the crown is on it.
-  private func editRow(unit: String, value: String, active: Bool, tap: @escaping () -> Void) -> some View {
+  private func editRow(unit: String, band: String?, value: String, active: Bool, tap: @escaping () -> Void) -> some View {
     Button(action: { TapGate.pass(tap) }) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         Text(unit.uppercased())
           .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
-          .foregroundStyle(active ? Palette.signal : Palette.ink2)
+          .foregroundStyle(active ? Palette.ink0 : Palette.ink2)
+        if let band {
+          // The ask, inside the row it is about. Moss here is earned: it is the coach's decision.
+          Text(band)
+            .font(.system(size: Fit.s(13), weight: .semibold, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.signal)
+        }
         Spacer(minLength: 4)
         Text(value)
           .font(.system(size: Fit.s(30), weight: .medium, design: .monospaced)).monospacedDigit()
@@ -1562,20 +1721,23 @@ struct ActiveSetScreen: View {
       .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(active ? Palette.ink0.opacity(0.07) : .clear))
       .overlay(
         RoundedRectangle(cornerRadius: 13, style: .continuous)
-          .strokeBorder(active ? Palette.signal.opacity(0.75) : Palette.ink0.opacity(0.16), lineWidth: active ? 1.6 : 1)
+          .strokeBorder(active ? Palette.ink0.opacity(0.85) : Palette.ink0.opacity(0.16), lineWidth: active ? 1.7 : 1)
       )
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
   }
 
-  /// The moss crown instruction: a refresh glyph + "TURN CROWN TO SET".
+  /**
+   * The crown instruction. ⚠️ MUTED, NOT MOSS, and at the type floor rather than 9.5 — it teaches
+   * the one non-obvious gesture on this screen, and a hint is never a decision.
+   */
   private var crownHint: some View {
     HStack(spacing: 5) {
       Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
-      Text(WatchCopy.turnCrownToSet).font(.system(size: 9.5, weight: .medium, design: .monospaced)).tracking(1.1)
+      Text(WatchCopy.turnCrownToSet).font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
     }
-    .foregroundStyle(Palette.signal)
+    .foregroundStyle(Palette.ink2)
     .frame(maxWidth: .infinity, alignment: .center)
   }
 
@@ -2051,8 +2213,17 @@ private struct CardioStageScreen: View {
               .foregroundStyle(Palette.ink0)
               .lineLimit(1).minimumScaleFactor(0.5)
             kmProgress
+            /*
+             * ⛔ PACE JOINS THE ROW AND DISTANCE LEAVES IT (founder 2026-08-04): *"put the pace per
+             * kilometre in with the heart rate and the calories, and then make the 4.62 km under the
+             * bar bigger — running, she will certainly not see it."*
+             *
+             * The row read km · heart · burn, and the number every runner reads first was not on the
+             * wrist at all — which is where a runner actually looks, because the phone is in a
+             * pocket. Distance moves under the bar that is already drawing it, as a FIGURE.
+             */
             HStack(spacing: 4) {
-              Metric(value: metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––", label: WatchCopy.metricKm)
+              Metric(value: paceLabel, label: WatchCopy.perKm)
               Metric(value: metrics.heartRateBpm.map { "\($0)" } ?? "––", label: WatchCopy.metricHeart)
               Metric(value: metrics.activeKcal.map { "\($0)" } ?? "––", label: WatchCopy.metricKcal)
             }
@@ -2083,10 +2254,29 @@ private struct CardioStageScreen: View {
         .frame(height: 8)
       }
       .frame(height: 8)
-      Text("\(Int((intoKm * 1000).rounded())) m")
-        .font(.system(size: 11, weight: .medium, design: .monospaced)).monospacedDigit()
-        .foregroundStyle(Palette.ink1)
+      /*
+       * ⚠️ TOTAL DISTANCE, NOT METRES-INTO-THIS-KILOMETRE, and at 24 points rather than 11. The bar
+       * above already draws the position inside the kilometre — as a position, which is what a bar
+       * is for. Printing the same thing as a number under it was the one seat this line had, spent.
+       */
+      HStack(alignment: .firstTextBaseline, spacing: 4) {
+        Text(String(format: "%.2f", km))
+          .font(.system(size: Fit.s(24), weight: .semibold, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(Palette.ink0)
+        Text(WatchCopy.metricKm.lowercased())
+          .font(.system(size: Fit.s(12), design: .monospaced))
+          .foregroundStyle(Palette.ink2)
+      }
+      .lineLimit(1).minimumScaleFactor(0.6)
     }
+  }
+
+  /// Minutes per kilometre — measured, never modelled, and a dash until there is a kilometre.
+  private var paceLabel: String {
+    let km = metrics.distanceKm ?? 0
+    let secs = elapsed()
+    guard km >= 0.05, secs > 0 else { return "––" }
+    return fmtTime(secs / km)
   }
 }
 
@@ -2159,11 +2349,18 @@ struct CardioCompleteScreen: View {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip()
         Spacer(minLength: 2)
-        HStack(spacing: 6) { DrawCheck(size: 14); Legend(WatchCopy.cardioSaved, size: Wrist.legend) }
-        Text(WatchCopy.thatsTheDistance)
-          .font(.system(size: Fit.s(20), design: .serif)).foregroundStyle(Palette.ink0)
-          .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
-          .padding(.top, 5)
+        /*
+         * ⛔ THE MARK REPLACES THE MOOD (founder 2026-08-04). "That's the distance." took a whole
+         * block on a 41 mm case to say what the enormous figure under it already says. The wordmark
+         * costs one row and makes a screenshot of a wrist carry the product — the same reason it
+         * went onto the phone's poster.
+         */
+        HStack(spacing: 6) {
+          RangeGlyph()
+          Text("hush").font(.system(size: Fit.s(15), design: .serif)).foregroundStyle(Palette.ink0)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, 2)
         HStack(alignment: .firstTextBaseline, spacing: 5) {
           Text(summary.distanceKm.map { String(format: "%.2f", $0) } ?? "––")
             .font(.system(size: Fit.s(42), weight: .medium, design: .monospaced)).monospacedDigit()
@@ -2352,13 +2549,23 @@ struct CompleteScreen: View {
       VStack(spacing: 0) {
         TopStrip()
         Spacer(minLength: 2)
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
           TallyMark()
-          Text(WatchCopy.thatsTheWork)
+          /*
+           * ⛔ THE WORKOUT'S NAME, NOT A MOOD (founder 2026-08-04, applying the phone's poster to the
+           * wrist). `summary.workoutName` has ridden the wire the whole time and this screen never
+           * drew it: **"That's the work." is a mood; "Lower A" is a fact**, and the tally mark above
+           * it has already said the work is done.
+           *
+           * ⚠️ The sentence stands in when the name is absent, which is what a standalone workout
+           * with no phone-side programme looks like.
+           */
+          Text(mirror.summary?.workoutName ?? WatchCopy.thatsTheWork)
             .font(.system(size: Fit.s(23), design: .serif))
             .foregroundStyle(Palette.ink0)
             .multilineTextAlignment(.center)
             .lineSpacing(1)
+            .lineLimit(2).minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
           if let sm = mirror.summary {
             HStack(alignment: .top, spacing: 4) {
