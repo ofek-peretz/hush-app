@@ -58,8 +58,10 @@ enum Fit {
 enum Wrist {
   /// Side padding. 9 rather than 12: on a 41 mm case every point of width is a point of type.
   static let side: CGFloat = 9
-  /// The gap under the action zone. Three points, not eight — the founder gave the bottom edge.
-  static let foot: CGFloat = 3
+  /* ⛔ `foot` is DELETED (2026-08-05). It was "the gap under the action zone", and the founder's
+     answer to that gap was that there should not be one: the action zone reaches the bottom edge.
+     Four screens had to be un-padded by hand to make it true, which is precisely why the constant
+     goes rather than being set to zero — a named gap is a gap somebody re-applies. */
   /// The header row. Fixed on every screen, so nothing above the fold ever shifts between them.
   static let head: CGFloat = 20
   /// A primary action. Big enough to hit with a wet thumb, on the smallest case.
@@ -525,7 +527,7 @@ private struct CorrectionNote: View {
           // The engine's new load, IN THE DIRECTION IT MOVED. It was moss either way — so the wrist
           // announced an ease in the colour of a raise (founder 2026-07-29, phone parity).
           .foregroundStyle(up ? Palette.up : Palette.down)
-        Text(WatchCopy.kg).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text(WatchCopy.kg).font(.system(size: 12)).foregroundStyle(Palette.ink2)
       }
       // The reason, under the number it earned — never apart from it (phone parity).
       Text(WatchCopy.corrected(c.reps, up: up))
@@ -1516,7 +1518,7 @@ struct ActiveSetScreen: View {
         Button { TapGate.pass { enterEdit(.weight) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(fmtW(wt)).font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
-            Text(WatchCopy.kg).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text(WatchCopy.kg).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
             newsMark
           }
           .lineLimit(1).minimumScaleFactor(0.5)
@@ -1540,7 +1542,7 @@ struct ActiveSetScreen: View {
         Button { TapGate.pass { enterEdit(.reps) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text("\(shownReps)").font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
-            Text(WatchCopy.reps).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
+            Text(WatchCopy.reps).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
           }
           .contentShape(Rectangle())
         }
@@ -1672,7 +1674,11 @@ struct ActiveSetScreen: View {
        mirror.loadSetup?.style == "barbell" || mirror.loadSetup?.style == "plate_loaded" {
       // 15 and 13, up from 13 and 12 — see the note at the call site. The FIGURE is mono and the
       // words beside it are sans, which is the same two-voice split every unit slot makes.
-      (Text("\(fmtW(ps)) \(WatchCopy.kg)").font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
+      // ⚠️ THE FIGURE AND THE UNIT ARE TWO RUNS. They were one mono string — and `WatchCopy.kg` is
+      // "ק\"ג" in Hebrew, so a monospaced face with no Hebrew swapped mid-word. Same law as the
+      // phone's `monoCarriesNoWords`, which had never been pointed at Swift.
+      (Text(fmtW(ps)).font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
+        + Text(" " + WatchCopy.kg).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink0)
         + Text(" " + WatchCopy.aSide).font(.system(size: 13)).foregroundStyle(Palette.ink1))
         .lineLimit(1).minimumScaleFactor(0.8)
     }
@@ -1788,7 +1794,7 @@ struct ActiveSetScreen: View {
   private var crownHint: some View {
     HStack(spacing: 5) {
       Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold))
-      Text(WatchCopy.turnCrownToSet).font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
+      Text(WatchCopy.turnCrownToSet).font(.system(size: Wrist.legend, weight: .medium)).tracking(1.1)
     }
     .foregroundStyle(Palette.ink2)
     .frame(maxWidth: .infinity, alignment: .center)
@@ -1863,7 +1869,7 @@ struct CorrectionScreen: View {
           // The glow is the mock's, and it is the reason this reads as news rather than as a
           // number: on the dark stage the new load is the only lit thing on the screen.
           .shadow(color: tone.opacity(0.22), radius: 15)
-        Text(WatchCopy.kg).font(.system(size: Fit.s(15), design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text(WatchCopy.kg).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
       }
       // ONE line, always: "34 31.5 kg" on a 40 mm case is already tight and a heavy lift
       // ("112.5 107.5 kg") is tighter. It scales before it wraps.
@@ -2016,11 +2022,11 @@ struct InterRestScreen: View {
         Spacer(minLength: 4)
         if let wt = nextLoad {
           (Text(fmtW(wt)).font(.system(size: Fit.s(24), weight: .medium, design: .monospaced))
-            + Text(" " + WatchCopy.kg).font(.system(size: 12, design: .monospaced)))
+            + Text(" " + WatchCopy.kg).font(.system(size: 12)))
             .foregroundStyle(Palette.signal)
             .lineLimit(1)
         } else {
-          Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal)
+          Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium)).foregroundStyle(Palette.signal)
         }
       }
     }
@@ -2126,13 +2132,13 @@ struct TransitionRestScreen: View {
         Spacer(minLength: 4)
         if let wt = mirror.nextTargetWeight {
           (Text(fmtW(wt)).font(.system(size: Fit.s(24), weight: .medium, design: .monospaced))
-            + Text(" " + WatchCopy.kg).font(.system(size: 12, design: .monospaced)))
+            + Text(" " + WatchCopy.kg).font(.system(size: 12)))
             .foregroundStyle(Palette.signal)
             .lineLimit(1)
             .fixedSize()
             .layoutPriority(1)
         } else {
-          Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).foregroundStyle(Palette.signal)
+          Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium)).foregroundStyle(Palette.signal)
         }
       }
       // The direction the new lift's opening load moved, if it moved. Restored after the

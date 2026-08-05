@@ -484,6 +484,30 @@ export const WATCH_INTENT_TYPES: readonly WatchIntentType[] = [
 ];
 const INTENT_TYPES = WATCH_INTENT_TYPES;
 
+/**
+ * ⛔ A STANDING FACT — true whether or not a session is running, and true however late it arrives.
+ *
+ * FOUNDER, 2026-08-05: *"when you press injury mode on the watch it shows the area picker and the
+ * pain level, which is fine — but when I press it nothing happens."*
+ *
+ * The wrist was dropping the report before it left (it guarded on `isReachable`, and his watch was
+ * in aeroplane mode). Fixing that put it on the DURABLE channel, and **this function would then
+ * have thrown it away on arrival** — twice over:
+ *
+ *   `noActiveSession` → a report delivered after the workout ended, after an app restart, or from
+ *                       a CARDIO run (where there is no strength mirror at all) is rejected.
+ *   `stale`           → the TTL is fifteen seconds, and the entire point of a queued report is
+ *                       that it arrives late.
+ *
+ * ⚠️ That is the WT14 shape for the third time in two days: a wrist intent that reaches the phone
+ * and dies quietly. Both gates exist for `complete_set` — a PROPOSAL against live state that must
+ * never be replayed against a session that has moved on. **A muscle that hurts is not a proposal.**
+ * It was true when she tapped it, it is true now, and no phase makes it untrue.
+ */
+function isStandingFact(t: WatchIntentType): boolean {
+  return t === 'report_pain';
+}
+
 /** The lobby proposals are valid only when there is NO active session (the Start
  *  screen). They are handled before the active-session gates below. */
 function isLobbyIntent(t: WatchIntentType): boolean {
@@ -647,6 +671,14 @@ export function decideWatchIntent(
   }
 
   const noActiveSession = !mirror || mirror.phase === 'complete';
+
+  // A standing fact is accepted in EVERY phase and at ANY age — see `isStandingFact`. Checked
+  // before every gate below, because every gate below is about live state.
+  if (isStandingFact(intent.type)) {
+    const action = intentToAction(intent);
+    if (!action) return { accept: false, reason: 'malformed', action: null, latencyMs };
+    return { accept: true, action, latencyMs };
+  }
 
   // Lobby proposals (Start screen) are valid ONLY when there is no active session;
   // the phone is the authority and performs the actual select/start.

@@ -238,3 +238,83 @@ describe('the pain report she files on the wrist is the one the engine acts on',
     expect({ watchSeverities: values }).toEqual({ watchSeverities: [...PAIN_SEVERITIES] });
   });
 });
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ A PAIN REPORT SURVIVES EVERY GATE BETWEEN THE WRIST AND THE ENGINE.
+ *
+ * FOUNDER, 2026-08-05: *"when you press injury mode on the watch it shows the area picker and the
+ * pain level, which is fine — but when I press it nothing happens."*
+ *
+ * It was dropped THREE separate times along one path, and each drop was silent:
+ *
+ *   1. THE WRIST         `reportPain` guarded on `manager.isReachable`, and every one of his
+ *                        screenshots has the aeroplane glyph. The intent was never sent.
+ *   2. THE PHONE'S NATIVE `didReceiveUserInfo` read only `record`, so once the report moved onto
+ *      SIDE                the durable channel it would have arrived and died — the WT14 shape.
+ *   3. THIS FUNCTION      `noActiveSession` and a fifteen-second TTL. A queued report is late by
+ *                        definition, and one filed from a CARDIO run has no strength mirror at
+ *                        all — so the durable channel would have delivered it and this would have
+ *                        thrown it away.
+ *
+ * ⚠️ ALL THREE FAILED THE SAME WAY: no crash, no log, nothing on screen. Every layer was
+ * individually defensible and the chain was dead. That is what this file exists for.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ a pain report is a standing fact, not a proposal', () => {
+  const painIntent = (issuedAt: string) => ({
+    v: WATCH_PROTOCOL_VERSION,
+    type: 'report_pain',
+    intentId: `pain_${issuedAt}`,
+    issuedAt,
+    area: 'Shoulders',
+    severity: 'pain',
+  });
+  const now = Date.parse('2026-08-05T12:00:00.000Z');
+
+  it('is accepted with NO session running — after the workout, or from a run', () => {
+    const d = decideWatchIntent(painIntent(new Date(now).toISOString()), null, now, new Set());
+    expect(d.accept).toBe(true);
+    expect(d.action).toEqual({ kind: 'report_pain', area: 'Shoulders', severity: 'pain' });
+  });
+
+  it('⛔ is accepted LATE — the whole point of the durable channel', () => {
+    // Twenty minutes old. The intent TTL is fifteen SECONDS, which is right for a `complete_set`
+    // against a session that has moved on, and fatal for a report that queued in a locker.
+    const issued = new Date(now - 20 * 60_000).toISOString();
+    const d = decideWatchIntent(painIntent(issued), null, now, new Set());
+    expect(d.accept).toBe(true);
+  });
+
+  it('⚠️ and a re-delivery is still rejected — at-least-once must not mean twice', () => {
+    const i = painIntent(new Date(now).toISOString());
+    const d = decideWatchIntent(i, null, now, new Set([i.intentId]));
+    expect(d.accept).toBe(false);
+    expect(d.reason).toBe('duplicate');
+  });
+
+  it('⚠️ a report with no severity is still refused — a half-finished flow is not a report', () => {
+    const i = { ...painIntent(new Date(now).toISOString()), severity: undefined };
+    expect(decideWatchIntent(i, null, now, new Set()).accept).toBe(false);
+  });
+
+  it('the phone reads intents off the DURABLE channel, not only off messages', () => {
+    // Link 2. The wrist queues it under `intent`; if the native side only looks for `record`, the
+    // report reaches the phone and dies with nothing to show for it.
+    const native = fs.readFileSync(
+      path.join(__dirname, '../../modules/hush-watch-connectivity/ios/HushWatchConnectivityModule.swift'),
+      'utf8',
+    );
+    const handler = native.slice(native.indexOf('didReceiveUserInfo'));
+    expect(handler).toContain('userInfo["intent"]');
+    expect(handler).toContain('onIntent(intent)');
+  });
+
+  it('the wrist queues it rather than requiring a connection', () => {
+    // Link 1. `guard localEngine == nil, manager.isReachable else { return false }` was the drop.
+    const model = fs.readFileSync(path.join(__dirname, '../../targets/watch/WatchModel.swift'), 'utf8');
+    const fn = model.slice(model.indexOf('func reportPain'), model.indexOf('func reportPain') + 700);
+    expect(fn).toContain('manager.transferIntent');
+    expect(fn).not.toMatch(/guard localEngine == nil, manager\.isReachable else \{ return false \}/);
+  });
+});

@@ -88,4 +88,47 @@ describe('the mono voice carries figures, never words', () => {
     }
     expect(violations).toEqual([]);
   });
+
+  /**
+   * ⛔ AND THE LAW HAD NEVER BEEN POINTED AT THE WRIST (found in the 2026-08-05 audit).
+   *
+   * Everything above sweeps `src/`. The watch is Swift, so for its whole life the wrist has drawn
+   * `WatchCopy.kg`, `WatchCopy.reps`, `WatchCopy.bodyweight` and "turn crown to set" inside
+   * `design: .monospaced` runs — and in Hebrew those are ק"ג, חזרות, גוף and סובב את הכתר.
+   *
+   * SF Mono has no Hebrew either, so watchOS substitutes the system face for those glyphs: the
+   * same mid-line swap this law exists to prevent, on the smallest screen in the product, on every
+   * set of every workout. The per-side line was the worst — the figure and its unit were ONE mono
+   * string, so the face changed inside a single run.
+   *
+   * ⚠️ It survived because the law could not see the file. Nobody ever argued for it.
+   */
+  it('⛔ no translated string is drawn in a monospaced run on the wrist', () => {
+    const swift = readFileSync(join(__dirname, '../../targets/watch/WatchScreens.swift'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    /*
+     * Every `WatchCopy.*` is a string the phone translates, so any of them inside a `.monospaced`
+     * font is a Hebrew word in a face that cannot draw one. The figures beside them are Swift
+     * expressions (`fmtW`, `fmtTime`, interpolation) and never `WatchCopy` — which is what makes
+     * this a clean line to draw.
+     */
+    const offenders = swift
+      .split('\n')
+      .map((l, i) => [i + 1, l] as const)
+      .filter(([, l]) => /Text\((?:" " \+ )?WatchCopy\.\w+[^)]*\)[^\n]*design: \.monospaced/.test(l))
+      .map(([n, l]) => `${n}: ${l.trim().slice(0, 90)}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('⚠️ …and a figure is never concatenated INTO a translated string', () => {
+    // One `Text` is one run, so the face cannot change at the unit however the string is built.
+    const swift = readFileSync(join(__dirname, '../../targets/watch/WatchScreens.swift'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const bad = swift
+      .split('\n')
+      .filter((l) => /Text\("[^"]*WatchCopy\.\w+[^"]*"\)/.test(l) && /monospaced/.test(l))
+      .map((l) => l.trim().slice(0, 90));
+    expect(bad).toEqual([]);
+  });
 });
