@@ -83,14 +83,22 @@ describe('⛔ and the prompt does not contradict itself about her sheet', () => 
      * six are the only questions this app asks" — above a rule saying nothing asks her for minutes.
      * Since 2026-08-05 nothing does: the coach sets the budget, never under 45.
      */
-    expect(text).toMatch(/Those five are the only questions this app\s+asks/);
-    expect(text).not.toMatch(/Those six are the only questions/);
+    /*
+     * ⚠️ THE COUNT IS GONE FROM THE PROSE ENTIRELY (2026-08-05). It was five, and five was wrong —
+     * the goal screen asks two more and requires both. Every count this prompt has ever stated has
+     * been wrong within a fortnight, so the sentence now names the fields and counts nothing. The
+     * reason for THIS assertion is untouched: the coach must not be told minutes is one of hers.
+     */
+    expect(text).toMatch(/it is the whole of what this app asks/);
+    expect(text).not.toMatch(/Those (five|six) are the only questions/);
     expect(text).toMatch(/"minutes" is a BUDGET and it is YOURS/);
+    expect(text).not.toMatch(/"minutes"[^.]{0,80}is one of (hers|her answers)/);
   });
 
-  it('⚠️ and the count it states matches the list it states', () => {
-    // "…asked her five things …and will never ask another." A stray "seventh" outlived the six.
-    expect(text).toMatch(/asked her five things/);
+  it('⚠️ and it does not state a count of her answers that a screen can falsify', () => {
+    // A stray "seventh" once outlived the six; then "five" outlived the seven. See
+    // `thePromptDescribesTheAppThatExists` for why the count itself was retired.
+    expect(text).not.toMatch(/asked her (five|six|seven) things/);
     expect(text).not.toMatch(/never ask a seventh/);
   });
 });

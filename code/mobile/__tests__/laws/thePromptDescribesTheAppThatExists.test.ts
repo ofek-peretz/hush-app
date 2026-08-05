@@ -62,13 +62,54 @@ describe('the prompt tells the truth about who asks her things', () => {
     expect(text()).not.toMatch(/Nothing else in this app will ever ask her a question/);
   });
 
-  it('names the number onboarding actually collects', () => {
+  it('⛔ states no COUNT of her answers at all, because every count here has been wrong', () => {
     /*
-     * ⚠️ TIED TO THE LIST, NOT TO A LITERAL. Add a seventh requirement and this fails, which is the
-     * only way a sentence in prose can be kept honest by a test.
+     * ⛔⛔ THIS TEST USED TO ASSERT THE COUNT, AND IT CERTIFIED A FALSEHOOD FOR TWO PASSES.
+     *
+     * It read `ASKED HER ${spelled} THINGS` off `REQUIRED_FOR_COACH.length` and called that "tied to
+     * the list, not to a literal" — which was true, and useless, because **`REQUIRED_FOR_COACH` is
+     * not the list of what onboarding asks.** It is the list of facts the coach cannot work without.
+     * `YourGoal` also asks for her goal and her limits, and disables its own continue button until
+     * both are non-empty, so the real number was seven while this test happily confirmed five.
+     *
+     * A law anchored to the wrong source is worse than no law: it survives the audit that would
+     * otherwise have caught the prose, and it did — twice, including one pass where I corrected the
+     * count from six to five and never questioned what it was counting.
+     *
+     * ── SO THE PROSE NAMES THE FIELDS AND STATES NO NUMBER ──────────────────────────────────────
+     * A count is a fact about the app duplicated into prose, and it goes stale the next time a
+     * screen changes. The field names cannot: if one is removed, the sheet stops carrying it and the
+     * feed law (`everyFactIsNamedToTheCoach`) fails.
      */
-    const spelled = ['ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT'][REQUIRED_FOR_COACH.length];
-    expect(text().toUpperCase()).toContain(`ASKED HER ${spelled} THINGS`);
+    expect(text()).not.toMatch(/asked her (five|six|seven|eight) things/i);
+    expect(text()).not.toMatch(/Those (five|six|seven) are the only questions/i);
+  });
+
+  it('⚠️ and names every answer she actually gives, including the two a form takes in her words', () => {
+    /*
+     * The seven. Five come from `REQUIRED_FOR_COACH`; `trainingFor` and `limits` come from the goal
+     * screen and are the two the old count forgot — which is exactly why they are asserted from the
+     * SCREEN below rather than from a list somebody could edit to match the prompt.
+     */
+    for (const r of REQUIRED_FOR_COACH) {
+      expect({ key: r.key, named: text().includes(`"${r.key}"`) }).toEqual({ key: r.key, named: true });
+    }
+    for (const key of ['trainingFor', 'limits']) {
+      expect({ key, named: text().includes(`"${key}"`) }).toEqual({ key, named: true });
+    }
+  });
+
+  it('⛔ and tells the coach NOT to open by re-asking the two it used to think were open', () => {
+    /*
+     * The behaviour the false count actually caused. "Everything else is yours to ask for", with
+     * `trainingFor` and `limits` outside the five, is an instruction to open the intake by asking a
+     * woman what she is training for — thirty seconds after she typed it into a required field.
+     */
+    expect(text()).toMatch(/do not open by asking her what she is training for or what hurts/);
+    const goal = read('src/screens/onboarding/YourGoal.tsx');
+    // ⚠️ Anchored to the screen: if the goal screen ever stops requiring them, the prompt is free to
+    // ask again and this rule has to be revisited rather than silently kept.
+    expect(goal).toMatch(/goal\.trim\(\)\.length === 0 \|\| limits\.trim\(\)\.length === 0/);
   });
 
   it('⛔ does not tell the coach to ask again for what she has already answered', () => {

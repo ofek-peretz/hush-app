@@ -170,19 +170,49 @@ describe('coach facts — the message the coach is sent', () => {
     expect(build().programme).toEqual([]);
   });
 
-  it('sends her instructions — her band, her map, her injuries — as instructions, not readings', () => {
+  it('sends her injuries as an instruction, not a reading', () => {
+    /*
+     * ⚠️ THE MAP LEFT THIS TEST ON 2026-08-05, and so did the band — see the two tests below and
+     * `everyFactIsNamedToTheCoach`. What survives is the claim the title was always about: an injury
+     * she reported is an INSTRUCTION to work around, and it reaches the coach with the severity and
+     * the date attached rather than as something for it to infer.
+     *
+     * `untilMs` is stated relative to `nowMs` now, because the sheet only carries live windows.
+     */
+    const now = 1_000_000;
     const f = coachFacts({
       profile: {
         ...profile,
         bodyMap: { Chest: 'emphasis' },
         repBandByMuscle: { Chest: '6-8' },
-        painEases: [{ muscle: 'Shoulders', severity: 'twinge', fromMs: 1, untilMs: 999 }],
-      }, plan: null , history, justFinished: history[0],
+        painEases: [{ muscle: 'Shoulders', severity: 'twinge', fromMs: 1, untilMs: now + 999 }],
+      }, plan: null , history, justFinished: history[0], nowMs: now,
     });
-    expect(f.athlete.emphasis).toEqual({ Chest: 'emphasis' });
-    expect(f.athlete.bandByMuscle).toEqual({ Chest: '6-8' });
-    expect(f.athlete.resting).toEqual([{ muscle: 'Shoulders', severity: 'twinge', untilMs: 999 }]);
+    expect(f.athlete.resting).toEqual([{ muscle: 'Shoulders', severity: 'twinge', untilMs: now + 999 }]);
     expect(f.athlete.minutes).toBe(55);
+    // Neither of the two engine-era fields rides along, even when the profile carries both.
+    expect('emphasis' in f.athlete).toBe(false);
+    expect('bandByMuscle' in f.athlete).toBe(false);
+  });
+
+  it('⛔ but NOT the rep band, which was never her instruction', () => {
+    /*
+     * ⛔ 2026-08-05. The test above used to assert `bandByMuscle` alongside these, under a title that
+     * called all three "her instructions". Two of them are. The band is not: `profile.repBand` is the
+     * literal '8-10' written at sign-up, the same string for every athlete alive, and `bandByMuscle`
+     * is empty unless she imported someone else's shared plan — in which case it describes THAT plan.
+     *
+     * On the sheet, beside her age and her bodyweight, it read as a preference she had expressed, and
+     * the coach had no way to tell a default from an answer. It sets the band on every item it writes
+     * and the app enforces that band live, so nothing was lost by dropping it.
+     */
+    const f = coachFacts({
+      profile: { ...profile, repBand: '8-10', repBandByMuscle: { Chest: '6-8' } },
+      plan: null, history, justFinished: history[0],
+    });
+    expect('band' in f.athlete).toBe(false);
+    expect('bandByMuscle' in f.athlete).toBe(false);
+    expect(JSON.stringify(f)).not.toContain('8-10');
   });
 
   it('never sends her name, and sends no field it was not explicitly given', () => {
@@ -198,7 +228,8 @@ describe('coach facts — the message the coach is sent', () => {
     expect(Object.keys(full.athlete).sort()).toEqual(
       // `language` is on the athlete because everything the coach writes is read by HER — see
       // `thePreambleIsTheSameForEveryone`, which holds it below the cache breakpoint.
-      ['band', 'daysPerWeek', 'language', 'minutes', 'sex', 'startWeightKg', 'units', 'weightKg'].sort(),
+      // ⚠️ `band` left this list on 2026-08-05 — see the test above for why it was never hers.
+      ['daysPerWeek', 'language', 'minutes', 'sex', 'startWeightKg', 'units', 'weightKg'].sort(),
     );
   });
 

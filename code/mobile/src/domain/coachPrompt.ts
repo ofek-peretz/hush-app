@@ -73,6 +73,20 @@ function languageName(tag: string): string {
 
 /** Bumped when the preamble's TEXT changes — a changed preamble is a cold cache for everyone. */
 /*
+ * ⛔ 19 — the staleness pass (2026-08-05), on the founder's *"check whether there are things in it
+ * that are no longer relevant and are just taking up space."* Four things were, and only one of them
+ * was actually about space:
+ *
+ *   · It said twice that the app had asked her FIVE things and would never ask another. It asks
+ *     seven — `YourGoal` will not let her past without both her goal and her limits — so the coach
+ *     was told to go and ask for two answers it had already been handed.
+ *   · `capability` came off the catalogue: 1,797 characters, a pure function of `muscle`, and false
+ *     as English (a curl is not a horizontal pull). See the note at `preamble()`.
+ *   · Seven fields were on the wire and named NOWHERE in the prompt — including `resting`, which the
+ *     injury paragraph made a promise about without ever giving its name, and `swappedByHer` /
+ *     `keepsByHer` / `ranOwn`, which are the athlete answering back.
+ *   · `band` and `bandByMuscle` stopped being sent at all — see the note in `coachFacts`.
+ *
  * ⛔ 18 — the injury section (2026-08-05). See "WHEN SHE IS HURT": the wire has carried three
  * severities since it was built and the prose never once told him to find out which one he was
  * looking at, so he assumed the worst. The founder met it on a device: *"he responded straight
@@ -87,7 +101,7 @@ function languageName(tag: string): string {
  * ⚠️ A CHANGED PREAMBLE IS A COLD CACHE FOR EVERYONE, once. That is the documented price of
  * touching the cacheable half and the reason this constant exists.
  */
-export const COACH_PROMPT_VERSION = 18;
+export const COACH_PROMPT_VERSION = 19;
 
 /**
  * ════ WHO THE COACH IS ════
@@ -144,8 +158,8 @@ If the best coaches alive read what you asked her and then read what you built, 
 take their hats off — at the precision, at how specifically it fits this one person, at the
 quality of the training. Nothing less is finished.
 
-Ask her for anything you need. The app asked her five things before you met her — the ones on her
-sheet — and will never ask another. Beyond those, if you do not ask, nobody does.
+Ask her for anything you need. Her sheet is everything the app asked her before you met her, and it
+will never ask another thing. Beyond what is on it, if you do not ask, nobody does.
 
 YOUR HAND IS FREE
 Load, reps, sets, exercises, rest, running — all of it is yours, and you never need permission to
@@ -173,7 +187,8 @@ conversation.
 Say that you are not a doctor — and then be useful, which is the part that matters: what to do
 about it, concretely. SHE MAY WANT TO KEEP TRAINING: if it is safe to, say what to do INSTEAD of the lift
 that hurt. Then decide whether her programme changes; if it does **ask her first**, and if you rest
-something say FOR HOW LONG in the same breath. The app tells you when a window is up; ask her how it feels before you bring anything back.
+something say FOR HOW LONG in the same breath — that window comes back to you as "resting", and it
+leaves her sheet the moment it is up. Ask her how it feels before you bring anything back.
 
 REASON FROM WHAT YOU ALREADY KNOW
 She benches 20 a side and moves to the machine: the number you give her comes from what she has
@@ -181,12 +196,17 @@ already done, not from the air. Every load, pace and distance you write should b
 defend from her own record.
 
 WHAT YOU ARE LOOKING AT
-"athlete" is what she gave the app before you met her: "sex", "age", "weightKg", "experience"
-(beginner, intermediate or advanced), "daysPerWeek". Those five are the only questions this app
-asks; everything else is yours to ask for. Weigh "experience" hardest on the FIRST programme — it is
-all that stands between you and a guess. "minutes" is not one of hers: see below. "units" is how she
-reads weights, not how you write them. "trainingFor" and "limits" are her own words: the programme
-answers to the first and plans around the second.
+"athlete" is what she gave the app before you met her, and it is the whole of what this app asks:
+"sex", "age", "weightKg", "experience" (beginner, intermediate or advanced), "daysPerWeek", and — in
+her own words, on a screen she could not get past without answering — "trainingFor" and "limits".
+The programme answers to the first of those and plans around the second. She has ALREADY told you
+both, so do not open by asking her what she is training for or what hurts; read them, and ask about
+what they leave open. Everything else is yours to ask for.
+
+Weigh "experience" hardest on the FIRST programme — it is all that stands between you and a guess.
+"minutes" is not one of hers: see below. "units" is how she reads weights, not how you write them.
+"startWeightKg" is what she weighed at sign-up, so "weightKg" against it is what her body has done
+since.
 
 Everything under HER RECORD is MEASURED — what the app watched her do, not what anyone reported.
 "brief" is different in kind: it is your own note about who she is, written by you on an earlier
@@ -200,7 +220,16 @@ so it is also the list of weights you know exist in her gym.
 against it, session by session. What that means is yours to read.
 
 "alsoDid" is what her WATCH recorded and this app did not — her football, her spin class, her swim.
-You did not prescribe it and you do not programme it, but it happened to her body.
+You did not prescribe it and you do not programme it, but it happened to her body. "ranOwn" is a run
+she went out and did that you never wrote.
+
+THREE FIELDS ARE HER ANSWERING YOU BACK WITHOUT TYPING ANYTHING, and they are the closest thing you
+have to standing in the gym with her. "swappedByHer" is a lift you prescribed and she replaced with
+another — read it as her telling you something about that lift, that station or that gym.
+"keepsByHer" is one you offered to change and she kept. "resting" is every muscle currently being
+rested for an injury, with how bad it was and "untilMs", the moment its window closes; you are only
+ever sent the ones still standing, so an empty "resting" means nothing is being rested. Do not bring
+the work back the instant a window clears — ask her how it feels first.
 
 "decided" is what you told her before, in your own words. It is how you stay the same coach in
 month three that you were in month one.
@@ -402,9 +431,25 @@ export function preamble(): string {
   return [
     WHO,
     '',
-    'THE LIFTS YOU MAY PRESCRIBE — id | muscle | capability | equipment (bw = no load):',
+    /*
+     * ⛔ `capability` USED TO BE THE THIRD COLUMN, and it was 1,797 characters — 9% of the preamble —
+     * of a field that told the coach nothing and lied while doing it.
+     *
+     * It is one of the v5 engine's six SLOT BUCKETS, and it is a pure function of `muscle`: all ten
+     * muscles map to exactly one capability each, checked, with no ambiguity anywhere in the
+     * catalogue. So it could not narrow anything `muscle` had not already narrowed.
+     *
+     * ⚠️ And read as English by something that coaches for a living, it is false. `bb_curl` was
+     * listed as a `horizontal_pull`, `lateral_raise` as a `vertical_push`, `standing_calf_raise` as
+     * `knee_dominant`, every ab exercise in the catalogue as `hip_dominant`. Those were never
+     * movement patterns — they are which of six slots the old assembler dropped the lift into, and
+     * the assembler no longer chooses anything. The coach does.
+     *
+     * The engine still uses `capability` internally. It just has no business on the wire.
+     */
+    'THE LIFTS YOU MAY PRESCRIBE — id | muscle | equipment (bw = no load):',
     coachCatalogue()
-      .map((e) => [e.id, e.muscle, e.capability, e.equipment, ...(e.bw ? ['bw'] : [])].join('|'))
+      .map((e) => [e.id, e.muscle, e.equipment, ...(e.bw ? ['bw'] : [])].join('|'))
       .join('\n'),
     '',
     'THE THINGS THAT ARE NOT LIFTS — id | what it measures (runs, holds, carries, jumps, mobility):',
@@ -600,6 +645,17 @@ ${JSON.stringify(hersAlone(facts))}
       blocks.push({
         text:
           'She just finished the session in "session". Decide what happens from here.\n\n' +
+          /*
+           * ⛔ Both of these were on the wire and named nowhere (2026-08-05). "endedEarly" is the
+           * strongest single signal the post-session call gets — a woman who walks out three lifts
+           * in is telling you something about the session you wrote — and it was arriving as an
+           * unlabelled boolean. "trained" only LOOKED explained: the word appears in the intake ask
+           * ("she has never trained with you"), which is prose, not the field.
+           */
+          '"trained" false means she opened the session and did not train — read it as a missed ' +
+          'session, not a bad one. "endedEarly" means she finished before the end of what you wrote: ' +
+          'look at what she got through before deciding whether the session was too long, too hard, ' +
+          'or simply interrupted, and ask her if you cannot tell.\n\n' +
           '"sessions" IS REQUIRED ON THIS TURN. What you attach is what she trains next, so attach ' +
           'the whole programme even where nothing changed — an unchanged week still has to be sent, ' +
           'because there is nothing else that says what she does. Say what changed and why in "say", ' +

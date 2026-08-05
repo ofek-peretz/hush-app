@@ -53,6 +53,8 @@ import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
 import type { CoachPlan } from './coachPlan';
 import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
+// The one filter that decides whether an ease is still standing — shared with every other consumer.
+import { activeEases } from './painReport';
 
 /** Bumped when the shape changes, so a stored or in-flight sheet is never read as the wrong shape. */
 export const COACH_FACTS_VERSION = 1;
@@ -253,11 +255,17 @@ export interface CoachFacts {
      * moved) because the milestone ladders are cut from it. It simply was not being handed over.
      */
     startWeightKg?: number;
-    /** Her declared rep band, and any per-muscle override she set in the body map. */
-    band?: string;
-    bandByMuscle?: Record<string, string>;
-    /** The map she drew — which muscles she wants more or less of. Her instruction, not a reading. */
-    emphasis?: Record<string, string>;
+    /*
+     * ⛔ `band` / `bandByMuscle` WERE HERE AND ARE GONE (2026-08-05) — they described the engine,
+     * not the athlete. The comment they carried called `band` "her declared rep band", and she has
+     * never declared one: it is the literal `'8-10'`, written at sign-up, identical for everybody.
+     * The full reasoning is at the omission in `coachFacts` itself.
+     */
+    /*
+     * ⛔ `emphasis` WAS HERE AND IS GONE (2026-08-05). Its comment called it "the map she drew —
+     * which muscles she wants more or less of", and there is no longer any screen on which she draws
+     * it. See the omission in `coachFacts` for the full reasoning.
+     */
     /** Muscles resting because she reported they hurt, with the day each comes back (ms). */
     resting?: { muscle: string; severity: string; untilMs: number }[];
     /**
@@ -820,13 +828,48 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       ...(profile.startWeightKg != null ? { startWeightKg: profile.startWeightKg } : {}),
       language,
       ...(profile.workoutMinutes != null ? { minutes: profile.workoutMinutes } : {}),
-      ...(profile.repBand ? { band: profile.repBand } : {}),
-      ...(profile.repBandByMuscle ? { bandByMuscle: stringMap(profile.repBandByMuscle) } : {}),
-      ...(profile.bodyMap ? { emphasis: stringMap(profile.bodyMap) } : {}),
+      /*
+       * ⛔ `band` AND `bandByMuscle` ARE NOT SENT, because neither was ever hers.
+       *
+       * `profile.repBand` is written once, at sign-up, as the literal `'8-10'` — the same string for
+       * every athlete who has ever installed this app (`BuildingProgramme.tsx`). It is a leftover
+       * default from when the v5 engine picked rep ranges. On the coach's sheet it did not read as a
+       * default; it read as HER rep band, sitting beside her age and her bodyweight, and a coach
+       * that honours it is honouring a constant that means nothing about her.
+       *
+       * `bandByMuscle` is empty for everyone except an athlete who imported a shared plan, and it
+       * describes THAT plan rather than her.
+       *
+       * The coach sets the band on every item it writes and the app enforces it live, so there is
+       * nothing here it needs to be told. If a real preference ever gets collected, it comes back as
+       * a field she actually answered.
+       */
+      /*
+       * ⛔ `emphasis` IS GONE TOO (2026-08-05), for the same reason and one worse one.
+       *
+       * It was `profile.bodyMap`, the v5 engine's per-muscle stance. **Nothing in the shipping app
+       * writes a stance any more.** The only live writer is `WeeklyUpdate`, which sets `'normal'` —
+       * the default — when she brings a rested muscle back. There is no screen where she can ask for
+       * more of a muscle or turn one off; the coach decides the balance now. So the field arrived as
+       * either nothing or `{Chest: 'normal'}`, and it was described to the coach as "a muscle she
+       * asked for more of", which she had no way to do.
+       *
+       * ⚠️ AND IT WOULD HAVE DOUBLED THE INJURY. `effectiveBodyMap` marks a hurt muscle `'off'`, so
+       * the moment anything passed the derived map through here the coach would read one injury
+       * twice under two names, with only `resting` carrying the severity and the date.
+       */
           ...(brief?.length ? { brief } : {}),
-      ...(profile.painEases?.length
+      /*
+       * ⛔ ONLY THE LIVE ONES. This mapped `profile.painEases` straight through, expired windows
+       * included, under a field called `resting` — so a shoulder rested for four days in March was
+       * still being presented as currently resting in August, and the coach had to notice `untilMs`
+       * was in the past to avoid working around an injury that had healed months ago.
+       *
+       * `activeEases` is the same filter every other consumer of this list already uses.
+       */
+      ...(activeEases(profile.painEases, nowMs).length
         ? {
-            resting: profile.painEases.map((p) => ({
+            resting: activeEases(profile.painEases, nowMs).map((p) => ({
               muscle: p.muscle,
               severity: p.severity,
               untilMs: p.untilMs,

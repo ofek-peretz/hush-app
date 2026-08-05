@@ -82,8 +82,15 @@ describe('every fact onboarding collects is named to the coach', () => {
     expect(text()).toMatch(/Weigh "experience" hardest on the FIRST programme/);
   });
 
-  it('⚠️ says these six are ALL the app asks, so the coach knows what is left to it', () => {
-    // `[\s\S]` because the prompt is hard-wrapped and this rule straddles a line break.
-    expect(text()).toMatch(/the only questions this app\s+asks/);
+  it('⚠️ says the sheet is ALL the app asks, so the coach knows what is left to it', () => {
+    /*
+     * ⛔ THIS USED TO ASSERT "the only questions this app asks", which sat immediately after a list
+     * of five — and the app asks seven. The CLAIM the coach needs is unchanged and is the reason
+     * this assertion exists: whatever is on her sheet is the end of what the app will ever ask, so
+     * anything else it needs, it has to ask for itself. What changed is that the sentence no longer
+     * pretends to enumerate. `[\s\S]` because the prompt is hard-wrapped.
+     */
+    expect(text()).toMatch(/it is the whole of what this app\s+asks/);
+    expect(text()).toMatch(/Everything else is yours to ask for/);
   });
 });
