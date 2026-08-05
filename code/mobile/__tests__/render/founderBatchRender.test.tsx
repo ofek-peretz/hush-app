@@ -294,7 +294,19 @@ describe('READOUT: no accent hue — emphasis is distance from the ground', () =
     const warmth = (hex: string) => parseInt(hex.slice(1, 3), 16) - parseInt(hex.slice(5, 7), 16);
     for (const p of [paper[0], paper[1], paper[2], paper[3]]) expect(warmth(p)).toBeGreaterThanOrEqual(4);
     for (const i of [ink[0], ink[1], ink[2]]) expect(warmth(i)).toBeGreaterThanOrEqual(4);
-    expect(warmth(stage[0])).toBeGreaterThan(0); // warm graphite, never true #000
+    /*
+     * ⛔ THE GROUND IS EXEMPT, AND IT IS THE FOUNDER'S CALL (2026-08-05): *"take the blackish
+     * background to absolute black — I think everything will stand out better that way."*
+     *
+     * This asserted "warm graphite, never true #000", and the reasoning behind it was sound while
+     * the ground was a surface things were READ on. It is not: everything on it is a cream wash or
+     * cream ink, both of which gain contrast against zero. The warmth law still binds every ground
+     * and ink the athlete actually reads — `stage[1]`, the papers, all three inks — which is what
+     * stops the app reading as silver. The ground itself is now the absence it always pretended to
+     * be.
+     */
+    expect(stage[0]).toBe('#000000');
+    expect(warmth(stage[1])).toBeGreaterThan(0); // the RAISED surface is still warm graphite
     // Both ramps converge on the same warm middle from opposite ends.
     expect(warmth(paper[2])).toBeGreaterThan(warmth(paper[1])); // paper warms as it darkens
     expect(warmth(ink[2])).toBeGreaterThan(warmth(ink[0])); // ink warms as it lightens

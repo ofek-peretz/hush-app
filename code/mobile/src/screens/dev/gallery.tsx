@@ -394,7 +394,7 @@ stored: ${plan.sessions.length} sessions · ${plan.notes?.length ?? 0} reasons` 
     <View style={{ padding: 16, gap: 14 }}>
       <Button label="Finish a workout and ask the coach" onPress={() => { void run(); }} />
       <Text style={{ color: cream[1], fontSize: 13 }}>{state}</Text>
-      <Text style={{ color: cream[2], fontSize: 11 }}>
+      <Text style={{ color: cream[2], fontSize: 13 }}>
         Told 8, did 12, three sets at 30 kg. A reply that changes nothing here is a finding.
       </Text>
     </View>
@@ -454,9 +454,9 @@ const sw = StyleSheet.create({
   session: { gap: 8 },
   name: { color: cream[0], fontSize: 15, fontWeight: '600' },
   block: { gap: 2, paddingStart: 10 },
-  rounds: { color: cream[2], fontSize: 11 },
+  rounds: { color: cream[2], fontSize: 13 },
   item: { color: cream[1], fontSize: 13 },
-  say: { color: cream[2], fontSize: 12, fontStyle: 'italic' },
+  say: { color: cream[2], fontSize: 13, fontStyle: 'italic' },
   dim: { color: cream[2], fontSize: 13, padding: 16 },
 });
 
@@ -529,7 +529,7 @@ function LiveCoachChat() {
   return (
     <>
       <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} invitation="Erez — tell me what you want, and I'll build it." />
-      {note ? <Text style={{ color: cream[2], fontSize: 11, padding: 8 }}>{note}</Text> : null}
+      {note ? <Text style={{ color: cream[2], fontSize: 13, padding: 8 }}>{note}</Text> : null}
     </>
   );
 }

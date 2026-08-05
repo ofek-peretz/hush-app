@@ -278,7 +278,7 @@ export function HistoryView({
                   style={({ pressed }) => [styles.row, last && styles.rowLast, pressed && styles.rowPressed]}
                 >
                   <View style={styles.dateCol}>
-                    <Legend size={10.5} track={0}>{dowOf(item.startedAt)}</Legend>
+                    <Legend size={11} track={0}>{dowOf(item.startedAt)}</Legend>
                     <Text style={styles.day}>{dayOf(item.startedAt)}</Text>
                   </View>
 
@@ -300,7 +300,7 @@ export function HistoryView({
                   </View>
 
                   {isCardio ? (
-                    <Legend size={10.5} track={0.06}>{t('history.rowRecorded')}</Legend>
+                    <Legend size={11} track={0.06}>{t('history.rowRecorded')}</Legend>
                   ) : raiseN > 0 ? (
                     <Legend size={12.5} track={0} tone="accent">{t('history.rowRaises', { count: raiseN })}</Legend>
                   ) : null}

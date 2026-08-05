@@ -100,7 +100,7 @@ function BandStat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.bandStat}>
       <Text style={styles.bandVal}>{value}</Text>
-      <Legend size={10} style={styles.bandLabel}>{label}</Legend>
+      <Legend size={11} style={styles.bandLabel}>{label}</Legend>
     </View>
   );
 }

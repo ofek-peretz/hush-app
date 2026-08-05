@@ -382,6 +382,8 @@
     "paused": "מושהה",
     "setLogged": "סט {{n}} מתוך {{m}} נרשם",
     "recorded": "הסט תועד.",
+    "liftDone": "{{lift}} — סיימנו.",
+    "liftDonePlain": "התרגיל הזה נגמר.",
     "vsLast": "מול האימון הקודם",
     "repsUnit": "חזרות",
     "upNext": "הבא בתור",

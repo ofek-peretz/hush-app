@@ -57,7 +57,7 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
         <View style={styles.card}>
           <View style={styles.lockRow}>
             <Icon name="lock" size={18} color={color.accent} strokeWidth={1.8} />
-            <Legend size={10} track={0.12}>{t('lapsed.pausedLegend')}</Legend>
+            <Legend size={11} track={0.12}>{t('lapsed.pausedLegend')}</Legend>
           </View>
 
           <Text style={styles.cardTitle}>{t('lapsed.title')}</Text>

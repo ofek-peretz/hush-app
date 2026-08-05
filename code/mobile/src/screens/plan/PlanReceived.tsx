@@ -47,7 +47,7 @@ export function PlanReceivedView({ plan, splitName, onAdopt, onDecline }: PlanRe
             <Text style={styles.senderLine} numberOfLines={1}>
               {from ? t('planReceived.sharedBy', { name: bidi(from) }) : t('planReceived.sharedAnon')}
             </Text>
-            <Legend size={10} track={0.12}>{t('planReceived.withYou')}</Legend>
+            <Legend size={11} track={0.12}>{t('planReceived.withYou')}</Legend>
           </View>
         </View>
 

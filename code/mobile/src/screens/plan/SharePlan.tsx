@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   // A quiet moss pill, not a filled one: on the record poster the moss is spent on a single small
   // mark, and a solid tag here was the loudest thing on a card that is mostly a list.
   daysTag: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: 'rgba(169,196,159,0.16)', borderWidth: 1, borderColor: 'rgba(169,196,159,0.4)' },
-  daysTagText: { fontFamily: font.sansSemibold, fontSize: 12.5, letterSpacing: 0.8, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
+  daysTagText: { fontFamily: font.sansSemibold, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
 
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: HAIRLINE },
   dayText: { flex: 1, minWidth: 0, gap: 1 },

@@ -48,7 +48,7 @@ import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
-import { setRow } from '@/domain/setRow';
+import { bandOf, setRow } from '@/domain/setRow';
 import { loadNews, showsPerSide } from '@/domain/loadNews';
 import type { MainParamList } from '@/app/navigation';
 
@@ -73,6 +73,16 @@ export type Confirm = {
    * Absent on a step with no rep prescription (a hold, a distance), where there is no band.
    */
   band?: [number, number];
+  /**
+   * ⛔ THE LIFT THIS SET BELONGED TO — added 2026-08-05, and it is what makes the lift-done beat
+   * survive a step with no band. See `ExerciseDone`: it drew a row of pips and a band mark, and
+   * when there was no band the whole screen was four green dots on black. The founder photographed
+   * that and described it exactly: *"the exercise-finished screen shows a black screen with only
+   * dots at the top."*
+   *
+   * The wrist has said "Leg Press, done." since it was built. The phone had nothing.
+   */
+  lift?: string;
 };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
@@ -440,11 +450,22 @@ export function SessionFlow({ navigation, route }: Props) {
       reps: tgt.recommendedReps,
       n: session.setLabel?.n ?? 1,
       m: session.setLabel?.m ?? 1,
-      // `repBandLo/Hi` and NOT `recommendedReps`: the edit wheel writes her performed reps into the
-      // latter, so reading it would make every set land dead-centre in a band of itself.
-      ...(tgt.repBandLo != null && tgt.repBandHi != null
-        ? { band: [tgt.repBandLo, tgt.repBandHi] as [number, number] }
-        : {}),
+      /*
+       * ⛔ ONE LADDER, SHARED WITH THE STAGE (`domain/setRow.bandOf`, 2026-08-05).
+       *
+       * This used to require BOTH ends to be present, and fell through to no band when either was
+       * missing — which is what a coach writing a fixed rep count produces. The stage's own ladder
+       * was more forgiving, so it drew a band the beat then denied existed, and every set logged
+       * against a fixed count came out as the bare "Set recorded." readback the founder
+       * photographed. The band is derived in one place now and both surfaces ask it.
+       *
+       * ⚠️ Still never `recommendedReps` on its own from HERE: the edit wheel writes her performed
+       * reps into that field, so reading it raw would make every edited set land dead-centre in a
+       * band of itself. `bandOf` prefers `repBandLo`, which the wheel never touches.
+       */
+      ...(bandOf(tgt) ? { band: bandOf(tgt)! } : {}),
+      // Read BEFORE `completeSet` moves the cursor — the same reason `exerciseAtLogRef` exists.
+      ...(session.currentExerciseId ? { lift: session.currentExerciseId } : {}),
     });
   }
   /**
@@ -1394,8 +1415,7 @@ function ActiveSet({
   // The engine v5 rep BAND — a floor to clear, a ceiling that means "too light" (models.ts §159/162).
   // `recommendedReps` starts equal to the floor but the athlete's edit overwrites it with her PERFORMED
   // reps, so the band must be read from repBandLo/Hi (mirrors Home.tsx's fallback ladder).
-  const bandLo = target.repBandLo ?? target.recommendedReps ?? 8;
-  const bandHi = target.repBandHi ?? bandLo;
+  const [bandLo, bandHi] = bandOf(target) ?? [8, 8];
 
   /*
    * ⛔ THE LIFT AS A ROW OF FIGURES (`domain/setRow`) — what replaced the rep-band graphic and the
@@ -1530,19 +1550,35 @@ function ActiveSet({
               hitSlop={12}
               style={({ pressed }) => [styles.heroPress, pressed && styles.heroPressed]}
             >
+             {/*
+               ⛔ THE CALIPER (founder 2026-08-04, extended 2026-08-05): *"instead of writing TAP ME
+               TO EDIT, let's put some nice shape around the weight and the reps, or some mark that
+               upgrades the screen and signals that this area is pressable."* Then: *"I like the
+               frame you added, but I think it can be widened to include the reps — because the reps
+               are meant for editing too."*
+
+               Two end ticks around the values. It is the WORDMARK's own glyph — hush is drawn as a
+               rule between two ticks — doing a second job: a measuring caliper closed around a
+               number says "this is a value" in a way no caption can, and it says it in every
+               language, which the dashed pill and its sentence could not.
+
+               ⚠️ IT ENCLOSES EXACTLY WHAT THE EDITOR EDITS. Weight and reps are both inside; the
+               per-side figure is NOT, because it is derived and she cannot set it. A frame around
+               something unpressable is worse than no frame.
+             */}
+             <View style={styles.caliper}>
+              <View style={styles.caliperTick} />
+              <View style={styles.caliperCol}>
               {isBodyweight ? (
-                <>
-                  <View style={styles.heroRow}>
-                    <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
-                      {target.recommendedReps}
-                    </Text>
-                    {/* The unit slot is mono because it usually holds `kg`/`lb`. On a bodyweight
-                        lift it holds a translated WORD ("reps"), so it hands over to sans — mono
-                        cannot draw Hebrew at all (monoCarriesNoWords). */}
-                    <Text style={[styles.heroUnit, styles.heroUnitWord]}>{t('workout.repsUnit')}</Text>
-                  </View>
-                  <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
-                </>
+                <View style={styles.heroRow}>
+                  <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
+                    {target.recommendedReps}
+                  </Text>
+                  {/* The unit slot is mono because it usually holds `kg`/`lb`. On a bodyweight
+                      lift it holds a translated WORD ("reps"), so it hands over to sans — mono
+                      cannot draw Hebrew at all (monoCarriesNoWords). */}
+                  <Text style={[styles.heroUnit, styles.heroUnitWord]}>{t('workout.repsUnit')}</Text>
+                </View>
               ) : (
                 <>
                   <View style={styles.heroRow}>
@@ -1573,100 +1609,53 @@ function ActiveSet({
                       </Text>
                     ) : null}
                   </View>
-                  {/* THE ANNEX SITS UNDER THE FIGURE, NOT BESIDE IT (founder, build 36 — C.9).
-                      Inline, it was pushed off the screen by every load that was not a two-digit
-                      whole number: "8.25 kg a sid". Under the figure it always fits, it reads the
-                      same at 7.5 kg and at 137.5, and the hero keeps its full designed size instead
-                      of shrinking to make room for a secondary fact — which serves "the one thing
-                      standing fully in the light" better than the inline row ever did. */}
                   {/*
-                    ⛔ THE PER-SIDE FIGURE IS NOT NEWS ON EVERY SET (founder 2026-08-04). It stays —
-                    his own ruling is that the athlete never calculates, and deleting it puts
-                    `(34 − 20) ÷ 2` back in her head at the rack. But she loads the bar ONCE, and on
-                    the sets after that it is a fact she acted on five minutes ago.
+                    ⛔ 3 · THE ASK, AS A NUMBER — the band graphic is DELETED (founder 2026-08-04):
+                    *"during a workout everything has to be maximally clear. There can't be a lot of
+                    copy and certainly not small type."* What stood here was 250 px of rule, two
+                    ticks and a legend, to say "6 to 8".
 
-                    ⚠️ It returns the instant the load moves, because that is when the bar has to be
-                    re-loaded and this becomes the most useful line on the screen.
+                    ⛔ AND IT LOST THE ACCENT (same day): *"why are we putting the reps in green as a
+                    hero? It is only the rep range that follows from the weight."* The palette's law
+                    is that moss means A DECISION MADE — and the LOAD is the bigger decision by far,
+                    yet it wore cream while the band that follows from it wore the accent.
+
+                    ⚠️ AND IT HAD NO TYPE AT ALL UNTIL 2026-08-05. When the graphic came out, its
+                    CONTAINER style stayed behind on the Text that replaced it — `flexDirection:
+                    'row'`, and nothing else. No family, no size, no colour, on the second most
+                    important figure on the screen, under a comment claiming it was set at 30. That
+                    is the small type the founder photographed four times. `typeHasAFloor` would now
+                    fail on it, but only because it is finally a size.
                   */}
-                  {annex && showsPerSide({ setNumber: setN, news }) ? (
-                    <Text style={styles.heroAnnex}>
-                      <Text style={styles.heroAnnexValue}>{annex.value}</Text>
-                      {` ${annex.suffix}`}
-                    </Text>
-                  ) : null}
+                  <Text
+                    style={styles.ask}
+                    accessible
+                    accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
+                  >
+                    {`× ${bandLo}–${bandHi}`}
+                  </Text>
                 </>
               )}
-              {/* THE EDIT DOOR (mock 2.2, lines 388–391): a dashed pill under the hero — a pencil
-                  and a quiet caption that name the number's one hidden move. The pencil rides
-                  INSIDE the pill, where the mock puts it (so the footer no longer needs its own).
-                  The caption is a WORD, so it is sans — mono carries only measurements
-                  (monoCarriesNoWords). It repeats what the Pressable's accessibilityHint already
-                  says, so it is hidden from VoiceOver. Bodyweight has no weight to tap, so the pill
-                  — and its "tap the WEIGHT" caption — is shown only for a loaded lift. */}
-              {/*
-                ⛔ ONLY ON THE FIRST SET OF THE SESSION (founder 2026-08-03): *"the 'tap to edit'
-                button should appear only on the first set of the workout and then disappear."*
+              </View>
+              <View style={styles.caliperTick} />
+             </View>
 
-                It is a TEACHING label, and a label that explains a control steals the control's job
-                — his own law. Once she has seen it, the pill is a dashed frame under the number on
-                every set for the rest of her life, saying a thing she already knows.
-                `accessibilityHint` on the Pressable is untouched, so the door is still announced to
-                VoiceOver on every set; only the drawn caption goes quiet.
+              {/* THE ANNEX SITS UNDER THE FIGURE — and OUTSIDE the caliper, because she cannot set
+                  it. It is derived from the load and the bar, and a frame around an unpressable
+                  value is a worse lie than no frame.
 
-                ⚠️ Gated on the SESSION's first step, not the exercise's — "set 1 of lift 4" is not a
-                first lesson, and showing it again there is the same noise one lift later.
-              */}
-              {!isBodyweight && (session.globalProgress?.index ?? 0) === 0 ? (
-                <View style={styles.heroEditPill} importantForAccessibility="no-hide-descendants">
-                  <Icon name="pencil" size={12} color={stage.ink2} strokeWidth={1.8} />
-                  <Legend size={10.5} track={0.14}>{t('workout.tapToEdit')}</Legend>
-                </View>
+                  ⛔ NOT ON EVERY SET (founder 2026-08-04). It stays — his ruling is that the athlete
+                  never calculates — but she loads the bar ONCE, and on the sets after that it is a
+                  fact she acted on five minutes ago. ⚠️ It returns the instant the load moves. */}
+              {isBodyweight ? (
+                <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
+              ) : annex && showsPerSide({ setNumber: setN, news }) ? (
+                <Text style={styles.heroAnnex}>
+                  <Text style={styles.heroAnnexValue}>{annex.value}</Text>
+                  {` ${annex.suffix}`}
+                </Text>
               ) : null}
             </Pressable>
-
-            {/* 2 · INSTRUCTION — folded into the hero's inline "N a side / per hand" annex (mock 2.2
-                  carries the equipment figure beside the load, not as a separate chip below it). */}
-
-            {/*
-              ⛔ 3 · THE ASK, AS A NUMBER — the band graphic is DELETED (founder 2026-08-04).
-
-              *"During a workout everything has to be maximally clear on the screen. There can't be a
-              lot of copy and certainly not small type — everything has to be clear and exact in how
-              it is laid out."*
-
-              What stood here was 250 px of rule, two ticks and a legend, to say "6 to 8". At arm's
-              length, sweating, the graphic carried nothing the two digits did not — and it spent the
-              widest element on the stage to do it. Set as a figure it reads from twice the distance
-              in a fifth of the width, and the moss goes with it, so the accent is still spent exactly
-              once on this screen.
-
-              Absent on a bodyweight lift: the reps ARE the hero above, and repeating them here would
-              say the same thing twice.
-            */}
-            {/*
-              ⛔ THE BAND LOST THE ACCENT (founder 2026-08-04): *"why are we putting the reps in
-              green as a hero? It is only the rep range that follows from the weight."*
-
-              He is right, and the reason is the palette's own law: **moss means "a decision
-              made"** — and the LOAD is by far the bigger decision, yet it wore cream while the
-              band that follows from it wore the accent. The eye was being sent to the second most
-              important number on the screen.
-
-              So the band is a quiet `× 6–8` — the notation every programme in the world is
-              written in, reading as part of the load's own sentence rather than as a second
-              headline. **Colour on this stage now means something HAPPENED**: a load that moved,
-              or a set that landed outside its band. On a quiet set there is no accent at all,
-              which is what makes the accent worth looking at.
-            */}
-            {!isBodyweight ? (
-              <Text
-                style={styles.ask}
-                accessible
-                accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
-              >
-                {`× ${bandLo}–${bandHi}`}
-              </Text>
-            ) : null}
 
             {/* 4 · THE REASON IS NOT ON THIS SCREEN (v7 2.2).
                   A delta pill and its clause used to sit under the band, so the set screen carried
@@ -1835,8 +1824,11 @@ function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => 
   const setN = session.setLabel?.n ?? 1;
   const setM = session.setLabel?.m ?? 1;
   const isBodyweight = planned.weight == null;
-  const bandLo = target.repBandLo ?? planned.reps ?? 8;
-  const bandHi = target.repBandHi ?? bandLo;
+  /* ⚠️ The editor asks the SAME ladder as the stage and the beat (`bandOf`). It kept its own until
+     2026-08-05, and three ladders for one fact is how the beat came to deny a band the stage was
+     drawing. `planned.reps` is the last resort here because the editor can open on a step the
+     target has not been built for. */
+  const [bandLo, bandHi] = bandOf(target) ?? bandOf({ recommendedReps: planned.reps }) ?? [8, 8];
   // 0.5 kg (1 lb) detents — the union of every real gym granularity, so the prescribed value always
   // sits ON the wheel and she can log the weight she actually lifted.
   const wStep = units === 'kg' ? 0.5 : 1;
@@ -2023,7 +2015,7 @@ function RestLearned({ took, was, now, nextSet }: { took: number; was: number; n
           <View style={styles.paceRing}>
             <View style={styles.paceRingInner}>
               <Text style={styles.paceValue}>{clock(took)}</Text>
-              <Legend size={10.5} track={0.22} align="center" tone="onStage">{t('workout.yourPace')}</Legend>
+              <Legend size={11} track={0.22} align="center" tone="onStage">{t('workout.yourPace')}</Legend>
             </View>
           </View>
         </Breathe>
@@ -2088,6 +2080,19 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
           <View key={i} style={styles.donePip} />
         ))}
       </View>
+      {/*
+        ⛔ THE SENTENCE, AND IT IS NOT OPTIONAL (founder 2026-08-05).
+        This beat drew pips and then a band mark that only exists when the step HAS a band. On a
+        fixed-rep prescription, a hold or a distance there was no band — and the entire screen was
+        four green dots on black for 1.4 seconds, with no name, no verdict and nothing to read.
+        **A display hung off a decision can only show the states where the decision fired**, which
+        is the same shape as the bug that lost the in-band confirmation.
+        The name is the floor now: whatever else this beat can say, it always says which lift just
+        ended — the sentence the wrist has had since it was built.
+      */}
+      <Text style={styles.beatDoneTitle}>
+        {confirm.lift ? t('workout.liftDone', { lift: bidi(exerciseDisplayName(confirm.lift)) }) : t('workout.liftDonePlain')}
+      </Text>
       {placed ? (
         <BandMark tone={placed.tone} left={placed.left} legend={t(`workout.${placed.legend}`, { n: confirm.n })} />
       ) : null}
@@ -2809,10 +2814,7 @@ const styles = StyleSheet.create({
   // The hero IS the edit control — its door is a dashed pill (below), the pencil + caption inside it.
   heroPress: { alignItems: 'center', marginTop: 34 },
   heroPressed: { opacity: press.opacity },
-  // THE EDIT DOOR — a dashed pill (mock 2.2): pencil + a quiet uppercase caption. Sans, because it
-  // carries words (monoCarriesNoWords). The dashed border is the "this value is editable" mark the
-  // bare rule used to be, now closed into a pill around the affordance's name.
-  heroEditPill: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 18, paddingVertical: 6, paddingHorizontal: 13, borderRadius: 100, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(241,238,229,0.22)' },
+  // (the dashed edit pill lived here — replaced by `caliper`, see its note)
   // Instruction-first execution: the imperative chip (TO-LOAD) + the quiet confirmation (LOADED),
   // sitting directly under the load — the athlete's "what do I do now?".
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
@@ -2863,15 +2865,26 @@ const styles = StyleSheet.create({
   // the glyph count, and the leading must never fall under the size or RN clips the digit tops.
   // THE LIT HERO (v7 2.2): 132px mono at -.05em in the BRIGHT cream, with a wide soft glow. It is
   // the one thing on the stage standing fully in the light — everything else rests in shadow.
+  /*
+   * ⛔ THE GLOW WAS DRAWING A GREY BOX (founder 2026-08-05, from two screenshots).
+   *
+   * This carried `textShadowRadius: 50` with no offset — intended as a halo, on the theory that
+   * the hero is "standing in the light". **iOS rasterises a text shadow over the glyph's BOUNDING
+   * RECTANGLE**, so at that radius it does not read as a glow at all: it fills a soft grey
+   * rectangle behind the digits, visible on both the load and the cardio clock, which reuses this
+   * style. He photographed it twice without naming it, because it looks like a component rather
+   * than a bug.
+   *
+   * ⚠️ AND THE GROUND IS BLACK NOW. Whatever the halo was buying against `#131210`, it buys
+   * nothing against zero — the cream figure is already the brightest thing on the screen by the
+   * largest possible margin. Deleted rather than tuned.
+   */
   hero: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
     color: '#f6f3ea',
     includeFontPadding: false,
     textAlign: 'left',
-    textShadowColor: 'rgba(246,243,234,0.16)',
-    textShadowRadius: 50,
-    textShadowOffset: { width: 0, height: 0 },
   },
   heroUnit: { fontFamily: font.mono, fontSize: 26, color: stage.ink2, marginStart: 10, marginBottom: 13, textAlign: 'left' },
   heroUnitWord: { fontFamily: font.sans },
@@ -2937,7 +2950,10 @@ const styles = StyleSheet.create({
   paceNow: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: up.stage, textAlign: 'left' },
 
   /* ── 2.3b · EXERCISE DONE — a beat, centred, that hands over by itself. ── */
-  beatHead: { alignItems: 'center', paddingTop: 28, gap: 34 },
+  beatHead: { alignItems: 'center', paddingTop: 28, gap: 26 },
+  // The lift, named, in the coach's serif — the beat's subject, drawn whether or not there is a
+  // band under it. 26 rather than 29: the pips above it are the mark, this is the caption to them.
+  beatDoneTitle: { fontFamily: font.serif, fontSize: 26, lineHeight: 32, color: stage.ink0, textAlign: 'center', maxWidth: 320 },
 
   // The band, resolved: the span lit, the dot landed inside it.
   // Every pip filled — a lift is spent, and that is the whole statement.
@@ -2959,7 +2975,40 @@ const styles = StyleSheet.create({
    * the ghosts the SAME 34 at 38% opacity (dimmed, never shrunk: a small number is unreadable, a
    * quiet one is merely quiet), and the last-load line is 13 where its predecessor was 10.5.
    */
-  ask: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 18 },
+  /*
+   * ⚠️ THIS WAS AN ORPHAN. It read `{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }` —
+   * the CONTAINER of the deleted band graphic, left behind on the `<Text>` that replaced it. A
+   * flex-row style on a Text sets nothing; the ask rendered at the platform default, on the second
+   * most important figure on the screen, directly beneath a comment claiming it was 30.
+   *
+   * The founder photographed it four times and called it small type. It was not a taste I was
+   * defending — it was a style that got orphaned, which is worse, because nothing was deciding it
+   * at all. `typeHasAFloor` can see it now, and 30 is what the comment always claimed.
+   */
+  ask: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 30,
+    letterSpacing: trackingPx(30, tracking.tight),
+    color: stage.ink1,
+    includeFontPadding: false,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+
+  /* ── THE CALIPER — the edit door, drawn as the brand's own range mark. ──
+   *
+   * Two ticks with the editable values between them. It replaces a dashed pill that carried the
+   * words "TAP THE WEIGHT TO EDIT", which was a label explaining a control — the founder's own law
+   * against itself — and which could only ever teach on the first set of a session because after
+   * that it was noise. The frame teaches on every set and says nothing.
+   *
+   * ⚠️ The ticks are the same 1.6 rule at the same 32% the wordmark uses, so the glyph is
+   * recognisably the same object at a different scale rather than a decoration that resembles it.
+   */
+  caliper: { flexDirection: 'row', alignItems: 'stretch', gap: 14 },
+  caliperTick: { width: 1.6, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.32)' },
+  caliperCol: { alignItems: 'center', paddingVertical: 4 },
   askNum: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
@@ -2986,7 +3035,19 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
 
-  sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 'auto' },
+  /*
+   * ⛔ `marginTop: 'auto'` MADE THE EMPTY MIDDLE THIRD (founder 2026-08-05's screenshot).
+   *
+   * `stageBody` centres its children. An auto top-margin on the LAST child consumes every spare
+   * point in the column — so the name, the load and the ask were pinned to the top of the stage,
+   * this row was pinned to the bottom against the button, and 300 points of black sat between
+   * them. It also put the set figures directly under `Complete set`, which is the second half of
+   * what he photographed: *"only the weight appears, and the reps from the previous workout are
+   * right at the bottom on top of COMPLETE SET."*
+   *
+   * One number, two complaints. It is a normal gap now, and the column centres as a whole.
+   */
+  sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 30 },
   setCol: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 43 },
   /* A set she has not reached: present, and saying nothing. */
   setDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.28)' },

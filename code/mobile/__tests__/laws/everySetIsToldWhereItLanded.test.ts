@@ -1,4 +1,7 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { bandPlacement } from '@/screens/session/SessionFlow';
+import { bandOf } from '@/domain/setRow';
 import { up, down, hold } from '@/design/tokens';
 
 /**
@@ -94,5 +97,86 @@ describe('and it says nothing when it has nothing to say', () => {
   it('⚠️ a nonsense band is absence, not a mark at the wrong end', () => {
     expect(at(9, [10, 8])).toBeNull();
     expect(at(9, [Number.NaN, 10])).toBeNull();
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AND THE BAND HAS TO REACH IT — the half of this law that was missing.
+ *
+ * FOUNDER, 2026-08-05, holding a photograph of "SET 3 OF 4 LOGGED · 47 kg × 16 · Set recorded.":
+ *
+ *   > *"On the phone the LOGGED screens I explicitly asked you for still do not appear."*
+ *
+ * Sixteen reps against a band of eight to ten, and the screen had no comment — so he concluded the
+ * verdict had never been built. **Every test above passed the whole time.** They exercise
+ * `bandPlacement`, which is pure, was correct, and is not where the bug was.
+ *
+ * The bug was in the FEED. The beat and the set stage derived the band by two different ladders,
+ * and the beat's was the stricter one: it required both ends of `repBandLo`/`repBandHi` and gave
+ * up otherwise. A coach prescribing a fixed count writes `reps: [10]`, so the stage drew "× 10"
+ * and the beat, one screen later, decided there was no band at all.
+ *
+ * **A law that tests a drawing and not its input can only prove the drawing is drawable.** Same
+ * shape as `runName`: built, correct, and fed by nobody.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ the band reaches the beat', () => {
+  it('a fixed rep count is a band, not an absence', () => {
+    // The exact shape that broke it: one number, because the coach prescribed a fixed count.
+    expect(bandOf({ recommendedReps: 10, repBandLo: 10 })).toEqual([10, 10]);
+    // …and it lands, rather than falling through to the readback.
+    expect(bandPlacement({ weight: 47, reps: 16, n: 3, m: 4, band: bandOf({ repBandLo: 10 })! })?.legend).toBe(
+      'landedAbove',
+    );
+  });
+
+  it('every shape the store can put on a target yields a band', () => {
+    // `sessionStore` builds a target from a `reps` item; these are the shapes it can produce.
+    expect(bandOf({ recommendedReps: 8, repBandLo: 8, repBandHi: 12 })).toEqual([8, 12]);
+    expect(bandOf({ recommendedReps: 8, repBandLo: 8 })).toEqual([8, 8]);
+    expect(bandOf({ recommendedReps: 8 })).toEqual([8, 8]);
+    // A reversed pair is repaired rather than refused — a band cannot end before it starts.
+    expect(bandOf({ repBandLo: 10, repBandHi: 8 })).toEqual([10, 10]);
+  });
+
+  it('⚠️ …and only a step with no rep prescription at all has none', () => {
+    expect(bandOf(null)).toBeNull();
+    expect(bandOf({})).toBeNull();
+    expect(bandOf({ recommendedReps: Number.NaN })).toBeNull();
+  });
+
+  /**
+   * ⚠️ ONE LADDER, MECHANICALLY. The two call sites were eight hundred lines apart in one file, and
+   * the drift between them survived a build and a founder review. Nothing in the session screen may
+   * derive a band by hand again.
+   */
+  it('the session screen derives the band in exactly one place', () => {
+    const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(src).not.toMatch(/repBandLo\s*\?\?/);
+    expect(src).not.toMatch(/repBandLo\s*!=\s*null/);
+  });
+});
+
+/**
+ * ⛔ THE LIFT-DONE BEAT ALWAYS HAS A SUBJECT (founder 2026-08-05: *"the exercise-finished screen
+ * shows a black screen with only dots at the top"*).
+ *
+ * It drew a row of pips and then the band mark — and the band mark is conditional, so on a step
+ * with no band the entire screen was four green dots for 1.4 seconds, with no name and no verdict.
+ * The name is unconditional now; the band is still the extra.
+ */
+describe('⛔ the lift-done beat names the lift', () => {
+  it('the name is not drawn behind the band mark', () => {
+    const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8');
+    const from = src.indexOf('function ExerciseDone');
+    const beat = src.slice(from, from + 2800);
+    const title = beat.indexOf('beatDoneTitle');
+    const placed = beat.indexOf('{placed ?');
+    expect(title).toBeGreaterThan(-1);
+    // Drawn BEFORE the conditional, so nothing about the band can take it away.
+    expect(title).toBeLessThan(placed);
   });
 });

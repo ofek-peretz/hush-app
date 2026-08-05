@@ -489,7 +489,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             <View style={styles.askCard}>
               <View style={styles.askHead}>
                 <View style={styles.askDot} />
-                <Legend size={10.5} tone="accent">{t('weekly.askSince')}</Legend>
+                <Legend size={11} tone="accent">{t('weekly.askSince')}</Legend>
               </View>
               <Text style={styles.askTitle} accessibilityRole="header">
                 {/* `muscle.*` is written for mid-sentence (English keeps it singular and
@@ -559,7 +559,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
                           hitSlop={6}
                           style={({ pressed }) => [styles.whyPill, pressed && styles.pressedDim]}
                         >
-                          <Legend size={10.5} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
+                          <Legend size={11} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
                         </Pressable>
                       </View>
                     ) : null}
@@ -578,7 +578,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             band of three zeroes on her first Saturday would be the emptiness this exists to fix. */}
         {steady && standing && standing.workouts > 0 ? (
           <View style={styles.standing}>
-            <Legend size={10.5} track={0.2}>{t('weekly.standingLegend')}</Legend>
+            <Legend size={11} track={0.2}>{t('weekly.standingLegend')}</Legend>
             <View style={styles.statBand}>
               <LetterFact value={String(standing.workouts)} label={t('weekly.statWorkouts')} />
               <LetterFact value={`${standing.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
@@ -686,7 +686,7 @@ function LetterFact({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.fact}>
       <Text style={styles.factValue}>{value}</Text>
-      <Legend size={10} track={0.14}>{label}</Legend>
+      <Legend size={11} track={0.14}>{label}</Legend>
     </View>
   );
 }

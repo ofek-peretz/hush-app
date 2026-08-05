@@ -321,7 +321,7 @@ export function HomeView(props: HomeViewProps) {
               >
                 <View style={styles.sealCore}>
                   <Text style={styles.sealCount}>{`${total}/${total}`}</Text>
-                  <Legend size={9.5} tone="muted">{t('home.sessionsLabel')}</Legend>
+                  <Legend size={11} tone="muted">{t('home.sessionsLabel')}</Legend>
                 </View>
                 <View style={styles.sealBadge}>
                   <Icon name="check" size={11} color={color.up} strokeWidth={3} />
@@ -621,7 +621,7 @@ export function HomeView(props: HomeViewProps) {
 
               {/* the trial — one quiet mono line under the act, gone when the trial is */}
               {props.trialLeft != null && props.trialLeft > 0 && !props.dayDone ? (
-                <Legend size={10.5} track={0.1} align="center" style={styles.trialLine}>
+                <Legend size={11} track={0.1} align="center" style={styles.trialLine}>
                   {t('home.trialLeft', { count: props.trialLeft })}
                 </Legend>
               ) : null}
@@ -714,7 +714,7 @@ function RestFact({ value, label, accent }: { value: string; label: string; acce
   return (
     <View style={styles.restFact}>
       <Text style={[styles.restFactVal, accent && styles.restFactValUp]}>{value}</Text>
-      <Legend size={10} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
+      <Legend size={11} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
     </View>
   );
 }
@@ -880,7 +880,7 @@ const styles = StyleSheet.create({
   /** The weekday, quieter than the name it sits beside: a label, not the thing she is choosing. */
   chipDay: {
     fontFamily: font.sans,
-    fontSize: 10.5,
+    fontSize: 13,
     letterSpacing: 0.6,
     color: color.textMuted,
     // The day reads in the athlete's own direction, like every other word on this page.

@@ -143,7 +143,7 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
           {/* THE PROOF. */}
           <View style={styles.proof}>
-            <Legend size={10.5}>{props.bandNote}</Legend>
+            <Legend size={11}>{props.bandNote}</Legend>
 
             <View style={styles.band}>
               <View style={styles.bandRule} />
@@ -184,7 +184,7 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
         <View style={styles.footer}>
           {/* The provenance, stated. Nothing on this screen came from anywhere else. */}
-          <Legend size={10.5} track={0.14} align="center">{t('why.decidedFrom')}</Legend>
+          <Legend size={11} track={0.14} align="center">{t('why.decidedFrom')}</Legend>
           <Button variant="primary" size="whySheet" block label={t('whyLoad.got')} onPress={props.onClose} />
         </View>
       </SafeAreaView>

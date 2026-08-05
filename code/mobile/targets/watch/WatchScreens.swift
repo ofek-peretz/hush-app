@@ -116,7 +116,7 @@ extension WristScreen where Actions == EmptyView {
 // MARK: Palette (v7 stage tokens — mirror of the phone's design/tokens.ts)
 
 enum Palette {
-  static let stage0 = Color(red: 0.075, green: 0.071, blue: 0.063) // stage[0] #131210 — the ground
+  static let stage0 = Color.black // stage[0] #000000 — absolute black (founder 2026-08-05)
   static let stage1 = Color(red: 0.106, green: 0.098, blue: 0.078) // stage[1] #1b1914 — raised / card
   static let stage2 = Color(red: 0.165, green: 0.157, blue: 0.133) // stage[2] #2a2822 — line / track
   static let ink0 = Color(red: 0.945, green: 0.933, blue: 0.898) // cream[0] #f1eee5 — primary text
@@ -298,8 +298,8 @@ private struct TopStrip: View {
       if controlsHint {
         Button(action: { TapGate.pass(goControls) }) {
           HStack(spacing: 3) {
-            Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold))
-            Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
+            Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+            Image(systemName: "pause.fill").font(.system(size: 12, weight: .semibold))
           }
           .foregroundStyle(Palette.ink2)
           .padding(.horizontal, 7).padding(.vertical, 3)
@@ -501,17 +501,17 @@ private struct CorrectionNote: View {
           .font(.system(size: 12, design: .monospaced)).monospacedDigit()
           .strikethrough(true, color: Palette.ink2)
           .foregroundStyle(Palette.ink2)
-        Text("→").font(.system(size: 10, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text("→").font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
         Text(fmtW(c.to))
           .font(.system(size: 17, weight: .semibold, design: .monospaced)).monospacedDigit()
           // The engine's new load, IN THE DIRECTION IT MOVED. It was moss either way — so the wrist
           // announced an ease in the colour of a raise (founder 2026-07-29, phone parity).
           .foregroundStyle(up ? Palette.up : Palette.down)
-        Text(WatchCopy.kg).font(.system(size: 9, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text(WatchCopy.kg).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
       }
       // The reason, under the number it earned — never apart from it (phone parity).
       Text(WatchCopy.corrected(c.reps, up: up))
-        .font(.system(size: 10))
+        .font(.system(size: 12))
         .foregroundStyle(Palette.ink1)
         .multilineTextAlignment(.center)
     }
@@ -583,8 +583,8 @@ private struct SwapUndoChip: View {
   var body: some View {
     Button(action: { TapGate.pass(action) }) {
       HStack(spacing: 3) {
-        Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold))
-        Text(WatchCopy.undo).font(.system(size: 11, weight: .semibold))
+        Image(systemName: "arrow.uturn.backward").font(.system(size: 12, weight: .semibold))
+        Text(WatchCopy.undo).font(.system(size: 12, weight: .semibold))
       }
       .foregroundStyle(Palette.signal)
       .padding(.horizontal, 9).padding(.vertical, 5)
@@ -638,7 +638,7 @@ private struct RestRing: View {
           Text(fmtTime(remaining))
             .font(.system(size: diameter * 0.24, weight: .semibold, design: .monospaced))
             .monospacedDigit().foregroundStyle(Palette.ink0)
-          Text(ready ? "READY" : restingLabel).font(.system(size: 9, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
+          Text(ready ? "READY" : restingLabel).font(.system(size: 12, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
         }
       }
     }
@@ -861,8 +861,8 @@ private struct GlanceScreen: View {
         }
         Spacer(minLength: 4)
         HStack(spacing: 4) {
-          Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
-          Text(WatchCopy.backToYourSet).font(.system(size: 11))
+          Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+          Text(WatchCopy.backToYourSet).font(.system(size: 12))
         }
         .foregroundStyle(Palette.ink2)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -1291,13 +1291,13 @@ struct ChooseOverlay: View {
               Spacer()
               if done {
                 HStack(spacing: 3) {
-                  Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.up)
-                  Legend(WatchCopy.done, size: 9)
+                  Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.up)
+                  Legend(WatchCopy.done, size: 11)
                 }
               }
             }
             Text("\(w.lifts ?? 0) lifts · \(w.muscles ?? "")")
-              .font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.ink2).lineLimit(1)
+              .font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2).lineLimit(1)
           }
           .padding(.vertical, 3) // the muscle line must not hug the card's edge (founder 2026-07-12)
         }
@@ -1628,7 +1628,7 @@ struct ActiveSetScreen: View {
   /// The dashed edit hint — a hint, not a button; the tap target is the hero load above it.
   private var tapToEditPill: some View {
     HStack(spacing: 5) {
-      Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(Palette.ink2)
+      Image(systemName: "pencil").font(.system(size: 12)).foregroundStyle(Palette.ink2)
       Text(WatchCopy.tapWeightToEdit.uppercased())
         .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
         .foregroundStyle(Palette.ink2)
@@ -1734,7 +1734,7 @@ struct ActiveSetScreen: View {
    */
   private var crownHint: some View {
     HStack(spacing: 5) {
-      Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+      Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold))
       Text(WatchCopy.turnCrownToSet).font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
     }
     .foregroundStyle(Palette.ink2)
@@ -1796,7 +1796,7 @@ struct CorrectionScreen: View {
     let tone = up ? Palette.up : Palette.down
     VStack(spacing: 12) {
       Spacer(minLength: 0)
-      Legend(up ? WatchCopy.raisedForYou : WatchCopy.easedForYou, size: 9)
+      Legend(up ? WatchCopy.raisedForYou : WatchCopy.easedForYou, size: 11)
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         // What it WAS — struck, and dropped to the quietest ink the stage has. It is here only so
         // the new number has something to be different from.
@@ -1913,7 +1913,7 @@ struct InterRestScreen: View {
         // her without her knowing.
         if mirror.restIsLearned == true {
           Text(WatchCopy.yourPace)
-            .font(.system(size: 11, design: .serif)).italic()
+            .font(.system(size: 12, design: .serif)).italic()
             .foregroundStyle(Palette.ink2)
             .padding(.top, 3)
         }
@@ -1963,7 +1963,7 @@ struct InterRestScreen: View {
         Spacer(minLength: 4)
         if let wt = nextLoad {
           (Text(fmtW(wt)).font(.system(size: Fit.s(24), weight: .medium, design: .monospaced))
-            + Text(" " + WatchCopy.kg).font(.system(size: 11, design: .monospaced)))
+            + Text(" " + WatchCopy.kg).font(.system(size: 12, design: .monospaced)))
             .foregroundStyle(Palette.signal)
             .lineLimit(1)
         } else {
@@ -2060,7 +2060,7 @@ struct TransitionRestScreen: View {
         Spacer(minLength: 4)
         if let wt = mirror.nextTargetWeight {
           (Text(fmtW(wt)).font(.system(size: Fit.s(24), weight: .medium, design: .monospaced))
-            + Text(" " + WatchCopy.kg).font(.system(size: 11, design: .monospaced)))
+            + Text(" " + WatchCopy.kg).font(.system(size: 12, design: .monospaced)))
             .foregroundStyle(Palette.signal)
             .lineLimit(1)
         } else {
@@ -2161,9 +2161,9 @@ private struct KmLoggedScreen: View {
           }
           if split.quickest {
             HStack(spacing: 4) {
-              Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+              Image(systemName: "checkmark").font(.system(size: 12, weight: .bold))
               Text(WatchCopy.quickestThisRun)
-                .font(.system(size: 10, design: .monospaced)).tracking(0.5)
+                .font(.system(size: 12, design: .monospaced)).tracking(0.5)
             }
             .foregroundStyle(Palette.signal)
           }
@@ -2171,7 +2171,7 @@ private struct KmLoggedScreen: View {
         .frame(maxWidth: .infinity)
         Spacer(minLength: 4)
         Text(WatchCopy.loggedBackToRun)
-          .font(.system(size: 10, design: .monospaced)).tracking(0.5)
+          .font(.system(size: 12, design: .monospaced)).tracking(0.5)
           .foregroundStyle(Palette.ink2)
           .frame(maxWidth: .infinity)
       }
@@ -2452,7 +2452,7 @@ struct CompleteScreen: View {
   private var readBack: some View {
     VStack(alignment: .leading, spacing: 0) {
       TopStrip()
-      Legend(WatchCopy.reading, size: 10).padding(.top, 2)
+      Legend(WatchCopy.reading, size: 11).padding(.top, 2)
       ScrollViewReader { proxy in
         ScrollView {
           VStack(alignment: .leading, spacing: 4) {
@@ -2467,7 +2467,7 @@ struct CompleteScreen: View {
                     .frame(width: 15, height: 15)
                   if i < read {
                     Image(systemName: "checkmark")
-                      .font(.system(size: 8, weight: .bold))
+                      .font(.system(size: 12, weight: .bold))
                       .foregroundStyle(Palette.stage0)
                   }
                 }
@@ -2479,7 +2479,7 @@ struct CompleteScreen: View {
                 Spacer(minLength: 4)
                 if let best = lift.best, !best.isEmpty {
                   Text(best)
-                    .font(.system(size: 11, design: .monospaced)).monospacedDigit()
+                    .font(.system(size: 12, design: .monospaced)).monospacedDigit()
                     .foregroundStyle(Palette.ink2)
                     .lineLimit(1).fixedSize()
                 }
@@ -2647,7 +2647,7 @@ struct CompleteScreen: View {
                   .lineLimit(1).minimumScaleFactor(0.6)
                 if let c = m.caption, !c.isEmpty {
                   Text(c.uppercased())
-                    .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(1.2)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced)).tracking(1.2)
                     .foregroundStyle(Palette.ink2)
                     .lineLimit(1)
                 }
@@ -2770,10 +2770,10 @@ private struct PainAreaScreen: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 6) {
         Button(action: { TapGate.pass(onBack) }) {
-          Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
+          Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
         }
         .buttonStyle(.plain)
-        Legend(WatchCopy.whereIsIt, size: 10)
+        Legend(WatchCopy.whereIsIt, size: 11)
       }
       ScrollView {
         /*
@@ -2793,7 +2793,7 @@ private struct PainAreaScreen: View {
                 Text(area.label).font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.ink2)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink2)
               }
               .padding(.horizontal, 12)
               .frame(maxWidth: .infinity).frame(height: Fit.s(44))
@@ -2826,10 +2826,10 @@ private struct PainSeverityScreen: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 6) {
         Button(action: { TapGate.pass(onBack) }) {
-          Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink2)
+          Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
         }
         .buttonStyle(.plain)
-        Legend(WatchCopy.howSharp, size: 10)
+        Legend(WatchCopy.howSharp, size: 11)
       }
       // `muscle` is the map's own name — what the wire carries. She reads hers.
       Text(WatchCopy.muscle(muscle))
@@ -2844,7 +2844,7 @@ private struct PainSeverityScreen: View {
               Text(choice.label).font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.8)
               Spacer(minLength: 4)
-              Image(systemName: "chevron.right").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.ink2)
+              Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink2)
             }
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity).frame(height: Fit.s(44))
@@ -2875,14 +2875,14 @@ private struct PainAcknowledgedScreen: View {
       TopStrip()
       Spacer(minLength: 4)
       VStack(alignment: .leading, spacing: 8) {
-        Legend(WatchCopy.gotIt, size: 10)
+        Legend(WatchCopy.gotIt, size: 11)
         Text(WatchCopy.easingToday(muscle))
           .font(.system(size: Fit.s(19), design: .serif)).foregroundStyle(Palette.ink0)
           .multilineTextAlignment(.leading).lineSpacing(1)
           .fixedSize(horizontal: false, vertical: true)
         VStack(alignment: .leading, spacing: 3) {
-          Text(WatchCopy.easedSwapped).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.ink2)
-          Text(WatchCopy.easedRests).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.ink2)
+          Text(WatchCopy.easedSwapped).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
+          Text(WatchCopy.easedRests).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -2909,7 +2909,7 @@ struct ConnectionLostScreen: View {
       VStack(spacing: 6) {
         Image(systemName: "wifi.slash").font(.title3).foregroundStyle(Palette.ink2)
         Text(WatchCopy.reconnecting).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink0)
-        Text(WatchCopy.continueOnPhone).font(.system(size: 11)).foregroundStyle(Palette.ink2)
+        Text(WatchCopy.continueOnPhone).font(.system(size: 12)).foregroundStyle(Palette.ink2)
       }
     }
     .padding(.horizontal, 10)

@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
   posterWord: { fontFamily: font.serif, fontSize: 20, color: stageC.ink0, textAlign: 'left' },
   posterDate: {
     fontFamily: font.sansMedium,
-    fontSize: 11.5,
+    fontSize: 13,
     letterSpacing: 1.9,
     color: stageC.ink2,
     textAlign: 'center',

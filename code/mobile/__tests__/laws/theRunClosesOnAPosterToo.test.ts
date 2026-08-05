@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { PHONE_FLOOR } from './typeHasAFloor.test';
 
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
 const cardio = () => read('src/screens/cardio/Cardio.tsx');
@@ -69,8 +70,17 @@ describe('⛔ nothing on it is small', () => {
     expect(done()).toContain('{avgPace > 0 ? (');
   });
 
-  it('the date is set at legend size, not at the eight points a date usually gets', () => {
-    expect(cardio()).toMatch(/posterDate:[\s\S]{0,200}fontSize: 11\.5/);
+  /**
+   * ⚠️ THIS PINNED 11.5 AND THE FLOOR OVERTOOK IT (2026-08-05). The law's point was that a date on
+   * a poster is not fine print — it was written when the alternative was eight points. `typeHasAFloor`
+   * now makes 13 the smallest thing the phone may draw at all, so pinning a literal below the floor
+   * would be one law forbidding what another requires. It asserts the FLOOR, which is the claim that
+   * was always being made.
+   */
+  it('the date is set at the type floor, not at the eight points a date usually gets', () => {
+    const m = cardio().match(/posterDate:[\s\S]{0,200}fontSize: ([0-9.]+)/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(PHONE_FLOOR);
   });
 });
 

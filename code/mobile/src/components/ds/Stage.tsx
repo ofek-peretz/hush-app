@@ -1,41 +1,28 @@
 /**
- * Stage — the ground of every screen: the warm near-black LIT FROM ABOVE.
+ * Stage — the ground of every screen.
  *
- * Every frame in the v7 handoff carries the same surface —
- * `linear-gradient(175deg, #1B1914 0%, #131210 38%, #0F0E0C 100%)` — and that light is
- * not decoration: it is the rule the whole palette rests on. Emphasis in v7 is
- * "standing in the light" versus "resting in shadow", which only means something if
- * the light is actually there. A flat `#131210` fill loses it.
+ * ⛔ THE LIGHT IS OFF (founder 2026-08-05): *"take the blackish background to absolute black — I
+ * think everything will stand out better that way."*
  *
- * 175° is very nearly straight down (180° would be exactly top→bottom), so the wash
- * leans a few degrees across as it falls. Drawn as an SVG rect because React Native
- * has no CSS gradients, and the app already carries `react-native-svg`.
+ * This drew the v7 handoff's `linear-gradient(175deg, #1B1914, #131210, #0F0E0C)` as an SVG rect,
+ * and the argument for it was real: v7's emphasis rule is "standing in the light versus resting in
+ * shadow", which needs light to exist. But the light was falling on the GROUND, and the ground is
+ * the one surface nothing is supposed to be read on. Every raised surface in the app is a cream
+ * wash — 5%, 10%, 14% — and on absolute black each of those gains the contrast the gradient was
+ * spending. **The depth did not come from the gradient; it came from the washes sitting on it.**
  *
- * Drop it as the FIRST child of a screen's root view; the root keeps
- * `backgroundColor: color.bg` (the gradient's own middle stop) so nothing flashes
- * before it paints and nothing breaks if it is absent.
+ * So this is now a flat black fill and nothing more. It stays as a component rather than being
+ * deleted at forty call sites, and because deleting it would leave those screens on
+ * `color.bg` alone — which is the same black, but reached by a different route, and one ground
+ * reached two ways is how two grounds start.
+ *
+ * ⚠️ THE GRADIENT ITSELF IS NOT DEAD. `stage.gradient` still dresses the two share cards, which
+ * are pictures of a stage rather than the stage — see the note on the token.
  */
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { stage } from '@/design/tokens';
 
-/** 175° in CSS = 5° off straight-down. x2/y2 express that as a unit vector. */
-const RAD = ((175 - 90) * Math.PI) / 180;
-
 export function Stage() {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%">
-        <Defs>
-          <LinearGradient id="hushStage" x1="0" y1="0" x2={String(Math.cos(RAD).toFixed(4))} y2="1">
-            <Stop offset="0" stopColor={stage.gradient[0]} />
-            <Stop offset={String(stage.gradientLocations[1])} stopColor={stage.gradient[1]} />
-            <Stop offset="1" stopColor={stage.gradient[2]} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#hushStage)" />
-      </Svg>
-    </View>
-  );
+  return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: stage[0] }]} />;
 }

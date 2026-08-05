@@ -125,3 +125,33 @@ export function currentBlockSets<T extends { setIndex: number }>(sets: T[]): T[]
   for (let i = 0; i < sets.length; i += 1) if (sets[i].setIndex === 0) start = i;
   return sets.slice(start);
 }
+
+/**
+ * ════ THE BAND, DERIVED ONCE ════
+ *
+ * ⛔ FOUNDER, 2026-08-05, from a photograph of "SET 3 OF 4 LOGGED · 47 kg × 16 · Set recorded."
+ *
+ * Sixteen reps against a band of eight to ten, and the screen had no comment. He read that as the
+ * landing verdict never having been built. It WAS built — all three states, on 2026-08-04 — and it
+ * never fired, because **the beat and the stage derived the band by two different ladders.**
+ *
+ *   the stage    `repBandLo ?? recommendedReps ?? 8`, then `repBandHi ?? lo`
+ *   the beat     `repBandLo != null && repBandHi != null`, or NO BAND AT ALL
+ *
+ * A coach that prescribes a fixed count writes `reps: [10]`, so `repBandHi` is undefined. The stage
+ * drew "× 10" perfectly happily and the beat, one screen later, decided there was no band to land
+ * in and fell through to the readback. **Two ladders for one fact, and the shorter one won on the
+ * screen that mattered.**
+ *
+ * So there is one ladder and it lives here. A fixed count is a band of a number to itself, which is
+ * what `bandPlacement` already handles — the dot lands mid-span and the load holds.
+ */
+export function bandOf(
+  target: { recommendedReps?: number | null; repBandLo?: number | null; repBandHi?: number | null } | null | undefined,
+): [number, number] | null {
+  if (!target) return null;
+  const lo = target.repBandLo ?? target.recommendedReps ?? null;
+  if (lo == null || !Number.isFinite(lo)) return null;
+  const hi = target.repBandHi ?? lo;
+  return [lo, Math.max(lo, hi)];
+}

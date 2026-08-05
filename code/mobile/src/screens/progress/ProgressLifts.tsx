@@ -325,7 +325,7 @@ function StatBadge({ value, unit, caption }: { value: string; unit: string; capt
       <View style={styles.badgeRing}>
         <View style={styles.badgeInner}>
           <Text style={styles.badgeValue}>{value}</Text>
-          <Legend size={7.5} track={0.12} align="center">{unit}</Legend>
+          <Legend size={11} track={0.12} align="center">{unit}</Legend>
         </View>
       </View>
       <Text style={styles.badgeCaption} numberOfLines={1}>{caption}</Text>

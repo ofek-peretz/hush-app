@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginStart: 40 + space[3],
     fontFamily: font.mono,
-    fontSize: 12.5,
+    fontSize: 13,
     letterSpacing: trackingPx(12.5, tracking.wide),
     textTransform: 'uppercase',
     color: stage.ink2,

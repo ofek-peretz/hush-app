@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   bestPillText: {
     fontFamily: font.sansMedium,
-    fontSize: 12.5,
+    fontSize: 13,
     letterSpacing: trackingPx(12.5, tracking.legend),
     textTransform: 'uppercase',
     color: up.stage,

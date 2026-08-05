@@ -404,7 +404,7 @@ function MomentRow({ moment, value, unit, units }: { moment: LiftMoment; value: 
             {value}
             <Text style={styles.rowUnit}> {unit}</Text>
           </Text>
-          <Legend size={10.5} track={0.06}>{dateWord(moment.atMs)}</Legend>
+          <Legend size={11} track={0.06}>{dateWord(moment.atMs)}</Legend>
         </View>
         <Text style={styles.rowLine}>{line}</Text>
       </View>
@@ -453,7 +453,7 @@ function ChangeRow({ change, conv, unit }: { change: LiftChange; conv: (v: numbe
                 : t(`progress.dir_${dir}`)}
             </Text>
           )}
-          <Legend size={10.5} track={0.06}>{dateWord(change.atMs)}</Legend>
+          <Legend size={11} track={0.06}>{dateWord(change.atMs)}</Legend>
         </View>
         <Text style={styles.rowLine}>
           {structural || !moved

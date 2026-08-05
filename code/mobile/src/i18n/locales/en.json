@@ -336,6 +336,8 @@
     "paused": "Paused",
     "setLogged": "Set {{n}} of {{m}} logged",
     "recorded": "Set recorded.",
+    "liftDone": "{{lift}}, done.",
+    "liftDonePlain": "That lift is done.",
     "vsLast": "vs. last session",
     "repsUnit": "reps",
     "upNext": "Up next",

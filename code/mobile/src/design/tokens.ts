@@ -216,14 +216,32 @@ export function directionWash(direction: LoadDirection): string {
  * THE STAGE — the ground of the entire app. Lit from above.
  */
 export const stage = {
-  0: '#131210', // stage ground (gradient middle)
-  1: '#1b1914', // raised on stage / gradient top (a floating dark card)
+  /**
+   * ⛔ THE GROUND IS ABSOLUTE BLACK (founder 2026-08-05): *"the app's background, on the watch and
+   * on the phone — take the blackish background to absolute black. I think everything will stand
+   * out better that way. Only the app's main background; do not touch anything else."*
+   *
+   * It was `#131210`, a warm near-black chosen so a raised surface could sit ABOVE it. That still
+   * works, and it works harder here: `surface` is a cream wash at 5% and every one of those washes
+   * gains contrast against zero that it did not have against a lit ground. Nothing else moves —
+   * `stage[1]` is still the card, `stage[2]` is still the rule, and the inks are untouched.
+   *
+   * ⚠️ Contrast only IMPROVES. `ink2` (#8b8474) was 4.7:1 against the old lightest gradient stop
+   * and is 5.3:1 on black, so no legend that passed before can fail now.
+   */
+  0: '#000000', // stage ground — absolute black
+  1: '#1b1914', // raised on stage (a floating dark card)
   2: '#2a2822', // faint rule / higher raised
   ink0: '#f1eee5', // primary on stage
   ink1: '#a8a290', // secondary on stage
   ink2: '#8b8474', // muted on stage
   lift: '#ffffff',
-  /** The lit-from-above background gradient. Top → bottom (175deg in the design). */
+  /**
+   * ⚠️ THE POSTER GRADIENT, AND ONLY THE POSTER. The lit-from-above wash is no longer the app's
+   * ground — it survives on the two SHARE CARDS, which are pictures of a stage rather than the
+   * stage itself. A poster rendered on absolute black has no edge against a phone's own black
+   * screenshot, and the founder's ruling was explicitly scoped to the app's background.
+   */
   gradient: ['#1b1914', '#131210', '#0f0e0c'] as const,
   gradientLocations: [0, 0.38, 1] as const,
 } as const;

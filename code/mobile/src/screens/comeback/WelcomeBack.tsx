@@ -53,7 +53,7 @@ export function WelcomeBackView({ daysAway, lifts, unit, onStart }: WelcomeBackV
 
         {shown.length > 0 ? (
           <View style={styles.card}>
-            <Legend size={10} track={0.14}>{t('comeback.cardLegend')}</Legend>
+            <Legend size={11} track={0.14}>{t('comeback.cardLegend')}</Legend>
             {shown.map((l, i) => (
               <View key={l.exerciseId} style={[styles.row, i > 0 && styles.rowRuled]}>
                 <Text style={styles.liftName} numberOfLines={1}>{l.name}</Text>
