@@ -449,7 +449,17 @@ export type CoachAsk =
    * in her own words, and all eight are already on the sheet. The coach's job here is not to talk;
    * it is to BUILD, immediately, from what it has.
    */
-  | { kind: 'first_programme' };
+  | { kind: 'first_programme' }
+  /**
+   * ⛔ THE FIRST OF TWO CALLS — the shape only (founder 2026-08-05: *"the plan build takes far too
+   * long … I don't think the right answer is to lower the AI's intelligence during the build"*).
+   *
+   * Name the programme and say which muscles fall on which day. No loads, no bands, no reasoning.
+   * See `COACH_SHAPE_SCHEMA` for why this raises quality rather than trading it away.
+   */
+  | { kind: 'first_shape' }
+  /** The second call: fill a shape this athlete has already been given. `shape` is call one's answer. */
+  | { kind: 'first_fill'; shape: string };
 
 /**
  * The conversation, as text.
@@ -642,6 +652,46 @@ ${JSON.stringify(hersAlone(facts))}
           '("title") and say in one line why it is this one ("why").\n\n' +
           '"say" is the first thing she will ever read from you. Two or three sentences: what you ' +
           'have built her and what happens next. Not a greeting, not a list of what you can do.\n' +
+          '"sessions" IS REQUIRED ON THIS TURN. "brief" too — it is your only memory of her.',
+      });
+      break;
+    case 'first_shape':
+      blocks.push({
+        text:
+          /*
+           * ⚠️ DELIBERATELY SHORT, AND THAT IS THE FEATURE. This call is answered at `low` thinking
+           * and its whole job is to come back in seconds with the two things the build screen needs
+           * before anything else: what her programme is CALLED and which muscles she is training.
+           * Anything more here would pull it toward the ninety-second answer it exists to precede.
+           */
+          'SKETCH HER WEEK — THE SHAPE ONLY, AND FAST. Everything about her is above. Decide how many ' +
+          'sessions her week has, what each one is called, and which muscles each one trains.\n\n' +
+          'Name the programme ("title") — a name she would say out loud, not a description. One line ' +
+          'on why it is this one ("why").\n\n' +
+          '⛔ NO LOADS, NO REP RANGES, NO EXERCISES. You are choosing the SHAPE; you will be asked for ' +
+          'the exercises and the weights in the next breath, and a weight named here would be a ' +
+          'second answer about what she lifts.',
+      });
+      break;
+    case 'first_fill':
+      blocks.push({
+        text:
+          /*
+           * ⚠️ IT IS HANDED THE SHAPE RATHER THAN ASKED TO INVENT ONE. That is the whole reason the
+           * split is expected to improve the answer and not merely hurry it: the longest prompt this
+           * project ever sent produced a one-lift programme, and cutting it three-fold produced ten.
+           * A question with the frame already drawn is a smaller question.
+           */
+          'FILL THE PROGRAMME YOU JUST SKETCHED. This is the shape you chose for her one moment ago:\n' +
+          `${ask.shape}\n\n` +
+          'Write it out in full now — every exercise, every load, every rep range, in "sessions". Keep ' +
+          'the names and the muscles you chose; she has already been shown them. If filling one out ' +
+          'shows you the shape was wrong, change it and say so in "notes" rather than leaving her a ' +
+          'day that does not work.\n\n' +
+          'She has never trained with you, so nothing here is a change: every load is an opening ' +
+          'position you chose, and "notes" is where you say why you chose it.\n' +
+          '"say" is the first thing she will ever read from you. Two or three sentences: what you ' +
+          'have built her and what happens next.\n' +
           '"sessions" IS REQUIRED ON THIS TURN. "brief" too — it is your only memory of her.',
       });
       break;

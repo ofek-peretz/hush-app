@@ -48,11 +48,28 @@ describe('the last step builds, it does not chat', () => {
     expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('BuildingProgramme'");
   });
 
-  it('asks the coach exactly once, with an ask that has no conversation in it', () => {
-    expect(building()).toContain("ask: { kind: 'first_programme' }");
+  it('⛔ asks TWICE now — a fast shape, then the prescription that fills it', () => {
+    /*
+     * ⛔ FOUNDER, 2026-08-05: *"the plan build takes far too long … I don't think the right answer
+     * is to lower the AI's intelligence during the build."*
+     *
+     * So the call is split rather than cheapened. Call A asks for the SHAPE at `low` — the name and
+     * which muscles fall on which day, ten short fields, seconds not a minute. Call B fills it at
+     * full thinking, unchanged.
+     *
+     * ⚠️ AND A IS NEVER ALLOWED TO FAIL THE BUILD. Without a shape the ask falls back to the
+     * original `first_programme` and the screen carries the wait on the catalogue's muscles exactly
+     * as it did before. Only B decides whether she has a programme.
+     */
+    const src = building();
+    expect(src).toContain("ask: { kind: 'first_shape' }");
+    expect(src).toContain("{ kind: 'first_fill', shape:");
+    expect(src).toContain(": { kind: 'first_programme' },");
+    // Call A is the cheap one; call B passes no level and takes the full default.
+    expect(src).toMatch(/COACH_SHAPE_SCHEMA[\s\S]{0,80}'low',/);
     // The guard against a double build when the effect re-runs — she must never be billed twice, and
     // two programmes racing to be stored is a week nobody chose.
-    expect(building()).toContain('if (started.current) return;');
+    expect(src).toContain('if (started.current) return;');
   });
 });
 
@@ -170,8 +187,15 @@ describe('the wait is honest', () => {
      * dashes until the answer lands, which is why the placeholder carries names and nothing else.
      */
     const src = building();
+    /*
+     * ⚠️ THREE SOURCES, and the order matters: the full plan when call B lands, HER muscles from
+     * call A before that, and the catalogue's in the first seconds. All three draw DASHED rows
+     * until a real lift exists — only the plan supplies one.
+     */
     expect(src).toContain('PLACEHOLDER_MUSCLES');
-    expect(src).toMatch(/PLACEHOLDER_MUSCLES\.slice\(0, shownMuscles\)\.map\(\(m\) => \(\{ muscle: m, lifts: \[\{ name: '' \}, \{ name: '' \}\] \}\)\)/);
+    expect(src).toContain('(sketched.length > 0 ? sketched : PLACEHOLDER_MUSCLES)');
+    expect(src).toContain('.map((m) => ({ muscle: m, lifts: waitingRows }))');
+    expect(src).toContain("const waitingRows = [{ name: '' }, { name: '' }];");
     // …and the real rows only ever come from the parsed plan.
     expect(src).toContain('muscles: buildMuscles(plan, inputs.units)');
   });

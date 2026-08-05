@@ -35,7 +35,7 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { BuildingProgrammeView, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
-import type { CoachPlan } from '@/domain/coachPlan';
+import { COACH_SHAPE_SCHEMA, parseCoachShape, type CoachPlan, type CoachShape } from '@/domain/coachPlan';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { db } from '@/data/local/db';
@@ -97,6 +97,8 @@ export function BuildingProgramme({ navigation, route }: Props) {
   const [fill, setFill] = useState(0);
   const [shownMuscles, setShownMuscles] = useState(0);
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: string | null; lifts: number } | null>(null);
+  /** Call A's answer — her real muscles and her programme's name, while call B is still out. */
+  const [sketch, setSketch] = useState<CoachShape | null>(null);
 
   useEffect(() => {
     const t0 = setTimeout(() => setFill(1), 120);
@@ -111,13 +113,20 @@ export function BuildingProgramme({ navigation, route }: Props) {
 
   useEffect(() => {
     if (shownMuscles === 0) return;
-    const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
+    /*
+     * ⚠️ THE TICKER COUNTS WHAT IS ACTUALLY BEING DRAWN. It counted the catalogue's seven even
+     * after call A had handed the screen HER four — so the reveal would wait for three muscles that
+     * were never going to be drawn, and the fill would appear to stall for three whole seconds
+     * before the name arrived. Same source as the render, or the clock is timing a different screen.
+     */
+    const sketchedCount = sketch ? new Set(sketch.days.flatMap((d) => d.muscles)).size : 0;
+    const total = built ? built.muscles.length : sketchedCount || PLACEHOLDER_MUSCLES.length;
     if (shownMuscles >= total) return;
     /* ⚠️ FAST ONCE THE ANSWER IS IN HAND — his own instruction: it must not drag on after the
        programme is built. Slow while waiting, so the screen still has somewhere to go. */
     const id = setTimeout(() => setShownMuscles((n) => n + 1), built ? 90 : MUSCLE_MS);
     return () => clearTimeout(id);
-  }, [shownMuscles, built]);
+  }, [shownMuscles, built, sketch]);
 
   /*
    * ⛔ THE NAME WAITS FOR THE FILL (found in the audit, 2026-08-05).
@@ -184,8 +193,41 @@ export function BuildingProgramme({ navigation, route }: Props) {
     setFailed(false);
     try {
       const facts = coachFacts({ profile, plan: null, history: [], language: currentLocale() });
+
+      /*
+       * ⛔ TWO CALLS, AND THE FIRST ONE IS WHY SHE IS NOT STARING AT NOTHING (founder 2026-08-05:
+       * *"the plan build takes far too long — this is the least SPOTIFY thing there is"*).
+       *
+       * CALL A asks for the SHAPE at `low` thinking: the programme's name and which muscles fall on
+       * which day. Ten short fields, the same class of answer as a chat turn — three to eight
+       * seconds against the ninety the full build can take. The screen has her real muscles and her
+       * programme's NAME while call B is still out.
+       *
+       * ⚠️ IT IS NEVER ALLOWED TO FAIL THE BUILD. A shape that does not come back costs the screen
+       * its early content and nothing else; the catalogue's muscles carry the wait exactly as they
+       * did before, and call B is the one that decides whether she has a programme.
+       */
+      const shapeReply = await askCoach(
+        coachRequest({ facts, ask: { kind: 'first_shape' } }),
+        COACH_SHAPE_SCHEMA as unknown as Record<string, unknown>,
+        'low',
+      );
+      const shape = shapeReply.ok ? parseCoachShape(shapeReply.text) : null;
+      if (shape) setSketch(shape);
+
+      /*
+       * CALL B fills what A sketched. Full thinking, unchanged — `low` was measured writing a
+       * one-exercise week, and the founder's ruling was explicit that the fix is not to make the
+       * coach dumber. Handing it the shape makes this a SMALLER question than the one call it
+       * replaces, which is why the split is expected to raise quality rather than trade it.
+       */
       const reply = await askCoach(
-        coachRequest({ facts, ask: { kind: 'first_programme' } }),
+        coachRequest({
+          facts,
+          ask: shape
+            ? { kind: 'first_fill', shape: JSON.stringify({ title: shape.title, days: shape.days }) }
+            : { kind: 'first_programme' },
+        }),
         COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
       );
       if (!reply.ok) { setFailed(true); return; }
@@ -241,9 +283,20 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * ⚠️ WHAT IS DRAWN IS ALWAYS WHAT IS KNOWN. Before the answer: her three numbers, then the real
    * muscles with dashed rows. After it: the real lifts, fast, and the programme's name.
    */
+  /*
+   * ⚠️ THREE SOURCES, IN ORDER OF HOW MUCH IS KNOWN, and never one pretending to be another:
+   *   · the full plan, once call B lands — real lifts, real loads;
+   *   · HER muscles from call A — real muscles, dashed rows;
+   *   · the catalogue's muscles — true of any programme, dashed rows, and all the screen has in
+   *     the first few seconds.
+   */
+  const waitingRows = [{ name: '' }, { name: '' }];
+  const sketched: string[] = sketch ? [...new Set(sketch.days.flatMap((d) => d.muscles))] : [];
   const muscles: BuildMuscle[] = built
     ? built.muscles.slice(0, shownMuscles)
-    : PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: [{ name: '' }, { name: '' }] }));
+    : (sketched.length > 0 ? sketched : PLACEHOLDER_MUSCLES)
+        .slice(0, shownMuscles)
+        .map((m) => ({ muscle: m, lifts: waitingRows }));
 
   /* ⚠️ `weightKg` and `age` are optional on the intake type; a ruler with no number to travel to
      sits at zero rather than crashing on the last screen before her programme. */
@@ -255,7 +308,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       unit={unitLabel(inputs.units)}
       fill={fill}
       muscles={muscles}
-      programmeName={revealed ? built?.name ?? null : null}
+      programmeName={revealed ? built?.name ?? sketch?.title ?? null : null}
       summary={
         revealed && built?.name
           ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })

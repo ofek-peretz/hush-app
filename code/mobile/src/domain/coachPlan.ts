@@ -979,3 +979,96 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     snapped,
   };
 }
+
+/* ─────────────────────────────────────────────────────────────── THE SHAPE, ASKED SEPARATELY */
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * WHAT HER WEEK IS, BEFORE WHAT IS IN IT — the first of two calls.
+ *
+ * ⛔ FOUNDER, 2026-08-05: *"the plan build takes far too long. This is the least SPOTIFY thing
+ * there is — the user sits and waits too long and that must not happen. I don't think the right
+ * answer is to lower the AI's intelligence during the build, because that is not the right fix."*
+ *
+ * He is right about both halves, and the measurements agree with him: a live three-turn intake ran
+ * **14.8 s, 20.8 s and 99.5 s**, and `low` thinking on the programme call was measured writing a
+ * **one-exercise week**. So the intelligence stays and the CALL is split instead.
+ *
+ * This one asks for the shape only: the programme's name, its sessions, and which muscles each one
+ * trains. Ten short fields, no loads, no rep bands, no reasoning — the same class of answer as a
+ * chat turn, which comes back in three to eight seconds.
+ *
+ * ── WHY THIS IS NOT "the cheap version of the plan" ─────────────────────────────────────────────
+ * The split is not a compromise; it is likely to RAISE quality. The longest prompt this project
+ * ever sent produced a one-lift programme and cutting it three-fold produced ten
+ * ([[prompt-length-suppresses-the-answer]]). A second call that is handed a shape and asked only to
+ * fill it is a smaller, sharper question than one asked to invent the shape and fill it at once.
+ *
+ * ⚠️ AND IT BUYS THE SCREEN SOMETHING TRUE TO DRAW. `BuildingProgrammeView` already renders muscles
+ * with dashed rows; until now those muscles were the catalogue's, which is honest but generic.
+ * They become HERS at second five, and the programme is NAMED there rather than at ninety.
+ *
+ * ⚠️ NO LOADS HERE, EVER. If this call could set a weight there would be two answers about what she
+ * lifts and no way to know which one the app drew. It names muscles; call two prescribes.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export const COACH_SHAPE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'days'],
+  properties: {
+    /** The programme's own name — the beat the build screen ends on. */
+    title: { type: 'string' },
+    /** One line on why it is this programme. Shown nowhere yet; it travels into call two. */
+    why: { type: 'string' },
+    days: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'muscles'],
+        properties: {
+          name: { type: 'string' },
+          /** Catalogue muscle names, in the order she will train them that day. */
+          muscles: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  },
+} as const;
+
+/** The shape, parsed — the little the first call is allowed to say. */
+export interface CoachShape {
+  title: string;
+  why?: string;
+  days: { name: string; muscles: string[] }[];
+}
+
+/**
+ * Read a shape reply. Tolerant in one direction only: a missing `days` is an empty week rather than
+ * a failure, because the screen can still draw the catalogue's muscles and the real plan is coming
+ * from call two regardless. **A missing title is a failure**, since the title is the only thing
+ * this call exists to produce that nothing else can supply.
+ */
+export function parseCoachShape(text: string): CoachShape | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.title !== 'string' || o.title.trim() === '') return null;
+  const days = Array.isArray(o.days)
+    ? o.days
+        .map((d) => {
+          const s = d as Record<string, unknown>;
+          if (typeof s?.name !== 'string') return null;
+          const muscles = Array.isArray(s.muscles) ? s.muscles.filter((m): m is string => typeof m === 'string') : [];
+          return { name: s.name, muscles };
+        })
+        .filter((d): d is { name: string; muscles: string[] } => d != null)
+    : [];
+  return { title: o.title.trim(), ...(typeof o.why === 'string' ? { why: o.why } : {}), days };
+}
