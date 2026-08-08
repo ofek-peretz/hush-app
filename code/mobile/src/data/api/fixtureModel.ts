@@ -286,6 +286,47 @@ export function estimateSessionMinutes(
  */
 // `budgetMin` is her declared time budget (S-64) — profile.workoutMinutes, defaulting to the
 // 60-minute ceiling.
+/**
+ * ════ THE FLOOR UNDER A SESSION — the mirror of the time cap (founder 2026-08-08) ════
+ *
+ * `enforceTimeCap` has always trimmed a day DOWN to her minutes. Nothing ever filled one UP, so
+ * `MAX_SESSION_MIN` was a ceiling with no floor beneath it and a session could come out at 24
+ * minutes without a single check complaining. The sweep across 1,455 programmes counted 335 of them
+ * under 45; scaling volume with frequency and with the muscles left on the map took it to 184, and
+ * the rest are days the DEAL left thin rather than days the volume left small.
+ *
+ * So the floor is enforced where the ceiling is: give the day's existing lifts more sets, largest
+ * gap first, until it reaches `MIN_SESSION_MIN` or nothing can legally grow.
+ *
+ * ⛔ IT ADDS SETS, NEVER EXERCISES. An exercise is a training decision — which muscle, which
+ * pattern, which equipment — and that belongs to the assembler, which has her map and her volume
+ * targets. This has neither. Adding a set to a lift she is already doing is the one move that
+ * cannot change what the session IS. F-1's [3,5] still bounds every slot, and a supplemental core
+ * block is never grown (it is a finisher, not the work).
+ */
+const MIN_SESSION_MIN = 45;
+
+function fillToSessionFloor(
+  day: ProgramDay,
+  floorMin: number = MIN_SESSION_MIN,
+  restSecFor?: (id: string) => number | null,
+  execSecFor?: (id: string) => number | null,
+  transitionSec?: number | null,
+): void {
+  const minutes = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec);
+  // Compounds grow first (S-35 — the compound keeps the fullest scheme), then isolations; catalogue
+  // order inside each. Deterministic, and it never exceeds F-1's ceiling.
+  const growable = () =>
+    day.slots
+      .filter((s) => !s.supplemental && s.setCount < V5_SETS_MAX)
+      .sort((a, b) => (isCompound(b.exerciseId) ? 1 : 0) - (isCompound(a.exerciseId) ? 1 : 0));
+  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX && minutes() < floorMin; guard++) {
+    const next = growable()[0];
+    if (!next) break; // every lift is at the ceiling — the day is as long as it can honestly be
+    next.setCount += 1;
+  }
+}
+
 function enforceTimeCap(
   day: ProgramDay,
   budgetMin: number = MAX_SESSION_MIN,
@@ -847,6 +888,9 @@ export const fixtureModel: ModelClient = {
     const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
     for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
     for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS); // work ≤ her minutes
+    // …and ≥ the floor. The cap runs first so the fill never has to undo it, and the fill can only
+    // reach `budgetMin - 1` worth of sets before the next set would put the day back over.
+    for (const d of days) fillToSessionFloor(d, Math.min(MIN_SESSION_MIN, budgetMin), restSecFor, execSecFor, transitionS);
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to

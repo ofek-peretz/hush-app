@@ -123,9 +123,28 @@ export const WEEKLY_SETS_FLOOR = 6; // MEV â€” below this a muscle is maint
  * muscle at four days, ~16 at six, inside the 12-20 band. Never read as 'she will do 30 sets'. */
 export const WEEKLY_SETS_CEILING = 30;
 
-export function startingWeeklySets(days: number): number {
-  const scaled = WEEKLY_SETS_PER_DAY * days;
-  return Math.min(WEEKLY_SETS_CEILING, Math.max(WEEKLY_SETS_FLOOR, scaled));
+/**
+ * B-2 — the muscle count a full body map trains (every group but Core, which is supplemental).
+ * Turning muscles OFF does not shorten her hour, so the work has to redistribute over what is left.
+ */
+export const FULL_BODY_MUSCLE_COUNT = 9;
+
+export function startingWeeklySets(days: number, trainableCount: number = FULL_BODY_MUSCLE_COUNT): number {
+  /*
+   * ⛔ AN `off` MUSCLE MUST NOT SHORTEN HER SESSION.
+   *
+   * The per-muscle target scaled with frequency but not with how many muscles were left, so a map
+   * with legs off simply produced less work — and the sweep across 1,455 programmes counted 335
+   * sessions under 45 minutes, nearly all of them on maps with something switched off. She did not
+   * ask for a shorter workout; she asked not to train a muscle. The hour is the same hour.
+   *
+   * So the pot is redistributed over the muscles that remain. Turning off four leg muscles gives the
+   * five upper ones 9/5 of the target, still bounded by the ceiling — which is where the time cap
+   * takes over and trims the day to her minutes anyway.
+   */
+  const spread = FULL_BODY_MUSCLE_COUNT / Math.max(1, trainableCount);
+  const scaled = WEEKLY_SETS_PER_DAY * days * spread;
+  return Math.min(WEEKLY_SETS_CEILING, Math.max(WEEKLY_SETS_FLOOR, Math.round(scaled)));
 }
 
 /**

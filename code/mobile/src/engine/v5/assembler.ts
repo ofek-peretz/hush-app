@@ -32,7 +32,9 @@ export function weeklyTargets(
    *  which is what this function returned for every frequency before 2026-08-08. */
   days?: number,
 ): Record<string, number> {
-  const base = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days);
+  // Core is supplemental, so it is not one of the muscles the week's work spreads over.
+  const trainable = trainableMuscles(map, allMuscles).filter((m) => m !== 'Core');
+  const base = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days, trainable.length);
   // Proportional, so an emphasis mark carries the same weight at 2 days as at 6 (see EMPHASIS_FRACTION).
   const bonus = days == null ? STARTING_WEEKLY_SETS.emphasisBonus : emphasisBonusFor(base);
   const out: Record<string, number> = {};
