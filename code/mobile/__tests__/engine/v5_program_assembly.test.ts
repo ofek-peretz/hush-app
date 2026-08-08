@@ -178,11 +178,12 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
     const emphasised = assembleV5DayLists({ Chest: 'emphasis' }, 4);
     const chestCount = (days: { exerciseIds: string[] }[]) => allExercises(days).filter((id) => muscleOf(id) === 'Chest').length;
     // The RELATIONSHIP is the law (S-4: an emphasised muscle earns more). The exact counts follow
-    // from B-2, which became frequency-aware on 2026-08-08 — at 4 days a normal muscle targets
-    // 5 × 4 = 20 weekly sets and an emphasised one 26, over `DAY_ONE_EX_DIVISOR` of 5.
+    // from B-2, which became frequency-aware on 2026-08-08 and muscle-size-aware on 2026-08-09:
+    // Chest draws its own SHARE of the week's pot (1.3 of a total 10.5), not a flat per-muscle
+    // figure, so pinning the numbers here is pinning the share table — which is the point.
     expect(chestCount(emphasised)).toBeGreaterThan(chestCount(normal));
-    expect(chestCount(normal)).toBe(4); // 20 / 5 → 4
-    expect(chestCount(emphasised)).toBe(6); // 20 + 60% = 32, / 5 → 6
+    expect(chestCount(normal)).toBe(5);
+    expect(chestCount(emphasised)).toBe(8);
   });
 
   it('structure follows volume — emphasise the lower body and more lower days fall out', () => {

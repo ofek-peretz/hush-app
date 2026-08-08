@@ -39,7 +39,7 @@ import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists, ESSENTIAL_PATTERNS } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
-import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
+import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
 import { epley, normalizeLoad } from '@/engine/loadMath';
@@ -185,7 +185,7 @@ function dayFromBlueprint(
   const slots: Slot[] = exercises.map((ex) => ({
     capability: ex.capability,
     exerciseId: ex.id,
-    setCount: setCounts?.[ex.id] ?? setsFor(ex.tier),
+    setCount: setCounts?.[ex.id] ?? setsFor(ex.tier, ex.muscle),
   }));
   // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
   // Calves · Core), in catalog order, deduplicated.
@@ -375,6 +375,47 @@ function enforceTimeCap(
     });
     return sameOnDay.length <= 1;
   };
+  /*
+   * ════ THE CAP GIVES UP SETS THE WAY chooseDonor DOES (founder 2026-08-09) ════
+   *
+   * Both drop passes below walk the day BACKWARDS and take the first slot that qualifies, so the
+   * muscle they take from is whichever sits late in `CANONICAL_MUSCLE_ORDER` — an ordering built as
+   * a tie-break, never as a priority. `MUSCLE_VOLUME_SHARE` gave the back the largest weekly target
+   * and the cap handed it straight back: the back sits fourth of five upper muscles, so it was cut
+   * first, and the printed week still read Back 8 · Calves 6. Scaling day-one SET counts to match
+   * the share made it worse for the same reason — a longer day just means a harder cut.
+   *
+   * `trimV5ToBudget` has always known the right rule (S-37 / `chooseDonor`: never an emphasis
+   * muscle, never one at its floor, otherwise whoever can best spare it). This is that rule, in the
+   * blunt pass, expressed as an ORDER rather than a veto: sort the candidates by how far each
+   * muscle's sets on this day exceed its share of the day, and take from the most over-served.
+   * Ties fall back to the incoming position, so it stays deterministic.
+   */
+  const overServed = (): Map<number, number> => {
+    const sets: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (m) sets[m] = (sets[m] ?? 0) + s.setCount;
+    }
+    const shareTotal = Object.keys(sets).reduce((n, m) => n + (MUSCLE_VOLUME_SHARE[m] ?? 1), 0) || 1;
+    const total = Object.values(sets).reduce((n, v) => n + v, 0) || 1;
+    const score = new Map<number, number>();
+    day.slots.forEach((s, i) => {
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (!m) return;
+      const deserved = (total * (MUSCLE_VOLUME_SHARE[m] ?? 1)) / shareTotal;
+      score.set(i, (sets[m] ?? 0) - deserved); // > 0 → this muscle has more than its share today
+    });
+    return score;
+  };
+  /** Slot indices, most over-served muscle first; ties keep the trailing-first order. */
+  const dropOrder = (): number[] => {
+    const score = overServed();
+    return day.slots
+      .map((_s, i) => i)
+      .sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0) || b - a);
+  };
   const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
   for (let k = isoIdx.length - 1; k >= 0 && over(); k--) {
     const slot = day.slots[isoIdx[k]];
@@ -392,14 +433,20 @@ function enforceTimeCap(
   // of them. A v4-era `slots.length <= 4` floor and a by-name Calves/Core exemption used to sit here
   // as well; neither is in the register, and neither does anything the named guard does not already
   // do (a generated core block is `supplemental`, and calves are always their muscle's only lift).
+  // The order is recomputed after every removal: dropping a slot changes which muscle is now the
+  // most over-served, and it also invalidates every index computed before the splice.
   for (const allowLeaveIt of [false, true]) {
-    for (let i = day.slots.length - 1; i >= 0 && over(); i--) {
-      const slot = day.slots[i];
-      const ex = exerciseById(slot.exerciseId);
-      if (!ex || slot.supplemental || ex.tier !== 'isolation') continue;
-      if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) continue; // S-59: leave-its are cut last
-      if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1) continue; // S-35/S-63: never a muscle's ONLY lift
-      if (lastOfEssentialPattern(slot)) continue; // never the day's last row / pulldown
+    for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
+      const i = dropOrder().find((j) => {
+        const slot = day.slots[j];
+        const ex = slot && exerciseById(slot.exerciseId);
+        if (!ex || slot.supplemental || ex.tier !== 'isolation') return false;
+        if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) return false; // S-59: leave-its are cut last
+        if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1) return false; // S-35/S-63: never a muscle's ONLY lift
+        if (lastOfEssentialPattern(slot)) return false; // never the day's last row / pulldown
+        return true;
+      });
+      if (i === undefined) break;
       day.slots.splice(i, 1);
     }
   }
@@ -662,7 +709,36 @@ type Tier = Exercise['tier'];
  *     exercise. It contradicts the whole of Loop 3: in v5 volume is **earned** from facts (S-32) and
  *     **cut** from facts (S-34), starting from B-2. A dial that sets it by declaration is v4.
  */
-function setsFor(tier: Tier): number {
+function setsFor(tier: Tier, muscle?: string): number {
+  /*
+   * ════ THE MUSCLE'S SHARE REACHES THE SET COUNT, NOT ONLY THE EXERCISE COUNT ════
+   *
+   * `MUSCLE_VOLUME_SHARE` gives the back the largest weekly target and the calves the smallest, and
+   * on its own that changed almost nothing: a 60-minute upper day holds about six lifts and there
+   * are five upper muscles, so every muscle gets ONE slot whatever its target says. The share had no
+   * room to express itself in exercise COUNT, and the printed week still read Back 8 · Calves 6.
+   *
+   * So it expresses itself here instead. A muscle that owns a large share of the week carries the
+   * fuller scheme on the lift it does get; a small one carries the leaner. Everything stays inside
+   * F-1's [3, 5] — this widens the day-one spread within the law, it does not reach past it.
+   *
+   * Loop 3 still overwrites all of it from her own facts within weeks (S-32/S-34). This is the
+   * day-one guess, and it is now a guess that knows a back is not a calf.
+   */
+  /*
+   * ⛔ MEASURED AND REVERTED, 2026-08-09 — kept as a note because the next reader will try it too.
+   *
+   * Scaling the day-one set count by the muscle's share (5 sets for a big compound, 3 for a small
+   * one) is the obvious way to let `MUSCLE_VOLUME_SHARE` reach a day that only has room for one lift
+   * per muscle. Measured over the 1,455-programme sweep it was NET NEGATIVE: it lengthened every day,
+   * so `enforceTimeCap` cut harder — and the cap drops by POSITION, not by share, so the muscles it
+   * took from were whichever sat late in canonical order. Back fell from 8 weekly sets to 6 at four
+   * days, 557 large-vs-small inversions remained, and the 45-minute floor broke in the bargain.
+   *
+   * The blocker is not this function. It is that the cap is share-blind: until it gives up sets the
+   * way `chooseDonor` does — from whoever can best spare them — a longer day just means a harder cut.
+   */
+  void muscle;
   // Compounds lead a day and carry the fuller scheme (Part 3 #4); both sit inside F-1.
   return tier === 'compound' ? 4 : V5_SETS_MIN;
 }

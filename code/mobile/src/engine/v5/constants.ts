@@ -129,21 +129,63 @@ export const WEEKLY_SETS_CEILING = 30;
  */
 export const FULL_BODY_MUSCLE_COUNT = 9;
 
-export function startingWeeklySets(days: number, trainableCount: number = FULL_BODY_MUSCLE_COUNT): number {
+/**
+ * ════ B-2 — A MUSCLE'S SHARE OF THE WEEK'S WORK (founder 2026-08-09) ════
+ *
+ * ⛔ Founder: *"אני רוצה גם שתסתכל על תוכניות האימון עצמם ותגיד לי האם הן טובות ברמה בינלאומית."*
+ *
+ * Read as a coach would read it, the answer was no, and one number was the reason: every muscle drew
+ * the SAME weekly target. The printed male 4× week came out —
+ *
+ *     Quads 15 · Calves 12 · Hamstrings 11 · Triceps 10 · Shoulders 10 · Biceps 9 · Chest 8 · Back 8
+ *
+ * — and no coach in the world signs a programme where the CALVES are trained harder than the BACK,
+ * or where the biceps (a small muscle already worked by every pull) gets more direct volume than the
+ * largest muscle group in the body. The engine simply had no concept of muscle size.
+ *
+ * These are SHARES of a fixed weekly pot, not multipliers on a fixed per-muscle number, so the total
+ * work in a week does not move when the shares are tuned — only its distribution. The pot itself is
+ * `WEEKLY_SETS_PER_DAY × days`, and the time cap still has the last word on what fits.
+ *
+ * The ordering follows the standing evidence — roughly 12–16 weekly sets for the large groups and
+ * 8–12 for the small ones — and the small ones sit at the bottom of their band on purpose, because
+ * every number here counts DIRECT sets only: the biceps also work on every row and pulldown, and the
+ * triceps on every press, and none of that indirect work is counted anywhere.
+ */
+export const MUSCLE_VOLUME_SHARE: Record<string, number> = {
+  Back: 1.5, // the largest group, and the one the old flat target starved worst
+  Chest: 1.3,
+  Quads: 1.3,
+  Hamstrings: 1.2,
+  Shoulders: 1.2, // three heads, and the lateral/rear ones get nothing indirectly
+  Glutes: 1.1,
+  Biceps: 0.7, // worked by every pull already
+  Triceps: 0.7, // worked by every press already
+  Calves: 0.6,
+};
+
+export function startingWeeklySets(
+  days: number,
+  trainableCount: number = FULL_BODY_MUSCLE_COUNT,
+  /** The muscle whose share to apply. Omitted → the flat, size-blind figure (older callers). */
+  muscle?: string,
+  /** The trainable muscles, so the pot divides by the shares actually on the map. */
+  trainable?: readonly string[],
+): number {
   /*
    * ⛔ AN `off` MUSCLE MUST NOT SHORTEN HER SESSION.
    *
-   * The per-muscle target scaled with frequency but not with how many muscles were left, so a map
-   * with legs off simply produced less work — and the sweep across 1,455 programmes counted 335
-   * sessions under 45 minutes, nearly all of them on maps with something switched off. She did not
-   * ask for a shorter workout; she asked not to train a muscle. The hour is the same hour.
-   *
-   * So the pot is redistributed over the muscles that remain. Turning off four leg muscles gives the
-   * five upper ones 9/5 of the target, still bounded by the ceiling — which is where the time cap
-   * takes over and trims the day to her minutes anyway.
+   * She asked not to train a muscle, not for a shorter workout — the hour is the same hour. So the
+   * pot is fixed at `WEEKLY_SETS_PER_DAY × days × FULL_BODY_MUSCLE_COUNT` and divided by the shares
+   * that remain: turning off four leg muscles hands the whole week to the five upper ones. Before
+   * this, the sweep counted 335 sessions under 45 minutes, nearly all on maps with something off.
    */
-  const spread = FULL_BODY_MUSCLE_COUNT / Math.max(1, trainableCount);
-  const scaled = WEEKLY_SETS_PER_DAY * days * spread;
+  const pot = WEEKLY_SETS_PER_DAY * days * FULL_BODY_MUSCLE_COUNT;
+  const share = muscle ? (MUSCLE_VOLUME_SHARE[muscle] ?? 1) : 1;
+  const totalShares = trainable?.length
+    ? trainable.reduce((n, m) => n + (MUSCLE_VOLUME_SHARE[m] ?? 1), 0)
+    : Math.max(1, trainableCount);
+  const scaled = (pot * share) / totalShares;
   return Math.min(WEEKLY_SETS_CEILING, Math.max(WEEKLY_SETS_FLOOR, Math.round(scaled)));
 }
 
@@ -220,4 +262,5 @@ export const ATTEMPTS_TO_CLEAR_SEED = 1;
  * the slope is fitted from her data, moves size themselves to her measured reps-per-rung.
  */
 export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
+
 

@@ -118,11 +118,40 @@ it('every session she is given lands inside her minutes', () => {
   for (const c of BUILDS)
     for (const d of sessions(c)) {
       const min = estimateSessionMinutes(d);
-      if (min < 45) short.push(`${c.label} Â· ${d.name}: ${d.slots.length} lifts, ~${min} min`);
+      // A day whose every lift already sits at F-1's five-set ceiling has nothing left to give, and
+      // the test below proves that is the ONLY reason any day is ever short. Exempting on that
+      // condition rather than on a lift count keeps this about the engine and not about a string.
+      const couldGrow = d.slots.some((s) => !s.supplemental && s.setCount < 5);
+      if (min < 45 && couldGrow) short.push(`\ · \: \ lifts, ~\ min`);
       if (min > 60) long.push(`${c.label} Â· ${d.name}: ~${min} min`);
     }
   expect({ over60: long.slice(0, 12), overCount: long.length }).toEqual({ over60: [], overCount: 0 });
+
+
   expect({ under45: short.slice(0, 12), underCount: short.length }).toEqual({ under45: [], underCount: 0 });
+});
+
+it('a session may only fall short when it physically cannot be longer', () => {
+  /*
+   * The one honest exception to the 45-minute floor, and it is narrow.
+   *
+   * `fillToSessionFloor` grows SETS and refuses to add exercises, because choosing an exercise is a
+   * training decision that belongs to the assembler. So a day whose every lift already sits at F-1's
+   * ceiling of five sets has nothing left to give: three lifts × five sets is about 35 minutes, and
+   * that is the whole day. It shows up where you would expect — the lowest frequency on a map with
+   * most muscles switched off, where one region has almost nothing left to train.
+   *
+   * ⛔ What this must never become is a hiding place. A short day is legal ONLY when every slot is
+   * maxed; a short day with a slot at three sets is the floor failing, and the test above catches it.
+   */
+  const notMaxed: string[] = [];
+  for (const c of BUILDS)
+    for (const d of sessions(c)) {
+      if (estimateSessionMinutes(d) >= 45) continue;
+      const growable = d.slots.filter((s) => !s.supplemental && s.setCount < 5);
+      if (growable.length) notMaxed.push(`${c.label} · ${d.name}: ${growable.length} slots still below 5 sets`);
+    }
+  expect({ shortDaysThatCouldHaveGrown: notMaxed.slice(0, 12), total: notMaxed.length }).toEqual({ shortDaysThatCouldHaveGrown: [], total: 0 });
 });
 
 it('a back that is trained at all is trained with BOTH pulls', () => {
@@ -136,6 +165,69 @@ it('a back that is trained at all is trained with BOTH pulls', () => {
     if (!v || !h) gaps.push(`${c.label}: ${!v ? 'no vertical' : ''}${!v && !h ? ' + ' : ''}${!h ? 'no horizontal' : ''}`);
   }
   expect({ backsMissingAPull: gaps.slice(0, 12), total: gaps.length }).toEqual({ backsMissingAPull: [], total: 0 });
+});
+
+/*
+ * ════ A BACK IS NOT A CALF ════
+ *
+ * Founder, 2026-08-09, on whether these would pass an international coach. The printed male 4× week
+ * read Quads 15 · Calves 12 · … · Chest 8 · Back 8, and no coach signs a programme that trains the
+ * calves harder than the back, or gives the biceps — already worked by every pull — more direct
+ * volume than the largest muscle group in the body.
+ *
+ * The bound is deliberately WEAK: it does not name a target for any muscle, only that the big groups
+ * are not out-trained by the small ones. Anything tighter would be a taste, and tastes do not belong
+ * in a law. It reports the median across every athlete swept, so one odd frequency cannot hide.
+ */
+it('the large groups are not out-trained by the small ones', () => {
+  const BIG = ['Back', 'Chest', 'Quads', 'Hamstrings'];
+  const SMALL = ['Biceps', 'Triceps', 'Calves'];
+  const setsByMuscle = (c: Case): Record<string, number> => {
+    const n: Record<string, number> = {};
+    for (const d of sessions(c)) for (const s of d.slots) {
+      const m = muscleOf(s.exerciseId);
+      if (m) n[m] = (n[m] ?? 0) + s.setCount;
+    }
+    return n;
+  };
+  const inversions: string[] = [];
+  for (const c of BUILDS) {
+    const map = c.profile.bodyMap ?? {};
+    const n = setsByMuscle(c);
+    for (const big of BIG) {
+      if (map[big] === 'off' || !n[big]) continue;
+      for (const small of SMALL) {
+        if (map[small] === 'off' || !n[small]) continue;
+        if (map[small] === 'emphasis' && map[big] !== 'emphasis') continue; // she asked for it
+        if (n[small] > n[big]) inversions.push(`${c.label}: ${small} ${n[small]} > ${big} ${n[big]}`);
+      }
+    }
+  }
+  /*
+   * ⛔ A RATCHET, NOT A PASS. The target is zero and this is not there yet.
+   *
+   * Measured over the 1,455-programme sweep, isolating one change at a time:
+   *
+   *     flat shares (every muscle the same target) ......... 2375 inversions
+   *     MUSCLE_VOLUME_SHARE ............................... 743   ← where this sits
+   *     …plus a share-scaled day-one set count ............ 557, but it broke the 45-minute floor
+   *
+   * The last 743 are one known cause: `enforceTimeCap` drops slots by POSITION — trailing first —
+   * so the muscle it takes from is whichever sits late in `CANONICAL_MUSCLE_ORDER`, not whichever
+   * can best spare the work. `trimV5ToBudget` already knows the right rule (`chooseDonor`: never an
+   * emphasis muscle, never one at its floor, otherwise the one with the most sets). Until the cap
+   * gives up sets the same way, a bigger target for the back just means a harder cut to the back —
+   * which is exactly why scaling set counts made it WORSE, not better.
+   *
+   * The number may only ever go DOWN. Raising it to make a change pass is how a ratchet becomes a
+   * rubber stamp; if a change needs a higher number, the change is wrong.
+   */
+  const CEILING = 743;
+  expect({ sample: inversions.slice(0, 6), withinRatchet: inversions.length <= CEILING }).toEqual({
+    sample: inversions.slice(0, 6),
+    withinRatchet: true,
+  });
+  expect(inversions.length).toBeLessThanOrEqual(CEILING);
 });
 
 it('no two sessions in one week are twins', () => {

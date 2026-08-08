@@ -34,11 +34,12 @@ export function weeklyTargets(
 ): Record<string, number> {
   // Core is supplemental, so it is not one of the muscles the week's work spreads over.
   const trainable = trainableMuscles(map, allMuscles).filter((m) => m !== 'Core');
-  const base = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days, trainable.length);
-  // Proportional, so an emphasis mark carries the same weight at 2 days as at 6 (see EMPHASIS_FRACTION).
-  const bonus = days == null ? STARTING_WEEKLY_SETS.emphasisBonus : emphasisBonusFor(base);
   const out: Record<string, number> = {};
   for (const m of trainableMuscles(map, allMuscles)) {
+    // Each muscle draws its OWN share of the week's pot (MUSCLE_VOLUME_SHARE) — a back is not a calf.
+    const base = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days, trainable.length, m, trainable);
+    // Proportional, so an emphasis mark carries the same weight at 2 days as at 6 (see EMPHASIS_FRACTION).
+    const bonus = days == null ? STARTING_WEEKLY_SETS.emphasisBonus : emphasisBonusFor(base);
     out[m] = base + (stanceOf(map, m) === 'emphasis' ? bonus : 0);
   }
   return out;
