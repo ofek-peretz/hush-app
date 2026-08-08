@@ -8,6 +8,20 @@
       "port": 5599
     },
     {
+      "name": "v8-direction",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py"],
+      "cwd": "C:\\Users\\ofek3\\Desktop\\Hush\\_v8_direction",
+      "port": 5602
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8090"],
+      "port": 8090,
+      "cwd": "C:\\Users\\ofek3\\Desktop\\Hush\\code\\app"
+    },
+    {
       "name": "hush-web",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8082"],

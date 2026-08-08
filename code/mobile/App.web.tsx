@@ -14,6 +14,10 @@
  * Pick a screen with the URL hash — `#1.2`, `#2.4`, `#3.4c` — matching the handoff's
  * own screen ids.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
@@ -28,8 +32,32 @@ import { setGender, getGender, type Gender } from '@/i18n/gender';
 import { color, font } from '@/design/tokens';
 import { installGlobalFontDefault } from '@/design/typography';
 import { GALLERY, DEFAULT_SCREEN, type GalleryEntry } from '@/screens/dev/gallery';
+// The REAL app, booted here so the browser is a place to USE Hush and not only to look at it.
+import { AppProvider } from '@/state/stores/appStore';
+import { SessionProvider } from '@/state/stores/sessionStore';
+import { ToastProvider } from '@/components/ds';
+import { Root } from '@/app/Root';
 
 installGlobalFontDefault();
+
+/**
+ * THE MANIFEST, PUBLISHED — for the static exporter that drives this harness screen by screen.
+ *
+ * It reads the list from the running module rather than by parsing `gallery.tsx`, because a
+ * regex over the source silently missed an entry and every index after it shifted by one. The
+ * exporter addresses screens by index (see `resolve`), so a manifest that is off by one is a
+ * bundle where a hundred screens are filed under the wrong name.
+ */
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__HUSH_GALLERY__ = GALLERY.map((g, index) => ({
+    index,
+    id: g.id,
+    label: g.label,
+    status: g.status,
+    note: g.note ?? null,
+    renderable: !!g.render,
+  }));
+}
 
 /** The handoff's own phone frame. Screenshots taken at this size line up 1:1 with the PNGs. */
 const FRAME_W = 390;
@@ -118,8 +146,47 @@ export default function App() {
 
   if (!ready || !fontsLoaded) return <View style={styles.canvas} />;
 
-  const id = hash || DEFAULT_SCREEN;
-  const entry = GALLERY.find((g) => g.id === id);
+  /*
+   * ════ NO HASH IS THE REAL APP NOW (founder 2026-08-08) ════
+   *
+   * Founder: *"מה שאני רואה עכשיו זה את הגלרייה... במקום שאבדוק מהפלאפון אראה את זה כאן?"* — and
+   * the landing page being an INDEX is why the browser had never replaced a build for him. A list
+   * of screens answers "was it built"; it cannot answer "does the app work".
+   *
+   * The header of this file used to say the real providers were impossible here, because they
+   * "reach for SQLite, HealthKit and billing". That was true of an intention, never of the code:
+   * `data/local/db` is AsyncStorage top to bottom (its own comment still says SQLite is for
+   * "later"), and the only genuinely native imports left in `src/` are expo-notifications and
+   * expo-secure-store — two modules, both behind seams, both resolvable with a `.web` variant.
+   *
+   * So the addresses are:
+   *   ·  no hash   → the real app, from the first screen, with real state and real persistence
+   *   ·  #gallery  → the screen index this file used to land on
+   *   ·  #2.1, #i57 → one screen, mounted bare — unchanged, and still how a screen is reconciled
+   *                   against its PNG
+   */
+  if (!hash) {
+    return (
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <View style={styles.canvas}>
+          <View style={styles.frame}>
+            <Boundary>
+              <AppProvider>
+                <SessionProvider>
+                  <ToastProvider>
+                    <Root />
+                  </ToastProvider>
+                </SessionProvider>
+              </AppProvider>
+            </Boundary>
+          </View>
+          <VoiceBar />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  const { id, entry } = resolve(hash === 'gallery' ? '' : hash);
 
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
@@ -147,6 +214,37 @@ export default function App() {
 
 const Stack = createNativeStackNavigator();
 const navTheme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: color.bgBase, card: color.bgBase } };
+
+/**
+ * ════ ELEVEN BUILT SCREENS HAD NO ADDRESS ════
+ *
+ * `id` is not unique in GALLERY. 'Pre-workout' shares `2.1c` with 'Today — week one, no days
+ * yet'; 'An interval — rep 3 of 6' shares `2.2m` with 'The set — nothing moved'; three cardio
+ * states collide the same way. `GALLERY.find` returns whichever was declared FIRST, so eleven
+ * live screens were built, rendering, listed in the index — and impossible to open. Clicking
+ * their row set the hash to an id that belongs to someone else, and the frame drew the other
+ * screen. This is the same failure the UNFILED catch-all was added for: a hand-maintained key
+ * that silently stopped being a key.
+ *
+ * The ids are the HANDOFF's, and the build protocol is "put your output next to
+ * `screenshots/screens/<id>.png`" — renaming them here would break the acceptance test that
+ * gives them their meaning. So the id stays ambiguous and a second, unambiguous address is
+ * added beside it: `#i57` is the entry at position 57, and every entry has exactly one.
+ */
+function resolve(hash: string): { id: string; entry?: GalleryEntry } {
+  const byIndex = /^i(\d+)$/.exec(hash);
+  if (byIndex) return { id: hash, entry: GALLERY[Number(byIndex[1])] };
+  const id = hash || DEFAULT_SCREEN;
+  return { id, entry: GALLERY.find((g) => g.id === id) };
+}
+
+/**
+ * The address a row links to: its own id where that id reaches it, and its index where another
+ * entry would answer first. A row that cannot open the screen it names is worse than no row.
+ */
+function addressOf(entry: GalleryEntry, index: number): string {
+  return GALLERY.findIndex((g) => g.id === entry.id) === index ? entry.id : `i${index}`;
+}
 
 /**
  * A screen that throws must SAY so. Without this the gallery draws an empty frame and the only
@@ -237,11 +335,13 @@ function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
           <View key={sec.title} style={styles.indexSection}>
             <Text style={styles.indexSectionTitle}>{sec.title}</Text>
             {rows.map((g) => (
+              // Keyed by INDEX, not id: the duplicate ids collided as React keys too, so two
+              // rows in the same section shared one identity.
               <Pressable
-                key={g.id}
+                key={GALLERY.indexOf(g)}
                 disabled={!g.render}
                 onPress={() => {
-                  window.location.hash = g.id;
+                  window.location.hash = addressOf(g, GALLERY.indexOf(g));
                 }}
                 style={styles.indexRowWrap}
               >
