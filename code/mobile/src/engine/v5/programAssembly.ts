@@ -325,10 +325,38 @@ export function assembleV5DayLists(
      * its share of the real work, and breaks the accidental single-equipment session on the way.
      * Still deterministic, still catalogue-ordered inside each pass.
      */
-    const compounds = picks.filter((id) => exerciseById(id)?.tier === 'compound');
-    const isolations = picks.filter((id) => exerciseById(id)?.tier !== 'compound');
-    compounds.forEach((exId, k) => dayExercises[regionIdxs[k % regionIdxs.length]].push(exId));
-    isolations.forEach((exId, k) => dayExercises[regionIdxs[k % regionIdxs.length]].push(exId));
+    /*
+     * ════ AND IT DEALS A PATTERN ONLY ONCE TO A DAY (founder 2026-08-08) ════
+     *
+     * `k % len` is blind to what a day already holds, and the audit printed the result: Lower A came
+     * out **Barbell Back Squat then Front Squat** — two `squat` lifts, back to back, in one session.
+     * No coach programmes a front squat immediately after a back squat; it is the same movement
+     * trained twice while the lunge and the leg extension sit on the other day.
+     *
+     * It is not a selection fault. A muscle with more exercises than patterns MUST repeat one
+     * (Quads has four lifts across `squat`/`lunge`/`knee_extension`), and repeating is fine — the
+     * two copies just have to land on DIFFERENT days. The dealer now places each lift on the day
+     * that does not already train that muscle's pattern, and falls back to the emptiest day when
+     * every candidate already does.
+     *
+     * Deterministic: ties break on day index, which is the order `k % len` used.
+     */
+    const dealTo = (exId: string) => {
+      const ex = exerciseById(exId);
+      const load = (i: number) => dayExercises[i].length;
+      const clashes = (i: number) =>
+        dayExercises[i].some((other) => {
+          const o = exerciseById(other);
+          return o && ex && o.muscle === ex.muscle && o.pattern === ex.pattern;
+        });
+      const free = regionIdxs.filter((i) => !clashes(i));
+      const pool = free.length > 0 ? free : regionIdxs;
+      let best = pool[0];
+      for (const i of pool) if (load(i) < load(best)) best = i; // strict: ties keep the lowest index
+      dayExercises[best].push(exId);
+    };
+    for (const id of picks.filter((id) => exerciseById(id)?.tier === 'compound')) dealTo(id);
+    for (const id of picks.filter((id) => exerciseById(id)?.tier !== 'compound')) dealTo(id);
   }
 
   // Hole guard: no workout may be EMPTY (a very sparse map at a high frequency — few muscles, many

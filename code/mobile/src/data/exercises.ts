@@ -76,13 +76,29 @@ export type LoadStyle =
 export type SwapPattern =
   // Chest
   | 'press_flat' | 'press_incline' | 'fly'
-  // Triceps
-  | 'press' | 'elbow_extension'
+  // Triceps — the long head crosses the shoulder, so where the ELBOW sits decides what is trained.
+  // Overhead (and the skullcrusher's lying equivalent) holds it stretched; a pushdown holds it short.
+  // Same split, same reason as the calves' straight/bent knee below.
+  | 'press' | 'elbow_extension_overhead' | 'elbow_extension_pushdown'
   // Back â€” a SHRUG is scapular elevation, not a row: nothing else in the catalogue trains it, and
   // scoring it as a row would answer a busy shrug with a barbell row.
   | 'row' | 'pulldown' | 'rear_delt' | 'shrug'
-  // Biceps
-  | 'curl'
+  /*
+   * Biceps — ONE pattern for nine lifts was the coarsest entry in this taxonomy, and the audit
+   * showed the cost: thirteen of the twenty-three same-pattern pairs in a single session were two
+   * curls, because nothing could tell the engine they were different lifts.
+   *
+   * The biceps crosses the shoulder too, so the arm's position sets the muscle's length. An INCLINE
+   * curl holds it behind the torso at full stretch; a preacher or concentration curl holds it in
+   * front, shortened. They are opposite ends of the length-tension curve, and the 2025 work on
+   * stretch-mediated hypertrophy makes the lengthened end the one that must not be swapped away.
+   * `brachialis` is a third thing entirely — a hammer or reverse curl trains the muscle UNDER the
+   * biceps, and the forearm never supinates.
+   *
+   * This is the same law the catalogue already applies to the calves (gastrocnemius vs soleus) and
+   * the delts (lateral vs front). It simply had never been applied to the arm.
+   */
+  | 'curl' | 'curl_lengthened' | 'curl_shortened' | 'brachialis'
   // Shoulders â€” a FRONT raise is a different plane from a lateral one, and the delt it trains is
   // the one the presses already hammer. Kept apart so a swap never trades one for the other.
   | 'press_overhead' | 'lateral_raise' | 'front_raise'
@@ -235,16 +251,16 @@ export const EXERCISES: Exercise[] = [
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ horizontal_push Â· Triceps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   { id: 'close_grip_bench', name: 'Close-Grip Bench Press', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 32, bwScaled: true, cues: ['Hands shoulder-width.', 'Tuck the elbows.', 'Press through the triceps.'] },
-  { id: 'triceps_pushdown', name: 'Triceps Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 20, cues: ['Pin the elbows to your sides.', 'Extend fully.', 'Resist on the way up.'], synonyms: ['pushdown'] },
-  { id: 'overhead_triceps_ext', name: 'Overhead Triceps Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Elbows by your ears.', 'Stretch behind the head.', 'Extend to lockout.'] },
-  { id: 'skullcrusher', name: 'Skullcrusher', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pointed up.', 'Lower to the forehead.', 'Extend to lockout.'], synonyms: ['lying triceps extension'] },
+  { id: 'triceps_pushdown', name: 'Triceps Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 20, cues: ['Pin the elbows to your sides.', 'Extend fully.', 'Resist on the way up.'], synonyms: ['pushdown'] },
+  { id: 'overhead_triceps_ext', name: 'Overhead Triceps Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_overhead', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Elbows by your ears.', 'Stretch behind the head.', 'Extend to lockout.'] },
+  { id: 'skullcrusher', name: 'Skullcrusher', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_overhead', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pointed up.', 'Lower to the forehead.', 'Extend to lockout.'], synonyms: ['lying triceps extension'] },
   { id: 'machine_dip', name: 'Seated Dip Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'supported', equipment: 'machine', tier: 'compound', baseKg: 40, cues: ['Chest tall, shoulders down.', 'Press the handles to lockout.', 'Control the return.'], synonyms: ['triceps dip machine', 'seated dip'] },
-  { id: 'db_overhead_triceps_ext', name: 'Dumbbell Overhead Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 12, cues: ['Elbows by your ears.', 'Lower behind the head.', 'Extend to lockout.'] },
-  { id: 'triceps_kickback', name: 'Triceps Kickback', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'free', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 6, cues: ['Hinge forward, upper arm still.', 'Extend the elbow back.', 'Return under control.'] },
+  { id: 'db_overhead_triceps_ext', name: 'Dumbbell Overhead Extension', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_overhead', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 12, cues: ['Elbows by your ears.', 'Lower behind the head.', 'Extend to lockout.'] },
+  { id: 'triceps_kickback', name: 'Triceps Kickback', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'free', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 6, cues: ['Hinge forward, upper arm still.', 'Extend the elbow back.', 'Return under control.'] },
   { id: 'bench_dip', name: 'Bench Dip', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands on the bench edge.', 'Lower until the elbows bend 90Â°.', 'Press back to lockout.'] },
   { id: 'diamond_push_up', name: 'Diamond Push-Up', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands together under the chest.', 'Elbows brush the ribs.', 'Press the floor away.'] },
-  { id: 'machine_triceps_ext', name: 'Triceps Extension Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Set the seat height.', 'Extend fully.', 'Resist on the way back.'] },
-  { id: 'single_arm_pushdown', name: 'Single-Arm Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 10, cues: ['Elbow pinned to your side.', 'Extend fully.', 'Resist on the way up.'] },
+  { id: 'machine_triceps_ext', name: 'Triceps Extension Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Set the seat height.', 'Extend fully.', 'Resist on the way back.'] },
+  { id: 'single_arm_pushdown', name: 'Single-Arm Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 10, cues: ['Elbow pinned to your side.', 'Extend fully.', 'Resist on the way up.'] },
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ horizontal_pull Â· Back â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   { id: 'bb_row', name: 'Barbell Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Hinge to about 45Â°.', 'Pull to your lower ribs.', 'Control the descent.'] },
@@ -270,12 +286,12 @@ export const EXERCISES: Exercise[] = [
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ horizontal_pull Â· Biceps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   { id: 'bb_curl', name: 'Barbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 20, cues: ['Elbows pinned to your sides.', 'Curl without swinging.', 'Lower under control.'] },
   { id: 'db_curl', name: 'Dumbbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 10, cues: ['No swinging.', 'Curl and squeeze.', 'Lower slowly.'] },
-  { id: 'hammer_curl', name: 'Hammer Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 10, cues: ['Neutral grip.', 'Keep elbows still.', 'Control the descent.'] },
-  { id: 'preacher_curl', name: 'Preacher Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 18, cues: ['Arms flat on the pad.', 'Curl without lifting the elbows.', 'Lower under control.'] },
-  { id: 'incline_db_curl', name: 'Incline Dumbbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'dumbbell', tier: 'isolation', baseKg: 8, cues: ['Sit back on the incline.', 'Let the arms hang behind you.', 'Curl without moving the elbows.'] },
+  { id: 'hammer_curl', name: 'Hammer Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'brachialis', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 10, cues: ['Neutral grip.', 'Keep elbows still.', 'Control the descent.'] },
+  { id: 'preacher_curl', name: 'Preacher Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl_shortened', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 18, cues: ['Arms flat on the pad.', 'Curl without lifting the elbows.', 'Lower under control.'] },
+  { id: 'incline_db_curl', name: 'Incline Dumbbell Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl_lengthened', support: 'supported', equipment: 'dumbbell', tier: 'isolation', baseKg: 8, cues: ['Sit back on the incline.', 'Let the arms hang behind you.', 'Curl without moving the elbows.'] },
   { id: 'cable_curl', name: 'Cable Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 18, cues: ['Elbows pinned to your sides.', 'Curl without swinging.', 'Resist on the way down.'] },
-  { id: 'concentration_curl', name: 'Concentration Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'supported', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow braced on the inner thigh.', 'Curl and squeeze.', 'Lower slowly.'] },
-  { id: 'reverse_curl', name: 'Reverse Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 15, cues: ['Overhand grip.', 'Elbows still.', 'Lower under control.'] },
+  { id: 'concentration_curl', name: 'Concentration Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl_shortened', support: 'supported', equipment: 'dumbbell', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow braced on the inner thigh.', 'Curl and squeeze.', 'Lower slowly.'] },
+  { id: 'reverse_curl', name: 'Reverse Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'brachialis', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 15, cues: ['Overhand grip.', 'Elbows still.', 'Lower under control.'] },
   { id: 'single_arm_cable_curl', name: 'Single-Arm Cable Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow pinned to your side.', 'Curl and squeeze.', 'Resist on the way down.'] },
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ vertical_push Â· Shoulders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
