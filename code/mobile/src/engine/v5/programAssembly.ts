@@ -163,8 +163,14 @@ export function pickExercises(
     let best = remaining[0];
     let bestScore = -Infinity;
     for (const c of remaining) {
+      // An owed essential pattern must be filled by a COMPOUND where the pool has one. Without the
+      // +2, the `isolation ? 1` term below decided it: Back's owed `pulldown` was answered by the
+      // STRAIGHT-ARM pulldown — a single-joint lat isolation that carries the pattern name and is
+      // not a vertical pull in any sense a coach means — and the trim, which drops isolations first,
+      // then took it straight back out. The pattern was satisfied on paper at every frequency and
+      // absent from the programme at four and five days.
       const score =
-        (owed.includes(c.pattern) ? 10 : 0) +
+        (owed.includes(c.pattern) ? (c.tier === 'compound' ? 12 : 10) : 0) +
         (patterns.has(c.pattern) ? 0 : 4) +
         (equips.has(c.equipment) ? 0 : 2) +
         (c.tier === 'isolation' ? 1 : 0);

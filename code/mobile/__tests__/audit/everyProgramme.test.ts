@@ -118,6 +118,36 @@ describe('every programme the engine can build', () => {
   });
 
   // eslint-disable-next-line jest/no-disabled-tests
+  /*
+   * ════ THE BACK GETS BOTH PULLS, IN EVERY PROGRAMME THE ENGINE CAN BUILD ════
+   *
+   * Founder, 2026-08-08, on whether these programmes would pass a serious coach. They would not
+   * have: the report above showed every male week training Back with a row and a face pull and
+   * never a pulldown or a pull-up. A row loads the lats with the humerus travelling horizontally,
+   * a pulldown loads them overhead; they build different things and neither substitutes.
+   *
+   * ⛔ IT IS ASSERTED ON THE MOVEMENT, NOT THE PATTERN NAME. The first fix satisfied
+   * `ESSENTIAL_PATTERNS` with the STRAIGHT-ARM pulldown — a single-joint lat isolation that carries
+   * the pattern label and is not a vertical pull in any sense a coach means — and the time cap,
+   * which drops isolations first, then removed it again. Naming the lifts is what makes this test
+   * about training rather than about a string.
+   */
+  const VERTICAL = ['lat_pulldown', 'pull_up', 'chin_up', 'assisted_pull_up'];
+  const HORIZONTAL = ['bb_row', 't_bar_row', 'cable_row', 'single_arm_cable_row', 'db_row', 'incline_db_row', 'machine_row', 'smith_row'];
+
+  it('every back is trained with BOTH a vertical and a horizontal pull', () => {
+    const missing: string[] = [];
+    for (const b of BUILDS) {
+      const ids = b.program.days.flatMap((d) => d.slots.map((s) => s.exerciseId));
+      const gaps = [
+        ids.some((id) => VERTICAL.includes(id)) ? null : 'no vertical pull',
+        ids.some((id) => HORIZONTAL.includes(id)) ? null : 'no horizontal pull',
+      ].filter(Boolean);
+      if (gaps.length) missing.push(`${b.label}: ${gaps.join(' + ')}`);
+    }
+    expect({ backsMissingAPull: missing }).toEqual({ backsMissingAPull: [] });
+  });
+
   it('no two sessions in one week are twins', () => {
     const twins: string[] = [];
     for (const b of BUILDS) {
