@@ -30,7 +30,7 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
-import { currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
@@ -631,19 +631,48 @@ async function foldEngine(
   // The seed's working-load conversion is priced at HER Tlo for the lift's muscle (S-9/S-43 — no
   // invented rep count sizes a load once she has declared a band).
   const seedFor = (id: string) => smartSeed(id, profile, history, bandOf(id).lo);
-  /*
-   * ⛔ THE BETWEEN-SESSION FOLD WAS HERE.
-   *
-   * It ran `advanceV5` over every session not yet folded — Loop 2 deciding the next load and
-   * whether a lift had graduated or should rotate, Loop 3 deciding how many sets a muscle had
-   * earned — and then enacted the exercise changes into `substitutes`.
-   *
-   * All of it is the AI's now, by the founder's ruling: *"the engine decides DURING the workout
-   * only."* What used to happen here happens in `platform/coach/afterSession` instead, and what
-   * used to be argued from a fold is a sentence the coach wrote and can be read back.
-   *
-   * `theEngineDecidesNothingBetweenSessions` is the law that keeps it gone.
-   */
+  const engineExerciseIds = [...new Set(program.days.flatMap((d) => d.slots.filter((s) => !s.supplemental).map((s) => s.exerciseId)))];
+  // Loop 3 (D) reads the (time-trimmed) prescribed sets to know whether she COMPLETED a muscle this
+  // occurrence (per exercise) and to seed/cap its learned volume at what actually fit — from the
+  // FINAL programme (post enforceTimeCap). The volume is a WEEKLY figure, so a muscle's whole-week
+  // total (summed across EVERY day it appears — chest often sits on two upper days) seeds and caps
+  // it; a per-occurrence figure would silently halve a multi-day muscle at the next regeneration.
+  const prescribedByEx: Record<string, number> = {};
+  const weeklyByMuscle: Record<string, number> = {};
+  for (const d of program.days) for (const s of d.slots) {
+    if (s.supplemental) continue;
+    prescribedByEx[s.exerciseId] = s.setCount;
+    const m = exerciseById(s.exerciseId)?.muscle;
+    if (m) weeklyByMuscle[m] = (weeklyByMuscle[m] ?? 0) + s.setCount;
+  }
+  const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle).catch(
+    (e): Record<string, 'graduate' | 'rotate'> => {
+      void track('engine_error', { op: 'advanceV5', message: String(e) });
+      return {};
+    },
+  );
+  // Enact engine-initiated exercise changes (S-52 graduate / S-25.2 rotate): resolve each target
+  // and write it to `substitutes` (which the assembler honours, C1). These are ENGINE changes, not
+  // athlete swaps (S-72) — written straight to substitutes, never through the learned counter, so a
+  // rotation never reads as a preference. Enacted at the next regeneration (the weekly roll).
+  // Resolve the wanted changes to concrete substitutions, honouring leave-it pins (S-30/S-71: a
+  // lift with a leave-it is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
+  // enacts what the resolver returns.
+  const enacted = resolveEngineEnactments(changes, prefs.leaveItsByMuscle, history, profile);
+  if (enacted.length) {
+    await editPreferences((p) => {
+      for (const e of enacted) {
+        p.substitutes[e.from] = e.to;
+        // S-71: mark an engine ROTATION so a later swap-back to it is read as RESISTANCE, not a fresh
+        // preference (S-72 keeps the two apart). A graduation is not a rotation → not marked.
+        if (e.rotated) (p.engineRotated ??= {})[e.from] = e.to;
+      }
+    }).catch((e) => void track('engine_error', { op: 'enactEngineChange', message: String(e) }));
+    // S-45: let the Saturday mirror name what Hush did (graduate/rotate write substitutes, not the
+    // load changeLog). Idempotent per week — a re-enacted standing change is not logged twice.
+    for (const e of enacted)
+      await recordStructuralChangeV5(e.from, e.to, e.kind).catch((err) => void track('engine_error', { op: 'recordStructuralChangeV5', message: String(err) }));
+  }
 }
 
 export const fixtureModel: ModelClient = {
