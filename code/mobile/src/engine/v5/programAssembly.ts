@@ -19,7 +19,7 @@
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
-import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
@@ -30,6 +30,33 @@ import { canLoad, type LoadProfile } from '@/domain/startingLoad';
  * standard day-one shape. Loop 3 grows or trims volume from there. Tunable (founder), not doctrine.
  */
 export const DAY_ONE_EX_DIVISOR = 5;
+
+/**
+ * ════ PATTERNS A MUSCLE MAY NOT BE PROGRAMMED WITHOUT (founder 2026-08-08) ════
+ *
+ * The diversity score below rewards a NEW movement pattern (+4), which is enough to spread a muscle
+ * across its shapes — and not enough to guarantee any particular one. The audit showed the cost:
+ * every male programme trained Back with a Barbell Row and a Face Pull and **never once a pulldown
+ * or a pull-up**. No serious coach would sign a back day with no vertical pull in it.
+ *
+ * It happened because catalogue order seats the row as the anchor, `pulldown` and `rear_delt` then
+ * score identically as "a pattern we don't have yet", and the tie falls to catalogue order again.
+ * Nothing was wrong; nothing was watching either.
+ *
+ * The two back patterns are not variations of each other. A row loads the lats with the humerus
+ * moving horizontally and builds thickness; a pulldown loads them overhead and builds width, and the
+ * research is consistent that a complete back needs both. So the pair is stated, and it outranks
+ * every other diversity term rather than competing with it.
+ *
+ * ⛔ This is a SHORT list on purpose. It exists for pairs that are anatomically non-substitutable and
+ * that a reader would notice missing — not as a place to encode preferences. A muscle whose whole
+ * pool trains one shape (Biceps: every entry is a curl) has nothing to state here, and a muscle that
+ * only gets ONE exercise at her frequency simply cannot cover a pair — the guard is "when there is
+ * room for two, both shapes appear", never "always both".
+ */
+export const ESSENTIAL_PATTERNS: Record<string, readonly SwapPattern[]> = {
+  Back: ['row', 'pulldown'],
+};
 
 export interface DayList {
   name: string;
@@ -131,10 +158,16 @@ export function pickExercises(
   while (chosen.length < wanted && remaining.length > 0) {
     const patterns = new Set(chosen.map((e) => e.pattern));
     const equips = new Set(chosen.map((e) => e.equipment));
+    // A missing ESSENTIAL pattern outranks every other kind of diversity — see ESSENTIAL_PATTERNS.
+    const owed = (ESSENTIAL_PATTERNS[muscle] ?? []).filter((p) => !patterns.has(p));
     let best = remaining[0];
     let bestScore = -Infinity;
     for (const c of remaining) {
-      const score = (patterns.has(c.pattern) ? 0 : 4) + (equips.has(c.equipment) ? 0 : 2) + (c.tier === 'isolation' ? 1 : 0);
+      const score =
+        (owed.includes(c.pattern) ? 10 : 0) +
+        (patterns.has(c.pattern) ? 0 : 4) +
+        (equips.has(c.equipment) ? 0 : 2) +
+        (c.tier === 'isolation' ? 1 : 0);
       if (score > bestScore) { bestScore = score; best = c; }
     }
     chosen.push(best);
