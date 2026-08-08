@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Model interface (spec §8.7). The app CONSUMES this; it never implements the
  * model. Inputs are only actual weight + actual reps per set (no RIR/effort).
  *
@@ -64,25 +64,20 @@ export interface ModelClient {
    * has the chosen number of workouts. The server clamps to a supported template
    * (2–4). Best-effort; fixture honors it via the profile in generateProgram.
    */
+  setWeeklyFrequency(daysPerWeek: number): Promise<void>;
 
-  /*
-   * ⛔ `generateProgram` WAS HERE.
-   *
-   * It composed a week from her body map. Nothing composes a week any more — the coach decides the
-   * programme in the intake conversation and re-decides it after every session, and a locally
-   * assembled second week would make "which one is she training?" a question with an answer nobody
-   * chose. `setWeeklyFrequency` went with it: it carried the frequency into the strategy that did
-   * the composing.
-   */
+  /** Generate the program before Home renders (spec §1.4/§4.1, flow §2.1). */
+  generateProgram(profile: Profile): Promise<Program>;
 
-  /*
-   * ⛔ `sessionTargets` WAS HERE.
-   *
-   * It answered "what load for each set of this workout" — the engine's read of its own state, and
-   * the thing that ran the between-session fold on the way past. Both are gone: the coach decides
-   * every load and writes it into the programme, so a load is READ FROM THE PLAN rather than asked
-   * for. Nothing on this seam decides anything any more.
+  /**
+   * Resolve advisory targets for the next session of a program day. During
+   * calibration these are conservative with NO reason line attached — the
+   * model owns that gating (spec §5.6, §2.3). The app renders what it gets.
    */
+  sessionTargets(args: {
+    programDayId: string;
+    completedSessions: number;
+  }): Promise<SetTarget[]>;
 
   /** Post actuals for a finished (or early-finished) session. */
   recordSession(args: {

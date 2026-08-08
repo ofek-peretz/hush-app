@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Local fixture model — the runnable program engine for the app today (every signed-in
  * user runs on this until a backend session/token exchange exists; see selectModel).
  *
@@ -30,7 +30,9 @@ import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
+import { currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
+import { assembleV5DayLists } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
@@ -42,8 +44,112 @@ import type { Session } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import type { ActualSet, ModelClient } from './modelClient';
 
+// F-1 — sets per exercise live in [3, 5], and that is the ONLY ceiling. A v4-era "max 4 for EVERY
+// lift" constant used to sit here and clamp `setsFor`, while Loop 3's `distributeMuscleSets` was
+// already handing a grown muscle 5 (SETS_MAX). Two different ceilings inside one engine; the
+// register names one. `sessionTargets` emits at least this many per-set targets per exercise so a
+// slot's setCount is ALWAYS fully covered (a slot never falls through to the default-weight
+// fallback).
+const MAX_SETS = V5_SETS_MAX;
 
+// ───────────────────────────── programme assembly ─────────────────────────────
+// The demographic split (MEN_SPLITS / WOMEN_SPLITS, and the MEN / WOMEN day pools they drew from) is
+// DELETED (register Part 5): the programme is assembled from her body map by assembleV5DayLists, not
+// chosen by sex × days from a shelf. Core is not a structural muscle here — it is supplemental work
+// added once per week by addWeeklyCore(), which honours the map's Core stance (off → none; emphasis →
+// a second core movement). Each day lists compounds first; dayFromBlueprint enforces the same.
 
+/**
+ * Order a day's exercises for gym flow — the athlete works ONE piece of equipment to the end and
+ * NEVER leaves and returns to it (founder 2026-07-09: critical in a packed gym; a taken station on
+ * return is the worst experience). This is the hard constraint, so it wins over strict global
+ * compounds-first: exercises are grouped by EQUIPMENT (every same-station lift is contiguous), and
+ * WITHIN each station compounds come before isolation (never pre-fatigue the station's main lift).
+ * Stations are ordered so the one holding the earliest COMPOUND leads — the day's main lift stays
+ * first — and isolation-only stations trail. The only price vs the old rule is that a station's
+ * isolation can precede another station's compound; grouping equipment is worth it.
+ */
+export function orderForFlow(list: Exercise[]): Exercise[] {
+  const tierRank = (e: Exercise) => (e.tier === 'compound' ? 0 : 1);
+  const idx = new Map<Exercise, number>(list.map((e, i) => [e, i]));
+  // group by equipment (one station, fully, before moving on)
+  const stations = new Map<string, Exercise[]>();
+  for (const e of list) {
+    const g = stations.get(e.equipment) ?? [];
+    g.push(e);
+    stations.set(e.equipment, g);
+  }
+  // within a station: compounds first, then original order
+  for (const g of stations.values()) g.sort((a, b) => tierRank(a) - tierRank(b) || idx.get(a)! - idx.get(b)!);
+  // Two lifts on the SAME PHYSICAL station (catalog `station` — the leg press and its calf raise)
+  // are pulled back to back, so she finishes the machine before anything else in the class block.
+  // Without this, the block's compounds-first order could send her leg press → leg extension →
+  // BACK to the leg press for calves — exactly the "left and returned" the law forbids. The class
+  // grouping alone cannot see it: each id appears once, so every OTHER machine is naturally visited
+  // once; only lifts that genuinely share equipment need the pull. Deterministic (first-seen leads).
+  for (const [k, g] of stations) {
+    if (!g.some((e) => e.station)) continue;
+    const clustered: Exercise[] = [];
+    for (const e of g) {
+      if (clustered.includes(e)) continue;
+      clustered.push(e);
+      if (e.station) for (const f of g) if (!clustered.includes(f) && f.station === e.station) clustered.push(f);
+    }
+    stations.set(k, clustered);
+  }
+  // order stations: the one with the earliest compound leads (main lift first); iso-only stations trail
+  return [...stations.values()]
+    .map((g) => {
+      const firstCompound = g.find((e) => tierRank(e) === 0);
+      return { g, key: firstCompound ? idx.get(firstCompound)! : Number.POSITIVE_INFINITY, first: Math.min(...g.map((e) => idx.get(e)!)) };
+    })
+    .sort((a, b) => a.key - b.key || a.first - b.first)
+    .flatMap((x) => x.g);
+}
+
+/**
+ * Re-run the gym-flow ordering on a day whose slots were EDITED AFTER assembly. `applyLeaveIts`
+ * can replace a slot's exercise with one on DIFFERENT equipment (a leave-it is same-muscle, not
+ * same-machine) — planting, say, a barbell lift in the middle of the machine block, which breaks
+ * the one law this ordering exists for ("enter a station once, leave it finished"). Slots keep
+ * their identity (setCount, supplemental) — only their order moves; ids are unique within a day.
+ */
+export function reflowDayForStations(day: ProgramDay): void {
+  const nonSupp = day.slots.filter((s) => !s.supplemental);
+  const supp = day.slots.filter((s) => s.supplemental); // core trails, always
+  const bySlotEx = new Map(nonSupp.map((s) => [s.exerciseId, s]));
+  const ordered = orderForFlow(nonSupp.map((s) => exerciseById(s.exerciseId)).filter((e): e is Exercise => !!e));
+  const reordered = ordered.map((e) => bySlotEx.get(e.id)).filter((s): s is Slot => !!s);
+  // A slot whose id resolves to no catalog entry (impossible today) keeps its place at the front.
+  if (reordered.length === nonSupp.length) day.slots = [...reordered, ...supp];
+}
+
+function dayFromBlueprint(
+  index: number,
+  name: string,
+  exerciseIds: string[],
+  /** v5 Loop 3: the LEARNED per-exercise set count (distributeMuscleSets). Absent → the day-one
+   *  `setsFor`, so a muscle still on its day-one shape is untouched. */
+  setCounts?: Record<string, number>,
+): ProgramDay {
+  const dayKey = String(index);
+  // NO ENGINE SLOT ID. v5 keys every decision to the EXERCISE — "State is keyed to the exercise,
+  // never to a slot" (Loop 2) — and S-29 deletes the `canonicalEngineId` unification that was the
+  // only consumer of the per-slot pattern-occurrence key this used to compute. A slot key in an
+  // engine with no slot state is v4 furniture; it is gone.
+  const exercises = orderForFlow(
+    exerciseIds.map((exerciseId) => exerciseById(exerciseId)).filter((e): e is Exercise => !!e),
+  );
+  const slots: Slot[] = exercises.map((ex) => ({
+    capability: ex.capability,
+    exerciseId: ex.id,
+    setCount: setCounts?.[ex.id] ?? setsFor(ex.tier),
+  }));
+  // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
+  // Calves · Core), in catalog order, deduplicated.
+  const muscleGroups = [...new Set(exercises.map((ex) => ex.muscle))];
+  return { id: `day_${index}`, name, muscleGroups, isRest: false, slots, key: dayKey, completed: false };
+}
 
 // ───────────────────────────── supplemental core (founder rules 2026-06-23) ─────────────────────────────
 // Core is supplemental, NOT a primary progression target. Exactly ONE core exercise per
@@ -136,11 +242,227 @@ export function estimateSessionMinutes(
  *      emphasis muscle is never silently stopped. If none qualifies, the day genuinely cannot fit
  *      her minutes (S-3) and is left as-is rather than starving a muscle.
  */
+// `budgetMin` is her declared time budget (S-64) — profile.workoutMinutes, defaulting to the
+// 60-minute ceiling.
+function enforceTimeCap(
+  day: ProgramDay,
+  budgetMin: number = MAX_SESSION_MIN,
+  restSecFor?: (id: string) => number | null,
+  /** B-4 — her measured set duration (timestamps), the work half of the per-set cost. */
+  execSecFor?: (id: string) => number | null,
+  /** Her learned LEAVE-ITS (S-71). A leave-it binds WHICH exercise, never whether it appears (L6) —
+   *  so the budget still cuts, but a leave-it is cut LAST (S-59 / Part 3 #5). */
+  protectedIds: ReadonlySet<string> = new Set(),
+  /** The between-exercises rest (her pooled median, S-17) — prices each lift's first set honestly. */
+  transitionSec?: number | null,
+): void {
+  const over = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin;
+  /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
+   *  pass, because dropping a slot is what changes the answer. */
+  const exCountByMuscle = (): Record<string, number> => {
+    const n: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (m) n[m] = (n[m] ?? 0) + 1;
+    }
+    return n;
+  };
+  const isoIdx = day.slots.map((_s, i) => i).filter((i) => !isCompound(day.slots[i].exerciseId));
+  for (let k = isoIdx.length - 1; k >= 0 && over(); k--) {
+    const slot = day.slots[isoIdx[k]];
+    if (!slot.supplemental && slot.setCount > 3) slot.setCount = 3;
+  }
+  // 2) Drop a trailing NON-core isolation slot.
+  //
+  // THE TWO LIFTS A DROP MAY NEVER TAKE (register S-35, and S-63's promise) were missing here: this
+  // pass would happily remove the ONLY exercise of a muscle — silently turning `off` a muscle she
+  // never turned off, and breaking the "an emphasis muscle is guaranteed at least one exercise"
+  // guarantee. Step 4 below had the guard; this earlier, more eager pass did not, so in practice the
+  // guard almost never got a say. Leave-its were ignored too, though Part 3 #5 says they are cut
+  // LAST — hence the two passes: everything else first, only then a leave-it (S-59).
+  // S-35 names exactly TWO lifts a drop may never take, and the only-exercise guard below is both
+  // of them. A v4-era `slots.length <= 4` floor and a by-name Calves/Core exemption used to sit here
+  // as well; neither is in the register, and neither does anything the named guard does not already
+  // do (a generated core block is `supplemental`, and calves are always their muscle's only lift).
+  for (const allowLeaveIt of [false, true]) {
+    for (let i = day.slots.length - 1; i >= 0 && over(); i--) {
+      const slot = day.slots[i];
+      const ex = exerciseById(slot.exerciseId);
+      if (!ex || slot.supplemental || ex.tier !== 'isolation') continue;
+      if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) continue; // S-59: leave-its are cut last
+      if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1) continue; // S-35/S-63: never a muscle's ONLY lift
+      day.slots.splice(i, 1);
+    }
+  }
+  const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
+  for (let k = compoundIdx.length - 1; k >= 1 && over(); k--) {
+    const slot = day.slots[compoundIdx[k]];
+    if (slot.setCount > 3) slot.setCount = 3;
+  }
+  // Step 4 — the last resort. Recompute the per-muscle exercise count each pass and drop the trailing
+  // compound whose muscle keeps another lift; unpinned first (S-59). Stop when nothing qualifies —
+  // the day genuinely cannot fit her minutes (S-3), and the engine says so rather than starve a muscle.
+  for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
+    const counts = exCountByMuscle();
+    let dropped = false;
+    for (const allowLeaveIt of [false, true]) {
+      for (let i = day.slots.length - 1; i >= 0; i--) {
+        const s = day.slots[i];
+        if (s.supplemental || !isCompound(s.exerciseId)) continue;
+        if (!allowLeaveIt && protectedIds.has(s.exerciseId)) continue; // S-59
+        const m = exerciseById(s.exerciseId)?.muscle;
+        if (!m || counts[m] <= 1) continue; // never a muscle's ONLY exercise (S-35)
+        day.slots.splice(i, 1);
+        dropped = true;
+        break;
+      }
+      if (dropped) break;
+    }
+    if (!dropped) break; // only single-exercise muscles remain → the day cannot fit (S-3)
+  }
+}
 
+/**
+ * v5 · D4 — the emphasis-aware trim (register S-37 / the protected-lifts rule). When the LEARNED
+ * volume (Loop 3) makes a day exceed her minutes, the set to give up is chosen by chooseDonor: NEVER
+ * an emphasis muscle, never one at its floor, and among the rest the muscle with the MOST sets this
+ * day (the one that can best spare it) — the exact mirror of S-32's give-rule, so the two never
+ * disagree. A set is shaved from that muscle's LAST isolation slot (a compound is never sacrificed
+ * before an isolation, S-35); once its isolations are at the floor, its trailing isolation exercise
+ * is dropped — but never a muscle's ONLY exercise (S-35: an emphasis muscle keeps its one lift, and a
+ * `normal` muscle is never silently turned `off`). Whatever residual remains is left to the shared
+ * enforceTimeCap safety net. Legacy is untouched — this runs for the v5 cohort only.
+ */
+export function trimV5ToBudget(
+  day: ProgramDay,
+  bodyMap: Profile['bodyMap'],
+  budgetMin: number,
+  restSecFor?: (id: string) => number | null,
+  /** B-4 — her measured set duration (timestamps), the work half of the per-set cost. */
+  execSecFor?: (id: string) => number | null,
+  /** S-59 — a leave-it is cut LAST. Trimming a SET off it is fine (a leave-it binds WHICH exercise,
+   *  not how many sets, L6); DROPPING it is what it forbids while anything else can give. */
+  protectedIds: ReadonlySet<string> = new Set(),
+  /** The between-exercises rest (her pooled median, S-17) — prices each lift's first set honestly. */
+  transitionSec?: number | null,
+): void {
+  const muscleOfSlot = (i: number) => exerciseById(day.slots[i].exerciseId)?.muscle;
+  const isEmphasis = (m: string | undefined) => !!m && bodyMap?.[m as MuscleGroup] === 'emphasis';
+  let guard = 0;
+  while (estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin && guard++ < 200) {
+    const setsByMuscle: Record<string, number> = {};
+    const exCountByMuscle: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (!m) continue;
+      setsByMuscle[m] = (setsByMuscle[m] ?? 0) + s.setCount;
+      exCountByMuscle[m] = (exCountByMuscle[m] ?? 0) + 1;
+    }
+    // A muscle can donate only through a droppable ISOLATION slot: trim a bonus set (>floor), or —
+    // when its isolations are all at the floor — drop a whole isolation exercise, but only if the
+    // muscle keeps at least one lift (never its only exercise).
+    const canDonate = (m: string): boolean =>
+      day.slots.some((s, i) => {
+        if (s.supplemental || muscleOfSlot(i) !== m) return false;
+        if (isCompound(s.exerciseId)) return false;
+        return s.setCount > V5_SETS_MIN || exCountByMuscle[m] > 1;
+      });
+    const candidates: VolumeCandidate[] = Object.keys(setsByMuscle)
+      .filter(canDonate)
+      .map((m) => ({ muscle: m, isEmphasis: isEmphasis(m), weeklySets: setsByMuscle[m], atFloor: setsByMuscle[m] <= V5_SETS_MIN }));
+    const donor = chooseDonor(candidates, CANONICAL_MUSCLE_ORDER);
+    if (!donor) break; // nothing may donate (all emphasis / floored) → the safety net finishes the job
+    const isoIdx = day.slots
+      .map((_s, i) => i)
+      .filter((i) => !day.slots[i].supplemental && muscleOfSlot(i) === donor.muscle && !isCompound(day.slots[i].exerciseId));
+    // Prefer shaving a bonus set from the donor's LAST isolation; else drop its trailing isolation.
+    const trimAt = [...isoIdx].reverse().find((i) => day.slots[i].setCount > V5_SETS_MIN);
+    // Which isolation to DROP: one without a leave-it if there is one, a leave-it only when nothing
+    // else is left to give (S-59 — cut last, never exempt).
+    const dropAt = [...isoIdx].reverse().find((i) => !protectedIds.has(day.slots[i].exerciseId)) ?? isoIdx[isoIdx.length - 1];
+    if (trimAt != null) {
+      day.slots[trimAt].setCount -= 1;
+    } else if (exCountByMuscle[donor.muscle] > 1 && isoIdx.length > 0) {
+      day.slots.splice(dropAt, 1);
+    } else {
+      break; // the donor's only exercise — protected; the safety net takes over
+    }
+  }
+}
 
+// ── Athlete-owned customizations honored at (re)generation (Program Ownership Contract) ──
+// Her learned LEAVE-ITS (S-71) are muscle-keyed, and applied to the FIRST slot of their muscle —
+// never duplicating an exercise the day already contains, and only within the slot's own capability,
+// so structure stays valid. There is no PIN: every entry here was earned by swapping back twice to a
+// lift the engine tried to rotate away (K=2), never placed by hand.
+function applyLeaveIts(day: ProgramDay, leaveItsByMuscle: Record<string, string>): void {
+  const present = new Set(day.slots.map((s) => s.exerciseId));
+  const consumedMuscle = new Set<string>();
+  day.slots = day.slots.map((slot) => {
+    const ex = exerciseById(slot.exerciseId);
+    if (!ex) return slot;
+    const pinId = leaveItsByMuscle[ex.muscle];
+    const pex = pinId ? exerciseById(pinId) : undefined;
+    if (
+      pex &&
+      pinId !== slot.exerciseId &&
+      pex.capability === slot.capability &&
+      !present.has(pinId) &&
+      !consumedMuscle.has(ex.muscle)
+    ) {
+      consumedMuscle.add(ex.muscle);
+      return { ...slot, exerciseId: pinId };
+    }
+    return slot;
+  });
+}
 
+/** Reorder a day's slots to the athlete's saved within-workout order (by exerciseId); slots not
+ *  in the list (e.g. a freshly applied leave-it, or the supplemental core) keep their order AFTER the
+ *  listed ones — so the athlete owns order while core still trails. Empty/absent => model order. */
+function applyExerciseOrder(day: ProgramDay, order?: string[]): void {
+  if (!order || !order.length) return;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  day.slots = day.slots
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => (rank.get(a.s.exerciseId) ?? order.length) - (rank.get(b.s.exerciseId) ?? order.length) || a.i - b.i)
+    .map((x) => x.s);
+}
 
+/** Reorder the week's workouts to the athlete's saved order (by stable day key); unlisted days
+ *  keep their relative order after the listed ones. */
+function applyWorkoutOrder(days: ProgramDay[], order: string[]): ProgramDay[] {
+  if (!order.length) return days;
+  const rank = new Map(order.map((k, i) => [k, i]));
+  return days
+    .map((d, i) => ({ d, i }))
+    .sort((a, b) => (rank.get(a.d.key ?? '') ?? order.length) - (rank.get(b.d.key ?? '') ?? order.length) || a.i - b.i)
+    .map((x) => x.d);
+}
 
+/**
+ * Append the week's supplemental core work to its host session (mutates in place). Core is a muscle on
+ * the body map like any other (register S-50), so this HONOURS her Core stance:
+ *   • `off`      → no core at all (S-2 — an off muscle never appears; the map is the only "off" lever).
+ *   • `normal`   → one core movement (3 sets, last, upper-preferred).
+ *   • `emphasis` → a SECOND distinct core movement (S-4 — first claim on volume; the mark is not wasted).
+ * It stays SUPPLEMENTAL (a finisher, not a structural region day) per the founder's standing rule; the
+ * map decides whether and how much, Loop 3 is not run on it.
+ */
+function addWeeklyCore(days: ProgramDay[], daysPerWeek: number, coreStance: MuscleStance = 'normal'): void {
+  if (!days.length || !CORE_POOL.length || coreStance === 'off') return;
+  const host = days[coreHostIndex(days)];
+  const count = coreStance === 'emphasis' ? Math.min(2, CORE_POOL.length) : 1;
+  const start = (Math.max(1, daysPerWeek) - 1) % CORE_POOL.length; // rotate the entry point by frequency
+  for (let k = 0; k < count; k++) {
+    const ex = exerciseById(CORE_POOL[(start + k) % CORE_POOL.length]);
+    if (!ex || host.slots.some((s) => s.exerciseId === ex.id)) continue; // skip a duplicate movement
+    host.slots.push({ capability: ex.capability, exerciseId: ex.id, setCount: CORE_SETS, supplemental: true });
+    if (!host.muscleGroups.includes(ex.muscle)) host.muscleGroups.push(ex.muscle);
+  }
+}
 
 // ───────────────────────────── cold-start starting weights ─────────────────────────────
 // `startingWeight` now lives in domain/startingLoad — unchanged, but no longer private to the
@@ -278,6 +600,51 @@ async function editPreferences(edit: (p: OwnedPreferences) => void): Promise<voi
   }
 }
 
+/**
+ * Run the engine's fold — every completed-but-unfolded occurrence gets decided, in order.
+ *
+ * Extracted from `sessionTargets` on 2026-07-17. It used to live only there, which meant the fold
+ * was LAZY: the decisions a workout earned were not computed until the athlete opened the NEXT
+ * workout. The engine's contract has never been lazy — v5 decides at the end of every occurrence
+ * (register L7) and every changeLog entry is stamped with the occurrence that produced it — but
+ * nothing ASKED it to until the next session started. That gap is why the Complete screen could
+ * only ever point at Saturday: at the moment it rendered, the decision genuinely did not exist yet.
+ *
+ * Now `sessionEarned` calls this at the whistle, so the app and the engine move in one breath.
+ *
+ * Idempotent and cursor-driven (`lastFoldedAt`): calling it twice folds nothing the second time,
+ * so the extra call at completion costs one no-op pass on the next session start.
+ */
+async function foldEngine(
+  program: Program,
+  profile: Awaited<ReturnType<typeof loadProfileSafe>>,
+  history: Session[],
+  prefs: OwnedPreferences,
+  bucketOpenMs: number | undefined,
+): Promise<void> {
+  // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
+  // to her single declared band, then the '8-10' default.
+  const bandOf = (exId: string) => {
+    const m = exerciseById(exId)?.muscle;
+    return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
+  };
+  // The seed's working-load conversion is priced at HER Tlo for the lift's muscle (S-9/S-43 — no
+  // invented rep count sizes a load once she has declared a band).
+  const seedFor = (id: string) => smartSeed(id, profile, history, bandOf(id).lo);
+  /*
+   * ⛔ THE BETWEEN-SESSION FOLD WAS HERE.
+   *
+   * It ran `advanceV5` over every session not yet folded — Loop 2 deciding the next load and
+   * whether a lift had graduated or should rotate, Loop 3 deciding how many sets a muscle had
+   * earned — and then enacted the exercise changes into `substitutes`.
+   *
+   * All of it is the AI's now, by the founder's ruling: *"the engine decides DURING the workout
+   * only."* What used to happen here happens in `platform/coach/afterSession` instead, and what
+   * used to be argued from a fold is a sentence the coach wrote and can be read back.
+   *
+   * `theEngineDecidesNothingBetweenSessions` is the law that keeps it gone.
+   */
+}
 
 export const fixtureModel: ModelClient = {
   async getProfile() {
@@ -292,22 +659,280 @@ export const fixtureModel: ModelClient = {
     return null;
   },
 
-  /*
-   * ⛔ `generateProgram` AND `setWeeklyFrequency` WERE HERE, and about 300 lines of assembly with
-   * them — the body-map read, the region split, the capability slots, the time-cap trimming.
+  async setWeeklyFrequency() {
+    // No-op: generateProgram already honors profile.daysPerWeek directly.
+  },
+
+  async generateProgram(profile: Profile): Promise<Program> {
+    // WEEKLY-PROGRAM model: a bucket of exactly N workouts (any order; Rest only after all N are
+    // done). The programme is ASSEMBLED from her body map (register Part 3), never a shelf split.
+    // Frequency is 2..6 — one workout a week is not a programme, so it is not offered (onboarding wheel
+    // is min 2), and clamping to 2 keeps the region split coherent (a single day can't cover a body).
+    const n = Math.min(Math.max(profile.daysPerWeek, 2), 6);
+    // One goal: hypertrophy (register Part 9 §A — the goal question is deleted; toning/strength are
+    // gone), so no goal is read anywhere. The weekly VOLUME lever (low/moderate/high) is gone too: in
+    // v5 volume is earned and cut from facts (Loop 3, S-32/S-34) starting from B-2, never set by a dial.
+    const prefs = await loadPreferencesSafe();
+
+    // The programme is GENERATED from the body map (register Part 3) — an `off` muscle never appears,
+    // emphasis earns more, and the region days fall out of where the volume is. The demographic split
+    // (MEN_SPLITS/WOMEN_SPLITS) is DELETED (S-58). Loop 3 (D): the LEARNED per-muscle volume reshapes
+    // the programme at every regeneration — a muscle that earned sets grows an exercise / fuller
+    // schemes, a trimmed one shrinks. Empty until she has trained, so the day-one shape is untouched
+    // for a fresh athlete.
+    const learnedVolume = await getVolumeTargetsV5().catch((e): Record<string, number> => {
+      void track('engine_error', { op: 'getVolumeTargetsV5', message: String(e) });
+      return {};
+    });
+    let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
+    // Safety net: everything-off (S-3) is prevented by the body-map screen (validateMap), but if a map
+    // ever yields no workout, fall back to an ALL-NORMAL map (never a demographic shelf) so a workout
+    // always exists. Unreachable in practice.
+    if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
+    const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts));
+
+    // S-29 · "The same exercise in two workouts in one week. **One progression, fed by both
+    // sessions** — automatic under exercise-keying. The `canonicalEngineId` unification hack is
+    // deleted." It was still here, computing slot ids nothing reads: v5 keys every decision to the
+    // EXERCISE, so two occurrences of one lift already share one progression by construction.
+
+    // Generation touches NO engine state: v5 does no engine-initiated swap here (a learned substitute
+    // is already applied inside the assembler, C1), and the 3-week CALENDAR rotation is deleted
+    // (register Part 5 — variety comes from a measured stall, not a schedule). Per-exercise state is
+    // created lazily by advanceV5 in sessionTargets.
+    for (const d of days) applyLeaveIts(d, prefs.leaveItsByMuscle); // a leave-it leads its muscle (S-30/S-71)
+    // A leave-it may sit on different EQUIPMENT than the slot it replaced — re-run the station
+    // ordering so the block law survives the substitution (Part 3 #3; runs before core is appended).
+    for (const d of days) reflowDayForStations(d);
+    // Core rides as supplemental work, but its SIZE follows the body map (S-50/S-2/S-4): off → none,
+    // emphasis → a second movement. Never a shelf default that ignores what she declared.
+    addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal');
+    const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
+    // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
+    // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
+    const history = await loadHistorySafe();
+    const restCache = new Map<string, number | null>();
+    const restSecFor = (id: string): number | null => {
+      let r = restCache.get(id);
+      if (r === undefined) {
+        const rests: (number | null | undefined)[] = [];
+        // INTER samples only (setIndex > 0): a first-set rest is the TRANSITION — priced separately
+        // below, and it must not drag this lift's between-sets median up (S-17, one clean fact each).
+        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach && l.setIndex > 0) rests.push(l.restBeforeS);
+        r = learnedRestS(rests);
+        restCache.set(id, r);
+      }
+      return r;
+    };
+    // B-4's other half: her measured SET DURATION, from the timestamps already on every logged set.
+    // Only consecutive same-exercise sets inside one session can yield it (see learnedExecS).
+    const execCache = new Map<string, number | null>();
+    const execSecFor = (id: string): number | null => {
+      let e = execCache.get(id);
+      if (e === undefined) {
+        const samples: ExecSample[] = [];
+        for (const s of history) for (const l of s.sets) {
+          if (l.exerciseId !== id || l.isApproach) continue;
+          samples.push({ exerciseId: l.exerciseId, sessionId: s.id, atMs: Date.parse(l.persistedAt), restBeforeS: l.restBeforeS });
+        }
+        samples.sort((a, b) => a.atMs - b.atMs);
+        e = learnedExecS(samples);
+        execCache.set(id, e);
+      }
+      return e;
+    };
+    // D4: resolve an over-budget day by DONATING from the muscle that can best spare it (S-37, emphasis
+    // protected) BEFORE the positional safety net.
+    // S-59 / Part 3 #5 — her learned leave-its (S-71) are cut LAST by both trims.
+    const leaveIts = new Set(Object.values(prefs.leaveItsByMuscle));
+    // The between-exercises rest: her pooled transition median, else the declared 120 s — the SAME
+    // seconds the transition timer actually runs (S-17), so the budget prices the workout she has.
+    const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
+    for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS); // work ≤ her minutes
+    // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
+    // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
+    // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
+    // its last lift (S-35's two protected drops).
+    //
+    // TODO(screens · S-3) — THE ENGINE HALF IS DONE; THE SENTENCE IS NOT. The register says the
+    // engine "says so", and today it only says so to telemetry. She should be told, in words, that
+    // this workout does not fit the minutes she declared and what her options are (more minutes, or
+    // a muscle off). Held deliberately for the founder's redesign of the programme surfaces —
+    // 2026-07-21. The engine emits everything the copy needs: the day, its real minutes, her budget.
+    //
+    // TODO(screens · S-59) — the other half of the same family. "Her leave-its do not fit inside her
+    // declared minutes": the ASSEMBLY rule is built (a leave-it is cut last, here and in
+    // trimV5ToBudget), and Rev 10 deleted the old prompt because a declarative pin no longer exists.
+    // If the redesign wants to surface anything here, it is the same S-3 sentence, not a question.
+    for (const d of days) {
+      // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
+      // report can never disagree with the enforcement about whether a day fits.
+      const mins = estimateSessionMinutes(d, restSecFor, execSecFor, transitionS);
+      if (mins > budgetMin + 1e-9) {
+        // S-3 — carry the verdict onto the day so the surface can SAY it (Home), not only telemetry.
+        // Same estimate the trims enforced, so the sentence can never disagree with the enforcement.
+        d.overBudget = true;
+        void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
+      }
+    }
+    for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
+    const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
+    return { id: 'program_v1', frequency: n, days: ordered };
+  },
+
+  /**
+   * WHAT THIS WORKOUT EARNED — folded at the whistle, then read back.
    *
-   * Nothing composes a week now. The coach writes the programme in the intake conversation and
-   * re-writes it after every session, from what she actually did rather than from a body map filled
-   * in on the day she signed up.
-   */
-  /*
-   * ⛔ `sessionTargets` WAS HERE, and about 100 lines of seeding and per-set target assembly.
+   * The brief's promise is "at the end of a workout, next time's weights are already decided — and
+   * it says so, THEN." Before this, they were decided lazily at the next session start, so Complete
+   * had nothing true to show and pointed at Saturday instead. Folding here makes the promise real.
    *
-   * It resolved a load for every set of a workout out of the engine's own state, and it was also
-   * where the between-session fold was triggered from. The coach decides every load now and writes
-   * it into the programme, so a load is READ FROM THE PLAN — `coachRows` for the screens,
-   * `buildPlanFromCoach` for the machine — and there is nothing left to ask.
+   * `[]` is a real and common answer — a workout where every lift held (S-24) changed nothing, and
+   * the screen must say so rather than invent a change (R7 / S-16).
    */
+  async sessionEarned({ startedAtMs }): Promise<Explanation[]> {
+    const program = await db.loadProgram();
+    if (!program) return [];
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    const prefs = await loadPreferencesSafe();
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
+    await foldEngine(program, profile, history, prefs, bucketOpenMs);
+    return getSessionEarnedV5(startedAtMs).catch((e): Explanation[] => {
+      void track('engine_error', { op: 'sessionEarned', message: String(e) });
+      return [];
+    });
+  },
+
+  /**
+   * The absolute next load per lift one occurrence set (v7 3.3b Record badges). Folds first — so the
+   * most recent whistle is decided before we read it back — then reads the stamped changeLog. A lift
+   * that held has no entry; the screen reads its absence as "holds at what she lifted".
+   */
+  async sessionForward({ startedAtMs }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+    const program = await db.loadProgram();
+    if (!program) return {};
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    const prefs = await loadPreferencesSafe();
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
+    await foldEngine(program, profile, history, prefs, bucketOpenMs);
+    return getSessionForwardV5(startedAtMs).catch((e): Record<string, { loadFrom: number | null; loadTo: number | null }> => {
+      void track('engine_error', { op: 'sessionForward', message: String(e) });
+      return {};
+    });
+  },
+
+  async sessionTargets({ programDayId }): Promise<SetTarget[]> {
+    void programDayId; // targets are keyed by exercise; the screen picks the day's slots
+    const profile = await loadProfileSafe();
+    const history = await loadHistorySafe();
+    const out: SetTarget[] = [];
+
+    const program = await db.loadProgram();
+    const prefs = await loadPreferencesSafe();
+    // The bucket the athlete is actually executing (null pre-upgrade). The engine advances WITH it,
+    // never ahead of it — a mid-week signup's extended first bucket must not get a mid-plan load
+    // change (weekCadence.firstBucketOpen).
+    const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
+    // ════ THE REASON ARROW IS THE ENGINE'S DECISION, NOT A DIFF AGAINST HER HISTORY ════
+    //
+    // "↑ 2.5" beside a load is Hush claiming, in its own voice, that it raised her. It used to be
+    // computed by comparing the new prescription to the LAST WEIGHT SHE LOGGED — and those are not
+    // the same question, because **Loop 1 moves the load mid-session**. Her last logged weight is
+    // wherever Loop 1 left her, not the load Loop 2 stepped from.
+    //
+    // The failure is not exotic; a six-week simulation produced it on an ordinary lift. Loop 1 eased
+    // her hammer curl to 2 kg late in the session; Loop 2 then decided the occurrence's real move,
+    // **4 → 3 — a cut** — and the stage compared 3 against the 2 she last logged and drew an **UP
+    // arrow**. Hush announced a raise on the very occurrence it took weight off the bar.
+    //
+    // The engine already stamps exactly this, per occurrence, in the changeLog: `loadFrom → loadTo`,
+    // the number the Complete screen and the Saturday mirror both read (`getSessionForwardV5`). So
+    // the stage reads the same record instead of re-deriving a rival one.
+    //
+    // R7 / S-16 · **a hold says nothing.** The arrow belongs to the lift's MOST RECENT occurrence, so
+    // an entry is only news while no later session has trained that lift — once she trains it again
+    // and it holds, the engine decided nothing and the stage falls silent, rather than re-announcing
+    // a move from a fortnight ago every time she opens the workout.
+    //
+    // The v4 "WEEK 1 is the learning week: silent" gate stays REMOVED (L7 — a decision is told at
+    // the moment it is born, never on a calendar). In her first week there is simply no stamped
+    // decision yet, so the reason stays silent from a FACT rather than from the calendar.
+    const engineState = await db.loadEngineV5().catch(() => null);
+    const lastTrainedAt = new Map<string, number>();
+    for (const sess of history) {
+      const at = Date.parse(sess.startedAt);
+      if (!Number.isFinite(at)) continue;
+      for (const set of sess.sets) {
+        if (set.isApproach) continue;
+        lastTrainedAt.set(set.exerciseId, Math.max(lastTrainedAt.get(set.exerciseId) ?? 0, at));
+      }
+    }
+    /** exerciseId → the load move the engine made at that lift's most recent occurrence. */
+    const decided = new Map<string, { from: number; to: number }>();
+    for (const c of engineState?.changeLog ?? []) {
+      if (c.kind != null || c.loadFrom == null || c.loadTo == null) continue; // structural/volume news is not an arrow
+      if (c.at !== lastTrainedAt.get(c.exerciseId)) continue; // superseded by a later occurrence → a hold
+      decided.set(c.exerciseId, { from: c.loadFrom, to: c.loadTo });
+    }
+
+    // The v5 engine — exercise-keyed, facts only — owns load, progression AND the band (S-6). It
+    // advances per workout and its prescription drives every exercise it manages; unmanaged / swap-only
+    // exercises fall back to the seed. The Weekly Update reads from v5 too (domain/weeklyUpdate), so a
+    // v5 athlete's load, progression and narration all come from one engine.
+    // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
+    // to her single declared band, then the '8-10' default.
+    const bandOf = (exId: string) => {
+      const m = exerciseById(exId)?.muscle;
+      return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
+    };
+    let v5targets: Record<string, V5Target> = {};
+    if (program) {
+      await foldEngine(program, profile, history, prefs, bucketOpenMs);
+      v5targets = await currentV5Targets(history).catch((e): Record<string, V5Target> => {
+        void track('engine_error', { op: 'currentV5Targets', message: String(e) });
+        return {};
+      });
+    }
+    // Cover EVERY renderable set with a real target. A slot's setCount can exceed MAX_SETS once Loop 3
+    // has LEARNED a muscle's volume — distributeMuscleSets assigns up to SETS_MAX (5, F-1) to a single
+    // lift, so a grown compound can be a 5-set slot. buildPlan renders slot.setCount sets and falls back
+    // to a null-weight/reps-8 neutral target for any set with no match, so emitting a fixed 4 would leave
+    // that 5th set uncovered (her load and band silently dropped). Emit up to the real max setCount in the
+    // programme (never fewer than MAX_SETS) so the "sessionTargets always covers a slot" invariant holds.
+    const maxSetCount = program
+      ? Math.max(MAX_SETS, ...program.days.flatMap((d) => d.slots.map((s) => s.setCount)))
+      : MAX_SETS;
+    for (const ex of EXERCISES) {
+      const v5t = v5targets[ex.id];
+      // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
+      const weight = v5t ? v5t.weight : smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
+      const reps = v5t ? v5t.reps : bandOf(ex.id).lo;
+      const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
+      let reasonType: SetTarget['reasonType'];
+      let reasonDelta: number | undefined;
+      // The engine's own stamped move for this lift's last occurrence — never a diff against the
+      // weight Loop 1 happened to leave her on. `to !== weight` means something changed the
+      // prescription since (a band change, an edit): the stamped entry is no longer what she is
+      // being asked for, and Hush says nothing rather than something stale.
+      const move = decided.get(ex.id);
+      if (weight != null && move != null && move.to === weight && move.from !== move.to) {
+        reasonType = move.to > move.from ? 'increase' : 'decrease';
+        reasonDelta = Math.round((move.to - move.from) * 10) / 10;
+      }
+      // No approach / warm-up set (founder ruling, 2026-07-16): every set is the working weight from
+      // set 1, and Loop 1 responds to her performance from the first set (as v4 did).
+      // Loop 1 (F-13): her fitted reps-per-rung, computed where history lives and stamped on the target
+      // so the live loop sizes a correction to HER number (null → one cautious rung, B-5).
+      const perRung = v5t ? perRungForV5(ex.id, history) ?? undefined : undefined;
+      for (let s = 0; s < maxSetCount; s++)
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+    }
+    return out;
+  },
+
   async recordSession(_args: { programDayId: string; sets: ActualSet[]; earlyFinish: boolean }) {
     // The completed session is persisted to local history by the session flow (db.append
     // CompletedSession); progression reads that history on the next sessionTargets call.

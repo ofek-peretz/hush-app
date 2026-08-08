@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hush Engine v5 — the live integration façade (mirrors v4Engine.ts, but EXERCISE-keyed).
  *
  * Bridges the app's Session history + Profile to the pure v5 core and persists per-exercise state
@@ -18,6 +18,8 @@ import { exerciseMeta } from '@/engine/catalog';
 import { exerciseDisplayName } from '@/data/exercises';
 import { currentWeekOpen } from '@/domain/weekCadence';
 import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, WeeklyVolumeMove, Explanation, ExplanationLine } from '@/engine/weeklyView';
+import { decideExercise } from './loop2';
+import { decideVolume } from './loop3';
 import { repsPerRung } from './repsPerRung';
 import { snapDown, nextRung } from './grid';
 import { muscleOf } from '@/data/exercises';
@@ -144,6 +146,28 @@ async function save(s: EngineV5State): Promise<void> {
 }
 const asStates = (s: EngineV5State) => s.exercises as Record<string, ExerciseState>;
 
+/** Ensure per-exercise state exists for every engine-managed exercise. Idempotent; preserves state.
+ *  A band change updates each exercise's band (T is hers; no conversion, S-43). */
+export async function ensureExercisesV5(exerciseIds: string[], band: BandSource, history: Session[], seedFor: SeedFor): Promise<EngineV5State> {
+  const state = await load();
+  const ex = asStates(state);
+  for (const id of exerciseIds) {
+    const b = resolveBand(band, id); // per-muscle T resolves to this exercise's band
+    if (!ex[id]) ex[id] = initExercise(id, b, history, seedFor);
+    else if (ex[id].band.lo !== b.lo || ex[id].band.hi !== b.hi) {
+      // S-43 (change T — now per muscle): recompute the load from her history at the NEW Tlo — "the
+      // load at which she performed ≥ the new T." If she has no history at the new band, keep the
+      // current load and set 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+      // Only exercises whose muscle's band changed are touched — the rest keep their state.
+      const meta = metaWithGrid(id, history);
+      const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, b, history);
+      const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
+      ex[id] = { ...ex[id], band: b, load };
+    }
+  }
+  await save(state);
+  return state;
+}
 
 // ───────────────────────────── advance (PER WORKOUT) ─────────────────────────────
 const CHANGELOG_KEEP = 200; // recent load changes retained for the mirror (~months of training)
@@ -156,35 +180,143 @@ const CHANGELOG_KEEP = 200; // recent load changes retained for the mirror (~mon
  * S-5). Saturday decides nothing — it is a mirror (S-45), fed by the timestamped change log.
  * `nowMs`/`bucketOpenMs` kept for signature parity; the decision no longer waits on either.
  */
-/*
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ `advanceV5` WAS HERE, AND IT IS NOT COMING BACK.
- *
- * It was the fold that ran between sessions: Loop 2 decided the next load and whether a lift had
- * graduated or should rotate, Loop 3 decided how many sets a muscle earned. Roughly 140 lines here
- * plus `loop2.ts`, `loop3.ts` and `volumeAllocation.ts`, all deleted with it.
- *
- * The founder ruled it out in one sentence, and had to say it twice before I heard it:
- *
- *   > *"The engine decides DURING the workout only, on the basis of what it sees, and that is it.
- *   > Everything outside the workout is the AI's decision."*
- *
- * ── WHAT SURVIVES, AND WHY IT IS NOT THE SAME THING ─────────────────────────────────────────────
- * Loop 1 stays. It corrects a load WITHIN a set when her reps fall outside the band the coach set —
- * it acts on what it is watching, inside the workout, against a prescription somebody else wrote.
- * That is not a second opinion about her training; it is the execution of the first one.
- *
- * ── WHY THIS IS A COMMENT AND NOT A CLEAN DELETION ──────────────────────────────────────────────
- * Because the failure mode is somebody adding it back. It reads as an obvious gap: no connection
- * means no new programme, and a deterministic floor looks like a kindness. It was proposed once
- * and overruled — **a second decider is precisely what was removed**, and one that only runs when
- * the real one is unreachable is the worst version of it, because it appears exactly when she has
- * no way to tell them apart.
- *
- * `theEngineDecidesNothingBetweenSessions` is the law. This is the reason behind it.
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- */
+export async function advanceV5(
+  exerciseIds: string[],
+  band: BandSource,
+  history: Session[],
+  seedFor: SeedFor,
+  nowMs: number = Date.now(),
+  bucketOpenMs?: number,
+  /**
+   * The current programme's prescribed set count for an exercise (0 = not in the programme). Loop 3
+   * (the Muscle loop) needs it to know whether she COMPLETED a muscle's sets this occurrence.
+   * Absent (tests / legacy) → Loop 3 no-ops, so an occurrence advances load exactly as before.
+   */
+  prescribedSets: (exerciseId: string) => number = () => 0,
+  /**
+   * The muscle's WHOLE-WEEK prescribed set total — Σ setCount over ALL its slots across every day (a
+   * muscle is often trained on more than one day, e.g. chest on two upper days). The learned volume is
+   * a WEEKLY figure, so it must seed and cap against the week, never a single occurrence — else a
+   * multi-day muscle would be silently halved at the next regeneration. Falls back to this occurrence's
+   * prescription only when unknown (a single-day muscle, or tests that omit it).
+   */
+  weeklyByMuscle: Record<string, number> = {},
+): Promise<Record<string, 'graduate' | 'rotate'>> {
+  void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
+  const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
+  const ex = asStates(state);
+  const managed = new Set(exerciseIds);
 
+  // Completed sessions not yet folded, OLDEST first — each is one occurrence, decided in order so
+  // state accumulates (Monday's gain is there for Thursday). `startedAt` strictly after the cursor.
+  const lastFolded = state.lastFoldedAt ?? 0;
+  const unfolded = history
+    .filter((s) => { const t = Date.parse(s.startedAt); return Number.isFinite(t) && t > lastFolded; })
+    .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  if (unfolded.length === 0) { await save(state); return {}; }
+
+  const log = state.changeLog ?? [];
+  // Engine-initiated exercise changes wanted from the LATEST fold per lift (S-52 graduate / S-25.2
+  // rotate). The integration layer resolves the target and enacts it (writes substitutes). A later
+  // progress/hold clears it — she is climbing again, so no change is wanted any more.
+  const wantsChange: Record<string, 'graduate' | 'rotate'> = {};
+  const volume = (state.volumeByMuscle ??= {}); // Loop 3 — the learned per-muscle set target
+  const streaks = (state.unfinishedByMuscle ??= {}); // S-34 — consecutive-unfinished per muscle
+  for (const sess of unfolded) {
+    const at = Date.parse(sess.startedAt);
+    const advancedThisOcc = new Set<string>(); // lifts that ROSE this occurrence (Loop 3 anyAdvanced)
+    // Sets she LOGGED per managed exercise this occurrence. `loggedByEx` is WORKING sets only (approach
+    // excluded, S-60) — it decides which lifts were really trained. `performedByEx` is ALL logged sets
+    // INCLUDING the approach set, because the approach set OCCUPIES a prescribed slot (it is set 0 of the
+    // N prescribed, not an extra) and she really performed it. The completion check must use this, or an
+    // approach occurrence — (N−1) working + 1 approach — reads as (N−1) < N "unfinished", which would
+    // both block S-32 growth and, on a layoff return (S-38), wrongly TRIM a muscle. The approach set is
+    // excluded from volume EARNING (it never advances), never a penalty against it (S-60).
+    const loggedByEx: Record<string, number> = {};
+    const performedByEx: Record<string, number> = {};
+    for (const log0 of sess.sets) {
+      if (!managed.has(log0.exerciseId)) continue;
+      performedByEx[log0.exerciseId] = (performedByEx[log0.exerciseId] ?? 0) + 1;
+      if (log0.isApproach) continue;
+      loggedByEx[log0.exerciseId] = (loggedByEx[log0.exerciseId] ?? 0) + 1;
+    }
+    for (const id of Object.keys(ex)) {
+      if (!managed.has(id)) continue; // only exercises in the current programme advance
+      const st = ex[id];
+      const meta = metaWithGrid(id, history);
+      const sets = setPerfs(id, [sess]); // THIS occurrence's working sets
+      if (sets.length === 0) continue; // this lift was not trained this workout → holds
+      // rotationAvailable = true: decideExercise now rotates ONLY on a REPEATED stall at the same wall
+      // (isRepeatedStall) — a first stall still backs off and re-climbs, so S-25's order holds. The
+      // integration resolves the rotation target (longest-without); if none exists, the lift just
+      // backs off (S-53). GRADUATION (S-52) is surfaced the same way, independent of this flag.
+      const out = decideExercise({ state: st, session: sets, meta, rotationAvailable: true });
+      if (out.wantsChange) wantsChange[id] = out.wantsChange;
+      else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
+      if (out.decision === 'progress') advancedThisOcc.add(id); // a lift of this muscle rose (S-32)
+      // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
+      // delta direction (explainChange), never the decision label. hold/ambiguous say nothing
+      // (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
+      if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
+      }
+      // S-28 · the ONE hold the engine must narrate. Every other hold says nothing (R7/S-16) because
+      // nothing happened; this one is a decision — she cleared every set and the load still did not
+      // move, and the register requires the engine to "say the truth and offer the only honest axis
+      // left." Logged with equal from/to loads, so the mirror's net-no-op filter must let it through
+      // on `kind`, not on a load delta.
+      if (out.decision === 'rung_out_of_reach' && out.load != null) {
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: out.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, kind: 'rung' });
+      }
+      ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
+    }
+
+    // ── Loop 3 · the Muscle loop (register Part 4 §E) — one volume decision per muscle per occurrence.
+    // Group the exercises she trained this occurrence by muscle, then decide +1 / hold / −1 sets from
+    // FACTS ONLY: did she complete every prescribed set for the muscle (and not end the session early),
+    // and did any of its lifts advance? The learned target is a WEEKLY total (a muscle is often trained
+    // on more than one day), seeded from her whole-week prescription and capped at one set beyond it —
+    // already time-trimmed (S-64) — so it can never spiral past her minutes, and a multi-day muscle is
+    // never halved. An athlete on the day-one shape stays on it until she earns more.
+    const trainedByMuscle: Record<string, string[]> = {};
+    for (const id of Object.keys(loggedByEx)) {
+      const m = muscleOf(id);
+      if (m) (trainedByMuscle[m] ??= []).push(id);
+    }
+    for (const [m, ids] of Object.entries(trainedByMuscle)) {
+      const prescribedTotal = ids.reduce((s, id) => s + Math.max(0, prescribedSets(id)), 0);
+      if (prescribedTotal <= 0) continue; // nothing prescribed for this muscle → nothing to reason on
+      const weekly = weeklyByMuscle[m] ?? prescribedTotal; // the muscle's WHOLE-WEEK prescription
+      const completedAll = !sess.earlyFinish && ids.every((id) => (performedByEx[id] ?? 0) >= prescribedSets(id));
+      const anyAdvanced = ids.some((id) => advancedThisOcc.has(id));
+      const streak = completedAll ? 0 : (streaks[m] ?? 0) + 1;
+      streaks[m] = streak;
+      const current = volume[m] ?? weekly; // seed from her real (time-trimmed) WEEKLY prescription
+      const res = decideVolume({
+        sets: current,
+        minSets: SETS_MIN, // one exercise at the floor; a further cut drops an exercise (S-35, assembly)
+        maxSets: weekly + 1, // earn at most one weekly set beyond what already fit her minutes (S-64)
+        completedAll,
+        anyAdvanced,
+        unfinishedStreak: streak,
+      });
+      volume[m] = res.sets;
+      // S-45: narrate a real volume MOVE so the Saturday mirror says what it did ("I added a set to your
+      // chest work"). Measured against what she was ACTUALLY prescribed (current), so the very first
+      // earned set — grown from the seed in the same fold — is narrated too; a pure seed (no move) says
+      // nothing. Muscle-keyed; the load fields stay null.
+      if (res.sets !== current) {
+        log.push({ exerciseId: m, decision: res.decision, loadFrom: null, loadTo: null, setsFrom: current, setsTo: res.sets, bandFrom: [0, 0], bandTo: [0, 0], at, kind: 'volume', muscle: m });
+      }
+    }
+  }
+  state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
+  state.changeLog = log.slice(-CHANGELOG_KEEP);
+  await save(state);
+  return wantsChange;
+}
+
+// ───────────────────────────── prescription read ─────────────────────────────
 export interface V5Target {
   weight: number | null;
   reps: number; // Tlo
@@ -192,10 +324,91 @@ export interface V5Target {
   sets: number;
 }
 
+/**
+ * The current per-exercise prescription: the working load, at her band, from the very first set.
+ *
+ * There is NO approach / warm-up / measurement set (founder ruling, 2026-07-16 — Build #33 QA). It was
+ * removed entirely: every set, including set 1, is the real working weight, and Loop 1 responds to what
+ * she performs from the first set onward (as v4 did). `nowMs` kept for signature parity.
+ */
+export async function currentV5Targets(history: Session[], nowMs: number = Date.now()): Promise<Record<string, V5Target>> {
+  void history; void nowMs; // no time-window decision remains (the approach set was the only reader)
+  const state = await load();
+  const ex = asStates(state);
+  const out: Record<string, V5Target> = {};
+  for (const id of Object.keys(ex)) {
+    const st = ex[id];
+    out[id] = { weight: st.load, reps: st.band.lo, bandHi: st.band.hi, sets: st.sets };
+  }
+  return out;
+}
 
+/**
+ * Record a STRUCTURAL change for the Saturday mirror (S-45): the exercise itself changed identity — a
+ * bodyweight graduation (S-52), a stall rotation (S-25.3), or a learned in-workout swap adopted as
+ * standing (S-69). These write `prefs.substitutes`, not the load changeLog, so without this the mirror
+ * (which reflects the week's decisions) would never mention them. Idempotent per (from, to, week): a
+ * regeneration that re-enacts the same standing substitute the same week does not log it twice.
+ */
+export async function recordStructuralChangeV5(
+  fromExercise: string,
+  toExercise: string,
+  kind: 'graduate' | 'swap',
+  atMs: number = Date.now(),
+): Promise<void> {
+  if (!fromExercise || !toExercise || fromExercise === toExercise) return;
+  const state = await load();
+  const log = state.changeLog ?? [];
+  // Idempotent within a week: a regeneration re-enacting the same standing substitute must not log it
+  // again. The mirror groups by calendar week, so a 7-day guard keeps one entry per adoption per week.
+  const WEEK_MS = 7 * 86400000;
+  const dup = log.some((c) => c.kind === kind && c.exerciseId === fromExercise && c.toExercise === toExercise && Math.abs(c.at - atMs) < WEEK_MS);
+  if (dup) return;
+  log.push({ exerciseId: fromExercise, decision: kind, loadFrom: null, loadTo: null, setsFrom: 0, setsTo: 0, bandFrom: [0, 0], bandTo: [0, 0], at: atMs, kind, toExercise });
+  state.changeLog = log.slice(-CHANGELOG_KEEP);
+  await save(state);
+}
 
+/** The learned per-muscle per-occurrence set target (Loop 3). Regeneration distributes each across
+ *  that muscle's exercises (distributeMuscleSets). A muscle absent here is still on its day-one shape. */
+export async function getVolumeTargetsV5(): Promise<Record<string, number>> {
+  const state = await load();
+  return { ...(state.volumeByMuscle ?? {}) };
+}
 
+/**
+ * Her fitted reps-per-rung for a lift (F-13), from history — the number Loop 1 uses to size an
+ * in-session correction (how many rungs a rep miss is worth). null until she has enough like-for-like
+ * pairs (F-12) → Loop 1 falls back to one cautious rung (B-5). Bodyweight has no load axis → null.
+ * Computed at the façade because it needs her learned grid (observedLoads) + rest-filtered history.
+ */
+export function perRungForV5(exerciseId: string, history: Session[]): number | null {
+  const meta = metaWithGrid(exerciseId, history);
+  if (meta.bodyweight) return null;
+  // F-8: a measured statistic reads only the recency window — the most recent sessions of THIS lift,
+  // not all-time. (The pure core windows on `state.history`; the façade must window the raw history it
+  // flattens, or an old form/gym years ago would still weigh on today's slope.)
+  const recent = history
+    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+    .slice(0, RECENCY_WINDOW_SESSIONS);
+  // ONE RECORD PER SESSION — not one bag of every set.
+  //
+  // This used to flatten the whole window into a single `SessionRecord`, which was harmless while
+  // the fit treated all points alike and became wrong the moment L3 started refusing pairs from
+  // inside one occurrence: with every set stamped as the same occurrence, EVERY pair is refused and
+  // the façade returns null for an athlete with a perfectly good history. The occurrence boundary is
+  // a fact about her training, and flattening it away destroyed the fact.
+  const records = recent
+    .map((s) => ({ load: null, sets: setPerfs(exerciseId, [s]) }))
+    .filter((r) => r.sets.length > 0);
+  return repsPerRung([], records, meta);
+}
 
+/** Reset all v5 engine state (account wipe / tests). */
+export async function resetV5(): Promise<void> {
+  await save(empty());
+}
 
 // ───────────────────────────── Weekly Update (parity with v4's surfaces) ─────────────────────────────
 const L = (key: string, params?: ExplanationLine['params']): ExplanationLine => ({ key: `explain.${key}`, params });
@@ -309,24 +522,138 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
   });
 }
 
-/*
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ ELEVEN EXPORTS WERE DELETED FROM THIS FILE, AND WHAT IS LEFT IS THE POINT.
+/**
+ * WHAT ONE WORKOUT EARNED — the per-occurrence twin of `closedWeekChanges`, and the thing that
+ * lets the Complete screen stop lying.
  *
- * Gone: `ensureExercisesV5`, `currentV5Targets`, `recordStructuralChangeV5`, `getVolumeTargetsV5`,
- * `perRungForV5`, `resetV5`, `getSessionEarnedV5`, `getSessionForwardV5`, `getWeeklyUpdateV5`,
- * `markWeeklyUpdateSeenV5`, `getWeeklyPlanV5` — the stamped state, the narration read back off it,
- * and the weekly view assembled from it. Every one of them served the between-session decision, and
- * there is no between-session decision.
+ * v5 decides at the END OF EVERY OCCURRENCE (register L7 — there is no weekly boundary). Every
+ * entry in the changeLog is already stamped with `at` = that occurrence's `startedAt`, so the
+ * decisions one workout produced are simply the entries carrying its timestamp. Nothing here is
+ * computed: the fold made these calls, this only reads them back.
  *
- * WHAT SURVIVES READS HER HISTORY AND DECIDES NOTHING:
+ * No netting, unlike the weekly mirror: a week may move one lift three times and must say so once,
+ * but a single occurrence decides a lift exactly once. Order is the order the fold reached them,
+ * which is the order the athlete trained them.
  *
- *   · `observedLoads`  — every load she has actually put on this lift. Loop 1 snaps a live
- *                        correction onto a rung she has really used rather than a generic step.
- *   · `railCeilingFor` — one rung past her own best. Loop 1 may correct UP inside a set; it may not
- *                        invent a personal record while she is standing under the bar.
- *
- * Both are measurements of what happened, consulted mid-set. That is the whole of what the engine
- * is now, and `theEngineDecidesNothingBetweenSessions` is the law that keeps it that way.
- * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * Returns [] when the workout changed nothing — which is a real and common answer (hold, S-24), and
+ * the screen must say so rather than invent a change (R7 / S-16).
  */
+export async function getSessionEarnedV5(sessionStartedAtMs: number): Promise<Explanation[]> {
+  const state = await load();
+  return (state.changeLog ?? []).filter((c) => c.at === sessionStartedAtMs).map(explainChange);
+}
+
+/**
+ * WHAT ONE WORKOUT SET AS THE NEXT LOAD — the per-lift forward numbers a single occurrence decided.
+ *
+ * Read-only twin of `getSessionEarnedV5`. Where that returns the *narrated* changes (the delta and
+ * its reason), the Record screen (v7 3.3b) needs the ABSOLUTE next load per lift — "NEXT: 41" — to
+ * stamp beside each exercise. Both read the very same stamped changeLog; nothing is recomputed here.
+ *
+ * Only plain load moves (`kind == null`) carry a forward number; a graduation/rotation/volume move is
+ * a different kind of news and has no per-lift "next weight". A lift that HELD has no entry at all —
+ * a hold is not a change (R7) — so the caller reads a missing exercise as "holds at what she lifted".
+ */
+export async function getSessionForwardV5(
+  sessionStartedAtMs: number,
+): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+  const state = await load();
+  const out: Record<string, { loadFrom: number | null; loadTo: number | null }> = {};
+  for (const c of state.changeLog ?? []) {
+    if (c.at !== sessionStartedAtMs || c.kind != null) continue;
+    out[c.exerciseId] = { loadFrom: c.loadFrom, loadTo: c.loadTo };
+  }
+  return out;
+}
+
+/** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
+export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<WeeklyUpdate | null> {
+  const state = await load();
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
+  if (changes.length === 0) return null;
+  const { end } = closedWeek(nowMs);
+  return { weekIndex: 0, at: new Date(end).toISOString(), explanations: changes.map(explainChange), seen: state.seenWeekEnd === end };
+}
+
+/** Mark the current closed-week mirror as seen (keyed to its week-end, so a new week reads unseen). */
+export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now()): Promise<void> {
+  const state = await load();
+  state.seenWeekEnd = closedWeek(nowMs).end;
+  await save(state);
+}
+
+/**
+ * The full week — every workout's lifts at their NEW loads, with the NET per-lift from→to for the
+ * week that just closed + Why. Same shape as v4 `getWeeklyPlan`, so the screens render unchanged.
+ * Read-only.
+ */
+export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now()): Promise<WeeklyPlanView | null> {
+  const state = await load();
+  const ex = asStates(state);
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
+  const { end } = closedWeek(nowMs);
+
+  // The change log carries FOUR kinds of news, and only one of them is keyed by a lift that is
+  // still in the programme. Attaching everything by `c.exerciseId` — as this function used to —
+  // silently dropped the other three from every SCREEN: a structural change is keyed by the lift
+  // that LEFT (`from`), so after the very regeneration that enacts it no slot matches; a volume
+  // move is keyed by a MUSCLE, which no slot ever matches. The mirror's data layer named them
+  // (getWeeklyUpdateV5, proven in stage 7) while the letter the athlete actually reads — and Home's
+  // briefing, and the rotation-UNDO that keys off `swapped` — could never show one. "Built but
+  // unconnected", the exact Part-7 failure, one seam further out.
+  const loadByEx = new Map(changes.filter((c) => c.kind == null).map((c) => [c.exerciseId, c]));
+  const rungByEx = new Map(changes.filter((c) => c.kind === 'rung').map((c) => [c.exerciseId, c]));
+  // A structural change attaches to the lift that ARRIVED (`toExercise`) — the one she can see.
+  const structByTo = new Map(
+    changes.filter((c) => (c.kind === 'graduate' || c.kind === 'swap') && c.toExercise).map((c) => [c.toExercise!, c]),
+  );
+  const volumeMoves: WeeklyVolumeMove[] = changes
+    .filter((c) => c.kind === 'volume' && c.muscle)
+    .map((c) => ({ muscle: c.muscle!, setsFrom: c.setsFrom, setsTo: c.setsTo, explanation: explainChange(c) }));
+
+  const workouts: WeeklyPlanWorkout[] = [];
+  for (const day of program.days) {
+    if (day.isRest) continue;
+    const lifts: WeeklyPlanLift[] = day.slots.map((slot) => {
+      const st = ex[slot.exerciseId];
+      // A lift that is ITSELF the product of a change (graduation / rotation / adopted swap) is the
+      // bigger news than a load move on it; one row carries one story, structural first.
+      const structural = structByTo.get(slot.exerciseId);
+      const c = structural ?? loadByEx.get(slot.exerciseId) ?? rungByEx.get(slot.exerciseId);
+      const change = c
+        ? {
+            snapshot: {
+              slotId: slot.exerciseId, exerciseId: slot.exerciseId,
+              // A structural row shows the NEW lift at its own current number (it enters at S-8/S-9,
+              // never at the old lift's load) — `swapped` is what the screens key the badge, the
+              // briefing's swap sentence, and the rotation-undo off.
+              loadFrom: structural ? null : c.loadFrom,
+              loadTo: structural ? (st ? st.load : null) : c.loadTo,
+              setsFrom: structural ? slot.setCount : c.setsFrom,
+              setsTo: structural ? slot.setCount : c.setsTo,
+              rangeFrom: structural && st ? [st.band.lo, st.band.hi] : c.bandFrom,
+              rangeTo: structural && st ? [st.band.lo, st.band.hi] : c.bandTo,
+              swapped: !!structural,
+            } as WeekPlanChange,
+            explanation: explainChange(c),
+          }
+        : null;
+      return {
+        exerciseId: slot.exerciseId,
+        name: exerciseDisplayName(slot.exerciseId),
+        loadKg: st ? st.load : null,
+        // The set count is the PROGRAMME's (Loop 3 distributes volume into slot.setCount + the time
+        // cap trims it); ExerciseState.sets is vestigial (always the day-one 4), so it must not be the
+        // source here or the weekly plan would show 4 sets regardless of the real workout.
+        sets: slot.setCount,
+        repRange: st ? [st.band.lo, st.band.hi] : null,
+        change,
+      };
+    });
+    workouts.push({ dayId: day.id, name: day.name, groups: day.muscleGroups, lifts });
+  }
+  // Every piece of news counts — a week whose only decision was a volume move must not read as "a
+  // steady week" on the letter while the update note on Home says the programme was updated.
+  const changedCount = workouts.reduce((n, w) => n + w.lifts.filter((l) => l.change).length, 0) + volumeMoves.length;
+  return { weekIndex: 0, at: new Date(end).toISOString(), changedCount, seen: state.seenWeekEnd === end, workouts, volume: volumeMoves };
+}

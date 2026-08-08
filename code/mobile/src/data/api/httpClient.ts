@@ -32,6 +32,7 @@ import type {
   Slot,
 } from '@/data/local/models';
 import type { ActualSet, BackendProfile, ModelClient } from './modelClient';
+import { fixtureModel } from './fixtureModel'; // the engine assembles the programme; see the delegation note below
 import { getBaseUrl, getToken } from './config';
 import { notifyUnauthorized } from './authEvents';
 import { HttpError, classifyStatus } from './httpErrors';
@@ -164,7 +165,28 @@ export class HttpModelClient implements ModelClient {
     return typeof strat.sessions_completed === 'number' ? strat.sessions_completed : null;
   }
 
+  /*
+   * ════ THE PROGRAMME IS ASSEMBLED LOCALLY, WHATEVER THE TRANSPORT ════
+   *
+   * These three used to compose the week on the SERVER (`POST /weeks`) and read the loads back off
+   * it. That made "who decided this workout?" a question with two possible answers depending on
+   * connectivity, and the remote one cost a round trip the athlete waited on.
+   *
+   * The engine decides now. It is deterministic, offline, and free, so there is no transport for
+   * which a different answer would be better — this client delegates rather than composes. What
+   * stays remote is what only the server has: identity, history sync, and the recorded session.
+   */
+  async setWeeklyFrequency(daysPerWeek: number): Promise<void> {
+    await fixtureModel.setWeeklyFrequency(daysPerWeek);
+  }
 
+  async generateProgram(profile: Profile): Promise<Program> {
+    return fixtureModel.generateProgram(profile);
+  }
+
+  async sessionTargets(args: { programDayId: string; completedSessions: number }): Promise<SetTarget[]> {
+    return fixtureModel.sessionTargets(args);
+  }
 
   /** Map a `{week, rest, workouts[]}` payload to the client Program (the weekly bucket of N
    *  workouts). Each workout becomes a non-rest ProgramDay carrying its backend session id (the
