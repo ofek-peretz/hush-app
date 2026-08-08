@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing, scoped to the engine. Stryker breaks the engine on purpose - flips a comparison, deletes a call, changes a constant - and checks that a test goes red. A surviving mutant is a change to the engine that NO test would have caught. This measures the tests, not the code, which is the only honest answer to 'how do we know the suite protects us'. Scoped to src/engine because that is where a silent defect costs the athlete a real workout.",
+  "packageManager": "npm",
+  "testRunner": "jest",
+  "jest": {
+    "projectType": "custom",
+    "configFile": "jest.mutation.config.js",
+    "enableFindRelatedTests": true
+  },
+  "_findRelatedComment": "enableFindRelatedTests is ON (it lives inside `jest` above; that object rejects unknown keys, so its note lives out here). Without it every mutant re-runs a large slice of a 243-suite project; with it jest runs only the suites that actually import the mutated file. It failed on the first attempt with 'No tests were found', but that was the sandbox breaking <rootDir> resolution - it resolves correctly now that the run is inPlace.",
+  "_inPlaceComment": "Stryker's sandbox breaks jest's <rootDir> resolution here (jest-expo preset + the @/ moduleNameMapper), so the dry run found no tests at all. Mutating in place avoids the copy entirely. Safe because every file under `mutate` is committed - `git checkout` restores them if a run is interrupted.",
+  "inPlace": true,
+  "mutate": [
+    "src/engine/v5/loop1.ts",
+    "src/engine/v5/loop2.ts",
+    "src/engine/v5/loop3.ts",
+    "src/engine/v5/grid.ts",
+    "src/engine/v5/repsPerRung.ts",
+    "src/engine/v5/repBand.ts",
+    "src/engine/v5/stats.ts",
+    "src/engine/v5/timeBudget.ts",
+    "src/engine/v5/bodyMap.ts",
+    "src/engine/v5/assembler.ts",
+    "src/engine/v5/volumeAllocation.ts",
+    "src/engine/v5/programAssembly.ts",
+    "src/engine/loadMath.ts",
+    "src/domain/startingLoad.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "_concurrencyComment": "2, not 4, and this is a MEMORY budget rather than a CPU one. Measured mid-run: 4 workers held 5.7 GB of a 15.6 GB machine, leaving 1 GB free with 2.3 GB of Windows Memory Compression, while the CPU sat at 8% across 20 logical processors. The run was thrashing, not computing. Two workers fit in RAM and each runs at full speed. Raise this only after re-measuring free memory, never because the core count looks idle.",
+  "concurrency": 2,
+  "timeoutMS": 60000,
+  "reporters": ["html", "clear-text", "progress"],
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "clearTextReporter": { "maxTestsToLog": 0 },
+  "thresholds": { "high": 90, "low": 75, "break": null }
+}
