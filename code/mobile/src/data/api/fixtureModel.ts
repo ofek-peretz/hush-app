@@ -76,40 +76,78 @@ const MAX_SETS = V5_SETS_MAX;
 export function orderForFlow(list: Exercise[]): Exercise[] {
   const tierRank = (e: Exercise) => (e.tier === 'compound' ? 0 : 1);
   const idx = new Map<Exercise, number>(list.map((e, i) => [e, i]));
-  // group by equipment (one station, fully, before moving on)
-  const stations = new Map<string, Exercise[]>();
-  for (const e of list) {
-    const g = stations.get(e.equipment) ?? [];
-    g.push(e);
-    stations.set(e.equipment, g);
-  }
-  // within a station: compounds first, then original order
-  for (const g of stations.values()) g.sort((a, b) => tierRank(a) - tierRank(b) || idx.get(a)! - idx.get(b)!);
-  // Two lifts on the SAME PHYSICAL station (catalog `station` — the leg press and its calf raise)
-  // are pulled back to back, so she finishes the machine before anything else in the class block.
-  // Without this, the block's compounds-first order could send her leg press → leg extension →
-  // BACK to the leg press for calves — exactly the "left and returned" the law forbids. The class
-  // grouping alone cannot see it: each id appears once, so every OTHER machine is naturally visited
-  // once; only lifts that genuinely share equipment need the pull. Deterministic (first-seen leads).
-  for (const [k, g] of stations) {
-    if (!g.some((e) => e.station)) continue;
-    const clustered: Exercise[] = [];
-    for (const e of g) {
-      if (clustered.includes(e)) continue;
-      clustered.push(e);
-      if (e.station) for (const f of g) if (!clustered.includes(f) && f.station === e.station) clustered.push(f);
+  /*
+   * ════ EQUIPMENT FAMILY IS NOT A STATION (founder 2026-08-08) ════
+   *
+   * Founder: *"מה שהמנוע עשה זה פשוט ליצור כמעט את כל האימון עם אותו הציוד וזה ברור שזה לא מה
+   * שרציתי. גם לא רציתי מבודד לפני מורכב."*
+   *
+   * This grouped by `e.equipment`, and that field has FIVE values — barbell, dumbbell, machine,
+   * cable, bodyweight. "One station, fully, before moving on" therefore meant "every barbell lift
+   * together, then every machine lift together", which cuts a day into three or four huge blocks
+   * and reads as a session done on one thing. It does not even save the walk it was written for: a
+   * leg press, a chest press, a lat pulldown and a leg curl are all `machine` and stand in four
+   * corners of the room.
+   *
+   * And it bought that with the training order. The old note admitted the price — *"a station's
+   * isolation can precede another station's compound; grouping equipment is worth it"* — which is
+   * the second half of what he said he did not want.
+   *
+   * ── THE THREE RULES, IN HIS ORDER ─────────────────────────────────────────────────────────────
+   *   1. The programme is not touched. Selection already happened; this only orders it.
+   *   2. COMPOUNDS BEFORE ISOLATIONS, globally and without exception. Never traded for a shorter
+   *      walk — which also delivers "a compound before an isolation on the same equipment", since
+   *      every compound is already ahead of every isolation.
+   *   3. INSIDE each of those two phases, save the walk: chain to a lift on the SAME PHYSICAL
+   *      station first (catalogue `station` — the leg press and its calf raise), then to one in the
+   *      same equipment family, then to whatever catalogue order offers next. Equipment family is a
+   *      tie-break here, never a grouping key.
+   *
+   * Deterministic: every preference falls back to the incoming order, which is catalogue order.
+   */
+  const chain = (phase: Exercise[]): Exercise[] => {
+    const out: Exercise[] = [];
+    const left = [...phase];
+    while (left.length) {
+      const prev = out[out.length - 1];
+      let pick = 0; // catalogue order is the floor
+      if (prev) {
+        const sameStation = prev.station ? left.findIndex((e) => e.station === prev.station) : -1;
+        const sameFamily = left.findIndex((e) => e.equipment === prev.equipment);
+        pick = sameStation >= 0 ? sameStation : sameFamily >= 0 ? sameFamily : 0;
+      }
+      out.push(left[pick]);
+      left.splice(pick, 1);
     }
-    stations.set(k, clustered);
+    return out;
+  };
+  const byOrder = (a: Exercise, b: Exercise) => idx.get(a)! - idx.get(b)!;
+  /*
+   * ⛔ THE ONE EXCEPTION TO "COMPOUNDS FIRST", AND IT IS A PHYSICAL FACT, NOT A PREFERENCE.
+   *
+   * `leg_press` and `leg_press_calf_raise` are the SAME MACHINE — the catalogue says so with
+   * `station`. Compounds-first puts every isolation behind every compound, which sends her to the
+   * leg press, away, and back to the leg press for calves: the exact "left and returned" this whole
+   * function exists to prevent, and the case the old station test pinned.
+   *
+   * So an isolation that shares a physical station with a compound rides directly behind it. This is
+   * the only thing allowed past the compounds-first line, it is never a whole equipment FAMILY (that
+   * coarseness is the bug being fixed), and it only fires where two catalogue lifts genuinely share
+   * one piece of equipment.
+   */
+  const compounds = chain([...list].filter((e) => tierRank(e) === 0).sort(byOrder));
+  const isolations = chain([...list].filter((e) => tierRank(e) === 1).sort(byOrder));
+  const ordered: Exercise[] = [];
+  const pulled = new Set<Exercise>();
+  for (const c of compounds) {
+    ordered.push(c);
+    if (!c.station) continue;
+    for (const i of isolations) if (!pulled.has(i) && i.station === c.station) { ordered.push(i); pulled.add(i); }
   }
-  // order stations: the one with the earliest compound leads (main lift first); iso-only stations trail
-  return [...stations.values()]
-    .map((g) => {
-      const firstCompound = g.find((e) => tierRank(e) === 0);
-      return { g, key: firstCompound ? idx.get(firstCompound)! : Number.POSITIVE_INFINITY, first: Math.min(...g.map((e) => idx.get(e)!)) };
-    })
-    .sort((a, b) => a.key - b.key || a.first - b.first)
-    .flatMap((x) => x.g);
+  for (const i of isolations) if (!pulled.has(i)) ordered.push(i);
+  return ordered;
 }
+
 
 /**
  * Re-run the gym-flow ordering on a day whose slots were EDITED AFTER assembly. `applyLeaveIts`
