@@ -15,6 +15,10 @@
  *
  * Run it alone to read the report:  npx jest everyProgramme -t "prints"
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { exerciseDisplayName, muscleOf } from '@/data/exercises';
 import type { Profile, Program, ProgramDay } from '@/data/local/models';
@@ -102,7 +106,7 @@ describe('every programme the engine can build', () => {
    * The report above keeps running — the programmes are readable at any time.
    */
   // eslint-disable-next-line jest/no-disabled-tests
-  it.skip('no session is a stub — every workout lands in the 45–60 min the founder ruled', () => {
+  it('no session is a stub — every workout lands in the 45–60 min the founder ruled', () => {
     const tooShort: string[] = [];
     for (const b of BUILDS) {
       for (const d of b.program.days.filter((x) => !x.isRest)) {
@@ -114,7 +118,7 @@ describe('every programme the engine can build', () => {
   });
 
   // eslint-disable-next-line jest/no-disabled-tests
-  it.skip('no two sessions in one week are twins', () => {
+  it('no two sessions in one week are twins', () => {
     const twins: string[] = [];
     for (const b of BUILDS) {
       const seen = new Map<string, string>();

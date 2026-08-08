@@ -6,6 +6,10 @@
  * band + body map, proving the body map actually shapes the real programme — and that a legacy
  * profile (no band) still gets the split, unchanged.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { muscleOf } from '@/data/exercises';
 import { db } from '@/data/local/db';
@@ -77,7 +81,11 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     const chest0 = distinctChest(dayOne);
 
     // Loop 3 has LEARNED a much larger Chest volume over weeks → persist it, then regenerate.
-    await db.saveEngineV5({ exercises: {}, volumeByMuscle: { Chest: 14 } });
+    // 14 used to be "much larger" than the flat B-2 base of 10. Since B-2 became frequency-aware
+    // (2026-08-08) day one already targets 5 × days, so 14 is SMALLER than the day-one shape at 3+
+    // days and this test was asserting growth against a shrink. The number has to clear day one for
+    // the assertion below to mean what its comment says.
+    await db.saveEngineV5({ exercises: {}, volumeByMuscle: { Chest: 34 } });
     const grown = await fixtureModel.generateProgram(chestOnly);
     const chest1 = distinctChest(grown);
 

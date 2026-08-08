@@ -235,7 +235,9 @@ export function assembleV5DayLists(
   /** Her sex + bodyweight — read ONLY to ask whether a lift's floor is loadable for her (S-55b). */
   profile?: LoadProfile,
 ): DayList[] {
-  const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER); // off muscles absent (S-2)
+  // `days` is passed so the weekly pot follows her frequency (B-2, 2026-08-08). Without it every
+  // frequency drew the same 10 sets a muscle and the extra days were empty calories.
+  const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER, days); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
   const trainable = Object.keys(targets);
   if (trainable.length === 0 || days <= 0) return []; // S-3
