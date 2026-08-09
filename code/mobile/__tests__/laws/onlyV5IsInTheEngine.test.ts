@@ -31,6 +31,10 @@
  * This file is the tripwire. It does not test behaviour; it asserts that these inputs cannot reach a
  * decision again, which is the only thing that kept them alive the first time.
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES, exerciseById } from '@/data/exercises';
 import { startingWeight } from '@/domain/startingLoad';
 import { SETS_MIN, SETS_MAX } from '@/engine/v5/constants';

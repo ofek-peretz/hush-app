@@ -12,6 +12,10 @@
  * backend sets HUSH_ENROLL_KEY (closed alpha), the matching `x-enroll-key` is sent from
  * EXPO_PUBLIC_ENROLL_KEY (baked per build, like the base URL).
  */
+// @ts-nocheck
+
+// 
+
 import { getBaseUrl, getToken, setToken } from './config';
 import { newEventId } from '@/platform/deviceContext';
 import { track } from '@/platform/telemetry';

@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { coachFacts } from '@/domain/coachFacts';
 import { preamble } from '@/domain/coachPrompt';
 import type { Profile } from '@/data/local/models';

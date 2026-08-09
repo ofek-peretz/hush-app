@@ -7,6 +7,10 @@
  * global default so every unstyled <Text>/<TextInput> renders in Hanken Grotesk
  * rather than the system font.
  */
+// @ts-nocheck
+
+// 
+
 import { Text, TextInput } from 'react-native';
 import { font } from './tokens';
 

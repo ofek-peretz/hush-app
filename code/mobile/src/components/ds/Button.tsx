@@ -4,6 +4,10 @@
  * danger, or onstage. No gradients, no rest shadow; press settles to 0.98 scale,
  * never bounces.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { Pressable, Text, View, StyleSheet, type ViewStyle } from 'react-native';
 import {

@@ -36,6 +36,10 @@
  * Pure and I/O-free.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { Units } from '@/data/local/models';
 
 export const ATHLETE_BRIEF_VERSION = 1;

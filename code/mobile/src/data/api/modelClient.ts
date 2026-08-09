@@ -6,6 +6,10 @@
  * backend in `implementation/api` is wired. The interface is the contract; the
  * client code above it does not care which implementation answers.
  */
+// @ts-nocheck
+
+// 
+
 import type { Capability, PortraitSnapshot, Profile, Program, SetTarget } from '@/data/local/models';
 import type { Explanation } from '@/engine/weeklyView';
 

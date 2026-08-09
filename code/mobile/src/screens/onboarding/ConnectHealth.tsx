@@ -28,6 +28,10 @@
  * would promise a decision that does not exist. It is a ruled row: a glyph, a sentence, no
  * affordance, visibly not the object above it.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

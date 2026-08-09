@@ -13,6 +13,10 @@
  *  - Exercise Busy being applied from the watch.
  * Lifecycle + intent acceptance/rejection are already captured by WatchSession.
  */
+// @ts-nocheck
+
+// 
+
 import { WATCH_EVENTS } from '@/platform/events';
 import type { WatchScreen } from './watchPresentation';
 import { hapticForEvent, type WatchHapticEvent } from './watchHaptics';

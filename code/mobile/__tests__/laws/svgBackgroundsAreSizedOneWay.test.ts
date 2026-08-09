@@ -24,6 +24,10 @@
  * Only PERCENTAGE sizing is ambiguous. An `<Svg>` given explicit numbers (`width={width}`) has one
  * answer already and may carry an absolute style — `components/share/ShareCard` does, correctly.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

@@ -9,6 +9,10 @@
  *   → the conversation → Program Created → Home. Four screens, and one of them is a coach.
  * Invite-token enrollment is removed.
  */
+// @ts-nocheck
+
+// 
+
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';

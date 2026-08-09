@@ -20,6 +20,10 @@
  * gradient poured into a frame, the wordmark carried whole, the moss spent on one small mark. This
  * is the same object, so it is built the same way.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

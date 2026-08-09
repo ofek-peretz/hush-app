@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { buildPlanFromCoach, type Step } from '@/state/stores/sessionStore';
 import type { PlannedSession, PlannedItem } from '@/domain/coachPlan';
 

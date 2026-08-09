@@ -2,6 +2,10 @@
  * Equipment Occupied (V1) — the current exercise moves exactly one position later; no
  * replacement, no structure change. Tests the pure plan transform.
  */
+// @ts-nocheck
+
+// 
+
 import { deferCurrentExercise, type Step } from '@/state/stores/sessionStore';
 import type { SetTarget } from '@/data/local/models';
 

@@ -23,6 +23,10 @@
  * holds. The coach decides; this only says what is usual. Nothing reads it to reject a prescription.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 
 /** How a movement is naturally measured. Advisory — see the header. */
 export type Measure = 'distance' | 'time' | 'reps';

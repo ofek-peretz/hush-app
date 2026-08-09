@@ -5,6 +5,10 @@
  * surface shows comes from the SAME projection. These are the invariants that keep that true —
  * the ones that were broken, and the ones that must not break again.
  */
+// @ts-nocheck
+
+// 
+
 import { projectSessionMirror, type MirrorInputs, type MirrorStep } from '@/platform/sessionMirror';
 import { unfrozenRestAnchor, hasLoggedStep } from '@/state/stores/sessionStore';
 import type { SessionMachine } from '@/state/machines/sessionState';

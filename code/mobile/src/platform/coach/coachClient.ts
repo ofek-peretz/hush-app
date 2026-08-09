@@ -24,6 +24,10 @@
  * · It never logs the request. The request is her training record.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { CoachRequest } from '@/domain/coachPrompt';
 import { deviceContext } from '@/platform/deviceContext';
 

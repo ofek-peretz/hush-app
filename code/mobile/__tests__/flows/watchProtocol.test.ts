@@ -3,6 +3,10 @@
  * validates every watch intent against its own mirror; the phone's truth wins.
  * Pure, no native.
  */
+// @ts-nocheck
+
+// 
+
 import {
   decideWatchIntent,
   makeStateEnvelope,

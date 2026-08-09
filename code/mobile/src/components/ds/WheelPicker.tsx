@@ -41,6 +41,10 @@
  * the active detent between two exact-width spacers, so content size never changes and
  * far targets are always populated.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   View,

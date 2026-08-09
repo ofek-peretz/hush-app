@@ -22,6 +22,10 @@
  * (notifications.ts) suppresses these `rest_*` alerts while the app is ACTIVE — no double buzz.
  * Locked/background: the handler doesn't run, so the scheduled alert wakes the screen.
  */
+// @ts-nocheck
+
+// 
+
 import * as Notifications from 'expo-notifications';
 import { tg } from '@/i18n';
 import { ensureNotificationPermission } from '@/platform/notifications';

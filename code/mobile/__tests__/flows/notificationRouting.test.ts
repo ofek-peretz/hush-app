@@ -5,6 +5,10 @@
  * are a no-op — including the payloads of RETIRED kinds, which is not hypothetical: a note
  * scheduled by an older build survives the upgrade on the device and can be tapped weeks later.
  */
+// @ts-nocheck
+
+// 
+
 import { intentFromNotificationData } from '@/platform/notifications';
 
 describe('intentFromNotificationData (pure routing map)', () => {

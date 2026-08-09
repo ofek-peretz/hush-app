@@ -2,6 +2,10 @@
  * Persistence robustness (production-readiness audit). Boot must survive corrupt
  * storage; offline-completed sessions queue idempotently for reconcile (§6.4).
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';

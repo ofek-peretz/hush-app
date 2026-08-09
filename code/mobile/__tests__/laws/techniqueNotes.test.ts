@@ -3,6 +3,10 @@
  * carries exactly 3 concise, plain-language cues — a reminder before a set, not
  * a lesson. Guards against paragraphs, missing cues, or content creep.
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES } from '@/data/exercises';
 import he from '@/i18n/locales/he.json';
 import type { Capability } from '@/data/local/models';

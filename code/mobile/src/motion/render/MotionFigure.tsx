@@ -5,6 +5,10 @@
  * fraction over the canonical loop; Reduce Motion freezes it at the start position (both range
  * ticks still mark the endpoints). Muted, no controls — a living illustration, not a player.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';

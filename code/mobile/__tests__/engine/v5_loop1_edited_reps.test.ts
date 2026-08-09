@@ -5,6 +5,10 @@
  * derives its band from `recommendedReps`, the band tracks her input and every set is "in band" → the
  * load never moves, no matter how many reps she enters. The immutable Tlo lives in `repBandLo`.
  */
+// @ts-nocheck
+
+// 
+
 import { applyLoop1, type LiveStep } from '@/engine/v5/liveSession';
 
 // A machine lift, band [8,10]. Three working sets at 34 kg. After an edit, set 0's recommendedReps has

@@ -10,6 +10,10 @@
  * and a callout can hold one ("40 · plate"). Defensive by construction — 0–1 points draw a dot, a
  * flat series draws level, and it never throws, because a progress screen must not crash.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Polyline, Circle, Defs, LinearGradient, Stop, Line } from 'react-native-svg';

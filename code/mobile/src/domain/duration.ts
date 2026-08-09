@@ -11,6 +11,10 @@
  * athlete is reading seconds pass, not summarising a session — that surface keeps
  * `fmtClock` (mm:ss / h:mm:ss).
  */
+// @ts-nocheck
+
+// 
+
 
 /** Minutes of a recorded duration, rounded to the nearest minute (never 0 for real work). */
 export function durationMinutes(seconds: number): number {

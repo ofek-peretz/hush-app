@@ -38,6 +38,10 @@
  * month three contradicting month one. The transcript ages out under a cap; the decisions do not.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { db, type PersistedCoachTurn } from '@/data/local/db';

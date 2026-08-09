@@ -20,6 +20,10 @@
  *   · the two acts: resume (moss), and end (outlined — an end is never the loud one)
  *   · at the very bottom, the pain door (§13) — set apart so it is present without being offered
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

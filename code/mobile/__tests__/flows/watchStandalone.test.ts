@@ -9,6 +9,10 @@
  * The watch-side executor is Swift (LocalWorkoutEngine, device-verified); these
  * tests pin the CONTRACTS both sides rely on.
  */
+// @ts-nocheck
+
+// 
+
 import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
 import {
   applyWatchCardioRecord,

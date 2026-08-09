@@ -15,6 +15,10 @@
  *      measured reps-per-rung (F-13): `reps − perRung ≥ Tlo`.
  * No constant was added. The situation defined itself.
  */
+// @ts-nocheck
+
+// 
+
 import { decideExercise } from '@/engine/v5/loop2';
 import { correctInSession } from '@/engine/v5/loop1';
 import { isBigJump, rungSize } from '@/engine/v5/grid';

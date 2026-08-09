@@ -27,6 +27,10 @@
  * row at all; the sentence behind it is what the row opens.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

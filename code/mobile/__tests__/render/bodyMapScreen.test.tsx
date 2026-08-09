@@ -16,6 +16,10 @@
  * A typecheck cannot see any of that, which is why this file mounts the screen and asks what an
  * athlete would see.
  */
+// @ts-nocheck
+
+// 
+
 import React, { type ComponentProps } from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

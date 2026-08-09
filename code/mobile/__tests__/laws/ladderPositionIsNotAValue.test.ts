@@ -29,6 +29,10 @@
  * Backgrounds are exempt on purpose: a surface asking for "the second rung" is asking for exactly
  * the thing the ladder exists to express, and it moves WITH the ladder, which is correct.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

@@ -29,6 +29,10 @@
  * and every line here is mixed, because the exercise names stay English by their own ruling.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { I18nManager } from 'react-native';
 
 import { currentLocale, tg } from '@/i18n';

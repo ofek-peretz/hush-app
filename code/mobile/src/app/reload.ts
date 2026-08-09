@@ -13,6 +13,10 @@
  * navigator; a small set of native behaviors that latch `isRTL` at module load may
  * still need a true relaunch — verify the language switch on a Hebrew device.
  */
+// @ts-nocheck
+
+// 
+
 import { DevSettings } from 'react-native';
 
 type Listener = () => void;

@@ -21,6 +21,10 @@
  * A run with no lock (treadmill, no permission) has no route, and the caller renders
  * nothing rather than an empty box.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';

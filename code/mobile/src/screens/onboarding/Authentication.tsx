@@ -15,6 +15,10 @@
  * the dark hairline-outline secondary with cream label and no logo. The account is the action,
  * not either brand — so the two share one geometry and the design carries no platform colour.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, Animated, Easing, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

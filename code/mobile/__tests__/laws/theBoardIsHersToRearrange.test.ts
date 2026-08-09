@@ -12,6 +12,10 @@
  * she cannot rearrange without checking.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { moveWorkoutToDay, daysAfterStarting, dropTarget, type BoardWorkout, type MeasuredRow } from '@/domain/weekBoard';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 

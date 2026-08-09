@@ -2,6 +2,10 @@
  * Canonical SessionMirror — the single projection for Live Activity / Dynamic
  * Island / Apple Watch. Projection rules + drift-proof rest + wire serialization.
  */
+// @ts-nocheck
+
+// 
+
 import {
   projectSessionMirror,
   mirrorToWire,

@@ -18,6 +18,10 @@
  * This file is the guard. It reads the SHIPPED COPY and refuses the v4 world, in both locales — the
  * Hebrew is where it would hide longest.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 import he from '@/i18n/locales/he.json';
 

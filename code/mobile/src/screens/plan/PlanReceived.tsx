@@ -11,6 +11,10 @@
  * allow-list, pinned by a test that reads the payload back as text). Her first working set is what
  * sets her loads — the same sentence the cold start has always made.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

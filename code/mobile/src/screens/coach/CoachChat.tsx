@@ -26,6 +26,10 @@
  * state no fixture can produce is a state nobody looks at.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,

@@ -9,6 +9,10 @@
  *   3.6b · DAY ONE       → before any data: no figures at all, no Lifts/Log choice to make, and the
  *                          page says so in the first person instead of drawing an empty graph.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

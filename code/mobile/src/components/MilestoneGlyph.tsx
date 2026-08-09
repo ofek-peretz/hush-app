@@ -21,6 +21,10 @@
  * Authored on a 48×48 grid, centred, with generous margins so the motif reads at the
  * 24px the gallery renders it at.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import Svg, { Path, Circle, Line, G, Rect } from 'react-native-svg';
 

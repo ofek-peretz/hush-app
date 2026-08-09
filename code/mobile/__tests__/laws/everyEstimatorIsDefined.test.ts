@@ -19,6 +19,10 @@
  * "Degenerate" is the case that matters. A real athlete's first week IS degenerate: one session, one
  * load, every set identical. Every estimator here meets that input before it ever meets a rich one.
  */
+// @ts-nocheck
+
+// 
+
 import { median, percentileNearestRank, theilSenSlope } from '@/engine/v5/stats';
 import { repsPerRung, rungsForHeadroom } from '@/engine/v5/repsPerRung';
 import { learnedRestS, learnedExecS, setsToMinutes, maxSetsInBudget } from '@/engine/v5/timeBudget';

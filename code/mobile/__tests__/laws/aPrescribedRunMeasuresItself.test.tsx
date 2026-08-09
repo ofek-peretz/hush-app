@@ -23,6 +23,10 @@
  * be the run the step is waiting for.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

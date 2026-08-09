@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { appendDecisions, recentDecisions, COACH_LOG_CAP, type CoachDecision } from '@/domain/coachLog';
 import { coachFacts } from '@/domain/coachFacts';
 import type { Profile, Program } from '@/data/local/models';

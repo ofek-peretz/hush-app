@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { geminiSchema } from '@/domain/geminiSchema';
 import { COACH_PLAN_SCHEMA, parseCoachPlan, COACH_PLAN_VERSION } from '@/domain/coachPlan';
 

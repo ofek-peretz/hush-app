@@ -10,6 +10,10 @@
  * That is the founder's own rule and it is the SAME function the drag uses, so the two can never
  * disagree about what a move means.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 

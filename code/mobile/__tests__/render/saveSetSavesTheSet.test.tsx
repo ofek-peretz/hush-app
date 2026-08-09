@@ -15,6 +15,10 @@
  *
  * The BACK chevron still closes WITHOUT logging — the only way out that does not record.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

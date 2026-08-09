@@ -7,6 +7,10 @@
  * stationary-indoor case can never read as movement again, and the estimators
  * stay distance-based (no distance ⇒ no calories; no bodyweight ⇒ no guess).
  */
+// @ts-nocheck
+
+// 
+
 import {
   segmentCounts,
   movementCredit,

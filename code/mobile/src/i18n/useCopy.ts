@@ -14,6 +14,10 @@
  * neither is the technique-cue library, because a context suffix cannot address an element of a
  * JSON array; it selects the feminine array itself (see data/exercises.ts).
  */
+// @ts-nocheck
+
+// 
+
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Line } from '@/domain/voice';

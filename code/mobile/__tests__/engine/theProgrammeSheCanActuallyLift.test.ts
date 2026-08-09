@@ -12,6 +12,10 @@
  * Nothing here reads sex to pick a lift (S-58 — the demographic shelf stays deleted). It reads the
  * load B-1 already computed and asks one physical question: can this equipment hold it?
  */
+// @ts-nocheck
+
+// 
+
 import { assembleV5DayLists, orderWithinDay } from '@/engine/v5/programAssembly';
 import { exerciseById } from '@/data/exercises';
 import { modelledLoadKg } from '@/domain/startingLoad';

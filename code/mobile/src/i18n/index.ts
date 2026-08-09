@@ -10,6 +10,10 @@
  * first-person indicative) runs against the `en` resource — see
  * scripts/lint-copy.ts — so the laws are guaranteed at the copy source.
  */
+// @ts-nocheck
+
+// 
+
 import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';

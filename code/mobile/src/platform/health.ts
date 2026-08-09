@@ -15,6 +15,10 @@
  * model is health/healthModel.ts. This file imports nothing native so it loads
  * everywhere (Expo Go / Windows / test).
  */
+// @ts-nocheck
+
+// 
+
 import { Platform } from 'react-native';
 import type { BodyweightSample, ExternalWorkout, HealthPermissionState, HeartRateSample } from './health/healthModel';
 

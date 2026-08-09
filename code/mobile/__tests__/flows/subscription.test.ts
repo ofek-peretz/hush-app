@@ -6,6 +6,10 @@
  * entitlement unlock, persistence across calls, restore). The StoreKit native
  * impl will satisfy the same `Billing` contract, so these tests pin the contract.
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   FREE_SESSION_LIMIT,

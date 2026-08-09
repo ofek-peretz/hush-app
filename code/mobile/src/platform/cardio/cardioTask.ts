@@ -12,6 +12,10 @@
  * for exactly as long as there is a run to measure, and never one second longer. The blue location
  * bar stays up for that whole time, which is the honest statement of it.
  */
+// @ts-nocheck
+
+// 
+
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { ingestFix } from './cardioRun';

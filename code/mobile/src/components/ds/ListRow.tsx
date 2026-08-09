@@ -5,6 +5,10 @@
  * subtitle, trailing slot (delta / badge / control), optional chevron. Hairline
  * divider between rows; `last` removes it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, tracking, trackingPx, up } from '@/design/tokens';

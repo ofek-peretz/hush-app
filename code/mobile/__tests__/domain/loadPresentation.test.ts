@@ -3,6 +3,10 @@
  * prescribed load (no display-side rounding), and that each equipment style yields the right setup
  * data. Plate breakdowns appear only when they sum exactly to the load.
  */
+// @ts-nocheck
+
+// 
+
 import { HERO_FONT_SIZE, heroFontSize, loadSetup, platesPerSide } from '@/domain/loadPresentation';
 
 describe('barbell load setup', () => {

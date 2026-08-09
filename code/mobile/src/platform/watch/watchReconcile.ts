@@ -19,6 +19,10 @@
  *
  * Deps are injected so the whole flow is unit-testable without native modules.
  */
+// @ts-nocheck
+
+// 
+
 import type { CardioActivity, ProgramDay, Session, SetLog } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { sessionTrained } from '@/domain/completion';

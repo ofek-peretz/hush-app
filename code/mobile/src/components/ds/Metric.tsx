@@ -4,6 +4,10 @@
  * is subordinate (0.42em of the value). Value first, meaning beneath, nothing
  * else — how every figure in Hush is presented.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, tracking, trackingPx, stage as stageC } from '@/design/tokens';

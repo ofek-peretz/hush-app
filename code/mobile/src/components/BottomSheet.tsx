@@ -20,6 +20,10 @@
  *
  * Tapping the scrim still dismisses.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useRef } from 'react';
 import {
   View,

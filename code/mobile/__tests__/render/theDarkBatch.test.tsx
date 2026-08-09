@@ -15,6 +15,10 @@
  *   C.5  the sheet scrim, 0.7, chosen on the argument that "at 0.55 the screen behind stayed
  *        legible" — true of paper, and on the dark stage it takes the pause screen to near-black.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

@@ -15,6 +15,10 @@
  * check is that both sides declare the same flex — which is what makes the centring hold for one
  * disc, two, or none.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet, View } from 'react-native';

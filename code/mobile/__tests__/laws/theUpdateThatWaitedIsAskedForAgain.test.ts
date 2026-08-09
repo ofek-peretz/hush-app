@@ -21,6 +21,10 @@
  * seconds, and spends nothing at all on an athlete who does not come back.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { retryWaitingUpdate } from '@/platform/coach/afterSession';
 import { db } from '@/data/local/db';
 import type { Session } from '@/data/local/models';

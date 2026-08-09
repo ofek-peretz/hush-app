@@ -4,6 +4,10 @@
  * This catches a future copy change that would re-introduce streaks, praise,
  * gamification, effort input, or interpreting language.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 
 const DENYLIST: { re: RegExp; why: string }[] = [

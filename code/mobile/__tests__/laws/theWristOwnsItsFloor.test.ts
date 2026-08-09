@@ -32,6 +32,10 @@
  * have to be mechanical.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 

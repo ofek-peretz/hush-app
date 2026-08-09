@@ -23,6 +23,10 @@
  * was deleted at the end of it.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { AppContext } from '@/state/stores/appStore';

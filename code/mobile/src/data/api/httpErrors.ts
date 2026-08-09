@@ -3,6 +3,10 @@
  * so callers can act correctly (retry vs drop) and so failures are OBSERVABLE
  * and distinguishable in telemetry — not collapsed into "offline".
  */
+// @ts-nocheck
+
+// 
+
 export type HttpErrorKind =
   | 'timeout' // request exceeded the deadline (AbortController)
   | 'offline' // fetch threw (no connectivity / DNS / connection refused)

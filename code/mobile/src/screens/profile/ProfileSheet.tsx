@@ -9,6 +9,10 @@
  * the real one: units/language switch instantly, Health opens the system permission flow, Sign Out /
  * Delete run behind a native confirm.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.

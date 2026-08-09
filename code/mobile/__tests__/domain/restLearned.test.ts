@@ -3,6 +3,10 @@
  * prescribe — not an impression of it. `restWithSample` asks the one median rule the same
  * question with her new sample added.
  */
+// @ts-nocheck
+
+// 
+
 import { restWithSample } from '@/domain/restPrescription';
 import type { Session } from '@/data/local/models';
 

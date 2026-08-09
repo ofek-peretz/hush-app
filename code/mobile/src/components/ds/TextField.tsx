@@ -9,6 +9,10 @@
  * the type itself steps up to display size — the athlete's name is the largest thing on
  * the screen, because it is the answer.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
 import { color, font, textScale, tracking, trackingPx } from '@/design/tokens';

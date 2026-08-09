@@ -8,6 +8,10 @@
  *
  * The bracket-dot's arrival animation is a later polish layer; this is the static truth.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

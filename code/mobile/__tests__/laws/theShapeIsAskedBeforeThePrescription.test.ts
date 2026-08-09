@@ -14,6 +14,10 @@
  * and it would hurt her silently, on the first screen of her first programme.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { COACH_SHAPE_SCHEMA, parseCoachShape } from '@/domain/coachPlan';

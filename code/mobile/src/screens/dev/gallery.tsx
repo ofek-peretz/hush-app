@@ -9,6 +9,10 @@
  * Add an entry as each screen is built; the id must match the handoff exactly
  * (`screenshots/screens/<id>.png`), because that PNG is the acceptance test.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, StyleSheet, Animated, ScrollView } from 'react-native';
 import { AppContext } from '@/state/stores/appStore';

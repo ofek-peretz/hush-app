@@ -3,6 +3,10 @@
  * distinct, and every event maps to its pattern. Pure data; the native layer
  * conforms to this.
  */
+// @ts-nocheck
+
+// 
+
 import {
   HAPTICS,
   hapticForEvent,

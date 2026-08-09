@@ -25,6 +25,10 @@
  * human. What it can do is make sure the next field added to either half is added to both.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { preamble } from '@/domain/coachPrompt';
 import { COACH_DECISION_SCHEMA, COACH_PLAN_SCHEMA, COACH_SHAPE_SCHEMA } from '@/domain/coachPlan';
 

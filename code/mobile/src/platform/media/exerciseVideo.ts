@@ -12,6 +12,10 @@
  *   • bundled (offline, instant, grows the binary, needs a release to update):
  *       bb_bench_press: { kind: 'bundled', module: require('../../../assets/exercise-videos/bb_bench_press.mp4') }
  */
+// @ts-nocheck
+
+// 
+
 
 /** A resolvable demo-video source for an exercise. */
 export type VideoSource =

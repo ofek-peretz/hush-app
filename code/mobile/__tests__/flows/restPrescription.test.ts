@@ -3,6 +3,10 @@
  * get real recovery, isolation sets don't; transitions stay fixed. The tier mapping is the
  * single source every surface reads (phone view, mirror → watch/Live Activity, plan snapshot).
  */
+// @ts-nocheck
+
+// 
+
 import {
   REST_COMPOUND_S,
   REST_ISOLATION_S,

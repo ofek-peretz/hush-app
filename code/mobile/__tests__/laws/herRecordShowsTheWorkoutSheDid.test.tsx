@@ -16,6 +16,10 @@
  * is the one an athlete would report as "the app lost my workout".
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

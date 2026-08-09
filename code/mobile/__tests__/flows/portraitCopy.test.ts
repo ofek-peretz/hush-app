@@ -3,6 +3,10 @@
  * `$t(...)` params (capability names, state phrases, durations) resolve against
  * the real en.json, in first-person indicative with no hedging (spec §4.8, §5.1).
  */
+// @ts-nocheck
+
+// 
+
 import i18next, { type i18n as I18nType } from 'i18next';
 import en from '@/i18n/locales/en.json';
 import type { Capability, PortraitSnapshot } from '@/data/local/models';

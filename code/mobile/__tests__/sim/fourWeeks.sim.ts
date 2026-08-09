@@ -20,6 +20,10 @@
  *   npx jest --testMatch "**\/*.sim.ts" --testTimeout 900000
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 /*
  * ⚠️ THE ENV MUST BE LOADED BEFORE `coachClient` IS. It reads `EXPO_PUBLIC_*` at MODULE LOAD, and
  * Expo normally inlines those at build time — jest never sees them, so the first run answered

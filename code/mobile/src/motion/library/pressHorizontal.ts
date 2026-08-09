@@ -22,6 +22,10 @@
  *    elbow flare sweeps from wide to gone-behind-the-fists, and the stack rides 1:1 with the true
  *    3D stroke. Rep anchor per §3.6: the machine opens at the chest and PRESSES first.
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, lerpV, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';

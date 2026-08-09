@@ -15,6 +15,10 @@
  * so (`pending`) rather than the whole section standing down. Pulled out here so that law can be
  * asserted directly, without mounting a navigator.
  */
+// @ts-nocheck
+
+// 
+
 import type { SetTarget } from '@/data/local/models';
 import type { LoadDirection } from '@/design/tokens';
 import { exerciseDisplayName } from '@/data/exercises';

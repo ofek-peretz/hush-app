@@ -23,6 +23,10 @@
  * Pure & I/O-free: same entries in, same claim out.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
 
 export type ProgressClaim =

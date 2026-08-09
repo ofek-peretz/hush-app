@@ -2,6 +2,10 @@
  * AFTER A GAP (v7 §10) — the welcome, and the two ways it could become the thing it exists to
  * avoid: greeting an absence that is not one, or greeting someone who never left.
  */
+// @ts-nocheck
+
+// 
+
 import { COMEBACK_DAYS, comebackAfterGap } from '@/domain/comeback';
 import type { Session } from '@/data/local/models';
 

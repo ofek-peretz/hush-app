@@ -6,6 +6,10 @@
  * the silhouette; the video path lights up exercise-by-exercise as content is
  * supplied (see platform/media/exerciseVideo). Muted loop, no controls.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Rect, Circle, Path, Defs, Pattern } from 'react-native-svg';

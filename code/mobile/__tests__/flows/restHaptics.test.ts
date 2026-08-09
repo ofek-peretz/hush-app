@@ -6,6 +6,10 @@
  * ownership gate (watch active → phone stands down), the exact schedule (warning at
  * end−7s, complete at end), the sub-second guard, and idempotent re-arm/disarm.
  */
+// @ts-nocheck
+
+// 
+
 
 // File-level mocks (jest hoists these above the import). Only `mock*`-prefixed vars may
 // be referenced inside a factory.

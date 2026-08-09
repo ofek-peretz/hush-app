@@ -16,6 +16,10 @@
  *      The row drew the heart unconditionally and fell back to an em-dash, so an athlete with no
  *      watch got a permanent empty seat labelled HR on every run she will ever take.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

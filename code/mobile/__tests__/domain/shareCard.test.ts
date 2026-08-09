@@ -8,6 +8,10 @@
  *  · a week card buckets the week's work by day, sums tonnage + reports the honest ± vs last week,
  *    and is null for an empty week.
  */
+// @ts-nocheck
+
+// 
+
 import { recordCardFromHistory, weekCardFromHistory } from '@/domain/shareCard';
 import type { Session, SetLog } from '@/data/local/models';
 

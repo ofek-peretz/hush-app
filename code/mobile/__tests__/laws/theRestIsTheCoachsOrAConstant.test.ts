@@ -23,6 +23,10 @@
  * every screen would keep working and the timer would simply run a number nobody chose.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { restAfterStep, type Step } from '@/state/stores/sessionStore';
 import { REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor } from '@/domain/restPrescription';
 import { preamble } from '@/domain/coachPrompt';

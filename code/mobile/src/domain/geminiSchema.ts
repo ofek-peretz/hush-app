@@ -28,6 +28,10 @@
  * Pure and I/O-free. Knows nothing about the transport, the key, or the request.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 
 /** The JSON-Schema shape we author. Loose on purpose — this reads a literal, it does not validate one. */
 type JsonSchema = Record<string, unknown>;

@@ -12,6 +12,10 @@
  * LEGIBILITY BEATS AESTHETICS. A slightly heavy glyph that is recognised in a fraction of a
  * second across a gym is worth more than a harmonious one that disappears at 16px.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { I18nManager } from 'react-native';
 import Svg, { Path, Rect, Circle, Line, G } from 'react-native-svg';

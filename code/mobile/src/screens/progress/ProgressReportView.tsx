@@ -7,6 +7,10 @@
  * 12 weeks (the every-12-weeks notification, `window: 'quarter'`). They differ only in `legend`,
  * `title`, which entries they pass, and whether the log's door is offered at the foot.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

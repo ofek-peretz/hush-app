@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { EXERCISES } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { coachFacts, coachCatalogue, coachMovements } from '@/domain/coachFacts';

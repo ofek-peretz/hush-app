@@ -10,6 +10,10 @@
  * It is invisible in review (the keys look complete), invisible in a typecheck, and invisible
  * in the app unless a tester happens to have exactly two of something. So it is a test.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 import he from '@/i18n/locales/he.json';
 

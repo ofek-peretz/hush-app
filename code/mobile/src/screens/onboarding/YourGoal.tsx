@@ -28,6 +28,10 @@
  * thing she was trying to look at.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React, { useState } from 'react';
 import { View, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

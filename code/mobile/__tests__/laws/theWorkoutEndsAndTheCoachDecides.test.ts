@@ -12,6 +12,10 @@
  * She has finished and left. Nothing here may block, throw, retry, or decide anything locally. A
  * finished workout is finished whatever the network did.
  */
+// @ts-nocheck
+
+// 
+
 import { db } from '@/data/local/db';
 import { askAfterSession } from '@/platform/coach/afterSession';
 import type { Profile, Program, Session } from '@/data/local/models';

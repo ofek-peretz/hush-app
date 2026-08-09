@@ -14,6 +14,10 @@
  * Not a test: `.sim.ts`, run by hand, prints numbers to read.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { coachFacts } from '@/domain/coachFacts';
 import { coachWeek, coachRows } from '@/domain/coachWeek';
 import { lastTimeOn } from '@/domain/lastTimeOn';

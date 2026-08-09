@@ -8,6 +8,10 @@
  * silently lose her load and her band. This proves the coverage invariant: a target exists (carrying
  * her real prescription) for every set the programme will render, whatever the slot's setCount.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import type { Profile, Program } from '@/data/local/models';

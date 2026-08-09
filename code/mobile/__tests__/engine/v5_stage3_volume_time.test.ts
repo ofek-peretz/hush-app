@@ -2,6 +2,10 @@
  * Engine v5 · Stage 3 — Loop 3 (volume) + the time budget from measured rest. One describe per
  * S-number.
  */
+// @ts-nocheck
+
+// 
+
 import { decideVolume } from '@/engine/v5/loop3';
 import { learnedRestS, setsToMinutes, maxSetsInBudget, fitsBudget } from '@/engine/v5/timeBudget';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';

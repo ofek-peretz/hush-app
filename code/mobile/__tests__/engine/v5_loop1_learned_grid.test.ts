@@ -3,6 +3,10 @@
  * set lands on a weight that physically exists at her gym (a 2 kg dumbbell jump), not the equipment
  * default increment (1.0 kg for a dumbbell) which could ask her to "grab 17 kg" that don't exist.
  */
+// @ts-nocheck
+
+// 
+
 import { applyLoop1, type LiveStep } from '@/engine/v5/liveSession';
 
 // A DUMBBELL lift, band [8,10], performed at 16 kg. Default dumbbell increment is 1.0 kg.

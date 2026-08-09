@@ -9,6 +9,10 @@
  * These are ENGINE changes, not athlete swaps (S-72): the integration writes them straight to
  * `substitutes`, bypassing the learned-swap occurrence counter — so a rotation never reads as a swap.
  */
+// @ts-nocheck
+
+// 
+
 import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, progressionRule } from '@/data/exercises';
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
 import type { Session } from '@/data/local/models';

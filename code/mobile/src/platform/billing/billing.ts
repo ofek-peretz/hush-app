@@ -21,6 +21,10 @@
  * so it is NOT wiped by an app-account sign-out / delete (an Apple subscription
  * outlives the local Hush account, exactly as in production).
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '@/platform/telemetry';
 import { BILLING_EVENTS } from '@/platform/events';

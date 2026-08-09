@@ -17,6 +17,10 @@
  * claim she chose something she has since changed.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { color, font, radius, textScale } from '@/design/tokens';

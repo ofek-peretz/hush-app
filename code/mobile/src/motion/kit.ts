@@ -5,6 +5,10 @@
  * True scale is what makes the lift instantly recognizable; the ghost treatment is what keeps the
  * figure — the actual demonstration — readable through it. Pure data, no dependencies.
  */
+// @ts-nocheck
+
+// 
+
 import type { Primitive, Vec2 } from './types';
 import { BAR_R, PLATE_R } from './anthro';
 

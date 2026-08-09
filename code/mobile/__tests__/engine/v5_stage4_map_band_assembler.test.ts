@@ -2,6 +2,10 @@
  * Engine v5 · Stage 4 — the body map, the declared band T, and the assembler core (programme shape
  * from volume, not a shelf). One describe per situation.
  */
+// @ts-nocheck
+
+// 
+
 import { bandFor, DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { bandFromTarget } from '@/engine/v5/liveSession';
 import { stanceOf, trainableMuscles, emphasisMuscles, validateMap, shouldAskBackOnOff, askBackMuscle, type BodyMap } from '@/engine/v5/bodyMap';

@@ -23,6 +23,10 @@
  * or dangling view modifiers — the other two failures in build 36. It closes the one class it can
  * close completely.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

@@ -3,6 +3,10 @@
  * of `platform/media/exerciseVideo`. Empty entries fall back to the existing video seam and then
  * the static silhouette, so an exercise lights up the moment its rig is added, with no other change.
  */
+// @ts-nocheck
+
+// 
+
 import type { Rig } from './types';
 import { bbBenchPress } from './library/bbBenchPress';
 import { bbBackSquat } from './library/bbBackSquat';

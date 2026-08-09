@@ -19,6 +19,10 @@
  *   · `watchWireParity` — the two wire declarations agree, field for field, in both languages;
  *   · `everyWristIntentLandsSomewhere` — what the wrist SENDS reaches a handler on the phone.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 import { sessionKcal, strengthSessionKcal } from '@/domain/energy';

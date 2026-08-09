@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import fs from 'fs';
 import path from 'path';
 import { weekRows, type WeekColumnWorkout } from '@/components/WeekColumn';

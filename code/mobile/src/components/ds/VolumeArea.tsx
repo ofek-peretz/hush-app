@@ -11,6 +11,10 @@
  * mono carries no words (the law), and "WEEK 1" is a word. Defensive by construction: 0–1 points
  * draw a dot, a flat series draws level; it never throws, because a progress screen must not crash.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Polyline, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';

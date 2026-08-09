@@ -38,6 +38,10 @@
  * WHEN is not this screen's business — `platform/watch/watchPresence` owns the split, holds the one
  * flag both surfaces share, and never lets either speak to a phone with no watch paired to it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

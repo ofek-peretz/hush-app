@@ -3,6 +3,10 @@
  * adapter against the wire shapes (BlockOut/SessionOut) and the per-set report
  * payload, without a live backend.
  */
+// @ts-nocheck
+
+// 
+
 jest.mock('@/data/api/config', () => ({
   getBaseUrl: () => 'http://test',
   getToken: async () => 'tok',

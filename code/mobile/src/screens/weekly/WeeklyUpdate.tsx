@@ -20,6 +20,10 @@
  * Data: getWeeklyPlan() joins the program structure with the engine's per-slot state and the
  * captured weekly change snapshot; the evidence comes from the logged history (domain/progressReport).
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

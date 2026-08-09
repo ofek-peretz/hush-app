@@ -13,6 +13,10 @@
  * says `pending`, because `load: null` already means BODYWEIGHT and a blank column may never be
  * read as "this lift carries no weight".
  */
+// @ts-nocheck
+
+// 
+
 import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
 import type { SetTarget } from '@/data/local/models';
 

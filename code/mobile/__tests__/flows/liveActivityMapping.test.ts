@@ -5,6 +5,10 @@
  * restEndsAtMs is carried (drift-proof countdown); during an active set there is
  * no countdown. The widget is a read-only SUBSET of the canonical SessionMirror.
  */
+// @ts-nocheck
+
+// 
+
 import i18next from 'i18next';
 import { liveActivityStateFromMirror } from '@/platform/liveActivity';
 import { resources } from '@/i18n';

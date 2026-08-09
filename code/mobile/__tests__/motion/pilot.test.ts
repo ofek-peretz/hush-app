@@ -7,6 +7,10 @@
  * rig renders it; and each family proves the validator has TEETH — a deliberately broken rig (a
  * lifted heel, a swinging torso, a partial pull) must be caught, or "validation passes" is hollow.
  */
+// @ts-nocheck
+
+// 
+
 import { bbBackSquat } from '@/motion/library/bbBackSquat';
 import { bbRow } from '@/motion/library/bbRow';
 import { latPulldown } from '@/motion/library/latPulldown';

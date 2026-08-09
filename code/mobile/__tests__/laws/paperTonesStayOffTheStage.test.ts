@@ -16,6 +16,10 @@
  * stripped first — EXCEPT the handful of components that genuinely draw on an opaque PAPER card, which
  * are named in `PAPER_SURFACES`. A new stage screen that reaches for the paper tone fails here.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 

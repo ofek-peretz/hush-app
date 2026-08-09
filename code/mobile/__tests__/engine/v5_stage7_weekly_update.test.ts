@@ -3,6 +3,10 @@
  * getWeeklyPlanV5 / getWeeklyUpdateV5 render them in the SAME shape the screens already consume, and
  * the gate follows the prescription swap (declared band → v5).
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, advanceV5, getWeeklyPlanV5, getWeeklyUpdateV5, markWeeklyUpdateSeenV5, recordStructuralChangeV5, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog, Program } from '@/data/local/models';

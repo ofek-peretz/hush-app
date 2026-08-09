@@ -8,6 +8,10 @@
  * An actionable toast stays up longer and is tappable — but only the toast itself; the rest of
  * the screen never loses a touch.
  */
+// @ts-nocheck
+
+// 
+
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

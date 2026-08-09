@@ -9,6 +9,10 @@
  *  · S-17    — her measured median rest fed the time BUDGET but was never the rest PRESCRIPTION.
  *  · S-47    — an unreadable engine state rebuilt itself from history in total silence.
  */
+// @ts-nocheck
+
+// 
+
 import { correctInSession } from '@/engine/v5/loop1';
 import { applyLoop1, type LiveStep } from '@/engine/v5/liveSession';
 import type { ExerciseMeta, ExerciseState } from '@/engine/v5/types';

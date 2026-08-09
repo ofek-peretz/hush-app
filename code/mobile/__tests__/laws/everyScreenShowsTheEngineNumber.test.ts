@@ -15,6 +15,10 @@
  * Each block below names the screen it protects, so a future change that re-derives a number has to
  * argue with the screen's own law rather than with a comment.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';

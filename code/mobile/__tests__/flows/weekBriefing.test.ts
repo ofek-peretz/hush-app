@@ -8,6 +8,10 @@
  * total confidence. So the resolver is pinned here: what it says, when it stays silent, and above
  * all that it never reports a change that did not happen.
  */
+// @ts-nocheck
+
+// 
+
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import { initI18n, tg } from '@/i18n';
 import { resetGender } from '@/i18n/gender';

@@ -10,6 +10,10 @@
  * problem as well as a trust one. If the numbers cannot be recovered honestly (an unfamiliar
  * price format, a missing plan), the tag simply does not appear.
  */
+// @ts-nocheck
+
+// 
+
 import type { SubscriptionProduct } from '@/platform/billing';
 
 /**

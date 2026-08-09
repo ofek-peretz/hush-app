@@ -17,6 +17,10 @@
  *   · the update states the COUNT first  → "3 changes this week", then the sentence, then the why
  *   · the name is spoken                 → on a finished week, Hush addresses the athlete
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

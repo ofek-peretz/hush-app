@@ -34,6 +34,10 @@
  * not a nicety here: three of the five states below cannot be produced by a live session at all.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 

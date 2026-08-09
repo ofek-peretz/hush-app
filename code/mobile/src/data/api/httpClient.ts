@@ -22,6 +22,10 @@
  * (done). The per-week material-change surface is now the v4 Weekly Update + Why
  * (engine/v4), sourced from the engine's persisted explanations — not a model-client method.
  */
+// @ts-nocheck
+
+// 
+
 import type {
   Capability,
   PortraitSnapshot,

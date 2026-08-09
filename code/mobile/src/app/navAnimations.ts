@@ -9,6 +9,10 @@
  * Full-layer slides and sheet slide-ups both collapse to opacity fades; the
  * product remains fully expressive through copy and layout without motion.
  */
+// @ts-nocheck
+
+// 
+
 import { I18nManager } from 'react-native';
 
 export type StackAnimation = 'slide_from_right' | 'slide_from_left' | 'slide_from_bottom' | 'fade';

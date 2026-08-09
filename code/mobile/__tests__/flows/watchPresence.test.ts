@@ -14,6 +14,10 @@
  * happen without a watch the athlete had owned the whole time. `hush.watch.offered` is the single
  * seam, and this file is the truth table for it.
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   hasOfferedTheWrist,

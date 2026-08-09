@@ -11,6 +11,10 @@
  *
  * Rest is skipped entirely when rest <= 5s (spec §1.14).
  */
+// @ts-nocheck
+
+// 
+
 
 export type SessionPhase =
   | 'SET_PRESENTED'

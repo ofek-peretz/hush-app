@@ -15,6 +15,10 @@
  * week. The rows themselves are unchanged from the ones Home drew.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 

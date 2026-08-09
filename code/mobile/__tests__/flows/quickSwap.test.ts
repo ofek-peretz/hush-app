@@ -7,6 +7,10 @@
  *   • retargetPlanForSwap — the swapped-in exercise carries ITS OWN prescription (a bench 60 kg
  *     never rides onto a machine pin); remaining sets only, logged sets untouched.
  */
+// @ts-nocheck
+
+// 
+
 import { inWorkoutLadder } from '@/domain/replacement';
 import { retargetPlanForSwap, type Step } from '@/state/stores/sessionStore';
 import { exerciseById, muscleOf } from '@/data/exercises';

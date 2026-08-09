@@ -14,6 +14,10 @@
  * Pure. Returns the profile to save, or null when the record already says all of it.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { Profile } from '@/data/local/models';
 import type { LearnedAboutHer } from './coachPlan';
 

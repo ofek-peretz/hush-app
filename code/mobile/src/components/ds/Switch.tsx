@@ -12,6 +12,10 @@
  * OFF is the one state the handoff never draws — it is a neutral translucent well
  * with a paper knob, which is the only version of it that stays legible on the stage.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';

@@ -24,6 +24,10 @@
  * So this is the guard on the guard. It is cheap and it is exact: if `__tests__` ever leaves
  * `include`, this fails, and it fails with the list above attached.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

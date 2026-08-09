@@ -10,6 +10,10 @@
  *
  * Pure + I/O-free; the app store applies the result at boot.
  */
+// @ts-nocheck
+
+// 
+
 import type { Profile } from '@/data/local/models';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;

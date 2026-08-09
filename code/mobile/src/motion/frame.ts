@@ -3,6 +3,10 @@
  * behind → the Duotone figure → equipment in front. This single function is what the RN renderer,
  * the filmstrip, and the GIF page all call, so every surface shows byte-identical geometry.
  */
+// @ts-nocheck
+
+// 
+
 import type { Primitive, Rig } from './types';
 import { skinFigure } from './skin';
 

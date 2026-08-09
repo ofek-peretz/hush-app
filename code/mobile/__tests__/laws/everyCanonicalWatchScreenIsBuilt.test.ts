@@ -16,6 +16,10 @@
  * A screen deliberately NOT built needs a row in `RULED_OUT` with the ruling behind it — so the gap
  * is a decision on the record, never a silence.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 

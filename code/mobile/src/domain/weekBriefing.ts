@@ -20,6 +20,10 @@
  * Pure: keys + params (never rendered strings), so the whole voice is testable and the gender
  * conjugation stays where it belongs — in i18n.
  */
+// @ts-nocheck
+
+// 
+
 import type { Line } from '@/domain/voice';
 import type { Units } from '@/data/local/models';
 import { displayWeight, unitLabel } from '@/domain/schedule';

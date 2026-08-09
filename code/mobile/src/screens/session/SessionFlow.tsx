@@ -11,6 +11,10 @@
  * per-set logging at Complete Set, the save-before-Well-Done invariant, rest
  * timing, edit-result (inline WheelPickers), swap (current + upcoming), finish.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

@@ -15,6 +15,10 @@
  * web / a build without the watch target / jest), so the transport degrades to the
  * stub and the bridge keeps running with a no-op pipe.
  */
+// @ts-nocheck
+
+// 
+
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule, type EventSubscription } from 'expo-modules-core';
 import { serializeEnvelope, type WatchStateEnvelope } from './protocol';

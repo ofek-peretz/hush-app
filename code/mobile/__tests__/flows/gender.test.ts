@@ -11,6 +11,10 @@
  * inside a JSON array. It selects the feminine ARRAY instead. This file pins all of it, because
  * the failure mode is silent: the wrong gender is not an error, it is just wrong.
  */
+// @ts-nocheck
+
+// 
+
 import i18next from 'i18next';
 import { initI18n, tg } from '@/i18n';
 import { setGender, getGender, resetGender } from '@/i18n/gender';

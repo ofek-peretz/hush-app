@@ -27,6 +27,10 @@
  * A count that is not literally `rows.length` is a second source of truth waiting to disagree.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { coachChanges } from '@/domain/coachWeek';

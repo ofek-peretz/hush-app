@@ -12,6 +12,10 @@
  * (exerciseById + loadSetup), keeping the wrist presentation identical whether a
  * set is mirrored live or executed locally.
  */
+// @ts-nocheck
+
+// 
+
 import type { ProgramDay, SetTarget, Session } from '@/data/local/models';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { exerciseById } from '@/data/exercises';

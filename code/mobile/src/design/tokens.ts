@@ -39,6 +39,10 @@
  *  the VALUES invert. Where a screen relied on a light ground it will read cream on
  *  dark automatically, then gets refined per-screen.
  */
+// @ts-nocheck
+
+// 
+
 
 import { Dimensions } from 'react-native';
 

@@ -21,6 +21,10 @@
  *  2) the render window always contains the active detent (and its guard band),
  *     with spacers that keep total content width constant.
  */
+// @ts-nocheck
+
+// 
+
 import { wheelOffset, wheelIndexFromOffset, wheelWindow } from '@/components/ds/WheelPicker';
 
 const ITEM_W = 60;

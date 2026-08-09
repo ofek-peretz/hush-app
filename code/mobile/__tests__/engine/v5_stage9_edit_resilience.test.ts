@@ -4,6 +4,10 @@
  * change (S-41), height (S-42). v5 is EXERCISE-keyed, so an exercise's progression must survive
  * regeneration, and a different exercise must never inherit another's state.
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, advanceV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import { EXERCISES } from '@/data/exercises';

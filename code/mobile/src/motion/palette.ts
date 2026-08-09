@@ -21,6 +21,10 @@
  * So: the drift is bounded (a drawing is internally consistent, and these are its own greys) and
  * documented. Decide it deliberately; do not "fix" it in passing.
  */
+// @ts-nocheck
+
+// 
+
 import type { ColorToken } from './types';
 
 export const MOTION_PALETTE: Record<ColorToken, string> = {

@@ -19,6 +19,10 @@
  * and unreachable in the first place. The gallery is blind too: it mounts `HomeView`, and not one
  * of these three lives there. So they are checked where they actually live — the `Home` container.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

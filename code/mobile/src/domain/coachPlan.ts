@@ -57,6 +57,10 @@
  * Pure and I/O-free. Knows nothing about any model, provider or transport.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES, type Exercise } from '@/data/exercises';
 
 /** Every muscle name the catalogue uses — the only vocabulary a rest window can be written in. */

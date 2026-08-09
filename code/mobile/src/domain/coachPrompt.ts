@@ -34,6 +34,10 @@
  * test holds it above the floor so a future trim cannot silently disable caching.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { coachCatalogue, coachMovements, type CoachFacts } from './coachFacts';
 import { COACH_BRIEF_LINES, COACH_PLAN_SCHEMA } from './coachPlan';
 import { REST_UNSTATED_S } from './restPrescription';

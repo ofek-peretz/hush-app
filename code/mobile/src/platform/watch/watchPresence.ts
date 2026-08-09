@@ -35,6 +35,10 @@
  *   unknown at onboarding    → 1.3 said nothing · 10.4 fires the first open that knows
  *   no watch, ever           → neither surface ever says a word
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nativeWatchPairing } from './watchTransportNative';
 

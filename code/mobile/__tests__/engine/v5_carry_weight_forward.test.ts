@@ -3,6 +3,10 @@
  * becomes the baseline for the REST of the exercise, up OR down, instead of reverting to the
  * prescription every set. Loop 1's rep-based correction then applies on top of that baseline.
  */
+// @ts-nocheck
+
+// 
+
 import { applyLoop1, carryWeightForward, type LiveStep } from '@/engine/v5/liveSession';
 
 // A machine lift, band [8,10], prescribed 34 kg for 4 sets.

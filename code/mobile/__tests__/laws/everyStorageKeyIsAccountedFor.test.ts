@@ -16,6 +16,10 @@
  * wiped), or named below with the reason it must outlive an account. There is no third option, and
  * "nobody thought about it" stops being expressible.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

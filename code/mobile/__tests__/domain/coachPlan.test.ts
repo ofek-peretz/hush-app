@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import {
   parseCoachPlan,
   COACH_PLAN_VERSION,

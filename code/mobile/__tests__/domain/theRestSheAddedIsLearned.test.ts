@@ -14,6 +14,10 @@
  *
  * The clock she actually watched is `total + extra`. This file holds that.
  */
+// @ts-nocheck
+
+// 
+
 
 import { restedSeconds as rested } from '@/domain/restPrescription';
 

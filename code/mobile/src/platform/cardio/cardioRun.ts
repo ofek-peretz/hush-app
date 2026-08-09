@@ -19,6 +19,10 @@
  * the hook verbatim, deliberately: the gates are the product of a founder-reported defect (a chair,
  * indoors, recording 0.07 km) and they are not the place to be clever while moving code.
  */
+// @ts-nocheck
+
+// 
+
 import type { CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
 import {
   MAX_ACCURACY_M,

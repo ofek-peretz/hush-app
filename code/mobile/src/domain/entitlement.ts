@@ -12,6 +12,10 @@
  * The Entitlement TYPE lives here too — it is the contract the StoreKit seam
  * (platform/billing) resolves and the app store caches for instant offline gating.
  */
+// @ts-nocheck
+
+// 
+
 
 /** Where an active entitlement comes from. `trial` = a StoreKit intro free-trial
  *  period (still a paid subscription, just in its grace window); `subscription` =

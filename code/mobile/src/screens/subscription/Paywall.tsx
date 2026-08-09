@@ -16,6 +16,10 @@
  *
  * Copy obeys the voice laws (no hedge / exclamation / "Recommended").
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

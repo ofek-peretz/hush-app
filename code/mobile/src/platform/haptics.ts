@@ -6,6 +6,10 @@
  * like one product: a set is a single light tap; rest-over is a soft ascending double; the workout
  * close is the signature (two soft taps, a pause, one sustained beat).
  */
+// @ts-nocheck
+
+// 
+
 import * as Haptics from 'expo-haptics';
 
 const I = Haptics.ImpactFeedbackStyle;

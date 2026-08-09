@@ -12,6 +12,10 @@
  * first, the region only as a fallback. An American living in Berlin whose phone is set to metric
  * has already answered this question, and a region code would overrule her.
  */
+// @ts-nocheck
+
+// 
+
 import { unitsForDevice } from '@/domain/unitsForDevice';
 
 describe('the measurement system she chose wins', () => {

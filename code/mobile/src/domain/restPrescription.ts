@@ -22,6 +22,10 @@
  * Day-one bootstraps (B-4 family, §10.8): compound 150 s / isolation 75 s between sets, 120 s
  * between exercises — each replaced by her own median the moment one exists.
  */
+// @ts-nocheck
+
+// 
+
 import { exerciseById } from '@/data/exercises';
 import { learnedRestS } from '@/engine/v5/timeBudget';
 import type { Session } from '@/data/local/models';

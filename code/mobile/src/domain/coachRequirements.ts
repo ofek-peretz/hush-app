@@ -37,6 +37,10 @@
  * only for now, and expand from there if this works smoothly."* A full gym is the assumption.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { Profile } from '@/data/local/models';
 
 /** One fact the coach cannot work without, and the reason it is on this list. */

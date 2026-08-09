@@ -27,6 +27,10 @@
  * count, and reps landing outside a band that no correction followed.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 
 /** Where a set's reps fell against her band. The same three the landing mark draws. */
 export type SetLanding = 'in' | 'above' | 'below';

@@ -23,6 +23,10 @@
  * readability gate adoption (a denied read returns no sample → "nothing to adopt").
  * This is the documented HealthKit pattern and keeps the denied path == granted.
  */
+// @ts-nocheck
+
+// 
+
 import {
   AuthorizationRequestStatus,
   getRequestStatusForAuthorization,

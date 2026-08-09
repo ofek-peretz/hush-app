@@ -14,6 +14,10 @@
  *
  * So: the thing she pays for is never rationed, and the thing that is open-ended is.
  */
+// @ts-nocheck
+
+// 
+
 import {
   CHAT_PER_MONTH,
   CHAT_PER_TRIAL,

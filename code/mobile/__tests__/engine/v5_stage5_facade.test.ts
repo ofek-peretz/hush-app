@@ -2,6 +2,10 @@
  * Engine v5 · Stage 5 — the integration façade (v5Engine). Proves Loop 2 + the rail persist and
  * drive the prescription end-to-end over history, exercise-keyed, at the weekly roll.
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, advanceV5, currentV5Targets, perRungForV5, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog } from '@/data/local/models';

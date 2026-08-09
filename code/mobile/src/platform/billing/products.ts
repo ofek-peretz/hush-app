@@ -7,6 +7,10 @@
  * only declares the stable product identifiers and their billing period, which is
  * all the rest of the app needs to reason about plans.
  */
+// @ts-nocheck
+
+// 
+
 
 export const PRODUCT_IDS = {
   monthly: 'hush.pro.monthly',

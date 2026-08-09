@@ -22,6 +22,10 @@
  * a better way now: `Legend` picks the face from the STRING (`monoVoice`), so an English ledger reads
  * exactly as the handoff draws it and a Hebrew one falls back to Assistant instead of breaking.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

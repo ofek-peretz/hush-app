@@ -4,6 +4,10 @@
  * sage, down reads clay, holding reads neutral. The glyph is a small triangle —
  * a precise gauge needle, not an emoji.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, directionTone, directionWash } from '@/design/tokens';

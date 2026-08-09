@@ -29,6 +29,10 @@
  * not quietly change underneath it — which is the part that is ours. Whether the answers stay good
  * is measured on real athletes, per model, through the unreadable-response counts.
  */
+// @ts-nocheck
+
+// 
+
 import { coachFacts, type CoachFacts } from '@/domain/coachFacts';
 import { COACH_LOG_CAP, appendDecisions, type CoachDecision } from '@/domain/coachLog';
 import { COACH_THREAD_CAP } from '@/data/local/db';

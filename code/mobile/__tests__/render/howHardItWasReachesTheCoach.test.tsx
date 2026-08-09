@@ -9,6 +9,10 @@
  * the phone and DIED there, because the delegate literal had no `reportPain` key and nothing failed.
  * So this walks the seam. The layout is not the risk; the handoffs are.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

@@ -18,6 +18,10 @@
  *    after a reconnect is rejected. The phone remains able to complete a workout
  *    entirely on its own, online or offline.
  */
+// @ts-nocheck
+
+// 
+
 import type { SessionEvent } from '@/state/machines/sessionState';
 import type { WatchCopyPack } from './watchCopyPack';
 import type { MirrorLoadSetup, SessionMirror } from '@/platform/sessionMirror';

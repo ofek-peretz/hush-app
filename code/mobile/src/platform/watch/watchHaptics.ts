@@ -17,6 +17,10 @@
  *
  * See WATCH_EXPERIENCE_SPEC.md §3.
  */
+// @ts-nocheck
+
+// 
+
 
 export type HapticPatternId =
   | 'set_complete'

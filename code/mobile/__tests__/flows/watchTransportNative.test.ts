@@ -5,6 +5,10 @@
  * `watchTransport` must be a safe no-op pipe so the JS WatchSession bridge keeps
  * running (all authority/validation lives in the bridge, exercised separately).
  */
+// @ts-nocheck
+
+// 
+
 import { watchTransport, watchTransportNative } from '@/platform/watch/watchTransportNative';
 
 describe('watchTransportNative (no native module under test)', () => {

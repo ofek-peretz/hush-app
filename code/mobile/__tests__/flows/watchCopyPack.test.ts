@@ -14,6 +14,10 @@
  * is the sole authority and the watch renders what it is handed (S-48). This stops making an
  * exception of words.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 

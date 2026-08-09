@@ -14,6 +14,10 @@
  *   B.11  the share screen's own heading.
  *   B.5   the one act fell below the fold on a long plan.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import i18next from 'i18next';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';

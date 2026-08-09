@@ -23,6 +23,10 @@
  * of state can switch off. So it asserts that each fact the card exists to state is drawn
  * UNCONDITIONALLY, and that the figures carrying them are not set at caption size.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

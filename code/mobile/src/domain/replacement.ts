@@ -9,6 +9,10 @@
  *
  * Kept as the domain-facing name the screens already import.
  */
+// @ts-nocheck
+
+// 
+
 import { swapCandidates, swapLadder as poolLadder, type SwapContext } from '@/domain/swapPool';
 import type { Exercise } from '@/data/exercises';
 

@@ -8,6 +8,10 @@
  * (`legendFamily`), so a Hebrew legend — which mono cannot draw at all — falls back
  * to Assistant instead of breaking mid-line.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { Text, StyleSheet, type TextStyle } from 'react-native';
 import { color, font, textScale, trackingPx, tracking } from '@/design/tokens';

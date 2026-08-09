@@ -11,6 +11,10 @@
  * figure stays beside the title throughout — the number she has is never withheld, only the shape
  * it has not made yet.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

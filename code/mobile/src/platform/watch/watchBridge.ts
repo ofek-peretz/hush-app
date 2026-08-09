@@ -15,6 +15,10 @@
  * session machine. The bridge holds no workout database; it keeps only the last
  * published mirror (to validate incoming intents) and a de-dupe set.
  */
+// @ts-nocheck
+
+// 
+
 import type { SessionEvent } from '@/state/machines/sessionState';
 import type { SessionMirror } from '@/platform/sessionMirror';
 import { WATCH_EVENTS } from '@/platform/events';

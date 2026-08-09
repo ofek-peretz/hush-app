@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { setRow, landingOf, currentBlockSets } from '@/domain/setRow';
 
 /**

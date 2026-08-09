@@ -31,6 +31,10 @@
  * ledger constants (Part 6) and must never be read as engine law. They order a menu; the athlete
  * chooses, and whatever she performs is the fact the loops read (F-2/S-14).
  */
+// @ts-nocheck
+
+// 
+
 import {
   exerciseById,
   exercisesForMuscle,

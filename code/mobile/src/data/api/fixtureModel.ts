@@ -39,7 +39,7 @@ import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists, ESSENTIAL_PATTERNS } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
-import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
+import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
 import { epley, normalizeLoad } from '@/engine/loadMath';
@@ -173,6 +173,8 @@ function dayFromBlueprint(
   /** v5 Loop 3: the LEARNED per-exercise set count (distributeMuscleSets). Absent → the day-one
    *  `setsFor`, so a muscle still on its day-one shape is untouched. */
   setCounts?: Record<string, number>,
+  /** Muscles she marked `emphasis` (S-4) — each of their lifts carries one extra set. */
+  emphasised: ReadonlySet<string> = new Set(),
 ): ProgramDay {
   const dayKey = String(index);
   // NO ENGINE SLOT ID. v5 keys every decision to the EXERCISE — "State is keyed to the exercise,
@@ -185,7 +187,7 @@ function dayFromBlueprint(
   const slots: Slot[] = exercises.map((ex) => ({
     capability: ex.capability,
     exerciseId: ex.id,
-    setCount: setCounts?.[ex.id] ?? setsFor(ex.tier, ex.muscle),
+    setCount: setCounts?.[ex.id] ?? setsForEmphasised(ex.tier, emphasised.has(ex.muscle)),
   }));
   // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
   // Calves · Core), in catalog order, deduplicated.
@@ -338,6 +340,9 @@ function enforceTimeCap(
   protectedIds: ReadonlySet<string> = new Set(),
   /** The between-exercises rest (her pooled median, S-17) — prices each lift's first set honestly. */
   transitionSec?: number | null,
+  /** Muscles she marked `emphasis` (S-4). Their claim on the day is raised so the cap never quietly
+   *  undoes the mark — the same rule `chooseDonor` already applies inside `trimV5ToBudget`. */
+  emphasised: ReadonlySet<string> = new Set(),
 ): void {
   const over = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin;
   /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
@@ -391,6 +396,11 @@ function enforceTimeCap(
    * muscle's sets on this day exceed its share of the day, and take from the most over-served.
    * Ties fall back to the incoming position, so it stays deterministic.
    */
+  // An EMPHASIS mark raises a muscle's claim here exactly as it raises its weekly target (S-4), so
+  // the cap cannot quietly undo what she asked for. Without this, `chooseDonor` protected an
+  // emphasised chest and then this pass cut it back to the same size as an unmarked one.
+  const claimOf = (m: string) =>
+    (MUSCLE_VOLUME_SHARE[m] ?? 1) * (emphasised.has(m) ? 1 + EMPHASIS_FRACTION : 1);
   const overServed = (): Map<number, number> => {
     const sets: Record<string, number> = {};
     for (const s of day.slots) {
@@ -398,13 +408,13 @@ function enforceTimeCap(
       const m = exerciseById(s.exerciseId)?.muscle;
       if (m) sets[m] = (sets[m] ?? 0) + s.setCount;
     }
-    const shareTotal = Object.keys(sets).reduce((n, m) => n + (MUSCLE_VOLUME_SHARE[m] ?? 1), 0) || 1;
+    const shareTotal = Object.keys(sets).reduce((n, m) => n + claimOf(m), 0) || 1;
     const total = Object.values(sets).reduce((n, v) => n + v, 0) || 1;
     const score = new Map<number, number>();
     day.slots.forEach((s, i) => {
       const m = exerciseById(s.exerciseId)?.muscle;
       if (!m) return;
-      const deserved = (total * (MUSCLE_VOLUME_SHARE[m] ?? 1)) / shareTotal;
+      const deserved = (total * claimOf(m)) / shareTotal;
       score.set(i, (sets[m] ?? 0) - deserved); // > 0 → this muscle has more than its share today
     });
     return score;
@@ -476,6 +486,27 @@ function enforceTimeCap(
       if (dropped) break;
     }
     if (!dropped) break; // only single-exercise muscles remain → the day cannot fit (S-3)
+  }
+  /*
+   * Step 5 — SHAVE A SET rather than lose a lift.
+   *
+   * Every pass above either caps a set count at the floor or removes a whole exercise, and all of
+   * them stop when the only candidates left are protected: a muscle's last lift, a leave-it, the
+   * day's last row or pulldown. An emphasised muscle carries an extra set (`setsForEmphasised`), and
+   * that alone put an Upper A at 63 minutes with nothing legal left to drop — the day was three
+   * minutes over and the cap had run out of moves that were not forbidden.
+   *
+   * Taking one set off the most over-served muscle is strictly gentler than any of them: the lift
+   * stays, the muscle stays, and F-1's floor of three still holds. It is last because a set is the
+   * cheapest thing to lose and should therefore be the last thing tried, not the first.
+   */
+  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX && over(); guard++) {
+    const i = dropOrder().find((j) => {
+      const s = day.slots[j];
+      return s && !s.supplemental && s.setCount > V5_SETS_MIN;
+    });
+    if (i === undefined) break; // every lift is at the floor — the day genuinely cannot fit (S-3)
+    day.slots[i].setCount -= 1;
   }
 }
 
@@ -743,6 +774,24 @@ function setsFor(tier: Tier, muscle?: string): number {
   return tier === 'compound' ? 4 : V5_SETS_MIN;
 }
 
+/**
+ * ════ AN EMPHASIS MARK ADDS A SET, NOT A DOOMED EXERCISE (founder 2026-08-09) ════
+ *
+ * Emphasis reached the programme only through `weeklyTargets`, which raised the muscle's target and
+ * therefore its EXERCISE count — and a 60-minute day cannot hold the extra lifts, so the cap removed
+ * them again. Measured end to end: an emphasised chest came out at ELEVEN weekly sets against twelve
+ * for an unmarked one. Asking for more returned less, which is the non-monotonicity `distributeMuscleSets`
+ * already has its own guard against.
+ *
+ * A set is the unit the day can actually absorb. It rides with the lift through the ordering, it is
+ * bounded by F-1's ceiling of five, and the cap now knows an emphasised muscle has a larger claim
+ * (`claimOf`), so it is not the first thing cut back off.
+ */
+function setsForEmphasised(tier: Tier, emphasised: boolean): number {
+  const base = setsFor(tier);
+  return emphasised ? Math.min(V5_SETS_MAX, base + 1) : base;
+}
+
 // `goal` and `experience` are NOT read here: Part 5 deletes the goal fork ("there is one goal:
 // hypertrophy") and Part 9 §A deletes `experience` from the decision path. `age` survives only for
 // the age-based rep guidance outside the engine, never for a load or a set count.
@@ -903,7 +952,10 @@ export const fixtureModel: ModelClient = {
     // ever yields no workout, fall back to an ALL-NORMAL map (never a demographic shelf) so a workout
     // always exists. Unreachable in practice.
     if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
-    const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts));
+    const emphasisedMuscles = new Set(
+      Object.entries(profile.bodyMap ?? {}).filter(([, v]) => v === 'emphasis').map(([m]) => m),
+    );
+    const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts, emphasisedMuscles));
 
     // S-29 · "The same exercise in two workouts in one week. **One progression, fed by both
     // sessions** — automatic under exercise-keying. The `canonicalEngineId` unification hack is
@@ -963,7 +1015,7 @@ export const fixtureModel: ModelClient = {
     // seconds the transition timer actually runs (S-17), so the budget prices the workout she has.
     const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
     for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
-    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS); // work ≤ her minutes
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS, emphasisedMuscles); // work ≤ her minutes
     // …and ≥ the floor. The cap runs first so the fill never has to undo it, and the fill can only
     // reach `budgetMin - 1` worth of sets before the next set would put the day back over.
     for (const d of days) fillToSessionFloor(d, Math.min(MIN_SESSION_MIN, budgetMin), restSecFor, execSecFor, transitionS);

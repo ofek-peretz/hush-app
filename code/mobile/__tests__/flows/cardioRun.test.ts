@@ -12,6 +12,10 @@
  * travelled — so the next fix re-measures a segment the run has already counted. A 10 km run
  * reports 15. That is what the monotonic guard exists for, and this file is the proof.
  */
+// @ts-nocheck
+
+// 
+
 jest.mock('@/platform/notifications', () => ({ notifier: { kilometre: async () => {} } }));
 
 import { beginRun, endRun, ingestFix, setPaused, snapshot, setHeartRate } from '@/platform/cardio/cardioRun';

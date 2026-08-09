@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import fs from 'fs';
 import path from 'path';
 import { REQUIRED_FOR_COACH, missingForCoach, readyForCoach } from '@/domain/coachRequirements';

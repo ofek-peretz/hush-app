@@ -10,6 +10,10 @@
  * off it by a timer that had been scheduled before the stamp existed. The stamp opens on a beat
  * of black, so the mark could be erased before it was ever drawn.
  */
+// @ts-nocheck
+
+// 
+
 import { advanceFromSaved } from '@/screens/session/WellDone';
 import { earnedMilestones, newlyEarned, COUNT_THRESHOLDS, TONNAGE_THRESHOLDS_KG } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';

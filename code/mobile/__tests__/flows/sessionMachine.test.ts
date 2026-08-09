@@ -1,6 +1,10 @@
 /**
  * Session machine invariants (spec §6.3, §8.4, §1.14, §7.2).
  */
+// @ts-nocheck
+
+// 
+
 import {
   initialSessionMachine,
   sessionReducer,

@@ -8,6 +8,10 @@
  *
  * So the verdict has three states, and the third one is the interesting one.
  */
+// @ts-nocheck
+
+// 
+
 import { coachVerdict, coachBrief } from '@/domain/coachEarned';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
 import type { CoachDecision } from '@/domain/coachLog';

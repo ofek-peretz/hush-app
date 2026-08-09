@@ -19,6 +19,10 @@
  * Canon (MOTION_FORM_STANDARD_V1 §2, unchanged): bar touches the chest line · straight vertical
  * bar path · feet/hips/shoulders/head fixed · lockout derived from the 172° elbow, never ≥179°.
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';

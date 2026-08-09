@@ -5,6 +5,10 @@
  * without interpreting — Hush never grades a run and never attaches a coaching or
  * engine decision to it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

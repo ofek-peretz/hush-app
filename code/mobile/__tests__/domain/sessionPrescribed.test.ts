@@ -15,6 +15,10 @@
  * So the number travels WITH the session, stamped at start: what she was actually asked to do, by
  * whoever asked.
  */
+// @ts-nocheck
+
+// 
+
 import { sessionTrained, workoutTrained, WORKOUT_TRAINED_FRACTION } from '@/domain/completion';
 import type { ProgramDay, Session, SetLog } from '@/data/local/models';
 

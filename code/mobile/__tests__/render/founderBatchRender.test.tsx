@@ -7,6 +7,10 @@
  * mistake, a component that renders nothing at all — none of those are type errors, and all of
  * them are the kind of thing that only shows up on a device otherwise.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 

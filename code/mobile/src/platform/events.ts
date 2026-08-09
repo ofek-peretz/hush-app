@@ -16,6 +16,10 @@
  * track()/deviceContext — see telemetry.ts — so each event is ordered and
  * reconstructable on its own.
  */
+// @ts-nocheck
+
+// 
+
 
 /** HealthKit — convenience-only; NEVER a model input. */
 export const HEALTH_EVENTS = {

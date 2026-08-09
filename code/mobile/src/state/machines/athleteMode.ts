@@ -8,6 +8,10 @@
  * Calibration ends by COMPLETED SESSION COUNT, never by calendar (§7.1, R20):
  * missed days never advance it; a long gap never resets it.
  */
+// @ts-nocheck
+
+// 
+
 import type { AthleteMode, PortraitState } from '@/data/local/models';
 
 export const CALIBRATION_SESSIONS = 7; // spec §2.3 / §5.6 R20

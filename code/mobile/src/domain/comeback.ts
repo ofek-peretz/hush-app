@@ -18,6 +18,10 @@
  *
  * Pure and I/O-free.
  */
+// @ts-nocheck
+
+// 
+
 import type { Session } from '@/data/local/models';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

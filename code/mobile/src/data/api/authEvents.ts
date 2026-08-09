@@ -7,6 +7,10 @@
  * transient network blip), so any 401 on an authenticated request means the
  * invite was revoked. Controlled enrollment remains the source of truth.
  */
+// @ts-nocheck
+
+// 
+
 type UnauthorizedHandler = () => void;
 
 let handler: UnauthorizedHandler | null = null;

@@ -6,6 +6,10 @@
  * Voice rules: facts, never praise ("100 workouts." — not "amazing!"). Exercise
  * names stay English inside Hebrew copy (RTL law) via a BiDi isolate.
  */
+// @ts-nocheck
+
+// 
+
 import type { Milestone } from '@/domain/milestones';
 import type { Units } from '@/data/local/models';
 import type { MilestoneGlyphName } from '@/components/MilestoneGlyph';

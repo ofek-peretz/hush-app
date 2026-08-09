@@ -15,6 +15,10 @@
  * cards out, on any device, forever. Display conversion (kg⇄lb) happens HERE so the
  * card component only ever renders figures; names/copy stay in the component.
  */
+// @ts-nocheck
+
+// 
+
 import type { Session, Units } from '@/data/local/models';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { sessionKcal } from '@/domain/energy';

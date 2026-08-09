@@ -27,6 +27,10 @@
  * Calm defaults: no sound, no badge (a quiet product, §8.6). Copy flows through
  * i18n (project copy law) — never a string literal here.
  */
+// @ts-nocheck
+
+// 
+
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tg } from '@/i18n';

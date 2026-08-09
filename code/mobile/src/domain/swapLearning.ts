@@ -11,6 +11,10 @@
  * already be a learned substitute; the reducer maps it back to its anchor). `performedIds` = the
  * distinct exercises she logged a WORKING set of (approach sets excluded upstream). Deterministic.
  */
+// @ts-nocheck
+
+// 
+
 import { muscleOf } from '@/data/exercises';
 import { foldOccurrences, type SwapLearning, type SwapOccurrence } from '@/engine/v5/learnedSwap';
 

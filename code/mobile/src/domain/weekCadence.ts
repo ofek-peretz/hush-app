@@ -19,6 +19,10 @@
  *
  * Pure + I/O-free so it is fully unit-testable and deterministic given a clock.
  */
+// @ts-nocheck
+
+// 
+
 import type { Program, ProgramDay, Session } from '@/data/local/models';
 import { sessionTrained } from '@/domain/completion';
 

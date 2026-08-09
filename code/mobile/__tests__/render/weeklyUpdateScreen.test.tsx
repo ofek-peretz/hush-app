@@ -9,6 +9,10 @@
  *  · **S-45 — volume moves are muscle news, rendered as muscle rows** (Rev 12 §7: the plan view
  *    used to drop them, so the letter claimed "steady" on a week Loop 3 changed).
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

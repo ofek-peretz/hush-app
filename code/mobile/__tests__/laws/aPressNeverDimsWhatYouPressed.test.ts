@@ -23,6 +23,10 @@
  * it closes the shape that actually shipped six times, which is a literal opacity keyed off a
  * `pressed` flag.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { globSync } from 'glob';

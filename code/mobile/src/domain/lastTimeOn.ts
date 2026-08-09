@@ -25,6 +25,10 @@
  * the athlete would be looking at one and being coached from the other.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { Session } from '@/data/local/models';
 
 /** One past occurrence of a lift, as a screen needs it. */

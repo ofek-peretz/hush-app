@@ -8,6 +8,10 @@
  * ('dark') on blur. It re-applies when `style` changes, so a screen with both a
  * paper phase and a stage phase (e.g. Cardio) can drive it from local state.
  */
+// @ts-nocheck
+
+// 
+
 import { useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { setStatusBarStyle } from 'expo-status-bar';

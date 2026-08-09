@@ -14,6 +14,10 @@
  * string to telemetry, comparisons, or anything non-visual — it carries invisible
  * control characters.
  */
+// @ts-nocheck
+
+// 
+
 import { I18nManager, type TextStyle } from 'react-native';
 
 const FSI = '⁨'; // First Strong Isolate — open

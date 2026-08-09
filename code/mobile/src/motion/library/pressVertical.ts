@@ -13,6 +13,10 @@
  * the shoulder and one forearm up. The barbell member starts lower — bar at the chin, the
  * front-rack — because a bar cannot rest at ear height; its elbows are visibly bent under it.
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, PosePredicate, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';

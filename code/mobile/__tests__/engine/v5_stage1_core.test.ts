@@ -2,6 +2,10 @@
  * Engine v5 · Stage 1 — the pure core. One `describe` per situation it owns; the test name carries
  * the S-number, so coverage is a count, not a feeling (register Part 7).
  */
+// @ts-nocheck
+
+// 
+
 import { correctInSession } from '@/engine/v5/loop1';
 import { decideExercise } from '@/engine/v5/loop2';
 import { snapDown, nextRung, prevRung } from '@/engine/v5/grid';

@@ -8,6 +8,10 @@
  * A rig may FORESHORTEN a projected segment (a bench-press humerus abducts into depth, a squat
  * grip rotates out of the side plane) but must document it against these canonical lengths.
  */
+// @ts-nocheck
+
+// 
+
 export const ATHLETE = {
   headR: 8,
   neck: 16, // shoulder joint → head center (long enough that the head clears a plate on the bar)

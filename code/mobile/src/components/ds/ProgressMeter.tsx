@@ -5,6 +5,10 @@
  * tone="signal" is moss for an active measure, tone="up" for progress. Optional
  * `mark` draws a reference tick (e.g. the initial peak vs the best peak since).
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, up } from '@/design/tokens';

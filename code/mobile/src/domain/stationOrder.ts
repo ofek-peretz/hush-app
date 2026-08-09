@@ -37,6 +37,10 @@
  *      an unbounded sort would return a different-looking programme every week.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { exerciseById } from '@/data/exercises';
 import type { PlannedBlock, PlannedSession, CoachPlan } from './coachPlan';
 

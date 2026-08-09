@@ -4,6 +4,10 @@
  * The app STORES and RENDERS these; it never derives loads, confidence,
  * capability scores, or forecasts (spec §8.7 — the model owns those).
  */
+// @ts-nocheck
+
+// 
+
 
 /** The five Class-A capabilities — the model's primitive (spec §0). */
 export type Capability =

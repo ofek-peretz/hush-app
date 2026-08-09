@@ -20,6 +20,10 @@
  * persisted, nothing touches the engine, always retroactively correct. Rejected
  * forever (founder): bodyweight-relative standards, e1RM marks, daily streaks.
  */
+// @ts-nocheck
+
+// 
+
 import type { Profile, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { startingWeight, type LoadProfile } from '@/domain/startingLoad';

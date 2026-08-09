@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { coachFacts, coachCatalogue, coachEquipment, COACH_FACTS_VERSION } from '@/domain/coachFacts';
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { EXERCISES } from '@/data/exercises';

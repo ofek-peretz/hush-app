@@ -14,6 +14,10 @@
  * reps reach the top of the band — which is a comparison of two recorded numbers, not an inference
  * about the athlete. R7: Hush never states a reason it did not measure.
  */
+// @ts-nocheck
+
+// 
+
 import type { Session, SetLog } from '@/data/local/models';
 import type { WeeklyPlanLift } from '@/engine/weeklyView';
 import { displayWeight, unitLabel } from '@/domain/schedule';

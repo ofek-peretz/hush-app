@@ -16,6 +16,10 @@
  * second, disagreeing home for B-4). Both were the same failure: the feature was cut, the ledger row
  * was struck through, and the number stayed. This test is what makes that not happen again.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 

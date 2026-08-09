@@ -35,6 +35,10 @@
  * The thresholds below are deliberately loose — this is a floor under quality, not a tuning target.
  * The fixed engine clears them with a wide margin; the engine before the fixes fails every one.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';

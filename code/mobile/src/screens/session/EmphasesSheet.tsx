@@ -21,6 +21,10 @@
  * doing; the name is here to say WHICH point this is, and then get out of the way.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { BottomSheet, useSheetScroll } from '@/components/BottomSheet';

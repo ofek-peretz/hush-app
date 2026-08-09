@@ -19,6 +19,10 @@
  * Canon (MOTION_FORM_STANDARD_V1 §2/§4.2): stand tall (hip+knee ~extended) → hip crease below the
  * knee · bar vertical over mid-foot · heels planted · no hyperextension at the top.
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';

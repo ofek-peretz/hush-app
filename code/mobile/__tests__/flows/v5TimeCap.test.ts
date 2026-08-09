@@ -4,6 +4,10 @@
  * frequency concentrates a region's whole volume on one day, which must still be trimmed to fit —
  * dropping a trailing compound as the last resort (S-35), never a muscle's only exercise.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';

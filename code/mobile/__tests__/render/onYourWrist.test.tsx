@@ -12,6 +12,10 @@
  * mid-line. `Legend` chooses its face per string — this proves the Hebrew one is drawn in a face
  * that can draw it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

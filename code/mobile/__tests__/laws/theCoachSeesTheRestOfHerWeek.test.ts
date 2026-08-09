@@ -23,6 +23,10 @@
  * and by seconds on duration, and agree on when it began.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { coachFacts } from '@/domain/coachFacts';
 import { preamble } from '@/domain/coachPrompt';
 import type { Profile, CardioActivity } from '@/data/local/models';

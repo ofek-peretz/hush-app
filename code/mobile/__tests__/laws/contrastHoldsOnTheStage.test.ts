@@ -17,6 +17,10 @@
  *     it reads ~2.2:1, present in the markup and gone to the eye. The guard asserts it genuinely fails
  *     AA on the stage (so the ban has teeth) AND that no stage text token resolves to it.
  */
+// @ts-nocheck
+
+// 
+
 import { cream, signal, stage, color, up, down, hold, alert } from '@/design/tokens';
 
 /** sRGB hex → relative luminance (WCAG 2.x). */

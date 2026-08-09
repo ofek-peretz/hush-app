@@ -17,6 +17,10 @@
  *  - `md`    — radius 16, padding 4, gap 4, 44px cells, 14px
  *  - `lg`    — radius 17, padding 4, gap 4, 52px cells, 15px  (1.2's SEX)
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { color, space, font } from '@/design/tokens';

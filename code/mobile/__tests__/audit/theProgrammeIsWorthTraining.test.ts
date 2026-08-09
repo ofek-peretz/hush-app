@@ -126,7 +126,12 @@ describe('2 Â· the programme is not the same for everyone', () => {
     const normal = await fixtureModel.generateProgram(athlete({}));
     await db.clear?.();
     const marked = await fixtureModel.generateProgram(athlete({ bodyMap: { Chest: 'emphasis' } }));
-    const chest = (p: Program) => liftsOf(p).filter((id) => muscleOf(id) === 'Chest').length;
+    // SETS, not exercises. A 60-minute day holds a fixed number of lifts, so an emphasis mark buys
+    // its extra work in sets (`setsForEmphasised`) — asking for another exercise asks the clock for
+    // the one thing it cannot give. Counting exercises here is exactly how the mark ended up
+    // REDUCING chest volume, 12 weekly sets down to 11: the extra lift was selected and then cut.
+    const chest = (p: Program) =>
+      p.days.flatMap((d) => d.slots).filter((s) => muscleOf(s.exerciseId) === 'Chest').reduce((n, s) => n + s.setCount, 0);
     expect(chest(marked)).toBeGreaterThan(chest(normal));
   });
 

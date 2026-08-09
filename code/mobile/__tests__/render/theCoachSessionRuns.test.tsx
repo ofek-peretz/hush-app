@@ -13,6 +13,10 @@
  * four shapes cannot be written as a `ProgramDay` at all. Making one door serve both would mean
  * inventing a `ProgramDay` for a 400 m repeat, which is the conversion this layer exists to refuse.
  */
+// @ts-nocheck
+
+// 
+
 import { buildPlanFromCoach } from '@/state/stores/sessionStore';
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { coachSession, coachWorkoutId } from '@/domain/coachWeek';

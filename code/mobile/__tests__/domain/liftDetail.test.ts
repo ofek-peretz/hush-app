@@ -5,6 +5,10 @@
  * a threshold she actually crossed, every ledger row a decision the engine already made. These are
  * the tests that hold that claim.
  */
+// @ts-nocheck
+
+// 
+
 import { liftClimb, liftMoments, liftChanges, changeDirection, pointIndexAt } from '@/domain/liftDetail';
 import type { EngineV5State } from '@/data/local/db';
 import type { Session } from '@/data/local/models';

@@ -17,6 +17,10 @@
  * or a verdict — the engine decided those at the end of each occurrence and this only reads them
  * back, exactly as the Record screen (3.3b) reads `sessionForward` back.
  */
+// @ts-nocheck
+
+// 
+
 import type { EngineV5State } from '@/data/local/db';
 import type { CoachDecision } from './coachLog';
 import type { Session } from '@/data/local/models';

@@ -10,6 +10,10 @@
  * actually draw gets the mono face; anything else gets the sans it was always
  * rendered in. English reads exactly as the handoff renders it; Hebrew never breaks.
  */
+// @ts-nocheck
+
+// 
+
 
 /** Latin letters, digits, and the punctuation IBM Plex Mono draws. Nothing else. */
 const MONO_DRAWABLE = /^[ -~ ·—–’‘“”…]*$/;

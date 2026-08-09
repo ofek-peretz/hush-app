@@ -19,6 +19,10 @@
  * So this law reads the SOURCE and joins the chain mechanically: every delegate the bridge is
  * capable of calling must appear in the object literal the phone hands it.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 import {

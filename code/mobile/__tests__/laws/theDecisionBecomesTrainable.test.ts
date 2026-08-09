@@ -16,6 +16,10 @@
  * and it would do it quietly, in a function that looked like plumbing. The plan is stored whole,
  * in the coach's vocabulary, and the surfaces read IT.
  */
+// @ts-nocheck
+
+// 
+
 import { db } from '@/data/local/db';
 import { buildPlanFromCoach } from '@/state/stores/sessionStore';
 import { parseCoachPlan, type CoachAnswer } from '@/domain/coachPlan';

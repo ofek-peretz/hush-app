@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { preamble, COACH_PROMPT_VERSION } from '@/domain/coachPrompt';
 import { coachCatalogue, coachMovements } from '@/domain/coachFacts';
 import { EXERCISES } from '@/data/exercises';

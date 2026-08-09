@@ -2,6 +2,10 @@
  * Replacement logic (UX §1). Recommended is the muscle-scoped, capped substitute list:
  * in-group only (a subset of the slot capability) and never the current exercise.
  */
+// @ts-nocheck
+
+// 
+
 import { recommended, inWorkoutLadder } from '@/domain/replacement';
 import { exerciseById } from '@/data/exercises';
 

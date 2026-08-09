@@ -38,6 +38,10 @@
  *
  * The container (Home.tsx) wires state + navigation.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

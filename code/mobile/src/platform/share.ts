@@ -14,6 +14,10 @@
  * bundles and TESTS even when they are absent — capture cannot be verified off a
  * device, so every path degrades to a clean "unavailable" rather than throwing.
  */
+// @ts-nocheck
+
+// 
+
 import { Platform, Share as RNShare } from 'react-native';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';

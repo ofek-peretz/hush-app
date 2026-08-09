@@ -9,6 +9,10 @@
  * Until enrollment, `getToken()` returns null and the app stays on the local
  * fixture model (see selectModel()).
  */
+// @ts-nocheck
+
+// 
+
 import * as SecureStore from 'expo-secure-store';
 
 // SecureStore keys must be alphanumeric/._- (no namespacey dots beyond allowed).

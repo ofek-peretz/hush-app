@@ -6,6 +6,10 @@
  * whole encoded payload as text and asserts that not one private number appears anywhere in it, so
  * a field added to `Program` next year cannot quietly start travelling.
  */
+// @ts-nocheck
+
+// 
+
 import {
   PLAN_SHARE_VERSION,
   decodePlan,

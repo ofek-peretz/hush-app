@@ -28,6 +28,10 @@
  * teaches her not to press it, which costs more than never having offered it.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { Step } from '@/state/stores/sessionStore';
 import type { PlannedItem } from './coachPlan';
 

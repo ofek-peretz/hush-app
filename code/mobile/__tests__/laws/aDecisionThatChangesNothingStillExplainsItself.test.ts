@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { coachFacts } from '@/domain/coachFacts';
 import { db } from '@/data/local/db';

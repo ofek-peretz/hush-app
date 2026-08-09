@@ -58,6 +58,35 @@ export const ESSENTIAL_PATTERNS: Record<string, readonly SwapPattern[]> = {
   Back: ['row', 'pulldown'],
 };
 
+/**
+ * ════ ACCESSORY PATTERNS — REAL WORK, BUT NEVER AHEAD OF THE MAIN MOVEMENT ════
+ *
+ * ⛔ Founder, 2026-08-09, asking for programmes he would sign as the best in the world. The block
+ * was the back: at four days the assembler SELECTED six back lifts — more than any other muscle,
+ * exactly as its volume share intends — and only TWO survived the time cap. Nothing was cutting
+ * unfairly. The six were a row, a pulldown, two rear-delt flies and two shrugs, and the cap drops
+ * isolations first, so it removed the four accessories and left the two real pulls.
+ *
+ * The cause is the diversity score. A NEW movement pattern is worth +4, which is right while the
+ * patterns are peers — and Back's four patterns are not peers. `row` and `pulldown` are the muscle's
+ * work; `rear_delt` and `shrug` are accessories to it. Scoring them equally means a muscle's third
+ * slot goes to a shrug rather than to a second row, and a shrug is what the cap then deletes. The
+ * back was being handed volume in a currency the day could not spend.
+ *
+ * So an accessory pattern earns the diversity bonus only ONCE — enough that a rear-delt fly reaches
+ * the programme, which it should and previously often did not — and after that a REPEAT of a primary
+ * pattern outscores a second accessory. The muscle keeps its variety and stops trading its main
+ * movement for it.
+ *
+ * ⛔ This is not a list of lifts to avoid. Every pattern here is worth training; the claim is only
+ * about ORDER of claim on a limited number of slots.
+ */
+export const ACCESSORY_PATTERNS: ReadonlySet<SwapPattern> = new Set<SwapPattern>([
+  'rear_delt', 'shrug', // Back — the lats and the mid-back are the work
+  'front_raise', // Shoulders — the front delt is saturated by every press
+  'abduction', 'adduction', 'kickback', // Glutes — the thrust and the hinge are the work
+]);
+
 export interface DayList {
   name: string;
   region: 'upper' | 'lower';
@@ -169,9 +198,17 @@ export function pickExercises(
       // not a vertical pull in any sense a coach means — and the trim, which drops isolations first,
       // then took it straight back out. The pattern was satisfied on paper at every frequency and
       // absent from the programme at four and five days.
+      // A NEW pattern is worth +4 while the patterns are peers. An ACCESSORY pattern is not a peer
+      // of the muscle's main movement, so it collects that bonus once and then stops competing —
+      // after which a repeat of a primary pattern (+2) outscores a second accessory (+1).
+      const isAccessory = ACCESSORY_PATTERNS.has(c.pattern);
+      const accessoriesTaken = chosen.filter((e) => ACCESSORY_PATTERNS.has(e.pattern)).length;
+      const novelty = patterns.has(c.pattern)
+        ? isAccessory ? 0 : 2 // a second row still beats a second shrug
+        : isAccessory ? (accessoriesTaken === 0 ? 4 : 1) : 4;
       const score =
         (owed.includes(c.pattern) ? (c.tier === 'compound' ? 12 : 10) : 0) +
-        (patterns.has(c.pattern) ? 0 : 4) +
+        novelty +
         (equips.has(c.equipment) ? 0 : 2) +
         (c.tier === 'isolation' ? 1 : 0);
       if (score > bestScore) { bestScore = score; best = c; }

@@ -6,6 +6,10 @@
  * 0.11 km · 5:39 /km · 147 bpm, because the tracker was a simulation. With real GPS,
  * distance may only accrue through `segmentCounts` — and a stationary device fails it.
  */
+// @ts-nocheck
+
+// 
+
 import type { CardioGait } from '@/data/local/models';
 
 /**

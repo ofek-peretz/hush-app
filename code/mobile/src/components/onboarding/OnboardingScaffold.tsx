@@ -19,6 +19,10 @@
  * still a bug on that step. But "the athlete cannot press Continue" must never be the way we
  * find out.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, I18nManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

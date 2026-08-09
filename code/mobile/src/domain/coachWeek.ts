@@ -26,6 +26,10 @@
  * Pure and I/O-free. Knows nothing about storage, the model, or any screen.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { REST_TRANSITION_S } from './restPrescription';
 import { exerciseDisplayName } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';

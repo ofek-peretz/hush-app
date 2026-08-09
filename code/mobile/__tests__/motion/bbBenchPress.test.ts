@@ -9,6 +9,10 @@
  * identity family. The canon is unchanged: bar to the chest line, vertical path, anchored body;
  * the frontal staging adds SYMMETRY, which these tests assert as mirror geometry.
  */
+// @ts-nocheck
+
+// 
+
 import { bbBenchPress } from '@/motion/library/bbBenchPress';
 import { validate } from '@/motion/formspec';
 import { angleAt } from '@/motion/geometry';

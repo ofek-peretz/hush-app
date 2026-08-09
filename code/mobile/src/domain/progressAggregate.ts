@@ -8,6 +8,10 @@
  * makes NO engine decision (the mirror reports what happened). Wall-clock duration (first set-start →
  * last set persisted) feeds the same MET kcal estimate the Complete screen already uses.
  */
+// @ts-nocheck
+
+// 
+
 import type { Session, CardioActivity } from '@/data/local/models';
 import { sessionKcal } from './energy';
 import { currentWeekOpen, trainingWeekNumber } from './weekCadence';

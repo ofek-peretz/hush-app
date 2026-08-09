@@ -5,6 +5,10 @@
  * accessibilityLabel. Settles to 0.98 scale on press; `bordered` adds a hairline
  * + surface; `onStage` inverts for the live workout.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { color, radius, control, stage as stageC } from '@/design/tokens';

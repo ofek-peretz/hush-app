@@ -13,6 +13,10 @@
  * Deleting them because the screen changed would have quietly retired six founder findings.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

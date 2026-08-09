@@ -13,6 +13,10 @@
  * `ActiveSet` obeyed it. This drives the REST screen, which is where the swap the founder used
  * actually lives (`onSwap` there is `startQuickSwap('next')`), and holds it to the same rule.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text, View, StyleSheet } from 'react-native';

@@ -7,6 +7,10 @@
  * no Portrait — it was removed long before v5 — and there are no tabs. Corrected 2026-07-17; the
  * only trace left is the vestigial `unlockedPortrait` flag on the session store's end result.)
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';

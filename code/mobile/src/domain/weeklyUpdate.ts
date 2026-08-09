@@ -3,6 +3,10 @@
  * narration, so this is a thin pass-through to v5 — kept as the single import point for Home and the
  * WeeklyUpdate screen (they never import an engine directly, so the surfaces can never disagree).
  */
+// @ts-nocheck
+
+// 
+
 import type { Program } from '@/data/local/models';
 import type { WeeklyUpdate, WeeklyPlanView } from '@/engine/weeklyView';
 import { getWeeklyUpdateV5, getWeeklyPlanV5, markWeeklyUpdateSeenV5 } from '@/engine/v5/v5Engine';

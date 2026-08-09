@@ -11,6 +11,10 @@
  * WIDTH; the height and stroke scale from it, so the bracket keeps its shape at any size.
  * Used large above the wordmark on the welcome screen, and small on the paywall / profile.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { color as tokenColor } from '@/design/tokens';

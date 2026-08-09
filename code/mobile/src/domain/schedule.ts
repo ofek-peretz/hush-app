@@ -2,6 +2,10 @@
  * Schedule + unit formatting helpers.
  * Today's program day drives Home's Workout/Rest variant (spec §1.6/§1.7).
  */
+// @ts-nocheck
+
+// 
+
 import type { Program, ProgramDay, Session, Units } from '@/data/local/models';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
 

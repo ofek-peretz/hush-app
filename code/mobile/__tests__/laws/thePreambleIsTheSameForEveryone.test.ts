@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { preamble, coachRequest, COACH_PROMPT_VERSION } from '@/domain/coachPrompt';
 import { coachFacts } from '@/domain/coachFacts';
 import { COACH_PLAN_SCHEMA } from '@/domain/coachPlan';

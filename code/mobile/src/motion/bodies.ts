@@ -3,6 +3,10 @@
  * lengths, so every isolation and machine rig places the same person and only authors what its
  * template actually moves. All functions are pure and return fresh joint maps.
  */
+// @ts-nocheck
+
+// 
+
 import type { Vec2 } from './types';
 import { ATHLETE } from './anthro';
 

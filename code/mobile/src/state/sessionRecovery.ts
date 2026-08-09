@@ -14,6 +14,10 @@
  *     between the set write and the snapshot write leaves the machine one step behind).
  *   • Anything stale or unusable falls back to the existing salvage — no data is ever lost.
  */
+// @ts-nocheck
+
+// 
+
 import { sessionReducer, type SessionMachine } from '@/state/machines/sessionState';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';

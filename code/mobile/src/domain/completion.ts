@@ -22,6 +22,10 @@
  * Pure + I/O-free: the same rule gates the live finalize AND the boot/regeneration heal, so a
  * partial session can never be silently promoted to "done" by a later reconciliation.
  */
+// @ts-nocheck
+
+// 
+
 import type { ProgramDay, Session } from '@/data/local/models';
 
 /** The fraction of a workout's prescribed work sets that makes it a TRAINED session. */

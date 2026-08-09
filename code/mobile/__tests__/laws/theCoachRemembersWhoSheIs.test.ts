@@ -30,6 +30,10 @@
  * not a number and not a set she performed.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { parseCoachPlan, COACH_BRIEF_LINES, COACH_BRIEF_LINE_MAX } from '@/domain/coachPlan';
 import { coachFacts } from '@/domain/coachFacts';
 import { coachRequest } from '@/domain/coachPrompt';

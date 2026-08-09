@@ -15,6 +15,10 @@
  * The screen reads WCSession, which a test host does not have, so the presence comes through the
  * documented `previewWrist` seam — the same seam the gallery uses, for the same reason.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

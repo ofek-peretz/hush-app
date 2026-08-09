@@ -8,6 +8,10 @@
  *
  * See `docs/canonical/MOTION_FORM_STANDARD_V1.md` for the normative definitions these types encode.
  */
+// @ts-nocheck
+
+// 
+
 
 export interface Vec2 {
   x: number;

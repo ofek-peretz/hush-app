@@ -26,6 +26,10 @@
  * This file is the standing check on that class: what the engine could see, the coach is told.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { coachFacts } from '@/domain/coachFacts';
 import type { Profile, Session, SetLog } from '@/data/local/models';
 

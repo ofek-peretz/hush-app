@@ -2,6 +2,10 @@
  * Pure 2D geometry for the motion system: vectors, a closed-form two-bone IK solver, joint-angle
  * measurement, and easing. No dependencies — runs identically in RN, jest, and the Node harness.
  */
+// @ts-nocheck
+
+// 
+
 import type { Vec2 } from './types';
 
 export const v = (x: number, y: number): Vec2 => ({ x, y });

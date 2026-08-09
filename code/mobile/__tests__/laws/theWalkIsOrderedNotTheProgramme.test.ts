@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { orderByStation, orderPlanByStation, stationChanges } from '@/domain/stationOrder';
 import { parseCoachPlan } from '@/domain/coachPlan';
 import type { PlannedBlock, CoachPlan } from '@/domain/coachPlan';

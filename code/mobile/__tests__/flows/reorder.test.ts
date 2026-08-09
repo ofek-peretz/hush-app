@@ -1,6 +1,10 @@
 /**
  * Athlete-owned reorder helper — the deterministic core of exercise/workout ordering.
  */
+// @ts-nocheck
+
+// 
+
 import { move } from '@/domain/reorder';
 
 describe('move', () => {

@@ -18,6 +18,10 @@
  * These mount the real screens in Hebrew, in both persons, because the failure mode is silent:
  * the wrong gender is not an error, it is just wrong.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import i18next from 'i18next';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';

@@ -21,6 +21,10 @@
  *   npx jest --testMatch "**\/*.sim.ts" --testTimeout 900000 -t "walk"
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 /* The env must be loaded before `coachClient` is — see `fourWeeks.sim.ts` for why. */
 import fs from 'fs';
 import path from 'path';

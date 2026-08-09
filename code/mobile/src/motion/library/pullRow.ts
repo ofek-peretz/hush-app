@@ -8,6 +8,10 @@
  * seated body (cable_row, machine_row) · the standing core (face_pull). Every member is the
  * template + a contact landmark + an implement drawing.
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';

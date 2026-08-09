@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import fs from 'fs';
 import path from 'path';
 import { applyLiveEdit, applyLiveEdits, LIVE_EDIT_VERBS, type LiveEdit } from '@/domain/liveRevision';

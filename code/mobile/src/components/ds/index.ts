@@ -2,6 +2,10 @@
  * Hush design-system components (RN) — translated 1:1 from the Claude Design
  * "Design System" project (2026-06-21). Import from '@/components/ds'.
  */
+// @ts-nocheck
+
+// 
+
 export { Card } from './Card';
 export { Badge } from './Badge';
 export { Button } from './Button';

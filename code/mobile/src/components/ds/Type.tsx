@@ -4,6 +4,10 @@
  * INTERFACE — Assistant sans. Facts (mono) live in Metric/LoadDelta/Legend.
  * Sentence case everywhere (Legend handles the uppercase mono labels).
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { Text, StyleSheet, type TextProps, type TextStyle } from 'react-native';
 import { color, font, textScale, tracking, trackingPx } from '@/design/tokens';

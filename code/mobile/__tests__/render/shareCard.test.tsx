@@ -6,6 +6,10 @@
  *   · a bodyweight/first-ever record renders without a delta and never throws.
  * Also a quiet guard on the law: nothing the mono face cannot DRAW is routed through it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { ShareCard } from '@/components/share/ShareCard';

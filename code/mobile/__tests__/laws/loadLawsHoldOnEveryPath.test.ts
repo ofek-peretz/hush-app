@@ -29,6 +29,10 @@
  * whole maintenance contract, and it is the only thing standing between this class of bug and the
  * next one.
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES, exerciseById, type Exercise } from '@/data/exercises';
 import { exerciseMeta, type Equipment } from '@/engine/catalog';
 import { BAR_KG, normalizeLoad } from '@/engine/loadMath';

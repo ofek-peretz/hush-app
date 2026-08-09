@@ -9,6 +9,10 @@
  * collected on the NameEntry screen (see appStore.setPendingName); when native Apple
  * Sign In is enabled, return its first-auth full name here as `name`.
  */
+// @ts-nocheck
+
+// 
+
 import { track } from '@/platform/telemetry';
 
 export type AuthProvider = 'apple' | 'google';

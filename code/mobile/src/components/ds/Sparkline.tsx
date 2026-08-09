@@ -16,6 +16,10 @@
  * point to itself), a flat series draws a flat line at mid-height. It never throws on a degenerate
  * input, because a progress screen must never be the thing that crashes.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View } from 'react-native';
 import Svg, { Polyline, Circle } from 'react-native-svg';

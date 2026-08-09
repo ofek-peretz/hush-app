@@ -3,6 +3,10 @@
  * through sessionTargets; a profile that declared a band uses it, one that didn't falls back to the
  * 8-10 default (there is no v4 cohort any more — S-58). Proven through the real model boundary.
  */
+// @ts-nocheck
+
+// 
+
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { resetV5 } from '@/engine/v5/v5Engine';

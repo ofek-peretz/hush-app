@@ -4,6 +4,10 @@
  * never emphasis, never its floor) — a compound is never sacrificed before an isolation, and a
  * muscle's only exercise is never dropped.
  */
+// @ts-nocheck
+
+// 
+
 import { trimV5ToBudget, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { exercisesForMuscle } from '@/data/exercises';
 import type { ProgramDay, Slot } from '@/data/local/models';

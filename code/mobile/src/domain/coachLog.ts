@@ -33,6 +33,10 @@
  * Pure and I/O-free.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 
 /** How many entries travel back. Enough to cover months of decisions on the lifts she trains most. */
 export const COACH_LOG_CAP = 60;

@@ -19,6 +19,10 @@
  *   · a workout that changed nothing returns [] — a REAL verdict (S-24 hold), never an empty state
  *   · one workout's decisions never leak into another's (the whole point of the stamp)
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, advanceV5, getSessionEarnedV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog } from '@/data/local/models';

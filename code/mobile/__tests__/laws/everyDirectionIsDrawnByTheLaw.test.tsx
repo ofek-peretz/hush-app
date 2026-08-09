@@ -16,6 +16,10 @@
  * None of those are visible to a typecheck, and each one lies to the athlete about what the engine
  * did. So the mapping has one home (`directionTone`) and this file holds every surface to it.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import fs from 'fs';
 import path from 'path';

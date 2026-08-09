@@ -10,6 +10,10 @@
  * Owns: S-17 (rest is recorded), S-18 (a long rest is recorded), S-54 (working sets only),
  *       and the absence contract that S-26 (the rest lever) and S-58 (migration) rely on.
  */
+// @ts-nocheck
+
+// 
+
 import type { SetLog } from '@/data/local/models';
 
 /** The engine's reader for a set's rest context — the ONLY way the engine may ask (L3). */

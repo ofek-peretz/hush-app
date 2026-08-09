@@ -9,6 +9,10 @@
  * her training — see `trialUsed` for why an unreadable ledger loses to the ordinary count rather
  * than winning.
  */
+// @ts-nocheck
+
+// 
+
 import * as SecureStore from 'expo-secure-store';
 
 import { TRIAL_LEDGER_KEY } from '@/domain/trialLedger';

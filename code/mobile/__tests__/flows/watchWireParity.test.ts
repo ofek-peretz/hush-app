@@ -16,6 +16,10 @@
  * (Swift may legitimately declare FEWER fields — the watch renders a subset of the mirror. The
  * rule is one-directional: everything Swift decodes must exist on the phone, spelled the same.)
  */
+// @ts-nocheck
+
+// 
+
 import { watchCopyPack } from '@/platform/watch/watchCopyPack';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

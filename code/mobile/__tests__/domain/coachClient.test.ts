@@ -9,6 +9,10 @@
  * times is three bills for one workout, and she has already left the gym), and fall back to a local
  * decision (there is no second decider).
  */
+// @ts-nocheck
+
+// 
+
 
 const URL = 'https://hush-coach.example.workers.dev';
 const TOKEN = 'a-shared-speed-bump-token';

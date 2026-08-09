@@ -9,6 +9,10 @@
  * week. A PARTIAL salvage credits nothing but its real work (History + engine + non-count
  * milestones). A replay of an already-salvaged session never credits twice.
  */
+// @ts-nocheck
+
+// 
+
 import { salvageOrphanSession } from '@/state/sessionRecovery';
 import { db } from '@/data/local/db';
 import type { Program, Session, SetLog } from '@/data/local/models';

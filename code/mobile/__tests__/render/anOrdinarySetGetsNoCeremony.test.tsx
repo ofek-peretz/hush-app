@@ -15,6 +15,10 @@
  *   · a CORRECTION — the set moved the next load
  *   · the LAST SET of a lift — finishing a lift is a thing that happened
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

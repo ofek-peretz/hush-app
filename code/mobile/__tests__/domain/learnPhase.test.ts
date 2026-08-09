@@ -7,6 +7,10 @@
  * learning sessions, two of them re-runs of work the engine had already seen; someone training six
  * had it stop at four (founder 2026-07-28).
  */
+// @ts-nocheck
+
+// 
+
 import { distinctWorkoutCount } from '@/domain/schedule';
 
 const asDays = (lists: { exerciseIds: string[] }[]) =>

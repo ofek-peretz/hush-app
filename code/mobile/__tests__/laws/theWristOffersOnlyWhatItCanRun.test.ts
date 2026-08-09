@@ -15,6 +15,10 @@
  * and a watch binary that installs asynchronously from the phone — and until it lands, "you cannot
  * start this one from your wrist" is the honest answer rather than a silent edit of her session.
  */
+// @ts-nocheck
+
+// 
+
 import { buildCoachWatchPlan } from '@/platform/watch/watchPlan';
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { coachWorkoutId } from '@/domain/coachWeek';

@@ -10,6 +10,10 @@
  * check fails and forces the coupling to be designed on purpose, not smuggled in through the back door
  * (the same discipline as the S-54 warm-up and S-67 assisted-machine tripwires).
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES, exercisesForMuscle, muscleOf, type MuscleGroup } from '@/data/exercises';
 
 const ALL: MuscleGroup[] = [

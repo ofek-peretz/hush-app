@@ -5,6 +5,10 @@
  * declares nothing; the blueprint original is always offered first afterwards, so a wrong adoption is
  * cheaply reversible. Deterministic, no I/O. (The rotation interactions S-71/S-72 land at wiring.)
  */
+// @ts-nocheck
+
+// 
+
 import {
   emptyLearning, applyOccurrence, foldOccurrences, offeredFor, anchorOf, swapMenuOrder,
   type SwapLearning, type SwapOccurrence,

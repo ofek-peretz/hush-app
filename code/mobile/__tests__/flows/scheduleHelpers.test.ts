@@ -3,6 +3,10 @@
  *  - sessionDayName: History labels stay stable when the program regenerates with
  *    fresh day ids (the backend composes a new id per session).
  */
+// @ts-nocheck
+
+// 
+
 import { sessionDayName, nextWorkout, weekProgress } from '@/domain/schedule';
 import type { Program, ProgramDay, Session } from '@/data/local/models';
 

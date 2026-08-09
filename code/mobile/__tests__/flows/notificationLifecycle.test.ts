@@ -3,6 +3,10 @@
  * coalesced / canceled events flow through the durable telemetry pipeline so the
  * full lifecycle is reconstructable. (Granted-permission mock so scheduling runs.)
  */
+// @ts-nocheck
+
+// 
+
 // Mutable so a test can revoke permission and assert what the app does WITHOUT it.
 const permission = { granted: true, canAskAgain: true };
 

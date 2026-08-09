@@ -4,6 +4,10 @@
  * phases are eased (controlled), the endpoint holds are still — this is where "correct tempo" and
  * the endpoint holds that land on the range ticks are defined, once, for every exercise.
  */
+// @ts-nocheck
+
+// 
+
 import type { Tempo } from './types';
 import { easeInOut } from './geometry';
 

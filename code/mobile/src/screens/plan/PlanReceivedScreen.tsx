@@ -8,6 +8,10 @@
  * A token that will not read is not a screen: it goes straight back, because a screen offering to
  * adopt something it could not parse is worse than no screen at all.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useMemo } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';

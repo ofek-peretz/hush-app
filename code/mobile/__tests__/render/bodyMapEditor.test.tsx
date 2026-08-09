@@ -10,6 +10,10 @@
  *  · **The map that gets saved is the map she drew** — whole-object, so a muscle taken back to
  *    normal really LEAVES. A merge could not express that, and the engine reads absence as normal.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';

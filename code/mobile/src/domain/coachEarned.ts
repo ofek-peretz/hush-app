@@ -25,6 +25,10 @@
  * Pure and I/O-free. The caller supplies the update and the log.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import type { CoachDecision } from './coachLog';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
 

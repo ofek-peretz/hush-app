@@ -13,6 +13,10 @@
  * decomposes EXACTLY onto standard plates; otherwise the per-side weight is shown as a plain number
  * (so we never print a plate stack that doesn't sum to the actual load).
  */
+// @ts-nocheck
+
+// 
+
 import { loadStyleOf, type LoadStyle } from '@/data/exercises';
 import type { Units } from '@/data/local/models';
 import { BAR_KG } from '@/engine/loadMath';

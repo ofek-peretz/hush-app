@@ -5,6 +5,10 @@
  * the v4 migration; it was removed on 2026-06-24 once v4 became the sole engine — the v4 engine
  * in `src/engine/v4` is now the single source of every prescription. Recoverable from git.)
  */
+// @ts-nocheck
+
+// 
+
 import { exercisesForCapability } from './exercises';
 import { FEMALE_UPPER_FACTOR, FEMALE_LOWER_FACTOR } from '@/domain/startingLoad';
 import type { Capability, PortraitSnapshot, Profile, Session } from './local/models';

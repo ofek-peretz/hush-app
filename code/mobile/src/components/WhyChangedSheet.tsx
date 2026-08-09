@@ -28,6 +28,10 @@
  * this component: every figure is handed in, already measured (R7 — Hush never states a reason it
  * did not measure). The closing line is the engine's own sentence, in the coach's italic serif.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

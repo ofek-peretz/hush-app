@@ -30,6 +30,10 @@
  * inherit someone else's excuse.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 

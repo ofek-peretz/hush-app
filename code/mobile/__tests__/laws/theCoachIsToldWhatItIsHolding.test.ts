@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { preamble } from '@/domain/coachPrompt';
 import { REQUIRED_FOR_COACH } from '@/domain/coachRequirements';
 

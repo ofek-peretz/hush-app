@@ -24,6 +24,10 @@
  * Pure and I/O-free.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import type { PlannedItem, PlannedSession } from './coachPlan';

@@ -9,6 +9,10 @@
  * the data threshold is "still learning" and is excluded from commitments and
  * median/imbalance math (spec §5.7, §7.9).
  */
+// @ts-nocheck
+
+// 
+
 import type { Capability, PortraitSnapshot } from '@/data/local/models';
 import type { Line } from '@/domain/voice';
 

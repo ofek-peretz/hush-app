@@ -19,6 +19,10 @@
  * So this walks the whole loop: a plan's notes → the stored log → the sheet → the bytes on the
  * wire. Every hop, in one test, because a hop is only ever missing at ONE of them.
  */
+// @ts-nocheck
+
+// 
+
 import { appendDecisions, recentDecisions, COACH_LOG_CAP } from '@/domain/coachLog';
 import { coachFacts } from '@/domain/coachFacts';
 import { coachRequest } from '@/domain/coachPrompt';

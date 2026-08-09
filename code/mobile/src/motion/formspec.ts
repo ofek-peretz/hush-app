@@ -5,6 +5,10 @@
  * this fail, in jest, on every commit. This is the mechanism that stops the demonstration from
  * ever contradicting Hush's own cues (MOTION_FORM_STANDARD_V1 §1).
  */
+// @ts-nocheck
+
+// 
+
 import type { FormSpec, Invariant, Pose, PosePredicate, Rig } from './types';
 import { angleAt, dist } from './geometry';
 

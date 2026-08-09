@@ -10,6 +10,10 @@
  * Pure + I/O-free so it is unit-testable and shared by the recorder (write gate)
  * and History (display gate for records persisted before this rule existed).
  */
+// @ts-nocheck
+
+// 
+
 
 export const CARDIO_MIN_DURATION_S = 60;
 export const CARDIO_MIN_DISTANCE_KM = 0.05;

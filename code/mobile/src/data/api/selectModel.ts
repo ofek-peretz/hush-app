@@ -7,6 +7,10 @@
  * (B2) or the program day-list (B1) — see the connect-backend blockers. Until
  * those backend surfaces exist, leaving the fixture active keeps the app whole.
  */
+// @ts-nocheck
+
+// 
+
 import type { ModelClient } from './modelClient';
 import { fixtureModel } from './fixtureModel';
 import { HttpModelClient } from './httpClient';

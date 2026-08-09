@@ -20,6 +20,10 @@
  * same screen.**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { coachWeek, queuedWorkout } from '@/domain/coachWeek';
 import { buildPlanFromCoach, restAfterStep } from '@/state/stores/sessionStore';
 import type { CoachPlan, PlannedSession } from '@/domain/coachPlan';

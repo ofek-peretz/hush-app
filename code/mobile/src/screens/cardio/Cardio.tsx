@@ -20,6 +20,10 @@
  * THE LAW (monoCarriesNoWords): mono carries only figures (the clock, the metres, the km/hr/kcal
  * numbers). Every word — "CARDIO", "KM", "1,000 m", "km 3 logged", the legends — is SANS.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

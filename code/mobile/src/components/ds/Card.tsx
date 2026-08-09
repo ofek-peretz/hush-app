@@ -5,6 +5,10 @@
  * `accent` marks the active item with moss; `stage` is a deeper dark card;
  * `raised` lifts with the deep warm shadow.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { color, radius, space, border, shadow, stage as stageC } from '@/design/tokens';

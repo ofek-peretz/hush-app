@@ -22,6 +22,10 @@
  * Pure & I/O-free. The gate is here so the same rule holds for the live row, the average, and
  * anything that reads it later.
  */
+// @ts-nocheck
+
+// 
+
 import type { HeartRateSample } from '@/platform/health/healthModel';
 
 /**

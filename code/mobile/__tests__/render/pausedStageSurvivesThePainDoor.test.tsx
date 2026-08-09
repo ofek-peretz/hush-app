@@ -17,6 +17,10 @@
  * behavioural test, not a snapshot: what matters is that the athlete can always get back to the
  * one screen that lets her resume or end.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';

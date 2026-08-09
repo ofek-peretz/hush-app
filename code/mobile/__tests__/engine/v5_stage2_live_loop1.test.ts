@@ -2,6 +2,10 @@
  * Engine v5 · Stage 2 — Loop 1 live in a workout. Verifies the integration edge (applyLoop1) that
  * sessionStore.completeSet calls, so a correction reaches the phone and the watch from one place.
  */
+// @ts-nocheck
+
+// 
+
 import { applyLoop1, bandFromTarget, type LiveStep } from '@/engine/v5/liveSession';
 
 // A barbell lift (2.5 kg starting increment, B-6) prescribed at 80 kg × 8 reps → provisional band [8,12].

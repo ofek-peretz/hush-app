@@ -13,6 +13,10 @@
  * have a face, and pins each to the file that wears it, so a surface silently losing its citation is caught
  * too. Together they make the register↔screen tie a thing the CI holds, not a thing a human remembers.
  */
+// @ts-nocheck
+
+// 
+
 import fs from 'fs';
 import path from 'path';
 

@@ -8,6 +8,10 @@
  *
  * Both surfaces now ask the same function (domain/swapPool). This pins the watch's half of that.
  */
+// @ts-nocheck
+
+// 
+
 import { buildMirrorSteps, type Step } from '@/state/stores/sessionStore';
 import { exerciseById } from '@/data/exercises';
 

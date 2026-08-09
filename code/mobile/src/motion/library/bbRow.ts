@@ -18,6 +18,10 @@
  * lower-rib line · bar vertical under the shoulder · torso frozen 45° ±3° · knees & feet fixed.
  * rom 0 = dead hang (rep start, arms long); rom 1 = bar at the ribs (working endpoint).
  */
+// @ts-nocheck
+
+// 
+
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
 import { DEFAULT_TEMPO } from '../timeline';

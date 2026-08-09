@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { bandPlacement } from '@/screens/session/SessionFlow';

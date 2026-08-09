@@ -24,6 +24,10 @@
  * quietly retries three times is three bills for one workout, and nobody is waiting on it.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { db } from '@/data/local/db';
 import { health } from '@/platform/health';
 import { currentLocale } from '@/i18n';

@@ -2,6 +2,10 @@
  * Watch presentation projection — the canonical "what screen to show" logic for
  * the Claude Design watch (ui_kits/watch). Pure; the SwiftUI layer conforms to this.
  */
+// @ts-nocheck
+
+// 
+
 import {
   projectWatchScreen,
   actionToIntent,

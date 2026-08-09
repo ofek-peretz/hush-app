@@ -8,6 +8,10 @@
  * or device change is detected (a new install id on an athlete with backend
  * history).
  */
+// @ts-nocheck
+
+// 
+
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';

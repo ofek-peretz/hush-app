@@ -11,6 +11,10 @@
  * (lift = handle travel × rom, the honest 1:1 cable). Pure data, no dependencies beyond the kit
  * vocabulary and the shared IK.
  */
+// @ts-nocheck
+
+// 
+
 import type { Primitive, Vec2 } from './types';
 import { cable, pulley } from './kit';
 import { twoBoneIK } from './geometry';

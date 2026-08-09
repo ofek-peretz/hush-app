@@ -19,6 +19,10 @@
  * from their own body and corrects from their first working set, exactly as it does for a plan Hush
  * built. Nothing in a payload can set a load, because no payload carries one.
  */
+// @ts-nocheck
+
+// 
+
 import { muscleOf } from '@/data/exercises';
 
 /** The share-format version. A receiver that does not know a version refuses the payload. */

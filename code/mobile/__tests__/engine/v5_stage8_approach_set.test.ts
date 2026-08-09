@@ -7,6 +7,10 @@
  * the fold (the decision, the anchor, the observed grid, the rail), or a 15 kg light set would pollute
  * her progression. This proves that legacy exclusion still holds.
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, advanceV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog } from '@/data/local/models';

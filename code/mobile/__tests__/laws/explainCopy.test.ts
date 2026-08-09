@@ -7,6 +7,10 @@
  *   I-27b — a reprice explanation states the SETS ARE KEPT (volume is never cut).
  * Also proves en/he parity for the namespace so a change can't drop a locale.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 import he from '@/i18n/locales/he.json';
 

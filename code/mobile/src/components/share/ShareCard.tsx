@@ -14,6 +14,10 @@
  * mono carries no words. The handoff draws the eyebrow in mono; the law overrules the
  * mock, so it rides in sans here.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';

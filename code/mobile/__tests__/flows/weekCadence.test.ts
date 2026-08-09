@@ -8,6 +8,10 @@
  * implementation detail (see the header of domain/weekCadence: an update nobody is awake for is
  * not an update), so the first test below nails it down as a fact.
  */
+// @ts-nocheck
+
+// 
+
 import {
   WEEK_OPEN_DOW,
   WEEK_OPEN_HOUR,

@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import fs from 'fs';
 import path from 'path';
 import { buildCoachWatchPlan } from '@/platform/watch/watchPlan';

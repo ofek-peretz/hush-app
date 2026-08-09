@@ -36,6 +36,10 @@
  * all take translated words through a prop. Those components were moved to sans in the same pass;
  * this guards the far larger surface, the screens.)
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 

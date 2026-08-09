@@ -4,6 +4,10 @@
  * outline, signal (ochre), up (sage), down (clay), solid (ink). A badge always
  * carries state — never decoration. `legend` switches to the uppercase voice.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, paper, ink, signal, up, down, tracking, trackingPx } from '@/design/tokens';

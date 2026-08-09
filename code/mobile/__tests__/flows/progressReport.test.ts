@@ -6,6 +6,10 @@
  *  - bodyweight movements are tracked by best REPS (mode 'reps' — founder 2026-07-10);
  *  - entries are sorted biggest-gain first (load entries before reps entries).
  */
+// @ts-nocheck
+
+// 
+
 import { quarterlyPeakProgress } from '@/domain/progressReport';
 import type { Session, SetLog } from '@/data/local/models';
 

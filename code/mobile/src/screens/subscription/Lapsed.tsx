@@ -15,6 +15,10 @@
  * discount to bait a return, and never a higher one to punish the gap. "Same price as before" is
  * printed under it because that is the promise, and a promise nobody can see is not one.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

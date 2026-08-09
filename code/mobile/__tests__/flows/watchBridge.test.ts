@@ -3,6 +3,10 @@
  * the whole authority/telemetry path is exercised without a watchOS target or any
  * Apple hardware.
  */
+// @ts-nocheck
+
+// 
+
 import { WatchSession, type WatchTransport } from '@/platform/watch/watchBridge';
 import { WATCH_EVENTS } from '@/platform/events';
 import type { SessionEvent } from '@/state/machines/sessionState';

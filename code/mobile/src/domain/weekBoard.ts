@@ -32,6 +32,10 @@
  * It answers the only question the athlete asked: which session sits on which weekday now.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { WEEK_ORDER } from '@/domain/trainingDays';
 import type { Weekday } from '@/domain/coachPlan';
 

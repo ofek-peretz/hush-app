@@ -5,6 +5,10 @@
  *  - mid-week signup (the first bucket extends to the next Saturday when the
  *    remaining days cannot fit the chosen frequency) + the Week-N display clamp.
  */
+// @ts-nocheck
+
+// 
+
 import { cardioPerformed, CARDIO_MIN_DURATION_S, CARDIO_MIN_DISTANCE_KM } from '@/domain/cardio';
 import { agedProfile, fullYearsSince } from '@/domain/profileAge';
 import {

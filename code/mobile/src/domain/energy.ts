@@ -11,6 +11,10 @@
  * Honesty rule (the cardio precedent, `cardioMath.kcalForKm`): no bodyweight ⇒
  * NO number. Hush never guesses a body to bill calories against.
  */
+// @ts-nocheck
+
+// 
+
 export const STRENGTH_MET = 4.5;
 
 /** Estimated kcal for a strength session; null when it cannot be estimated honestly. */

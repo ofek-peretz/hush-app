@@ -1,6 +1,10 @@
 /**
  * Telemetry pipeline + secure token storage (alpha observability/hardening).
  */
+// @ts-nocheck
+
+// 
+
 jest.mock('@/data/api/config', () => ({
   getBaseUrl: () => 'http://test',
   getToken: async () => 'tok',

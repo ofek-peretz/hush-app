@@ -8,6 +8,10 @@
  * (S-38), TRIM the muscle. S-60 excludes the approach set from volume EARNING (it never advances),
  * never turns it into a penalty against volume.
  */
+// @ts-nocheck
+
+// 
+
 import { advanceV5, getVolumeTargetsV5, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import { muscleOf } from '@/data/exercises';

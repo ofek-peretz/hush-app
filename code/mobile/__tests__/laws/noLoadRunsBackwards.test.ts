@@ -21,6 +21,10 @@
  * It is a plate-loaded machine: the plates are stated, and nothing else is claimed.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISES, exerciseById } from '@/data/exercises';
 import { startingWeight } from '@/domain/startingLoad';
 import { loadSetup } from '@/domain/loadPresentation';

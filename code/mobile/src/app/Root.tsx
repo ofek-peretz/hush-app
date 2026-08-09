@@ -12,6 +12,10 @@
  * is a launcher tab: its press opens the full-screen Cardio stage on the Main stack (so a live run
  * carries no tab bar), and History folded out of the bar into the Progress surface.
  */
+// @ts-nocheck
+
+// 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Linking } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';

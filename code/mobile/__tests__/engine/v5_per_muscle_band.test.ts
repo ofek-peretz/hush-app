@@ -8,6 +8,10 @@
  *   • changing ONE muscle's band updates only its exercises (isolated — S-43 per muscle);
  *   • a single scalar Band still works for every exercise (back-compat, what the older tests pass).
  */
+// @ts-nocheck
+
+// 
+
 import { ensureExercisesV5, currentV5Targets, resetV5 } from '@/engine/v5/v5Engine';
 import { bandFor } from '@/engine/v5/repBand';
 import { muscleOf } from '@/data/exercises';

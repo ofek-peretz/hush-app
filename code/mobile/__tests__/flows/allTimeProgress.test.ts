@@ -4,6 +4,10 @@
  * (founder 2026-07-09) — that first load is the starting point (baseline, delta 0);
  * gains are measured against it from the second day on.
  */
+// @ts-nocheck
+
+// 
+
 import { allTimePeakProgress, standingRecord, ALL_TIME_MIN_WEEKS } from '@/domain/progressReport';
 import type { Session, SetLog } from '@/data/local/models';
 

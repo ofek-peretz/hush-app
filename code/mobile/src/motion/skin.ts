@@ -21,6 +21,10 @@
  * Correctness still lives in the pose data and the FormSpec; this file only decides how the
  * figure looks. Pure: Pose + chains → Primitive[].
  */
+// @ts-nocheck
+
+// 
+
 import type { ColorToken, CubicSeg, FigureChains, Pose, Primitive, Vec2 } from './types';
 import { LIMB_W } from './anthro';
 

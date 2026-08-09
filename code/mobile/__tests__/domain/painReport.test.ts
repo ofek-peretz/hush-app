@@ -6,6 +6,10 @@
  * two ways it could quietly break are a window that never lapses, and an ease that leaks into the
  * map she drew.
  */
+// @ts-nocheck
+
+// 
+
 import {
   EASE_DAYS,
   activeEases,

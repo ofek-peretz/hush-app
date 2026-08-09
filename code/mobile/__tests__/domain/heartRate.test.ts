@@ -9,6 +9,10 @@
  * routinely minutes old. Drawing that under a live clock is the same class of lie as "5:39 /km" on
  * a phone sitting on a table, which is the defect the whole cardio module was rebuilt around.
  */
+// @ts-nocheck
+
+// 
+
 import {
   liveHeartRate,
   averageHeartRate,

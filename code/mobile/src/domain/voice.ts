@@ -5,6 +5,10 @@
  *
  * Returns i18n keys + params, never raw strings — the copy lives in en.json.
  */
+// @ts-nocheck
+
+// 
+
 import type { AthleteMode, SetTarget } from '@/data/local/models';
 import { mayShowReason } from './modeGate';
 

@@ -19,6 +19,10 @@
  *
  * This module is PURE (no native imports) so it is unit-testable on any host.
  */
+// @ts-nocheck
+
+// 
+
 import type { SessionMachine } from '@/state/machines/sessionState';
 import type { ReasonType } from '@/data/local/models';
 

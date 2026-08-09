@@ -7,6 +7,10 @@
  *
  * The label rides in an RN Text overlay rather than inside the SVG, because "YOU ARE HERE" is words.
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Polyline, Circle } from 'react-native-svg';

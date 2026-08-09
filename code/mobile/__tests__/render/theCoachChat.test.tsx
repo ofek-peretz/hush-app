@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';

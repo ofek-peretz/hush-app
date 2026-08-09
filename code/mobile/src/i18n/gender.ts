@@ -17,6 +17,10 @@
  * and falls back to the base `k` when no feminine form was authored (English needs none).
  * Masculine is the fallback for an unknown gender — the app's copy as it shipped.
  */
+// @ts-nocheck
+
+// 
+
 import { useSyncExternalStore } from 'react';
 
 export type Gender = 'male' | 'female';

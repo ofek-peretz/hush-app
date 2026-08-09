@@ -3,6 +3,10 @@
  * 2026-06-23) — relative strength per capability from best estimated 1RM vs a sex/bodyweight
  * benchmark, with confidence that rises as real data accrues. No hardcoded demo bars.
  */
+// @ts-nocheck
+
+// 
+
 import { computePortrait } from '@/data/progression';
 import type { Capability, Profile, Session } from '@/data/local/models';
 

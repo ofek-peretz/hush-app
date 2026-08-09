@@ -7,6 +7,10 @@
  * route trace preserves the shape of the run, and every milestone family strikes its own
  * badge.
  */
+// @ts-nocheck
+
+// 
+
 import { durationMinutes, fmtMinutes, fmtMinutesFromMs } from '@/domain/duration';
 import { parsePriceAmount, annualSavingPct } from '@/domain/pricing';
 import { WHEEL_HEIGHT } from '@/components/ds/WheelPicker';

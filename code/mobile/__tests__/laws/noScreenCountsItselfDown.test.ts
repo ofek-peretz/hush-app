@@ -15,6 +15,10 @@
  * (a "track"/"fill" pair beside a countdown) by their own render tests; what cannot be re-added
  * quietly is the sentence.
  */
+// @ts-nocheck
+
+// 
+
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

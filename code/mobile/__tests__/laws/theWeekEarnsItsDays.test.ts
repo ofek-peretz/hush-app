@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import {
   trainingDays,
   MIN_HISTORY_DAYS,

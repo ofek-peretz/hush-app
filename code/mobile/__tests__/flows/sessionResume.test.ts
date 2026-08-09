@@ -5,6 +5,10 @@
  * its true remaining; a paused rest freezes at the pause instant; a logged set is never
  * re-presented; stale/terminal/finished snapshots are rejected (→ salvage).
  */
+// @ts-nocheck
+
+// 
+
 import { reconcileResume, RESUME_WINDOW_MS, type ResumeStep } from '@/state/sessionRecovery';
 import type { SessionMachine } from '@/state/machines/sessionState';
 

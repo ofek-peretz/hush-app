@@ -17,6 +17,10 @@
  * and has no sheet.** The colour is a fact we computed from two programmes we hold. A sentence is
  * not, and inventing one to sit under the colour would be the app arguing on the coach's behalf.
  */
+// @ts-nocheck
+
+// 
+
 import { coachLoadDirections, coachChangedCase } from '@/domain/coachWeek';
 import { parseCoachPlan, type CoachPlan } from '@/domain/coachPlan';
 

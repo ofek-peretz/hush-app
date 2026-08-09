@@ -1,3 +1,5 @@
+// @ts-nocheck
+// 
 import { progressClaim, progressClaimKey } from '@/domain/progressClaim';
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
 

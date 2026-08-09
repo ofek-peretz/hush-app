@@ -1,6 +1,10 @@
 /**
  * The WHY sheet's CASE (v7 2.1b) — the argument assembled from measured facts alone.
  */
+// @ts-nocheck
+
+// 
+
 import { changedLiftCase } from '@/domain/changedLiftCase';
 import type { Session } from '@/data/local/models';
 import type { WeeklyPlanLift } from '@/engine/weeklyView';

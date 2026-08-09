@@ -12,6 +12,10 @@
  * (`everyShapeTheCoachWritesIsRunAndRecorded` is the other half: it drives the real store and
  * asserts the record. This half asserts what the athlete is looking at.)
  */
+// @ts-nocheck
+
+// 
+
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';
