@@ -89,7 +89,7 @@ export const ACCESSORY_PATTERNS: ReadonlySet<SwapPattern> = new Set<SwapPattern>
 
 export interface DayList {
   name: string;
-  region: 'upper' | 'lower';
+  region: 'upper' | 'lower' | 'full';
   exerciseIds: string[];
   /** Per-exercise set count when Loop 3 has LEARNED this muscle's volume (distributeMuscleSets). Absent
    *  entries fall back to the day-one `setsFor`, so a muscle still on its day-one shape is untouched. */
@@ -246,12 +246,13 @@ function resolveChain(id: string, substitutes: Record<string, string>): string {
 }
 
 /** Name a region's days A, B, C… in the order they fall across the week. */
-function nameDays(regionDays: ('upper' | 'lower')[]): string[] {
-  const seen: Record<string, number> = { upper: 0, lower: 0 };
+function nameDays(regionDays: ('upper' | 'lower' | 'full')[]): string[] {
+  const seen: Record<string, number> = { upper: 0, lower: 0, full: 0 };
+  const label = { upper: 'Upper', lower: 'Lower', full: 'Full Body' } as const;
   return regionDays.map((r) => {
     const letter = String.fromCharCode(65 + seen[r]); // A, B, C…
     seen[r] += 1;
-    return `${r === 'upper' ? 'Upper' : 'Lower'} ${letter}`;
+    return `${label[r]} ${letter}`;
   });
 }
 
@@ -324,7 +325,8 @@ export function assembleV5DayLists(
   const setCounts: Record<string, number> = {}; // exerciseId → learned per-occurrence sets (Loop 3)
 
   for (const region of ['upper', 'lower'] as const) {
-    const regionIdxs = regionDays.map((r, i) => (r === region ? i : -1)).filter((i) => i >= 0);
+    // A FULL-BODY day belongs to BOTH regions, so it receives from both passes (S-3 / Part 3).
+    const regionIdxs = regionDays.map((r, i) => (r === region || r === 'full' ? i : -1)).filter((i) => i >= 0);
     if (regionIdxs.length === 0) continue;
     const muscles = trainable
       .filter((m) => regionOf(m) === region)
@@ -378,16 +380,54 @@ export function assembleV5DayLists(
      *
      * Deterministic: ties break on day index, which is the order `k % len` used.
      */
+    /*
+     * ════ A DAY IS FULL BEFORE THE CLOCK SAYS SO (founder 2026-08-09) ════
+     *
+     * The dealer places every exercise the targets ask for and leaves it to `enforceTimeCap` to cut
+     * back. That works while the cap has legal moves, and on a FULL-BODY week it does not: every
+     * muscle is already down to one lift, the row and the pulldown are protected as essential
+     * patterns, and a three-day week with two emphasis marks came out at 72 minutes with nothing the
+     * cap was allowed to remove.
+     *
+     * Choosing which lift a day does without is a TRAINING decision — it belongs here, where the
+     * volume targets and the body map are, not in a blunt pass that only knows the clock. So the
+     * dealer stops at a day's realistic capacity, and the muscle whose exercise did not fit keeps
+     * its remaining lifts on the days that still have room.
+     *
+     * Seven is a 60-minute session at three to five sets a lift, which is the same arithmetic the
+     * time cap prices — one number, not two opinions about how long an hour is.
+     */
+    const MAX_LIFTS_PER_DAY = 7;
     const dealTo = (exId: string) => {
       const ex = exerciseById(exId);
       const load = (i: number) => dayExercises[i].length;
+      /*
+       * ⛔ …BUT A MUSCLE'S FIRST LIFT IS NEVER THE ONE THAT DOES NOT FIT (S-2/S-35).
+       *
+       * A full day may turn away a muscle's second or third exercise. Turning away its FIRST would
+       * switch off a muscle she left on, which is the one thing the body map forbids — and it is
+       * silent, because nothing downstream knows the lift was ever wanted. So capacity yields here:
+       * the muscle takes the emptiest day even if that day is already at its limit, and the time cap
+       * deals with the overflow the ordinary way.
+       */
+      const daysWithMuscle = ex
+        ? dayExercises.filter((d) => d.some((o) => exerciseById(o)?.muscle === ex.muscle)).length
+        : 0;
+      // Capacity also yields for the lift that brings a muscle to a SECOND day. Twice a week is the
+      // best-supported number in the literature and the whole reason a low-frequency week is now
+      // full-body; refusing that lift to keep a day at seven trades the dose for the tidiness.
+      const mustPlace = daysWithMuscle < 2;
+      if (!mustPlace && regionIdxs.every((i) => load(i) >= MAX_LIFTS_PER_DAY)) return; // every day is full
       const clashes = (i: number) =>
         dayExercises[i].some((other) => {
           const o = exerciseById(other);
           return o && ex && o.muscle === ex.muscle && o.pattern === ex.pattern;
         });
-      const free = regionIdxs.filter((i) => !clashes(i));
-      const pool = free.length > 0 ? free : regionIdxs;
+      // The lift that opens a muscle, or brings it to a second day, ignores capacity (see above).
+      const withRoom = mustPlace ? regionIdxs : regionIdxs.filter((i) => load(i) < MAX_LIFTS_PER_DAY);
+      const candidates = withRoom.length > 0 ? withRoom : regionIdxs;
+      const free = candidates.filter((i) => !clashes(i));
+      const pool = free.length > 0 ? free : candidates;
       let best = pool[0];
       for (const i of pool) if (load(i) < load(best)) best = i; // strict: ties keep the lowest index
       dayExercises[best].push(exId);

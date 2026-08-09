@@ -186,13 +186,38 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
     expect(chestCount(emphasised)).toBe(8);
   });
 
+  /*
+   * ⛔ MEASURED AT FOUR DAYS NOW, AND THE LAW IS UNCHANGED (2026-08-09).
+   *
+   * This used to assert at THREE days. Below four days every session is full-body (see
+   * FULL_BODY_UNTIL_DAYS): splitting upper from lower there divides the week's sessions between the
+   * halves, so a two-day athlete trained every muscle ONCE and a three-day athlete trained her whole
+   * lower body once — against roughly 63% more growth for twice a week at equal volume.
+   *
+   * So a three-day week has no upper or lower days to count, and counting them was measuring the
+   * split rather than the law. The law — structure is an OUTPUT of volume, never a shelf — is
+   * asserted at the first frequency that HAS a split, and the full-body case gets its own assertion
+   * below: the mark still has to shape the week, it just shapes what is IN each day.
+   */
   it('structure follows volume — emphasise the lower body and more lower days fall out', () => {
     const map: BodyMap = { Quads: 'emphasis', Glutes: 'emphasis' };
-    const days = assembleV5DayLists(map, 3);
+    const days = assembleV5DayLists(map, 4);
     const lower = days.filter((d) => d.region === 'lower').length;
     const upper = days.filter((d) => d.region === 'upper').length;
     expect(lower).toBeGreaterThanOrEqual(upper); // the volume pulled the week lower
-    expect(lower + upper).toBe(3);
+    expect(lower + upper).toBe(4);
+  });
+
+  it('below four days every session is FULL BODY — the split would cost her the frequency', () => {
+    for (const n of [2, 3]) {
+      const days = assembleV5DayLists({}, n);
+      expect({ n, regions: days.map((d) => d.region) }).toEqual({ n, regions: Array(n).fill('full') });
+    }
+    // …and the mark still does real work there: it shapes what is in the day, not the day's label.
+    const marked = assembleV5DayLists({ Quads: 'emphasis' }, 3);
+    const plain = assembleV5DayLists({}, 3);
+    const quads = (ds: { exerciseIds: string[] }[]) => allExercises(ds).filter((id) => muscleOf(id) === 'Quads').length;
+    expect(quads(marked)).toBeGreaterThan(quads(plain));
   });
 
   it('a very sparse map at high frequency still leaves NO empty workout (hole guard, S-29)', () => {

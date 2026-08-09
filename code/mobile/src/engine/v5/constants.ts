@@ -130,6 +130,17 @@ export const WEEKLY_SETS_CEILING = 30;
 export const FULL_BODY_MUSCLE_COUNT = 9;
 
 /**
+ * B-2 — at or below this many training days, every session trains the WHOLE body.
+ *
+ * Splitting upper from lower divides the week's sessions between the halves, so at two days each
+ * muscle is trained once a week and at three the entire lower body is. Twice a week grows roughly
+ * 63% more than once at equal volume, and that is the single best-supported number in the whole
+ * hypertrophy literature — a split that costs it is a split that is not worth having yet. Four days
+ * is where upper/lower first gives BOTH halves two sessions, so that is where the split begins.
+ */
+export const FULL_BODY_UNTIL_DAYS = 3;
+
+/**
  * ════ B-2 — A MUSCLE'S SHARE OF THE WEEK'S WORK (founder 2026-08-09) ════
  *
  * ⛔ Founder: *"אני רוצה גם שתסתכל על תוכניות האימון עצמם ותגיד לי האם הן טובות ברמה בינלאומית."*

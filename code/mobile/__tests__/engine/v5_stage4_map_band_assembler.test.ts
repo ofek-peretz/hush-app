@@ -90,14 +90,28 @@ describe('S-56 · ask-back fires only for a muscle she actually TRAINED (a chang
 });
 
 describe('the programme SHAPE is an output of volume — emphasis drives the split, no shelf', () => {
-  it('mark Glutes + Quads on a 3-day week → two lower days fall out automatically', () => {
+  /*
+   * ⛔ FIVE DAYS, NOT THREE (2026-08-09). Below four days every session is full-body
+   * (FULL_BODY_UNTIL_DAYS), because splitting the body there divides the week's sessions between the
+   * halves — a three-day athlete trained her whole lower body ONCE a week, against roughly 63% more
+   * growth for twice at equal volume. A three-day week has no lower days to count, so the law is
+   * asserted at a frequency that has a split. The law itself is untouched: mark the lower body and
+   * the days follow the volume, with nothing chosen from a shelf.
+   */
+  it('mark Glutes + Quads → the lower days fall out automatically, once the week HAS a split', () => {
     const map: BodyMap = { Glutes: 'emphasis', Quads: 'emphasis' };
     const targets = weeklyTargets(map, ALL);
     const vol = regionVolume(targets);
     expect(vol.lower).toBeGreaterThan(0);
-    const days = assignRegionDays(targets, 3);
-    expect(days).toHaveLength(3);
+    const days = assignRegionDays(targets, 5);
+    expect(days).toHaveLength(5);
     expect(days.filter((d) => d === 'lower').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('and below four days there is no split to shape — every session is full body', () => {
+    const targets = weeklyTargets({ Glutes: 'emphasis', Quads: 'emphasis' }, ALL);
+    expect(assignRegionDays(targets, 2)).toEqual(['full', 'full']);
+    expect(assignRegionDays(targets, 3)).toEqual(['full', 'full', 'full']);
   });
   it('a balanced map splits days without favouring either region unfairly', () => {
     const targets = weeklyTargets({}, ALL);

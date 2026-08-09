@@ -187,7 +187,7 @@ function dayFromBlueprint(
   const slots: Slot[] = exercises.map((ex) => ({
     capability: ex.capability,
     exerciseId: ex.id,
-    setCount: setCounts?.[ex.id] ?? setsForEmphasised(ex.tier, emphasised.has(ex.muscle)),
+    setCount: setCounts?.[ex.id] ?? (emphasised.has(ex.muscle) ? Math.min(V5_SETS_MAX, setsFor(ex.tier) + 1) : setsFor(ex.tier)),
   }));
   // Display the precise muscle groups the session trains (e.g. Quads · Hamstrings ·
   // Calves · Core), in catalog order, deduplicated.
@@ -343,6 +343,20 @@ function enforceTimeCap(
   /** Muscles she marked `emphasis` (S-4). Their claim on the day is raised so the cap never quietly
    *  undoes the mark — the same rule `chooseDonor` already applies inside `trimV5ToBudget`. */
   emphasised: ReadonlySet<string> = new Set(),
+  /*
+   * ⛔ MUSCLES THIS WEEK TRAINS ON MORE THAN ONE DAY — the scope S-35 actually meant.
+   *
+   * "Never a muscle's ONLY lift" exists so the cap cannot silently turn off a muscle she left on.
+   * It was written when every day was upper or lower, where a muscle's one lift on its day WAS its
+   * week. Full-body days broke that reading: at three days every muscle holds exactly one lift per
+   * session, so the guard fired on every slot, no drop was ever legal, and a Full Body A of eight
+   * lifts sat at 63 minutes with the cap out of moves.
+   *
+   * A muscle trained on Monday and Thursday does not go dark because Monday gives up its lift. So
+   * the guard asks the WEEK, not the day. Empty (the default, and every older caller) → the strict
+   * per-day reading, unchanged.
+   */
+  trainedOnOtherDays: ReadonlySet<string> = new Set(),
 ): void {
   const over = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin;
   /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
@@ -452,7 +466,8 @@ function enforceTimeCap(
         const ex = slot && exerciseById(slot.exerciseId);
         if (!ex || slot.supplemental || ex.tier !== 'isolation') return false;
         if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) return false; // S-59: leave-its are cut last
-        if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1) return false; // S-35/S-63: never a muscle's ONLY lift
+        // S-35/S-63: never a muscle's only lift — unless the WEEK trains it on another day too.
+        if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1 && !trainedOnOtherDays.has(ex.muscle)) return false;
         if (lastOfEssentialPattern(slot)) return false; // never the day's last row / pulldown
         return true;
       });
@@ -477,7 +492,7 @@ function enforceTimeCap(
         if (s.supplemental || !isCompound(s.exerciseId)) continue;
         if (!allowLeaveIt && protectedIds.has(s.exerciseId)) continue; // S-59
         const m = exerciseById(s.exerciseId)?.muscle;
-        if (!m || counts[m] <= 1) continue; // never a muscle's ONLY exercise (S-35)
+        if (!m || (counts[m] <= 1 && !trainedOnOtherDays.has(m))) continue; // S-35, read across the week
         if (lastOfEssentialPattern(s)) continue; // never the day's last row / pulldown
         day.slots.splice(i, 1);
         dropped = true;
@@ -787,9 +802,25 @@ function setsFor(tier: Tier, muscle?: string): number {
  * bounded by F-1's ceiling of five, and the cap now knows an emphasised muscle has a larger claim
  * (`claimOf`), so it is not the first thing cut back off.
  */
-function setsForEmphasised(tier: Tier, emphasised: boolean): number {
-  const base = setsFor(tier);
-  return emphasised ? Math.min(V5_SETS_MAX, base + 1) : base;
+function growEmphasised(
+  day: ProgramDay,
+  emphasised: ReadonlySet<string>,
+  budgetMin: number,
+  restSecFor?: (id: string) => number | null,
+  execSecFor?: (id: string) => number | null,
+  transitionSec?: number | null,
+): void {
+  if (emphasised.size === 0) return;
+  const minutes = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec);
+  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX; guard++) {
+    const slot = day.slots.find((s) => {
+      const m = exerciseById(s.exerciseId)?.muscle;
+      return !s.supplemental && m && emphasised.has(m) && s.setCount < V5_SETS_MAX;
+    });
+    if (!slot) return; // her marked muscles are already at F-1's ceiling on this day
+    slot.setCount += 1;
+    if (minutes() > budgetMin) { slot.setCount -= 1; return; } // the hour wins; the mark is not free
+  }
 }
 
 // `goal` and `experience` are NOT read here: Part 5 deletes the goal fork ("there is one goal:
@@ -1015,10 +1046,42 @@ export const fixtureModel: ModelClient = {
     // seconds the transition timer actually runs (S-17), so the budget prices the workout she has.
     const transitionS = learnedTransitionRestS(history) ?? REST_TRANSITION_S;
     for (const d of days) trimV5ToBudget(d, profile.bodyMap, budgetMin, restSecFor, execSecFor, leaveIts, transitionS);
-    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS, emphasisedMuscles); // work ≤ her minutes
+    /*
+     * Which muscles the week STILL trains on more than one day — the scope S-35's only-lift guard
+     * means, recomputed before every day.
+     *
+     * ⛔ Computing it once is a race with itself: Monday gives up its only calf lift "because
+     * Thursday has one", then Thursday gives up its own "because Monday had one", and the muscle is
+     * silently off — the exact outcome S-35 exists to prevent. Reading the CURRENT slots each time
+     * means the last day holding a muscle can never be the one that drops it.
+     */
+    const stillTrainedTwice = (): ReadonlySet<string> => {
+      const n: Record<string, number> = {};
+      for (const d of days)
+        for (const m of new Set(d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter(Boolean)))
+          n[m as string] = (n[m as string] ?? 0) + 1;
+      /*
+       * A drop must leave the muscle at TWICE a week — the dose the full-body restructure exists to
+       * buy, and the best-supported number in the literature. So it needs three days to give one up.
+       *
+       * ⛔ EXCEPT IN A TWO-DAY WEEK, where that promise cannot be kept by anyone. Two sessions hold
+       * about fourteen lifts between them and there are nine muscles; something has to be trained
+       * once. Refusing the drop there does not buy a muscle a second session — it just puts the day
+       * over her hour, which is the one thing she actually feels. The compounds still cover the big
+       * muscles twice; what falls to once is the small isolation work, which is the right thing to
+       * lose and what any coach writing a two-day programme also loses.
+       */
+      const floor = days.length <= 2 ? 1 : 2;
+      return new Set(Object.entries(n).filter(([, c]) => c > floor).map(([m]) => m));
+    };
+    for (const d of days) enforceTimeCap(d, budgetMin, restSecFor, execSecFor, leaveIts, transitionS, emphasisedMuscles, stillTrainedTwice()); // work ≤ her minutes
     // …and ≥ the floor. The cap runs first so the fill never has to undo it, and the fill can only
     // reach `budgetMin - 1` worth of sets before the next set would put the day back over.
     for (const d of days) fillToSessionFloor(d, Math.min(MIN_SESSION_MIN, budgetMin), restSecFor, execSecFor, transitionS);
+    // …and only THEN does an emphasis mark buy its extra set, out of whatever room is left under her
+    // ceiling. Added before the cap it was simply cut off again, or it pushed a full-body day to 63
+    // minutes with every other slot already at F-1's floor and no legal drop remaining.
+    for (const d of days) growEmphasised(d, emphasisedMuscles, budgetMin, restSecFor, execSecFor, transitionS);
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to

@@ -11,7 +11,7 @@
  * Pure. Deterministic.
  */
 
-import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, MUSCLE_REGION } from './constants';
+import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, FULL_BODY_UNTIL_DAYS, MUSCLE_REGION } from './constants';
 import { stanceOf, trainableMuscles, emphasisMuscles, type BodyMap } from './bodyMap';
 
 /** Region of a muscle (upper/lower); unknown â†’ upper (safe default, never its own day). */
@@ -66,9 +66,27 @@ export function regionVolume(targets: Record<string, number>): { upper: number; 
  * apportioned by volume, ties to upper (the canonical lead). This is what makes "emphasise glutes +
  * quads on 3 days â†’ two lower days" fall out automatically, with no split chosen from a shelf.
  */
-export function assignRegionDays(targets: Record<string, number>, days: number): ('upper' | 'lower')[] {
+export function assignRegionDays(targets: Record<string, number>, days: number): ('upper' | 'lower' | 'full')[] {
   const { upper, lower } = regionVolume(targets);
   if (days <= 0) return [];
+  /*
+   * ════ AT LOW FREQUENCY, SPLITTING THE BODY COSTS HER THE FREQUENCY (founder 2026-08-09) ════
+   *
+   * Measured before this existed: at TWO days every muscle was trained ONCE a week, and at three the
+   * whole lower body was trained once. Splitting upper from lower divides the week's sessions among
+   * the regions, so two days means one upper and one lower — and one session a week is the dose the
+   * evidence is clearest about, because twice a week grows roughly 63% more at equal volume.
+   *
+   * The split is worth its cost only once there are enough days to give both halves two sessions
+   * each. Below that, every day trains the whole body, which is what any coach writes for a two- or
+   * three-day athlete and for the same reason: the compounds cover several muscles at once and the
+   * frequency is what is scarce.
+   *
+   * ⛔ This is a structural choice made from her DAYS, which is a fact she gave us — not from sex,
+   * not from a shelf, and not from a self-report. Structure is still an output (Part 3); this simply
+   * recognises that below four days the volume cannot shape a split worth having.
+   */
+  if (days <= FULL_BODY_UNTIL_DAYS && upper > 0 && lower > 0) return Array(days).fill('full');
   if (upper === 0) return Array(days).fill('lower');
   if (lower === 0) return Array(days).fill('upper');
 
