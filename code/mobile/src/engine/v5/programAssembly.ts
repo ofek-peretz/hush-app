@@ -470,6 +470,58 @@ export function assembleV5DayLists(
     for (const id of picks.filter((id) => exerciseById(id)?.tier !== 'compound')) dealTo(id);
   }
 
+  /*
+   * ⛔ AND THEN THE DAYS ARE LEVELLED (founder 2026-08-10, measured).
+   *
+   * The dealer places each lift on the emptiest legal day, which balances a week where every muscle
+   * wants the same number of exercises. It does not balance one where they do not: compounds are
+   * dealt before isolations, so a muscle with two compounds fills days in the first pass while
+   * another muscle's only lift — an isolation — arrives in the second to find them full. Capacity
+   * yields for that lift (it must: refusing a muscle's FIRST exercise switches off a muscle she left
+   * on), and the yields pile up.
+   *
+   * Measured on a three-day full-body week, female 75 kg:
+   *
+   *     no mark        7 / 7 / 7 exercises
+   *     Glutes mark    9 / 7 / 6      ← the first day cannot fit her hour, and cannot be cut
+   *
+   * That 9-lift day is irreducible by the time cap: every lift is at the three-set floor and every
+   * one is its muscle's only lift, so S-35 forbids all of them. The fix has to be here, before the
+   * clock ever sees it.
+   *
+   * ⚠️ A MOVE, NEVER A DROP. This only ever relocates a lift from the fullest day to the emptiest,
+   * and only when the destination does not already train that muscle's pattern — so the week keeps
+   * every exercise it chose, and no day gains a movement it already has. Nothing can be lost here,
+   * which is what makes it safe to run after every other rule has had its say.
+   *
+   * ⚠️ AND IT LEVELS TO WITHIN ONE. Exact equality is impossible when the lift count is not divisible
+   * by the day count, and chasing it would move lifts for ever; the guard bounds the passes anyway.
+   */
+  const totalDealt = dayExercises.reduce((n, d) => n + d.length, 0);
+  for (let guard = 0; guard < totalDealt + dayExercises.length; guard++) {
+    let fullest = 0;
+    let emptiest = 0;
+    for (let i = 0; i < dayExercises.length; i++) {
+      if (regionDays[i] !== regionDays[fullest]) continue;
+      if (dayExercises[i].length > dayExercises[fullest].length) fullest = i;
+    }
+    for (let i = 0; i < dayExercises.length; i++) {
+      if (regionDays[i] !== regionDays[fullest]) continue;
+      if (dayExercises[i].length < dayExercises[emptiest].length) emptiest = i;
+    }
+    if (dayExercises[fullest].length - dayExercises[emptiest].length <= 1) break;
+    const movable = dayExercises[fullest].find((id) => {
+      const ex = exerciseById(id);
+      return ex && !dayExercises[emptiest].some((other) => {
+        const o = exerciseById(other);
+        return o && o.muscle === ex.muscle && o.pattern === ex.pattern;
+      });
+    });
+    if (!movable) break;
+    dayExercises[fullest].splice(dayExercises[fullest].indexOf(movable), 1);
+    dayExercises[emptiest].push(movable);
+  }
+
   // Hole guard: no workout may be EMPTY (a very sparse map at a high frequency — few muscles, many
   // days). An empty day borrows its region's leading lift; a repeat is legal (S-29 — a lift trained
   // twice a week builds on itself) and strictly better than an empty session. Trainable is non-empty,
