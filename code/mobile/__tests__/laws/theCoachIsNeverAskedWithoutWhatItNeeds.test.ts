@@ -137,7 +137,7 @@ describe('onboarding asks for every one of them', () => {
     /* ⚠️ `NameEntry` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-04) — four answering
        screens now, not five. The list is the PATH, so it changes when the path does; what may not
        change is that every requirement is still collected on it. */
-    const flow = ['AboutYou', 'YourTraining', 'BodyMap', 'ConnectHealth']
+    const flow = ['AboutYou', 'BodyMap', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -197,10 +197,17 @@ describe('onboarding asks for every one of them', () => {
      * misses one of them.** Which screen holds which is his to arrange; that every one is carried
      * forward is not.
      */
+    /*
+     * ⛔ ONE ANSWERING SCREEN FEWER (founder 2026-08-10): *"תמשיך למיזוג המסכים."* Once age and
+     * experience left, `YourTraining` held two wheels and `AboutYou` held two controls — four
+     * answers over two half-empty screens, which is one form with an extra tap in the middle of it.
+     *
+     * ⚠️ THE LAW'S CLAIM IS STILL THE SAME ONE: there is no route to the programme that drops one
+     * of her numbers. What changed is how many steps collect them, which is his to arrange.
+     */
     const about = read('src/screens/onboarding/AboutYou.tsx');
-    expect(about).toContain("navigation.navigate('YourTraining', { sex })");
-    const training = read('src/screens/onboarding/YourTraining.tsx');
-    expect(training.match(/<WheelPicker/g)).toHaveLength(2);
+    expect(about.match(/<WheelPicker/g)).toHaveLength(2);
+    expect(about).toContain("navigation.navigate('BodyMap', { sex, weightKg: kg, daysPerWeek: days })");
     /*
      * ⛔ THE STEP AFTER THIS ONE IS THE BODY MAP NOW (founder 2026-08-08): *"פציעות כאבים ומה אסור
      * יהיה בBODYMAP לכן לא צריך טקסט חופשי."* `YourGoal` asked for two paragraphs, and measuring
@@ -210,10 +217,9 @@ describe('onboarding asks for every one of them', () => {
      * numbers. Only the name of the next hop moved, and the spread (`...route.params`) is the half
      * that actually carries them — which is why it is pinned rather than the screen name alone.
      */
-    expect(training).toContain("navigation.navigate('BodyMap', { ...route.params, weightKg: kg, daysPerWeek: days })");
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
-    expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
     expect(read('src/app/Root.tsx')).toContain('name="BodyMap"');
+    expect(read('src/app/Root.tsx')).not.toContain('YourTraining');
     /*
      * ⚠️ AND THE MAP RELAYS WHAT IT WAS GIVEN. This is the defect the wiring actually shipped: the
      * screen was written against a `{ inputs }` param no step in this navigator sends, so her sex,
@@ -245,7 +251,7 @@ describe('onboarding asks for every one of them', () => {
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {
     // She is adjusting, not counting up from 30 kg. A rule that opens at its floor is a rule she has
     // to scroll before she can answer, which is how a form becomes a chore.
-    const src = read('src/screens/onboarding/YourTraining.tsx');
+    const src = read('src/screens/onboarding/AboutYou.tsx');
     expect(src).toMatch(/WEIGHT_OPENS_ON: Record<'kg' \| 'lb', number> = \{ kg: \d+, lb: \d+ \}/);
     /*
      * ⚠️ THE AGE WHEEL IS GONE, so its opening value is too — and what replaces the assertion is the

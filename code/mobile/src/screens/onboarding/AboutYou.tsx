@@ -32,7 +32,7 @@ import React, { useState } from 'react';
 import { View, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, TextField, SegmentedControl } from '@/components/ds';
+import { Button, Legend, TextField, SegmentedControl, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -40,11 +40,13 @@ import type { OnboardingParamList } from '@/app/navigation';
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 
 /** Where each rule opens — a place to turn from, not a default anybody keeps. */
-const WEIGHT_OPENS_ON = { kg: 70, lb: 155 } as const;
+const WEIGHT_OPENS_ON: Record<'kg' | 'lb', number> = { kg: 70, lb: 155 };
+const DAYS_OPENS_ON = 3;
 
 export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const units = app.profile?.units ?? 'kg';
   /*
    * ⛔ THE NAME IS ALREADY OURS (founder 2026-08-04): *"onboarding is something people fill in and
    * move on."*
@@ -66,6 +68,26 @@ export function AboutYou({ navigation }: Props) {
    * the removal of the worst default in the product.
    */
   const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
+  /*
+   * ⛔ THE TWO RULERS CAME BACK HERE (founder 2026-08-10): *"תמשיך למיזוג המסכים."*
+   *
+   * `YourTraining` held three wheels — days, bodyweight, age — and once age left with experience
+   * (see the note below), the intake was FOUR answers spread over two screens, each half empty.
+   * Two half-screens is not a gentler form than one full one; it is the same form with an extra tap
+   * in the middle of it. The screen now asks everything a person is and everything she sets, and
+   * the next thing she sees is her own body.
+   *
+   * ⚠️ The wheel itself is untouched, on his standing instruction: *"אל תיגע בפונקציונליות של
+   * הסרגלים, הם עובדים מושלם."* Same `WheelPicker`, same ranges, same opening values.
+   */
+  const [days, setDays] = useState<number>(
+    app.profile?.daysPerWeek && app.profile.daysPerWeek > 0 ? app.profile.daysPerWeek : DAYS_OPENS_ON,
+  );
+  const [weight, setWeight] = useState<number>(() => {
+    const known = app.profile?.weightKg;
+    if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
+    return WEIGHT_OPENS_ON[units];
+  });
   /*
    * ⛔ HOW LONG SHE HAS TRAINED IS NOT ASKED (founder 2026-08-08, on a measurement).
    *
@@ -101,16 +123,25 @@ export function AboutYou({ navigation }: Props) {
     Keyboard.dismiss();
     app.setPendingName(name);
     app.setPendingSex(sex);
+    // The one place lb becomes kg. The record is metric; the wheel is hers.
+    const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
-    // `OnboardingInputs` and there must be ONE place that does. The lb→kg conversion went with the
-    // weight wheel to `YourTraining`; there is still exactly one place it happens.
-    navigation.navigate('YourTraining', { sex });
+    // `OnboardingInputs` and there must be ONE place that does.
+    navigation.navigate('BodyMap', { sex, weightKg: kg, daysPerWeek: days });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 4 }}
+      progress={{ index: 1, total: 3 }}
+      /*
+       * ⛔ THE BODY OF THIS STEP IS TWO HORIZONTAL WHEELS, so it cannot also be a step you leave
+       * with a horizontal drag (founder 2026-07-13): every attempt to set a bodyweight would drag
+       * the screen back instead of turning the rule. The navigator's full-screen gesture is off for
+       * this step (`Root`), and the way back by hand lives in the footer — the one band with no
+       * wheel in it. The arrow in the top bar is, as ever, the way back that always works.
+       */
+      onSwipeBack={() => navigation.goBack()}
       keyboard
       title={t('ob.aboutTitle')}
       headGap={26}
@@ -151,16 +182,43 @@ export function AboutYou({ navigation }: Props) {
           onChange={pickSex}
         />
         {/*
-          ⛔ THE EXPERIENCE CONTROL STOOD HERE AND IS DELETED — see the note on the state above. The
-          screen is down to the two things it cannot learn any other way: what to call her, and which
-          gender every Hebrew sentence from here on conjugates against.
+          ⛔ THE EXPERIENCE CONTROL STOOD HERE AND IS DELETED — see the note on the state above.
+          What is left above is the two things the app cannot learn any other way: what to call her,
+          and which gender every Hebrew sentence from here on conjugates against. Below it, the two
+          numbers she sets — one instrument each.
         */}
+        <View style={styles.col}>
+          <Legend>{t('ob.daysPerWeek')}</Legend>
+          <WheelPicker
+            value={days}
+            onChange={setDays}
+            step={1}
+            min={2}
+            max={6}
+            size="lg"
+            ends="chevron"
+            label={t('ob.daysPerWeek')}
+          />
+        </View>
+        <View style={styles.col}>
+          <Legend>{t('ob.weightLegend')}</Legend>
+          <WheelPicker
+            value={weight}
+            onChange={setWeight}
+            step={units === 'kg' ? 0.5 : 1}
+            min={units === 'kg' ? 30 : 66}
+            max={units === 'kg' ? 250 : 550}
+            size="lg"
+            ends="chevron"
+            label={t('ob.weightLegend')}
+          />
+        </View>
       </View>
     </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  rows: { gap: 22 },
+  rows: { gap: 20 },
   col: { gap: 12 },
 });

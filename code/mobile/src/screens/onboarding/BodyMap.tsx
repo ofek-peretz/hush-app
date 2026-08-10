@@ -34,8 +34,9 @@
 
 import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { Button } from '@/components/ds';
 import { BodyMapFigure, viewOf, type Face } from '@/components/BodyMapFigure';
 import { color, font } from '@/design/tokens';
 import { tg } from '@/i18n';
@@ -50,7 +51,6 @@ const STANCES: { key: MuscleStance; word: string }[] = [
 ];
 
 export function BodyMap({ navigation, route }: { navigation: any; route: any }) {
-  const insets = useSafeAreaInsets();
   const [face, setFace] = useState<Face>('front');
   const [open, setOpen] = useState<string | null>(null);
   /** Only her decisions. A muscle absent is `normal` — see the header note. */
@@ -108,11 +108,35 @@ export function BodyMap({ navigation, route }: { navigation: any; route: any }) 
 
   const openStance: MuscleStance = open ? (map[open] ?? 'normal') : 'normal';
 
+  /*
+   * ⛔ THIS STEP HAD NO WAY BACK AND NO PLACE IN THE COUNT (fixed 2026-08-10).
+   *
+   * It was written before it was wired in, so it drew its own header: a title, a subtitle, and
+   * nothing else. Every other step in the intake carries the scaffold's back arrow and its progress
+   * bar, which means the athlete met a step 2 of 3 with no arrow — the one screen in onboarding she
+   * could not leave except by finishing it, on the one screen that BLOCKS finishing until she has
+   * left at least one muscle on. A dead end guarding a refusal.
+   */
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
-      <Text style={styles.title}>{tg('ob.mapTitle')}</Text>
-      <Text style={styles.sub}>{tg('ob.mapSub')}</Text>
-
+    <OnboardingScaffold
+      onBack={() => navigation.goBack()}
+      progress={{ index: 2, total: 3 }}
+      title={tg('ob.mapTitle')}
+      sub={tg('ob.mapSub')}
+      headGap={18}
+      bodyTop={18}
+      footer={
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          label={tg('ob.daysBuild')}
+          onPress={build}
+          /* S-3 — an unbuildable map never leaves this screen, and the reason is said above. */
+          disabled={nothingOn}
+        />
+      }
+    >
       <View style={styles.tabs} accessibilityRole="tablist">
         {(['front', 'back'] as Face[]).map((f) => (
           <Pressable
@@ -175,28 +199,20 @@ export function BodyMap({ navigation, route }: { navigation: any; route: any }) 
         {nothingOn ? <Text style={styles.refusal}>{tg('ob.mapNothingOn')}</Text> : null}
         {consequence ? <Text style={styles.note}>{consequence}</Text> : null}
       </ScrollView>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={tg('ob.daysBuild')}
-        accessibilityState={{ disabled: nothingOn }}
-        disabled={nothingOn}
-        onPress={build}
-        style={[styles.cta, { marginBottom: insets.bottom + 16 }, nothingOn && styles.ctaOff]}
-      >
-        <Text style={[styles.ctaText, nothingOn && styles.ctaTextOff]}>{tg('ob.daysBuild')}</Text>
-      </Pressable>
-    </View>
+    </OnboardingScaffold>
   );
 }
 
 export default BodyMap;
 
+/*
+ * ⚠️ NO `root`, NO `title`, NO `sub`, NO `cta`. The scaffold draws the frame, the head and the
+ * pinned footer for every other step in the intake; this screen had hand-rolled all four, which is
+ * why it was the only one without a back arrow. What is left here is what is genuinely this
+ * screen's own: the face tabs, the stance sheet, and the two lines that answer an act.
+ */
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.bg, paddingHorizontal: 22 },
-  title: { fontFamily: font.serif, fontSize: 28, color: color.textPrimary },
-  sub: { fontFamily: font.sans, fontSize: 14, color: color.textMuted, marginTop: 6 },
-  tabs: { flexDirection: 'row', gap: 8, marginTop: 18, alignSelf: 'center' },
+  tabs: { flexDirection: 'row', gap: 8, alignSelf: 'center' },
   tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 100, borderWidth: 1, borderColor: color.borderControl },
   tabOn: { backgroundColor: color.paper, borderColor: color.paper },
   tabText: { fontFamily: font.mono, fontSize: 13, color: color.textMuted, letterSpacing: 1 },
@@ -211,8 +227,4 @@ const styles = StyleSheet.create({
   rungTextOn: { color: color.onPaper },
   note: { fontFamily: font.sans, fontSize: 13, color: color.textMuted, marginTop: 16, textAlign: 'center' },
   refusal: { fontFamily: font.sans, fontSize: 13, color: color.textPrimary, marginTop: 12, textAlign: 'center' },
-  cta: { paddingVertical: 16, borderRadius: 16, alignItems: 'center', backgroundColor: color.paper },
-  ctaOff: { backgroundColor: color.surface2 },
-  ctaText: { fontFamily: font.sans, fontSize: 16, color: color.onPaper },
-  ctaTextOff: { color: color.textMuted },
 });

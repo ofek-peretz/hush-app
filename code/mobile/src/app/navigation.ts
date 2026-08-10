@@ -69,8 +69,12 @@ export type OnboardingParamList = {
    * payload, and the engine learns her true load from `actualWeight` the moment she edits a set —
    * see the note on `AboutYou`'s state for the numbers. Both remain OPTIONAL on `ConnectHealth` so
    * a persisted profile that has them still parses; no screen produces them any more.
+   *
+   * ⛔ AND `YourTraining` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-10). Once age and
+   * experience went, the intake was four answers across two screens, each half empty — the same
+   * form with an extra tap in the middle of it. Three answering steps now: who she is and what she
+   * has, then her body, then health.
    */
-  YourTraining: { sex: 'male' | 'female' };
   /*
    * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front
    * door). What she is training FOR, and what hurts or is refused. Everything else onboarding needs

@@ -83,6 +83,22 @@ describe('a thumb can land on every one of them', () => {
     expect(small).toEqual([]);
   });
 
+  it('⛔ …and clears it in UNITS too, so the floor does not depend on the stage width', () => {
+    /*
+     * THE TEST ABOVE PASSES FOR THE WRONG REASON IF THE GEOMETRY IS TIGHT. Sized to the drawn
+     * muscle, a calf's target was 36 units — 45 pt at a 250 pt stage and 40 pt at 220, which is
+     * where the stage landed the moment this figure had to share a screen with a back arrow, a
+     * stance sheet and a footer. A law that a layout tweak can break is a law about the layout.
+     *
+     * ⚠️ At 1 unit ≥ 1 pt the stage can be anything from 200 pt up and every target still clears.
+     */
+    const tight = FACES.flatMap((f) => hitBoxes(f))
+      .filter((b) => b.box.w < 44 || b.box.h < 44)
+      .map((b) => `${b.muscle} ${b.box.w}×${b.box.h}u`);
+    expect(tight).toEqual([]);
+    expect(UNIT_PT()).toBeGreaterThanOrEqual(1);
+  });
+
   it('every target sits on the drawing board, not off the edge of it', () => {
     for (const face of FACES) {
       for (const { muscle, box } of hitBoxes(face)) {

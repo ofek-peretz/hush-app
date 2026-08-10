@@ -21,7 +21,6 @@ import { HushTabBar } from '@/app/HushTabBar';
 import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
-import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { BodyMapFigure } from '@/components/BodyMapFigure';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
@@ -1244,8 +1243,7 @@ export const GALLERY: GalleryEntry[] = [
     first authorization, so most athletes land on a FILLED field. `app.pendingName()` is null in the
     gallery, which draws the other case — so both are entries here.
   */
-  { id: '1.2c', label: 'About you — nothing known yet', status: 'live', note: 'no name from the provider; sex unchosen, so Continue waits', render: () => mount(AboutYou) },
-  { id: '1.2d', label: 'Her training — two rulers', status: 'live', note: 'days and bodyweight — one instrument each; age and experience are gone (founder 2026-08-08), because nothing in the engine ever read them', render: () => mount(YourTraining, { sex: 'female' }) },
+  { id: '1.2c', label: 'About you — the whole first step', status: 'live', note: 'name, sex and the two rulers on one screen (founder 2026-08-10). No name from the provider here, and sex unchosen, so Continue waits', render: () => mount(AboutYou) },
   /*
    * ⛔ AND THEN 1.2e WENT (founder 2026-08-08): *"פציעות כאבים ומה אסור יהיה בBODYMAP לכן לא צריך
    * טקסט חופשי."* `YourGoal` asked for two paragraphs whose only reader was the AI's fact pack, and

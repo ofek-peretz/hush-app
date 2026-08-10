@@ -167,7 +167,7 @@ export const ZONES: { front: Zone[]; back: Zone[] } = {
       // The anterior deltoid CAPS the shoulder — from the collarbone, wrapping out and down.
       d: 'M 66,76 C 54,79 46,88 43,100 C 41,111 43,122 48,127 C 55,124 61,114 64,102 C 67,90 68,80 66,76 Z',
       mirrored: true,
-      hit: { x: 24, y: 66, w: 40, h: 60 },
+      hit: { x: 18, y: 66, w: 46, h: 60 },
     },
     {
       muscle: 'Chest',
@@ -180,7 +180,7 @@ export const ZONES: { front: Zone[]; back: Zone[] } = {
       muscle: 'Biceps',
       d: 'M 48,128 C 41,138 38,156 39,174 C 41,188 46,196 52,197 C 58,192 60,176 59,158 C 58,142 54,131 48,128 Z',
       mirrored: true,
-      hit: { x: 24, y: 128, w: 40, h: 74 },
+      hit: { x: 18, y: 128, w: 46, h: 74 },
     },
     {
       muscle: 'Core',
@@ -192,7 +192,7 @@ export const ZONES: { front: Zone[]; back: Zone[] } = {
       d: 'M 77,228 C 68,240 65,268 68,296 C 70,313 76,325 84,328 C 92,323 95,304 95,280 '
         + 'C 95,254 88,236 82,228 Z',
       mirrored: true,
-      hit: { x: 62, y: 224, w: 37, h: 106 },
+      hit: { x: 54, y: 224, w: 45, h: 106 },
     },
   ],
   back: [
@@ -226,7 +226,7 @@ export const ZONES: { front: Zone[]; back: Zone[] } = {
       muscle: 'Triceps',
       d: 'M 47,116 C 39,128 36,148 37,168 C 39,184 45,194 51,195 C 57,190 59,172 58,152 C 57,132 53,119 47,116 Z',
       mirrored: true,
-      hit: { x: 20, y: 114, w: 38, h: 86 },
+      hit: { x: 14, y: 114, w: 44, h: 86 },
     },
     {
       muscle: 'Glutes',
@@ -239,14 +239,14 @@ export const ZONES: { front: Zone[]; back: Zone[] } = {
       d: 'M 77,248 C 68,260 66,284 69,306 C 71,319 77,328 84,330 C 92,325 95,309 95,288 '
         + 'C 95,266 88,252 82,248 Z',
       mirrored: true,
-      hit: { x: 62, y: 246, w: 37, h: 86 },
+      hit: { x: 54, y: 246, w: 45, h: 86 },
     },
     {
       muscle: 'Calves',
       d: 'M 81,334 C 73,344 70,362 72,378 C 74,389 79,395 85,396 C 91,392 93,378 93,363 '
         + 'C 93,349 87,336 81,334 Z',
       mirrored: true,
-      hit: { x: 62, y: 334, w: 36, h: 68 },
+      hit: { x: 52, y: 334, w: 46, h: 68 },
     },
   ],
 };
@@ -381,9 +381,16 @@ export function BodyMapFigure({ face, map, selected, onSelect }: BodyMapFigurePr
 /**
  * ⛔ THE WIDTH THE FIGURE ACTUALLY DRAWS AT, published because a TARGET SIZE CANNOT BE CHECKED
  * WITHOUT IT. A press rectangle 34 units wide is 42 pt here and 26 pt if this number drops to 150 —
- * the same geometry, one of them under Apple's 44 pt floor. `everyMuscleIsThumbSized` reads it.
+ * the same geometry, one of them under Apple's 44 pt floor.
+ *
+ * ⚠️ AND THE GEOMETRY NO LONGER DEPENDS ON IT. Sized to the drawn muscle, a calf's target was 36
+ * units — which clears 44 pt only while this number stays at 250, and the figure has to shrink the
+ * moment it shares a screen with a back arrow, a stance sheet and a footer. Every limb target now
+ * reaches OUTWARD into the empty space beside the limb until it is at least 44 units on both sides,
+ * so the floor holds at ANY stage width from 200 pt up. The law asserts both: the size in points
+ * here, and the size in units that stops this from being a number nobody may touch.
  */
-export const STAGE_MAX_W = 250;
+export const STAGE_MAX_W = 220;
 
 const styles = StyleSheet.create({
   stage: { width: '100%', aspectRatio: BOX.w / BOX.h, alignSelf: 'center', maxWidth: STAGE_MAX_W },

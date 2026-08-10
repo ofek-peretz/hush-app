@@ -40,7 +40,6 @@ import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './na
 
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
-import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
@@ -114,8 +113,15 @@ function OnboardingNavigator() {
       }}
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
-      <OnboardingStack.Screen name="AboutYou" component={AboutYou} />
-      <OnboardingStack.Screen name="YourTraining" component={YourTraining} />
+      {/* ⛔ TWO WHEELS LIVE ON THIS STEP NOW, so its full-screen back-drag is off (founder
+          2026-07-13): a horizontal gesture over a horizontal rule is the rule losing. The step
+          keeps a hand-held way back across its FOOTER, the one band with no wheel in it
+          (`OnboardingScaffold.onSwipeBack`), plus the arrow that always works. */}
+      <OnboardingStack.Screen
+        name="AboutYou"
+        component={AboutYou}
+        options={{ fullScreenGestureEnabled: false }}
+      />
       <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       {/* BODY DATA DOES NOT SWIPE BACK (founder 2026-07-13). Its body is three horizontal wheels,
