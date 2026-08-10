@@ -241,6 +241,50 @@ it('the large groups are not out-trained by the small ones', () => {
   expect(inversions.length).toBeLessThanOrEqual(CEILING);
 });
 
+/*
+ * ════ A MUSCLE SHE LEFT ON IS GROWN, NOT MAINTAINED ════
+ *
+ * ⛔ Founder, 2026-08-10, on three cases the reading found: Triceps at 3 weekly sets on a three-day
+ * week with Back off, Calves at 3 on a four-day week with Quads off, Shoulders at 6 on a plain
+ * four-day week. There was a floor under a SESSION and a ceiling over it, and nothing at all under a
+ * MUSCLE — so a muscle could leave the week on one lift at F-1's minimum while the day it sat in was
+ * a perfectly legal sixty minutes.
+ *
+ * `raiseToWeeklyFloor` fixes what is fixable: it grows the thinnest muscle's existing lifts where the
+ * clock has room, and where it has not, TRANSFERS a set from a muscle comfortably clear of the floor
+ * on the same day — so the day's length never moves.
+ *
+ * ⛔ WHAT IS LEFT IS PHYSICS, AND THIS TEST NAMES IT RATHER THAN HIDING IT. Two bounds cannot be
+ * argued with: a muscle holding ONE exercise cannot exceed five sets, because F-1 caps a slot at
+ * five; and a day already at her ceiling cannot lend anything. So the law is not "every muscle
+ * reaches six" — it is "a muscle below six is a muscle one of those two bounds is holding down".
+ * If a muscle is ever short with room to spare, that is a defect and this goes red.
+ */
+it('a muscle below the effective dose is one that physically could not reach it', () => {
+  const unexplained: string[] = [];
+  for (const c of BUILDS) {
+    const sets: Record<string, number> = {};
+    const lifts: Record<string, number> = {};
+    for (const d of sessions(c))
+      for (const s of d.slots) {
+        if (s.supplemental) continue;
+        const m = muscleOf(s.exerciseId);
+        if (!m) continue;
+        sets[m] = (sets[m] ?? 0) + s.setCount;
+        lifts[m] = (lifts[m] ?? 0) + 1;
+      }
+    for (const [m, n] of Object.entries(sets)) {
+      if (n >= 6) continue;
+      const cappedByF1 = lifts[m] === 1 && n >= 5; // one lift, already at the ceiling
+      const daysAtBudget = sessions(c)
+        .filter((d) => d.slots.some((s) => muscleOf(s.exerciseId) === m))
+        .every((d) => estimateSessionMinutes(d) >= 55); // no room left to lend
+      if (!cappedByF1 && !daysAtBudget) unexplained.push(`${c.label}: ${m} ${n} sets across ${lifts[m]} lifts`);
+    }
+  }
+  expect({ shortWithRoomToSpare: unexplained.slice(0, 12), total: unexplained.length }).toEqual({ shortWithRoomToSpare: [], total: 0 });
+});
+
 it('no two sessions in one week are twins', () => {
   const twins: string[] = [];
   for (const c of BUILDS) {

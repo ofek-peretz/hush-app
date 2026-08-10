@@ -39,7 +39,7 @@ import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists, ESSENTIAL_PATTERNS } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
-import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
+import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
 import { epley, normalizeLoad } from '@/engine/loadMath';
@@ -821,6 +821,98 @@ function setsFor(tier: Tier, muscle?: string): number {
  * bounded by F-1's ceiling of five, and the cap now knows an emphasised muscle has a larger claim
  * (`claimOf`), so it is not the first thing cut back off.
  */
+/**
+ * ════ THE WEEKLY FLOOR UNDER A MUSCLE (founder 2026-08-10) ════
+ *
+ * There is a floor under a SESSION (`fillToSessionFloor`) and a ceiling over it (`enforceTimeCap`),
+ * and nothing at all under a MUSCLE. So a muscle could come out of the week at three weekly sets —
+ * one lift at F-1's floor — while the day it sat in was a perfectly legal sixty minutes. The audit
+ * found three: Triceps at 3 on a three-day week with Back off, Calves at 3 on a four-day week with
+ * Quads off, and Shoulders at 6 on a plain four-day week.
+ *
+ * Six is the minimum effective dose the evidence supports (`WEEKLY_SETS_FLOOR`), and it is a WEEKLY
+ * quantity, so the check has to be weekly too. Below it a muscle is being maintained rather than
+ * grown, which is not what she asked for when she left it on.
+ *
+ * ⛔ IT ADDS SETS TO LIFTS SHE ALREADY HAS, and only where the day has room under her ceiling. It
+ * never adds an exercise (that is the assembler's decision, made with her map), never exceeds F-1's
+ * five, and never pushes a day past `budgetMin`. Where the clock genuinely has no room the muscle
+ * stays short — that is an honest limit, and `everyAthleteTheEngineCanMeet` asserts which muscles it
+ * can happen to rather than letting it pass silently.
+ */
+function raiseToWeeklyFloor(
+  days: ProgramDay[],
+  floorSets: number,
+  budgetMin: number,
+  restSecFor?: (id: string) => number | null,
+  execSecFor?: (id: string) => number | null,
+  transitionSec?: number | null,
+): void {
+  const weekly = (): Record<string, number> => {
+    const n: Record<string, number> = {};
+    for (const d of days)
+      for (const s of d.slots) {
+        if (s.supplemental) continue;
+        const m = exerciseById(s.exerciseId)?.muscle;
+        if (m) n[m] = (n[m] ?? 0) + s.setCount;
+      }
+    return n;
+  };
+  for (let guard = 0; guard < 200; guard++) {
+    const sets = weekly();
+    const short = Object.entries(sets)
+      .filter(([, n]) => n < floorSets)
+      .sort((a, b) => a[1] - b[1]) // the thinnest muscle first
+      .map(([m]) => m);
+    if (short.length === 0) return;
+    let grew = false;
+    for (const m of short) {
+      for (const d of days) {
+        const slot = d.slots.find((s) => !s.supplemental && s.setCount < V5_SETS_MAX && exerciseById(s.exerciseId)?.muscle === m);
+        if (!slot) continue;
+        slot.setCount += 1;
+        if (estimateSessionMinutes(d, restSecFor, execSecFor, transitionSec) > budgetMin) {
+          slot.setCount -= 1; // the hour wins
+          continue;
+        }
+        grew = true;
+        break;
+      }
+      if (grew) break;
+    }
+    if (grew) continue;
+    /*
+     * The clock has no room left, so TRANSFER instead of adding: take a set from a muscle that is
+     * comfortably clear of the floor and give it to one that is under, on the same day. The day's
+     * length does not move, so nothing downstream has to be re-checked.
+     *
+     * This is what makes the last cases reachable at all: a muscle at three weekly sets is usually
+     * alone on a full day, where growing it is impossible and taking from a neighbour costs that
+     * neighbour a set it can spare. The donor must stay clear of the floor itself and inside F-1, so
+     * a transfer can never create the problem it is solving.
+     */
+    let moved = false;
+    for (const m of short) {
+      for (const d of days) {
+        const taker = d.slots.find((s) => !s.supplemental && s.setCount < V5_SETS_MAX && exerciseById(s.exerciseId)?.muscle === m);
+        if (!taker) continue;
+        const giver = d.slots.find((s) => {
+          if (s.supplemental || s === taker || s.setCount <= V5_SETS_MIN) return false;
+          const gm = exerciseById(s.exerciseId)?.muscle;
+          return !!gm && gm !== m && (sets[gm] ?? 0) - 1 >= floorSets;
+        });
+        if (!giver) continue;
+        giver.setCount -= 1;
+        taker.setCount += 1;
+        moved = true;
+        break;
+      }
+      if (moved) break;
+    }
+    if (!moved) return; // every short muscle is boxed in by the clock, by F-1, or by its neighbours
+  }
+}
+
 function growEmphasised(
   day: ProgramDay,
   emphasised: ReadonlySet<string>,
@@ -1101,6 +1193,9 @@ export const fixtureModel: ModelClient = {
     // ceiling. Added before the cap it was simply cut off again, or it pushed a full-body day to 63
     // minutes with every other slot already at F-1's floor and no legal drop remaining.
     for (const d of days) growEmphasised(d, emphasisedMuscles, budgetMin, restSecFor, execSecFor, transitionS);
+    // …and no muscle she left ON leaves the week below the minimum effective dose, where the clock
+    // has room to prevent it (B-2's WEEKLY_SETS_FLOOR).
+    raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, budgetMin, restSecFor, execSecFor, transitionS);
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
