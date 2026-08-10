@@ -12,9 +12,19 @@
  * deleted.** It was theatre for a machine that is gone, and it filled the one moment where she is
  * most curious about what she is getting with a progress bar for nothing.
  *
- * What replaced it is the programme itself. It already exists by the time she arrives — the coach
- * wrote it during the conversation, and `db.loadCoachPlan()` has it — so there is nothing to wait
- * for and nothing to stage. `PlanWeek` draws it, the coach's own instruction on each row included.
+ * ⛔ AND THIS PARAGRAPH DESCRIBED A SCREEN THAT NO LONGER EXISTS (corrected 2026-08-11). It said, in
+ * the present tense, that the coach wrote her programme during the conversation, that
+ * `db.loadCoachPlan()` has it, and that `PlanWeek` draws it. All three stopped being true on
+ * 2026-08-10 — the build assembles the week locally, nothing writes that record, and the founder had
+ * the week list deleted (*"nobody sees it"*).
+ *
+ * ⚠️ STALE PROSE IS NOT COSMETIC. A comment explaining why a state is safe, left standing after the
+ * state is gone, is exactly what made `completeOnboarding` read as correct while it set
+ * `program = null` — the amputation took a whole session to find because its own note vouched for
+ * it. A file that lies about itself costs more than one with no comment at all.
+ *
+ * What she meets here is her week by NAME — its shape, her days, and the muscles she leads with,
+ * composed by `programmeName` from the same programme the CTA is about to build.
  *
  * ⚠️ THE TRIAL BLOCK BELOW IT IS UNTOUCHED and must stay that way: the fourteen, the FREE pill, the
  * no-card-until-they-are-done line and the two-phase arc are all founder-ratified, several of them

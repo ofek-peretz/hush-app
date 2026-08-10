@@ -927,17 +927,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('pain_reported', { muscle, severity });
         /*
-         * THE MUSCLE IS OFF NOW, AND THE PROGRAMME HAS TO ANSWER THAT TODAY.
+         * ⛔ THE MUSCLE IS OFF NOW, AND THE PROGRAMME ANSWERS THAT HERE (founder 2026-08-11).
          *
-         * This used to regenerate the week on the spot. It cannot any more — nothing composes a
-         * week — but the URGENCY was never about the generator: a shoulder that hurts today must
-         * not be programmed tomorrow. So the coach is told immediately rather than at the next
-         * post-session call, which might be days away.
+         * This was `void askCoachToRevise(...)` under a comment that said *"this used to regenerate
+         * the week on the spot. It cannot any more — nothing composes a week"*. It can: the
+         * assembler came back on 2026-08-10. This is the FOURTH place carrying that same sentence,
+         * and it is the one where being wrong is dangerous rather than merely slow.
          *
-         * Fire and forget: the ease is already saved and is in her sheet regardless, so the worst
-         * case is that the revision arrives later rather than never.
+         * ⚠️ WHAT IT MEANT IN PRACTICE: she reports a painful shoulder, the ease is saved, a network
+         * call fires unawaited — and if it does not land, **the shoulder is programmed tomorrow.**
+         * The old comment conceded *"the worst case is that the revision arrives later rather than
+         * never"*; with no signal, later IS never. Hush has no business needing a connection to stop
+         * training a joint she just said hurts.
+         *
+         * ⚠️ AND IT GOES THROUGH `programProfile`, which composes her active eases over the map she
+         * drew — including the one saved two lines above. A raw call here would rebuild the week
+         * from a body map that does not yet know about the injury, which is the exact defect that
+         * function's own comment warns about.
          */
-        if (!already) void askCoachToRevise(`her ${muscle} hurts (${severity}) and is eased until it settles`);
+        const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
+        if (rebuilt) {
+          await db.saveProgram(rebuilt);
+          dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        }
       },
 
       async updateProfileInfo(fields) {

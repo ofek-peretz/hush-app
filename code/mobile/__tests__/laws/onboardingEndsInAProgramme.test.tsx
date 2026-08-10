@@ -176,7 +176,16 @@ describe('the ordering that a first run always breaks', () => {
     for (const raw of ['generateProgram(profile)', 'generateProgram(state.profile)']) {
       expect({ raw, present: store.includes(raw) }).toEqual({ raw, present: false });
     }
-    expect(store.match(/generateProgram\(programProfile\(/g) ?? []).toHaveLength(2);
+    /*
+     * ⚠️ COUNTED AS "ALL OF THEM", NOT AS A NUMBER. This asserted exactly two wrapped calls and went
+     * red when the third arrived — `reportPain`, the one place where an unwrapped call would rebuild
+     * her week from a body map that does not yet know about the injury she just reported. A law that
+     * has to be edited every time the guarded thing spreads is a law that teaches people to edit it.
+     */
+    const calls = store.match(/\.generateProgram\(/g) ?? [];
+    const wrapped = store.match(/\.generateProgram\(programProfile\(/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    expect(wrapped.length).toBe(calls.length);
     // …and it is no longer the null it was left as when the coach owned the week.
     expect(store).not.toContain('const program: Program | null = null;');
   });
