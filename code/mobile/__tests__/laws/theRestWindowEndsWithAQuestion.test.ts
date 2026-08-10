@@ -1,4 +1,7 @@
 // @ts-nocheck
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const read = (rel: string) => readFileSync(join(__dirname, '..', '..', rel), 'utf8');
 // 
 import fs from 'fs';
 import path from 'path';
@@ -44,13 +47,30 @@ const models = fs.readFileSync(
 const branch = store.slice(store.indexOf('const lapsed = live.filter'), store.indexOf('CALENDAR-PRIMARY CADENCE'));
 
 describe('when the window she was given runs out', () => {
-  it('⚠️ she is TOLD, asked how it feels, and asked before anything comes back', () => {
-    // All three of the founder's verbs, in the message that reaches the coach.
-    expect(branch).toMatch(/Tell her the time is up/);
-    expect(branch).toMatch(/ask her how it feels now/);
-    expect(branch).toMatch(/ask whether she is happy for you to/);
-    // …and nothing moves until she has answered.
-    expect(branch).toMatch(/Do not change anything until she answers/);
+  it('⛔ she is TOLD, asked how it feels, and asked before anything comes back — WITHOUT a network', () => {
+    /*
+     * ⛔ THE THREE VERBS ARE THE FOUNDER'S AND THEY ARE UNCHANGED. What changed is where they live.
+     *
+     * This used to assert them as ENGLISH IN A PROMPT — `Tell her the time is up`, `ask her how it
+     * feels now`, `ask whether she is happy for you to` — sent to the coach. So the rule held only
+     * while there was a signal. With none she was never asked at all: the muscle simply reappeared
+     * in her programme one morning and nothing said why. An injury is the last place in this product
+     * that should need a connection.
+     *
+     * ⚠️ SO THE QUESTION IS ENGINE STATE. `awaitingAnswer` reads the window against the clock — which
+     * also means a lapse that happened while the app was closed is caught the moment she opens it —
+     * and `answerEaseCheck` is the only thing that closes it. Her three answers are the three verbs:
+     * she is told (the check exists), asked how it feels (`tender` / `hurts`), and nothing comes back
+     * on the app's say-so (`recovered` is hers to give).
+     */
+    const store = read('src/state/stores/appStore.tsx');
+    expect(store).not.toMatch(/askCoachToRevise\([\s\S]{0,120}rest window/);
+    expect(store).toContain('easeChecks()');
+    expect(store).toContain('async answerEaseCheck(muscle, answer)');
+    // …and every answer that is not "recovered" writes a fresh window rather than nothing.
+    expect(store).toContain('again ? [...closed, easeFor(muscle, again, now)] : closed');
+    // …and the programme is rebuilt from it, locally, through the pain-ease wrapper.
+    expect(store).toMatch(/answerEaseCheck[\s\S]{0,1400}generateProgram\(programProfile\(/);
   });
 
   it('⚠️ does NOT clear the ease on the clock', () => {

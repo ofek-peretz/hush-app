@@ -183,6 +183,50 @@ export function forbiddenFor(
   return out;
 }
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE WINDOW RAN OUT — AND SHE HAS TO BE ASKED, NOT TOLD.
+ *
+ * ⛔ FOUNDER, testing the foundation stones: *"אחרי X זמן המערכת צריכה לזכור ולהגיד לו שהזמן נגמר,
+ * ולשאול אותו איך הוא מרגיש, והאם אפשר לשחרר את דיווח הפציעה ולהחזיר לתוכנית."*
+ *
+ * That rule was implemented as an AI call. The consequence, measured: **with no signal she is never
+ * asked** — the muscle simply reappears in her programme one morning and nothing says why. An
+ * injury is the last place in this product that should need a connection.
+ *
+ * ⚠️ SO THE QUESTION IS ENGINE STATE, NOT A MESSAGE. A lapsed window is marked `askedAt`; her answer
+ * writes `answeredAt` and, if she is not clear yet, a fresh ease. Three answers, and each is a fact
+ * about her body rather than an instruction about the programme:
+ *
+ *     recovered   nothing more is written — the lapsed window already stopped forbidding anything
+ *     tender      a `twinge`: the movement stays away, the muscle keeps training
+ *     hurts       a `pain`: the muscle rests again, a full window
+ *
+ * ⚠️ AND "RECOVERED" IS NOT AN ACTION. A lapsed ease already forbids nothing, because `activeEases`
+ * reads the clock — so saying yes changes no programme. It only closes the question, which is why
+ * the muscle coming back is safe against an app that was shut for a fortnight.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export type EaseAnswer = 'recovered' | 'tender' | 'hurts';
+
+/** The severity a follow-up answer writes, or null when she is clear. */
+export const ANSWER_SEVERITY: Record<EaseAnswer, PainSeverity | null> = {
+  recovered: null,
+  tender: 'twinge',
+  hurts: 'pain',
+};
+
+/**
+ * The windows that have run out and are still waiting on her.
+ *
+ * ⚠️ IT DOES NOT REQUIRE `askedAt`. Whether she has been shown the question yet is a fact about the
+ * NOTICE; this is the list of questions that are still open, so a lapse that happened while the app
+ * was closed is caught the moment she opens it.
+ */
+export function awaitingAnswer(eases: readonly PainEase[] | undefined, nowMs: number): PainEase[] {
+  return (eases ?? []).filter((e) => e.untilMs <= nowMs && !e.answeredAt);
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** One muscle, rested because she said it hurt. */
@@ -190,6 +234,10 @@ export interface PainEase {
   /** A muscle from CANONICAL_MUSCLE_ORDER — the same names the map and the assembler use. */
   muscle: string;
   severity: PainSeverity;
+  /** When she was ASKED how it feels, once the window ran out. Set by the lapse check. */
+  askedAt?: number;
+  /** When she ANSWERED. An ease with this set is closed and never asked about again. */
+  answeredAt?: number;
   /** When she reported it (ms). */
   fromMs: number;
   /** When the muscle returns ON ITS OWN (ms). Nothing has to be remembered or undone. */

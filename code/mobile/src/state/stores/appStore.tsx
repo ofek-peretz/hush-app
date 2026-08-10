@@ -35,7 +35,7 @@ import { track, flush as flushTelemetry } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
 import { undoEngineRotation } from '@/domain/swapLearning';
-import { activeEases, easeFor, effectiveBodyMap, type PainSeverity } from '@/domain/painReport';
+import { activeEases, awaitingAnswer, easeFor, effectiveBodyMap, ANSWER_SEVERITY, type EaseAnswer, type PainEase, type PainSeverity } from '@/domain/painReport';
 import { muscleOf } from '@/data/exercises';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
@@ -215,6 +215,10 @@ interface AppApi extends AppState {
    * pool by the caller. Returns the ease so the response screen can state it as a fact.
    */
   reportPain: (muscle: string, severity: PainSeverity) => Promise<void>;
+  /** The rest windows that have run out and are still waiting on her. */
+  easeChecks: () => PainEase[];
+  /** Her answer to one of them: clear, still tender, or still hurting. */
+  answerEaseCheck: (muscle: string, answer: EaseAnswer) => Promise<void>;
   updateProfileInfo: (fields: {
     age?: number;
     heightCm?: number;
@@ -853,11 +857,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await db.saveProfile(marked);
             dispatch({ type: 'PROFILE_UPDATED', profile: marked });
             void track('pain_ease_lapsed', { muscles: toAsk.map((e) => e.muscle) });
-            void askCoachToRevise(
-              `The rest window on her ${toAsk.map((e) => e.muscle).join(' and ')} has just run out. ` +
-                'Tell her the time is up, ask her how it feels now, and ask whether she is happy for you to ' +
-                'bring it back into her programme. Do not change anything until she answers.',
-            );
+            /*
+             * ⛔ THE QUESTION IS STATE NOW, NOT A MESSAGE (founder 2026-08-11).
+             *
+             * This fired `askCoachToRevise` — so the founder's own rule (*"the system has to REMEMBER
+             * and TELL him the time is up, and ASK HIM HOW HE FEELS"*) held only while there was a
+             * signal. With none, she was never asked: the muscle simply reappeared in her programme
+             * one morning and nothing said why. An injury is the last place in this product that
+             * should need a connection.
+             *
+             * Marking `askedAt` is the whole of it. `awaitingAnswer` reads the window against the
+             * clock, so the question survives an app that was shut for a fortnight, and
+             * `answerEaseCheck` below is what closes it.
+             */
           }
         }
         // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
@@ -945,6 +957,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * from a body map that does not yet know about the injury, which is the exact defect that
          * function's own comment warns about.
          */
+        const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
+        if (rebuilt) {
+          await db.saveProgram(rebuilt);
+          dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        }
+      },
+
+      easeChecks() {
+        return state.profile ? awaitingAnswer(state.profile.painEases, Date.now()) : [];
+      },
+
+      /**
+       * ⛔ HER ANSWER ENDS THE WINDOW — the app never decides she is healed.
+       *
+       * ⚠️ "RECOVERED" WRITES NOTHING BUT A CLOSE, and that is not an oversight: a lapsed ease
+       * already forbids nothing, because `activeEases` reads the clock. Saying yes changes no
+       * programme; it closes the question. The other two write a FRESH window, so the week is rebuilt
+       * against a body map that knows about it — through `programProfile`, like every other build.
+       */
+      async answerEaseCheck(muscle, answer) {
+        if (!state.profile) return;
+        const now = Date.now();
+        const open = awaitingAnswer(state.profile.painEases, now).filter((e) => e.muscle === muscle);
+        if (open.length === 0) return;
+        const closed = (state.profile.painEases ?? []).map((e) =>
+          open.includes(e) ? { ...e, answeredAt: now } : e,
+        );
+        const again = ANSWER_SEVERITY[answer];
+        const profile: Profile = {
+          ...state.profile,
+          painEases: again ? [...closed, easeFor(muscle, again, now)] : closed,
+        };
+        await db.saveProfile(profile);
+        dispatch({ type: 'PROFILE_UPDATED', profile });
+        void track('pain_ease_answered', { muscle, answer });
         const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
