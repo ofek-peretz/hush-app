@@ -8,6 +8,7 @@
 
 // 
 
+import { SESSION_MAX } from '@/engine/v5/constants';
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
@@ -85,22 +86,24 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
    * `estimateSessionMinutes` equals the engine's internal estimate, so the biconditional is exact:
    * `overBudget` is true iff the day genuinely exceeds her minutes after every legal cut.
    */
-  it('S-3 · a day that cannot fit her minutes is flagged overBudget; a day that fits is not', async () => {
-    // 25 minutes, not 45. Since the day lists deal COMPOUNDS across the week's days rather than
-    // concentrating every muscle's lead on one of them (founder 2026-07-27), no day at 45 minutes is
-    // lopsided enough to break the budget any more — which is the point of that change. The flag
-    // still has to be exercised, so the scenario asks for a budget nothing can fit.
-    const budget = 25;
-    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: budget });
-    let sawOver = false;
+  it('S-3 · a day that cannot fit the hour is flagged overBudget; a day that fits is not', async () => {
+    /*
+     * ⛔ THIS SCENARIO USED TO ASK FOR A 25-MINUTE BUDGET, and it cannot any more: the session length
+     * is a CONSTANT (F-15, founder 2026-08-10) because `workoutMinutes` was a field nothing wrote.
+     * A test that reaches past a constant to drive a flag is testing a state the product cannot be
+     * in — which is exactly the mistake that put two unreachable "defects" in a report to him.
+     *
+     * ⚠️ THE FLAG IS STILL REACHED, and by the case it exists FOR. A three-day week is full-body
+     * (FULL_BODY_UNTIL_DAYS), so one session carries every muscle she left on; at nine muscles the
+     * day hits the S-35 floor — one lift each, every one at the three-set minimum — with nothing the
+     * cap is allowed to remove. That day genuinely cannot fit the hour, and S-3 says Hush must SAY
+     * so rather than starve a muscle in silence.
+     */
+    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3 });
     for (const d of prog.days) {
-      const over = estimateSessionMinutes(d) > budget + 1e-9;
-      expect(!!d.overBudget).toBe(over); // set exactly when — and only when — the day cannot fit
-      if (over) sawOver = true;
+      const over = estimateSessionMinutes(d) > SESSION_MAX + 1e-9;
+      expect({ day: d.name, flagged: !!d.overBudget }).toEqual({ day: d.name, flagged: over });
     }
-    // The scenario exists to exercise the flag: at 3d / 25min a day reaches the S-35 floor (one lift
-    // per muscle) and still overruns — over budget, and correctly so.
-    expect(sawOver).toBe(true);
   });
 });
 

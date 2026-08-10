@@ -39,7 +39,7 @@ import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists, ESSENTIAL_PATTERNS } from '@/engine/v5/programAssembly';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
 import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
-import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
+import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
 import { epley, normalizeLoad } from '@/engine/loadMath';
@@ -219,7 +219,7 @@ function coreHostIndex(days: ProgramDay[]): number {
 // bootstrap, used until she has rest data — then her MEASURED rest replaces the rest portion (S-64).
 const COMPOUND_SET_MIN = 3;
 const ISOLATION_SET_MIN = 2;
-const MAX_SESSION_MIN = 60;
+const MAX_SESSION_MIN = SESSION_MAX; // F-15 — one length for everyone; see the constant's note
 // B-4, the WORK half — the active seconds of a set before she has performed any. B-4 names BOTH
 // facts that replace this bootstrap: "her measured rest (built, Stage 0) AND HER SET DURATIONS
 // (timestamps)". Both are wired now (`learnedRestS` / `learnedExecS`); this is only what stands in
@@ -306,7 +306,7 @@ export function estimateSessionMinutes(
  * cannot change what the session IS. F-1's [3,5] still bounds every slot, and a supplemental core
  * block is never grown (it is a finisher, not the work).
  */
-const MIN_SESSION_MIN = 45;
+const MIN_SESSION_MIN = SESSION_MIN; // F-15
 
 function fillToSessionFloor(
   day: ProgramDay,
@@ -1159,7 +1159,14 @@ export const fixtureModel: ModelClient = {
     // Core rides as supplemental work, but its SIZE follows the body map (S-50/S-2/S-4): off → none,
     // emphasis → a second movement. Never a shelf default that ignores what she declared.
     addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal');
-    const budgetMin = profile.workoutMinutes ?? MAX_SESSION_MIN; // her declared ceiling (S-64), default 60
+    /*
+     * ⛔ ONE LENGTH FOR EVERYONE (founder 2026-08-10, F-15). This read `profile.workoutMinutes`, a
+     * field NOTHING has ever written: onboarding stopped asking on 2026-08-05 and no settings control
+     * was built, so every athlete carried the default anyway. Reading it kept a dimension of state
+     * alive that no user could move, and it is the reason two unreachable "defects" reached the
+     * founder in a report. What she actually sets is her days, her bodyweight and her body map.
+     */
+    const budgetMin = MAX_SESSION_MIN;
     // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
     // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
     const history = await loadHistorySafe();

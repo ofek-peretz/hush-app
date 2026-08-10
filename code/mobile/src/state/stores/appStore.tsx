@@ -943,7 +943,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async updateProfileInfo(fields) {
         if (!state.profile) return;
         const daysChanged = fields.daysPerWeek != null && fields.daysPerWeek !== state.profile.daysPerWeek;
-        const minutesChanged = fields.workoutMinutes != null && fields.workoutMinutes !== state.profile.workoutMinutes;
+        const minutesChanged = false; // F-15 — the session length is a constant; nothing can change it
         // The map decides which muscles exist and how much of the week each one owns — a change is a
         // reshape, so it rebuilds on the same road as frequency and the time cap.
         const mapChanged = fields.bodyMap != null && JSON.stringify(fields.bodyMap) !== JSON.stringify(state.profile.bodyMap ?? {});
@@ -957,7 +957,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.sex ? { sex: fields.sex } : {}),
           ...(fields.experience ? { experience: fields.experience } : {}),
           ...(fields.daysPerWeek != null ? { daysPerWeek: fields.daysPerWeek } : {}),
-          ...(fields.workoutMinutes != null ? { workoutMinutes: fields.workoutMinutes } : {}),
+          /* ⛔ `workoutMinutes` IS NOT SETTABLE (F-15, founder 2026-08-10). It was accepted here and
+             no screen ever sent it — a variable nobody could move, costing a dimension of engine
+             state. The session is 45–60 for everyone; her days, her bodyweight and her body map are
+             what she sets. */
           ...(fields.bodyMap != null ? { bodyMap: fields.bodyMap } : {}),
           ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
         };

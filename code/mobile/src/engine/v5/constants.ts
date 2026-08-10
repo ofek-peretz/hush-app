@@ -124,6 +124,27 @@ export const WEEKLY_SETS_FLOOR = 6; // MEV â€” below this a muscle is maint
 export const WEEKLY_SETS_CEILING = 30;
 
 /**
+ * ⛔ THE SESSION IS ONE LENGTH FOR EVERYONE (founder 2026-08-10): *"למה לא פשוט להגדיר שעה אימון
+ * קבוע — בין 45 ל-60 דקות טווח קבוע?"*
+ *
+ * He is right, and the product had already been doing it without saying so. `workoutMinutes` sat on
+ * `Profile` as a number, and NOTHING WROTE IT: onboarding stopped asking on 2026-08-05 (*"the athlete
+ * cannot answer how long she wants to be in a gym before her first session"*), and no settings
+ * control was ever built. Every athlete carried the same 60.
+ *
+ * ⚠️ A VARIABLE NOBODY SETS IS WORSE THAN A CONSTANT, and it cost three things:
+ *   · a whole dimension of the engine's state space to test and maintain, with no user behind it;
+ *   · WEAKER GUARANTEES — a family of bounds proved instead of one. One bound is stronger;
+ *   · two "defects" I reported to the founder that no athlete could reach, because I swept the space
+ *     the TYPE allowed rather than the space the PRODUCT produces.
+ *
+ * The floor is his too: *"just make it at least 45 minutes, because less than that is too light."*
+ */
+/* F-15 — the session's fixed length. Both ends are the founder's, 2026-06-23 and 2026-08-05. */
+export const SESSION_MIN = 45;
+export const SESSION_MAX = 60;
+
+/**
  * B-2 — the muscle count a full body map trains (every group but Core, which is supplemental).
  * Turning muscles OFF does not shorten her hour, so the work has to redistribute over what is left.
  */

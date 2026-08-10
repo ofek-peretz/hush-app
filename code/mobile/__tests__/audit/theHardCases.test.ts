@@ -15,7 +15,7 @@
 // @ts-nocheck
 
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
-import { CANONICAL_MUSCLE_ORDER, WEEKLY_SETS_FLOOR } from '@/engine/v5/constants';
+import { CANONICAL_MUSCLE_ORDER, SESSION_MAX, WEEKLY_SETS_FLOOR } from '@/engine/v5/constants';
 import { exerciseById, muscleOf, patternFamily } from '@/data/exercises';
 import { swapCandidates, defaultBackup } from '@/domain/swapPool';
 import type { MuscleStance, Profile, Program } from '@/data/local/models';
@@ -30,8 +30,7 @@ const athlete = (over: Partial<Profile> = {}): Profile => ({
   repBand: '8-10',
   repBandByMuscle: {},
   memberSince: new Date('2026-01-01').toISOString(),
-  workoutMinutes: 60,
-  ...over,
+    ...over,
 });
 
 const build = (p: Profile): Promise<Program> => fixtureModel.generateProgram(p);
@@ -40,7 +39,14 @@ const lifts = (p: Program) => workouts(p).flatMap((d) => d.slots.map((s) => s.ex
 
 /** The whole space an athlete can be in, without the map. */
 const DAYS = [2, 3, 4, 5, 6];
-const MINUTES = [45, 60, 75, 90];
+/*
+ * ⛔ ONE LENGTH, BECAUSE THAT IS WHAT THE PRODUCT PRODUCES (F-15, founder 2026-08-10).
+ *
+ * This swept 45 / 60 / 75 / 90 and reported two "defects" at 45 that NO ATHLETE COULD REACH:
+ * `workoutMinutes` was typed `number` but nothing ever wrote it. Sweeping the space the TYPE allows
+ * instead of the space the PRODUCT produces manufactures findings and costs the reader's trust.
+ */
+const MINUTES = [SESSION_MAX];
 const SEXES: ('male' | 'female')[] = ['male', 'female'];
 const WEIGHTS = [45, 62, 95, 140];
 
@@ -65,7 +71,7 @@ describe('⛔ several things change at once', () => {
       for (const minutes of MINUTES)
         for (const bodyMap of MAPS)
           for (const sex of SEXES) {
-            const p = await build(athlete({ daysPerWeek: days, workoutMinutes: minutes, bodyMap, sex }));
+            const p = await build(athlete({ daysPerWeek: days, bodyMap, sex }));
             const w = workouts(p);
             const label = `${sex} ${days}d ${minutes}min ${JSON.stringify(bodyMap)}`;
             if (w.length !== days) broken.push(`${label}: ${w.length} workouts, wanted ${days}`);
@@ -87,7 +93,7 @@ describe('⛔ several things change at once', () => {
         for (const bodyMap of MAPS) {
           const off = Object.entries(bodyMap).filter(([, v]) => v === 'off').map(([m]) => m);
           if (off.length === 0) continue;
-          const p = await build(athlete({ daysPerWeek: days, workoutMinutes: minutes, bodyMap }));
+          const p = await build(athlete({ daysPerWeek: days, bodyMap }));
           const trained = new Set(lifts(p).map((id) => muscleOf(id)));
           for (const m of off) if (trained.has(m)) leaked.push(`${days}d ${minutes}min: ${m}`);
         }
@@ -120,7 +126,7 @@ describe('⛔ the numbers on the page are inside their bounds', () => {
     for (const days of DAYS)
       for (const minutes of MINUTES)
         for (const weightKg of WEIGHTS) {
-          const p = await build(athlete({ daysPerWeek: days, workoutMinutes: minutes, weightKg }));
+          const p = await build(athlete({ daysPerWeek: days, weightKg }));
           for (const d of workouts(p))
             for (const s of d.slots) {
               if (s.setCount < 3 || s.setCount > 5) bad.push(`${days}d ${minutes}min ${weightKg}kg: ${s.exerciseId} ${s.setCount} sets`);
@@ -129,7 +135,7 @@ describe('⛔ the numbers on the page are inside their bounds', () => {
     expect(bad.slice(0, 10)).toEqual([]);
   });
 
-  it('⛔ no session runs away — and a sub-45 request is NOT honoured, which she is never told', async () => {
+  it('⛔ no session runs away past the hour', async () => {
     /*
      * ⛔ A REAL HOLE, FOUND BY THIS TEST AND LEFT DOCUMENTED RATHER THAN PAPERED OVER.
      *
@@ -156,7 +162,7 @@ describe('⛔ the numbers on the page are inside their bounds', () => {
     for (const days of DAYS)
       for (const minutes of MINUTES)
         for (const bodyMap of [{}, { Back: 'emphasis' as MuscleStance }, { Quads: 'emphasis' as MuscleStance, Glutes: 'emphasis' as MuscleStance }]) {
-          const p = await build(athlete({ daysPerWeek: days, workoutMinutes: minutes, bodyMap }));
+          const p = await build(athlete({ daysPerWeek: days, bodyMap }));
           for (const d of workouts(p)) {
             const min = estimateSessionMinutes(d);
             // A hard outer bound: whatever the combination, a session may not run more than ten
@@ -172,7 +178,7 @@ describe('⛔ the numbers on the page are inside their bounds', () => {
     const missing: string[] = [];
     for (const days of DAYS)
       for (const minutes of MINUTES) {
-        const p = await build(athlete({ daysPerWeek: days, workoutMinutes: minutes }));
+        const p = await build(athlete({ daysPerWeek: days }));
         const trained = new Set(lifts(p).map((id) => muscleOf(id)));
         for (const m of CANONICAL_MUSCLE_ORDER) {
           if (m === 'Core') continue; // supplemental — sized by the map, may legitimately be absent
@@ -233,7 +239,7 @@ describe('⛔ the week is stable under repetition', () => {
     for (const days of DAYS)
       for (const minutes of MINUTES)
         for (const bodyMap of [{}, { Glutes: 'emphasis' as MuscleStance, Calves: 'off' as MuscleStance }]) {
-          const p = athlete({ daysPerWeek: days, workoutMinutes: minutes, bodyMap });
+          const p = athlete({ daysPerWeek: days, bodyMap });
           const a = lifts(await build(p));
           const b = lifts(await build(p));
           if (a.join(',') !== b.join(',')) drift.push(`${days}d ${minutes}min`);
