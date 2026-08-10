@@ -91,9 +91,25 @@ describe('the prompt asks for a name that could only be hers', () => {
 
 describe('and it reaches two screens, not one', () => {
   it('⛔ the programme she just received carries it', () => {
+    /*
+     * ⛔ THE NAME IS THE ENGINE'S NOW (founder 2026-08-10, option b). The coach's `title` and `why`
+     * were what made a programme a thing with a name; the coach is out of the build, so the name is
+     * composed from the two facts that made her week HERS — how it splits, and what she leads with.
+     *
+     * ⚠️ AND THE `why` LINE IS GONE WITH NO REPLACEMENT, deliberately. A generated sentence about why
+     * this week suits her would be a claim nothing measured. The name states the shape; it does not
+     * argue for it.
+     */
     const src = read('src/screens/onboarding/ProgramCreated.tsx');
-    expect(src).toContain('{coachPlan?.title ? (');
-    expect(src).toContain('{coachPlan.why ? <Text style={styles.programWhy}>');
+    expect(src).toContain('{named ? (');
+    expect(src).toContain('programmeName(');
+    /*
+     * ⚠️ MATCHED AGAINST CODE, NOT PROSE. The file's header still EXPLAINS what `coachPlan` was and
+     * why it went — an assertion that cannot tell an explanation from an instruction fails on its own
+     * documentation, which this one did on its first run.
+     */
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toContain('coachPlan');
   });
 
   it('⚠️ and so does TODAY, where she looks every morning', () => {

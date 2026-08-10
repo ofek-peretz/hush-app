@@ -184,7 +184,18 @@ describe('the ordering that a first run always breaks', () => {
   it('⛔ lands on the screen that SHOWS her the week', () => {
     // *"It moved me straight to the transition screen without showing me the plan."*
     expect(building()).toContain("navigation.replace('ProgramCreated', { inputs })");
-    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain('<PlanWeek');
+    /*
+     * ⛔ THE WEEK LIST IS DELETED (founder 2026-08-10): *"אף אחד לא רואה את זה."* It sat below
+     * the signature under a real argument — the programme is what she came for, so it ends the
+     * screen — and the device refuted it: nobody scrolls past the seal.
+     *
+     * ⚠️ WHAT THE LAW PROTECTS SURVIVES: she must not be moved past her programme without meeting
+     * it. She meets it by NAME here — shape, days, and what she leads with — and the week itself is
+     * one tap behind the CTA rather than an unread list under a signature.
+     */
+    const ready = read('src/screens/onboarding/ProgramCreated.tsx');
+    expect(ready).not.toContain('<PlanWeek');
+    expect(ready).toContain('programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER)');
   });
 });
 

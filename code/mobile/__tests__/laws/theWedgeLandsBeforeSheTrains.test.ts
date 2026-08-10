@@ -63,7 +63,13 @@ describe('the coach\'s reason rides with the lift', () => {
 
   it('⛔ and the screen it lands on is the one she meets first', () => {
     // `ProgramCreated` is the last step of onboarding — the plan, before she has trained once.
-    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain('<PlanWeek plan={coachPlan}');
+    /*
+     * ⛔ `PlanWeek` IS GONE FROM THIS SCREEN (founder 2026-08-10) — nobody scrolled to it. The wedge
+     * this law is about is the REASON riding with the lift, and it still lands where she meets it:
+     * on Today and inside the session. What is asserted here is that she is not moved past her
+     * programme unmet — she meets it by name.
+     */
+    expect(read('src/screens/onboarding/ProgramCreated.tsx')).not.toContain('<PlanWeek');
     expect(read('src/screens/onboarding/BuildingProgramme.tsx')).toContain("navigation.replace('ProgramCreated'");
   });
 

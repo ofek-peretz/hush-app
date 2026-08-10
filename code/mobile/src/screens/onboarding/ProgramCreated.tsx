@@ -58,12 +58,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Button, Legend } from '@/components/ds';
-import { PlanWeek } from '@/components/PlanWeek';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
-import type { CoachPlan } from '@/domain/coachPlan';
+import { programmeName } from '@/domain/programmeName';
+import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
+import type { Program } from '@/data/local/models';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -79,16 +80,57 @@ export function ProgramCreated({ route }: Props) {
   const app = useApp();
   const { inputs } = route.params;
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
-  // HER learning phase, from the programme the assembler is about to build (see `learnCount`).
-  const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
+  /*
+   * The profile the CTA is about to write, in memory. `generateProgram` is pure and reads only these
+   * four, so the week previewed here is byte-for-byte the week she will train.
+   */
+  const profileForPreview = useMemo<Profile>(
+    () => ({
+      sex: inputs.sex,
+      weightKg: inputs.weightKg,
+      daysPerWeek: inputs.daysPerWeek,
+      units: inputs.units,
+      repBand: '8-10',
+      bodyMap: inputs.bodyMap,
+      workoutMinutes: inputs.workoutMinutes ?? 60,
+    }) as Profile,
+    [inputs],
+  );
+  /*
+   * ⛔ THIS READ A RECORD NOTHING WRITES ANY MORE, AND DREW A BROKEN ARC BECAUSE OF IT.
+   *
+   * It loaded `db.loadCoachPlan()` — the coach's answer, persisted by `BuildingProgramme` until
+   * 2026-08-10, when the build stopped asking. So `coachPlan` was permanently null, `learnCount(null)`
+   * returned 0, and the trial band rendered **"I LEARN YOU 1–0"** beside **"I KNOW YOU 1–14"** on the
+   * screen whose whole job is explaining the deal before she agrees to it.
+   *
+   * ⚠️ AND IT WAS INVISIBLE IN THE GALLERY FOR THE SAME REASON IT WAS BROKEN: no coach plan there
+   * either, so the harness drew the identical nonsense and it read as fixture emptiness.
+   *
+   * The programme is on disk now — `completeOnboarding` saves it — but this screen runs BEFORE that
+   * (its own CTA is what calls `completeOnboarding`), so it composes the same week the assembler is
+   * about to build. That call is PURE, which is what makes asking it twice safe and its answer
+   * identical to the one she will train.
+   */
+  const [program, setProgram] = useState<Program | null>(null);
   useEffect(() => {
     let alive = true;
-    void db.loadCoachPlan().then((p) => alive && setCoachPlan(p));
+    void app.model.generateProgram(profileForPreview).then((p) => alive && setProgram(p)).catch(() => {});
     return () => {
       alive = false;
     };
-  }, []);
-  const learnTicks = useMemo(() => learnCount(coachPlan), [coachPlan]);
+  }, [profileForPreview]);
+  const learnTicks = useMemo(() => learnCount(program), [program]);
+  /* Her week's name, in her language — the same descriptor `BuildingProgramme` renders. */
+  const named = useMemo(() => {
+    if (!program) return null;
+    const n = programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER);
+    return [
+      t(n.key),
+      t('plan.weekDays', { n: n.days }),
+      ...(n.led.length > 0 ? [t('plan.led', { muscles: n.led.map((m) => t(`muscle.${m}`)).join(' · ') })] : []),
+    ].join(' · ');
+  }, [program, inputs.bodyMap, t]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const reduced = useReducedMotion();
@@ -160,10 +202,9 @@ export function ProgramCreated({ route }: Props) {
               to name everything writes "Your Personalized Fitness Journey". When it has nothing
               worth calling the programme, this draws nothing and the screen reads as it always did.
             */}
-            {coachPlan?.title ? (
+            {named ? (
               <View style={styles.programName}>
-                <Text style={styles.programTitle}>{bidi(coachPlan.title)}</Text>
-                {coachPlan.why ? <Text style={styles.programWhy}>{coachPlan.why}</Text> : null}
+                <Text style={styles.programTitle}>{bidi(named)}</Text>
               </View>
             ) : null}
             {/* THE HEADLINE FACT (founder 2026-07-24): the fourteen stand huge, FREE beside them. */}
@@ -206,15 +247,14 @@ export function ProgramCreated({ route }: Props) {
             </View>
             <Text style={styles.signature}>{t('ob.readySignature')}</Text>
             {/*
-              ════ THE WEEK ITSELF, AND IT GOES LAST ON PURPOSE ════
+              ⛔ THE WEEK LIST IS DELETED (founder 2026-08-10): *"אם אני זוכר התוכנית אימון מופיעה
+              שם למטה וצריך להעיף אותה כי אף אחד לא רואה את זה."*
 
-              Below the promise rather than above it. The trial arc is the DEAL — the fourteen, the
-              free pill, the no-card line — and it is what she has to understand before she agrees
-              to anything. The programme is what she came for, so it is what the screen ends on and
-              what the CTA sits under: the last thing she reads before "show my program" is the
-              actual programme.
+              `PlanWeek` sat below the signature, under an argument that the programme is what she
+              came for so it should be the last thing she reads. It is a real argument and the device
+              refuted it: nobody scrolls past the seal. What this screen is FOR is the deal — the
+              fourteen, the free pill, the no-card line — and the week is one tap away behind the CTA.
             */}
-            <PlanWeek plan={coachPlan} units={inputs.units} />
           </Animated.View>
       </ScrollView>
       <View style={styles.footer}>
@@ -239,17 +279,17 @@ export function ProgramCreated({ route }: Props) {
 /**
  * How many sessions the learning phase runs for.
  *
- * It used to ask the ASSEMBLER to compose her week and count the lifts in it. The assembler is
- * deleted, and by the time this screen draws the coach has already written her programme — so it is
- * counted from what she will actually train rather than from a second week nobody will see.
+ * ⛔ IT ASKS THE ASSEMBLER AGAIN. The comment here used to read *"the assembler is deleted"* — it is
+ * back, and it is the only thing that composes her week, so the phase is counted from the programme
+ * she will actually train rather than from a coach's answer nothing writes.
+ *
+ * ⚠️ ZERO IS NOT A LENGTH. `learnPhaseLength` floors at 1; this returns 0 only while the pure call
+ * is still resolving, and the band is not drawn until it has. The old version returned 0 FOREVER,
+ * which is how "I LEARN YOU 1–0" reached the screen.
  */
-function learnCount(plan: CoachPlan | null): number {
-  if (!plan) return 0;
-  return learnPhaseLength(
-    plan.sessions.map((s) => ({
-      slots: s.blocks.flatMap((b) => b.items.map((i) => ({ exerciseId: i.ex }))),
-    })),
-  );
+function learnCount(program: Program | null): number {
+  if (!program) return 0;
+  return learnPhaseLength(program.days);
 }
 
 /** The moss start/finish measuring mark — two caps, a rule between them, the dot arrived at centre. */
