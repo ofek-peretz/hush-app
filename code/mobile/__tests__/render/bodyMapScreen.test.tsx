@@ -137,7 +137,7 @@ function props(over: Record<string, unknown> = {}) {
        * `fixtureModel`'s safety net quietly rebuilding an all-normal map, which is the exact silent
        * failure this file's first law was written about. The fixture is the navigator's shape now.
        */
-      route: { params: { name: 'Ofek', sex: 'female', weightKg: 62, daysPerWeek: 4 } },
+      route: { params: { sex: 'female', weightKg: 62, daysPerWeek: 4, units: 'kg', healthConnected: true } },
       ...over,
       // `as never` made every `{...p}` below a spread of `never`. The screen's own prop type is the
       // honest annotation, and it keeps the fixture answerable to the component it drives.
@@ -258,7 +258,7 @@ describe('F-4 · the emphasis budget is legible, not a hidden error', () => {
     tap(r, 'Quads', 'Emphasis');
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
+    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
     expect(Object.values(map).filter((s) => s === 'emphasis')).toHaveLength(EMPHASIS_BUDGET);
     expect(map.Quads).toBeUndefined();
   });
@@ -285,7 +285,7 @@ describe('the map that leaves is the map she drew', () => {
     tap(r, 'Back', 'Emphasis');
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
+    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
     expect(map).toEqual({ Calves: 'off', Back: 'emphasis' });
   });
 
@@ -296,7 +296,7 @@ describe('the map that leaves is the map she drew', () => {
     tap(r, 'Calves', 'Normal'); // …she changed her mind
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
+    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
     expect(map).toEqual({});
   });
 
@@ -317,8 +317,18 @@ describe('the map that leaves is the map she drew', () => {
     act(() => continueBtn(r).props.onPress());
 
     expect(nav[0]).toEqual({
-      s: 'ConnectHealth',
-      p: { name: 'Ofek', sex: 'female', weightKg: 62, daysPerWeek: 4, bodyMap: { Back: 'emphasis' } },
+      s: 'BuildingProgramme',
+      p: {
+        inputs: {
+          goal: 'build_muscle',
+          sex: 'female',
+          weightKg: 62,
+          daysPerWeek: 4,
+          units: 'kg',
+          healthConnected: true,
+          bodyMap: { Back: 'emphasis' },
+        },
+      },
     });
   });
 });

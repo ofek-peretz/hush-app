@@ -14,7 +14,7 @@
 // 
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { CardioActivity, Experience, MuscleStance, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary, Units } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
 import type { WristOffer } from '@/platform/watch/watchPresence';
@@ -100,7 +100,19 @@ export type OnboardingParamList = {
    * muscle. OFF is "don't train this" (a bad shoulder, a forbidden movement); EMPHASIS is "lead
    * with this". `assembleV5DayLists` takes this map and nothing else about her intent.
    */
-  BodyMap: { sex: 'male' | 'female'; weightKg: number; daysPerWeek: number };
+  /*
+   * ⛔ AND IT IS THE LAST ANSWERING STEP NOW (founder 2026-08-10). It therefore carries what the two
+   * steps before it collected AND what only `ConnectHealth` can know — her units and whether health
+   * was granted — because it is where `OnboardingInputs` is assembled. One place builds that object;
+   * which place is the last one is what changed.
+   */
+  BodyMap: {
+    sex?: 'male' | 'female';
+    weightKg?: number;
+    daysPerWeek?: number;
+    healthConnected?: boolean;
+    units?: Units;
+  };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
@@ -117,9 +129,6 @@ export type OnboardingParamList = {
      *  Kept only because `ConnectHealth` still spreads them into the profile conditionally. */
     goal?: string;
     limits?: string;
-    /** What she drew on the body map. `{}` is a complete answer — normal is the absence of a
-     *  decision, not one — so an empty object must never be read as "she skipped it". */
-    bodyMap?: Record<string, MuscleStance>;
     previewWrist?: WristOffer;
   } | undefined;
   /*

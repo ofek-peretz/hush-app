@@ -122,8 +122,12 @@ function OnboardingNavigator() {
         component={AboutYou}
         options={{ fullScreenGestureEnabled: false }}
       />
-      <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
+      {/* ⛔ HEALTH SECOND, THE BODY MAP LAST (founder 2026-08-10). The map is the only step that
+          shapes the week, so it is the peak — and the peak belongs beside the payoff. A permission
+          ask was a fine thing to put in front of a conversation and a poor thing to put between her
+          and her programme. */}
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
+      <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
       {/* BODY DATA DOES NOT SWIPE BACK (founder 2026-07-13). Its body is three horizontal wheels,
           and a full-screen horizontal back gesture over them means every attempt to set an age
           drags the STEP instead of turning the rule. The step keeps a hand-held way back — a drag

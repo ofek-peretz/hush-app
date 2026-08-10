@@ -137,7 +137,7 @@ describe('onboarding asks for every one of them', () => {
     /* ⚠️ `NameEntry` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-04) — four answering
        screens now, not five. The list is the PATH, so it changes when the path does; what may not
        change is that every requirement is still collected on it. */
-    const flow = ['AboutYou', 'BodyMap', 'ConnectHealth']
+    const flow = ['AboutYou', 'ConnectHealth', 'BodyMap']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -207,7 +207,7 @@ describe('onboarding asks for every one of them', () => {
      */
     const about = read('src/screens/onboarding/AboutYou.tsx');
     expect(about.match(/<WheelPicker/g)).toHaveLength(2);
-    expect(about).toContain("navigation.navigate('BodyMap', { sex, weightKg: kg, daysPerWeek: days })");
+    expect(about).toContain("navigation.navigate('ConnectHealth', { sex, weightKg: kg, daysPerWeek: days })");
     /*
      * ⛔ THE STEP AFTER THIS ONE IS THE BODY MAP NOW (founder 2026-08-08): *"פציעות כאבים ומה אסור
      * יהיה בBODYMAP לכן לא צריך טקסט חופשי."* `YourGoal` asked for two paragraphs, and measuring
@@ -227,7 +227,7 @@ describe('onboarding asks for every one of them', () => {
      * alone would have passed against exactly that.
      */
     const map = read('src/screens/onboarding/BodyMap.tsx');
-    expect(map).toContain("navigation.navigate('ConnectHealth', { ...(route?.params ?? {}), bodyMap: map })");
+    expect(map).toContain("navigation.navigate('BuildingProgramme', {");
     /* ⚠️ AND THE DELETED SCREEN IS GONE FROM THE NAVIGATOR, not merely unrouted — a screen left
        registered is a screen a deep link can still reach. */
     expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
@@ -235,17 +235,24 @@ describe('onboarding asks for every one of them', () => {
     expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('AboutYou')");
   });
 
-  it('and ConnectHealth puts it into the inputs the profile is built from', () => {
-    const src = read('src/screens/onboarding/ConnectHealth.tsx');
-    expect(src).toContain('const weightKg = route.params?.weightKg;');
-    expect(src).toContain('...(weightKg != null ? { weightKg } : {})');
+  it('and the LAST step puts it into the inputs the profile is built from', () => {
     /*
-     * ⚠️ AND THE MAP, which is the ONLY thing onboarding sends that shapes the programme. The guard
-     * is `!= null`, not truthiness of its size: `{}` is a complete answer (every muscle left normal)
-     * and `completeOnboarding` reads the PRESENCE of the key to put her on the v5 engine.
+     * ⛔ THAT STEP IS THE BODY MAP NOW (founder 2026-08-10). `ConnectHealth` assembled
+     * `OnboardingInputs` while it was last; the order changed so the map — the only step that shapes
+     * the week — sits beside the payoff. The assembly moved WHOLE rather than splitting in two,
+     * because the principle it was written under is that exactly one place builds that object.
      */
-    expect(src).toContain('const bodyMap = route.params?.bodyMap;');
-    expect(src).toContain('...(bodyMap != null ? { bodyMap } : {})');
+    const src = read('src/screens/onboarding/BodyMap.tsx');
+    expect(src).toContain('...(p.weightKg != null ? { weightKg: p.weightKg } : {})');
+    /*
+     * ⚠️ AND THE MAP ITSELF is spread UNCONDITIONALLY. `{}` is a complete answer — every muscle
+     * left normal — and `completeOnboarding` reads the PRESENCE of the key to put her on the v5
+     * engine, so a `length` guard would silently drop the athlete who changed nothing.
+     */
+    expect(src).toContain('bodyMap: map,');
+    // …and what only the health step can know rides forward rather than being re-derived here.
+    expect(src).toContain("healthConnected: p.healthConnected ?? false");
+    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain('healthConnected: withHealth,');
   });
 
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {

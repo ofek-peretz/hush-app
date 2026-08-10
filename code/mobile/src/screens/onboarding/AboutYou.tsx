@@ -127,7 +127,7 @@ export function AboutYou({ navigation }: Props) {
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('BodyMap', { sex, weightKg: kg, daysPerWeek: days });
+    navigation.navigate('ConnectHealth', { sex, weightKg: kg, daysPerWeek: days });
   }
 
   return (

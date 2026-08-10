@@ -124,78 +124,35 @@ export function ConnectHealth({ navigation, route }: Props) {
     // first open that knows. Both exits set it, because both leave the screen having shown it.
     if (wrist) void markWristOffered();
     /*
-     * ════ THE LAST STEP BEFORE THE COACH ════
+     * ⛔ THIS IS NO LONGER THE LAST STEP (founder 2026-08-10). The body map is.
      *
-     * Founder, 2026-08-01: *"delete every screen you can and change the prompt accordingly. Good
-     * onboarding is short — precise and to the point, and now that we added a conversation window
-     * we MUST make onboarding as short as possible."*
+     * Health sat last because the step after it was a coach, and a permission ask is a fine thing to
+     * put in front of a conversation. It is a poor thing to put in front of a PROGRAMME: the map is
+     * the only screen in the intake that shapes the week, so it is the emotional peak, and the peak
+     * belongs next to the payoff. Ending on "may I read your heart rate" and then handing her a
+     * programme puts the dullest question in the product between her and the thing she came for.
      *
-     * `ManualInfo` used to sit here: two wheel pickers asking her bodyweight and how many days she
-     * trains. Both are questions a coach asks, and the very next screen IS a coach — so she was
-     * being asked twice, once by a form that cannot follow up and once by something that can.
-     *
-     * The intake prompt names both as things to learn. What is left here is what a conversation
-     * genuinely cannot supply: her units, which the PHONE already knows and should never be a
-     * question at all.
+     * ⚠️ SO THE ASSEMBLY OF `OnboardingInputs` MOVES WITH THE ORDER, whole, to the new last step.
+     * There must be ONE place that builds it — that principle is unchanged and is the reason this
+     * screen does not build half of it here and let the map bolt the rest on. What this step knows
+     * and nothing else does is her units and whether health was granted, so those two ride forward
+     * as params exactly as `sex` always has.
      */
-    navigation.navigate('BuildingProgramme', {
-      inputs: {
-        // Hush is hypertrophy-first for everyone — goal is not asked. Experience is deleted (Rev 7).
-        goal: 'build_muscle',
-        /*
-         * ⛔ ZERO MEANS NOBODY HAS ASKED HER, AND IT MUST STAY A NUMBER SHE NEVER SEES.
-         *
-         * ⚠️ This was `4`, with a comment claiming "the coach replaces it, so the placeholder
-         * survives exactly one exchange". **It did not survive one exchange — it decided the
-         * product.** The founder, on the device: *"he decides by himself that he'll do 4 workouts
-         * for me, for some reason, without asking me how many I want."*
-         *
-         * The number went onto the coach's sheet as a measured fact, under a bound that reads
-         * "write exactly that many sessions", so the very first reply was a four-day programme and
-         * the question was never asked. `coachFacts` omits it now while it is 0.
-         */
-        /*
-         * ⛔ HER ANSWER, FROM `YourWeek` — never a placeholder. This field was hard-coded to a
-         * literal 4 once, and it decided the founder's week without asking him. `0` remains the
-         * fallback so that `coachFacts` omits it rather than stating a number nobody gave.
-         */
-        daysPerWeek: daysPerWeekAsked ?? 0,
-        // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
-        // This was `'kg'` for everybody, so every American athlete was told her bodyweight in
-        // kilos and then had to go and find a switch. `unitsForDevice` reads the measurement
-        // system SHE set when she set the phone up, and falls back to its region.
-        units: unitsForDevice(Localization.getLocales()[0]),
-        healthConnected: withHealth,
-        sex,
-        /*
-         * ⛔ HER BODYWEIGHT, from the step before this one (founder 2026-08-03). Not optional in
-         * practice: `Bodyweight` is on the only path here, and `missingForCoach` is what proves it.
-         */
-        ...(weightKg != null ? { weightKg } : {}),
-        ...(age != null ? { age } : {}),
-        ...(experience != null ? { experience } : {}),
-        ...(workoutMinutes != null ? { workoutMinutes } : {}),
-        /* Her own words — the two things a form cannot hold. They become the coach's first brief. */
-        ...(goal ? { goalText: goal } : {}),
-        ...(limits ? { limitsText: limits } : {}),
-        /*
-         * ⛔ THE MAP SHE DREW — the only thing onboarding sends that SHAPES the programme.
-         *
-         * ⚠️ SPREAD CONDITIONALLY, and the condition is presence, not size. `{}` is a complete
-         * answer (she left every muscle normal) and it must arrive as `{}`, because
-         * `completeOnboarding` reads the PRESENCE of this key to put her on the v5 engine. A
-         * truthiness test on the object is safe — `{}` is truthy — but `Object.keys(map).length`
-         * would not be, and that is the shape this line is most likely to be "tidied" into.
-         */
-        ...(bodyMap != null ? { bodyMap } : {}),
-      },
+    navigation.navigate('BodyMap', {
+      ...(route.params ?? {}),
+      healthConnected: withHealth,
+      // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
+      // This was `'kg'` for everybody, so every American athlete was told her bodyweight in kilos
+      // and then had to go and find a switch. `unitsForDevice` reads the measurement system SHE set
+      // when she set the phone up, and falls back to its region.
+      units: unitsForDevice(Localization.getLocales()[0]),
     });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 3 }}
+      progress={{ index: 2, total: 3 }}
       legend={t('ob.healthLegend')}
       title={t('ob.healthTitle')}
       /*

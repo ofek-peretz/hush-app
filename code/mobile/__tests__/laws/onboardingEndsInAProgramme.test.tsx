@@ -47,7 +47,10 @@ describe('the last step builds, it does not chat', () => {
     expect(fs.existsSync(path.join(__dirname, '..', '..', 'src/screens/onboarding/CoachIntake.tsx'))).toBe(false);
     // …and nothing routes to it, which is how a deleted screen becomes a blank one instead.
     expect(read('src/app/Root.tsx')).not.toContain('CoachIntake');
-    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('BuildingProgramme'");
+    /* ⛔ THE LAST ANSWERING STEP IS THE BODY MAP (founder 2026-08-10) — health moved to second, so
+       the peak sits beside the payoff instead of a permission ask sitting between them. */
+    expect(read('src/screens/onboarding/BodyMap.tsx')).toContain("navigation.navigate('BuildingProgramme'");
+    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('BodyMap'");
   });
 
   it('⛔ ASKS NOBODY — the week is assembled, not requested', () => {

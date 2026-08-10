@@ -94,16 +94,42 @@ export function BodyMap({ navigation, route }: { navigation: any; route: any }) 
   };
 
   /*
-   * ⚠️ THE RELAY IS FLAT, and it was not. This screen was written against a `{ inputs }` param that
-   * no step in this navigator has ever sent: every onboarding screen spreads what it was given and
-   * adds its own (`{ ...route.params, bodyMap }`), and `ConnectHealth` reads those keys off the top
-   * of `route.params`. Wrapping the map in an `inputs` object dropped BOTH — her sex, weight and
-   * days on the way in, and the map itself on the way out — so the assembler would have been handed
-   * an athlete with no body and no map, silently.
+   * ⛔ THIS IS THE LAST STEP NOW (founder 2026-08-10), so it is where `OnboardingInputs` is
+   * assembled — the one place that does, moved whole from `ConnectHealth` rather than split in two.
+   *
+   * The map is the only screen in the intake that shapes the week, which makes it the peak, and the
+   * peak belongs next to the payoff. Health moved to second: a permission ask was a fine thing to
+   * put in front of a conversation and a poor thing to put between her and her programme.
+   *
+   * ⚠️ THE RELAY IS FLAT, and this screen was written against a `{ inputs }` param no step in this
+   * navigator has ever sent — her sex, weight and days died on the way in and the map on the way
+   * out, silently, with `fixtureModel`'s safety net rebuilding an all-normal week.
    */
   const build = () => {
     if (nothingOn) return; // S-3 — an unbuildable map never leaves this screen
-    navigation.navigate('ConnectHealth', { ...(route?.params ?? {}), bodyMap: map });
+    const p = route?.params ?? {};
+    navigation.navigate('BuildingProgramme', {
+      inputs: {
+        // Hush is hypertrophy-first for everyone (register Part 9 §A) — the goal question is gone.
+        goal: 'build_muscle',
+        /*
+         * ⛔ ZERO MEANS NOBODY HAS ASKED HER. This was a literal `4` once and it decided the
+         * founder's week unasked — *"he decides by himself that he'll do 4 workouts for me."* The
+         * fallback stays 0 so a missing answer reads as missing rather than as an answer.
+         */
+        daysPerWeek: p.daysPerWeek ?? 0,
+        units: p.units ?? 'kg',
+        healthConnected: p.healthConnected ?? false,
+        sex: p.sex,
+        ...(p.weightKg != null ? { weightKg: p.weightKg } : {}),
+        /*
+         * ⚠️ SPREAD ON PRESENCE, NOT ON SIZE. `{}` is a complete answer — she left every muscle
+         * normal — and `completeOnboarding` reads the PRESENCE of this key to put her on the v5
+         * engine. `Object.keys(map).length` is the tidy-up that would break it.
+         */
+        bodyMap: map,
+      },
+    });
   };
 
   const openStance: MuscleStance = open ? (map[open] ?? 'normal') : 'normal';
@@ -120,7 +146,7 @@ export function BodyMap({ navigation, route }: { navigation: any; route: any }) 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 3 }}
+      progress={{ index: 3, total: 3 }}
       title={tg('ob.mapTitle')}
       sub={tg('ob.mapSub')}
       headGap={18}
