@@ -23,6 +23,7 @@ import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { BodyMapFigure } from '@/components/BodyMapFigure';
+import { FormMedia } from '@/components/FormMedia';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -1281,6 +1282,17 @@ export const GALLERY: GalleryEntry[] = [
       </View>
     ),
   },
+  /*
+   * ⚠️ THE DEMONSTRATION, PUT WHERE IT CAN BE LOOKED AT. `FormMedia` is reachable in the product
+   * only from inside a live workout, which is a poor place to judge a drawing. The founder's note
+   * on 2026-08-10 — that the figure in the demos reads as robotic beside the body map — cannot be
+   * answered without both on one screen, and this is the cheap half of that.
+   */
+  { id: '2.9', label: 'The demonstration — the motion figure', status: 'live', note: 'bench press, the rig that exists today; compare against 1.2e', render: () => (
+    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 18 }}>
+      <FormMedia exerciseId="bb_bench_press" title="Barbell Bench Press" />
+    </View>
+  ) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
