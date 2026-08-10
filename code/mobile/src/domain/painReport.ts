@@ -52,6 +52,137 @@ export const EASE_DAYS: Record<PainSeverity, number> = {
   sharp: 14,
 };
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ WHAT A REPORTED MUSCLE ACTUALLY FORBIDS — the movements, not the label.
+ *
+ * ⛔ FOUNDER, 2026-08-11, approving this table: *"הטבלה נראית טובה, תבנה לפיה."*
+ *
+ * Before it, a pain report switched a MUSCLE off and nothing else, which leaves the obvious hole
+ * open: a hurt shoulder switches off `Shoulders` — **and chest pressing still loads that shoulder
+ * tomorrow.** The muscle is the label she can point at; the movement is what the joint feels.
+ *
+ * Every exercise already carries a `pattern`, so the engine has always had what it needs to answer
+ * this properly. It simply never asked.
+ *
+ * ⚠️ THIS IS COACHING KNOWLEDGE, WRITTEN ONCE AND READ BY EYES. It is deliberately a TABLE rather
+ * than a computation: an injury is the one place where two athletes reporting the same thing must
+ * get the same answer, every time, and where a reviewer has to be able to check the whole rule in
+ * one screen. Nothing here is inferred at runtime and nothing is asked of a model.
+ *
+ * ⚠️ AND IT IS NOT A DIAGNOSIS. These are movements to leave alone while something settles. Hush has
+ * no opinion about tissue, states none, and names no recovery time — the windows above are rest, not
+ * healing.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export interface ForbiddenPatterns {
+  /** The movements that provoke it directly. Off at EVERY severity, including a twinge. */
+  readonly aggravator: readonly string[];
+  /** The big lifts that load the same structure. Off from `pain` upward. */
+  readonly loaded: readonly string[];
+}
+
+/*
+ * ⛔ TWO TIERS, AND MEASURING IS WHAT SPLIT THEM (2026-08-11).
+ *
+ * The table shipped flat first, and `theProgrammeUnderAnInjury` immediately found what that costs:
+ * every Chest pattern (`fly`, `press_flat`, `press_incline`) and every Quads pattern (`squat`,
+ * `lunge`, `knee_extension`) is on the list, so a TWINGE emptied those muscles outright — the exact
+ * outcome the twinge rung exists to avoid.
+ *
+ * What a coach says is *"your chest twinged — drop the flyes, keep pressing"*. So the provoking
+ * movement goes at every severity, and the big lift that loads the same structure goes only once it
+ * is actual pain.
+ */
+export const FORBIDDEN_PATTERNS: Record<string, ForbiddenPatterns> = {
+  Shoulders: { aggravator: ['lateral_raise', 'front_raise', 'fly'], loaded: ['press_overhead'] },
+  Back: { aggravator: ['hinge'], loaded: ['row', 'squat'] },
+  Quads: { aggravator: ['knee_extension'], loaded: ['squat', 'lunge'] },
+  Hamstrings: { aggravator: ['knee_flexion'], loaded: ['hinge'] },
+  Glutes: { aggravator: ['thrust'], loaded: ['hinge', 'squat', 'lunge'] },
+  Triceps: { aggravator: ['elbow_extension_overhead', 'elbow_extension_pushdown'], loaded: ['press_flat'] },
+  Biceps: { aggravator: ['curl', 'curl_lengthened', 'curl_shortened', 'brachialis'], loaded: [] },
+  Chest: { aggravator: ['fly'], loaded: ['press_flat', 'press_incline'] },
+  Calves: { aggravator: ['calf_bent'], loaded: ['calf_straight', 'lunge'] },
+  Core: { aggravator: ['crunch', 'rotation'], loaded: ['leg_raise', 'anti_extension'] },
+};
+
+/** Every pattern a site can ever forbid — the union, for readers and for tests. */
+export function allPatternsFor(muscle: string): readonly string[] {
+  const f = FORBIDDEN_PATTERNS[muscle];
+  return f ? [...f.aggravator, ...f.loaded] : [];
+}
+
+/** What THIS severity forbids on the muscle it was reported on. */
+export function patternsAt(muscle: string, severity: PainSeverity): readonly string[] {
+  const f = FORBIDDEN_PATTERNS[muscle];
+  if (!f) return [];
+  return severity === 'twinge' ? f.aggravator : [...f.aggravator, ...f.loaded];
+}
+
+/**
+ * ⛔ THE SEVERITY DECIDES HOW FAR THE TABLE REACHES — the three rungs did the same thing before.
+ *
+ * `EASE_DAYS` graded the WINDOW and nothing else: a twinge and a sharp pain both switched the muscle
+ * off outright, one for three days and one for fourteen. That is a rest length pretending to be a
+ * decision. What a coach actually does differs in KIND:
+ *
+ *   · a TWINGE is a warning — keep training the muscle, leave the movement that provoked it alone;
+ *   · PAIN takes the muscle out, and its movements with it;
+ *   · SHARP takes those movements out of the whole week, wherever they appear.
+ *
+ * The third rung is the one the muscle-only model could never express: with a sharp shoulder, the
+ * bench press has to go too, and no amount of switching `Shoulders` off achieves that.
+ */
+export function restsTheMuscle(severity: PainSeverity): boolean {
+  return severity !== 'twinge';
+}
+
+/** Whether the ban reaches beyond the reported muscle's own lifts into the rest of the week. */
+export function bansAcrossTheWeek(severity: PainSeverity): boolean {
+  return severity === 'sharp';
+}
+
+/**
+ * The movement patterns that are off limits right now, from her standing eases.
+ *
+ * ⚠️ ONLY THE LIVE ONES. A lapsed window forbids nothing, for the same reason it rests nothing: a
+ * rest ends by the clock passing it, not by anything being cleared.
+ */
+export function forbiddenPatterns(
+  eases: readonly PainEase[] | undefined,
+  nowMs: number,
+  opts: { acrossTheWeek?: boolean } = {},
+): Set<string> {
+  const out = new Set<string>();
+  for (const e of activeEases(eases, nowMs)) {
+    if (opts.acrossTheWeek && !bansAcrossTheWeek(e.severity)) continue;
+    for (const p of patternsAt(e.muscle, e.severity)) out.add(p);
+  }
+  return out;
+}
+
+/**
+ * The patterns off limits when choosing lifts FOR a given muscle.
+ *
+ * ⚠️ TWO SOURCES, AND THE DIFFERENCE IS THE POINT. A report on THIS muscle bans its own movements at
+ * any severity. A SHARP report on any muscle bans those movements everywhere — which is the case the
+ * muscle-only model could never express: a sharp shoulder has to take the bench press with it, and
+ * no amount of switching `Shoulders` off reaches a lift filed under `Chest`.
+ */
+export function forbiddenFor(
+  muscle: string,
+  eases: readonly PainEase[] | undefined,
+  nowMs: number,
+): Set<string> {
+  const out = forbiddenPatterns(eases, nowMs, { acrossTheWeek: true });
+  for (const e of activeEases(eases, nowMs)) {
+    if (e.muscle !== muscle) continue;
+    for (const p of patternsAt(e.muscle, e.severity)) out.add(p);
+  }
+  return out;
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** One muscle, rested because she said it hurt. */
@@ -116,7 +247,14 @@ export function effectiveBodyMap(
   const live = activeEases(eases, nowMs);
   if (live.length === 0) return { ...(map ?? {}) };
   const next: Record<string, MuscleStance> = { ...(map ?? {}) };
-  for (const e of live) next[e.muscle] = 'off';
+  /*
+   * ⛔ A TWINGE NO LONGER SWITCHES THE MUSCLE OFF (founder 2026-08-11). It did, and that made the
+   * mildest report cost her a muscle for three days — the same outcome as a sharp pain, only
+   * shorter. What a twinge earns is the MOVEMENT being left alone (`FORBIDDEN_PATTERNS`), while the
+   * muscle keeps training on whatever else it has. Stopping a whole muscle because something
+   * twinged is how an athlete learns not to report anything.
+   */
+  for (const e of live) if (restsTheMuscle(e.severity)) next[e.muscle] = 'off';
   return next;
 }
 

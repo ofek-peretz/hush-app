@@ -24,6 +24,7 @@ import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, 
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
+import { forbiddenFor } from '@/domain/painReport';
 
 /**
  * A muscle's starting weekly-set target (B-2) divided by this → its day-one exercise COUNT (min 1). At
@@ -177,7 +178,24 @@ export function pickExercises(
   substitutes: Record<string, string> = {},
   profile?: LoadProfile,
 ): string[] {
-  const all = exercisesForMuscle(muscle as MuscleGroup).filter((e) => !isSwapOnly(e.id));
+  /*
+   * ⛔ A MOVEMENT SHE HAS REPORTED IS NOT OFFERED (founder 2026-08-11, `FORBIDDEN_PATTERNS`).
+   *
+   * Switching the MUSCLE off was the whole of the old answer, and it leaves the obvious hole open: a
+   * hurt shoulder switched off `Shoulders` while chest pressing kept loading that shoulder the next
+   * day. Every exercise already carries its `pattern`; the engine simply never asked.
+   *
+   * ⚠️ NO "KEEP THE POOL IF IT EMPTIES" FALLBACK HERE, unlike `canLoad` below. That fallback exists
+   * so a muscle is never emptied by an equipment check — a pool of only-too-heavy lifts still yields
+   * its catalogue lead, because she can always load something. A ban is the opposite: if every lift
+   * for this muscle uses a movement she reported, the honest answer is that it rests this week.
+   * Handing it back would be the app overruling her report to keep the shape tidy.
+   */
+  const banned = forbiddenFor(muscle, profile?.painEases, Date.now());
+  const all = exercisesForMuscle(muscle as MuscleGroup)
+    .filter((e) => !isSwapOnly(e.id))
+    .filter((e) => !banned.has(e.pattern));
+  if (all.length === 0) return [];
   // Lifts whose floor she can actually load lead; the rest stay available behind them, so a muscle
   // is never emptied by the check — a pool of only-too-heavy lifts still yields its catalogue lead.
   const fits = all.filter((e) => canLoad(e, profile));

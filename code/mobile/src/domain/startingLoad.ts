@@ -45,7 +45,13 @@ import type { Exercise } from '@/data/exercises';
  * default. Rev 7 deleted the onboarding question and left the multiplier here, so every athlete
  * answered "beginner" by omission and took a 22% discount nobody chose.
  */
-export type LoadProfile = Pick<Profile, 'sex' | 'weightKg'>;
+/*
+ * ⚠️ `painEases` RIDES ALONG (2026-08-11) so the selector can refuse a movement she has just reported.
+ * It is on this type rather than a new parameter because the profile ALREADY flows to every call
+ * site — widening it changes no signature in `programAssembly`, the file with the most surviving
+ * mutants in the engine, which is not a file to reshape for a feature.
+ */
+export type LoadProfile = Pick<Profile, 'sex' | 'weightKg' | 'painEases'>;
 
 const UPPER: Capability[] = ['horizontal_push', 'horizontal_pull', 'vertical_push'];
 
