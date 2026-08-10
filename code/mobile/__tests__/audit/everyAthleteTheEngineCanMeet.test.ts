@@ -285,6 +285,67 @@ it('a muscle below the effective dose is one that physically could not reach it'
   expect({ shortWithRoomToSpare: unexplained.slice(0, 12), total: unexplained.length }).toEqual({ shortWithRoomToSpare: [], total: 0 });
 });
 
+/*
+ * ════ A MARK SHE PLACES IS A MARK SHE SEES ════
+ *
+ * ⛔ Founder, 2026-08-10: does emphasis work for one muscle, and for two (F-4 caps it at two)?
+ *
+ * Reading the marked weeks said no. Marking CALVES changed the programme not at all — six weekly
+ * sets before and after — and so did marking Biceps, Triceps or Shoulders. The mark raised the
+ * muscle's target, the target became an exercise COUNT, and for a small share that still rounded to
+ * the same number of lifts; the day was already at sixty minutes, so there was nowhere for the extra
+ * work to go. With two marks it was worse: the first muscle in the day's order took everything and
+ * the second was untouched, so one of her two marks did nothing at all.
+ *
+ * A mark she can place and not see is worse than no mark. This asserts the mark MOVED the muscle,
+ * for every legal single mark and every legal pair, at every frequency the sweep builds.
+ */
+it('every emphasis mark moves the muscle it is placed on', () => {
+  const byMap = new Map(BUILDS.map((b) => [`${b.profile.sex}|${b.profile.weightKg}|${b.profile.daysPerWeek}|${JSON.stringify(b.profile.bodyMap)}`, b]));
+  const setsFor = (c: Case, muscle: string) =>
+    sessions(c).flatMap((d) => d.slots).filter((s) => !s.supplemental && muscleOf(s.exerciseId) === muscle).reduce((n, s) => n + s.setCount, 0);
+
+  const inert: string[] = [];
+  for (const c of BUILDS) {
+    const marked = Object.entries(c.profile.bodyMap ?? {}).filter(([, v]) => v === 'emphasis').map(([m]) => m);
+    if (marked.length === 0) continue;
+    // The same athlete with the marks removed, and everything else about her identical.
+    const plainMap = Object.fromEntries(Object.entries(c.profile.bodyMap ?? {}).filter(([, v]) => v !== 'emphasis'));
+    const plain = byMap.get(`${c.profile.sex}|${c.profile.weightKg}|${c.profile.daysPerWeek}|${JSON.stringify(plainMap)}`);
+    if (!plain) continue; // no like-for-like control in the sweep for this map
+    for (const m of marked) {
+      const withMark = setsFor(c, m);
+      const without = setsFor(plain, m);
+      if (withMark <= without) inert.push(`${c.label}: ${m} ${without} -> ${withMark}`);
+    }
+  }
+  /*
+   * ⛔ A RATCHET AT 192, AND THE TARGET IS ZERO. Measured over the 1,455-programme sweep:
+   *
+   *     without the same-day transfer in `growEmphasised` ....... 498 inert marks
+   *     with it ................................................. 192   ← where this sits
+   *
+   * What remains is concentrated where the week has no slack to move: at two and three days a
+   * session is already at her ceiling and every other muscle is at the weekly floor, so there is no
+   * donor a transfer is allowed to take from. Serving the mark there would mean either breaking her
+   * hour or dropping an unmarked muscle below the effective dose, and neither is a trade she asked
+   * for when she marked ONE muscle.
+   *
+   * The honest fix is upstream — a marked muscle should be able to claim an extra EXERCISE at
+   * assembly, where her map and her volume targets are both in scope, rather than negotiating for
+   * sets afterwards. That is a design change, not a constant.
+   *
+   * The number may only ever go DOWN. Raising it to make a change pass is how a ratchet becomes a
+   * rubber stamp.
+   */
+  const CEILING = 192;
+  expect({ sample: inert.slice(0, 6), withinRatchet: inert.length <= CEILING }).toEqual({
+    sample: inert.slice(0, 6),
+    withinRatchet: true,
+  });
+  expect(inert.length).toBeLessThanOrEqual(CEILING);
+});
+
 it('no two sessions in one week are twins', () => {
   const twins: string[] = [];
   for (const c of BUILDS) {

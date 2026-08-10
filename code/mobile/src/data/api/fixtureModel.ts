@@ -920,17 +920,61 @@ function growEmphasised(
   restSecFor?: (id: string) => number | null,
   execSecFor?: (id: string) => number | null,
   transitionSec?: number | null,
+  /** Weekly sets per muscle across the whole programme — a donor may not drop below the floor. */
+  weeklySets: Record<string, number> = {},
 ): void {
   if (emphasised.size === 0) return;
   const minutes = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec);
-  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX; guard++) {
-    const slot = day.slots.find((s) => {
+  /** Sets this day gives each muscle — used to spread growth across BOTH marks, not just the first. */
+  const onDay = (): Record<string, number> => {
+    const n: Record<string, number> = {};
+    for (const s of day.slots) {
+      if (s.supplemental) continue;
       const m = exerciseById(s.exerciseId)?.muscle;
-      return !s.supplemental && m && emphasised.has(m) && s.setCount < V5_SETS_MAX;
-    });
+      if (m) n[m] = (n[m] ?? 0) + s.setCount;
+    }
+    return n;
+  };
+  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX; guard++) {
+    /*
+     * The THINNEST marked muscle grows first. Taking the first slot in day order instead meant that
+     * with two marks the earlier one took everything: Chest+Back came out with Back at 18 weekly
+     * sets and Chest unchanged at 8 — one of her two marks silently doing nothing. F-4 allows two,
+     * so two have to be served.
+     */
+    const have = onDay();
+    const slot = day.slots
+      .filter((s) => {
+        const m = exerciseById(s.exerciseId)?.muscle;
+        return !s.supplemental && m && emphasised.has(m) && s.setCount < V5_SETS_MAX;
+      })
+      .sort((a, b) => (have[exerciseById(a.exerciseId)!.muscle] ?? 0) - (have[exerciseById(b.exerciseId)!.muscle] ?? 0))[0];
     if (!slot) return; // her marked muscles are already at F-1's ceiling on this day
     slot.setCount += 1;
-    if (minutes() > budgetMin) { slot.setCount -= 1; return; } // the hour wins; the mark is not free
+    if (minutes() <= budgetMin) continue;
+    slot.setCount -= 1;
+    /*
+     * The hour is full, so TRANSFER rather than give up. Reading the marked programmes showed the
+     * cost of giving up: marking Calves changed the week not at all — six weekly sets before and
+     * after — and so did marking Biceps, Triceps or Shoulders. Their days were already at sixty
+     * minutes, so there was nothing to add, and a mark she can place and not see is worse than no
+     * mark at all.
+     *
+     * The donor is an UNMARKED muscle that stays clear of the weekly floor without the set, on the
+     * same day, so the session's length does not move. If no such donor exists the mark genuinely
+     * costs nothing here, and it says so by stopping rather than by breaking her hour.
+     */
+    // …and the donor may not fall below the effective dose itself. Without this, marking Chest and
+    // Back took a four-day week's Glutes to 4 weekly sets and Calves to 3: a mark she placed on one
+    // muscle is not permission to stop training another she left on.
+    const giver = day.slots.find((s) => {
+      if (s.supplemental || s === slot || s.setCount <= V5_SETS_MIN) return false;
+      const gm = exerciseById(s.exerciseId)?.muscle;
+      return !!gm && !emphasised.has(gm) && (weeklySets[gm] ?? 0) - 1 >= WEEKLY_SETS_FLOOR;
+    });
+    if (!giver) return;
+    giver.setCount -= 1;
+    slot.setCount += 1;
   }
 }
 
@@ -1192,7 +1236,17 @@ export const fixtureModel: ModelClient = {
     // …and only THEN does an emphasis mark buy its extra set, out of whatever room is left under her
     // ceiling. Added before the cap it was simply cut off again, or it pushed a full-body day to 63
     // minutes with every other slot already at F-1's floor and no legal drop remaining.
-    for (const d of days) growEmphasised(d, emphasisedMuscles, budgetMin, restSecFor, execSecFor, transitionS);
+    const weeklyByMuscleNow = (): Record<string, number> => {
+      const n: Record<string, number> = {};
+      for (const d of days)
+        for (const s of d.slots) {
+          if (s.supplemental) continue;
+          const m = exerciseById(s.exerciseId)?.muscle;
+          if (m) n[m] = (n[m] ?? 0) + s.setCount;
+        }
+      return n;
+    };
+    for (const d of days) growEmphasised(d, emphasisedMuscles, budgetMin, restSecFor, execSecFor, transitionS, weeklyByMuscleNow());
     // …and no muscle she left ON leaves the week below the minimum effective dose, where the clock
     // has room to prevent it (B-2's WEEKLY_SETS_FLOOR).
     raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, budgetMin, restSecFor, execSecFor, transitionS);

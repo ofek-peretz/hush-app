@@ -17,6 +17,7 @@
  * is named and tunable, not doctrine.
  */
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
+import { stanceOf } from './bodyMap';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
 import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
@@ -368,7 +369,21 @@ export function assembleV5DayLists(
         picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
         picks.push(...picked);
       } else {
-        picks.push(...pickExercises(m, exerciseCountFor(targets[m]), leaveItsByMuscle[m], substitutes, profile));
+        /*
+         * ════ AN EMPHASIS MARK MUST BUY A SECOND LIFT (founder 2026-08-10) ════
+         *
+         * Reading the marked programmes: marking Calves changed nothing at all — 6 weekly sets
+         * before and after — and so did marking Biceps, Triceps or Shoulders. The mark raised the
+         * target, the target is divided by `DAY_ONE_EX_DIVISOR`, and for a muscle with a small
+         * SHARE that still rounds to one exercise. One exercise is capped at five sets by F-1, so
+         * there was nowhere for the extra work to go and the athlete saw an identical week.
+         *
+         * A mark she can place and not see is worse than no mark. Two exercises is the smallest
+         * change that gives the volume somewhere to land, and it is bounded by her pool.
+         */
+        const marked = stanceOf(map, m) === 'emphasis';
+        const want = Math.max(exerciseCountFor(targets[m]), marked ? 2 : 1);
+        picks.push(...pickExercises(m, want, leaveItsByMuscle[m], substitutes, profile));
       }
     }
 
