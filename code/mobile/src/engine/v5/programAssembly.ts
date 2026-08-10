@@ -56,6 +56,25 @@ export const DAY_ONE_EX_DIVISOR = 5;
  */
 export const ESSENTIAL_PATTERNS: Record<string, readonly SwapPattern[]> = {
   Back: ['row', 'pulldown'],
+  /*
+   * ⛔ HAMSTRINGS, ADDED 2026-08-09 — AND THE REASON GENERALISES.
+   *
+   * With Back switched off, the audit read Quads 20 weekly sets against Hamstrings 7, a three-to-one
+   * split between two muscles whose shares are 1.3 and 1.2. Tracing it: the targets were 29 and 27,
+   * the selector picked six quad lifts and five hamstring lifts — both correct — and the time cap
+   * left five quads and TWO hamstrings.
+   *
+   * The hamstring's five were an RDL, a deadlift, and three leg curls. Its two movements are a hip
+   * HINGE, which is compound, and KNEE FLEXION, which every machine in the catalogue performs as an
+   * isolation. The cap drops isolations first, so it took the knee flexion — the muscle's other
+   * primary movement — while the quad, whose work is squats and presses, lost almost nothing.
+   *
+   * A leg curl is not an accessory to an RDL. The hamstring crosses two joints and the two movements
+   * train it at different lengths; a programme with only hinges is an incomplete hamstring, exactly
+   * as a back with only rows is an incomplete back. The engine was penalising a muscle for the tier
+   * its catalogue entries happen to carry, which is a fact about equipment, not about training.
+   */
+  Hamstrings: ['hinge', 'knee_flexion'],
 };
 
 /**

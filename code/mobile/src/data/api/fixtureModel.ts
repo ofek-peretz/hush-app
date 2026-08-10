@@ -583,10 +583,29 @@ export function trimV5ToBudget(
     const trimAt = [...isoIdx].reverse().find((i) => day.slots[i].setCount > V5_SETS_MIN);
     // Which isolation to DROP: one without a leave-it if there is one, a leave-it only when nothing
     // else is left to give (S-59 — cut last, never exempt).
-    const dropAt = [...isoIdx].reverse().find((i) => !protectedIds.has(day.slots[i].exerciseId)) ?? isoIdx[isoIdx.length - 1];
+    /*
+     * ⛔ AND NEVER THE DAY'S LAST ESSENTIAL PATTERN.
+     *
+     * `enforceTimeCap` learned this on 2026-08-08; this pass, which runs FIRST, did not — so the
+     * protection was being applied to a day the earlier trim had already taken the lift from. With
+     * Back off, the audit read Quads 20 weekly sets against Hamstrings 7: the hamstring's knee
+     * flexion is an isolation on every machine in the catalogue, so this loop took it as the donor's
+     * "trailing isolation" while the quad, whose work is squats, lost almost nothing.
+     */
+    const wouldOrphan = (i: number): boolean => {
+      const ex = exerciseById(day.slots[i].exerciseId);
+      const essential = ex && ESSENTIAL_PATTERNS[ex.muscle];
+      if (!ex || !essential?.includes(ex.pattern)) return false;
+      return day.slots.filter((s) => {
+        const e = exerciseById(s.exerciseId);
+        return !s.supplemental && e?.muscle === ex.muscle && e.pattern === ex.pattern;
+      }).length <= 1;
+    };
+    const droppable = isoIdx.filter((i) => !wouldOrphan(i));
+    const dropAt = [...droppable].reverse().find((i) => !protectedIds.has(day.slots[i].exerciseId)) ?? droppable[droppable.length - 1];
     if (trimAt != null) {
       day.slots[trimAt].setCount -= 1;
-    } else if (exCountByMuscle[donor.muscle] > 1 && isoIdx.length > 0) {
+    } else if (exCountByMuscle[donor.muscle] > 1 && droppable.length > 0 && dropAt != null) {
       day.slots.splice(dropAt, 1);
     } else {
       break; // the donor's only exercise — protected; the safety net takes over
