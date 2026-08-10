@@ -111,26 +111,51 @@ describe('she changes her body map', () => {
   });
 
   /*
-   * ⛔ A DEFECT, FOUND BY THIS FILE ON ITS FIRST RUN AND LEFT RED ON PURPOSE.
+   * ⛔ THIS WAS THE DEFECT THIS FILE FOUND, AND IT IS FIXED (founder 2026-08-10).
    *
-   * Marking Shoulders as a LEAD makes her shoulder training WORSE:
+   * It shipped as `it.failing` for exactly as long as the bug lived. Marking Shoulders as a LEAD made
+   * her shoulder training WORSE — three exercises became two, the set count did not move (9 → 9), and
+   * Chest and Back each lost a set paying for it. The one deliberate instruction the body map exists
+   * to carry produced a worse week.
    *
-   *     plain     Shoulders 9 sets · db_shoulder_press, cable_lateral_raise, db_front_raise
-   *     emphasis  Shoulders 9 sets · db_shoulder_press, machine_shoulder_press
-   *
-   * Three exercises become two, the set count does not move, and Chest (12→11) and Back (10→9)
-   * each lose a set to pay for it. The one deliberate instruction the body map exists to carry —
-   * *"lead with this"* — costs her an exercise on the muscle she named and volume on two she did
-   * not. The "≥2 exercises for an emphasised muscle" rule is being applied as a CEILING.
-   *
-   * ⚠️ `it.failing` rather than a weakened assertion or a `todo`: the suite stays green, the defect
-   * stays documented at full strength, and this flips to a FAILURE the moment it is fixed — which
-   * is the only way a known bug cannot quietly become the expected behaviour.
+   * The mark is a TRANSFER now, measured in whole exercises rather than sets, so a marked muscle
+   * cannot be trimmed back to where it started: the sets it gained are no longer being asked for
+   * anywhere else. See `weeklyTargets`.
    */
-  it.failing('a muscle she marks EMPHASIS gets more of the week than it had', async () => {
+  it('⛔ a muscle she marks EMPHASIS gets more of the week than it had', async () => {
     const plain = weeklySets(await build(athlete()));
     const led = weeklySets(await build(athlete({ bodyMap: { Shoulders: 'emphasis' } })));
     expect(led.Shoulders).toBeGreaterThan(plain.Shoulders);
+  });
+
+  it('⛔ …and EVERY muscle does, at every frequency — swept, not spot-checked', async () => {
+    /*
+     * Shoulders was the one that failed, and it failed because of where its share sat relative to the
+     * rounding. Any muscle can land there, so the guarantee is asserted across the whole map and
+     * across her real choices rather than on the one case that happened to break.
+     */
+    const flat: string[] = [];
+    for (const days of [3, 4, 6]) {
+      for (const m of CANONICAL_MUSCLE_ORDER) {
+        if (m === 'Core') continue; // supplemental — sized by the map, never dealt a share of the week
+        const plain = weeklySets(await build(athlete({ daysPerWeek: days })));
+        const led = weeklySets(await build(athlete({ daysPerWeek: days, bodyMap: { [m]: 'emphasis' as MuscleStance } })));
+        if ((led[m] ?? 0) <= (plain[m] ?? 0)) flat.push(`${days}d ${m} ${plain[m]}→${led[m]}`);
+      }
+    }
+    expect(flat).toEqual([]);
+  });
+
+  it('⚠️ and it is a TRANSFER — the week does not grow to pay for her mark', async () => {
+    /*
+     * The half that makes the guarantee above reliable rather than lucky. If a mark could ADD volume,
+     * the time cap would take it straight back out — which is precisely how the original defect
+     * worked. Conserving the total is what stops the cap from having anything to reclaim.
+     */
+    const sum = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+    const plain = sum(weeklySets(await build(athlete())));
+    const led = sum(weeklySets(await build(athlete({ bodyMap: { Back: 'emphasis' } }))));
+    expect(Math.abs(led - plain)).toBeLessThanOrEqual(3); // rounding at the day level, never a bonus
   });
 
   it('⚠️ and turning one muscle off does not quietly starve the others', async () => {

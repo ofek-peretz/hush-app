@@ -11,7 +11,8 @@
  * Pure. Deterministic.
  */
 
-import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, FULL_BODY_UNTIL_DAYS, MUSCLE_REGION } from './constants';
+import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, FULL_BODY_UNTIL_DAYS, MUSCLE_REGION, WEEKLY_SETS_FLOOR, EMPHASIS_FRACTION } from './constants';
+import { exerciseCountFor, DAY_ONE_EX_DIVISOR } from './programAssembly';
 import { stanceOf, trainableMuscles, emphasisMuscles, type BodyMap } from './bodyMap';
 
 /** Region of a muscle (upper/lower); unknown â†’ upper (safe default, never its own day). */
@@ -37,10 +38,63 @@ export function weeklyTargets(
   const out: Record<string, number> = {};
   for (const m of trainableMuscles(map, allMuscles)) {
     // Each muscle draws its OWN share of the week's pot (MUSCLE_VOLUME_SHARE) — a back is not a calf.
-    const base = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days, trainable.length, m, trainable);
-    // Proportional, so an emphasis mark carries the same weight at 2 days as at 6 (see EMPHASIS_FRACTION).
-    const bonus = days == null ? STARTING_WEEKLY_SETS.emphasisBonus : emphasisBonusFor(base);
-    out[m] = base + (stanceOf(map, m) === 'emphasis' ? bonus : 0);
+    out[m] = days == null ? STARTING_WEEKLY_SETS.base : startingWeeklySets(days, trainable.length, m, trainable);
+  }
+
+  /*
+   * ⛔ AN EMPHASIS MARK MOVES VOLUME. IT DOES NOT ADD IT (founder 2026-08-10).
+   *
+   * It used to ADD `emphasisBonusFor(base)` and leave every other muscle alone, so a mark she placed
+   * in one tap grew the week's total. That total is not hers to grow — her hour is fixed — so the
+   * extra work never reached her: `enforceTimeCap` cut it back out on the way to the screen, and
+   * WHICH sets it cut was an accident of the trim. Measured, at the 60-minute default:
+   *
+   *     Shoulders   plain 9 sets / 3 exercises      emphasis 9 sets / 2 exercises
+   *
+   * The mark had inflated the target from 23 weekly sets to 37 — above `WEEKLY_SETS_CEILING`, a
+   * number nobody trains — which asked for SEVEN shoulder exercises, filled them with compounds, and
+   * left the cap to hack it back to two. Her instruction was neutralised to the set, and Chest and
+   * Back each paid a set for it.
+   *
+   * Under a fixed hour, *"lead with this"* can only mean *"at the expense of something else"*. Four
+   * days of sixty minutes is about eighty weekly sets; across nine muscles that is nine each, and no
+   * arrangement of the hour changes it. Anything but a transfer is a promise the clock breaks.
+   *
+   * ── ⛔ AND THE UNIT IS AN EXERCISE, NOT A SET. THIS IS THE WHOLE FIX. ────────────────────────
+   * The first attempt moved SETS and conserved them exactly — and still broke, because
+   * `exerciseCountFor` ROUNDS sets into lifts. Four donors each giving two sets lose no exercise
+   * between them while the marked muscle's gain crosses a rounding boundary and buys one, so the
+   * week came out a lift heavier than it started. On a three-day full-body week there is nowhere to
+   * put that lift: six sessions landed at ~69 minutes against a 60-minute ceiling, on days the time
+   * cap is forbidden to trim (every lift at the three-set floor, every one its muscle's only lift).
+   *
+   * Moving whole `DAY_ONE_EX_DIVISOR`-sized blocks makes the rounding irrelevant: five sets out of
+   * one muscle is exactly one lift out, five in is exactly one lift in. Sets AND lifts are conserved
+   * by construction rather than by a correction pass — and the correction pass is what broke the
+   * back's two pulls when I tried it, because it shaved donors one set at a time until a muscle fell
+   * off a boundary nobody was watching.
+   *
+   * ⚠️ A DONOR KEEPS ITS FLOOR AND ITS SECOND LIFT. Below `WEEKLY_SETS_FLOOR` is under MEV, and below
+   * two exercises a muscle that needs two PATTERNS — a back needs a row and a pulldown (S-55b) —
+   * cannot have both. A mark redistributes training; it does not switch a muscle off or strip it of
+   * a movement. `off` is the control that does that, and she has it.
+   */
+  const marked = trainable.filter((m) => stanceOf(map, m) === 'emphasis');
+  const donors = trainable.filter((m) => stanceOf(map, m) !== 'emphasis');
+  if (days != null && marked.length > 0 && donors.length > 0) {
+    for (const m of marked) {
+      /* How many LIFTS the mark is worth — the same proportional weight, counted in the right unit. */
+      const chunks = Math.max(1, Math.round(exerciseCountFor(out[m]) * EMPHASIS_FRACTION));
+      for (let c = 0; c < chunks; c += 1) {
+        const donor = donors
+          .filter((d) => out[d] - DAY_ONE_EX_DIVISOR >= WEEKLY_SETS_FLOOR
+            && exerciseCountFor(out[d] - DAY_ONE_EX_DIVISOR) >= 2)
+          .sort((a, b) => (out[b] - out[a]) || a.localeCompare(b))[0];
+        if (!donor) break; // nothing left to give without going under a floor — a smaller mark, not a hole
+        out[donor] -= DAY_ONE_EX_DIVISOR;
+        out[m] += DAY_ONE_EX_DIVISOR;
+      }
+    }
   }
   return out;
 }
