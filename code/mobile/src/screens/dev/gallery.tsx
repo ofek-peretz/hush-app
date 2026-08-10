@@ -23,6 +23,7 @@ import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { YourTraining } from '@/screens/onboarding/YourTraining';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
+import { BodyMapFigure } from '@/components/BodyMapFigure';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -1256,6 +1257,32 @@ export const GALLERY: GalleryEntry[] = [
    * fixture — they are the two things this screen exists to say out loud.
    */
   { id: '1.2e', label: 'What do I train? — the body map', status: 'live', note: 'replaces the goal/limits prose (founder 2026-08-08): off · normal · lead, on one body she presses', render: () => mount(BodyMap, { sex: 'female', weightKg: 62, daysPerWeek: 4 }) },
+  /*
+   * ⛔ THE FIGURE ITSELF, BOTH FACES AND ALL THREE STANCES ON ONE PAGE.
+   *
+   * ⚠️ 1.2e CAN ONLY EVER SHOW ONE FACE AND ONE STATE AT A TIME — it is a screen, and the back is a
+   * tap away. That is right for the athlete and useless for reconciling a drawing: the whole reason
+   * the first figure shipped reading like a snowman is that nobody ever looked at both halves of it
+   * beside each other. This entry is the drawing under a lamp: front and back, with one muscle LED
+   * with, one turned OFF and one open for editing, so every state the painter can produce is on
+   * screen at once and a regression in any of them is visible without a single press.
+   */
+  {
+    id: '1.2f',
+    label: 'The body — both faces, all three stances',
+    status: 'live',
+    note: 'the drawing under a lamp: chest is a LEAD, calves are OFF, back is the one being edited',
+    render: () => (
+      <View style={{ flex: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 8, paddingTop: 28 }}>
+        <View style={{ flex: 1 }}>
+          <BodyMapFigure face="front" map={{ Chest: 'emphasis', Calves: 'off' }} selected={null} onSelect={noop} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <BodyMapFigure face="back" map={{ Chest: 'emphasis', Calves: 'off' }} selected="Back" onSelect={noop} />
+        </View>
+      </View>
+    ),
+  },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
