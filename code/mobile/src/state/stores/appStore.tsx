@@ -643,17 +643,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const live = modelRef.current; // the (possibly just-swapped) live model
 
         /*
-         * ⛔ THE PROGRAMME IS NOT GENERATED HERE ANY MORE. It already exists.
+         * ⛔ THE PROGRAMME IS GENERATED HERE AGAIN (founder 2026-08-10). It was `null`.
          *
-         * `CoachIntake` is the step before this one, and it does not leave until the coach's plan is
-         * ON DISK (`db.recordCoachAnswer`). By the time this runs there is a programme, written by
-         * the thing that will keep writing it. Composing a second one locally would put two weeks
-         * in the app and make "which one is she training?" a question with an answer nobody chose.
+         * The comment that stood here said the programme "already exists" because `CoachIntake` did
+         * not leave until the coach's plan was on disk. **`CoachIntake` was deleted on 2026-08-04**,
+         * and what replaced it — `BuildingProgramme` — still made the call, so the claim stayed true
+         * by accident. Every new athlete's first programme was therefore a network round trip: slow,
+         * paid for, and impossible without a signal — the whole of what the founder asked to remove.
          *
-         * `setWeeklyFrequency` went with it: it carried the chosen frequency into a server strategy
-         * that composed the week, and nothing composes a week here now.
+         * `live.generateProgram` is not a fallback. It reads her body map, honours `off` and
+         * `emphasis`, applies her learned substitutes, orders the lifts by station, sizes the core
+         * from the map and fits the week inside her minutes. It is the path
+         * `everyAthleteTheEngineCanMeet` sweeps 1,455 programmes through.
+         *
+         * ⚠️ AND IT IS PERSISTED BELOW, in the same write as the profile. The old flow left that to
+         * `db.recordCoachAnswer` one screen earlier; with nothing writing that record any more, a
+         * programme held only in React state would vanish on the first cold start.
          */
-        const program: Program | null = null;
+        const program: Program | null = await live.generateProgram(profile).catch((e) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
 
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
@@ -671,7 +681,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // frequency (e.g. Thursday + 4×/week), the first bucket is stamped for the NEXT open so
         // it survives the first Saturday roll — the athlete's first program gets a full runway.
         const weekOpenMs = firstBucketOpen(Date.now(), inputs.daysPerWeek);
-        await Promise.all([db.saveProfile(profile), db.saveWeekOpen(weekOpenMs), persistMode(m)]);
+        await Promise.all([
+          db.saveProfile(profile),
+          ...(program ? [db.saveProgram(program)] : []),
+          db.saveWeekOpen(weekOpenMs),
+          persistMode(m),
+        ]);
         setGender(profile.sex);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });

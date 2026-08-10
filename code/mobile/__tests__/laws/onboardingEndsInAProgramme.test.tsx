@@ -50,29 +50,28 @@ describe('the last step builds, it does not chat', () => {
     expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('BuildingProgramme'");
   });
 
-  it('⛔ asks TWICE now — a fast shape, then the prescription that fills it', () => {
+  it('⛔ ASKS NOBODY — the week is assembled, not requested', () => {
     /*
-     * ⛔ FOUNDER, 2026-08-05: *"the plan build takes far too long … I don't think the right answer
-     * is to lower the AI's intelligence during the build."*
+     * ⛔ FOUNDER, 2026-08-10, closing the arc this clause has been tracking since 2026-08-05.
      *
-     * So the call is split rather than cheapened. Call A asks for the SHAPE at `low` — the name and
-     * which muscles fall on which day, ten short fields, seconds not a minute. Call B fills it at
-     * full thinking, unchanged.
+     * It used to assert TWO calls: a `low`-thinking shape then a full-thinking fill, split because
+     * *"the plan build takes far too long — this is the least SPOTIFY thing there is"*. The split
+     * made a ninety-second wait survivable. Removing the call removes the wait.
      *
-     * ⚠️ AND A IS NEVER ALLOWED TO FAIL THE BUILD. Without a shape the ask falls back to the
-     * original `first_programme` and the screen carries the wait on the catalogue's muscles exactly
-     * as it did before. Only B decides whether she has a programme.
+     * ⚠️ AND THE ASSERTION IS ON THE ABSENCE, not merely on the presence of the assembler. A screen
+     * that generates locally AND still calls the coach is the worse of both: it pays for a network
+     * round trip whose answer nothing reads, and it fails offline for a programme it already has.
      */
     const src = building();
-    expect(src).toContain("ask: { kind: 'first_shape' }");
-    expect(src).toContain("{ kind: 'first_fill', shape:");
-    expect(src).toContain(": { kind: 'first_programme' },");
-    // Call A is the cheap one; call B passes no level and takes the full default.
-    expect(src).toMatch(/COACH_SHAPE_SCHEMA[\s\S]{0,80}'low',/);
-    // The guard against a double build when the effect re-runs — she must never be billed twice, and
-    // two programmes racing to be stored is a week nobody chose.
+    expect(src).toContain('await model.generateProgram(profile)');
+    for (const gone of ['askCoach', 'coachRequest', 'coachFacts', 'COACH_DECISION_SCHEMA', 'COACH_SHAPE_SCHEMA', 'first_programme']) {
+      expect({ gone, present: src.includes(gone) }).toEqual({ gone, present: false });
+    }
+    // The guard against a double build when the effect re-runs — two programmes racing to be stored
+    // is still a week nobody chose, network or no network.
     expect(src).toContain('if (started.current) return;');
   });
+
 });
 
 describe('the ordering that a first run always breaks', () => {
@@ -109,40 +108,57 @@ describe('the ordering that a first run always breaks', () => {
     }
   });
 
-  it('⛔ invents NO programme when the coach cannot be reached', () => {
+  it('⛔ THE PROGRAMME IS LOCAL, AND NOTHING ABOUT IT TOUCHES THE NETWORK', () => {
     /*
-     * The whole ruling in one assertion: no local generator, no cached week, no "starter plan". The
-     * only thing that happens on failure is that she is told.
-     */
-    const src = building();
-    expect(src).toContain('if (!reply.ok) { setFailed(true); return; }');
-    expect(src).toContain("if (!parsed.ok || !parsed.answer.plan) { setFailed(true); return; }");
-    expect(src).not.toMatch(/generateProgram|buildPlan|fallbackPlan|starterWeek/);
-  });
-
-  it('⚠️ requires the programme in the SCHEMA, not merely in the prose', () => {
-    // She is looking at a screen that promised her a week. "sessions IS REQUIRED" in words is what
-    // the post-session call once ignored while describing a change it had not attached.
-    expect(building()).toContain('COACH_DECISION_SCHEMA');
-  });
-
-  it('stores what came back before it moves on', () => {
-    // `ProgramCreated` reads the plan from the db. An un-awaited write here is the exact bug the
-    // founder hit as "here is your plan" over an empty screen.
-    const src = building();
-    expect(src).toContain('await db.recordCoachAnswer(');
-    /*
-     * ⚠️ ASSERTED AS A DEPENDENCY, NOT AS A SOURCE POSITION (2026-08-05). This compared the two
-     * offsets in the file, which held while both lived in `build()` — and the navigation moved into
-     * an effect when the simulation's reveal was gated on the fill finishing, so the LINE order
-     * flipped while the ORDER OF EVENTS did not.
+     * ⛔ THIS CLAUSE SAID THE EXACT OPPOSITE, AND IT WAS RIGHT WHEN IT WAS WRITTEN:
      *
-     * The chain is: the write is awaited → `setBuilt` → the rows fill → `revealed` → navigate.
-     * Every link is checked, so the position in the file is free to change again.
+     *     "no local generator, no cached week, no starter plan. The only thing that happens on
+     *      failure is that she is told."
+     *
+     * That was the ruling while the coach WAS the product — a locally generated week would have been
+     * the deleted engine coming back through a side door. The founder reversed the premise on
+     * 2026-08-08 (*"אני רוצה להחזיר את המנוע ולתת לו כמה שיותר כוח"*), so the side door is the front door
+     * and the network is what may not decide her week.
+     *
+     * ⚠️ WHAT THE CLAUSE ACTUALLY PROTECTS IS UNCHANGED: exactly ONE thing composes her first week,
+     * and it is knowable in advance. Two sources was always the defect — only which one survived
+     * changed.
      */
-    expect(src).toMatch(/await db\.recordCoachAnswer\([\s\S]{0,600}setBuilt\(/);
-    expect(src).toMatch(/if \(!revealed\) return;[\s\S]{0,400}navigation\.replace\('ProgramCreated'/);
-    expect(src).toContain('const filled = !!built && shownMuscles >= built.muscles.length;');
+    const src = building();
+    expect(src).toContain('await model.generateProgram(profile)');
+    // `generateProgram` is pure and offline; a screen that can still be blocked by a signal has not
+    // finished moving.
+    expect(src).not.toMatch(/askCoach|fetch\(|currentLocale\(\)/);
+  });
+
+  it('⚠️ hands the assembler the BODY MAP — the only input that shapes the week', () => {
+    /*
+     * This asserted `COACH_DECISION_SCHEMA` — that the programme was demanded in the schema rather
+     * than merely in the prose. The equivalent guarantee now is about the INPUT: `generateProgram`
+     * reads `profile.bodyMap`, and a profile assembled here without it produces a full-body week for
+     * an athlete who turned muscles off. Nothing would throw; she would simply be trained on
+     * something she did not ask for.
+     */
+    const src = building();
+    expect(src).toContain('bodyMap');
+    expect(src).toContain('const profile = React.useMemo<Profile>(');
+  });
+
+  it('the week she is shown is the week that is SAVED', () => {
+    /*
+     * ⛔ THE WRITE MOVED, AND IT HAD TO. `db.recordCoachAnswer` used to persist the coach's plan
+     * here, one screen before she accepted it — which is why `completeOnboarding` could set
+     * `program = null` and lean on it being already on disk. Nothing writes that record now.
+     *
+     * ⚠️ SO THE SAVE LIVES WITH THE PROFILE, in the same write. A programme held only in React state
+     * is a programme that vanishes on the first cold start, and the athlete opens Hush to an app
+     * that has forgotten the week it just built for her.
+     */
+    const store = read('src/state/stores/appStore.tsx');
+    expect(store).toContain('await live.generateProgram(profile)');
+    expect(store).toContain('db.saveProgram(program)');
+    // …and it is no longer the null it was left as when the coach owned the week.
+    expect(store).not.toContain('const program: Program | null = null;');
   });
 
   it('⛔ lands on the screen that SHOWS her the week', () => {
@@ -190,16 +206,23 @@ describe('the wait is honest', () => {
      */
     const src = building();
     /*
-     * ⚠️ THREE SOURCES, and the order matters: the full plan when call B lands, HER muscles from
-     * call A before that, and the catalogue's in the first seconds. All three draw DASHED rows
-     * until a real lift exists — only the plan supplies one.
+     * ⚠️ TWO SOURCES NOW, NOT THREE. The middle tier was the coach's SKETCH — her real muscles,
+     * arriving seconds before its full answer — and it existed only because the full answer was
+     * slow. The catalogue's muscles carry the opening beat and the assembled week replaces them
+     * whole; both draw DASHED rows until a real lift exists.
      */
     expect(src).toContain('PLACEHOLDER_MUSCLES');
-    expect(src).toContain('(sketched.length > 0 ? sketched : PLACEHOLDER_MUSCLES)');
-    expect(src).toContain('.map((m) => ({ muscle: m, lifts: waitingRows }))');
+    expect(src).toContain('PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: waitingRows }))');
     expect(src).toContain("const waitingRows = [{ name: '' }, { name: '' }];");
-    // …and the real rows only ever come from the parsed plan.
-    expect(src).toContain('muscles: buildMuscles(plan, inputs.units)');
+    // …and the real rows only ever come from the assembled programme.
+    expect(src).toContain('buildMusclesFromProgram(program, profile.repBand');
+    /*
+     * ⛔ AND NO WEIGHT IS DRAWN ON THIS SCREEN. The coach prescribed loads here; the engine sets an
+     * opening load from her FIRST SET (Loop 1, S-38), so a number here would be one nothing had
+     * measured — the same law that keeps a lifetime calorie total off Progress.
+     */
+    expect(src).toContain('load: null,');
+    expect(src).not.toMatch(/displayWeight\(item|item\.load/);
   });
 
   it('⚠ and it does not drag on once the programme is built', () => {

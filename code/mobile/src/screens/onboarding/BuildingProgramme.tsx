@@ -39,18 +39,13 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { BuildingProgrammeView, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
-import { COACH_SHAPE_SCHEMA, parseCoachShape, type CoachPlan, type CoachShape } from '@/domain/coachPlan';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { db } from '@/data/local/db';
-import { askCoach } from '@/platform/coach/coachClient';
-import { coachFacts } from '@/domain/coachFacts';
-import { coachRequest } from '@/domain/coachPrompt';
-import { COACH_DECISION_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
-import { currentLocale } from '@/i18n';
+import { useApp } from '@/state/stores/appStore';
+import { programmeName, type ProgrammeName } from '@/domain/programmeName';
 import { color, font } from '@/design/tokens';
-import type { Profile } from '@/data/local/models';
+import type { Profile, Program } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
@@ -71,6 +66,8 @@ const PLACEHOLDER_MUSCLES: readonly string[] = ['Chest', 'Back', 'Quads', 'Hamst
 
 export function BuildingProgramme({ navigation, route }: Props) {
   const { t } = useCopy();
+  const app = useApp();
+  const model = app.model;
   const { inputs } = route.params;
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
@@ -101,9 +98,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
    */
   const [fill, setFill] = useState(0);
   const [shownMuscles, setShownMuscles] = useState(0);
-  const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: string | null; lifts: number } | null>(null);
-  /** Call A's answer — her real muscles and her programme's name, while call B is still out. */
-  const [sketch, setSketch] = useState<CoachShape | null>(null);
+  const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
 
   useEffect(() => {
     const t0 = setTimeout(() => setFill(1), 120);
@@ -124,16 +119,14 @@ export function BuildingProgramme({ navigation, route }: Props) {
      * were never going to be drawn, and the fill would appear to stall for three whole seconds
      * before the name arrived. Same source as the render, or the clock is timing a different screen.
      */
-    const sketchedCount = sketch
-      ? new Set(sketch.days.flatMap((d) => d.muscles).filter((m) => CANONICAL_MUSCLE_ORDER.includes(m))).size
-      : 0;
-    const total = built ? built.muscles.length : sketchedCount || PLACEHOLDER_MUSCLES.length;
+
+    const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
     if (shownMuscles >= total) return;
     /* ⚠️ FAST ONCE THE ANSWER IS IN HAND — his own instruction: it must not drag on after the
        programme is built. Slow while waiting, so the screen still has somewhere to go. */
     const id = setTimeout(() => setShownMuscles((n) => n + 1), built ? 90 : MUSCLE_MS);
     return () => clearTimeout(id);
-  }, [shownMuscles, built, sketch]);
+  }, [shownMuscles, built]);
 
   /*
    * ⛔ THE NAME WAITS FOR THE FILL (found in the audit, 2026-08-05).
@@ -196,68 +189,39 @@ export function BuildingProgramme({ navigation, route }: Props) {
     [inputs],
   );
 
+  /*
+   * ⛔ THE PROGRAMME IS ASSEMBLED, NOT ASKED FOR (founder 2026-08-10).
+   *
+   * This made TWO network calls: a `low`-thinking shape, then a full-thinking fill. They existed to
+   * make a ninety-second wait survivable — the founder's own words, *"the plan build takes far too
+   * long, this is the least SPOTIFY thing there is"* — and the honest fix was never a faster call.
+   * It was to stop making one: `generateProgram` is pure, reads her body map, and answers in
+   * milliseconds. The wait it was engineered around does not exist.
+   *
+   * ⚠️ SO THE SCREEN'S PACING IS NOW ITS OWN. It still fills a muscle at a time, because the beat is
+   * what makes her week feel composed rather than dumped — but it is a deliberate reveal of a
+   * finished thing, not a progress bar for a call. Nothing on screen waits for anything.
+   *
+   * ⚠️ AND THERE IS NO LOAD ON IT. The coach prescribed weights here; the engine does not, and must
+   * not — Loop 1 sets the opening load from her FIRST SET (S-38), so a weight printed on this screen
+   * would be a number nothing had measured. Exercise, sets and her rep band are what is known now.
+   */
   const build = useCallback(async () => {
     setFailed(false);
     try {
-      const facts = coachFacts({ profile, plan: null, history: [], language: currentLocale() });
-
-      /*
-       * ⛔ TWO CALLS, AND THE FIRST ONE IS WHY SHE IS NOT STARING AT NOTHING (founder 2026-08-05:
-       * *"the plan build takes far too long — this is the least SPOTIFY thing there is"*).
-       *
-       * CALL A asks for the SHAPE at `low` thinking: the programme's name and which muscles fall on
-       * which day. Ten short fields, the same class of answer as a chat turn — three to eight
-       * seconds against the ninety the full build can take. The screen has her real muscles and her
-       * programme's NAME while call B is still out.
-       *
-       * ⚠️ IT IS NEVER ALLOWED TO FAIL THE BUILD. A shape that does not come back costs the screen
-       * its early content and nothing else; the catalogue's muscles carry the wait exactly as they
-       * did before, and call B is the one that decides whether she has a programme.
-       */
-      const shapeReply = await askCoach(
-        coachRequest({ facts, ask: { kind: 'first_shape' } }),
-        COACH_SHAPE_SCHEMA as unknown as Record<string, unknown>,
-        'low',
-      );
-      const shape = shapeReply.ok ? parseCoachShape(shapeReply.text) : null;
-      if (shape) setSketch(shape);
-
-      /*
-       * CALL B fills what A sketched. Full thinking, unchanged — `low` was measured writing a
-       * one-exercise week, and the founder's ruling was explicit that the fix is not to make the
-       * coach dumber. Handing it the shape makes this a SMALLER question than the one call it
-       * replaces, which is why the split is expected to raise quality rather than trade it.
-       */
-      const reply = await askCoach(
-        coachRequest({
-          facts,
-          ask: shape
-            ? { kind: 'first_fill', shape: JSON.stringify({ title: shape.title, days: shape.days }) }
-            : { kind: 'first_programme' },
-        }),
-        COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
-      );
-      if (!reply.ok) { setFailed(true); return; }
-      const parsed = parseCoachPlan(reply.text);
-      if (!parsed.ok || !parsed.answer.plan) { setFailed(true); return; }
-      await db.recordCoachAnswer(parsed.answer, new Date().toISOString());
-      /*
-       * ⛔ THE ANSWER BECOMES THE SIMULATION'S SUBJECT before it becomes a navigation. The screen
-       * has been drawing muscles with dashes; now it draws the real lifts, fast, and names the
-       * programme — which is the beat the founder asked for and the one thing `CoachPlan` has
-       * always carried and nothing has ever shown at full size.
-       */
-      const plan = parsed.answer.plan;
+      const program = await model.generateProgram(profile);
       setBuilt({
-        muscles: buildMuscles(plan, inputs.units),
-        name: plan.title ?? null,
-        lifts: plan.sessions.reduce((n, x) => n + x.blocks.reduce((m, b) => m + b.items.length, 0), 0),
+        muscles: buildMusclesFromProgram(program, profile.repBand ?? '8-10'),
+        name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER),
+        lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
       });
       setShownMuscles(1);
     } catch {
+      // A pure function that throws is a defect, not an outage — but onboarding may never be a dead
+      // end, so the retry stays. It just has nothing to blame a network for any more.
       setFailed(true);
     }
-  }, [inputs, navigation, profile]);
+  }, [profile]);
 
   useEffect(() => {
     if (started.current) return;
@@ -307,14 +271,30 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * failed anywhere. Anything the catalogue does not know is dropped rather than drawn; if that
    * leaves nothing, the catalogue's own list carries the wait exactly as it did before.
    */
-  const sketched: string[] = sketch
-    ? [...new Set(sketch.days.flatMap((d) => d.muscles))].filter((m) => CANONICAL_MUSCLE_ORDER.includes(m))
-    : [];
+  /*
+   * ⚠️ TWO TIERS NOW, NOT THREE. The middle one was the coach's SKETCH — her real muscles, arriving
+   * seconds before its full answer — and it existed only because the full answer was slow. There is
+   * no gap to fill any more: the catalogue's muscles carry the opening beat, and the real week
+   * replaces them whole.
+   */
   const muscles: BuildMuscle[] = built
     ? built.muscles.slice(0, shownMuscles)
-    : (sketched.length > 0 ? sketched : PLACEHOLDER_MUSCLES)
-        .slice(0, shownMuscles)
-        .map((m) => ({ muscle: m, lifts: waitingRows }));
+    : PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: waitingRows }));
+
+  /*
+   * The week's name, said in her language. `programmeName` returns the PARTS — the shape, the
+   * muscles she leads with, the days — because Hebrew assembles this sentence differently, and a
+   * domain module that returned English prose would be a second copy layer nobody translates.
+   */
+  const named = built?.name
+    ? [
+        t(built.name.key),
+        t('plan.weekDays', { n: built.name.days }),
+        ...(built.name.led.length > 0
+          ? [t('plan.led', { muscles: built.name.led.map((m) => t(`muscle.${m}`)).join(' · ') })]
+          : []),
+      ].join(' · ')
+    : null;
 
   /* ⚠️ `weightKg` and `age` are optional on the intake type; a ruler with no number to travel to
      sits at zero rather than crashing on the last screen before her programme. */
@@ -326,9 +306,9 @@ export function BuildingProgramme({ navigation, route }: Props) {
       unit={unitLabel(inputs.units)}
       fill={fill}
       muscles={muscles}
-      programmeName={revealed ? built?.name ?? sketch?.title ?? null : null}
+      programmeName={revealed ? named : null}
       summary={
-        revealed && built?.name
+        revealed && named
           ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })
           : null
       }
@@ -337,27 +317,32 @@ export function BuildingProgramme({ navigation, route }: Props) {
 }
 
 /**
- * The coach's answer, grouped by muscle — his correction: *"show the muscle name and then all the
- * exercises chosen for that muscle, with the weight, reps and sets."*
+ * The assembled week, grouped by muscle — the founder's own correction: *"show the muscle name and
+ * then all the exercises chosen for that muscle."*
  *
- * ⚠️ FIRST OCCURRENCE WINS per lift, the same reading every other surface makes: a lift the coach
+ * ⚠️ FIRST OCCURRENCE WINS per lift, the same reading every other surface makes: a lift the assembler
  * put on two days is one prescription, not two.
+ *
+ * ⛔ AND THERE IS NO LOAD COLUMN. Its predecessor read a weight off the coach's plan; the engine
+ * decides an opening load from her FIRST SET (Loop 1, S-38), so there is genuinely no weight to show
+ * yet. `load: null` is what the row renders as a dash — the honest answer, and the same one every
+ * untrained lift gives everywhere else in the app.
  */
-export function buildMuscles(plan: CoachPlan, units: 'kg' | 'lb'): BuildMuscle[] {
+export function buildMusclesFromProgram(program: Program, repBand: string): BuildMuscle[] {
   const byMuscle = new Map<string, BuildLift[]>();
   const seen = new Set<string>();
-  for (const session of plan.sessions) {
-    for (const block of session.blocks) {
-      for (const item of block.items) {
-        if (item.kind !== 'reps' || seen.has(item.ex)) continue;
-        seen.add(item.ex);
-        const m = muscleOf(item.ex) ?? 'Other';
-        const load = item.load == null ? null : `${String(+((displayWeight(item.load, units) ?? 0).toFixed(2)))} ${unitLabel(units)}`;
-        const [lo, hi] = item.reps;
-        const scheme = `${block.rounds} × ${hi > lo ? `${lo}–${hi}` : lo}`;
-        const row: BuildLift = { name: exerciseDisplayName(item.ex), load, scheme };
-        byMuscle.set(m, [...(byMuscle.get(m) ?? []), row]);
-      }
+  for (const day of program.days) {
+    if (day.isRest) continue;
+    for (const slot of day.slots) {
+      if (seen.has(slot.exerciseId)) continue;
+      seen.add(slot.exerciseId);
+      const m = muscleOf(slot.exerciseId) ?? 'Other';
+      const row: BuildLift = {
+        name: exerciseDisplayName(slot.exerciseId),
+        load: null,
+        scheme: `${slot.setCount} × ${repBand.replace('-', '–')}`,
+      };
+      byMuscle.set(m, [...(byMuscle.get(m) ?? []), row]);
     }
   }
   return [...byMuscle].map(([muscle, lifts]) => ({ muscle, lifts }));

@@ -65,14 +65,6 @@ describe('⛔ the shape call cannot prescribe', () => {
 });
 
 describe('⛔ a shape that does not arrive costs the screen, never the programme', () => {
-  it('the build falls back to the single call it replaced', () => {
-    const src = readFileSync(join(__dirname, '../../src/screens/onboarding/BuildingProgramme.tsx'), 'utf8');
-    expect(src).toContain(": { kind: 'first_programme' },");
-    // …and only the SECOND call decides whether she has a programme.
-    expect(src).toContain('if (!reply.ok) { setFailed(true); return; }');
-    expect(src).not.toMatch(/shapeReply[\s\S]{0,120}setFailed/);
-  });
-
   it('⚠️ a reply with no title is refused — the title is the only thing this call alone can give', () => {
     expect(parseCoachShape('{"days":[]}')).toBeNull();
     expect(parseCoachShape('{"title":"   "}')).toBeNull();
@@ -94,18 +86,29 @@ describe('⛔ a shape that does not arrive costs the screen, never the programme
   });
 });
 
-describe('⛔ and the coach cannot invent a muscle onto her screen', () => {
-  it('the shape’s muscles are filtered against the catalogue before they are drawn', () => {
+describe('⛔ the build no longer asks — the two clauses that read it are retired', () => {
+  it('BuildingProgramme makes no coach call at all (founder 2026-08-10)', () => {
     /*
-     * Call A returns muscle names as free text, and the view prints them through
-     * `t('muscle.<name>')` — i18next returns the KEY when it does not know one. A coach that wrote
-     * "Pecs" would have put **"muscle.Pecs" on the first screen of her programme**, and nothing
-     * anywhere would have failed.
+     * ⛔ TWO CLAUSES STOOD HERE AND THEIR SUBJECT MOVED, WHICH IS NOT THE SAME AS THEIR BEING WRONG.
+     *
+     *   · "the build falls back to the single call it replaced" — there is no call to fall back to.
+     *   · "the shape's muscles are filtered against the catalogue" — nothing returns free-text
+     *     muscle names to the screen any more, so there is nothing to filter.
+     *
+     * The rest of this file is UNTOUCHED and still holds: it governs the shape CONTRACT — that the
+     * call cannot prescribe a load, that a reply without a title is refused, that a malformed day is
+     * dropped rather than the reply — and `coachPlan` / `coachPrompt` still carry that contract for
+     * every surface that does ask. A law is retired when its subject is gone, never weakened until
+     * it passes.
+     *
+     * ⚠️ WHAT REPLACES THEM IS THE ABSENCE ITSELF, asserted here so this file fails loudly if the
+     * call ever comes back to the build. `onboardingEndsInAProgramme` holds the positive half.
      */
     const src = readFileSync(join(__dirname, '../../src/screens/onboarding/BuildingProgramme.tsx'), 'utf8');
-    expect(src).toContain('.filter((m) => CANONICAL_MUSCLE_ORDER.includes(m))');
-    // ⚠️ The ticker counts the SAME filtered list, or the fill stalls on muscles never drawn.
-    const ticker = src.slice(src.indexOf('const sketchedCount'), src.indexOf('const sketchedCount') + 260);
-    expect(ticker).toContain('CANONICAL_MUSCLE_ORDER.includes(m)');
+    for (const gone of ['askCoach', 'first_shape', 'first_fill', 'first_programme', 'COACH_SHAPE_SCHEMA']) {
+      expect({ gone, present: src.includes(gone) }).toEqual({ gone, present: false });
+    }
+    expect(src).toContain('await model.generateProgram(profile)');
   });
 });
+
