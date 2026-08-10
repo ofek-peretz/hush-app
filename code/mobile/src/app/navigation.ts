@@ -14,7 +14,7 @@
 // 
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
+import type { CardioActivity, Experience, MuscleStance, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
 import type { WristOffer } from '@/platform/watch/watchPresence';
@@ -75,7 +75,20 @@ export type OnboardingParamList = {
    * in a gym before her first session"* — and he agreed: *"fine, take it out. Just make it at least
    * 45 minutes, because less than that is too light."* The floor lives on the coach now.
    */
-  YourGoal: { sex: 'male' | 'female'; experience: Experience; weightKg: number; age: number; daysPerWeek: number };
+  /*
+   * ⛔ AND THEN THE PROSE WENT TOO (founder 2026-08-08): *"פציעות כאבים ומה אסור יהיה בBODYMAP לכן
+   * לא צריך טקסט חופשי. כולל אילו שרירים הוא הכי רוצה לפתח."*
+   *
+   * `YourGoal` asked two paragraphs and one chip row. Measuring who READ them found a single
+   * consumer — `coachFacts`, the AI's fact pack — and the AI is out of the front door. Nothing in
+   * the engine has ever seen `goalText` or `limitsText`, so the screen was asking her to type an
+   * answer that changed no decision.
+   *
+   * The body map asks the same two things in the form the assembler actually reads: a stance per
+   * muscle. OFF is "don't train this" (a bad shoulder, a forbidden movement); EMPHASIS is "lead
+   * with this". `assembleV5DayLists` takes this map and nothing else about her intent.
+   */
+  BodyMap: { sex: 'male' | 'female'; weightKg: number; daysPerWeek: number; experience?: Experience; age?: number };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
@@ -87,9 +100,14 @@ export type OnboardingParamList = {
     experience?: Experience;
     daysPerWeek?: number;
     workoutMinutes?: number;
-    /** Her own words: what the programme is FOR, and what it has to plan around. */
+    /** Her own words: what the programme is FOR, and what it has to plan around.
+     *  @deprecated Nothing produces these any more — `BodyMap` replaced the prose screen that did.
+     *  Kept only because `ConnectHealth` still spreads them into the profile conditionally. */
     goal?: string;
     limits?: string;
+    /** What she drew on the body map. `{}` is a complete answer — normal is the absence of a
+     *  decision, not one — so an empty object must never be read as "she skipped it". */
+    bodyMap?: Record<string, MuscleStance>;
     previewWrist?: WristOffer;
   } | undefined;
   /*

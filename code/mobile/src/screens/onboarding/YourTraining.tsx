@@ -89,7 +89,7 @@ export function YourTraining({ navigation, route }: Props) {
   function onContinue() {
     // The one place lb becomes kg. The record is metric; the wheel is hers.
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
-    navigation.navigate('YourGoal', { ...route.params, weightKg: kg, age, daysPerWeek: days });
+    navigation.navigate('BodyMap', { ...route.params, weightKg: kg, age, daysPerWeek: days });
   }
 
   return (

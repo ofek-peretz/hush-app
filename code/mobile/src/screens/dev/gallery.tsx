@@ -22,7 +22,7 @@ import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { YourTraining } from '@/screens/onboarding/YourTraining';
-import { YourGoal } from '@/screens/onboarding/YourGoal';
+import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -1245,7 +1245,17 @@ export const GALLERY: GalleryEntry[] = [
   */
   { id: '1.2c', label: 'About you — nothing known yet', status: 'live', note: 'no name from the provider; sex unchosen, so Continue waits', render: () => mount(AboutYou) },
   { id: '1.2d', label: 'Her training — three rulers', status: 'live', note: 'days, bodyweight, age — one instrument each (founder 2026-08-05); session length is gone', render: () => mount(YourTraining, { sex: 'female', experience: 'intermediate' }) },
-  { id: '1.2e', label: 'Her goal + her limits — one screen, no prose', status: 'live', note: 'was two screens; the paragraphs were what made them two', render: () => mount(YourGoal, { sex: 'female', experience: 'intermediate', weightKg: 62, age: 34, daysPerWeek: 4 }) },
+  /*
+   * ⛔ AND THEN 1.2e WENT (founder 2026-08-08): *"פציעות כאבים ומה אסור יהיה בBODYMAP לכן לא צריך
+   * טקסט חופשי."* `YourGoal` asked for two paragraphs whose only reader was the AI's fact pack, and
+   * the AI is out of the front door. The body map asks the same two things — what to lead with, what
+   * to leave alone — in the form `assembleV5DayLists` actually reads.
+   *
+   * ⚠️ MOUNTED WITH AN EMPTY MAP, which is the state that matters: nothing marked, nothing off,
+   * Continue live. The refusals (a third lead, an all-off body) are reached by pressing, not by a
+   * fixture — they are the two things this screen exists to say out loud.
+   */
+  { id: '1.2e', label: 'What do I train? — the body map', status: 'live', note: 'replaces the goal/limits prose (founder 2026-08-08): off · normal · lead, on one body she presses', render: () => mount(BodyMap, { sex: 'female', weightKg: 62, daysPerWeek: 4 }) },
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.

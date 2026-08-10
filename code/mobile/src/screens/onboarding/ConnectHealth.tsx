@@ -61,6 +61,7 @@ export function ConnectHealth({ navigation, route }: Props) {
   const workoutMinutes = route.params?.workoutMinutes;
   const goal = route.params?.goal;
   const limits = route.params?.limits;
+  const bodyMap = route.params?.bodyMap;
   const [connected, setConnected] = useState(false);
   /**
    * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
@@ -177,6 +178,16 @@ export function ConnectHealth({ navigation, route }: Props) {
         /* Her own words — the two things a form cannot hold. They become the coach's first brief. */
         ...(goal ? { goalText: goal } : {}),
         ...(limits ? { limitsText: limits } : {}),
+        /*
+         * ⛔ THE MAP SHE DREW — the only thing onboarding sends that SHAPES the programme.
+         *
+         * ⚠️ SPREAD CONDITIONALLY, and the condition is presence, not size. `{}` is a complete
+         * answer (she left every muscle normal) and it must arrive as `{}`, because
+         * `completeOnboarding` reads the PRESENCE of this key to put her on the v5 engine. A
+         * truthiness test on the object is safe — `{}` is truthy — but `Object.keys(map).length`
+         * would not be, and that is the shape this line is most likely to be "tidied" into.
+         */
+        ...(bodyMap != null ? { bodyMap } : {}),
       },
     });
   }

@@ -124,7 +124,20 @@ function props(over: Record<string, unknown> = {}) {
     nav: navigated,
     p: {
       navigation: { navigate: (s: string, p: unknown) => void navigated.push({ s, p }), goBack: () => {} },
-      route: { params: { inputs: { name: 'Ofek', daysPerWeek: 4 } } },
+      /*
+       * ⛔ THE RELAY IS FLAT, AND THIS FIXTURE USED TO ENCODE THE BUG.
+       *
+       * It handed the screen `{ inputs: { … } }`, which is the shape the screen was written against
+       * and **no step in the onboarding navigator has ever sent**. Every other step spreads what it
+       * was given and adds its own (`{ ...route.params, weightKg, age, daysPerWeek }`), and
+       * `ConnectHealth` reads those keys off the top of `route.params`.
+       *
+       * ⚠️ So the screen was unreachable, its test was green, and the day it was wired in her sex,
+       * her weight and her days would have died on the way IN and the map on the way OUT — with
+       * `fixtureModel`'s safety net quietly rebuilding an all-normal map, which is the exact silent
+       * failure this file's first law was written about. The fixture is the navigator's shape now.
+       */
+      route: { params: { name: 'Ofek', sex: 'female', weightKg: 62, daysPerWeek: 4 } },
       ...over,
       // `as never` made every `{...p}` below a spread of `never`. The screen's own prop type is the
       // honest annotation, and it keeps the fixture answerable to the component it drives.
@@ -245,7 +258,7 @@ describe('F-4 · the emphasis budget is legible, not a hidden error', () => {
     tap(r, 'Quads', 'Emphasis');
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
+    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
     expect(Object.values(map).filter((s) => s === 'emphasis')).toHaveLength(EMPHASIS_BUDGET);
     expect(map.Quads).toBeUndefined();
   });
@@ -272,7 +285,7 @@ describe('the map that leaves is the map she drew', () => {
     tap(r, 'Back', 'Emphasis');
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
+    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
     expect(map).toEqual({ Calves: 'off', Back: 'emphasis' });
   });
 
@@ -283,7 +296,29 @@ describe('the map that leaves is the map she drew', () => {
     tap(r, 'Calves', 'Normal'); // …she changed her mind
     act(() => continueBtn(r).props.onPress());
 
-    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
+    const map = (nav[0] as { p: { bodyMap: Record<string, string> } }).p.bodyMap;
     expect(map).toEqual({});
+  });
+
+  it('⛔ and it carries EVERYTHING it was given — the step is a relay, not a terminus', () => {
+    /*
+     * The defect this pins is invisible on this screen and fatal one screen later: `ConnectHealth`
+     * assembles the whole of `OnboardingInputs` from `route.params`, so a step that answers with
+     * only its OWN answer hands the assembler an athlete with no sex, no bodyweight and no days —
+     * and every one of those is spread conditionally downstream, so nothing throws. The programme is
+     * simply built for nobody.
+     *
+     * ⚠️ ASSERTED ON THE WHOLE OBJECT, not key by key: a per-key check passes against a screen that
+     * drops the one key nobody thought to name.
+     */
+    const { p, nav } = props();
+    const r = mount(<BodyMap {...p} />);
+    tap(r, 'Back', 'Emphasis');
+    act(() => continueBtn(r).props.onPress());
+
+    expect(nav[0]).toEqual({
+      s: 'ConnectHealth',
+      p: { name: 'Ofek', sex: 'female', weightKg: 62, daysPerWeek: 4, bodyMap: { Back: 'emphasis' } },
+    });
   });
 });

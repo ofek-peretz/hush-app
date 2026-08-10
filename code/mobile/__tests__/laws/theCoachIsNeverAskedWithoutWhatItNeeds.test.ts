@@ -201,12 +201,31 @@ describe('onboarding asks for every one of them', () => {
     expect(about).toContain("navigation.navigate('YourTraining', { sex, experience })");
     const training = read('src/screens/onboarding/YourTraining.tsx');
     expect(training.match(/<WheelPicker/g)).toHaveLength(3);
-    expect(training).toContain("navigation.navigate('YourGoal', { ...route.params, weightKg: kg, age, daysPerWeek: days })");
+    /*
+     * ⛔ THE STEP AFTER THIS ONE IS THE BODY MAP NOW (founder 2026-08-08): *"פציעות כאבים ומה אסור
+     * יהיה בBODYMAP לכן לא צריך טקסט חופשי."* `YourGoal` asked for two paragraphs, and measuring
+     * who READ them found one consumer — the AI's fact pack — which is out of the front door.
+     *
+     * ⚠️ THE LAW'S CLAIM IS UNCHANGED: there is no route to the programme that drops one of her
+     * numbers. Only the name of the next hop moved, and the spread (`...route.params`) is the half
+     * that actually carries them — which is why it is pinned rather than the screen name alone.
+     */
+    expect(training).toContain("navigation.navigate('BodyMap', { ...route.params, weightKg: kg, age, daysPerWeek: days })");
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
     expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
+    expect(read('src/app/Root.tsx')).toContain('name="BodyMap"');
+    /*
+     * ⚠️ AND THE MAP RELAYS WHAT IT WAS GIVEN. This is the defect the wiring actually shipped: the
+     * screen was written against a `{ inputs }` param no step in this navigator sends, so her sex,
+     * weight and days died on the way IN and the map died on the way OUT. A test on the screen name
+     * alone would have passed against exactly that.
+     */
+    const map = read('src/screens/onboarding/BodyMap.tsx');
+    expect(map).toContain("navigation.navigate('ConnectHealth', { ...(route?.params ?? {}), bodyMap: map })");
     /* ⚠️ AND THE DELETED SCREEN IS GONE FROM THE NAVIGATOR, not merely unrouted — a screen left
        registered is a screen a deep link can still reach. */
     expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
+    expect(read('src/app/Root.tsx')).not.toContain('YourGoal');
     expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('AboutYou')");
   });
 
@@ -214,6 +233,13 @@ describe('onboarding asks for every one of them', () => {
     const src = read('src/screens/onboarding/ConnectHealth.tsx');
     expect(src).toContain('const weightKg = route.params?.weightKg;');
     expect(src).toContain('...(weightKg != null ? { weightKg } : {})');
+    /*
+     * ⚠️ AND THE MAP, which is the ONLY thing onboarding sends that shapes the programme. The guard
+     * is `!= null`, not truthiness of its size: `{}` is a complete answer (every muscle left normal)
+     * and `completeOnboarding` reads the PRESENCE of the key to put her on the v5 engine.
+     */
+    expect(src).toContain('const bodyMap = route.params?.bodyMap;');
+    expect(src).toContain('...(bodyMap != null ? { bodyMap } : {})');
   });
 
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {

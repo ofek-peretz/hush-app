@@ -93,9 +93,17 @@ export function BodyMap({ navigation, route }: { navigation: any; route: any }) 
     });
   };
 
+  /*
+   * ⚠️ THE RELAY IS FLAT, and it was not. This screen was written against a `{ inputs }` param that
+   * no step in this navigator has ever sent: every onboarding screen spreads what it was given and
+   * adds its own (`{ ...route.params, bodyMap }`), and `ConnectHealth` reads those keys off the top
+   * of `route.params`. Wrapping the map in an `inputs` object dropped BOTH — her sex, weight and
+   * days on the way in, and the map itself on the way out — so the assembler would have been handed
+   * an athlete with no body and no map, silently.
+   */
   const build = () => {
     if (nothingOn) return; // S-3 — an unbuildable map never leaves this screen
-    navigation.navigate('ConnectHealth', { inputs: { ...(route?.params?.inputs ?? {}), bodyMap: map } });
+    navigation.navigate('ConnectHealth', { ...(route?.params ?? {}), bodyMap: map });
   };
 
   const openStance: MuscleStance = open ? (map[open] ?? 'normal') : 'normal';
