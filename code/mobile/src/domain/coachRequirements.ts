@@ -45,7 +45,7 @@ import type { Profile } from '@/data/local/models';
 
 /** One fact the coach cannot work without, and the reason it is on this list. */
 export interface CoachRequirement {
-  key: 'sex' | 'weightKg' | 'age' | 'experience' | 'daysPerWeek';
+  key: 'sex' | 'weightKg' | 'daysPerWeek';
   /** Why the coach cannot do its job without it — for the reader, not for the athlete. */
   why: string;
 }
@@ -70,23 +70,28 @@ export const REQUIRED_FOR_COACH: readonly CoachRequirement[] = [
      */
     why: 'bodyweight lifts are prescribed against it, and it is the baseline progress is read from',
   },
-  {
-    key: 'age',
-    /*
-     * Not a number the coach applies a formula to — it is context it reasons with. What recovers in
-     * two days at twenty-five takes three at fifty-five, and a coach that does not know which one it
-     * is talking to writes the same week for both.
-     */
-    why: 'how fast she recovers, which is the difference between four sessions a week and three',
-  },
-  {
-    key: 'experience',
-    /*
-     * The single biggest input to a STARTING load. Everything after week one is measured, but week
-     * one is a guess, and this is what makes it an educated one instead of a coin toss.
-     */
-    why: 'the starting loads, which are the only ones the coach has no measurement for',
-  },
+  /*
+   * ⛔ `age` AND `experience` ARE OFF THIS LIST (founder 2026-08-08).
+   *
+   * ⚠️ THE ENTRY ABOVE THIS ONE USED TO CALL EXPERIENCE *"the single biggest input to a STARTING
+   * load"*, and that claim was never measured. Measuring it reverses it. The founder forced the
+   * correction in one line — *"אל תשכח את העובדה שאם מתאמן עורך ומשנה משקל המנוע מתאים אותו מיד.
+   * אתה מסתכל רק על החזרות"* — and he was right: my simulation moved reps only, so it modelled an
+   * athlete who never touches the weight she is handed.
+   *
+   * With ONE edit on set 1, a 130 kg-capable athlete opened at 45 kg is at 130 kg in that set and
+   * offered 132.5 kg the next session, because `observedLoads` reads `actualWeight` — what she
+   * LIFTED, never what she was told to lift. Week one is not a guess the app has to get right; it is
+   * a guess she corrects with one finger, after which the engine has a measurement.
+   *
+   * `age` never had a claim to begin with: nothing in `src/engine` reads it, and `fixtureModel`
+   * records the one place that ever wanted to — a −1 set penalty at 65+ — as *"nowhere in the
+   * register; the same guess S-42 refuses."*
+   *
+   * ⛔ AND A FACT NOTHING ASKS FOR CANNOT SIT IN A LIST OF "what she must be asked" — the note on
+   * `workoutMinutes` above says exactly this. `missingForCoach` would report both missing for every
+   * athlete alive, for ever. They stay OPTIONAL on `Profile` so a persisted record still parses.
+   */
   {
     key: 'daysPerWeek',
     /*

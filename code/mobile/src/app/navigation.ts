@@ -62,7 +62,15 @@ export type OnboardingParamList = {
    * carries the three she SETS, on one instrument each. Bodyweight and age travel one step later
    * than they used to; nothing else about the relay changes.
    */
-  YourTraining: { sex: 'male' | 'female'; experience: Experience };
+  /*
+   * ⛔ `experience` AND `age` LEFT THE INTAKE (founder 2026-08-08, on a measurement he forced).
+   *
+   * Neither is read anywhere in `src/engine`. Their only consumers were `coachFacts` and the server
+   * payload, and the engine learns her true load from `actualWeight` the moment she edits a set —
+   * see the note on `AboutYou`'s state for the numbers. Both remain OPTIONAL on `ConnectHealth` so
+   * a persisted profile that has them still parses; no screen produces them any more.
+   */
+  YourTraining: { sex: 'male' | 'female' };
   /*
    * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front
    * door). What she is training FOR, and what hurts or is refused. Everything else onboarding needs
@@ -88,7 +96,7 @@ export type OnboardingParamList = {
    * muscle. OFF is "don't train this" (a bad shoulder, a forbidden movement); EMPHASIS is "lead
    * with this". `assembleV5DayLists` takes this map and nothing else about her intent.
    */
-  BodyMap: { sex: 'male' | 'female'; weightKg: number; daysPerWeek: number; experience?: Experience; age?: number };
+  BodyMap: { sex: 'male' | 'female'; weightKg: number; daysPerWeek: number };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired

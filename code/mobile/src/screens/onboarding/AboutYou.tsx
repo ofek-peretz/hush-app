@@ -32,10 +32,9 @@ import React, { useState } from 'react';
 import { View, Keyboard, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Legend, TextField, SegmentedControl } from '@/components/ds';
+import { Button, TextField, SegmentedControl } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import type { Experience } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
@@ -67,7 +66,27 @@ export function AboutYou({ navigation }: Props) {
    * the removal of the worst default in the product.
    */
   const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
-  const [experience, setExperience] = useState<Experience>(app.profile?.experience ?? 'beginner');
+  /*
+   * ⛔ HOW LONG SHE HAS TRAINED IS NOT ASKED (founder 2026-08-08, on a measurement).
+   *
+   * I answered his question — *"האם אתה חושב שכן צריך ניסיון והאם זה כן יהיה מדויק יותר?"* — first
+   * with a simulation that had a 100 kg-capable athlete opened at 45 kg and still under 75 kg after
+   * six sessions, and concluded the question WAS needed. He corrected the model in one line:
+   * *"אל תשכח את העובדה שאם מתאמן עורך ומשנה משקל המנוע מתאים אותו מיד. אתה מסתכל רק על החזרות."*
+   *
+   * He was right, and re-measuring with a single edit on set 1 reverses the answer:
+   *
+   *     TRUE 100 | opened 45 | PASSIVE after 6: 75 | EDITED s1: 100  → session 2 opens 102.5
+   *     TRUE 130 | opened 45 | PASSIVE after 6: 75 | EDITED s1: 130  → session 2 opens 132.5
+   *
+   * `observedLoads` reads `actualWeight` — what she LIFTED, never what she was told to lift — so the
+   * engine learns from the correction and builds on it the next session. A wrong opening load costs
+   * one finger movement; a wrong ANSWER to "how long have you trained" costs the same load and is
+   * also a question she may not know how to answer honestly.
+   *
+   * ⚠️ Nothing in `src/engine` has ever read `experience`. Its only consumers were `coachFacts` (the
+   * AI's fact pack) and the server payload, and the AI is out of the front door.
+   */
 
   function pickSex(v: string) {
     const next = v as 'female' | 'male';
@@ -85,7 +104,7 @@ export function AboutYou({ navigation }: Props) {
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does. The lb→kg conversion went with the
     // weight wheel to `YourTraining`; there is still exactly one place it happens.
-    navigation.navigate('YourTraining', { sex, experience });
+    navigation.navigate('YourTraining', { sex });
   }
 
   return (
@@ -132,29 +151,10 @@ export function AboutYou({ navigation }: Props) {
           onChange={pickSex}
         />
         {/*
-          ⛔ EXPERIENCE MOVED HERE (founder 2026-08-05): *"move the years of experience to the screen
-          with the name and the sex."*
-
-          He is right about what belongs together. This screen asks the three things she IS — her
-          name, her sex, how long she has trained — and none of them is a number she sets. The next
-          screen asks the three she SETS, on one instrument each. Bodyweight and age went with it.
-
-          Years, not ranks: nobody has to decide whether they are "advanced".
+          ⛔ THE EXPERIENCE CONTROL STOOD HERE AND IS DELETED — see the note on the state above. The
+          screen is down to the two things it cannot learn any other way: what to call her, and which
+          gender every Hebrew sentence from here on conjugates against.
         */}
-        <View style={styles.col}>
-          <Legend>{t('ob.experience')}</Legend>
-          <SegmentedControl
-            block
-            size="lg"
-            options={[
-              { value: 'beginner', label: t('ob.expNew') },
-              { value: 'intermediate', label: t('ob.expSome') },
-              { value: 'advanced', label: t('ob.expYears') },
-            ]}
-            value={experience}
-            onChange={(v) => setExperience(v as Experience)}
-          />
-        </View>
       </View>
     </OnboardingScaffold>
   );

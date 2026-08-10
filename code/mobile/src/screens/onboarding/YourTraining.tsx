@@ -69,7 +69,6 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'YourTraining'>;
 
 /** Where the wheels open when there is nothing known about her yet. */
 const WEIGHT_OPENS_ON: Record<'kg' | 'lb', number> = { kg: 70, lb: 155 };
-const AGE_OPENS_ON = 30;
 const DAYS_OPENS_ON = 3;
 
 export function YourTraining({ navigation, route }: Props) {
@@ -84,12 +83,11 @@ export function YourTraining({ navigation, route }: Props) {
     if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
     return WEIGHT_OPENS_ON[units];
   });
-  const [age, setAge] = useState<number>(app.profile?.age && app.profile.age > 0 ? app.profile.age : AGE_OPENS_ON);
 
   function onContinue() {
     // The one place lb becomes kg. The record is metric; the wheel is hers.
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
-    navigation.navigate('BodyMap', { ...route.params, weightKg: kg, age, daysPerWeek: days });
+    navigation.navigate('BodyMap', { ...route.params, weightKg: kg, daysPerWeek: days });
   }
 
   return (
@@ -139,19 +137,18 @@ export function YourTraining({ navigation, route }: Props) {
             label={t('ob.weightLegend')}
           />
         </View>
-        <View style={styles.col}>
-          <Legend>{t('ob.age')}</Legend>
-          <WheelPicker
-            value={age}
-            onChange={setAge}
-            step={1}
-            min={14}
-            max={95}
-            size="lg"
-            ends="chevron"
-            label={t('ob.age')}
-          />
-        </View>
+        {/*
+          ⛔ THE AGE WHEEL STOOD HERE AND IS DELETED (founder 2026-08-08). It was asked for the
+          coach's sheet, and the coach is out of the front door. **Nothing in `src/engine` has ever
+          read `age`** — I grepped the whole directory for it and the only hits are the word inside
+          `allMuscles` and a comment about a stale seed. `fixtureModel`'s own note admits as much:
+          *"`age` survives only for the age-based rep guidance outside the engine, never for a load
+          or a set count"*, and its neighbour records a −1 set penalty at 65+ as *"nowhere in the
+          register; the same guess S-42 refuses."*
+
+          ⚠️ So the wheel was a question whose answer moved nothing, and asking it made the intake
+          read as a form. Two rulers now, not three.
+        */}
       </View>
     </OnboardingScaffold>
   );

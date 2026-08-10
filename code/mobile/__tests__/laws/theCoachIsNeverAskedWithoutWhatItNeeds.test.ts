@@ -47,7 +47,7 @@ describe('what the coach cannot work without', () => {
      * would have reported it missing for every athlete alive, for ever.
      */
     expect(REQUIRED_FOR_COACH.map((r) => r.key)).toEqual([
-      'sex', 'weightKg', 'age', 'experience', 'daysPerWeek',
+      'sex', 'weightKg', 'daysPerWeek',
     ]);
     for (const r of REQUIRED_FOR_COACH) expect(r.why.length).toBeGreaterThan(20);
   });
@@ -62,7 +62,7 @@ describe('what the coach cannot work without', () => {
     // exact hole this file exists to close, and it is the answer a naive `Object.keys` filter gives.
     /* ⛔ FIVE, NOT SIX (2026-08-05). Session length is no longer something she is asked for, so it
        cannot be something she is MISSING — a warning that is always on is a warning nobody reads. */
-    const every = ['sex', 'weightKg', 'age', 'experience', 'daysPerWeek'];
+    const every = ['sex', 'weightKg', 'daysPerWeek'];
     expect(missingForCoach(null)).toEqual(every);
     expect(missingForCoach(undefined)).toEqual(every);
   });
@@ -137,7 +137,7 @@ describe('onboarding asks for every one of them', () => {
     /* ⚠️ `NameEntry` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-04) — four answering
        screens now, not five. The list is the PATH, so it changes when the path does; what may not
        change is that every requirement is still collected on it. */
-    const flow = ['AboutYou', 'YourTraining', 'YourGoal', 'ConnectHealth']
+    const flow = ['AboutYou', 'YourTraining', 'BodyMap', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -198,9 +198,9 @@ describe('onboarding asks for every one of them', () => {
      * forward is not.
      */
     const about = read('src/screens/onboarding/AboutYou.tsx');
-    expect(about).toContain("navigation.navigate('YourTraining', { sex, experience })");
+    expect(about).toContain("navigation.navigate('YourTraining', { sex })");
     const training = read('src/screens/onboarding/YourTraining.tsx');
-    expect(training.match(/<WheelPicker/g)).toHaveLength(3);
+    expect(training.match(/<WheelPicker/g)).toHaveLength(2);
     /*
      * ⛔ THE STEP AFTER THIS ONE IS THE BODY MAP NOW (founder 2026-08-08): *"פציעות כאבים ומה אסור
      * יהיה בBODYMAP לכן לא צריך טקסט חופשי."* `YourGoal` asked for two paragraphs, and measuring
@@ -210,7 +210,7 @@ describe('onboarding asks for every one of them', () => {
      * numbers. Only the name of the next hop moved, and the spread (`...route.params`) is the half
      * that actually carries them — which is why it is pinned rather than the screen name alone.
      */
-    expect(training).toContain("navigation.navigate('BodyMap', { ...route.params, weightKg: kg, age, daysPerWeek: days })");
+    expect(training).toContain("navigation.navigate('BodyMap', { ...route.params, weightKg: kg, daysPerWeek: days })");
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
     expect(read('src/app/Root.tsx')).toContain('name="YourTraining"');
     expect(read('src/app/Root.tsx')).toContain('name="BodyMap"');
@@ -247,7 +247,13 @@ describe('onboarding asks for every one of them', () => {
     // to scroll before she can answer, which is how a form becomes a chore.
     const src = read('src/screens/onboarding/YourTraining.tsx');
     expect(src).toMatch(/WEIGHT_OPENS_ON: Record<'kg' \| 'lb', number> = \{ kg: \d+, lb: \d+ \}/);
-    expect(src).toMatch(/AGE_OPENS_ON = \d+/);
+    /*
+     * ⚠️ THE AGE WHEEL IS GONE, so its opening value is too — and what replaces the assertion is the
+     * one that matters: **no wheel on this screen may open at its own floor.** A rule that opens at
+     * 30 kg or at 2 days is a rule she has to scroll before she can answer.
+     */
+    expect(src).not.toContain('AGE_OPENS_ON');
+    expect(src).not.toContain("t('ob.age')");
     expect(src).toMatch(/min=\{units === 'kg' \? 30 : 66\}/);
     // ⚠️ And the same for the wheel that was a segmented control until 2026-08-05: three days a
     // week is where most people land, and a ruler that opens at its floor is one she has to scroll.
