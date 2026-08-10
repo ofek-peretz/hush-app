@@ -158,8 +158,25 @@ describe('the ordering that a first run always breaks', () => {
      * that has forgotten the week it just built for her.
      */
     const store = read('src/state/stores/appStore.tsx');
-    expect(store).toContain('await live.generateProgram(profile)');
     expect(store).toContain('db.saveProgram(program)');
+    /*
+     * ⛔ AND EVERY GENERATION GOES THROUGH `programProfile`, WHICH IS A DEFECT I SHIPPED FOR AN HOUR.
+     *
+     * `programProfile` composes her active PAIN EASES over the body map — a resting muscle switched
+     * off for as long as it is settling, never written into the map she drew. Its own comment says
+     * *"every `generateProgram` call goes through here; a call that did not would quietly train a
+     * muscle she just told us hurts"* — and the first version of this line called
+     * `generateProgram(profile)` raw. It was harmless only by accident: a brand-new athlete has no
+     * eases yet. The same mistake in `updateProfileInfo`, where she certainly does, programmes an
+     * injured shoulder.
+     *
+     * ⚠️ ASSERTED AS "NO RAW CALL ANYWHERE", not as "the wrapper appears somewhere". A law that only
+     * checks for the presence of the right call passes a file that makes both.
+     */
+    for (const raw of ['generateProgram(profile)', 'generateProgram(state.profile)']) {
+      expect({ raw, present: store.includes(raw) }).toEqual({ raw, present: false });
+    }
+    expect(store.match(/generateProgram\(programProfile\(/g) ?? []).toHaveLength(2);
     // …and it is no longer the null it was left as when the coach owned the week.
     expect(store).not.toContain('const program: Program | null = null;');
   });

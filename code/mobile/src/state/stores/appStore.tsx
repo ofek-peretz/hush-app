@@ -660,7 +660,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * `db.recordCoachAnswer` one screen earlier; with nothing writing that record any more, a
          * programme held only in React state would vanish on the first cold start.
          */
-        const program: Program | null = await live.generateProgram(profile).catch((e) => {
+        const program: Program | null = await live.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
         });
@@ -968,13 +968,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         if (daysChanged || minutesChanged || mapChanged) {
           /*
-           * SHE CHANGED SOMETHING STRUCTURAL — most often how many days a week she trains.
+           * ⛔ SHE CHANGED SOMETHING STRUCTURAL, AND THE WEEK IS REBUILT HERE AGAIN (founder
+           * 2026-08-10, item 3). This was `void askCoachToRevise(...)` — the third instance of the
+           * same amputation as `foldEngine` and `completeOnboarding`, and the worst-behaved of them:
            *
-           * The week used to be rebuilt here from her body map. The coach owns that decision now,
-           * and her sheet already carries the new number, so it is told what happened and answers
-           * with a whole programme. Not awaited: the profile edit is saved and complete on its own.
+           *   · **It was fire-and-forget.** `void`, never awaited. A failed call changed nothing and
+           *     said nothing, so turning a muscle off and getting the same week back was the
+           *     expected outcome on a bad signal, with no way to tell that from "the engine decided
+           *     to keep it".
+           *   · **The message only ever named DAYS** — `she now trains N days a week` — so a body-map
+           *     edit or a new time cap reached the coach as a sentence about frequency. The one
+           *     structural change the athlete makes most deliberately was the one it could not say.
+           *
+           * `generateProgram` reads all three: the map decides which muscles exist and how much of
+           * the week each owns, `daysPerWeek` sets how many workouts it is dealt across, and
+           * `workoutMinutes` is the ceiling it trims to.
+           *
+           * ⚠️ AND HER PROGRESS SURVIVES IT. v5 keys every decision to the EXERCISE, never to a slot
+           * (S-29), so a lift that is still in the week after the reshape keeps the load it earned.
+           * Generation touches no engine state — that is what makes a rebuild safe to do on an edit
+           * rather than something to save for a Saturday.
            */
-          void askCoachToRevise(`she now trains ${profile.daysPerWeek} days a week`);
+          const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
+            void track('engine_error', { op: 'generateProgram', message: String(e) });
+            return null;
+          });
+          if (rebuilt) {
+            await db.saveProgram(rebuilt);
+            dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+          }
         }
       },
 
