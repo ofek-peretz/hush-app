@@ -104,7 +104,17 @@ async function live(profile: Profile) {
         new Date(2026, 0, 5 + w * 7 + i, 12).getTime(),
         undefined,
         (id) => perExercise[id] ?? 0,
-        (id) => whole[muscleOf(id) ?? ''] ?? 0,
+        /*
+         * ⚠️ A RECORD KEYED BY MUSCLE, NOT A FUNCTION — and passing a function here is what produced
+         * the "six muscles under MEV from week two" reading this file first reported. `advanceV5`
+         * indexes it (`weeklyByMuscle[m]`), so a function yields `undefined` and it falls back to
+         * THIS OCCURRENCE's prescription. Loop 3 then learned one day's sets as the whole week's
+         * target, and the number halved on the first fold.
+         *
+         * The engine was right. The simulation was feeding it a day and calling it a week — the
+         * exact failure mode this audit exists to catch, arriving first in the audit itself.
+         */
+        whole,
       );
     }
     /* She completed everything at the top of the band, so every lift earns a rung. */
@@ -158,31 +168,38 @@ describe('⛔ eight weeks — the week she trains in month two', () => {
   });
 
   /*
-   * ⛔ THE FINDING THIS FILE WAS WRITTEN TO LOOK FOR, AND IT IS REAL. LEFT RED.
+   * ⛔ THIS TEST REPORTED A DEFECT THAT WAS ITS OWN, AND THE CORRECTION IS WORTH MORE THAN THE FIND.
    *
-   * From WEEK TWO onward, six muscles sit at FIVE weekly sets — under `WEEKLY_SETS_FLOOR`, the
-   * effective dose — and they stay there for the rest of the run:
+   * On its first run it read six muscles — Triceps, Glutes, Shoulders, Back, Biceps, Calves — sitting
+   * at FIVE weekly sets from week two onward, under `WEEKLY_SETS_FLOOR`, for an athlete who completed
+   * every prescribed set at the top of her band. It was written up as the most consequential defect
+   * in the engine.
    *
-   *     week 2:  Triceps 5 · Glutes 5 · Shoulders 5 · Back 5 · Biceps 5 · Calves 5
+   * ⚠️ IT WAS THE SIMULATION. `advanceV5`'s eighth parameter is `weeklyByMuscle: Record<string,
+   * number>` — a record INDEXED BY MUSCLE — and this file passed a function. `weeklyByMuscle[m]` on a
+   * function is `undefined`, so the engine fell back to THIS OCCURRENCE's prescription and Loop 3
+   * learned one day's sets as the whole week's target. The number halved on the first fold.
    *
-   * She completed every prescribed set at the top of her band, every session. An athlete who does
-   * everything asked of her should be EARNING volume. Instead most of her body drops under the dose
-   * the moment the engine starts learning from her.
+   * ⚠️ TWO FIXES WERE PROPOSED AND MEASURED BEFORE THE CAUSE WAS FOUND, and both were wrong: flooring
+   * Loop 3's `minSets` at MEV (it broke seven ratified Loop 3 laws) and correcting `enforceTimeCap`
+   * (measurement showed the generated week was already at or above MEV — the trim was never
+   * involved). Neither was shipped. The measurement that settled it compared a per-day prescription
+   * against a per-week one and found them IDENTICAL, which is what pointed at the argument rather
+   * than at either candidate.
    *
-   * ⚠️ WHY IT WAS INVISIBLE UNTIL NOW: week one is correct — every single-week audit in this repo
-   * passes, including the 1,455-programme sweep, and all of them are photographs of day one. Loop 3
-   * seeds the learned target from her REAL (time-trimmed) prescription, and the trim is what takes a
-   * muscle from six sets to five. That five then becomes the learned figure the next week is built
-   * from, and `raiseToWeeklyFloor` does not lift it back. The floor holds on the generated week and
-   * not on the learned one.
+   * ⛔ AND WITH THE FEED CORRECTED, A SMALLER ONE IS STILL THERE — REAL, AND LEFT RED.
    *
-   * ⚠️ THIS IS THE MOST CONSEQUENTIAL DEFECT FOUND IN THE ENGINE THIS SESSION. It is not a twin in a
-   * session or a minute over an hour: it is most of her body under-dosed for every week after the
-   * first, in the exact case the product is built for — the athlete who does what she is told.
+   *     Glutes at 5 from week 3 · Triceps at 5 from week 5   (12 instances over the run)
    *
-   * `it.failing` so the suite stays honest and this flips to a failure the moment it is fixed. The
-   * fix belongs in the seam between Loop 3's learned volume and the weekly floor, and it is a real
-   * piece of work rather than a patch.
+   * Not six muscles from week two; two muscles, later, and only after several folds. It is a slow
+   * drift rather than an immediate halving, which is why it needed the corrected simulation to be
+   * seen at all — the loud wrong reading was hiding a quiet right one.
+   *
+   * ⚠️ THE TWO CANDIDATE FIXES ARE STILL BOTH RULED OUT, and by measurement rather than by argument:
+   * the generated week is at or above MEV every time (so the time cap is not the source), and
+   * flooring Loop 3's `minSets` breaks seven ratified laws. What is left is the seam where a muscle
+   * that sits at the bottom of its share drifts down one set at a time — and finding it needs a fold-
+   * by-fold read of Loop 3's decisions for those two muscles, not another guess.
    */
   it.failing('⛔ …and no muscle sinks under the effective dose either', async () => {
     // The other direction. A muscle that drifts under MEV week after week is training that costs her
