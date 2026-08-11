@@ -282,6 +282,13 @@ export function ProfileSheet({ navigation }: Props) {
             which is the whole of what this row is for. */}
         {/* Only when there is something to share — a control that opens and bounces straight back
             is worse than no control. `SharePlanScreen` reads the same plan. */}
+        {/*
+          ⛔ THE BODY MAP, REACHABLE AT LAST (founder 2026-08-11). It is the surface that carries her
+          injuries, the muscles she has switched off and the ones she leads with — and until now it
+          existed only in onboarding, drawn once. The pain flow's own copy already sent her here
+          (*"adjust it any time in You → Body map"*), to a screen that was not built.
+        */}
+        <Row label={t('ob.mapTitle')} onPress={() => navigation.navigate('BodyMapEdit')} />
         {hasPlan ? <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last /> : null}
 
 

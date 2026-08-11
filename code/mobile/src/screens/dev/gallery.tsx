@@ -22,6 +22,7 @@ import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
+import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { BodyMapFigure } from '@/components/BodyMapFigure';
 import { FormMedia } from '@/components/FormMedia';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
@@ -2295,6 +2296,13 @@ export const GALLERY: GalleryEntry[] = [
    * the gallery could not show him.
    */
   { id: '4.0', label: 'You', status: 'live', note: 'the whole tab — every row, in one place, which is the point', render: () => mount(ProfileSheet) },
+  /*
+   * ⛔ 4.1 EXISTS AGAIN (founder 2026-08-11). The body map lived on ONE screen, in onboarding, drawn
+   * once and never reachable — while the pain flow's copy already told her *"adjust it any time in
+   * You → Body map."* The app promised a surface it did not have, and its test suite sat blocked on
+   * the missing module for as long as that was true.
+   */
+  { id: '4.1', label: 'Body map — hers to change', status: 'live', note: 'the map after onboarding: a muscle off or led with, its rep band, and a rest window that has run out', render: () => mount(BodyMapEdit) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
 
   // ── 06–11 · SURFACES ───────────────────────────────────────────────────────────────────────

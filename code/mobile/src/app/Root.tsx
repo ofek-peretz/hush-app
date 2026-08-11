@@ -47,6 +47,7 @@ import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
+import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
@@ -170,6 +171,7 @@ function MainNavigator() {
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
       <MainStack.Screen name="Coach" component={CoachScreen} />
+      <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />

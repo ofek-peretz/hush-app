@@ -1145,7 +1145,12 @@
     "gotIt": "Got it",
     "title": "Something hurts",
     "invite": "Tell me what hurts and I will take it from there.",
-    "inviteOnLift": "Tell me what hurts on the {{exercise}} and I will take it from there."
+    "inviteOnLift": "Tell me what hurts on the {{exercise}} and I will take it from there.",
+    "resting": "Resting — {{n}} days left, then it comes back on its own.",
+    "askBack": "Your {{muscle}} has rested the time I asked for. How does it feel now?",
+    "answerRecovered": "Back to normal",
+    "answerTender": "Still tender",
+    "answerHurts": "Still hurts"
   },
   "notifAsk": {
     "title": "May I speak up — only when it matters?",

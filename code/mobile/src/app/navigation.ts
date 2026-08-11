@@ -263,6 +263,12 @@ export type MainParamList = {
    * stands in front of deciding whether the numbers are right.
    */
   PreWorkout: { workoutId: string };
+  /*
+   * ⛔ HER BODY, EDITABLE (founder 2026-08-11). The map used to exist on ONE screen, in onboarding —
+   * drawn once and never reachable again — while the pain copy already told her *"adjust it any time
+   * in You → Body map."* The app was promising a screen that did not exist.
+   */
+  BodyMapEdit: undefined;
   SharePlan: undefined;
   PlanReceived: { token: string };
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
