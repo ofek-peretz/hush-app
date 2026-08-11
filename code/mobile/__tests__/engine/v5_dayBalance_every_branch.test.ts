@@ -39,6 +39,9 @@ const sizes = (dl: ReturnType<typeof lists>) => dl.map((d) => d.exerciseIds.leng
 const all = (dl: ReturnType<typeof lists>) => dl.flatMap((d) => d.exerciseIds);
 const spread = (s: number[]) => (s.length ? Math.max(...s) - Math.min(...s) : 0);
 
+/** Switching one of these off can collapse the lower region to a single day — see the pinned case. */
+const ONE_DAY_REGION_MAPS = new Set(['Quads', 'Hamstrings', 'Glutes']);
+
 describe('⛔ the levelling pass — no day carries the week', () => {
   it('leaves no region more than ONE lift out of balance, at every frequency', () => {
     /*
@@ -122,20 +125,84 @@ describe('⛔ the levelling pass — no day carries the week', () => {
    * describe what a coach already distinguishes between a barbell squat and a leg press.
    */
   it('⛔ never puts a muscle’s PATTERN on a day that already trains it', () => {
+    /*
+     * FIXED 2026-08-11, and NOT in the engine. Two attempts there failed: refusing the duplicate
+     * broke `emphasis earns MORE exercises` and `compounds are spread across the week`, and scoping
+     * the ban to compounds changed nothing because the twins WERE the compounds. What made it
+     * affordable was splitting `squat` / `row` / `hinge` / `press_flat` in the CATALOGUE.
+     *
+     * ⚠️ SWEPT ACROSS THE REAL SPACE, not the three maps this test first used. A green test that does
+     * not reach the failing case is the exact problem this whole effort exists to remove — and the
+     * narrow version of this test passed while thirty weeks still held twins.
+     */
     const twins: string[] = [];
+    const maps: (Record<string, MuscleStance> | undefined)[] = [undefined, {}];
+    for (const m of CANONICAL_MUSCLE_ORDER) {
+      maps.push({ [m]: 'emphasis' as MuscleStance });
+      if (!ONE_DAY_REGION_MAPS.has(m)) maps.push({ [m]: 'off' as MuscleStance });
+    }
+    for (const a of ['Chest', 'Back', 'Quads']) for (const b of ['Hamstrings', 'Calves', 'Biceps']) {
+      maps.push({ [a]: 'emphasis' as MuscleStance, [b]: 'emphasis' as MuscleStance });
+    }
     for (const days of [2, 3, 4, 5, 6])
-      for (const map of [undefined, { Quads: 'emphasis' as MuscleStance }, { Back: 'emphasis' as MuscleStance }]) {
-        for (const d of lists(days, map)) {
+      for (const map of maps) {
+        const dl = lists(days, map);
+        for (const d of dl) {
+          /*
+           * ⚠️ SKIPPED WHERE THE REGION HAS ONE DAY, and that is a STRUCTURAL condition rather than a
+           * list of maps that happen to fail. When a region holds a single session, every one of its
+           * lifts is forced onto it — `mustPlace` never yields, and correctly so — and no dealer rule
+           * can prevent a repeat. Which maps produce that shape depends on the share table and will
+           * drift; the condition will not. The pinned case below is the same fact, driven directly.
+           */
+          if (dl.filter((o) => o.region === d.region).length < 2) continue;
           const seen = new Set<string>();
           for (const id of d.exerciseIds) {
             const ex = exerciseById(id);
             if (!ex) continue;
             const key = `${ex.muscle}/${ex.pattern}`;
-            if (seen.has(key)) twins.push(`${days}d ${d.name}: ${key} twice`);
+            if (seen.has(key)) twins.push(`${days}d ${JSON.stringify(map)} ${d.name}: ${key}`);
             seen.add(key);
           }
         }
       }
+    expect(twins).toEqual([]);
+  });
+
+  /*
+   * ⛔ THE CASE THE BAN CANNOT REACH, MEASURED AND LEFT RED.
+   *
+   * A sweep of 1,260 weeks found thirty that still hold a twin, and every one of them is the same
+   * shape: a LOWER muscle switched off at four days. Turning one off can collapse the lower region
+   * to a SINGLE day, and then every remaining lower lift is forced onto it — `mustPlace` (a muscle's
+   * first lift, or the one bringing it to a second day) never yields, and correctly so: a twin is
+   * better than a muscle switched off behind her back.
+   *
+   * ⚠️ THE TIE-BREAK DOES NOT HELP AND WAS MEASURED, NOT ASSUMED. Preferring the day holding least of
+   * that pattern was written, swept, and left the count at exactly thirty — because with one day in
+   * the region there is no other day to prefer. It was reverted rather than kept for the look of it.
+   *
+   * ⚠️ THE REAL FIX IS IN SELECTION, not dealing: a muscle should not be given more lifts than the
+   * region has distinct slots for. That is a change to how many exercises a muscle earns, which is
+   * `weeklyTargets` territory, and it is not something to write at the end of a night.
+   *
+   * `it.failing` because these ARE reachable maps — a knee that hurts is why someone switches Quads
+   * off — and a coach reading a Lower A with two hip hinges in it would mark that.
+   */
+  it.failing('⛔ …including when a switched-off muscle collapses the region to one day', () => {
+    const twins: string[] = [];
+    for (const off of ['Quads', 'Hamstrings', 'Glutes']) {
+      for (const d of lists(4, { [off]: 'off' as MuscleStance })) {
+        const seen = new Set<string>();
+        for (const id of d.exerciseIds) {
+          const ex = exerciseById(id);
+          if (!ex) continue;
+          const key = `${ex.muscle}/${ex.pattern}`;
+          if (seen.has(key)) twins.push(`${off} off · ${d.name}: ${key}`);
+          seen.add(key);
+        }
+      }
+    }
     expect(twins).toEqual([]);
   });
 
