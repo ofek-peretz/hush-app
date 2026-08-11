@@ -182,9 +182,16 @@ describe('⛔ the levelling pass — no day carries the week', () => {
    * that pattern was written, swept, and left the count at exactly thirty — because with one day in
    * the region there is no other day to prefer. It was reverted rather than kept for the look of it.
    *
-   * ⚠️ THE REAL FIX IS IN SELECTION, not dealing: a muscle should not be given more lifts than the
-   * region has distinct slots for. That is a change to how many exercises a muscle earns, which is
-   * `weeklyTargets` territory, and it is not something to write at the end of a night.
+   * ⛔ THE SELECTION CAP LANDED 2026-08-11 AND CUT IT BY MORE THAN HALF, not to zero. A muscle is no
+   * longer asked for more lifts than `days in its region × distinct patterns it owns`, and the sweep
+   * fell from thirty weeks to twelve, and from three generated programmes to two.
+   *
+   * ⚠️ WHY IT IS NOT ZERO, MEASURED RATHER THAN GUESSED: the cap bounds HOW MANY lifts a muscle is
+   * given; it does not make those lifts pattern-distinct. `pickExercises` orders by diversity but may
+   * still return two hinges among the three it is allowed, and with one day in the region there is
+   * nowhere for the second to go. Closing that means teaching the selector about the region's day
+   * count — a real change to a function five other callers share, and the third distinct attempt at
+   * this bug. It is worth doing deliberately, not at the end of a night.
    *
    * `it.failing` because these ARE reachable maps — a knee that hurts is why someone switches Quads
    * off — and a coach reading a Lower A with two hip hinges in it would mark that.

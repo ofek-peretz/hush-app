@@ -400,7 +400,37 @@ export function assembleV5DayLists(
          * change that gives the volume somewhere to land, and it is bounded by her pool.
          */
         const marked = stanceOf(map, m) === 'emphasis';
-        const want = Math.max(exerciseCountFor(targets[m]), marked ? 2 : 1);
+        /*
+         * ⛔ A MUSCLE IS NEVER GIVEN MORE LIFTS THAN ITS REGION CAN HOLD DISTINCTLY (founder
+         * 2026-08-11 — the selection fix, after the dealing fixes were measured and failed).
+         *
+         * A day may not repeat a muscle's movement, and `mustPlace` never yields — a muscle's first
+         * lift, and the one bringing it to a second day, are placed whatever the day already holds.
+         * So when a region collapses to ONE session — switching off a lower muscle does it, and so do
+         * two upper marks at four days — every lower lift is forced onto that day, and the dealer has
+         * no move left. A sweep of 1,260 weeks found thirty in exactly that shape.
+         *
+         * Two attempts to fix it while DEALING both failed and were reverted: refusing the duplicate
+         * cancelled the emphasis mark, and preferring the day holding least of the pattern changes
+         * nothing when there is only one day to prefer. The fault was never in the dealing. **The
+         * muscle was being asked for more exercises than can exist without a repeat**, and the honest
+         * place to say so is here, where the count is decided.
+         *
+         * The ceiling is arithmetic, not a guess: `days in this muscle's region × distinct patterns
+         * it owns` is exactly how many of its lifts can be placed with no day repeating a movement.
+         *
+         * ⚠️ THE FLOOR STILL WINS. A muscle always gets at least one lift, and a marked one at least
+         * two — S-2/S-35 and S-4 outrank tidiness, and a mark that bought nothing is the defect this
+         * engine spent a day removing.
+         */
+        const regionOfM = regionDays.filter((r) => r === 'full' || r === regionOf(m)).length || 1;
+        const distinctPatterns = new Set(
+          pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes, profile)
+            .map((id) => exerciseById(id)?.pattern)
+            .filter(Boolean),
+        ).size || 1;
+        const room = Math.max(marked ? 2 : 1, regionOfM * distinctPatterns);
+        const want = Math.min(room, Math.max(exerciseCountFor(targets[m]), marked ? 2 : 1));
         picks.push(...pickExercises(m, want, leaveItsByMuscle[m], substitutes, profile));
       }
     }
