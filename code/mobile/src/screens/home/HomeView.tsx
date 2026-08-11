@@ -153,6 +153,9 @@ export interface HomeViewProps {
    *  (every trained muscle is down to its last lift). Set on ProgramDay by generateProgram. When
    *  true, Hush SAYS so under the plan rather than starving a muscle in silence. */
   overBudget?: boolean;
+  /** Muscles whose rest window has run out and are still waiting on her answer (S-32b's sibling). */
+  easeChecks?: string[];
+  onEaseAnswer?: (muscle: string, answer: 'recovered' | 'tender' | 'hurts') => void;
   /** Her declared time budget in minutes (profile.workoutMinutes) — the number the S-3 line names. */
   budgetMinutes?: number;
   /** Open one lift's form clip — a tap on the lift's row. */
@@ -311,6 +314,38 @@ export function HomeView(props: HomeViewProps) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/*
+            ⛔ THE REST WINDOW THAT RAN OUT — FIRST THING, ABOVE HER WEEK (founder 2026-08-11).
+            The founder's rule is that Hush must *"REMEMBER and TELL him the time is up, and ASK HIM
+            HOW HE FEELS."* The body map answers it too, but a question that only lives there is one
+            she has to go looking for — and "tell" is not "wait to be found". This is the screen she
+            opens; this is where telling happens.
+
+            ⚠️ IT IS NOT A BANNER AND IT DOES NOT NAG. It appears only while a window has lapsed and
+            she has not answered, and any answer removes it — including "back to normal", which
+            writes nothing but a close. `awaitingAnswer` reads the clock, so a window that ran out
+            while the app was shut is here the moment she opens it.
+          */}
+          {(props.easeChecks ?? []).map((m) => (
+            <View key={m} style={styles.easeAsk}>
+              <Text style={styles.easeAskTitle}>{t('pain.askBack', { muscle: t(`muscle.${m}`) })}</Text>
+              <View style={styles.easeAnswers}>
+                {(['recovered', 'tender', 'hurts'] as const).map((a) => (
+                  <Pressable
+                    key={a}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t(`muscle.${m}`)} — ${t(`pain.answer${a[0].toUpperCase()}${a.slice(1)}`)}`}
+                    onPress={() => props.onEaseAnswer?.(m, a)}
+                    style={styles.easeAnswer}
+                  >
+                    <Text style={styles.easeAnswerText}>
+                      {t(`pain.answer${a[0].toUpperCase()}${a.slice(1)}`)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))}
           {props.resting ? (
             <View style={styles.restBlock}>
               {/* the day + week, quietly — a sans eyebrow (holds the translated word "Week") */}
@@ -668,6 +703,15 @@ function RestFact({ value, label, accent }: { value: string; label: string; acce
    An orphaned style is what `styles.ask` became when the band graphic was deleted around it, and
    it then rendered the second largest figure on the set screen at the platform default for a week. */
 const styles = StyleSheet.create({
+  /* The lapsed rest window. Quiet, above the week, and gone the moment she answers. */
+  easeAsk: { marginBottom: 22 },
+  easeAskTitle: { fontFamily: font.serif, fontSize: 19, lineHeight: 26, color: color.textPrimary },
+  easeAnswers: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  easeAnswer: {
+    paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12,
+    borderWidth: 1, borderColor: color.borderControl,
+  },
+  easeAnswerText: { fontFamily: font.sans, fontSize: 14, color: color.textPrimary },
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
 

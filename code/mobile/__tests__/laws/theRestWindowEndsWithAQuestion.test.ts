@@ -73,6 +73,29 @@ describe('when the window she was given runs out', () => {
     expect(store).toMatch(/answerEaseCheck[\s\S]{0,1400}generateProgram\(programProfile\(/);
   });
 
+  it('⛔ and it REACHES her — on the screen she opens, not only where she could go looking', () => {
+    /*
+     * ⛔ THE VERB IS "TELL", AND A QUESTION THAT ONLY LIVES IN A SETTINGS SCREEN DOES NOT TELL.
+     *
+     * The founder's rule has three verbs — remember, tell, ask — and the first version of this
+     * satisfied "remember" and "ask" while quietly dropping "tell": the question existed as engine
+     * state and appeared on the body map, which she has to navigate to. Most people never would, and
+     * a muscle would come back without her ever being asked.
+     *
+     * ⚠️ SO IT IS ON TODAY AS WELL, and asserted on BOTH surfaces. The body map is where the fact
+     * lives (a resting muscle, its days left); Today is where the question is put to her.
+     */
+    expect(read('src/screens/home/Home.tsx')).toContain('easeChecks={(app.easeChecks?.() ?? [])');
+    expect(read('src/screens/home/HomeView.tsx')).toContain("t('pain.askBack'");
+    expect(read('src/screens/profile/BodyMapEdit.tsx')).toContain("t('pain.askBack'".replace("t(", "tg("));
+
+    /*
+     * ⚠️ AND IT DISAPPEARS ON ANY ANSWER, including "back to normal" — which writes nothing but a
+     * close. A prompt that survives being answered is the nagging this product does not do.
+     */
+    expect(read('src/screens/home/HomeView.tsx')).toContain('props.onEaseAnswer?.(m, a)');
+  });
+
   it('⚠️ does NOT clear the ease on the clock', () => {
     /*
      * The line that was here: `painEases: activeEases(live, Date.now())` — which drops every lapsed

@@ -836,6 +836,13 @@ export function Home({ navigation, route }: Props) {
       overBudget={false}
       /* ⚠️ NO `?? 60`. Nothing asks her for a budget any more, so a fallback here would be the app
          inventing one — and this prop feeds a notice that names it out loud. Absent stays absent. */
+      /*
+       * ⛔ THE REST WINDOW SHE IS OWED AN ANSWER ABOUT (founder 2026-08-11). The body map carries it
+       * too, but a question that only lives there is one she must go looking for — and the rule is
+       * that Hush TELLS her. This is the screen she opens.
+       */
+      easeChecks={(app.easeChecks?.() ?? []).map((e) => e.muscle)}
+      onEaseAnswer={(muscle, a) => void app.answerEaseCheck?.(muscle, a)}
       budgetMinutes={app.profile?.workoutMinutes}
       dayDone={!!todayId && doneCoachIds.includes(todayId)}
       units={app.profile?.units ?? 'kg'}
