@@ -115,10 +115,13 @@ describe('⛔ the levelling pass — no day carries the week', () => {
    * different fault and had no test at all until now. That is exactly what a 65.9% mutation score
    * means in practice.
    *
-   * `it.failing` keeps the suite honest while the defect stays documented at full strength, and flips
-   * to a failure the moment it is fixed.
+   * FIXED 2026-08-11, and NOT in the engine. Two attempts there failed: refusing the duplicate broke
+   * `emphasis earns MORE exercises` and `compounds are spread across the week`, and scoping the ban
+   * to compounds changed nothing because the twins WERE the compounds. What made the line affordable
+   * was splitting `squat` / `row` / `hinge` in the CATALOGUE — the vocabulary was too poor to
+   * describe what a coach already distinguishes between a barbell squat and a leg press.
    */
-  it.failing('⛔ never puts a muscle’s PATTERN on a day that already trains it', () => {
+  it('⛔ never puts a muscle’s PATTERN on a day that already trains it', () => {
     const twins: string[] = [];
     for (const days of [2, 3, 4, 5, 6])
       for (const map of [undefined, { Quads: 'emphasis' as MuscleStance }, { Back: 'emphasis' as MuscleStance }]) {

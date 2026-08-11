@@ -479,6 +479,25 @@ export function assembleV5DayLists(
       const withRoom = mustPlace ? regionIdxs : regionIdxs.filter((i) => load(i) < MAX_LIFTS_PER_DAY);
       const candidates = withRoom.length > 0 ? withRoom : regionIdxs;
       const free = candidates.filter((i) => !clashes(i));
+      /*
+       * ⛔ A DAY NEVER REPEATS A MUSCLE'S MOVEMENT (founder 2026-08-11, after the catalogue split).
+       *
+       * The line under this was `const pool = free.length > 0 ? free : candidates;` — when every
+       * legal day already trained this muscle's pattern, the lift was placed anyway. Thirty-one
+       * sessions came out holding the same muscle+pattern twice: `Quads/squat` twice in one Lower A
+       * is a back squat and a hack squat back to back while the lunge sits on the other day.
+       *
+       * ⚠️ THIS COULD NOT BE FIXED IN THE ENGINE, AND TWO ATTEMPTS PROVED IT. Refusing the duplicate
+       * broke `emphasis earns MORE exercises` (S-4/S-63) and `compounds are spread across the week`,
+       * because `Quads` owned three patterns — so a marked muscle's fourth lift had no clash-free day
+       * anywhere, and refusing it cancelled the mark. Scoping the ban to compounds changed nothing:
+       * the twins WERE the compounds. The vocabulary was too poor to describe what a coach already
+       * distinguishes, and splitting `squat` / `row` / `hinge` is what made this line affordable.
+       *
+       * ⚠️ `mustPlace` still ignores it entirely, as it ignores capacity: a muscle's FIRST lift, or
+       * the one bringing it to a second day, is never the lift that does not fit.
+       */
+      if (free.length === 0 && !mustPlace) return;
       const pool = free.length > 0 ? free : candidates;
       let best = pool[0];
       for (const i of pool) if (load(i) < load(best)) best = i; // strict: ties keep the lowest index

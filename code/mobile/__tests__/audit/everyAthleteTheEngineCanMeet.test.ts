@@ -135,8 +135,24 @@ it('every session she is given lands inside her minutes', () => {
        * Widening the bound for everyone would hide a real defect. Widening it only where she made a
        * mark states the PRICE of the mark. An unmarked map is still held to the minute.
        */
+      /*
+       * ⛔ 67, NOT 65 (founder 2026-08-11, approving the measured cost of the pattern split).
+       *
+       * The allowance was tuned when `Back/row`, `Quads/squat` and `Hamstrings/hinge` each carried
+       * one name over seven to nine lifts. Splitting them on the axis a coach uses — free axial load
+       * versus supported — changes which lifts the diversity score reaches for, and the whole cost is:
+       *
+       *     1 programme of 1,455, a MARKED map, at ~66 min against 65
+       *
+       * ⚠️ WIDENING A BOUND TO LET A CHANGE THROUGH IS NORMALLY THE WRONG MOVE, and it was refused
+       * four times over this engine on 2026-08-10. It is right here for one reason: this number was
+       * never a law, it is a MEASUREMENT of what a mark costs — its own note says *"the measured
+       * overshoot is three minutes… widening it only where she made a mark states the PRICE of the
+       * mark."* The selection changed, so the measurement changed. An unmarked map is still held to
+       * the minute, which is the half that guards anything.
+       */
       const marked = Object.values(c.profile.bodyMap ?? {}).includes('emphasis');
-      if (min > (marked ? 65 : 60)) long.push(`${c.label} · ${d.name}: ~${min} min`);
+      if (min > (marked ? 67 : 60)) long.push(`${c.label} · ${d.name}: ~${min} min`);
     }
   expect({ overHerCeiling: long.slice(0, 12), overCount: long.length }).toEqual({ overHerCeiling: [], overCount: 0 });
   expect({ under45: short.slice(0, 12), underCount: short.length }).toEqual({ under45: [], underCount: 0 });

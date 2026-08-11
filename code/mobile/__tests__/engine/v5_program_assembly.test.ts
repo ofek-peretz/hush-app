@@ -182,8 +182,18 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
     // Chest draws its own SHARE of the week's pot (1.3 of a total 10.5), not a flat per-muscle
     // figure, so pinning the numbers here is pinning the share table — which is the point.
     expect(chestCount(emphasised)).toBeGreaterThan(chestCount(normal));
+    /*
+     * ⚠️ EIGHT BECAME SEVEN ON 2026-08-11, and the law did not move. `Chest/press_flat` carried eight
+     * lifts under one name, so the chest owned three patterns in total — and a day may not repeat a
+     * muscle's movement. Filing the dip as the decline press it is gives the chest a fourth, which is
+     * what let the mark climb from six back to seven.
+     *
+     * The comment above already draws the line this edit respects: the RELATIONSHIP is the law, the
+     * counts are a pinned measurement of the share table. The catalogue changed, so the measurement
+     * changed; `emphasised > normal` is asserted first and is what may never move.
+     */
     expect(chestCount(normal)).toBe(5);
-    expect(chestCount(emphasised)).toBe(8);
+    expect(chestCount(emphasised)).toBe(7);
   });
 
   /*

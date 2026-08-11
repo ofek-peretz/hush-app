@@ -48,10 +48,22 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
    * not a silently deleted triceps. (Before the S-35 guard was wired into `enforceTimeCap`, this day
    * DID come in under 45 — by dropping the athlete's only biceps or triceps lift.)
    */
-  it('S-7 · a shorter declared budget is honoured — until honouring it would cost a muscle (S-35 > S-64)', async () => {
-    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3, workoutMinutes: 45 });
+  it('S-7 · the hour is honoured — until honouring it would cost a muscle (S-35 > S-64)', async () => {
+    /*
+     * ⛔ THIS ASSERTED AGAINST 45, A BUDGET THAT STOPPED EXISTING (F-15, 2026-08-10).
+     *
+     * It passed `workoutMinutes: 45` and then required every day over 45 minutes to be at the S-35
+     * floor. The session length is a constant now — `budgetMin` is 60 for everyone — so the param was
+     * ignored and the assertion was being made about a threshold no code uses. It kept passing by
+     * luck, and a catalogue change that shifted selection by one lift was enough to expose that.
+     *
+     * ⚠️ THE LAW ITSELF IS UNCHANGED and is the one that matters: a day may exceed her ceiling ONLY
+     * when every muscle on it is already down to a single lift. Over budget is legal at the floor and
+     * nowhere else — the alternative is a silently deleted triceps.
+     */
+    const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: 3 });
     for (const d of prog.days) {
-      if (estimateSessionMinutes(d) <= 45) continue;
+      if (estimateSessionMinutes(d) <= SESSION_MAX) continue;
       // Over budget is legal ONLY at the floor: every non-supplemental muscle down to a single lift.
       const perMuscle: Record<string, number> = {};
       for (const s of d.slots) {
