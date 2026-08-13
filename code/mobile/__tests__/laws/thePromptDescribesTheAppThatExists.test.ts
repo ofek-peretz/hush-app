@@ -108,10 +108,18 @@ describe('the prompt tells the truth about who asks her things', () => {
      * woman what she is training for — thirty seconds after she typed it into a required field.
      */
     expect(text()).toMatch(/do not open by asking her what she is training for or what hurts/);
-    const goal = read('src/screens/onboarding/YourGoal.tsx');
-    // ⚠️ Anchored to the screen: if the goal screen ever stops requiring them, the prompt is free to
-    // ask again and this rule has to be revisited rather than silently kept.
-    expect(goal).toMatch(/goal\.trim\(\)\.length === 0 \|\| limits\.trim\(\)\.length === 0/);
+    /*
+     * ⛔ THE ANCHOR WAS `YourGoal.tsx`, AND THE NOTE HERE SAID WHAT TO DO WHEN IT WENT: *"if the goal
+     * screen ever stops requiring them, the prompt is free to ask again and this rule has to be
+     * revisited rather than silently kept."*
+     *
+     * It went on 2026-08-12 — the body map replaced it — so the rule WAS revisited. The instruction
+     * is now conditional on the field being present, which is the only form that is true for an
+     * athlete who was never asked. Anchored to the prose, because there is no longer a screen to
+     * anchor to and pretending otherwise is how a law comes to certify a falsehood.
+     */
+    expect(text()).toMatch(/PRESENT ONLY WHEN SHE HAS GIVEN THEM/);
+    expect(text()).toMatch(/Where a field is ABSENT she has never been asked/);
   });
 
   it('⛔ does not tell the coach to ask again for what she has already answered', () => {

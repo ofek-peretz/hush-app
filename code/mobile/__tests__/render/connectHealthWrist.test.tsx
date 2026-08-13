@@ -86,7 +86,14 @@ describe('the wrist is named only when there is a wrist', () => {
     expect(read).not.toContain(tg('onWrist.noticeInstall'));
     // …and the screen is otherwise exactly what it was.
     expect(read).toContain(tg('ob.healthCardTitle'));
-    expect(read).toContain(tg('ob.healthHelper'));
+    /*
+     * ⛔ THREE LINES CAME OFF THIS SCREEN 2026-08-12 (founder), `ob.healthHelper` among them. It
+     * said the same law as `ob.healthSub` eight lines above it — Health never decides a weight —
+     * and one statement of a law is a promise while two is a screen arguing with itself. What she
+     * GETS is the three rows, which are still asserted below.
+     */
+    expect(read).not.toContain(tg('ob.healthHelper'));
+    expect(read).toContain(tg('ob.healthHr'));
   });
 
   it('a paired watch that already carries the app is confirmed, not sold', () => {

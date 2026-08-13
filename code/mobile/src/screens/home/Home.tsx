@@ -23,6 +23,7 @@ import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChanges, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
@@ -38,7 +39,7 @@ import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
 import { comebackAfterGap } from '@/domain/comeback';
 import { trainingDays, WEEK_ORDER } from '@/domain/trainingDays';
-import { daysAfterStarting, moveWorkoutToDay } from '@/domain/weekBoard';
+import { daysAfterStarting } from '@/domain/weekBoard';
 import { WelcomeBackView } from '@/screens/comeback/WelcomeBack';
 import { LapsedView } from '@/screens/subscription/Lapsed';
 import { OnYourWristView } from '@/screens/watch/OnYourWrist';
@@ -54,9 +55,13 @@ import {
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
+import { WhyHereSheet, whyHereProps } from '@/components/WhyHereSheet';
+import { liftPlacement, type LiftPlacement } from '@/domain/whyLiftIsHere';
+import { weekNotice } from '@/domain/weekNotice';
+import { WEEKLY_SETS_FLOOR } from '@/engine/v5/constants';
 import type { Line } from '@/domain/voice';
 import { coachBrief } from '@/domain/coachEarned';
-import { muscleGroupsLabel, exerciseDisplayName, exerciseCues } from '@/data/exercises';
+import { muscleGroupsLabel, exerciseDisplayName, exerciseCues, muscleOf } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { LoadDirection } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
@@ -141,17 +146,6 @@ export function Home({ navigation, route }: Props) {
    * never match, so the coach branch was unreachable and every workout quietly ran the engine's
    * version. Whoever supplies the chips supplies the id Begin resolves.
    */
-  const workouts: HomeWorkoutOption[] = coachWorkouts.map((w) => ({
-    id: w.id,
-    name: w.name,
-    // The coach names its own sessions ("Intervals & Core"), so there is no muscle line to derive —
-    // and inventing one would be a claim about a week nobody made.
-    muscles: '',
-    // The day the coach put it on, when it put it on one. Drawn on the chip so a week that HAS a
-    // shape reads as one — and absent everywhere else, which is most weeks.
-    ...(w.day ? { day: w.day } : {}),
-    done: doneCoachIds.includes(w.id),
-  }));
   const isFocused = useIsFocused();
 
   /*
@@ -170,13 +164,54 @@ export function Home({ navigation, route }: Props) {
     let alive = true;
     void (async () => {
       try {
-        const [stored, history, weekOpenMs] = await Promise.all([
-          db.loadCoachPlan(),
+        const [plan, history, weekOpenMs, program] = await Promise.all([
+          /*
+           * ⛔ ONE DOOR, AND IT IS NOT `db.loadCoachPlan()` ANY MORE (founder 2026-08-12).
+           *
+           * Today was bridged in place on 2026-08-11 and that fixed exactly one screen. Nine others
+           * were reading the same empty key — the share sheet, the Saturday letter, the profile's
+           * "you have a programme" flag — and bridging each one where it stood would have been nine
+           * bridges to drift apart. `loadWeekPlan` is the single one: the coach's week when one
+           * exists, the engine's in the same shape when it does not.
+           */
+          loadWeekPlan(),
           db.loadHistory(),
           db.loadWeekOpen(),
+          db.loadProgram().catch(() => null),
         ]);
         if (!alive) return;
-        setCoachPlan(stored);
+        /*
+         * ⛔ TODAY DRAWS THE ENGINE'S WEEK (founder 2026-08-11): *"תתקן את המסך של Today שיצייר את
+         * התוכנית של המנוע."*
+         *
+         * This read `db.loadCoachPlan()` and nothing else — correct while the coach wrote the
+         * programme, and wrong from the moment the engine took it back. Onboarding calls
+         * `generateProgram` now, which writes a `Program`; **nothing writes a `CoachPlan` any more**
+         * (`db.recordCoachAnswer` has one caller left and it only runs after a session). So an
+         * athlete who finished onboarding had her programme in storage and an EMPTY Today, and would
+         * have kept it until the day she trained.
+         *
+         * ⚠️ THE COACH'S WEEK STILL WINS WHEN ONE EXISTS. This is a fallback, not a replacement: a
+         * stored `CoachPlan` is a week something deliberately wrote, and the engine's is what she
+         * has when nothing did. The conversion is in `domain/enginePlan` — and its note explains why
+         * translating this way is honest when `coachWeek`'s header refuses the other direction.
+         */
+        setCoachPlan(plan);
+        /*
+         * The placements come off the ENGINE's week, which is the only thing that knows why a lift
+         * was chosen. Built for the whole week rather than per tap: this is the screen she opens
+         * every morning, and a sheet that takes a frame to appear reads as a stall.
+         */
+        const here: Record<string, LiftPlacement> = {};
+        for (const d of program?.days ?? [])
+          if (!d.isRest)
+            for (const s of d.slots) {
+              const lp = liftPlacement(s.exerciseId, program, app.profile?.bodyMap, app.profile?.daysPerWeek, history ?? []);
+              if (lp) here[s.exerciseId] = lp;
+            }
+        setPlacements(here);
+        const notice = weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek }, app.profile?.workoutMinutes);
+        setEngineNotice(notice ? t(notice.key, notice.params) : null);
         const since = weekOpenMs ?? 0;
         setDoneCoachIds(
           history
@@ -215,22 +250,87 @@ export function Home({ navigation, route }: Props) {
     };
   }, []);
   /*
-   * ⛔ THE DAYS SHE TRAINS — DERIVED, NEVER ASKED (founder 2026-08-04, the third of his three
-   * questions about the week column). `null` until the pattern is earned, and Home draws his
-   * numbered column while it is.
+   * ⛔ THE DERIVED WEEKDAY PATTERN IS GONE FROM THIS SCREEN (founder 2026-08-12): *"ואמרנו שזה לא
+   * יופיע כימים אלא כN אימונים."* Ruled: always numbered, never a calendar.
    *
-   * ⚠️ Computed from `saved`, which arrives asynchronously, so it is `null` on the very first frame
-   * of every launch too — the same answer as "not enough history", and the right one: a column that
-   * flashed weekdays in and out on load would be worse than one that never named them.
+   * `trainingDays` itself is untouched and still correct — it observes the days she has actually
+   * trained and never assigns one. What changed is that Today does not draw a week out of it. Seven
+   * rows with three gaps reads as a calendar with days you missed, whatever the derivation behind
+   * it, and that is the to-do list he rejected in the first place.
    */
-  const patternDays = useMemo(
-    () => trainingDays(saved ?? [], app.profile?.daysPerWeek, Date.now()),
-    [saved, app.profile?.daysPerWeek],
-  );
   // Which lifts the engine touched this week AND WHICH WAY — so Today can light their figure in the
   // direction it moved (founder 2026-07-29; it used to be one ochre for all three, which named a
   // change and refused to say whether the load had gone up or down). Empty in week one.
   const [changedDir, setChangedDir] = useState<Record<string, LoadDirection>>({});
+
+  /*
+   * ⛔ THESE LIVE **BELOW** `changedDir`, AND THAT IS NOT TIDINESS — IT IS A CRASH AVOIDED.
+   *
+   * Written first at the top of the component beside the other derivations, where they read well.
+   * `useCallback`'s dependency array is evaluated the moment the line runs, so `[coachPlan,
+   * changedDir]` reached for a `const` declared 130 lines further down: a temporal-dead-zone
+   * ReferenceError on every mount of the first screen in the app.
+   *
+   * ⚠️ `@ts-nocheck` ON THIS FILE HAD NOTHING TO SAY ABOUT IT, which is the same silence that hid
+   * `font is not defined` on `AboutYou`. Caught here by reading the line numbers, not by a tool.
+   */
+  /**
+   * How many of a workout's OWN loads the engine moved, and what it trains.
+   *
+   * ⚠️ BOTH READ `coachRows`, the same list the pre-workout sheet draws, so a card can never
+   * disagree with what opening it shows. `changedDir` is keyed by exercise (it is built from the
+   * week's decisions), which is exactly the shape needed to ask a workout about itself.
+   */
+  const changesIn = React.useCallback(
+    (workoutId: string) => (coachRows(coachPlan, workoutId) ?? []).filter((r) => changedDir[r.ex]).length,
+    [coachPlan, changedDir],
+  );
+  const musclesOf = React.useCallback(
+    (workoutId: string) => {
+      const seen: string[] = [];
+      for (const r of coachRows(coachPlan, workoutId) ?? []) {
+        const m = muscleOf(r.ex);
+        // A movement that is not a lift (a plank, a run) credits no muscle rather than a guessed one.
+        if (m && !seen.includes(m)) seen.push(m);
+      }
+      return seen.map((m) => t(`muscle.${m}`)).join(' · ');
+    },
+    [coachPlan, t],
+  );
+
+  /*
+   * ⛔ EVERY ROW CARRIES ITS OWN SHAPE NOW (founder 2026-08-12, on the Today redesign).
+   *
+   * `items` and `minutes` have been on `CoachWorkout` since it was written and only the QUEUED
+   * workout's pair was ever drawn — so three rows of the week said nothing but a name, which is
+   * exactly what made them look like a list rather than a sequence worth pressing.
+   */
+  const workouts: HomeWorkoutOption[] = coachWorkouts.map((w) => ({
+    id: w.id,
+    name: w.name,
+    /*
+     * ⛔ THE MUSCLES ARE DERIVED AGAIN (founder 2026-08-12). This was `muscles: ''` under the note
+     * *"the coach names its own sessions, so there is no muscle line to derive — and inventing one
+     * would be a claim about a week nobody made."* True of the coach. **The ENGINE composed this
+     * week**, `coachRows` gives its exercises and `muscleOf` answers for each one, so the line is
+     * read off the programme rather than invented. Drawn on the queued card only (`WeekColumn`).
+     */
+    muscles: musclesOf(w.id),
+    /*
+     * ⛔ AND THE CHANGE COUNT BELONGS TO ITS OWN WORKOUT. The pill drew `briefCount` — the WEEK's
+     * total — on the queued card alone, so a load the engine moved in Lower B was invisible until
+     * she opened it, while the number on the card she was looking at counted work that was not in
+     * it. `changedDir` is keyed by exercise; this asks each workout which of its own rows moved.
+     */
+    changes: changesIn(w.id),
+    items: w.items,
+    minutes: w.minutes,
+    timeUnknown: w.hasUncountedWork,
+    // The day the coach put it on, when it put it on one. Drawn on the chip so a week that HAS a
+    // shape reads as one — and absent everywhere else, which is most weeks.
+    ...(w.day ? { day: w.day } : {}),
+    done: doneCoachIds.includes(w.id),
+  }));
   /**
    * THE ARGUMENT BEHIND EACH CHANGED LIFT (v7 2.1b), keyed by exercise.
    *
@@ -241,6 +341,18 @@ export function Home({ navigation, route }: Props) {
    */
   const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
   const [whyFor, setWhyFor] = useState<string | null>(null);
+  /**
+   * ⛔ AND THE REASON A LIFT IS HERE AT ALL (founder 2026-08-12) — the second door onto the WHY.
+   *
+   * The pre-workout card got this first; Today did not, so pressing a row here still fell through to
+   * the form clip whenever the engine had not MOVED that load — which in her first week is every row
+   * she has. One idea ("press a lift, it explains itself") cannot have two answers depending on
+   * which screen she is standing on.
+   */
+  const [placements, setPlacements] = useState<Record<string, LiftPlacement>>({});
+  const [hereFor, setHereFor] = useState<string | null>(null);
+  /** The one sentence about what her week could not do — see `domain/weekNotice`. */
+  const [engineNotice, setEngineNotice] = useState<string | null>(null);
   const [formFor, setFormFor] = useState<string | null>(null);
   /*
    * ⛔ THE ENGINE'S PER-SET TARGET READ WAS HERE, and the `pending` machinery around it.
@@ -588,10 +700,15 @@ export function Home({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
-  // ── RECOVERY FACTS (v7 3.5 "THE WEEK IS DONE") — the day strip + the week's tonnage/kcal, read
-  //    from this week's saved history. Best-effort and only while resting: an unread history simply
-  //    leaves the strip and band undrawn (HomeView treats both as optional).
-  const [weekDays, setWeekDays] = useState<{ trained: boolean; today: boolean }[] | undefined>(undefined);
+  /*
+   * ── RECOVERY FACTS (v7 3.5 "THE WEEK IS DONE") — the week's tonnage/kcal, read from this week's
+   *    saved history. Best-effort and only while resting; an unread history leaves the band undrawn.
+   *
+   * ⛔ THE DAY STRIP'S STATE (`weekDays`) IS DELETED (founder 2026-08-12). It fed seven marks,
+   *    Sun→Sat, on the week-complete screen — and the seal above them says "4/4" while three of them
+   *    were dashed empty rings. The ledger that replaced the strip reads `workouts`, which this
+   *    screen already has.
+   */
   const [weekEnergy, setWeekEnergy] = useState<{ tonnes: number; kcal: number | null } | null>(null);
   useEffect(() => {
     if (!isFocused || !resting) return;
@@ -602,11 +719,6 @@ export function Home({ navigation, route }: Props) {
         if (cancelled) return;
         const weekOpen = currentWeekOpen(Date.now());
         const wk = all.filter((s) => Date.parse(s.startedAt) >= weekOpen);
-        // Seven marks, Sun→Sat: a day is "trained" if any session started on it this week.
-        const todayDow = new Date().getDay();
-        const trained = new Array(7).fill(false) as boolean[];
-        for (const s of wk) trained[new Date(s.startedAt).getDay()] = true;
-        setWeekDays(trained.map((tr, i) => ({ trained: tr, today: i === todayDow })));
         // Tonnage (kg lifted → t) and calories (from total wall-clock work time) across the week.
         let kg = 0;
         let ms = 0;
@@ -627,10 +739,7 @@ export function Home({ navigation, route }: Props) {
         }
         setWeekEnergy({ tonnes: kg / 1000, kcal });
       } catch {
-        if (!cancelled) {
-          setWeekDays(undefined);
-          setWeekEnergy(null);
-        }
+        if (!cancelled) setWeekEnergy(null);
       }
     })();
     return () => {
@@ -849,7 +958,12 @@ export function Home({ navigation, route }: Props) {
       // A CHANGED ROW OPENS ITS CASE (v7 2.1b); an unchanged one opens the form clip. The rule is
       // the row's own state, so there is nothing to teach: the lift Hush moved is already the one
       // drawn differently, and it is the only one with an argument to read.
-      onForm={(id) => (whyByExercise[id] ? setWhyFor(id) : setFormFor(id))}
+      /*
+       * ⛔ THE SAME THREE-WAY ANSWER THE PRE-WORKOUT CARD GIVES, in the same order of how much is
+       * known: the load's case when the engine moved it, the placement when it merely put the lift
+       * there, and the form clip when neither exists. Two screens, one idea.
+       */
+      onForm={(id) => (whyByExercise[id] ? setWhyFor(id) : placements[id] ? setHereFor(id) : setFormFor(id))}
       resumable={resumable}
       onResume={onResume}
       onStart={onStart}
@@ -863,23 +977,44 @@ export function Home({ navigation, route }: Props) {
        * board keeps marking where she is; it is simply no longer the whole act.
        */
       /*
-       * ⛔ THE DRAG'S OWN DOOR ONTO `weekBoard` (founder 2026-08-05). The same function Begin uses,
-       * so a session moved by a finger and a session moved by being trained end up in the same
-       * place by the same rule.
+       * ⛔ THE DRAG IS GONE WITH THE WEEKDAY SLOTS (founder 2026-08-12) — see `WeekColumn`.
        *
-       * ⚠️ `saveCoachPlanDays`, NOT `saveCoachPlan` — see its note. Writing her drag through the
-       * ordinary path would rotate the change-diff anchors and make the next real programme diff
-       * against the wrong week, so every change the coach then made would go uncounted.
+       * It handed `moveWorkoutToDay` a weekday to drop onto, and a numbered column has none. Its own
+       * note already recorded that it did nothing for most athletes: `saveCoachPlanDays` returns
+       * early when no coach plan is stored, so on every GENERATED week the row lifted, sprang back
+       * and changed nothing.
+       *
+       * ⚠️ `daysAfterStarting` (in `onStart`, above) is untouched and still matters: training a
+       * session records WHEN it happened, which is what `trainingDays` reads. Observing stays;
+       * assigning is what left.
        */
-      onMoveToDay={(id, day) => {
-        const moved = moveWorkoutToDay(coachWorkouts, id, day);
-        if (!moved) return;
-        void db.saveCoachPlanDays(moved).then(() => db.loadCoachPlan()).then((p) => setCoachPlan(p ?? null)).catch(() => {});
-      }}
-      onChooseWorkout={(id) => {
-        setChosenId(id);
-        navigation.navigate('PreWorkout', { workoutId: id });
-      }}
+      /*
+       * ════ ⛔ READING A WORKOUT NO LONGER RE-QUEUES THE WEEK ════
+       *
+       * FOUNDER, 2026-08-12: *"לוחצים על משבצת בTODAY ואז נפתח הMODAL? … כי אחרת אז מה הערך של
+       * כפתור הBEGIN במסך הTODAY?"*
+       *
+       * The question found a real defect. This was `setChosenId(id)` and THEN navigate — so opening
+       * a workout to look at it made it the queued one. She peeks at Lower B, drags the sheet down,
+       * and Today now reads **"Begin Lower B"**: a workout she never chose, standing where the one
+       * she was about to do used to be. `chosenId` drives the lit card, the act, and the watch
+       * lobby, so a glance rewrote all three.
+       *
+       * **Looking is not choosing.** One press opens the sheet and changes nothing.
+       *
+       * ── SO THE THREE CONTROLS ARE THREE DIFFERENT SENTENCES ─────────────────────────────────────
+       *   · A CARD           — "show me this one." Opens the sheet. No state moves.
+       *   · BEGIN, on Today  — "start the one that is up." One tap, no sheet, the 90% path. THIS is
+       *                        the value of the button: the queued workout is a decision the week
+       *                        already made, and she should not have to re-make it every morning.
+       *   · BEGIN, in the sheet — "start THIS one instead." Starting is the deliberate act, and it
+       *                        is what records the swap (`daysAfterStarting`, `PreWorkoutScreen`).
+       *
+       * ⚠️ THE QUEUE STILL MOVES WHEN SHE TRAINS, which is the only honest trigger: `daysAfterStarting`
+       * runs on START, from both doors, and `queuedWorkout` reads what she has actually done. Nothing
+       * is lost by refusing to move it on a glance — the move just waits for a decision.
+       */
+      onChooseWorkout={(id) => navigation.navigate('PreWorkout', { workoutId: id })}
       /*
        * Never written since the coach took the week: `weekBriefing` assembled a sentence out of
        * deltas and the coach writes its own. `HomeView` does not render it either — it has read
@@ -889,23 +1024,26 @@ export function Home({ navigation, route }: Props) {
        */
       brief={brief}
       /*
-       * ⛔ THE NAME OF THE PROGRAMME SHE IS ON (founder 2026-08-04). It is drawn on the day it
-       * arrives and then never again — which makes it an announcement rather than a thing she is
-       * doing. Today is where she looks every morning, so it is where the name has to live.
+       * ⛔ THE PROGRAMME'S NAME IS OFF TODAY (founder 2026-08-12): *"תוריד את שם התוכנית."*
+       *
+       * It arrived on 2026-08-04 as the screen's HEADLINE — a real fix at the time, because Home was
+       * leading with "MONDAY · UP NEXT", a fact she already had. Measured a week later it was the
+       * same fault one level up: **50 pixels of the first fold saying the identical sentence every
+       * morning for the life of the programme**, above a week that starts a fifth of the way down
+       * the screen.
+       *
+       * ⚠️ IT IS NOT DELETED FROM THE PRODUCT. `ProgramCreated` still hands it to her by name when it
+       * is made, which is the beat that turns a week into a thing she was given; `programmeName` and
+       * the `title` on the plan are untouched. What went is a permanent fact charging daily rent on
+       * the one screen that has to be about today.
        */
-      programTitle={coachPlan?.title ?? null}
+      notice={engineNotice}
       /*
-       * ⛔ AND ITS REASON (founder 2026-08-04). `why` is written by the coach for every programme,
-       * stored, and sent back to it every week — and it was drawn on exactly one screen, the one
-       * right after onboarding. It is the difference between a programme and a list of workouts.
+       * ⛔ AND WHAT THE ENGINE COULD NOT DO, on the screen she opens every morning. Read from the
+       * engine's OWN week rather than the plan drawn above it, because the verdicts are stamped on
+       * `ProgramDay` and the conversion into a `CoachPlan` deliberately carries no opinions across.
        */
-      programWhy={coachPlan?.why ?? null}
-      /*
-       * ⚠️ THE DAYS SHE TRAINS, WATCHED — never asked (`domain/trainingDays`). `null` is a real and
-       * common answer, and it is what makes the column number its rows instead of naming weekdays:
-       * the week EARNS its days rather than being assigned them.
-       */
-      trainingDays={patternDays}
+
       briefCount={briefCount}
       undoable={undoable}
       onUndoSwap={async () => {
@@ -915,13 +1053,35 @@ export function Home({ navigation, route }: Props) {
       }}
       briefUnseen={briefUnseen}
       trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions)}
-      onCoach={() => navigation.navigate('Coach')}
+      /*
+       * ⛔ THE COACH DOOR IS CLOSED, AND THE SCREEN BEHIND IT IS DELETED (founder 2026-08-11).
+       *
+       * His standing instruction since the rebuild began: the app is not a chat. `CoachIntake` left
+       * onboarding on 2026-08-04 — "take the chat out of the front door" — and this corner button
+       * quietly kept a second door to the same conversation, on the screen she opens every day.
+       *
+       * ⛔ AND ON 2026-08-12 THE REST WENT WITH IT. That note used to end: *"`CoachChat`, `useCoach`
+       * and the whole coach domain remain — the pain screen and the live session still use them."*
+       * True, and it sat under a headline claiming the AI was out of the house, which it was not:
+       * the in-workout window was a chat, the pain report was a chat, and a call after EVERY session
+       * wrote a programme that every screen then preferred over the engine's.
+       *
+       * All three are closed. The model is reachable from the plan IMPORT and from nowhere else —
+       * the one job the deterministic engine genuinely cannot do. See `theAiHasOneJob`.
+       */
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
-      weekDays={weekDays}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
       nextWorkoutName={nextCoach?.name ?? null}
       />
       {/* WHY THIS CHANGED — the engine's argument for the lift it moved, at full length. */}
+      {hereFor && placements[hereFor] ? (
+        <View style={StyleSheet.absoluteFill}>
+          <WhyHereSheet
+            {...whyHereProps(placements[hereFor], exerciseDisplayName(hereFor), t, WEEKLY_SETS_FLOOR)}
+            onClose={() => setHereFor(null)}
+          />
+        </View>
+      ) : null}
       {whyFor && whyByExercise[whyFor] ? (
         <View style={StyleSheet.absoluteFill}>
           <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />

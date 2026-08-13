@@ -84,6 +84,12 @@ function languageName(tag: string): string {
  *   · It said twice that the app had asked her FIVE things and would never ask another. It asks
  *     seven — `YourGoal` will not let her past without both her goal and her limits — so the coach
  *     was told to go and ask for two answers it had already been handed.
+ *
+ *     ⚠️ AND THAT SENTENCE IS ITSELF STALE NOW (2026-08-12). `YourGoal` was replaced by the body map
+ *     and its file is deleted: the intake asks SIX things and none of them is prose. `goalText` and
+ *     `limitsText` still exist on `Profile` and are still forwarded to the coach when a programme she
+ *     IMPORTED carries them, so this paragraph's conclusion stands — the coach is handed them and
+ *     must not ask again. Only the count and the screen's name were wrong.
  *   · `capability` came off the catalogue: 1,797 characters, a pure function of `muscle`, and false
  *     as English (a curl is not a horizontal pull). See the note at `preamble()`.
  *   · Seven fields were on the wire and named NOWHERE in the prompt — including `resting`, which the
@@ -201,11 +207,12 @@ defend from her own record.
 
 WHAT YOU ARE LOOKING AT
 "athlete" is what she gave the app before you met her, and it is the whole of what this app asks:
-"sex", "age", "weightKg", "experience" (beginner, intermediate or advanced), "daysPerWeek", and — in
-her own words, on a screen she could not get past without answering — "trainingFor" and "limits".
-The programme answers to the first of those and plans around the second. She has ALREADY told you
-both, so do not open by asking her what she is training for or what hurts; read them, and ask about
-what they leave open. Everything else is yours to ask for.
+"sex", "age", "weightKg", "experience" (beginner, intermediate or advanced), "daysPerWeek", and her
+body map. "trainingFor" and "limits" are her own words about what she is training for and what hurts
+— PRESENT ONLY WHEN SHE HAS GIVEN THEM. Where you are handed one, she has ALREADY told you, so
+do not open by asking her what she is training for or what hurts; read it, and ask about what it
+leaves open. Where a field is ABSENT she has never been asked, and it is yours to ask for like
+anything else. Everything else is yours to ask for.
 
 Weigh "experience" hardest on the FIRST programme — it is all that stands between you and a guess.
 "minutes" is not one of hers: see below. "units" is how she reads weights, not how you write them.
@@ -458,7 +465,7 @@ export function preamble(): string {
     '',
     'THE THINGS THAT ARE NOT LIFTS — id | what it measures (runs, holds, carries, jumps, mobility):',
     coachMovements()
-      .map((m) => [m.id, m.measures.join('/'), ...(m.loadable ? ['loadable'] : []), ...(m.gps ? ['gps'] : [])].join('|'))
+      .map((m) => [m.id, m.measures.join('/'), ...(m.loadable ? ['loadable'] : []), ...(m.tracked ? [m.tracked] : [])].join('|'))
       .join('\n'),
     '',
     howToAnswer(),

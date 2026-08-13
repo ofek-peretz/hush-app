@@ -39,6 +39,7 @@ import { tg } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { CANONICAL_MUSCLE_ORDER, EMPHASIS_BUDGET } from '@/engine/v5/constants';
+import { emphasisRefusal, type MarkRefusal } from '@/engine/v5/bodyMap';
 import { muscleOf } from '@/data/exercises';
 import { awaitingAnswer, easeOn, daysLeft, type EaseAnswer } from '@/domain/painReport';
 import type { MuscleStance, RepBandChoice, Session } from '@/data/local/models';
@@ -69,7 +70,7 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
   const [bands, setBands] = useState<Record<string, RepBandChoice>>({ ...(app.profile?.repBandByMuscle ?? {}) });
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<string[] | null>(null);
+  const [refused, setRefused] = useState<{ reason: MarkRefusal; marks: string[] } | null>(null);
   /**
    * ⚠️ READ, NEVER SHOWN AS A WARNING. S-56 is why: the fact that a muscle has been trained changes
    * NOTHING this screen does or says. It is loaded because the register scopes the Saturday question
@@ -97,13 +98,40 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
 
   const stanceOf = (m: string): MuscleStance => map[m] ?? 'normal';
 
+  /**
+   * ⛔ NOTHING LEFT ON IS NOT A PROGRAMME (S-3) — AND THIS SCREEN WAS THE DOOR TO IT.
+   *
+   * ⛔ FOUNDER, 2026-08-12: *"אם יש לנו משתמש שלא רוצה לאמן רגליים בכלל, יש לנו אפשרות כזאת?"*
+   *
+   * Switching a REGION off works and works well — measured: legs off at three, four and five days
+   * gives Upper A–E, 45 to 60 minutes each, zero leg work anywhere. Nothing is templated; the shape
+   * falls out of the volume, which is what Part 3 says structure is.
+   *
+   * Switching EVERYTHING off does not, and this screen allowed it. Onboarding has refused it since
+   * the map shipped (`nothingOn` kills the button and says why); the editor never learned the same
+   * rule. Traced: `generateProgram` has a safety net that calls the assembler again with NO body
+   * map, so she switched off all ten muscles, pressed save, and was handed **three full-body days
+   * of seven lifts** — every muscle she had just turned off, trained. The engine overruling her in
+   * silence is the one thing the map exists to prevent.
+   *
+   * The engine's half is fixed too (it now returns no workout rather than inventing one), but the
+   * fix that matters is this: she is never in that state, and the button says so instead of
+   * failing afterwards.
+   */
+  const nothingOn = useMemo(() => CANONICAL_MUSCLE_ORDER.every((m) => map[m] === 'off'), [map]);
+
   const setStance = (muscle: string, stance: MuscleStance) => {
     setRefused(null);
     // F-4 — the budget is legible, not a hidden error, exactly as it is in onboarding.
-    if (stance === 'emphasis' && stanceOf(muscle) !== 'emphasis' && marks.length >= EMPHASIS_BUDGET) {
-      setRefused(marks.slice(0, EMPHASIS_BUDGET));
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      return;
+    // One question, one home — the same `emphasisRefusal` onboarding asks, so the two screens and the
+    // engine can never disagree about which marks her week can actually honour (F-4 + the region rule).
+    if (stance === 'emphasis') {
+      const why = emphasisRefusal(map, muscle, CANONICAL_MUSCLE_ORDER, app.profile?.daysPerWeek);
+      if (why) {
+        setRefused({ reason: why, marks });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        return;
+      }
     }
     /*
      * ⛔ NO CONFIRM, NO SHEET, NO ARGUMENT (S-56 / L8). Turning a muscle off just happens — even one
@@ -166,11 +194,15 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
           block
           label={tg('profileEdit.save')}
           onPress={() => void save()}
-          /* Nothing to say is not a thing to save — and an always-live button teaches her to press it. */
-          disabled={!touched || busy}
+          /* Nothing to say is not a thing to save — and an always-live button teaches her to press it.
+             …and NOTHING LEFT ON is not a programme (S-3) — see `nothingOn`. */
+          disabled={!touched || busy || nothingOn}
         />
       }
     >
+      {/* The refusal is stated, not just enforced — a dead button with no sentence is the silent
+          failure this screen exists to remove. Same words onboarding uses. */}
+      {nothingOn ? <Text style={styles.refusal}>{tg('ob.mapNothingOn')}</Text> : null}
       <View style={styles.tabs} accessibilityRole="tablist">
         {(['front', 'back'] as Face[]).map((f) => (
           <Pressable
@@ -285,7 +317,11 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
         <Text style={styles.note}>{tg('ob.mapEmphasis', { n: marks.length })}</Text>
         {refused ? (
           <Text style={styles.refusal}>
-            {tg('ob.mapBudgetFull', { a: tg(`muscle.${refused[0]}`), b: tg(`muscle.${refused[1]}`) })}
+            {refused.reason === 'budget'
+              ? tg('ob.mapBudgetFull', { a: tg(`muscle.${refused.marks[0]}`), b: tg(`muscle.${refused.marks[1]}`) })
+              : refused.reason === 'same_region'
+                ? tg('ob.mapSameRegion', { a: tg(`muscle.${refused.marks[0]}`) })
+                : tg('ob.mapFullBodyWeek', { n: app.profile?.daysPerWeek, a: tg(`muscle.${refused.marks[0]}`) })}
           </Text>
         ) : null}
       </ScrollView>
@@ -299,22 +335,22 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 8, alignSelf: 'center' },
   tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 100, borderWidth: 1, borderColor: color.borderControl },
   tabOn: { backgroundColor: color.paper, borderColor: color.paper },
-  tabText: { fontFamily: font.mono, fontSize: 13, color: color.textMuted, letterSpacing: 1 },
+  tabText: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, letterSpacing: 1 },
   tabTextOn: { color: color.onPaper },
   body: { paddingTop: 16, paddingBottom: 24, alignItems: 'center' },
   sheet: { width: '100%', marginTop: 18, alignItems: 'center' },
-  sheetName: { fontFamily: font.mono, fontSize: 13, color: color.textMuted, letterSpacing: 1.4, marginBottom: 8 },
-  resting: { fontFamily: font.sans, fontSize: 13, color: color.accent, marginBottom: 10, textAlign: 'center' },
+  sheetName: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, letterSpacing: 1.4, marginBottom: 8 },
+  resting: { fontFamily: font.sans, fontSize: 17, color: color.accent, marginBottom: 10, textAlign: 'center' },
   rungs: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' },
   rung: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 12, borderWidth: 1, borderColor: color.borderControl },
   rungOn: { backgroundColor: color.accent, borderColor: color.accent },
-  rungText: { fontFamily: font.sans, fontSize: 14, color: color.textPrimary },
+  rungText: { fontFamily: font.sans, fontSize: 17, color: color.textPrimary },
   rungTextOn: { color: color.onPaper },
   band: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: color.borderControl },
   bandOn: { backgroundColor: color.accent, borderColor: color.accent },
-  bandText: { fontFamily: font.mono, fontSize: 13, color: color.textPrimary },
+  bandText: { fontFamily: font.mono, fontSize: 17, color: color.textPrimary },
   ask: { width: '100%', marginTop: 22, alignItems: 'center' },
   askTitle: { fontFamily: font.serif, fontSize: 18, color: color.textPrimary, textAlign: 'center' },
-  note: { fontFamily: font.sans, fontSize: 13, color: color.textMuted, marginTop: 16, textAlign: 'center' },
-  refusal: { fontFamily: font.sans, fontSize: 13, color: color.textPrimary, marginTop: 12, textAlign: 'center' },
+  note: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, marginTop: 16, textAlign: 'center' },
+  refusal: { fontFamily: font.sans, fontSize: 17, color: color.textPrimary, marginTop: 12, textAlign: 'center' },
 });

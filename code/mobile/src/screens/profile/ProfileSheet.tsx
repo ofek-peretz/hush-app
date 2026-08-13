@@ -24,11 +24,15 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
+import { BodyMapFigure } from '@/components/BodyMapFigure';
 import { HushMark } from '@/components/HushMark';
 import { Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+// ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
+// programme in the same shape when there is not. See `data/local/weekPlan`.
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import { health } from '@/platform/health';
 import type { HealthPermissionState } from '@/platform/health/healthModel';
 import * as haptics from '@/platform/haptics';
@@ -57,7 +61,7 @@ export function ProfileSheet({ navigation }: Props) {
   const [hasPlan, setHasPlan] = React.useState(false);
   React.useEffect(() => {
     let alive = true;
-    void db.loadCoachPlan().then((p) => alive && setHasPlan(!!p && p.sessions.length > 0));
+    void loadWeekPlan().then((p) => alive && setHasPlan(!!p && p.sessions.length > 0));
     return () => {
       alive = false;
     };
@@ -172,6 +176,21 @@ export function ProfileSheet({ navigation }: Props) {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ THE BODY MAP IS THE FRONT OF THIS SCREEN (founder, 2026-08-12)
+
+            *"אתה בעצמך אמרת לי שיופיע בגדול קודם כל מפת הגוף ורק אז ההגדרות למטה בשביל לחסוך בעוד
+            פקד ב-TABBAR אבל בפועל לא עשית את זה והשארת אותו זרוק למטה."*
+
+          He is right, and it is my own argument I failed to carry out: the map earns this tab its
+          place instead of a fifth icon in the bar — and it was a plain chevron row at the very
+          bottom, under Health, indistinguishable from a units toggle. **The one thing on this
+          screen that is about her body was filed with the preferences.**
+
+          It is a card at the top now, above Membership, drawn as what it is.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
         {/* identity */}
         <View style={styles.identity}>
           <Avatar name={p?.name ?? '?'} size={52} />
@@ -181,9 +200,72 @@ export function ProfileSheet({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Membership (Subscription + Apple Payments) — directly under identity (who you
-            are + your plan, one zone), a prominent card with a state badge; trial state
-            adds a sessions-left meter + an honest billing note. */}
+        {/*
+          ⛔ THE BODY ITSELF, NOT A CARD THAT OPENS ONE (founder, 2026-08-12)
+
+            *"התכוונתי שהגוף יהיה במסך בלי פקד ואז בגלילה למטה יופיע כל שאר הדברים."*
+
+          My first pass answered "put the map at the front" with a titled card and a chevron —
+          which is the same row it replaced, in a bigger box. **He asked for the map, not a door to
+          it.** The figure is drawn here, at the size it is drawn everywhere else, carrying her
+          actual stances: what is on, what she leads with, what is being eased.
+
+          ⚠️ IT IS STILL PRESSABLE AND IT IS NOT A BUTTON. Pressing the body opens the editor, where
+          the three rungs live — the body is the affordance, so there is nothing beside it to label.
+          The two lines under it name what it is and get out of the way.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('ob.mapTitle')}
+          onPress={() => navigation.navigate('BodyMapEdit')}
+          style={({ pressed }) => [styles.mapBlock, pressed && styles.mapBlockPressed]}
+        >
+          <BodyMapFigure face="front" map={p?.bodyMap ?? {}} selected={null} onSelect={() => navigation.navigate('BodyMapEdit')} />
+          <View style={styles.mapWords}>
+            <Text style={styles.frontTitle}>{t('ob.mapTitle')}</Text>
+            <Text style={styles.frontSub}>{t('profile.mapSub')}</Text>
+          </View>
+        </Pressable>
+
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ ONE DOOR FOR THE PROGRAMME SHE BRINGS AND THE ONE SHE SENDS (founder, 2026-08-12)
+
+            *"את BRING YOUR OWN PROGRAMME ואת SEND SOMEONE THE SHAPE OF YOUR WEEK אני רוצה שתאחד
+            לפקד אחד יפה וגדול … ותן לפקד הזה צבע יותר מיוחד כי זה פיצ'ר מיוחד."*
+
+          They were two plain rows at the foot of the page, and they are two directions of ONE act:
+          a week travelling in or out. Nothing else in this product moves a whole programme between
+          two people, and it was drawn like a units toggle.
+
+          ⚠️ MOSS, WHICH IS SPENT ONCE PER SCREEN IN THIS PRODUCT. The palette's rule is that the
+          accent means *a decision made* — and this is the only control here that changes what she
+          trains rather than how it is displayed.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.programmeDoor')}
+          /*
+           * ⚠️ ONE DESTINATION, NOT A FORK. `hasPlan ? 'SharePlan' : 'ImportPlan'` read well and was
+           * wrong in the one case that matters: an athlete who already has a week could then never
+           * reach the importer to bring a different one. The door opens the BRING screen, which
+           * carries the send-yours link at its foot when there is something to send.
+           */
+          onPress={() => navigation.navigate('ImportPlan')}
+          style={({ pressed }) => [styles.frontCard, styles.planCard, pressed && styles.planCardPressed]}
+        >
+          <View style={styles.planMark}>
+            <Icon name="share" size={20} color={color.up} strokeWidth={2} />
+          </View>
+          <View style={styles.frontText}>
+            <Text style={styles.frontTitle}>{t('profile.programmeDoor')}</Text>
+            <Text style={styles.frontSub}>{t('profile.programmeDoorSub')}</Text>
+          </View>
+          <Icon name="chevronRight" size={20} color={color.up} strokeWidth={2} />
+        </Pressable>
+
+        {/* Membership (Subscription + Apple Payments) — a prominent card with a state badge; trial
+            state adds a sessions-left meter + an honest billing note. */}
         <Legend style={styles.sectionLegend}>{t('profile.membership')}</Legend>
         <Pressable
           accessibilityRole="button"
@@ -225,19 +307,32 @@ export function ProfileSheet({ navigation }: Props) {
         </Pressable>
         {membershipState === 'trial' ? <Text style={styles.trialNote}>{t('profile.trialNote')}</Text> : null}
 
+        {/*
+          ⛔ THE ONBOARDING SHAPE, NOT A PILL PAIR (founder, 2026-08-12): *"תחליף את הפקדים של
+          הליברות והשפה לפקדים כמו שבONBORDING של המין."*
+
+          `SegmentedControl` is the app's control for switching a VIEW — Lifts / Log, where the two
+          options are two ways of looking at one thing. Units and language are CHOICES she makes
+          about the product, which is what the onboarding sex control is for, and it is the shape
+          she has already used once. Two cards, a lit border on the answer, a wash on press.
+        */}
         <Legend style={styles.sectionLegend}>{t('profile.preferences')}</Legend>
-        <Row label={t('profile.units')} control={<SegmentedControl options={['kg', 'lb']} value={units} onChange={onUnits} />} />
-        <Row
-          label={t('profile.language')}
-          control={
-            <SegmentedControl
-              options={[{ value: 'en', label: 'EN' }, { value: 'he', label: 'עב' }]}
-              value={locale}
-              onChange={onLanguage}
-            />
-          }
-          last
-        />
+        <View style={styles.pickBlock}>
+          <Text style={styles.pickLabel}>{t('profile.units')}</Text>
+          <Pick
+            options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
+            value={units}
+            onChange={(v) => onUnits(v as 'kg' | 'lb')}
+          />
+        </View>
+        <View style={styles.pickBlock}>
+          <Text style={styles.pickLabel}>{t('profile.language')}</Text>
+          <Pick
+            options={[{ value: 'en', label: 'English' }, { value: 'he', label: 'עברית' }]}
+            value={locale}
+            onChange={onLanguage}
+          />
+        </View>
 
         <Legend style={styles.sectionLegend}>{t('profile.healthSection')}</Legend>
         <Row
@@ -282,16 +377,6 @@ export function ProfileSheet({ navigation }: Props) {
             which is the whole of what this row is for. */}
         {/* Only when there is something to share — a control that opens and bounces straight back
             is worse than no control. `SharePlanScreen` reads the same plan. */}
-        {/*
-          ⛔ THE BODY MAP, REACHABLE AT LAST (founder 2026-08-11). It is the surface that carries her
-          injuries, the muscles she has switched off and the ones she leads with — and until now it
-          existed only in onboarding, drawn once. The pain flow's own copy already sent her here
-          (*"adjust it any time in You → Body map"*), to a screen that was not built.
-        */}
-        <Row label={t('ob.mapTitle')} onPress={() => navigation.navigate('BodyMapEdit')} />
-        {hasPlan ? <Row label={t('planShare.title')} onPress={() => navigation.navigate('SharePlan')} last /> : null}
-
-
         {/* Leaving is not something we design FOR (founder 2026-07-12). Sign Out carried a
             full bordered button — the heaviest control on the screen — which made logging out
             read as the page's primary action and put a big target under an idle thumb. Both
@@ -386,6 +471,38 @@ function Row({
   );
 }
 
+/**
+ * ⛔ A CHOICE, IN THE SHAPE SHE ALREADY KNOWS (founder, 2026-08-12) — the onboarding sex control's
+ * geometry, lifted whole so the two screens teach one gesture. Equal cards, a lit border on the
+ * answer, a WASH on press and never a fade (A.13).
+ */
+function Pick({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={styles.pickRow}>
+      {options.map((o) => (
+        <Pressable
+          key={o.value}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: value === o.value }}
+          accessibilityLabel={o.label}
+          onPress={() => onChange(o.value)}
+          style={({ pressed }) => [styles.pick, value === o.value && styles.pickOn, pressed && styles.pickPressed]}
+        >
+          <Text style={[styles.pickText, value === o.value && styles.pickTextOn]}>{o.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 4, minHeight: 44 },
@@ -402,6 +519,57 @@ const styles = StyleSheet.create({
   identitySub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
 
   sectionLegend: { marginTop: 20, marginBottom: 2 },
+
+  /* The preference choices — the onboarding sex control's own geometry. */
+  pickBlock: { marginTop: 16, gap: 10 },
+  pickLabel: { fontFamily: font.sansMedium, fontSize: 19, color: color.textPrimary, textAlign: 'left' },
+  pickRow: { flexDirection: 'row', gap: 10 },
+  pick: {
+    flex: 1,
+    minHeight: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.16)',
+  },
+  pickOn: { borderColor: color.textPrimary },
+  pickPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
+  pickText: { fontFamily: font.sansMedium, fontSize: 20, color: color.textMuted, textAlign: 'center' },
+  pickTextOn: { color: color.textPrimary },
+
+  /* ── THE FRONT OF THE SCREEN — the body map and the programme door. See the notes at the markup.
+     They are cards rather than rows because a row is a setting and neither of these is one. ── */
+  frontCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  frontCardPressed: { backgroundColor: 'rgba(241,238,229,0.05)' },
+  /* ⛔ THE MAP IS THE FRONT OF THE SCREEN — the figure, drawn, not a door to it. */
+  mapBlock: { marginTop: 10, paddingBottom: 10, borderRadius: 20 },
+  mapBlockPressed: { backgroundColor: 'rgba(241,238,229,0.04)' },
+  mapWords: { marginTop: 10, gap: 4, alignItems: 'center' },
+  frontText: { flex: 1, gap: 4 },
+  frontTitle: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 28, color: color.textPrimary, textAlign: 'center' },
+  frontSub: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'center' },
+  /* ⛔ THE ACCENT, SPENT ONCE. Moss means "a decision made" in this palette, and this is the only
+     control on the page that changes what she trains rather than how it is shown. */
+  planCard: { borderColor: 'rgba(169,196,159,0.42)', backgroundColor: 'rgba(169,196,159,0.08)' },
+  planCardPressed: { backgroundColor: 'rgba(169,196,159,0.16)' },
+  planMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(169,196,159,0.14)',
+  },
   // B.9 — a legend that follows a paragraph gets the edge the rows give the others.
   sectionAfterNote: { marginTop: 22, paddingTop: 20, borderTopWidth: 1, borderTopColor: color.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },

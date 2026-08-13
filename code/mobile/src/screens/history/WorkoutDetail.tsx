@@ -269,7 +269,7 @@ function Fact({ value, label, accent }: { value: string; label: string; accent?:
   return (
     <View style={styles.fact}>
       <Text style={[styles.factVal, accent && styles.factValUp]}>{value}</Text>
-      <Legend size={11} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
+      <Legend size={17} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
     </View>
   );
 }
@@ -311,14 +311,14 @@ const styles = StyleSheet.create({
   exName: { flex: 1, fontFamily: font.sansSemibold, fontSize: textScale.md, color: color.textPrimary, textAlign: 'left' },
   badge: { textAlign: 'left' },
   // "Next" / "Holds" are words (he: "הבא" / "נשאר") — sans, never mono.
-  badgeLabel: { fontFamily: font.sansMedium, fontSize: 15, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
+  badgeLabel: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
   badgeLabelUp: { color: signal[0] },
-  badgeNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
+  badgeNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: color.textMuted }, // rtl-ok: nested span inside badge, which sets textAlign
   badgeNumUp: { color: signal[0] },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingVertical: 5, paddingHorizontal: 11, backgroundColor: CHIP_BG, borderRadius: 100 },
-  chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, color: color.textMuted, textAlign: 'left' },
+  chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: color.textMuted, textAlign: 'left' },
 
-  footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

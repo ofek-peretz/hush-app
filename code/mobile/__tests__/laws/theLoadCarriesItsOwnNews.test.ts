@@ -78,24 +78,37 @@ describe('⛔ and it is silent far more often than it speaks', () => {
   });
 });
 
-describe('the per-side figure, and when it is worth a line', () => {
-  it('⛔ the first set of a lift — she is loading the bar', () => {
-    // The founder's own ruling stands: the athlete never calculates. Deleting this puts
-    // `(34 − 20) ÷ 2` back in her head at the rack.
+describe('⛔ the per-side figure is on EVERY set now', () => {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE FOUNDER REVERSED THIS, AND THE ARGUMENT IT REPLACED WAS MINE (2026-08-12)
+   *
+   *   *"במסך התרגיל החי לא מופיע כמה לשים בכל צד."* — photographed on set 2 at 37.5 kg, where the
+   *   old rule was correctly hiding it.
+   *
+   * The rule was `setNumber <= 1 || news != null`: show it while she loads the bar, and again the
+   * moment Loop 1 moves the load. The reasoning was that on sets two, three and four it is a fact
+   * she acted on five minutes ago, taking a row on the smallest screen in the product.
+   *
+   * ⚠️ WHAT THAT ASSUMED IS THAT SHE LOADED THE BAR AND DID NOT LEAVE IT. She racks between sets,
+   * someone borrows a plate, she comes back from the water fountain — and the one number she needs
+   * to rebuild it was the one the screen had decided she remembered. **A loading instruction is
+   * cheap to show and expensive to be missing.**
+   *
+   * ⚠️ AND THE SPACE OBJECTION IS PAID, NOT WAIVED. The set stage has two bands and one annex line
+   * now, not the seven stacked figures it had when the rule was written.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  it('on the first set, on the fourth, and with no news at all', () => {
     expect(showsPerSide({ setNumber: 1, news: null })).toBe(true);
+    expect(showsPerSide({ setNumber: 2, news: null })).toBe(true);
+    expect(showsPerSide({ setNumber: 4, news: null })).toBe(true);
   });
 
-  it('and not on the sets after it — the bar has not moved', () => {
-    expect(showsPerSide({ setNumber: 2, news: null })).toBe(false);
-    expect(showsPerSide({ setNumber: 4, news: null })).toBe(false);
-  });
-
-  it('⛔ but it RETURNS the moment the load does', () => {
-    /*
-     * This is the half that makes the rule correct rather than merely tidy. Loop 1 changes the load
-     * mid-exercise — the product's signature — and at that moment the bar must be re-loaded and the
-     * per-side figure is the most useful line on the screen.
-     */
+  it('⚠️ and on the set Loop 1 moved — the case the old rule got right', () => {
+    // A load that changed mid-lift MUST be re-loaded; this was the half that made the old rule
+    // defensible, and it is the half that survives being made unconditional.
     expect(showsPerSide({ setNumber: 3, news: { direction: 'down', deltaKg: 2.5 } })).toBe(true);
   });
 });
+

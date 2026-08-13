@@ -2,7 +2,7 @@
 // 
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
-import { TimeStage, DistanceStage, OpenStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
+import { TimeStage, DistanceStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
 import { initI18n, tg } from '@/i18n';
 
 /**
@@ -132,21 +132,13 @@ describe('a distance to cover', () => {
   });
 });
 
-describe('open — no number worth stating', () => {
-  it('gives the instruction the whole stage, and invents no figure', () => {
-    const item = { kind: 'open', ex: 'mobility', say: 'Whatever your hips need today.' } as const;
-    const read = textOf(draw(<OpenStage item={item} name="Mobility" onDone={jest.fn()} />));
-    expect(read).toContain('Whatever your hips need today.');
-    // Inventing "5 minutes" here would be the app deciding something the coach left open.
-    expect(read).not.toMatch(/\d/);
-  });
-
-  it('falls back to the name when the coach said nothing', () => {
-    const item = { kind: 'open', ex: 'warm_up' } as const;
-    expect(textOf(draw(<OpenStage item={item} name="Warm-up" onDone={jest.fn()} />))).toContain('Warm-up');
-  });
-});
-
+/*
+ * ⛔ `OpenStage` IS DELETED, AND SO ARE THE TWO TESTS THAT MOUNTED IT (founder, 2026-08-12).
+ *
+ * They proved the stage gave the coach's instruction the whole screen and invented no figure —
+ * which it did, faithfully, for a shape the product could not do anything else with. **An item the
+ * app cannot measure is an item it cannot coach**, and a law is not a reason to keep one.
+ */
 describe('the readings', () => {
   it('reads a clock the same way the rest ring does', () => {
     expect([0, 5, 45, 60, 90, 600, 3599].map(clockOf)).toEqual(

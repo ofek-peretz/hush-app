@@ -191,9 +191,20 @@ describe('Rev 7 · assembleV5DayLists — the map is the programme', () => {
      * The comment above already draws the line this edit respects: the RELATIONSHIP is the law, the
      * counts are a pinned measurement of the share table. The catalogue changed, so the measurement
      * changed; `emphasised > normal` is asserted first and is what may never move.
+     *
+     * ⚠️ SEVEN BECAME SIX ON 2026-08-11, same line, same reason. The emphasis TRANSFER is now bounded
+     * — it may carry a marked muscle one exercise-block past `WEEKLY_SETS_CEILING` and no further.
+     * Before the bound it ran to FIFTY weekly sets for one muscle, which is not a bigger dose but
+     * volume she cannot recover from, and it was paid for by draining unmarked muscles toward MEV.
+     *
+     * ⛔ AND THE BOUND WAS NOT CHOSEN TO FIT THIS NUMBER. A HARD ceiling (no block of headroom) was
+     * measured first and is better on every other count — nothing above 30, donors drained 48 rather
+     * than 76 — but it broke the LAW on the line above: a marked chest and an unmarked one both came
+     * out at five lifts, because the dealer drops some of what it is handed and the ask has to exceed
+     * for the mark to survive it. The law outranks the tidier number.
      */
     expect(chestCount(normal)).toBe(5);
-    expect(chestCount(emphasised)).toBe(7);
+    expect(chestCount(emphasised)).toBe(6);
   });
 
   /*

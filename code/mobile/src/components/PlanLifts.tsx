@@ -63,6 +63,18 @@ export interface PlanLiftsProps {
    * The delta chip stays, because `↑ 3.5` is a fact she reads in half a second and is the reason to
    * look at the row at all. The SENTENCE behind it is what the row opens — the same sheet the
    * Mirror opens, so one explanation has three doors and no second author.
+   *
+   * ⛔ AND IT IS ASKED FOR EVERY ROW NOW, NOT ONLY A CHANGED ONE (founder 2026-08-11).
+   *
+   * This read `lift.changed && onWhy ? onWhy(id) : onForm(id)`. A change needs two programmes to
+   * compare, so in her FIRST week nothing has changed — and the door to the one thing this product
+   * claims to do differently was shut on every row she had. She met the engine at its most
+   * assertive and least explicable, on the screen she opens with her bag on her shoulder.
+   *
+   * The row now always asks, and the CALLER decides which answer exists: the load's case when the
+   * engine moved it, the placement (`domain/whyLiftIsHere`) when it merely put it there, and the
+   * form clip when neither does. This component stays what it was — a table that reports facts —
+   * and does not learn which kinds of explanation the product has.
    */
   onWhy?: (exerciseId: string) => void;
 }
@@ -76,8 +88,8 @@ export function PlanLifts({ lifts, units, onForm, onWhy }: PlanLiftsProps) {
           key={`${lift.exerciseId}_${i}`}
           accessibilityRole="button"
           accessibilityLabel={lift.pending ? lift.name : `${lift.name} · ${planFigureLabel(lift, units)}`}
-          accessibilityHint={lift.changed && onWhy ? t('weekly.whyLink') : undefined}
-          onPress={() => (lift.changed && onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId))}
+          accessibilityHint={onWhy ? t('weekly.whyLink') : undefined}
+          onPress={() => (onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId))}
           style={({ pressed }) => [
             styles.planRow,
             // The table is CLOSED — the last row carries the bottom rule, so the plan reads as a
@@ -175,23 +187,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    minHeight: 54,
-    paddingVertical: 9,
+    minHeight: 68,
+    paddingVertical: 14,
     borderTopWidth: 1,
     borderTopColor: 'rgba(241,238,229,0.10)',
   },
   planRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.10)' },
-  planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: textScale.md, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
-  planFigure: { flexGrow: 0, flexShrink: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, textAlign: 'right' },
+  planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  /* ⛔ 17 → 22 (founder, 2026-08-12: *"תציג את התוכנית … ותעצב את זה בגדול וברור"*). With the
+     per-muscle allocation off the sheet above it, the LIFTS are the sheet — and they were set at
+     the size of the caption that used to label the bars. */
+  planName: { flexShrink: 1, minWidth: 0, fontFamily: font.sansMedium, fontSize: 22, lineHeight: 28, color: color.textPrimary, textAlign: 'left' },
+  planFigure: { flexGrow: 0, flexShrink: 0, fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 19, textAlign: 'right' },
   figureQuiet: { color: color.textSecondary, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
-  figureMeta: { fontSize: 13.5 },
+  figureMeta: { fontSize: 17 },
   figureUnit: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   figureChanged: { fontFamily: font.monoMedium }, // rtl-ok: nested span, inherits end-alignment from planFigure
   figureScheme: { color: color.textMuted, fontFamily: font.mono }, // rtl-ok: nested span, inherits end-alignment from planFigure
   /* The delta — an arrow in the direction's own tone, no number. The figure beside it carries the
      new load, and printing the delta as well would state the same move twice. */
   delta: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 99, borderWidth: 1 },
-  deltaText: { fontFamily: font.monoSemibold, fontSize: 13, textAlign: 'center' },
-  pressedDim: { opacity: 0.6 },
+  deltaText: { fontFamily: font.monoSemibold, fontSize: 17, textAlign: 'center' },
+  /* ⛔ A PRESS IS A WASH, NEVER A FADE (founder A.13). This was `opacity: 0.6` — touching a lift
+     dimmed its own name and load to the strength of a disabled row. The wash sits UNDER the row and
+     the figures never move. */
+  pressedDim: { backgroundColor: 'rgba(241,238,229,0.06)' },
 });

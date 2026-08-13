@@ -153,22 +153,29 @@ export function ConnectHealth({ navigation, route }: Props) {
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
       progress={{ index: 2, total: 3 }}
-      legend={t('ob.healthLegend')}
-      title={t('ob.healthTitle')}
       /*
-       * ⛔ THIS ONE LINE STAYS, AND IT IS THE EXCEPTION TO THE FOUNDER'S OWN INSTRUCTION.
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       * ⛔ THREE LINES OFF THIS SCREEN (founder, 2026-08-12)
        *
-       * *"Take the text off the top and leave only titles — nobody reads whole sentences in
-       * onboarding."* He is right about every other step, and all of them lost their prose. This is
-       * not prose: **"I show it. It never decides a weight."** is a PROMISE about what happens to
-       * her health data, made at the only moment she is deciding whether to hand it over.
+       *   *"תוריד את ה-OPTIONAL מלמעלה, תוריד את 'I show it. It never decides a weight', תוריד את
+       *   'For the runs and walks you record…' — וזה יפנה לך מקום להגדיל את הכרטיסייה של APPLE
+       *   HEALTH ולעשות את זה במסגרת שתשכנע את המשתמש ללחוץ על זה."*
        *
-       * `theV4WorldIsGoneFromTheCopy` asserts it, and it caught me deleting it — HealthKit is not a
-       * model input (founder ruling), and the screen that asks for the permission is where that has
-       * to be said.
+       * ⚠️ AND I ARGUED ONE OF THEM BACK ONTO THIS SCREEN ONCE. The note that stood here defended
+       * *"I show it. It never decides a weight"* as a PROMISE rather than prose — the ratified law
+       * that Health is never a model input, said at the moment she hands it over.
+       *
+       * The promise is not deleted; it MOVED. `ob.healthHelper` said the same thing a second time
+       * eight lines below ("Your lifting runs on one thing: what you lift"), and the three rows in
+       * between say what she GETS. One statement of a law is a promise; two is a screen arguing
+       * with itself, and neither survives being the fourth thing she reads before a switch.
+       *
+       * ⛔ AND "OPTIONAL" WAS THE WORST OF THE THREE. A screen whose footer already says "Skip for
+       * now" does not need a word at the top telling her not to bother.
+       * ════════════════════════════════════════════════════════════════════════════════════════
        */
-      voice={t('ob.healthSub')}
-      headGap={32}
+      title={t('ob.healthTitle')}
+      headGap={26}
       footer={
         <>
           <Button
@@ -210,7 +217,7 @@ export function ConnectHealth({ navigation, route }: Props) {
               one mono legend as abbreviations, which is the smallest, least legible way to state
               the only reason to turn the switch on. It is the card's STATE now, and the three
               measurements have a row each under it. */}
-          <Legend size={12.5} track={0} weight="regular" tone="onStage" style={styles.sub}>
+          <Legend size={17} track={0} weight="regular" tone="onStage" style={styles.sub}>
             {connected ? t('ob.healthCardOn') : t('ob.healthCardSub')}
           </Legend>
         </View>
@@ -239,9 +246,6 @@ export function ConnectHealth({ navigation, route }: Props) {
         <HealthRead icon="flame" name={t('ob.healthKcal')} sub={t('ob.healthKcalSub')} />
         <HealthRead icon="footprints" name={t('ob.healthKm')} sub={t('ob.healthKmSub')} last />
       </View>
-
-      {/* v7 helper line — the law in words, under the card, sans. */}
-      <Text style={styles.helper}>{t('ob.healthHelper')}</Text>
 
       {/* THE WRIST — a ruled row, and only for someone who has one. No Pressable, no switch, no
           chevron: there is nothing here to decide, and the shape says so before the words do. */}
@@ -279,32 +283,37 @@ function HealthRead({ icon, name, sub, last }: { icon: 'heart' | 'flame' | 'foot
 }
 
 const styles = StyleSheet.create({
+  /* ⛔ THE CARD IS THE INVITATION (founder, 2026-08-12): *"להגדיל את הכרטיסייה … ולעשות את זה
+     במסגרת שתשכנע את המשתמש ללחוץ על זה."* It was a 20-point row in `border` grey — the same
+     weight as the three read-only rows beneath it — and it is the only thing on the page she can
+     act on. Moss rim, moss wash, and the room the three deleted lines freed. */
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: color.border,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(169,196,159,0.45)',
     borderRadius: radius.card,
-    backgroundColor: color.surface,
+    backgroundColor: 'rgba(169,196,159,0.08)',
   },
   cardOn: { borderColor: color.up, backgroundColor: color.upWash },
   cardPressed: { backgroundColor: color.fillSubtle },
   // v7: 46 × 46, radius 14, a subtle paper wash behind the moss waveform.
-  iconBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: color.fillSubtleStrong, alignItems: 'center', justifyContent: 'center' },
+  iconBox: { width: 58, height: 58, borderRadius: 18, backgroundColor: 'rgba(169,196,159,0.16)', alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.sansSemibold, fontSize: 16, color: color.textPrimary, textAlign: 'left' },
+  title: { fontFamily: font.sansSemibold, fontSize: 24, lineHeight: 30, color: color.textPrimary, textAlign: 'left' },
   sub: { color: color.textSecondary, marginTop: 3 },
   // The three measurements — a block of rows, not a paragraph.
-  reads: { marginTop: 18 },
+  reads: { marginTop: 30 },
   read: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 11 },
   readRuled: { borderBottomWidth: 1, borderBottomColor: color.border },
   readText: { flex: 1, minWidth: 0, gap: 1 },
-  readName: { fontFamily: font.sansSemibold, fontSize: 15, color: color.textPrimary, textAlign: 'left' },
-  readSub: { fontFamily: font.sans, fontSize: 13, color: color.textMuted, textAlign: 'left' },
+  readName: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
+  readSub: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'left' },
   // The law in words, under the three rows.
-  helper: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, marginTop: 16, textAlign: 'left' },
+  helper: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, marginTop: 16, textAlign: 'left' },
   // The wrist row — ruled off the helper above it, so it reads as a separate FACT rather than a
   // second sentence about Health. A hairline is the lightest thing that can say "and also".
   wrist: {
@@ -316,7 +325,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: color.border,
   },
-  wristText: { flex: 1, fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
+  wristText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
   // The quiet second exit.
-  skip: { fontFamily: font.sansMedium, fontSize: 14, color: color.textMuted, textAlign: 'center', paddingVertical: 4 },
+  skip: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textAlign: 'center', paddingVertical: 4 },
 });

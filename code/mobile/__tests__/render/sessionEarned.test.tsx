@@ -14,6 +14,8 @@
 
 // 
 
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';
@@ -144,7 +146,32 @@ describe('2.5 says everything the workout decided', () => {
     expect(draw({})).toContain('Nothing needed moving');
   });
 
-  it('but not before the engine has answered — an unread ledger claims nothing', () => {
-    expect(draw({ answered: false })).not.toContain('Nothing needed moving');
+  it('⛔ AND THERE IS NO LONGER A "STILL READING" STATE TO WAIT FOR', () => {
+    /*
+     * ⛔ FOUNDER, 2026-08-12: *"כבר לא רלוונטי לדעתי כי זה היה כאשר היה את ה-AI. אפשר למחוק ולוודא
+     * שכל הצינור הזה סגור."*
+     *
+     * `answered` was false for the ~15 s the post-session MODEL call took, and this pinned the one
+     * thing that mattered about it: an empty ledger mid-flight is not a verdict. **The call is no
+     * longer made** — `sessionStore` dropped `askAfterSession` the same day, because the engine owns
+     * the programme after every session — so the prop, the branch and its copy are deleted.
+     *
+     * ⚠️ THE ENGINE ANSWERS IN A MILLISECOND, which is why this is a deletion and not a default:
+     * there is no interval left in which the ledger could be read too early.
+     */
+    const flow = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'src/screens/session/WellDone.tsx'),
+      'utf8',
+    );
+    expect(flow).not.toContain('answered: boolean');
+    expect(flow).not.toContain("t('complete.stillReading')");
+    /*
+     * ⚠️ ASSERTED ON THE IMPORT, NOT ON THE CALL. `sessionStore` still QUOTES the deleted line in
+     * the comment that explains why it went — "This line was `void askAfterSession(saved)`" — so a
+     * substring check on the call text passes only while nobody documents the deletion. The import
+     * is the thing that cannot be present without the pipe being open.
+     */
+    expect(fs.readFileSync(path.join(__dirname, '..', '..', 'src/state/stores/sessionStore.tsx'), 'utf8'))
+      .not.toMatch(/^import .*askAfterSession/m);
   });
 });

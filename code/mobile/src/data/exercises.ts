@@ -139,8 +139,33 @@ export type SwapPattern =
   | 'calf_straight' | 'calf_bent'
   // Hamstrings
   | 'hinge' | 'knee_flexion'
-  // Glutes
-  | 'thrust' | 'kickback' | 'abduction' | 'adduction'
+  /*
+   * ⛔ GLUTES · THE THRUST SPLIT (founder 2026-08-11, after six ENGINE attempts were reverted).
+   *
+   * `thrust` held all four of the muscle's compounds — barbell hip thrust, glute bridge, machine hip
+   * thrust, single-leg hip thrust — so with one name over the lot, and a day forbidden from repeating
+   * a muscle's pattern, GLUTES COULD PLACE EXACTLY ONE COMPOUND PER DAY. Everything else it owns is
+   * an accessory (`abduction`, `kickback`, `adduction`), which `pickExercises` rightly deprioritises
+   * and `enforceTimeCap` drops first. The muscle was shaped like an isolation muscle by its filing.
+   *
+   * The cost was measured, not supposed. With Quads and Glutes BOTH marked at six days — identical
+   * weekly targets of 50 — the week came out **Quads 36 sets · Glutes 12**. Six engine fixes were
+   * written for that across selection, dealing and the trim; every one of them was reverted, because
+   * each helped two marks on one region by breaking single marks (`everyAthleteTheEngineCanMeet`'s
+   * ratchet caught two of them). The engine was never wrong. The vocabulary was.
+   *
+   * The axis is the one this file already uses twice — free versus machine-supported (`squat` /
+   * `squat_supported`, `row` / `row_supported`) — plus the ROM difference a coach would name first:
+   *
+   *   `thrust`             shoulders elevated on a bench, hips travelling through full extension
+   *   `thrust_supported`   the same movement with a pad carrying you — the glute-drive machine
+   *   `bridge`             from the FLOOR: a shorter hip ROM and a different resistance curve
+   *
+   * ⚠️ SWAPS ARE UNAFFECTED. `patternFamily` maps every one of these to `primary`, so a machine hip
+   * thrust is still a legal answer for a busy barbell hip thrust — which is exactly what an athlete
+   * wants when the rack is taken.
+   */
+  | 'thrust' | 'thrust_supported' | 'bridge' | 'kickback' | 'abduction' | 'adduction'
   // Core â€” ROTATION is a function the catalogue had no entry for at all: every core movement in it
   // flexed the spine or resisted it, and nothing turned it.
   | 'crunch' | 'leg_raise' | 'anti_extension' | 'rotation';
@@ -264,7 +289,7 @@ export interface Exercise {
  */
 export const EXERCISES: Exercise[] = [
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ horizontal_push Â· Chest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  { id: 'bb_bench_press', name: 'Barbell Bench Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Keep your feet planted.', 'Lower to the chest with control.', 'Drive the bar straight up.'], synonyms: ['bench'] },
+  { id: 'bb_bench_press', name: 'Barbell Bench Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Keep your feet planted.', 'Lower to the chest with control.', 'Drive the bar straight up.'], synonyms: ['bench', 'bench press'] },
   { id: 'incline_bb_press', name: 'Incline Barbell Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_incline', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 30, bwScaled: true, cues: ['Set a ~30Â° incline.', 'Lower to the upper chest.', 'Press up and slightly back.'], synonyms: ['incline bench'] },
   { id: 'db_bench_press', name: 'Dumbbell Bench Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'dumbbell', tier: 'compound', baseKg: 16, cues: ['Stack your wrists.', 'Lower under control.', 'Press to lockout.'], synonyms: ['db press', 'dumbbell press'] },
   { id: 'incline_db_press', name: 'Incline Dumbbell Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_incline', support: 'free', equipment: 'dumbbell', tier: 'compound', baseKg: 14, cues: ['Set a ~30Â° incline.', 'Lower to the upper chest.', 'Press up evenly.'], synonyms: ['incline db'] },
@@ -390,7 +415,7 @@ export const EXERCISES: Exercise[] = [
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ hip_dominant Â· Glutes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   { id: 'hip_thrust', name: 'Barbell Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Upper back on the bench.', 'Drive through the heels.', 'Squeeze the glutes at the top.'], synonyms: ['thrust'] },
-  { id: 'glute_bridge', name: 'Glute Bridge', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 30, cues: ['Heels close.', 'Drive the hips up.', 'Squeeze at the top.'] },
+  { id: 'glute_bridge', name: 'Glute Bridge', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'bridge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 30, cues: ['Heels close.', 'Drive the hips up.', 'Squeeze at the top.'] },
   { id: 'cable_pull_through', name: 'Cable Pull-Through', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'hinge', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 25, cues: ['Hinge at the hips.', 'Push the hips back.', 'Snap the hips forward.'] },
   { id: 'hip_abduction', name: 'Hip Abduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'abduction', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Press the knees out.', 'Control the return.'], synonyms: ['abductor machine'] },
   { id: 'cable_hip_abduction', name: 'Cable Hip Abduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'abduction', support: 'guided', unilateral: true, equipment: 'cable', tier: 'isolation', baseKg: 8, cues: ['Cuff on the outside ankle.', 'Sweep the leg out and slightly back.', 'Return under control.'], synonyms: ['standing cable abduction'] },
@@ -727,3 +752,96 @@ export function exercisesForMuscle(muscle: MuscleGroup): Exercise[] {
  * single pool in `domain/swapPool`. Every surface (phone, watch, program editor, weekly rotation)
  * goes through it. Nothing chooses a substitute from this file any more.
  * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * INDIRECT VOLUME — the sets a lift gives a muscle that is not the one it is filed under.
+ *
+ * ⛔ FOUNDER, 2026-08-11: *"תלמד את חישוב הנפח לקרוא את capability."*
+ *
+ * ── WHY IT IS NOT `capability`, MEASURED BEFORE IT WAS BUILT ────────────────────────────────────
+ * `capability` has five values over ten muscles, and reading volume straight off it is wrong in
+ * both directions:
+ *
+ *     hip_dominant   = Hamstrings + Glutes + Core     a hanging leg raise is not glute work
+ *     knee_dominant  = Quads + Calves                 a calf raise is not quad work
+ *
+ * So capability is the GUARDRAIL here, not the rule: a lift may only lend volume inside its own
+ * capability (asserted below), which is what stops this table ever claiming a bench press trains
+ * the back. WHICH muscle it lends to, and how much, is stated per movement PATTERN, because that is
+ * the level at which the answer is actually the same for every lift — every hinge loads the glutes,
+ * whether it is a barbell RDL or a dumbbell one.
+ *
+ * ── WHY IT EXISTS ──────────────────────────────────────────────────────────────────────────────
+ * The catalogue files each lift under ONE muscle, so `bb_deadlift` and `db_rdl` count as Hamstrings
+ * and `bulgarian_split_squat` counts as Quads — and the glutes, which are a prime mover in all
+ * three, are credited with none of it. Measured, that made the engine read Glutes at 7 weekly sets
+ * in a week where hip-dominant work outweighed knee-dominant work at every frequency. Seven separate
+ * engine fixes were attempted against that number before it was established that the number itself
+ * was wrong.
+ *
+ * ── THE FRACTIONS ──────────────────────────────────────────────────────────────────────────────
+ * A half-set is the convention in the hypertrophy literature for a muscle that is a prime mover but
+ * not THE target of the lift, and it is deliberately the only value here: a second number would be a
+ * claim about relative contribution that no one has measured for this catalogue. A muscle that is
+ * merely stabilising earns nothing — this is not a list of everything a lift touches.
+ *
+ * ⚠️ IT IS A MEASUREMENT, NOT A BUDGET. Nothing here changes what the engine PRESCRIBES: targets,
+ * selection and the time cap are untouched. It changes what "this muscle is under-trained" means, so
+ * the passes that ask that question stop asking it of a number that was never true.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export const INDIRECT_SHARE = 0.5;
+
+const INDIRECT_BY_PATTERN: Partial<Record<SwapPattern, readonly MuscleGroup[]>> = {
+  // Hip extension under load. The glutes are the prime hip extensor in every one of these.
+  hinge: ['Glutes'],
+  hinge_isolated: ['Glutes'],
+  // …and the thrust family repays the hamstrings, which extend the hip alongside them.
+  thrust: ['Hamstrings'],
+  thrust_supported: ['Hamstrings'],
+  bridge: ['Hamstrings'],
+  // Knee-dominant work that also takes the hip through range. A leg extension does not (no hip),
+  // and neither does a machine squat pattern where the seat holds the pelvis — hence `squat` and
+  // `lunge` only.
+  squat: ['Glutes'],
+  lunge: ['Glutes'],
+  // Pressing is elbow extension the triceps perform; pulling is elbow flexion the biceps perform.
+  press_flat: ['Triceps'],
+  press_incline: ['Triceps'],
+  press_decline: ['Triceps'],
+  press_overhead: ['Triceps'],
+  row: ['Biceps'],
+  row_supported: ['Biceps'],
+  pulldown: ['Biceps'],
+};
+
+/**
+ * The muscles a lift trains BESIDES the one it is filed under, each earning `INDIRECT_SHARE` of a
+ * set. Empty for a lift that trains one muscle, and for any entry whose target would sit outside the
+ * lift's own capability (the guardrail — see the header).
+ */
+export function indirectMusclesOf(id: string | null | undefined): readonly MuscleGroup[] {
+  const ex = id ? BY_ID.get(id) : undefined;
+  if (!ex) return [];
+  /*
+   * ⛔ COMPOUNDS ONLY — and this gate was added because the table was WRONG without it, caught by
+   * `theVolumeAMuscleActuallyReceives` on its first run.
+   *
+   * Indirect volume comes from a second joint moving under load. A single-joint lift has no second
+   * joint, so it cannot be a prime mover anywhere but its own muscle — and the pattern table alone
+   * does not know that. `straight_arm_pulldown` carries the `pulldown` pattern and would have been
+   * credited with biceps work, when the whole point of the lift is that the ELBOW STAYS STRAIGHT: it
+   * trains no biceps whatsoever. Crediting it would have made the engine believe an arm was fed by a
+   * lift that never bent it.
+   *
+   * ⚠️ IT COSTS ONE HONEST ENTRY, AND THAT IS THE RIGHT TRADE. `back_extension` is filed as an
+   * isolation (the hip is the only joint it moves) and the glutes ARE a prime hip extensor in it, so
+   * this gate under-counts that lift. Being conservative here is deliberate: an over-count tells the
+   * engine a muscle is fed when it is not, and the floor pass then stops feeding it. An under-count
+   * only costs a little precision on one lift.
+   */
+  if (ex.tier !== 'compound') return [];
+  const listed = INDIRECT_BY_PATTERN[ex.pattern] ?? [];
+  return listed.filter((m) => m !== ex.muscle && (BY_MUSCLE.get(m) ?? []).some((o) => o.capability === ex.capability));
+}

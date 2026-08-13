@@ -16,7 +16,7 @@
 
 // 
 
-import { moveWorkoutToDay, daysAfterStarting, dropTarget, type BoardWorkout, type MeasuredRow } from '@/domain/weekBoard';
+import { moveWorkoutToDay, daysAfterStarting, type BoardWorkout } from '@/domain/weekBoard';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 
 const week: BoardWorkout[] = [
@@ -97,72 +97,26 @@ describe('⛔ …and starting a different day’s workout is the same move', () 
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ AND WHERE A DROP LANDED — arithmetic on MEASURED rows, never on a row-height constant.
+ * ════ ⛔ AND THE DRAG ITSELF IS GONE (founder 2026-08-12) ════
  *
- * The rows are not the same height. The open row carries a name, a shape line and a change pill and
- * stands about three times a closed one; a rest day is a letter and a hairline and stands shorter
- * than either. **Dividing the drag distance by any single number puts the session on the wrong day
- * for most of the week** — and silently: she drops it on Wednesday and finds it on Thursday.
+ * *"ואמרנו שזה לא יופיע כימים אלא כN אימונים."* Ruled: the week is always numbered, never a
+ * calendar — so there are no weekday rows to drop onto, `DraggableWeekRow` is deleted and
+ * `dropTarget` with it.
  *
- * ⚠️ THIS IS THE HALF A DEVICE CANNOT TEST FOR ME. There is no simulator in this suite and no Xcode
- * in this project, so the gesture is verified by reading and the ARITHMETIC is verified here.
+ * ⚠️ WHAT WENT WITH IT WAS SOME OF THE BEST ARITHMETIC IN THIS FILE, and it is worth recording why
+ * rather than just removing the tests. `dropTarget` resolved a drop against MEASURED row bands
+ * instead of a row-height constant, because the rows were never the same height — the open one stood
+ * about three times a closed one. Dividing by any single number put the session on the wrong day for
+ * most of the week, silently. Six tests held that. They are gone because their subject is, not
+ * because they stopped being right.
+ *
+ * ⛔ AND THE FEATURE HAD ALREADY STOPPED WORKING FOR ALMOST EVERYONE. `Home`'s own comment said so:
+ * `saveCoachPlanDays` returns early when no coach plan is stored, so on every GENERATED week — every
+ * athlete who did not import a programme — the row lifted, sprang back and changed nothing.
+ *
+ * ── WHAT SURVIVES, AND IT IS THE HALF THAT MATTERS ──────────────────────────────────────────────
+ * `moveWorkoutToDay` and `daysAfterStarting`, tested above. They are no longer about a gesture:
+ * when she STARTS a session that sits elsewhere in the week, the days are rewritten so the record
+ * matches what she actually did. **Observation stays; assignment is what left.**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-describe('⛔ where a dragged row lands', () => {
-  /* A real week: Monday open (tall), the rest closed, Tuesday and Thursday resting (short). */
-  const rows: MeasuredRow[] = [
-    { day: 'sun', y: 0, height: 44 },
-    { day: 'mon', y: 44, height: 150 }, // the open row
-    { day: 'tue', y: 194, height: 38 },
-    { day: 'wed', y: 232, height: 44 },
-    { day: 'thu', y: 276, height: 38 },
-    { day: 'fri', y: 314, height: 44 },
-    { day: 'sat', y: 358, height: 44 },
-  ];
-
-  it('lands on the row whose band holds the centre', () => {
-    expect(dropTarget(rows, 10)).toBe('sun');
-    expect(dropTarget(rows, 120)).toBe('mon');
-    expect(dropTarget(rows, 250)).toBe('wed');
-    expect(dropTarget(rows, 380)).toBe('sat');
-  });
-
-  it('⛔ a uniform row height would have got this wrong', () => {
-    /*
-     * The bug this exists to prevent, made concrete. At 44 px a row, a centre of 250 is "row 5" —
-     * Thursday. It is Wednesday, because the open row above it is 150 px tall. The two answers
-     * differ by a day, on the commonest layout the board has.
-     */
-    expect(Math.floor(250 / 44)).toBe(5);
-    expect(rows[5].day).toBe('fri');
-    expect(dropTarget(rows, 250)).toBe('wed');
-  });
-
-  it('⚠️ a drop past either end clamps rather than doing nothing', () => {
-    // Refusing them would make Sunday and Saturday the two hardest days to reach.
-    expect(dropTarget(rows, -80)).toBe('sun');
-    expect(dropTarget(rows, 9000)).toBe('sat');
-  });
-
-  it('⚠️ a drop in the seam between two rows belongs to the nearer one', () => {
-    const gapped: MeasuredRow[] = [
-      { day: 'sun', y: 0, height: 40 },
-      { day: 'mon', y: 60, height: 40 },
-    ];
-    expect(dropTarget(gapped, 48)).toBe('sun');
-    expect(dropTarget(gapped, 56)).toBe('mon');
-  });
-
-  it('⚠️ a column with no days at all cannot be dropped on', () => {
-    // Week one: the rows are NUMBERED, there are no weekdays, and dragging must mean nothing.
-    expect(dropTarget([{ y: 0, height: 44 }, { y: 44, height: 44 }], 20)).toBeNull();
-    expect(dropTarget([], 20)).toBeNull();
-  });
-
-  it('the two halves compose — a measured drop resolves to a real move', () => {
-    const target = dropTarget(rows, 250)!;
-    const out = moveWorkoutToDay([{ id: 'a', day: 'mon' }, { id: 'b', day: 'wed' }], 'a', target)!;
-    expect(out.a).toBe('wed');
-    expect(out.b).toBe('mon');
-  });
-});

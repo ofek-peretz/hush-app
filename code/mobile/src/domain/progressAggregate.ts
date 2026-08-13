@@ -56,6 +56,18 @@ export interface ProgressAggregate {
   kcal: number;
   /** Lifetime cardio distance in kilometres. */
   cardioKm: number;
+  /**
+   * ⛔ LIFETIME MINUTES UNDER THE BAR AND ON THE ROAD (founder, 2026-08-12: *"כמה זמן בשעות הוא עשה
+   * מבחינת אימונים בסך הכל"*).
+   *
+   * `sessionDurationMs` was already computed on every session — the kcal estimate has needed it
+   * since the day it was written — and thrown away. **The one fact she can never get back is the
+   * only one this screen was not keeping.**
+   *
+   * ⚠️ MINUTES, NOT HOURS, AND ROUNDED AT THE EDGE. Storing hours would round every session to the
+   * nearest one and lose a third of a short workout each time; the screen divides.
+   */
+  minutes: number;
   /** Tonnes moved per training week, oldest → newest — the area graph's series. */
   weeklyTonnes: number[];
 }
@@ -82,13 +94,16 @@ export function progressAggregate(
   let liftedKg = 0;
   let workouts = 0;
   let kcal = 0;
+  let ms = 0;
   let raises = 0;
   const best = new Map<string, number>(); // exerciseId → best actual load seen so far
 
   for (const s of hist) {
     liftedKg += sessionTonnageKg(s);
     if (s.trained !== false) workouts += 1;
-    const k = sessionKcal(s, sessionDurationMs(s), weightKg);
+    const dur = sessionDurationMs(s);
+    ms += dur;
+    const k = sessionKcal(s, dur, weightKg);
     if (k != null) kcal += k;
 
     // Raises — a lift that, this session, exceeded its own all-time peak load. One per lift per session.
@@ -110,6 +125,8 @@ export function progressAggregate(
   for (const c of cardio ?? []) {
     cardioKm += c.distanceKm || 0;
     if (c.calories) kcal += c.calories;
+    // A run is time she trained. Counting only the lifting would say a marathon week was 0 hours.
+    if (c.durationSec) ms += c.durationSec * 1000;
   }
 
   // Weekly-volume series: tonnage bucketed by the Saturday-20:30 training week, from the account's
@@ -131,6 +148,7 @@ export function progressAggregate(
     raises,
     kcal,
     cardioKm: +cardioKm.toFixed(1),
+    minutes: Math.round(ms / 60_000),
     weeklyTonnes,
   };
 }

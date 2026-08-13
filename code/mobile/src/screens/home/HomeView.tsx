@@ -176,26 +176,39 @@ export interface HomeViewProps {
    * ⛔ SHE DRAGGED ONE ONTO ANOTHER DAY (founder 2026-08-05). Absent = the board is read-only,
    * which is what week one is: with no pattern the rows are numbered and there are no days.
    */
-  onMoveToDay?: (id: string, day: Weekday) => void;
+  /* ⛔ `onMoveToDay` IS DELETED (founder 2026-08-12) — the numbered column has no day to drop onto.
+     See `WeekColumn`, which carries the argument and the measurement. */
   /** Hush's sentence(s) about what it did to this week's plan (domain/weekBriefing). Held for the
    *  WHY surface the change pill opens; null while the engine's record is still being read. */
   brief: Line[] | null;
   /** How many lifts the engine changed this week — the count on the moss pill beside the title.
    *  Null / 0 in a steady week, where no pill shows. */
   /** The coach's name for the programme she is on. Null until it has named one. */
-  programTitle?: string | null;
-  /**
-   * The coach's reason for the whole programme — its `why`.
-   *
-   * ⚠️ OPTIONAL AND OFTEN ABSENT: an older plan carries no `why`, and a blank line where a reason
-   * should be reads as a failure rather than as a plan that predates the field.
+  /*
+   * ⛔ `programTitle` IS DELETED (founder 2026-08-12): *"תוריד את שם התוכנית."* It was the screen's
+   * headline from 2026-08-04 and 50px of the first fold saying the same sentence every morning.
+   * The name lives where it is news — `ProgramCreated`, the day it is made.
    */
-  programWhy?: string | null;
+  /*
+   * ⛔ `programWhy` IS DELETED (2026-08-12). It carried `coachPlan.why` — the coach's paragraph about
+   * the whole programme — and `domain/enginePlan` leaves `why` deliberately absent (R7: Hush never
+   * states a reason it did not measure). Null on every device since the engine took the week.
+   */
+  /**
+   * ⛔ THE ENGINE'S OWN SENTENCE ABOUT WHAT HER WEEK COULD NOT DO — `domain/weekNotice`.
+   *
+   * Distinct from the coach's `why` (deleted above): this is the ENGINE
+   * saying it could not fit her hour, could not fill it, or could not feed every muscle she left on
+   * — three facts it has stamped on the days for a long time and told nobody but telemetry.
+   */
+  notice?: string | null;
   /**
    * The weekdays she trains on, or absent while the pattern is still being earned.
    * Absent → the column NUMBERS its rows instead (see `WeekColumn`), which is week one.
    */
-  trainingDays?: Set<Weekday> | null;
+  /* ⛔ `trainingDays` IS DELETED (founder 2026-08-12): *"אמרנו שזה לא יופיע כימים אלא כN אימונים."*
+     The derivation is still right and still lives in `domain/trainingDays`; Today simply does not
+     draw a calendar out of it. */
   briefCount: number | null;
   /** This week's update has not been opened yet — the pill wears a small unseen dot. */
   briefUnseen: boolean;
@@ -206,18 +219,21 @@ export interface HomeViewProps {
   /** Workouts left in the free trial — one quiet line under the act; absent once the trial is over
    *  or the athlete is a member. */
   trialLeft?: number | null;
-  /** Open the account surface (the You tab) — the avatar opposite the wordmark. */
-  /** Open the SHARE surface — the two-figure door opposite the wordmark (v7 2.1). */
-  /** Open the coach — the conversation, from the corner of the first screen she sees. */
-  onCoach?: () => void;
-  /** Open the plan-share door. Reached from the You tab now; Today's corner is the coach's. */
+  /*
+   * ⛔ `onCoach` IS DELETED (founder 2026-08-12). The corner door it drew had no caller in the app —
+   * only the dev fixture — so the prop's whole remaining function was to let a harness invent a
+   * control the product does not have. See the brand row.
+   */
+  /** Open the plan-share door. Reached from the You tab; nothing stands in Today's corner now. */
   onShare?: () => void;
 
   // ── RECOVERY, v7 3.5 "THE WEEK IS DONE" — all optional, all best-effort. Absent → the section
   //    simply does not draw (the closing verdict still reads from the seal + copy alone).
   /** Sun→Sat (7), each day of THIS week: trained (a session logged) and whether it is today. The
    *  strip lands day by day — trained days wear the moss check, rest days a dashed ring. */
-  weekDays?: { trained: boolean; today: boolean }[];
+  /* ⛔ `weekDays` IS DELETED (founder 2026-08-12). It fed the seven-mark day strip on the
+     week-complete state; the week is N workouts everywhere on this screen now, and the ledger that
+     replaced the strip reads `workouts` like the active face does. */
   /** The week's facts band: tonnage moved, calories, loads the engine raised. kcal null → omitted. */
   weekStats?: { tonnes: number; kcal: number | null; loadsUp: number } | null;
   /** The workout that opens the next week (rotation's first) — named, without a fabricated load. */
@@ -278,39 +294,29 @@ export function HomeView(props: HomeViewProps) {
             <RangeMark />
             <Text style={styles.wordmark}>hush</Text>
           </View>
-          {/* ════ THE DOOR OPPOSITE THE WORDMARK IS THE COACH (founder 2026-08-01) ════
-              It held the share glyph, and before that an initial in a circle. It is the coach now,
-              and the founder's reason for putting it HERE rather than in the tab bar is the whole
-              product's positioning in one sentence:
+          {/*
+            ════ ⛔ THE CORNER DOOR IS GONE, AND IT HAD ALREADY LEFT THE PRODUCT ════
 
-                > *"I don't want to put the AI in the tab bar, because that would signal hardest of
-                > all that we're just another AI app — when we really, really aren't."*
+            FOUNDER, 2026-08-12: *"ומה זה החלונית של הAI למעלה, אתה ממליץ להשאיר אותה? כרגע זה לא
+            מובן."* The answer is not a recommendation — it is a measurement. **`Home.tsx` has never
+            passed `onCoach`.** The route it opened (`Coach`) was deleted on 2026-08-11 with
+            `CoachScreen`, and this block is `props.onCoach ? … : null`, so on a real device the
+            speech bubble has not been drawn since. The only thing still handing it a function was
+            the gallery fixture — which is why he could see it and nobody else could.
 
-              Which is exactly right. A tab is a section of an app; this is not a section, it is who
-              decides everything the rest of the app shows. A door in the corner is what a coach
-              gets: available from the first screen, always, and announcing nothing.
+            ⚠️ THAT IS THE SECOND TIME THIS EXACT HARNESS LIE HAS COST A REVIEW. `1.5` mounted a
+            `model: {}` that the app never has, and now Today mounted a coach door the app never
+            has. **A fixture that supplies something the product does not is not a convenience —
+            it is a screen nobody can act on**, and the founder spent one of his notes on a control
+            that was not there.
 
-              Sharing moved to the You tab rather than being deleted — it was the only way into it.
-
-              ⚠️ AND THE GLYPH WAS STILL THE SHARE GLYPH. `twoPeople` is two figures over two
-              shoulders, drawn for exactly one job: "send this to another person". Left in the
-              corner it did not read as a neutral placeholder, it read as the door it used to be —
-              the one thing this door can no longer do. A bubble says the plain true thing (something
-              here talks) without saying the forbidden one: no sparkle, no robot, nothing that makes
-              the corner announce an AI in an app whose whole positioning is that it is not one.
-
-              ⏸️ Still a placeholder — the founder is drawing this in Claude Design. */}
-          {props.onCoach ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('coach.title')}
-              hitSlop={10}
-              onPress={props.onCoach}
-              style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
-            >
-              <Icon name="speech" size={21} color={signal[0]} strokeWidth={2.1} />
-            </Pressable>
-          ) : null}
+            What it USED to be, kept because the argument is still binding on whatever stands here
+            next: the founder put the coach in the corner rather than the tab bar — *"I don't want
+            to put the AI in the tab bar, because that would signal hardest of all that we're just
+            another AI app."* A tab is a section; that was not a section. Nothing occupies the
+            corner now, and nothing should occupy it by default: the AI has one job (`theAiHasOneJob`)
+            and it is reached from the import screen.
+          */}
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -365,7 +371,7 @@ export function HomeView(props: HomeViewProps) {
               >
                 <View style={styles.sealCore}>
                   <Text style={styles.sealCount}>{`${total}/${total}`}</Text>
-                  <Legend size={11} tone="muted">{t('home.sessionsLabel')}</Legend>
+                  <Legend size={17} tone="muted">{t('home.sessionsLabel')}</Legend>
                 </View>
                 <View style={styles.sealBadge}>
                   <Icon name="check" size={11} color={color.up} strokeWidth={3} />
@@ -374,38 +380,58 @@ export function HomeView(props: HomeViewProps) {
 
               <Display style={styles.restTitle}>{t('home.restTitle')}</Display>
 
-              {/* THE WEEK, as seven marks — trained days wear the moss check, rest days a dashed ring,
-                  today ringed in moss. Absent (the test path) → the strip simply does not draw. */}
-              {props.weekDays?.length ? (
-                <View style={styles.strip}>
-                  {props.weekDays.map((day, i) => (
-                    <View key={i} style={styles.stripCol}>
-                      <View
-                        style={[
-                          styles.stripDot,
-                          day.trained ? styles.stripDotOn : styles.stripDotOff,
-                          day.today && styles.stripDotToday,
-                        ]}
-                      >
-                        {day.trained ? <Icon name="check" size={13} color={color.onAccent} strokeWidth={2.8} /> : null}
-                      </View>
-                      <Text style={[styles.stripLabel, day.today && styles.stripLabelToday]}>{weekdayShort(i)}</Text>
+              {/*
+                ════ ⛔ THE SEVEN-MARK DAY STRIP IS GONE, AND THE MEASUREMENT IS THE WHOLE ARGUMENT ════
+
+                FOUNDER, 2026-08-12, on whether it should follow the N-workouts ruling off this
+                screen: *"נותן לך את זכות הבחירה לזה."*
+
+                It goes, and not on consistency — on a self-contradiction I could measure. The seal
+                says **4/4** at y=149. Two hundred and thirty-one pixels below it, the strip drew
+                **three dashed empty rings**. A dashed ring is the visual language of a slot waiting
+                to be filled; three of them under a headline that says the week is complete is the
+                screen telling her she finished everything and then drawing three holes.
+
+                ⚠️ I ARGUED FOR KEEPING IT ONE MESSAGE EARLIER, on tense — the week is over, so those
+                are days she trained rather than days she owes. That reasoning is sound and it is not
+                how a strip of dots is read. **Nobody parses tense out of seven circles.**
+
+                ── WHAT REPLACES IT, AND WHY IT IS NOT JUST A DELETION ─────────────────────────────
+                Her four workouts, named, each with its check. It is the same vocabulary the active
+                Today now speaks (`WeekColumn`), so the two faces of this screen stop disagreeing
+                about what a week is — and it says the thing weekdays could not: **what she did.**
+                "Upper A, Lower A, Upper B, Lower B" is what an athlete remembers about a finished
+                week. "Sunday, Tuesday, Thursday, Saturday" is what a calendar remembers.
+              */}
+              {props.workouts?.length ? (
+                <View style={styles.doneList}>
+                  {props.workouts.map((w, i) => (
+                    <View key={w.id} style={[styles.doneRow, i > 0 && styles.doneRowRuled]}>
+                      <Text style={styles.doneIndex}>{String(i + 1).padStart(2, '0')}</Text>
+                      <Text style={styles.doneName} numberOfLines={1}>{bidi(w.name)}</Text>
+                      {/* ⚠️ THE CHECK FOLLOWS THE WORKOUT, NOT THE SCREEN. A week can close with a
+                          session unfinished — she trained three of four and Saturday came — and
+                          ticking every row because the week rolled over would be the app claiming a
+                          workout she did not do, on the screen that congratulates her. */}
+                      {w.done ? (
+                        <Icon name="check" size={17} color={color.up} strokeWidth={2.6} />
+                      ) : (
+                        <View style={styles.doneMissing} />
+                      )}
                     </View>
                   ))}
                 </View>
               ) : null}
 
-              {/* the rest note — the coach's serif in italic, a moss range-mark opening it */}
-              <View style={styles.restNote}>
-                <View style={styles.restNoteMark}>
-                  <View style={styles.restNoteBar} />
-                  <View style={[styles.restNoteTick, styles.markTickStart]} />
-                  <View style={[styles.restNoteTick, styles.markTickEnd]} />
-                </View>
-                <Text style={styles.restNoteText}>
-                  {props.name ? t('home.restSubNamed', { name: bidi(props.name) }) : t('home.restSub')}
-                </Text>
-              </View>
+              {/*
+                ⛔ THE REST NOTE IS DELETED (founder, 2026-08-12): *"תמחק את המשפט … ואז זה יתן יותר
+                מקום וחלל במסך."*
+
+                It read *"Muscle is built on days like this. Nothing is scheduled — that's the
+                program working."* — true, and it is the one thing on this screen she does not need
+                told. **The seal says 3/3 and the ledger names all three**; a paragraph explaining
+                that a finished week is a good thing is the screen talking over its own evidence.
+              */}
 
               {/* the week's facts — moved · kcal · loads up (mono figures, sans labels) */}
               {props.weekStats ? (
@@ -440,85 +466,64 @@ export function HomeView(props: HomeViewProps) {
                   the rest state's; it is not the engine claiming a calendar (register L7). What is
                   up next is still the queued workout, whatever day it is opened on. */}
               {/*
-                ⛔ THE PROGRAMME'S NAME REPLACES THE WEEKDAY EYEBROW (founder 2026-08-04).
-                
-                The line read "MONDAY · UP NEXT", which is two facts she already has: her phone shows
-                the day, and the whole screen is what is next. Naming the PROGRAMME here costs the
-                same pixels and answers a question nothing else on the screen does — what am I on?
+                ════ ⛔ THE HIERARCHY WAS UPSIDE DOWN, AND THE MEASUREMENT SAYS SO ════
 
-                ⚠️ Falls back to the old line when the coach has not named it, because `title` is
-                optional and an empty eyebrow is worse than a redundant one.
+                FOUNDER, 2026-08-12: *"המסך הזה צריך עיצוב כולל מחדש … יש לך יד חופשית."*
+
+                The largest type on Today was the PROGRAMME NAME — 38px serif, three lines, 84
+                pixels of the first fold. It reads *"Upper / Lower · 4 days a week · leading with
+                Chest"*, and **it says exactly that every single morning for the life of the
+                programme.** The thing she opened the app for — Upper B, six lifts, fifty-five
+                minutes — was 23px, third row down, inside a container.
+
+                **A screen should be biggest where it changes.** The name is identity: worth
+                stating, in the serif, because it is the name of a made object — and worth stating
+                ONCE, small. So it drops to a supporting line and the queued workout takes the
+                headline in `WeekColumn`.
+
+                ⚠️ THIS DEMOTES SOMETHING HE ASKED FOR ON 2026-08-04, and it is the same argument he
+                made then, applied one level further. What he was fixing was Home leading with
+                *"MONDAY · UP NEXT"* — a fact she already had. A name that never changes is the same
+                fault at a larger size: it is not news, and news is what a daily screen is for.
               */}
               {/*
-                ⛔ REBUILT 2026-08-04 — THE PROGRAMME TAKES THE HEADLINE AND THE WEEK BECOMES A WEEK.
-
-                The founder, on the drawn proposal: *"you're right that the way I chose is like a
-                to-do list."* Home used to open on the QUEUED WORKOUT, with the week reduced to a
-                horizontal strip of chips and no days in it at all — so the two questions an athlete
-                opens the app with (*what am I on?* and *where am I in the week?*) were both
-                unanswerable, while the one she already knew (*what is today called?*) took the
-                largest type on the screen.
-
-                Now the eyebrow states the week's shape, the headline is the PROGRAMME the coach
-                named, its reason sits under it in the coach's own serif, and the week is a column
-                she can read down. The queued workout keeps everything it had — it is the row that
-                opens (`WeekColumn`), and it holds the lifts.
+                ⛔ THE EYEBROW IS THE WEEK NUMBER, AND NOTHING ELSE (founder 2026-08-12).
+                It read "WEEK 11 · 2 OF 4 DONE", and the four cards underneath say "2 of 4" by
+                having checks on two of them. **A screen that states a fact its own content already
+                draws is spending the top of the fold on a caption.**
               */}
               <Legend track={0.18}>
                 {props.weekNumber != null && props.workouts.length > 0
-                  ? t('home.programEyebrow', { week: props.weekNumber, count: props.workouts.length })
+                  ? t('home.weekLabel', { n: props.weekNumber })
                   : `${restWeekday} · ${t('home.upNext')}`}
               </Legend>
 
-              {props.programTitle ? (
-                <Text style={styles.programName} numberOfLines={2}>{bidi(props.programTitle)}</Text>
+              {/*
+                ⛔ WHAT THE WEEK COULD NOT DO (founder 2026-08-12). Not the coach's paragraph above —
+                the engine's own honest sentence about her INPUTS: a day past her minutes, a day her
+                map cannot fill, a muscle two days a week cannot feed. `domain/weekNotice` picks the
+                one that matters and every version of it carries the remedy, which is hers.
+
+                ⚠️ SET IN THE READING VOICE, NOT AS A WARNING. It is a fact about a choice she made,
+                with something she can do about it — clay is for pain and destructive confirms and
+                appears nowhere near it.
+              */}
+              {props.notice ? (
+                <Text style={styles.weekNotice}>{props.notice}</Text>
               ) : null}
 
               {/*
-                ⛔ THE COACH'S REASON FOR THE WHOLE PROGRAMME. Written by it, stored, sent back to it
-                every week — and drawn on exactly one screen, the one right after onboarding, which
-                she sees once and never again. It is the difference between a programme and a list.
+                ⛔ THE LEGACY TITLE ROW IS DELETED (founder 2026-08-12).
+
+                It drew `dayName` at 54px with the week's change pill beside it, and it was mounted
+                only *"when the coach has NOT named the programme"* — a fallback from the era when
+                the headline was the programme's name. Taking that name off Today made the fallback
+                condition **always true**, so for one commit the screen carried its queued workout
+                twice: once here at 54, once on the card that is now the subject of the screen.
+
+                ⚠️ CAUGHT BY READING THE BRANCH I HAD JUST ORPHANED, not by a test — every law here
+                asserts what IS drawn, and none of them objects to a thing being drawn twice.
               */}
-              {props.programWhy ? (
-                <Text style={styles.programWhy} numberOfLines={3}>{props.programWhy}</Text>
-              ) : null}
-
-              {/* legacy title row — kept mounted only when the coach has NOT named the programme,
-                  so an older plan still leads with the workout it is offering rather than nothing. */}
-              {props.programTitle ? null : (
-              <View style={styles.titleRow}>
-                {/*
-                  ⛔ TWO LINES, NOT ONE (founder 2026-08-03): *"on the TODAY screen it writes 'upper
-                  bo…' — the whole sentence isn't on the screen."*
-
-                  It was clamped to one line at 54px. That was survivable when the day's name came
-                  from our own short split table ("Upper A"); the COACH names sessions in words, in
-                  her language, and "פלג גוף עליון" does not fit on one 54px line beside a change
-                  pill. The first thing she reads each day was an ellipsis.
-
-                  Same fix and the same reason as the lift names below (A.15): the name is the one
-                  string on this screen that must never be cut, because it is what tells her what
-                  today IS.
-                */}
-                <Text style={styles.title} numberOfLines={2}>{bidi(props.dayName ?? '')}</Text>
-                {props.briefCount != null && props.briefCount > 0 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('home.briefChanges', { count: props.briefCount })}
-                    hitSlop={8}
-                    onPress={props.onWeeklyUpdate}
-                    style={({ pressed }) => [styles.changePill, pressed && styles.pressedDim]}
-                  >
-                    {props.briefUnseen ? <View style={styles.changeDot} /> : null}
-                    {/* The pill says the fact — "3 CHANGES". The screen reader gets the longer
-                        sentence above, where there is room for "this week". */}
-                    <Legend size={11.5} track={0.08} weight="semibold" tone="accent">
-                      {t('home.briefChangesShort', { count: props.briefCount })}
-                    </Legend>
-                  </Pressable>
-                ) : null}
-              </View>
-              )}
 
               {/* The shape of the session, one line — "6 LIFTS · ~55 MIN".
 
@@ -543,35 +548,15 @@ export function HomeView(props: HomeViewProps) {
               <WeekColumn
                 workouts={props.workouts}
                 selectedId={props.dayId ?? props.workouts.find((w) => w.name === props.dayName)?.id ?? null}
-                days={props.trainingDays}
                 onChoose={props.onChooseWorkout}
-                onMoveToDay={props.onMoveToDay}
                 changes={props.briefCount}
                 onChanges={props.onWeeklyUpdate}
                 inert={!!props.resumable}
-                shape={
-                  liftCount
-                    ? props.planTimeUnknown
-                      ? t('home.planShapeNoTime', { lifts: liftCount })
-                      : t('home.planShape', { lifts: liftCount, min: props.planMinutes || 0 })
-                    : null
-                }
+                /* ⛔ `shape` IS NOT PASSED (2026-08-12). It composed the queued card's line from
+                   `plan`, while every other card composed its own from its `items`/`minutes` — two
+                   derivations of one fact, caught disagreeing in the harness on the first mount.
+                   Every card answers for itself now. See `WeekColumn.shapeOf`. */
               >
-
-              {/*
-                ⛔ THE LIFT TABLE LEFT THIS SCREEN (founder 2026-08-05): *"you cannot see that there
-                are other workouts besides the first one, because the rest are hidden in the scroll
-                below."*
-
-                The card was tall because it printed all six lifts — and THAT is what pushed
-                workouts 02, 03 and 04 under the fold, not the number of workouts. So the table
-                moved to `screens/plan/PreWorkout`, the screen she opens once she has decided to
-                train, where it arrives with the coach's reasoning attached. Today is a week she can
-                see in one screen again.
-
-                ⚠️ Nothing is behind a tap that was not already: every row of the column opens that
-                card, including this one.
-              */}
 
               {/* S-3 · the day genuinely cannot fit her minutes. The engine has already cut everything
                   it legally can (a muscle's last lift is protected), so it says so plainly and offers
@@ -584,6 +569,28 @@ export function HomeView(props: HomeViewProps) {
               ) : null}
 
               </WeekColumn>
+
+              {/*
+                ════ ⛔ AND THEN IT LEFT AGAIN, THE SAME DAY, AND HE WAS RIGHT TWICE ════
+
+                FOUNDER, 2026-08-12: *"למה במסך הTODAY יש גם את הימים וגם את תוכנית האימון שמוצגת
+                למטה, וגם יש מסך PREWORKOUT?"*
+
+                Because I put it there. I found `HomeView` never calling the `onForm` it was handed —
+                three sheets behind a door that did not exist — and I fixed that by drawing the whole
+                lift table on Today, then justified the duplication with a distinction he never asked
+                for ("Today is the queued workout, PreWorkout is any other"). **That distinction was
+                built to defend the thing I had just done**, which is the tell.
+
+                One workout's contents belong in ONE place, and his vision names it: the week is a
+                sequence, and pressing a workout raises a sheet from the bottom holding it. So the
+                table is gone from here and `PreWorkout` is that sheet (`Root.tsx`, presentation:
+                'modal'). Today is the week and nothing else.
+
+                ⚠️ THE REAL FINDING SURVIVES AND IS NOT LOST IN THE REVERSAL: the wedge's door was
+                shut, and it is open now on the surface that owns the lifts. `theWedgeLandsBeforeSheTrains`
+                asserts it there.
+              */}
 
               {props.startError ? <Body tone="secondary" style={styles.error}>{t('errors.general')}</Body> : null}
 
@@ -628,9 +635,15 @@ export function HomeView(props: HomeViewProps) {
                 />
               ) : null}
 
-              {/* the trial — one quiet mono line under the act, gone when the trial is */}
+              {/* the trial — one quiet mono line under the act, gone when the trial is.
+
+                  ⛔ TRACKING 0.1 → 0.04 (founder's screenshot, 2026-08-12). At 17px with 0.1 em of
+                  tracking, "4 WORKOUTS LEFT IN YOUR TRIAL" broke across two lines with **TRIAL alone
+                  on the second** — a widow, centred, directly under the one act on the screen.
+                  Uppercase tracked type is what pushed it over; the type floor is not negotiable, so
+                  the tracking is what gives way. */}
               {props.trialLeft != null && props.trialLeft > 0 && !props.dayDone ? (
-                <Legend size={11} track={0.1} align="center" style={styles.trialLine}>
+                <Legend size={17} track={0.04} align="center" style={styles.trialLine}>
                   {t('home.trialLeft', { count: props.trialLeft })}
                 </Legend>
               ) : null}
@@ -682,18 +695,22 @@ function whatIsLeftFirst(workouts: HomeWorkoutOption[]): HomeWorkoutOption[] {
 }
 
 
-/** The short weekday label for the day strip's column i (0 = Sunday), in the active locale. */
-function weekdayShort(i: number): string {
-  // 2023-01-01 was a Sunday; add i days to land on that column's weekday.
-  return new Date(2023, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase();
-}
 
 /** One fact of the week's band — a mono figure over its sans meta label (MOVED / KCAL / LOADS UP). */
+/**
+ * ⛔ ONE FACT, ONE ROW (founder, 2026-08-12): *"תן למשקל שהורם, לקלוריות ולהעלאות כל שורה משל עצמו
+ * אבל תעצב את זה יפה כי יהיה לך הרבה מקום."*
+ *
+ * They shared a 12-point band, three abreast, under a paragraph that has now gone — so the space
+ * the deletion freed goes to the three facts that were crowded by it. The figure leads the row and
+ * its name closes it, ruled, in the same shape the finish poster's facts take: two screens that
+ * report a week and a session should not report them in two different languages.
+ */
 function RestFact({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
     <View style={styles.restFact}>
       <Text style={[styles.restFactVal, accent && styles.restFactValUp]}>{value}</Text>
-      <Legend size={11} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
+      <Legend size={20} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
     </View>
   );
 }
@@ -711,7 +728,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12,
     borderWidth: 1, borderColor: color.borderControl,
   },
-  easeAnswerText: { fontFamily: font.sans, fontSize: 14, color: color.textPrimary },
+  easeAnswerText: { fontFamily: font.sans, fontSize: 17, color: color.textPrimary },
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
 
@@ -732,22 +749,16 @@ const styles = StyleSheet.create({
   markTickStart: { start: 0 },
   markTickEnd: { end: 0 },
   // ════ THE SHARE DOOR IS A CONTROL, SO IT LOOKS LIKE ONE (founder A.8) ════
-  // "The two-people icon is swallowed by the background — effectively invisible."
-  //
-  // It was NOT the colour: the glyph is lit moss on a near-black stage, which is about as much
-  // contrast as this palette has. It was that a 1.8-weight outline floating in a bare corner with
-  // no surface under it does not register as a THING TO PRESS — the eye reads it as decoration
-  // beside the wordmark and moves on. The fill it used to have was removed on the argument that a
-  // ring would compete with the range-mark opposite; a WASH does not compete, it just gives the
-  // glyph a body. The stroke goes up with it, because a hairline is what got swallowed.
-  shareDoor: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: color.fillSubtleStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /*
+   * ⛔ `shareDoor` GOES WITH THE DOOR IT DRESSED (2026-08-12) — see the brand row.
+   *
+   * Its note is kept, because the RULE it won is general and the next thing put in that corner has
+   * to obey it: *"the two-people icon is swallowed by the background — effectively invisible."* It
+   * was never the colour. A 1.8-weight outline floating in a bare corner with no surface under it
+   * does not register as a thing to press; the eye reads it as decoration beside the wordmark and
+   * moves on. A control needs a BODY — a wash, not a ring, which would compete with the range-mark
+   * opposite.
+   */
   avatar: {
     width: 36,
     height: 36,
@@ -756,29 +767,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontFamily: font.sansSemibold, fontSize: 14, color: color.textPrimary, textAlign: 'center' },
+  avatarText: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
 
   // v7 2.1: the page's own gutter is 30; only the ACT drops to 26 (see `cta`).
   // flexGrow so the ACT can sit at the foot of a short page (the handoff's `margin-top:auto`)
   // while a long one still scrolls.
   scroll: { flexGrow: 1, paddingHorizontal: 30, paddingTop: 22, paddingBottom: 8 },
-  block: { gap: 13 },
+  /* `flex: 1` so the week column below has a height to centre inside. */
+  block: { flex: 1, gap: 13 },
   pressedDim: { opacity: 0.62 },
 
   // ── the title row ──
   /*
-   * ⚠️ 38, NOT THE 54 THE WORKOUT NAME USED TO TAKE. A programme is named in words the coach chose
-   * ("Shoulders, rebuilt" / "כתפיים, מהיסוד") and it has to survive two lines in Hebrew without
-   * pushing the week below the fold. The founder's floor is that nothing be SMALL; this is the
-   * largest type on the screen and stays it.
+   * ⛔ `programWhy` IS DELETED WITH ITS PROP (2026-08-12). It drew `coachPlan.why` — a paragraph the
+   * engine does not write and never will (R7, `domain/enginePlan`), so it was null on every device
+   * and the only place it was ever seen was a gallery fixture that invented one.
    */
-  programName: { fontFamily: font.serif, fontSize: 38, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
-  programWhy: {
-    marginTop: 8,
-    fontFamily: font.serif,
-    fontSize: 16,
-    lineHeight: 23,
-    color: color.textSecondary,
+  /* The engine's own note. Sans rather than the coach's serif — it is a fact about her inputs, not
+     a voice speaking to her, and the two must not be mistaken for each other. */
+  weekNotice: {
+    marginTop: 10,
+    fontFamily: font.sans,
+    fontSize: 17,
+    lineHeight: 20,
+    color: color.textMuted,
     textAlign: 'left',
   },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
@@ -846,7 +858,7 @@ const styles = StyleSheet.create({
   /** The weekday, quieter than the name it sits beside: a label, not the thing she is choosing. */
   chipDay: {
     fontFamily: font.sans,
-    fontSize: 13,
+    fontSize: 17,
     letterSpacing: 0.6,
     color: color.textMuted,
     // The day reads in the athlete's own direction, like every other word on this page.
@@ -863,20 +875,24 @@ const styles = StyleSheet.create({
   // Pinned under the scroller (B.5). The 26 px gutter every primary button in the product
   // sits at — reached directly now rather than by walking back out of the page's 30.
   cta: { paddingHorizontal: 26, paddingTop: 18, paddingBottom: 6, gap: 12 },
-  trialLine: { marginTop: 4 },
+  trialLine: { marginTop: 4, paddingHorizontal: 4 },
 
   // ── recovery (v7 3.5 "THE WEEK IS DONE") ──
   restBlock: { paddingTop: 6, alignItems: 'center' },
   restEyebrow: { marginBottom: 15 },
 
   // the seal — a big dashed ring, its core the N/N count, a moss check at the crown
+  /* ⛔ THE RING WAS INVISIBLE (founder, 2026-08-12): *"את העיגול בחלק העליון תן לו צבע, לא רואים
+     בכלל ש-3/3 מוקף בעיגול."* A 1.5-point dashed hairline in `borderStrong` on black is a texture,
+     not a ring — and it is the SEAL: the one mark on this screen that says the week closed. Moss,
+     at 2.5, in the product's own finished colour. */
   sealRing: {
     width: 158,
     height: 158,
     borderRadius: 79,
-    borderWidth: 1.5,
+    borderWidth: 2.5,
     borderStyle: 'dashed',
-    borderColor: color.borderStrong,
+    borderColor: color.up,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -907,15 +923,17 @@ const styles = StyleSheet.create({
 
   restTitle: { marginTop: 15, textAlign: 'center' },
 
-  // the seven-mark week strip
-  strip: { flexDirection: 'row', gap: 9, marginTop: 16 },
-  stripCol: { alignItems: 'center', gap: 5 },
-  stripDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  stripDotOn: { backgroundColor: color.up },
-  stripDotOff: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: color.borderStrong },
-  stripDotToday: { borderWidth: 3, borderStyle: 'solid', borderColor: color.upWash },
-  stripLabel: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 13, letterSpacing: 0.4, color: color.textMuted, textAlign: 'center' },
-  stripLabelToday: { fontFamily: font.monoSemibold, color: color.up }, // rtl-ok: merged onto stripLabel, which sets textAlign:'center'
+  /* The week she finished, named — the ledger that replaced the seven-day strip. Left-aligned
+     inside a centred column on purpose: it is a LIST of things done, and a centred list has no
+     edge for the eye to run down. */
+  doneList: { alignSelf: 'stretch', marginTop: 22, paddingHorizontal: 4 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  doneRowRuled: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
+  doneIndex: { width: 26, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, letterSpacing: 0.8, color: color.textMuted, textAlign: 'left' },
+  doneName: { flex: 1, fontFamily: font.sans, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
+  /* A workout the week closed without: the check's own space, held empty. Not a cross and not a
+     dash — nothing failed, and the row is a record rather than a verdict. */
+  doneMissing: { width: 15, height: 15 },
 
   // the italic-serif rest note, opened by a moss range-mark
   restNote: {
@@ -931,28 +949,32 @@ const styles = StyleSheet.create({
   restNoteMark: { width: 18, height: 8, marginTop: 8 },
   restNoteBar: { position: 'absolute', start: 0, end: 0, top: 3.5, height: 1.5, backgroundColor: color.up },
   restNoteTick: { position: 'absolute', top: 0, width: 1.5, height: 8, backgroundColor: color.up },
-  restNoteText: { flex: 1, fontFamily: font.serif, fontStyle: 'italic', fontSize: 16.5, lineHeight: 24, color: color.textPrimary, textAlign: 'left' },
+  restNoteText: { flex: 1, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 24, color: color.textPrimary, textAlign: 'left' },
 
   // the week's facts band
   statBand: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignSelf: 'stretch',
-    marginTop: 18,
-    paddingVertical: 12,
+    marginTop: 26,
     borderTopWidth: 1,
     borderTopColor: color.border,
+  },
+  restFact: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: color.border,
   },
-  restFact: { gap: 2 },
-  restFactVal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
+  /* 22 → 44, with the room the deleted paragraph freed. These are the week's three measured facts
+     and they were set at the size of the label beside them. */
+  restFactVal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 44, lineHeight: 50, letterSpacing: -1, includeFontPadding: false, color: color.textPrimary, textAlign: 'left' },
   restFactValUp: { color: color.up },
 
   // NEXT — name only, no fabricated load
   nextRow: { alignSelf: 'stretch', marginTop: 16, textAlign: 'left' },
-  nextLabel: { fontFamily: font.sansMedium, fontSize: 14.5, letterSpacing: 0.8, color: color.textMuted }, // rtl-ok: nested span, inherits textAlign from nextRow
-  nextName: { fontFamily: font.sansSemibold, fontSize: 13, color: color.textPrimary }, // rtl-ok: nested span, inherits textAlign from nextRow
+  nextLabel: { fontFamily: font.sansMedium, fontSize: 17, letterSpacing: 0.8, color: color.textMuted }, // rtl-ok: nested span, inherits textAlign from nextRow
+  nextName: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary }, // rtl-ok: nested span, inherits textAlign from nextRow
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, alignSelf: 'stretch' },
   restNext: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },

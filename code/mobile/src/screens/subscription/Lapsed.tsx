@@ -53,7 +53,7 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
     <SafeAreaView style={styles.root} edges={['top']}>
       {/* Today, still Today. The header does not change because the day did not. */}
       <View style={styles.head}>
-        <Legend size={11} track={0.16}>{t('lapsed.todayLegend')}</Legend>
+        <Legend size={17} track={0.16}>{t('lapsed.todayLegend')}</Legend>
         <Text style={styles.day} accessibilityRole="header">{dayName ?? t('lapsed.noDay')}</Text>
       </View>
 
@@ -61,7 +61,7 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
         <View style={styles.card}>
           <View style={styles.lockRow}>
             <Icon name="lock" size={18} color={color.accent} strokeWidth={1.8} />
-            <Legend size={11} track={0.12}>{t('lapsed.pausedLegend')}</Legend>
+            <Legend size={17} track={0.12}>{t('lapsed.pausedLegend')}</Legend>
           </View>
 
           <Text style={styles.cardTitle}>{t('lapsed.title')}</Text>
@@ -81,7 +81,7 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
 
       {/* STILL YOURS. Not a teaser — every row opens. */}
       <ScrollView style={styles.keptScroll} contentContainerStyle={styles.kept} showsVerticalScrollIndicator={false}>
-        <Legend size={11} track={0.14} style={styles.keptLegend}>{t('lapsed.stillYours')}</Legend>
+        <Legend size={17} track={0.14} style={styles.keptLegend}>{t('lapsed.stillYours')}</Legend>
         {kept.map((row, i) => (
           <Pressable
             key={row.key}
@@ -126,8 +126,8 @@ const styles = StyleSheet.create({
   },
   lockRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardTitle: { fontFamily: font.serif, fontSize: 21, lineHeight: 27, color: color.textPrimary, textAlign: 'left' },
-  cardBody: { fontFamily: font.sans, fontSize: 13.5, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
-  samePrice: { fontFamily: font.sans, fontSize: 15, color: color.textMuted, textAlign: 'center' },
+  cardBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
+  samePrice: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'center' },
 
   keptScroll: { flex: 1, marginTop: 20 },
   kept: { paddingHorizontal: 30, paddingBottom: 24 },
@@ -148,5 +148,5 @@ const styles = StyleSheet.create({
   keptRowLast: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
   keptText: { flex: 1, minWidth: 0, gap: 1 },
   keptTitle: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textPrimary, textAlign: 'left' },
-  keptDetail: { fontFamily: font.sans, fontSize: 15, color: color.textSecondary, textAlign: 'left' },
+  keptDetail: { fontFamily: font.sans, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
 });

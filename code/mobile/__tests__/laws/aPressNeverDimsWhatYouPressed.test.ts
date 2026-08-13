@@ -58,6 +58,26 @@ function fades(): Hit[] {
       const inline = /pressed\s*\?\s*(0?\.\d+)/.test(line);
       const named = /[Pp]ressed\s*:\s*\{[^}]*opacity\s*:\s*(0?\.\d+)/.test(line);
       if (inline || named) out.push({ where: `${rel}:${i + 1}`, line: line.trim() });
+
+      /*
+       * ⛔ AND THE THIRD SHAPE, WHICH IS THE ONE THAT ACTUALLY SHIPPED ON TODAY (2026-08-12).
+       *
+       * `pressed && styles.dim`, with `dim: { opacity: 0.6 }` at the foot of the file. Neither
+       * pattern above can see it: there is no `pressed ? 0.6`, and the style is not NAMED "pressed"
+       * — it is named `dim`, which is a description of what it does rather than of when it applies.
+       *
+       * **So the week cards on the first screen of the app dropped their whole selves to 0.6 under
+       * a thumb** — the name, the figures, the check — through every run of a law written to forbid
+       * exactly that. Found by hand while answering a question about whether a card looks pressable.
+       *
+       * This resolves the style reference against the file's own stylesheet, which closes the class:
+       * a fade cannot hide behind a nicer variable name any more.
+       */
+      for (const m of line.matchAll(/pressed\s*&&\s*(?:[\w.]*styles\.)([A-Za-z_$][\w$]*)/g)) {
+        const decl = new RegExp(String.raw`\b${m[1]}:\s*\{([^}]*)\}`).exec(withoutComments(readFileSync(f, 'utf8')));
+        const op = decl && /opacity\s*:\s*(0?\.\d+)/.exec(decl[1]);
+        if (op) out.push({ where: `${rel}:${i + 1}`, line: `${line.trim()}   →   ${m[1]}: { opacity: ${op[1]} }` });
+      }
     });
   }
   return out;

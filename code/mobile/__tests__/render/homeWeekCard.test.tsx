@@ -21,6 +21,8 @@
 
 // 
 
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
@@ -109,9 +111,14 @@ function colors(node: ReactTestInstance): string[] {
   return out;
 }
 
+/*
+ * ⛔ `changes` IS PER WORKOUT (founder 2026-08-12). The pill used to draw `briefCount` — the WEEK's
+ * total — on the queued card alone, so a load the engine moved in Legs A was invisible until she
+ * opened it, and the number on the card she was looking at counted work that was not in it.
+ */
 const WORKOUTS = [
   { id: 'day_1', name: 'Push A', muscles: 'Chest · Shoulders', done: true },
-  { id: 'day_2', name: 'Pull A', muscles: 'Back · Biceps' },
+  { id: 'day_2', name: 'Pull A', muscles: 'Back · Biceps', changes: 3 },
   { id: 'day_3', name: 'Legs A', muscles: 'Quads · Glutes' },
 ];
 
@@ -155,7 +162,15 @@ describe('the app says what it does', () => {
    * change count rides a small moss pill on the title; the paragraph lives behind it, on the WHY
    * surface the pill opens. Today states the fact (N changed); the Weekly Update tells the story.
    */
-  it('the change count rides a moss pill on the title — not a paragraph on the stage', () => {
+  it('⛔ the change count rides a pill on the CARD THAT OWNS IT — not a paragraph on the stage', () => {
+    /*
+     * ⛔ REWRITTEN 2026-08-12. The pill used to sit on a 54px title row above the week, drawing the
+     * WEEK's total, and the title row is deleted — with the programme name off Today it would have
+     * drawn the queued workout's name a second time.
+     *
+     * The rule it carried is unchanged and is the reason the pill exists: **Today states the FACT
+     * (N changed); the Weekly Update tells the story.** What moved is whose fact it is.
+     */
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
     expect(said).toContain(tg('home.briefChangesShort', { count: 3 }).toUpperCase());
     // the engine's full sentence is NOT printed on Today — it is one tap away, never a wall of text
@@ -171,29 +186,38 @@ describe('the app says what it does', () => {
     expect(opened).toBe(1);
   });
 
-  it('an unread update wears the unseen dot; a read one is quiet', () => {
-    expect(unseenDots(mount(<HomeView {...props({ briefUnseen: true })} />)).length).toBeGreaterThan(0);
-    expect(unseenDots(mount(<HomeView {...props({ briefUnseen: false })} />))).toHaveLength(0);
+  it('⛔ exactly ONE pill, and it stays on its own workout when another is queued', () => {
+    /*
+     * The half the old law could not state. Only `Pull A` was touched. Queue `Legs A` and the pill
+     * must NOT follow the selection — it belongs to the work it counts. Before this it was drawn
+     * from `briefCount` on whichever card happened to be open, so it described a different day.
+     */
+    const pills = (r: ReactTestRenderer) =>
+      r.root.findAll((n) => n.props?.accessibilityLabel === tg('home.briefChanges', { count: 3 }));
+
+    const queuedElsewhere = mount(<HomeView {...props({ dayId: 'day_3', dayName: 'Legs A' })} />);
+    // One pill on the screen, and the card carrying it is Pull A's — not the queued Legs A.
+    expect(pills(queuedElsewhere).length).toBeGreaterThan(0);
+    // Walk up to the card and confirm the name inside it is the workout the pill counts.
+    let card = pills(queuedElsewhere)[0].parent;
+    let found = false;
+    for (let i = 0; i < 8 && card && !found; i += 1) {
+      found = card.findAll((n) => typeof n.props?.children === 'string' && n.props.children.includes('Pull A')).length > 0;
+      if (!found) card = card.parent;
+    }
+    expect(found).toBe(true);
   });
 
-  it('states HOW MANY lifts changed — and a steady week shows no pill at all', () => {
-    expect(texts(mount(<HomeView {...props({ briefCount: 3 })} />)).join(' ')).toContain(
-      tg('home.briefChangesShort', { count: 3 }).toUpperCase(),
-    );
-    // Zero changes = no pill, no text. The "no changes" sentence belongs to the WHY surface, not
-    // to Today, which would otherwise carry a label explaining that nothing happened.
-    const rSteady = mount(<HomeView {...props({ briefCount: 0 })} />);
-    expect(byLabel(rSteady, tg('home.briefChanges', { count: 3 }))).toBeNull();
-    expect(texts(rSteady).join(' ')).not.toContain(tg('home.briefNoChanges'));
+  it('⚠️ a steady week shows no pill at all, and never a zero', () => {
+    // Zero changes = no pill, no text. The "no changes" sentence belongs to the WHY surface, not to
+    // Today, which would otherwise carry a label explaining that nothing happened.
+    const steady = WORKOUTS.map((w) => ({ ...w, changes: 0 }));
+    const r = mount(<HomeView {...props({ workouts: steady })} />);
+    expect(byLabel(r, tg('home.briefChanges', { count: 3 }))).toBeNull();
+    expect(texts(r).join(' ')).not.toContain(tg('home.briefChangesShort', { count: 0 }).toUpperCase());
   });
 });
 
-  /*
-   * ⛔ SEVEN ASSERTIONS MOVED OUT ON 2026-08-05, NOT DELETED. The lift table left this screen
-   * (founder: *"you cannot see that there are other workouts besides the first one"*) — the card
-   * was tall because it printed all six lifts. Every claim they made is still a claim, and it is
-   * made against the screen that draws the table now: `__tests__/render/preWorkoutCard.test.tsx`.
-   */
 describe('the week is on the page, and it is a door', () => {
   it('every workout of the week is a chip', () => {
     const said = texts(mount(<HomeView {...props()} />)).join(' ');
@@ -346,6 +370,29 @@ describe('the week is on the page, and it is a door', () => {
     expect(said).not.toContain(tg('home.begin', { name: bidi('Push A') }));
   });
 
+  it('⛔ opening a workout to READ it does not re-queue the week', () => {
+    /*
+     * ════ LOOKING IS NOT CHOOSING ════
+     *
+     * FOUNDER, 2026-08-12, asking how the interaction works: *"כי אחרת אז מה הערך של כפתור הBEGIN
+     * במסך הTODAY?"* The question found the defect. `onChooseWorkout` was `setChosenId(id)` and then
+     * navigate — so opening a workout to look at it MADE it the queued one. She peeks at Lower B,
+     * drags the sheet down, and Today reads "Begin Lower B": a workout she never chose, standing
+     * where the one she was about to do used to be.
+     *
+     * `chosenId` drives the lit card, the act, and the watch lobby. A glance rewrote all three, and
+     * the button he asked about was the thing it cost.
+     *
+     * ⚠️ ASSERTED ON THE SOURCE, because the state it guards lives in the CONTAINER and the render
+     * tests here drive the view. What the view does is press-and-navigate; what must never come back
+     * is the write beside it.
+     */
+    const home = fs.readFileSync(path.join(__dirname, '..', '..', 'src/screens/home/Home.tsx'), 'utf8');
+    expect(home).toContain("onChooseWorkout={(id) => navigation.navigate('PreWorkout', { workoutId: id })}");
+    // The queue moves when she TRAINS, from either door — never when she reads.
+    expect(home).toContain('daysAfterStarting(coachWorkouts, todayId,');
+  });
+
   it('⚠️ a done row’s TYPE agrees with its mark — it recedes, it is not an offer in cream', () => {
     /*
      * The chips said this with a strike-through, and the founder's point was that *the mark and the
@@ -357,18 +404,36 @@ describe('the week is on the page, and it is a door', () => {
      * A strike-through through a whole day of the week would read as cancelled rather than done.
      */
     const r = mount(<HomeView {...props()} />);
+    /*
+     * ⚠️ THE PROBE READS THE NAME, NOT THE WHOLE ROW. It used to collect every coloured text in the
+     * card, which was harmless while a row WAS its name and became meaningless the moment the row
+     * grew an index and a shape line — both of which sit in the muted ink by design. It then
+     * reported "receded" for every row on the screen, done or not.
+     */
     const tone = (label: string) =>
       r.root
         .findAll((n) => n.props?.accessibilityLabel === label)
-        .flatMap((n) => n.findAll((c) => typeof c.props?.children === 'string'))
+        .flatMap((n) =>
+          n.findAll((c) => typeof c.props?.children === 'string' && c.props.children.includes(label)),
+        )
         .map((c) => {
           const st = c.props.style;
           const flat = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
           return flat?.color as string | undefined;
         })
         .filter(Boolean);
-    expect(tone('Push A')).toContain(color.textMuted); // done — receded
-    expect(tone('Legs A')).toContain(color.textSecondary); // still to do — a step brighter
+    /*
+     * ⚠️ ASSERTED AS A RELATION, NOT AS TWO TOKENS (2026-08-12). This pinned the pending name to
+     * `textSecondary`, which was its exact ink when every unqueued row was a one-line label. The
+     * redesign made all four rows CARDS and their names the serif at full ink — so the law failed on
+     * a screen where the rule it protects is more true than it was, not less.
+     *
+     * A colour constant is not the law. The law is that **done recedes and pending does not**, and
+     * that survives any repaint.
+     */
+    expect(tone('Push A')).toContain(color.textMuted); // done — receded into the stage's quiet ink
+    expect(tone('Legs A')).not.toContain(color.textMuted); // still to do — anything but receded
+    expect(tone('Legs A').length).toBeGreaterThan(0); // …and the probe really found the row
   });
 
   /**
@@ -459,8 +524,18 @@ describe('the screen does not stutter', () => {
     // v7 (2026-07-22) restores the big serif headline, so the name is set THREE places on purpose:
     // the coach names the session (title), the button says it as it starts it, and the lit chip
     // says it a third time only while it is the selection. That is hierarchy, not an echo.
+    /*
+     * ⛔ TWO, NOT THREE (founder 2026-08-12). The third was a 54px title row above the week — a
+     * fallback from the era when the headline was the programme's NAME. Taking that name off Today
+     * made its condition always true, so for one commit the screen carried its queued workout twice
+     * at two different sizes. The row is deleted.
+     *
+     * The rule this test is really about survives and is stronger for it: **the name is stated where
+     * it is the subject (the lit card) and where it is the act (Begin), and nowhere else.** An echo
+     * is not hierarchy.
+     */
     const named = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('Pull A'));
-    expect(named).toHaveLength(3);
+    expect(named).toHaveLength(2);
   });
 
   it('training Home carries NO numeric week meter — the chips are the only picture of the count', () => {
@@ -490,14 +565,35 @@ describe('the screen does not stutter', () => {
   });
 });
 
-describe('the name', () => {
-  it('is spoken when the week is closed — and the copy still reads without one', () => {
-    const named = texts(mount(<HomeView {...props({ resting: true, dayName: null })} />)).join(' ');
-    expect(named).toContain('Ofek');
-    const anonymous = texts(
-      mount(<HomeView {...props({ resting: true, dayName: null, name: undefined })} />),
-    ).join(' ');
-    expect(anonymous).toContain(tg('home.restSub'));
-    expect(anonymous).not.toContain('undefined');
+describe('⛔ the closed week states its evidence and explains nothing', () => {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE REST NOTE IS DELETED (founder, 2026-08-12): *"תמחק את המשפט … ואז זה יתן יותר מקום וחלל
+   * במסך."*
+   *
+   * It read *"Muscle is built on days like this. Nothing is scheduled — that's the program
+   * working."* The seal says 3/3 and the ledger names all three; a paragraph explaining that a
+   * finished week is a good thing is the screen talking over its own evidence.
+   *
+   * ⚠️ AND HER NAME WENT WITH IT, which he should know rather than discover. `home.restSubNamed`
+   * was the ONE place this screen greeted her, and it was a clause inside that sentence. The name
+   * is not the explanation and could be put back somewhere else; it is not being put back here
+   * without him asking, because a greeting invented to fill the gap a deletion left is exactly the
+   * kind of thing this screen just lost.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  it('the paragraph is gone from the closed week', () => {
+    const said = texts(mount(<HomeView {...props({ resting: true, dayName: null })} />)).join(' ');
+    expect(said).not.toContain(tg('home.restSub'));
+    expect(said).not.toContain('Ofek');
+    expect(said).not.toContain('undefined');
+  });
+
+  it('⚠️ …and what it says instead is all measured', () => {
+    // The seal, the ledger, the three facts and when the next week opens. Nothing interpreted.
+    const said = texts(mount(<HomeView {...props({ resting: true, dayName: null })} />)).join(' ');
+    expect(said).toContain('3/3');
+    expect(said).toContain(tg('home.restTitle'));
+    expect(said).toContain(tg('home.restNext'));
   });
 });

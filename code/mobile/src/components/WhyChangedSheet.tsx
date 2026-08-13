@@ -139,7 +139,7 @@ export function WhyChangedSheet(props: WhyChangedProps) {
             <Text style={[styles.to, { color: tone.fg, textShadowColor: tone.glow }]}>{props.loadTo}</Text>
             <Text style={styles.unit}>{props.unit}</Text>
             <View style={[styles.pill, { backgroundColor: tone.fg }, held && styles.pillHeld]}>
-              <Legend size={11} track={0.06} style={held ? styles.pillTextHeld : styles.pillText}>
+              <Legend size={17} track={0.06} style={held ? styles.pillTextHeld : styles.pillText}>
                 {props.delta ?? t('why.held')}
               </Legend>
             </View>
@@ -147,7 +147,9 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
           {/* THE PROOF. */}
           <View style={styles.proof}>
-            <Legend size={11}>{props.bandNote}</Legend>
+            {/* 12, not 11 — this labels the figure directly under it and was sitting at the legend
+                floor for no reason but habit. */}
+            <Legend size={17}>{props.bandNote}</Legend>
 
             <View style={styles.band}>
               <View style={styles.bandRule} />
@@ -188,7 +190,7 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
         <View style={styles.footer}>
           {/* The provenance, stated. Nothing on this screen came from anywhere else. */}
-          <Legend size={11} track={0.14} align="center">{t('why.decidedFrom')}</Legend>
+          <Legend size={17} track={0.14} align="center">{t('why.decidedFrom')}</Legend>
           <Button variant="primary" size="whySheet" block label={t('whyLoad.got')} onPress={props.onClose} />
         </View>
       </SafeAreaView>
@@ -280,41 +282,65 @@ const styles = StyleSheet.create({
   pillHeld: { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(241,238,229,0.24)' },
   pillTextHeld: { color: stage.ink1 },
 
-  proof: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.12)', gap: 14 },
+  /*
+   * ════ ⛔ THE PROOF WAS THE SMALLEST THING ON THE SHEET, UNDER A 188-PIXEL HOLE ════
+   *
+   * FOUNDER, 2026-08-12: *"ניראה נהדר אבל למה שלא תנצל את החלל הריק שיש באמצע? ולמה שלא תגדיל את
+   * המלל הקטן הזה שבקושי רואים ותיתן יותר אוויר וגודל למלל."*
+   *
+   * Measured in the harness before touching anything: the argument ended at y=432 and the closing
+   * sentence began at y=620. **One hundred and eighty-eight empty pixels through the middle of the
+   * screen** — `line` carries `marginTop: 'auto'`, which is a good rule (a conclusion sits at the
+   * foot of its argument) applied to a block that had not been given enough to say.
+   *
+   * ⚠️ AND WHAT SAT ABOVE THE HOLE WAS THE EVIDENCE ITSELF — `44 × 9·9·8` against `44 × 10·10·10`,
+   * her own reps, **the two lines the entire verdict is derived from**, set at 13px: the smallest
+   * type on a sheet whose headline number is 70. The load got the glow and the reason that earned
+   * it got the footnote treatment. That is the wrong way round on the one screen in this product
+   * whose whole job is showing its working.
+   *
+   * So the space goes to the proof rather than to padding: the band is a real figure (62px, not
+   * 34), and the two sessions are ROWS — 18px tabular figures, 15.5px labels, room to breathe. The
+   * conclusion still anchors low; there is simply much less nothing above it.
+   */
+  proof: { marginTop: 32, paddingTop: 22, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.12)', gap: 20 },
 
-  // The band: her range, drawn, with the two sessions landed on it.
-  band: { width: '100%', height: 34 },
-  bandRule: { position: 'absolute', left: 0, right: 0, top: 16, height: 1, backgroundColor: 'rgba(241,238,229,0.16)' },
-  bandSpan: { position: 'absolute', left: '24%', width: '52%', top: 15, height: 4, borderRadius: 2 },
-  bandTick: { position: 'absolute', top: 8, width: 2, height: 16 },
+  // The band: her range, drawn, with the two sessions landed on it. Every offset below is measured
+  // from the rule at top:27 — the ticks, the span and the marks are all centred on it.
+  band: { width: '100%', height: 62 },
+  bandRule: { position: 'absolute', left: 0, right: 0, top: 27, height: 1, backgroundColor: 'rgba(241,238,229,0.16)' },
+  bandSpan: { position: 'absolute', left: '24%', width: '52%', top: 24.5, height: 6, borderRadius: 3 },
+  bandTick: { position: 'absolute', top: 17, width: 2, height: 21 },
   bandTickLo: { left: '24%' },
   bandTickHi: { left: '76%' },
   // rtl-ok — absolutely positioned onto a DRAWN band whose ticks are at fixed percentages; the
   // two variants below (always applied with it) carry the alignment that pins each number to its
   // tick. The band is a figure, not text flow, so it must not mirror away from what it labels.
-  bandNum: { position: 'absolute', top: 26, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 15 }, // rtl-ok — the variants below pin each number to its drawn tick
-  bandNumLo: { left: '24%', marginStart: -6, textAlign: 'left' },
-  bandNumHi: { left: '76%', marginStart: -8, textAlign: 'left' },
+  bandNum: { position: 'absolute', top: 42, fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 17 }, // rtl-ok — the variants below pin each number to its drawn tick
+  bandNumLo: { left: '24%', marginStart: -7, textAlign: 'left' },
+  bandNumHi: { left: '76%', marginStart: -9, textAlign: 'left' },
   // A session that REACHED the top is filled; one that fell short is a ring — the difference the
   // whole argument turns on, drawn rather than described. Both take the verdict's tone at the call
   // site, so the marks can never be a different colour from the number they explain.
-  mark: { position: 'absolute', top: 10, width: 12, height: 12, borderRadius: 6, marginStart: -6 },
+  mark: { position: 'absolute', top: 19.5, width: 16, height: 16, borderRadius: 8, marginStart: -8 },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    paddingVertical: 10,
+    paddingVertical: 17,
     borderTopWidth: 1,
     borderTopColor: 'rgba(241,238,229,0.08)',
   },
   rowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.08)' },
-  rowLabel: { flexShrink: 1, fontFamily: font.sans, fontSize: 14, color: '#c9c4b4', textAlign: 'left' },
-  rowFigure: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 13, color: stage.ink0, textAlign: 'right' },
+  rowLabel: { flexShrink: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: '#c9c4b4', textAlign: 'left' },
+  // ⚠️ 18, AND IT IS THE SECOND-LARGEST FIGURE ON THE SHEET BY INTENT. This is what she did; the
+  // 70px number is only what the engine did about it.
+  rowFigure: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 18, lineHeight: 22, color: stage.ink0, textAlign: 'right' },
 
   // The engine's closing sentence, in its own voice, at the foot of the argument.
-  line: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: stage.ink0, marginTop: 'auto', paddingTop: 16, paddingBottom: 4, textAlign: 'left' },
+  line: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 21, lineHeight: 30, color: stage.ink0, marginTop: 'auto', paddingTop: 26, paddingBottom: 4, textAlign: 'left' },
 
   footer: { paddingHorizontal: 26, paddingTop: 12, paddingBottom: 30, gap: 11 },
 });

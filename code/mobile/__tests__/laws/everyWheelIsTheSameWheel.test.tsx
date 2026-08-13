@@ -56,55 +56,104 @@ function draw(size: 'md' | 'lg', value = 137.5): ReactTestRenderer {
 }
 
 /** Flatten whatever style shape a node carries into one object. */
+/** The md detent pitch, read from the control's own export so this cannot drift. */
+const ITEM_W_MD = 96;
+
 const flat = (s: unknown): Record<string, unknown> =>
   (StyleSheet.flatten(s as never) ?? {}) as Record<string, unknown>;
 
-describe('one wheel, one size, everywhere', () => {
-  it('md and lg resolve to the SAME height — the 2026-07-28 ruling, now actually enforced', () => {
-    expect(WHEEL_HEIGHT.md).toBe(WHEEL_HEIGHT.lg);
+describe('⛔ two sizes again — and this time the RELATIONSHIP is what is pinned', () => {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE 2026-07-28 RULING IS NARROWED BY THE FOUNDER HIMSELF (2026-08-12)
+   *
+   *   *"אני אשמח אם תגדיל את הסרגלים עצמם ואת המלל במסך EDIT SET בלבד ולא בONBORDING. זה חדר כושר
+   *   זה צריך להיות ברור ומדויק מהרגע הראשון."*
+   *
+   * "One wheel, one size, everywhere" was made when the two sizes had drifted apart by accident and
+   * the onboarding ruler — the first control she ever turns — had ended up the SMALLER of the two.
+   * That fault is not this: `lg` is now deliberately larger, and only on the one screen turned
+   * under a loaded bar.
+   *
+   * ⚠️ SO THE LAW CHANGES SUBJECT RATHER THAN GOING. What must hold is not that the numbers are
+   * equal — it is that **the cell can never be too small for the numeral it holds**, which is the
+   * thing "one size" was accidentally guaranteeing and which broke the instant a size grew.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  it('the edit dial is the LARGER one — it is read under a bar', () => {
+    expect(WHEEL_HEIGHT.lg).toBeGreaterThan(WHEEL_HEIGHT.md);
   });
 
-  it('and to the same numeral geometry, so a call site cannot pick the wrong one', () => {
-    const sizes = (['md', 'lg'] as const).map((s) => {
-      const r = draw(s);
-      const cells = r.root.findAllByType(ScrollView)[0].findAllByType(View).map((v) => flat(v.props.style).width);
-      return { widest: Math.max(...cells.filter((w): w is number => typeof w === 'number')) };
-    });
-    expect(sizes[0]).toEqual(sizes[1]);
+  it('⛔ and no size can truncate its numeral — the box is not a box at all', () => {
+    /*
+     * The relationship, on both sizes at once. `NUM_CELL_W` used to be one constant measured
+     * against a 48-point numeral and centred on `ITEM_W.md` — correct only while every wheel was
+     * the same wheel, and the reason the founder photographed "37…" the moment one grew.
+     */
+    for (const size of ['md', 'lg'] as const) {
+      const r = draw(size, 137.5);
+      const scroller = r.root.findAllByType(ScrollView)[0];
+      /*
+       * ⛔ THE NUMERAL IS OUT OF THE FLOW ENTIRELY — the only version of this that actually held.
+       *
+       * Two earlier fixes both treated a symptom and both failed on a device: a WIDER cell (build
+       * 36) and `flexShrink: 0` (2026-08-12, morning). The founder photographed "37…" through both,
+       * which between them prove the declared width was never what decided the outcome — a
+       * `numberOfLines={1}` Text inside a fixed-width flex item can be handed less than it asks for
+       * by any number of layout paths, and the ellipsis does the rest.
+       *
+       * So: absolute, no width, no `numberOfLines`. A Text out of the flow cannot be compressed by
+       * the flow, and one with no width has nothing to be truncated to.
+       */
+      const numeral = scroller.findAllByType(Text)[0];
+      const st = flat(numeral.props.style);
+      expect({ size, position: st.position }).toEqual({ size, position: 'absolute' });
+      expect({ size, width: st.width }).toEqual({ size, width: undefined });
+      expect({ size, lines: numeral.props.numberOfLines }).toEqual({ size, lines: undefined });
+    }
   });
 });
 
 describe('the numeral is never truncated (C.2)', () => {
-  it("gives the numeral a box WIDER than its detent cell, so '82.5' cannot become '82…'", () => {
-    const r = draw('md', 82.5);
-    const scroller = r.root.findAllByType(ScrollView)[0];
-    // Every numeral sits in a detent-pitch cell; the Text inside carries its own, wider box.
-    const texts = scroller.findAllByType(Text);
-    const numeralBoxes = texts
-      .map((t) => flat(t.props.style).width)
-      .filter((w): w is number => typeof w === 'number');
-    const cellWidths = scroller
-      .findAllByType(View)
-      .map((v) => flat(v.props.style).width)
-      .filter((w): w is number => typeof w === 'number' && w > 0 && w < 200);
-
-    expect(numeralBoxes.length).toBeGreaterThan(0);
-    // The numeral's own box must exceed the pitch, or a long value clips inside its cell.
-    expect(Math.max(...numeralBoxes)).toBeGreaterThan(Math.min(...cellWidths));
-  });
-
-  it('centres that wider box on the cell, so the readout does not drift off the strike mark', () => {
+  /*
+   * ⛔ REWRITTEN 2026-08-12, AND THE OLD SHAPE OF THIS LAW IS WHY IT TOOK THREE TRIES.
+   *
+   * It asserted that the numeral's declared BOX was wider than its detent cell, and that the box
+   * was centred on it by symmetric negative margins. Both were true the whole time, on both of the
+   * builds where the founder photographed "37…". **The law was measuring the declaration and the
+   * defect was in the layout** — a fixed-width `numberOfLines={1}` Text inside a fixed-width flex
+   * item is a candidate for compression whatever it asks for, and once compressed the ellipsis is
+   * automatic.
+   *
+   * So the claim moves from "the box is big enough" to "there is no box": the numeral is absolutely
+   * positioned, unconstrained and unlimited in lines. Nothing about the flow can reach it.
+   */
+  it("⛔ the numeral is out of the flow, so '82.5' has nothing to be truncated to", () => {
     const r = draw('md', 82.5);
     const texts = r.root.findAllByType(ScrollView)[0].findAllByType(Text);
-    // Note the shape: a `for` loop that skips numerals without a declared box would pass with the
-    // box removed entirely. Collect them instead, then require that some exist AND that every one
-    // is centred — symmetric negative margins. An asymmetric pair would shift the number off the
-    // moss tick that is supposed to be striking it.
-    const boxed = texts
-      .map((t) => flat(t.props.style) as { width?: number; marginHorizontal?: number })
-      .filter((st) => typeof st.width === 'number');
-    expect(boxed.length).toBeGreaterThan(0);
-    for (const st of boxed) expect(st.marginHorizontal).toBeLessThan(0);
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of texts) {
+      const st = flat(t.props.style) as { position?: string; width?: number };
+      expect(st.position).toBe('absolute');
+      expect(st.width).toBeUndefined();
+      expect(t.props.numberOfLines).toBeUndefined();
+    }
+  });
+
+  it('⚠️ and the cell it hangs in is still the detent pitch — the geometry is untouched', () => {
+    /*
+     * The snapping, the offset maths and the strike mark all work in `itemW`. Taking the numeral out
+     * of the flow must not move the track it is read against; the item keeps its width and the
+     * numeral is centred inside it by the item's own `alignItems`.
+     */
+    const r = draw('md', 82.5);
+    const cells = r.root
+      .findAllByType(ScrollView)[0]
+      .findAllByType(View)
+      .map((v) => flat(v.props.style))
+      .filter((st) => typeof st.width === 'number' && (st.width as number) > 0 && (st.width as number) < 200);
+    expect(cells.length).toBeGreaterThan(0);
+    for (const st of cells) expect(st.alignItems === 'center' || st.width === ITEM_W_MD).toBeTruthy();
   });
 });
 

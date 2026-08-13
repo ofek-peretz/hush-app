@@ -538,9 +538,50 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
  * Returns [] when the workout changed nothing — which is a real and common answer (hold, S-24), and
  * the screen must say so rather than invent a change (R7 / S-16).
  */
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ WHAT THIS SESSION CHANGED — and a HOLD IS NOT A CHANGE (founder, 2026-08-12)
+ *
+ *   *"במסך סיום האימון כתוב 12 שינויים בזמן שהיו רק 6 תרגילים … כל דבר שנמצא ב-HOLD זה לא שינוי!
+ *   … ויותר גרוע היא שם שרירים ולא תרגילים והיה כתוב שאין שינוי בהם."*
+ *
+ * Both faults were here, in one unfiltered line: this returned EVERY changeLog entry stamped at the
+ * session's instant and let the screen work out what to do with them.
+ *
+ *   TWELVE FOR SIX      six lifts and six MUSCLE-keyed `kind: 'volume'` entries. `explainChange`
+ *                       narrates those by muscle, so the ledger drew "Chest" as if it were a lift —
+ *                       and Loop 3's volume list has been empty on that screen since it was
+ *                       rebuilt, so nothing was going to draw them properly either.
+ *   HOLDS COUNTED       a lift that held is stamped like any other decision. `getSessionForwardV5`
+ *                       twenty lines below has ALWAYS excluded them, with the reason written out —
+ *                       *"a hold is not a change (R7)"* — and this one never asked.
+ *
+ * ⚠️ SO THE PREDICATE IS "DID A NUMBER MOVE", not a list of kinds. A graduation moves the lift, a
+ * rotation moves it, a raise moves the load, Loop 3 moves the sets — and S-28's `rung` moves
+ * nothing at all, which is exactly the honest, well-narrated hold the founder is objecting to.
+ * Reading the kinds would have to be updated every time one is added; reading the NUMBERS cannot
+ * drift.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export function changeMoved(c: ChangeEntry): boolean {
+  if (c.toExercise) return true; // a swap or a graduation — the lift itself moved
+  if (c.loadFrom !== c.loadTo) return true;
+  if (c.setsFrom !== c.setsTo) return true;
+  return c.bandFrom[0] !== c.bandTo[0] || c.bandFrom[1] !== c.bandTo[1];
+}
+
 export async function getSessionEarnedV5(sessionStartedAtMs: number): Promise<Explanation[]> {
   const state = await load();
-  return (state.changeLog ?? []).filter((c) => c.at === sessionStartedAtMs).map(explainChange);
+  return (state.changeLog ?? [])
+    .filter((c) => c.at === sessionStartedAtMs)
+    /*
+     * ⛔ MUSCLES ARE NOT LIFTS, and this screen lists lifts. A volume move is real news and it is
+     * the WEEK's news, not one workout's — the Saturday letter carries it, keyed by muscle, where a
+     * muscle is the subject rather than an impostor in a list of exercises.
+     */
+    .filter((c) => c.kind !== 'volume')
+    .filter(changeMoved)
+    .map(explainChange);
 }
 
 /**

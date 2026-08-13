@@ -185,12 +185,47 @@ export interface ProgramDay {
   // a muscle in silence. Absent (the norm) whenever the day fits. Read-only: it changes no load,
   // volume, selection or order — enforceTimeCap has already run; this only reports its verdict.
   overBudget?: boolean;
+  /**
+   * ⛔ THE MIRROR OF `overBudget` — her minutes could not be FILLED (founder 2026-08-12).
+   *
+   * Set by the engine when a finished day comes out under `SESSION_MIN`, which happens when the map
+   * she drew does not contain enough work to reach it: a map with one muscle left on produces
+   * 25-minute sessions against the hour she asked for, and no arrangement can do better (F-1 caps a
+   * block at five sets and a day may not repeat a movement).
+   *
+   * The week is CORRECT and it is not the week she thinks she asked for, so the surface says so.
+   * Read-only, exactly like `overBudget`: it changes no load, volume, selection or order.
+   */
+  shortOfBudget?: boolean;
 }
 
 export interface Program {
   id: string;
   frequency: number;
   days: ProgramDay[];
+  /**
+   * ⛔ WHO WROTE THIS WEEK — and it decides whether the engine may ever rewrite it.
+   *
+   * FOUNDER, 2026-08-11: *"אסור למנוע שלנו לשנות את זה אלא רק לנהל את המתאמן בהסתמך על התוכנית
+   * שהוא קיבל."*
+   *
+   * `'engine'` (or absent — every programme that exists today) is a week Hush generated. It may be
+   * regenerated whenever her facts change, which is the whole point of it.
+   *
+   * `'authored'` is a week SHE brought: her own programme, or one her coach wrote for her. The
+   * engine may not touch its shape — not the exercises, not the days, not the prescribed sets — and
+   * that holds even when it breaks Hush's own rules. A 74-minute session stays 74 minutes. A muscle
+   * under MEV stays under MEV. She was shown what we found and she chose to keep it, and a coach's
+   * programme is not ours to improve.
+   *
+   * ⚠️ WHAT THE ENGINE STILL DOES IS THE LOADS. Loop 1 corrects the weight between sets from the
+   * reps she just did, and Loop 2 decides the next session's load from the last one. Those are not
+   * changes to the programme — they are the answer to "how heavy today", which no written plan can
+   * contain and which is the reason she is using Hush at all.
+   *
+   * This is also the door for the COACH track: a coach writes the week, Hush runs the loads.
+   */
+  authored?: 'engine' | 'athlete_or_coach';
 }
 
 /** Reason types Hush may attach to a changed set (spec §4.4). */

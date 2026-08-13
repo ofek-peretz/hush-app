@@ -21,6 +21,25 @@
  *   3. THE PROGRAMME IS NAMED. `CoachPlan` has carried a name since it was designed and nothing has
  *      ever shown it at full size. It is the beat that turns a loading screen into a delivery.
  *
+ * ── ⛔ REVISED 2026-08-12, ON *"למה זה ניראה רע ומשעמם וכל כך חסר חיים?"* ────────────────────────
+ * Three faults, and the middle one is the one that matters.
+ *
+ *   1. THE THIRD RULER WAS HER AGE, AND NOTHING ASKS FOR IT ANY MORE. It left the intake on
+ *      2026-08-08 (`navigation.ts`) because no line in `src/engine` reads it. The ruler stayed. So
+ *      movement one drew a labelled instrument counting **from zero to zero**, on the screen whose
+ *      entire claim is that every figure on it is one she set herself. Two rulers now, both hers.
+ *
+ *   2. ⛔ MOVEMENT THREE THREW MOVEMENTS ONE AND TWO AWAY. It was `named ? <the name> : <the list>`,
+ *      so the instant her week was complete the screen **replaced it with a single line**. The beat
+ *      that is supposed to be the delivery was the one where the most disappeared — a crescendo
+ *      composed as a collapse, which is exactly what "lifeless" describes. The name now lands ABOVE
+ *      the finished list, on a rule, and the week it names stays on screen underneath it.
+ *
+ *   3. THE FIGURE SNAPPED WHILE THE BAR CRAWLED. `shown` was computed from the `fill` PROP — 0, then
+ *      1 — while the track grew over 900ms off a reanimated value. So the number arrived correct in
+ *      one frame beside a bar still travelling, which is precisely the *"animation pretending to be
+ *      a measurement"* the comment below it warned against. One clock drives both now.
+ *
  * ── ⚠️ IT NEVER DRAWS A LIFT THAT HAS NOT ARRIVED ───────────────────────────────────────────────
  * The muscles are real — they come from the catalogue, which the app knows without asking anyone —
  * and each one's rows stand as DASHES until the coach's answer lands. Then they fill fast and the
@@ -39,11 +58,13 @@
 // 
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
-import { Legend, Stage } from '@/components/ds';
+import { Arrive, Legend, Stage } from '@/components/ds';
+import { BodyMapFigure, viewOf } from '@/components/BodyMapFigure';
+import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { bidi } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -65,13 +86,13 @@ export interface BuildMuscle {
 }
 
 export interface BuildingProgrammeViewProps {
-  /** Her three answers, for the rulers. */
-  days: number;
-  weight: number;
-  age: number;
-  unit: string;
-  /** How far through movement one — 0 to 1. The rulers fill and the figures count with it. */
-  fill: number;
+  /*
+   * ⛔ THE RULERS' PROPS ARE GONE — `days`, `weight`, `unit`, `fill`, and the `Ruler` that read
+   * them. Movement one became the DARK BODY when the founder replaced this beat with his own
+   * design, and the instrument was left standing in the file: a component nothing rendered, a
+   * `useTravel` clock nothing started, and four props the container was still computing and
+   * passing every time. Under `@ts-nocheck` nothing says a word about that.
+   */
   /** The muscles considered, in order. Drawn as they arrive. */
   muscles: BuildMuscle[];
   /** The programme's name, when the coach has given one — movement three. */
@@ -80,110 +101,192 @@ export interface BuildingProgrammeViewProps {
   summary?: string | null;
 }
 
+const NOOP = () => {};
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ONE LIFT'S JOURNEY — and the container's beat is derived FROM these, never guessed alongside.
+ *
+ * FOUNDER, 2026-08-13: *"ראיתי את האנימציה של הגוף היא טובה, פשוט זה טס במהירות האור ולא נותן לכל
+ * שריר את הרגע שלו. זה צריך ממש להיות אנימציה ארוכה ואיטית."*
+ *
+ * He was right and the numbers say why: the muscle changed every **90 ms**, while one lift needs
+ * rise + hold + travel to get into the body. Every row was replaced before it had finished rising —
+ * the journey this beat is built on was never once completed on screen.
+ *
+ * ⚠️ SO THE TIMINGS LIVE HERE AND `beatFor` IS THE ONLY THING THE CLOCK ASKS. A screen whose
+ * animation and whose clock hold two separate opinions about how long a thing takes is exactly how
+ * the 90 ms survived: both were "correct" on their own.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/** Between one lift starting and the next — they overlap, so the feed breathes rather than ticks. */
+export const LIFT_STEP_MS = 220;
+export const LIFT_RISE_MS = 420;
+/** The row simply SITS there. This is the part that makes it readable rather than a flicker. */
+export const LIFT_HOLD_MS = 460;
+/** Up into the figure. */
+export const LIFT_TRAVEL_MS = 520;
+/** A breath on the lit muscle after the last row has gone in, before the next muscle takes over. */
+export const MUSCLE_BREATH_MS = 300;
+
+/**
+ * How long one muscle owns the screen: exactly as long as its own lifts need, plus a breath.
+ * A muscle with four lifts genuinely has more to show than one with two, and gets it.
+ */
+export function beatFor(lifts: number): number {
+  const rows = Math.max(1, lifts);
+  return (rows - 1) * LIFT_STEP_MS + LIFT_RISE_MS + LIFT_HOLD_MS + LIFT_TRAVEL_MS + MUSCLE_BREATH_MS;
+}
+
 export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
   const { t } = useCopy();
   const named = !!props.programmeName;
+  /*
+   * The muscle being filled right now, and every muscle already in the body. `lit` is a body map in
+   * the figure's own vocabulary — `emphasis` is its moss — so the instrument she drew her map on is
+   * the instrument that reports the result, with no second drawing to keep in step.
+   */
+  const current = props.muscles.length ? props.muscles[props.muscles.length - 1] : null;
+  const filling = named ? null : current?.muscle ?? null;
+  const lit = React.useMemo(() => {
+    /*
+     * ⛔ THE UNALLOCATED MUSCLES ARE `off`, NOT ABSENT — and absent is what they were for an hour.
+     *
+     * A muscle missing from a body map is `normal`, which the figure draws in CREAM. So the beat
+     * opened on a fully cream body and "filling" it meant nudging each muscle from cream to moss:
+     * two light tones a metre apart. **The founder's design is a body that starts dark and lights
+     * up**, and the only way to say that in this component's vocabulary is to state the darkness
+     * rather than leave it to a default.
+     */
+    const out: Record<string, 'emphasis' | 'off'> = {};
+    for (const m of CANONICAL_MUSCLE_ORDER) out[m] = 'off';
+    for (const m of props.muscles) out[m.muscle] = 'emphasis';
+    return out;
+  }, [props.muscles]);
+  /* The figure turns to whichever face carries the muscle being filled — she never has to guess
+     where the light went. It holds the last face once the programme is named. */
+  const face = filling ? viewOf(filling) : 'front';
 
   return (
     <View style={styles.root}>
       <Stage />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.head}>
-          <Legend size={11} track={0.2}>
+          <Legend size={17} track={0.2}>
             {named ? t('ob.buildYourProgramme') : props.muscles.length ? t('ob.buildChoosing') : t('ob.buildReading')}
           </Legend>
         </View>
 
+        {/*
+          ── MOVEMENT THREE — it has a name, so it is a thing she was given. ──
+
+          ⛔ ABOVE the week, not instead of it. See the header note: this used to be the branch that
+          replaced the list, and the delivery beat was the one where the screen emptied.
+        */}
         {named ? (
-          /* ── MOVEMENT THREE — it has a name, so it is a thing she was given. ── */
-          <View style={styles.namedBody}>
+          <Arrive order={0} style={styles.namedHead}>
             <View style={styles.namedRule} />
-            <Text style={styles.programmeName} numberOfLines={4}>{bidi(props.programmeName!)}</Text>
+            <Text style={styles.programmeName} numberOfLines={3}>{bidi(props.programmeName!)}</Text>
             {props.summary ? <Text style={styles.summary}>{props.summary}</Text> : null}
+          </Arrive>
+        ) : null}
+
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ THE PROGRAMME IS BUILT ON HER OWN BODY (founder, 2026-08-12)
+
+            *"למה לא לעשות אנימציה יפה עם מפת הגוף שלנו — שבוחרת שריר ומציגה את התרגילים שלו ואז
+            זורקת אותם לתוך השריר הזה, וכך עוברת שריר אחר שריר, ולבסוף כל מפת הגוף הופכת לירוקה?"*
+
+          What stood here was two filling bars and then a scrolling list of names — a screen that
+          FILLED TIME rather than saying anything. His design says the thing that is actually
+          happening: the assembler takes a muscle, chooses lifts for it, allocates its volume, and
+          moves on. **The body map is not decoration over the computation; it is the computation's
+          own shape.**
+
+          ⚠️ AND THE MAP IS THE ONE SHE JUST DREW, which is what makes it hers rather than a
+          diagram. Every muscle starts dark; each one the engine allocates turns moss and stays
+          moss; the figure turns to whichever face carries the muscle being filled. At the end her
+          whole programme is lit at once — the first time she sees what she is about to train.
+
+          ⚠️ IT ALSO BUYS THE TIME THE IMPORT PATH NEEDS. A photographed programme is a real model
+          call, and this is the screen that holds it; a beat worth watching is the only honest way
+          to spend a wait.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
+        <View style={styles.body}>
+          <View style={styles.figureStage}>
+            <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} />
           </View>
-        ) : props.muscles.length === 0 ? (
-          /* ── MOVEMENT ONE — her own three numbers, arriving where she left them. ── */
-          <View style={styles.rulers}>
-            <Ruler label={t('ob.daysLabel')} value={props.days} to={props.days / 7} fill={props.fill} />
-            <Ruler
-              label={t('ob.weightLabel')}
-              value={props.weight}
-              unit={props.unit}
-              to={Math.min(1, props.weight / 140)}
-              fill={props.fill}
-            />
-            <Ruler label={t('ob.ageLabel')} value={props.age} to={Math.min(1, props.age / 80)} fill={props.fill} />
+
+          {/*
+            The muscle being filled, and the lifts going into it. Only the CURRENT muscle's lifts
+            are on screen: the ones before it are already in the body, which is what the moss says.
+          */}
+          <View style={styles.feed}>
+            {/*
+              ⚠️ AND THE FEED CLEARS WHEN THE PROGRAMME IS NAMED. `current` is still the last muscle
+              at that moment, so the closing beat was the whole body lit — the thing she came for —
+              with one muscle's lift list still sitting under it, as though the build had stopped
+              mid-calf. The final frame is the body and its name, and nothing else.
+            */}
+            {current && !named ? (
+              <>
+                <Legend size={19} track={0.22} align="center" tone="accent">
+                  {t(`muscle.${current.muscle}`).toUpperCase()}
+                </Legend>
+                {current.lifts.map((l, i) => (
+                  <LiftIn key={`${current.muscle}_${i}`} name={l.name} order={i} />
+                ))}
+              </>
+            ) : null}
           </View>
-        ) : (
-          /* ── MOVEMENT TWO — a muscle at a time, three numbers a lift. ── */
-          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-            {props.muscles.map((m) => (
-              <View key={m.muscle} style={styles.group}>
-                <Text style={styles.muscle}>{t(`muscle.${m.muscle}`).toUpperCase()}</Text>
-                {m.lifts.map((l, i) => {
-                  const waiting = !l.load && !l.scheme;
-                  return (
-                    <View key={`${m.muscle}_${i}`} style={styles.liftRow}>
-                      <Text style={[styles.liftName, waiting && styles.waiting]} numberOfLines={1}>
-                        {waiting ? '·········' : bidi(l.name)}
-                      </Text>
-                      {/* ⚠️ A DASH, NEVER A ZERO. A row the coach has not answered for yet has no
-                          load; printing "0 kg" would be the app inventing a prescription. */}
-                      <Text style={[styles.liftLoad, waiting && styles.waiting]}>{l.load ?? '— —'}</Text>
-                      <Text style={[styles.liftScheme, waiting && styles.waiting]}>{l.scheme ?? '— × —'}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
-          </ScrollView>
-        )}
+        </View>
       </SafeAreaView>
     </View>
   );
 }
 
 /**
- * One ruler, filling from zero.
+ * ⛔ ONE LIFT, GOING IN — the founder's *"זורקת אותם לתוך השריר"* (2026-08-12).
  *
- * ⚠️ THE FIGURE COUNTS WITH THE TRACK. A bar that grows while its number sits already-correct
- * beside it is an animation pretending to be a measurement — and this screen's whole claim is that
- * the measuring is real. Under reduced motion both simply arrive, which is the same fact without
- * the travel.
+ * It rises into place and then travels UP toward the figure as it fades: the row does not vanish,
+ * it goes somewhere, and the place it goes is the muscle that just turned moss.
+ *
+ * ⚠️ THE TRAVEL IS THE POINT AND THE FADE IS NOT ENOUGH ON ITS OWN. A row that merely dissolves
+ * reads as the screen forgetting it; a row that moves toward the body reads as the body taking it.
+ * The two together are what makes the map look like it is being FILLED rather than coloured in.
  */
-function Ruler({
-  label,
-  value,
-  unit,
-  to,
-  fill,
-}: {
-  label: string;
-  value: number;
-  unit?: string;
-  to: number;
-  fill: number;
-}) {
+function LiftIn({ name, order }: { name: string; order: number }) {
   const reduced = useReducedMotion();
-  const grow = useSharedValue(reduced ? 1 : 0);
+  const life = useSharedValue(reduced ? 1 : 0);
   React.useEffect(() => {
-    grow.value = reduced ? 1 : withTiming(fill, { duration: 900, easing: Easing.out(Easing.cubic) });
-  }, [fill, grow, reduced]);
+    if (reduced) {
+      life.value = 1;
+      return;
+    }
+    life.value = withDelay(
+      order * LIFT_STEP_MS,
+      withSequence(
+        withTiming(1, { duration: LIFT_RISE_MS, easing: Easing.out(Easing.cubic) }),
+        withDelay(LIFT_HOLD_MS, withTiming(2, { duration: LIFT_TRAVEL_MS, easing: Easing.in(Easing.cubic) })),
+      ),
+    );
+  }, [life, order, reduced]);
 
-  const bar = useAnimatedStyle(() => ({ width: `${Math.max(0, Math.min(1, grow.value * to)) * 100}%` }));
-  const shown = reduced ? value : Math.round(value * Math.max(0, Math.min(1, fill)));
+  const style = useAnimatedStyle(() => {
+    const rise = Math.min(1, life.value);
+    const draw = Math.max(0, life.value - 1);
+    return {
+      opacity: rise * (1 - draw),
+      transform: [{ translateY: (1 - rise) * 14 - draw * 76 }, { scale: 1 - draw * 0.14 }],
+    };
+  });
 
   return (
-    <View style={styles.ruler}>
-      <Legend size={11} track={0.14}>{label}</Legend>
-      <View style={styles.figureRow}>
-        <Text style={styles.figure}>{shown}</Text>
-        {unit ? <Text style={styles.figureUnit}>{unit}</Text> : null}
-      </View>
-      <View style={styles.track}>
-        <Animated.View style={[styles.trackFill, bar]} />
-      </View>
-    </View>
+    <Animated.View style={style}>
+      <Text style={styles.feedLift} numberOfLines={1}>{bidi(name)}</Text>
+    </Animated.View>
   );
 }
 
@@ -192,43 +295,25 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   head: { paddingHorizontal: space.gutter, paddingTop: 22 },
 
-  /* ── movement one ── */
-  rulers: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter, gap: 34 },
-  ruler: { gap: 6 },
-  figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
-  figure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 40, color: stage.ink0, textAlign: 'left' },
-  figureUnit: { fontFamily: font.sans, fontSize: 15, color: stage.ink2, textAlign: 'left' },
-  track: { height: 3, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.11)', overflow: 'hidden' },
-  trackFill: { height: 3, borderRadius: 3, backgroundColor: stage.ink1 },
-
-  /* ── movement two ── */
-  list: { paddingHorizontal: space.gutter, paddingTop: 18, paddingBottom: 28 },
-  group: { marginBottom: 14 },
   /*
-   * ⚠️ NOT OCHRE, though it was the obvious choice for a section head. The palette's law is that
-   * **ochre is the MARK and nothing else** (founder, ratified 2026-07-13) — spending it on seven
-   * headers here would make the wordmark one decoration among many on the first screen that has to
-   * establish it. Cream at the muted step, uppercase and tracked, does the same job of separating a
-   * group from its rows.
+   * ── THE BUILD, ON HER OWN BODY — see the note at the markup. ──
+   *
+   * ⛔ THE RULERS' STYLES WENT WITH THE RULERS, and so did the finished LIST's: `rulers`, `ruler`,
+   * `figure`, `track`, `trackFill`, `list`, `group`, `muscle`, `liftRow`, `liftName`, `liftLoad`,
+   * `liftScheme`, `waiting`, `listUnderName`. Fourteen definitions for two components this screen
+   * stopped rendering on 2026-08-12 — dead weight that reads, to anyone opening this file, as a
+   * description of what the screen does.
    */
-  muscle: {
-    fontFamily: font.sansMedium,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    color: stage.ink2,
-    marginBottom: 4,
-    textAlign: 'left',
-  },
-  liftRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingVertical: 5 },
-  liftName: { flex: 1, fontFamily: font.sans, fontSize: 14, color: stage.ink1, textAlign: 'left' },
-  liftLoad: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14, color: stage.ink0, minWidth: 62, textAlign: 'right' },
-  liftScheme: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 13, color: stage.ink2, minWidth: 66, textAlign: 'right' },
-  waiting: { color: '#57534a' },
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, gap: 18 },
+  figureStage: { width: '100%', maxWidth: 260, alignSelf: 'center' },
+  /* A fixed seat, so the figure does not shuffle up and down as lifts come and go. */
+  feed: { height: 132, alignSelf: 'stretch', alignItems: 'center', gap: 6 },
+  feedLift: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
 
-  /* ── movement three ── */
-  namedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter },
-  namedRule: { height: 1, backgroundColor: 'rgba(241,238,229,0.14)', marginBottom: 20 },
+  /* ── the name — a HEAD over the finished week, not a screen that replaces it ── */
+  namedHead: { paddingHorizontal: space.gutter, paddingTop: 14 },
+  namedRule: { height: 1, backgroundColor: 'rgba(241,238,229,0.14)', marginBottom: 18 },
   // The largest type in onboarding. A playlist without a name is a list of songs.
-  programmeName: { fontFamily: font.serif, fontSize: 38, lineHeight: 42, color: stage.ink0, textAlign: 'left' },
-  summary: { marginTop: 16, fontFamily: font.mono, fontSize: 13, color: stage.ink2, textAlign: 'left' },
+  programmeName: { fontFamily: font.serif, fontSize: 34, lineHeight: 39, color: stage.ink0, textAlign: 'left' },
+  summary: { marginTop: 12, fontFamily: font.mono, fontSize: 17, color: stage.ink2, textAlign: 'left' },
 });

@@ -45,6 +45,7 @@ import * as Location from 'expo-location';
 import type { CardioGait } from '@/data/local/models';
 import {
   beginRun,
+  ingestStride,
   endRun,
   heartRateReadings,
   ingestFix,
@@ -70,6 +71,21 @@ import { liveHeartRate } from '@/domain/heartRate';
  */
 const HR_POLL_MS = 5_000;
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ HOW OFTEN THE TREADMILL IS ASKED HOW FAR SHE HAS GOT (founder, 2026-08-12)
+ *
+ * Five seconds, the same as the heart rate and for the same reason: Core Motion writes
+ * `DistanceWalkingRunning` in short segments as she moves, and asking faster only re-reads a sample
+ * that has not changed. The reading is CUMULATIVE, so a slower poll costs nothing at all — the next
+ * one carries everything the last one missed (`ingestStride` credits the delta).
+ *
+ * ⚠️ WHICH IS THE WHOLE REASON THE INDOOR PATH IS A POLL AND THE OUTDOOR ONE IS A SUBSCRIPTION. A
+ * missed GPS fix is a missed segment forever; a missed distance read is nothing.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+const STRIDE_POLL_MS = 5_000;
+
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
 export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, kcalForSegment, kcalPerKgKm, gaitFromPace, movementCredit, segmentCounts } from './cardioMath';
 export type { CardioSample, GpsState } from './cardioRun';
@@ -85,6 +101,15 @@ export function useCardioTracker(
   paused: boolean,
   liveGait: CardioGait,
   weightKg?: number | null,
+  /**
+   * ⛔ INDOORS — a treadmill, a belt, a track under a roof (founder, 2026-08-12).
+   *
+   * The distance comes from the phone's motion coprocessor by way of Health instead of from the
+   * satellite. **It is a source, not a second screen**: the maths, the calorie model and every beat
+   * above this hook are identical, and `kcalPerKgKm` already prices a walking segment and a running
+   * segment differently without being told which is which.
+   */
+  indoor = false,
 ): CardioSample {
   const [sample, setSample] = useState<CardioSample>(ZERO);
   const startedRef = useRef(false);
@@ -101,7 +126,7 @@ export function useCardioTracker(
   // ── The activity's own lifetime: one run, one background task, released together.
   useEffect(() => {
     if (!active) return;
-    beginRun(liveGait, weightKg);
+    beginRun(liveGait, weightKg, indoor);
     startedRef.current = true;
     setSample(snapshot());
     return () => {
@@ -149,9 +174,65 @@ export function useCardioTracker(
     return () => clearInterval(id);
   }, [active, paused]);
 
-  // ── GPS: the permissions, the foreground watcher, and the background task.
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ INDOORS: THE PHONE'S OWN MOTION, POLLED — the treadmill's replacement for the GPS watcher
+   *
+   * `HKQuantityTypeIdentifierDistanceWalkingRunning` since the run began. Core Motion derives it
+   * from step cadence and a stride-length model calibrated on her outdoor GPS work, so **no watch
+   * is required** — the coprocessor is in the phone. A watch improves the calibration; it is not
+   * the source.
+   *
+   * ⚠️ IT RUNS THROUGH A PAUSE, and `ingestStride` is what refuses to credit it. The cursor has to
+   * keep moving or the distance she covered standing at the water fountain arrives in one lump on
+   * resume, attributed to a run that was not happening.
+   *
+   * ⚠️ AND `null` STANDS DOWN THE WHOLE MODE. Health unreadable — Android today, or a denied
+   * grant — is not "she did not move": it is no source at all, and the stage must say so rather
+   * than draw a confident 0.00 for forty minutes. That is what `unavailable` already means here.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
   useEffect(() => {
-    if (!active) return;
+    if (!active || !indoor) return;
+    let alive = true;
+    const startedAt = Date.now();
+    let sawAny = false;
+    const read = () => {
+      void health
+        .distanceSince(startedAt)
+        .then((km) => {
+          if (!alive) return;
+          if (km == null) {
+            // Only before the first good reading. A source that drops out mid-run keeps whatever it
+            // already credited rather than retracting the kilometres she actually covered.
+            if (!sawAny) {
+              setGps('unavailable');
+              setSample(snapshot());
+            }
+            return;
+          }
+          sawAny = true;
+          ingestStride(km);
+        })
+        .catch(() => {
+          if (alive && !sawAny) setGps('unavailable');
+        });
+    };
+    read();
+    const id = setInterval(read, STRIDE_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [active, indoor]);
+
+  // ── GPS: the permissions, the foreground watcher, and the background task.
+  //    ⚠️ NOT OPENED INDOORS AT ALL — a treadmill session that asked for location would spend the
+  //    battery on a receiver that reports a stationary phone, and `ingestFix` would credit nothing
+  //    anyway. The permission prompt is the worse half: asking to track her location to measure a
+  //    belt is the kind of ask that gets refused once and then forever.
+  useEffect(() => {
+    if (!active || indoor) return;
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     setGps('acquiring');
@@ -202,7 +283,7 @@ export function useCardioTracker(
       sub?.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, indoor]);
 
   return sample;
 }

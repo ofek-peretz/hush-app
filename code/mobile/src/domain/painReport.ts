@@ -99,7 +99,9 @@ export const FORBIDDEN_PATTERNS: Record<string, ForbiddenPatterns> = {
   Back: { aggravator: ['hinge'], loaded: ['row', 'squat'] },
   Quads: { aggravator: ['knee_extension'], loaded: ['squat', 'lunge'] },
   Hamstrings: { aggravator: ['knee_flexion'], loaded: ['hinge'] },
-  Glutes: { aggravator: ['thrust'], loaded: ['hinge', 'squat', 'lunge'] },
+  /* The thrust family is three patterns since 2026-08-11 (see `SwapPattern`); a glute that hurts is
+   * aggravated by ALL of them — the split is about programming variety, never about what is safe. */
+  Glutes: { aggravator: ['thrust', 'thrust_supported', 'bridge'], loaded: ['hinge', 'squat', 'lunge'] },
   Triceps: { aggravator: ['elbow_extension_overhead', 'elbow_extension_pushdown'], loaded: ['press_flat'] },
   Biceps: { aggravator: ['curl', 'curl_lengthened', 'curl_shortened', 'brachialis'], loaded: [] },
   Chest: { aggravator: ['fly'], loaded: ['press_flat', 'press_incline'] },
@@ -179,6 +181,42 @@ export function forbiddenFor(
   for (const e of activeEases(eases, nowMs)) {
     if (e.muscle !== muscle) continue;
     for (const p of patternsAt(e.muscle, e.severity)) out.add(p);
+  }
+  return out;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ WHICH LIFTS A FRESH REPORT TAKES OUT OF THE SESSION SHE IS STANDING IN (founder, 2026-08-12)
+ *
+ *   *"אני באימון חזה ודיווחתי על פציעה בחזה והמשכתי את האימון וזה נשאר לי על תרגיל חזה. אז מה
+ *   המשמעות של זה לא הבנתי?"*
+ *
+ * The honest answer was: nothing. `reportPain` saved the ease and rebuilt the PROGRAMME — every
+ * week after this one — and the workout in front of her was untouched. She reported a hurt chest,
+ * pressed Back, and Resume put her on the next chest press.
+ *
+ * ⚠️ AND THAT IS THE ONE MOMENT THE REPORT IS MOST URGENT. A report filed at a rack is about the
+ * set she is about to do, not about Tuesday. The programme half was right and it was the half that
+ * could wait.
+ *
+ * ⚠️ IT REACHES FOR THE SAME TABLE THE ASSEMBLER USES (`patternsAt`), never a second opinion — so
+ * today and next week forbid exactly the same movements. The muscle is the label she can point at;
+ * the PATTERN is what the joint feels, which is why a hurt shoulder takes the bench press with it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export function liftsForbiddenNow(
+  exerciseIds: readonly string[],
+  eases: readonly PainEase[] | undefined,
+  nowMs: number,
+  patternOf: (id: string) => string | null | undefined,
+): string[] {
+  const banned = forbiddenPatterns(eases, nowMs);
+  if (banned.size === 0) return [];
+  const out: string[] = [];
+  for (const id of exerciseIds) {
+    const p = patternOf(id);
+    if (p && banned.has(p)) out.push(id);
   }
   return out;
 }

@@ -218,21 +218,32 @@ describe('the wait is honest', () => {
     expect(buildingCode()).not.toMatch(/progress\s*[:=]\s*\d|percent|ProgressMeter|ProgressBar/i);
   });
 
-  it('⛔ shows HER OWN ANSWERS being considered, not a generic stage name', () => {
+  it('⛔ shows HER OWN BODY being filled, not a generic stage name', () => {
     /*
-     * This is the difference between "analysing your goals…" — which is the AI-app noise the founder
-     * is trying to get away from — and a wait that is evidence something is being done with what she
-     * typed. Every line is a value she gave two screens ago.
-     */
-    /*
-     * ⛔ THE FOUR FADING SENTENCES BECAME A SIMULATION (founder 2026-08-05). The claim is
-     * unchanged and is now made in numbers rather than in prose: the screen opens on HER three
-     * answers — days, bodyweight, age — each ruler travelling from zero to the figure she set.
+     * This is the difference between "analysing your goals…" — the AI-app noise the founder is
+     * trying to get away from — and a wait that is evidence something is being done with what she
+     * gave us. The claim has never changed; what carries it has, twice.
+     *
+     * ⛔ IT ASSERTED `inputs.age` UNTIL 2026-08-13, AND IT PASSED ON A COMMENT. Age left the intake
+     * on 2026-08-08 and its ruler was deleted on 2026-08-12 — what satisfied `toContain('inputs.age')`
+     * for a day was the sentence in the file EXPLAINING that the age ruler had been removed. A law
+     * that reads source text can be kept green by prose describing its own violation.
+     *
+     * ⚠️ AND THE RULERS THEMSELVES ARE GONE (founder, 2026-08-12) — the beat is the BODY MAP she
+     * drew two screens ago, filling muscle by muscle. Still hers, still nothing invented.
      */
     const src = building();
-    expect(src).toContain('days={inputs.daysPerWeek}');
-    expect(src).toContain('inputs.weightKg');
-    expect(src).toContain('inputs.age');
+    expect(src).toContain('<BuildingProgrammeView');
+    expect(src).toContain('muscles={muscles}');
+    // The muscles are hers or the catalogue's — never a stage name, never a percentage.
+    expect(src).toContain('buildMusclesFromProgram(program');
+    /*
+     * ⚠️ AND THE ASSERTION IS AIMED AT THE RULERS, NOT AT `age`. Age is still a field on the
+     * profile this screen assembles (`age: inputs.age`) — what left is the labelled INSTRUMENT that
+     * drew it. "The word `age` is absent from the file" was never the rule; "no ruler is fed from
+     * here" is.
+     */
+    expect(buildingCode()).not.toMatch(/\b(fill|weight|unit|days)=\{/);
   });
 
   it('⛔ it never draws a lift the coach has not sent', () => {
@@ -265,9 +276,22 @@ describe('the wait is honest', () => {
     expect(src).not.toMatch(/displayWeight\(item|item\.load/);
   });
 
-  it('⚠ and it does not drag on once the programme is built', () => {
-    // His own instruction. The fill is 90 ms a row once the answer is in hand, whatever is left.
-    expect(building()).toContain('built ? 90 : MUSCLE_MS');
+  it("⛔ and its pace is the ANIMATION's, not a constant sitting beside it", () => {
+    /*
+     * ⛔ THIS PINNED `built ? 90 : MUSCLE_MS`, AND THE FOUNDER OVERRULED IT (2026-08-13): *"זה טס
+     * במהירות האור ולא נותן לכל שריר את הרגע שלו. זה צריך ממש להיות אנימציה ארוכה ואיטית."*
+     *
+     * The 90 ms came from his OWN earlier instruction — *"it must not drag on after the programme is
+     * built"* (2026-08-05) — and that instruction was about a screen that no longer exists: a
+     * scrolling list, where a row appearing was the whole event, waiting on a network call that has
+     * since been deleted. Carried into a beat where each muscle's lifts have a journey to complete,
+     * the same number stopped meaning "do not stall" and started meaning "let nothing finish".
+     *
+     * ⚠️ SO THE RULE IS NO LONGER A DURATION. `beatFor(lifts)` is the animation's own arithmetic —
+     * the only pace that cannot drift away from what is actually on screen.
+     */
+    expect(building()).toContain('beatFor(');
+    expect(buildingCode()).not.toContain('built ? 90');
   });
 
   it('and offers to ask again when it fails, keeping what she typed', () => {

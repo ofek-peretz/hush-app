@@ -94,6 +94,49 @@ describe('the mono voice carries figures, never words', () => {
   });
 
   /**
+   * ⛔ …AND A WORD THAT ARRIVES THROUGH A VARIABLE IS STILL A WORD (found 2026-08-13).
+   *
+   * The sweep above requires the `t(...)` to sit INSIDE the tag. The paywall's price cadence did
+   * not: `const cadence = perMonth || !annual ? t('paywall.perMonthShort') : t('paywall.perYearShort')`
+   * three lines up, then `<Text style={styles.cadence}>{cadence}</Text>`. Same rendered string, same
+   * mono face, invisible to the law — so "/חודש" has been sitting in a face with no Hebrew glyphs
+   * on the one screen in the product that asks for money.
+   *
+   * ⚠️ It is the cheapest possible evasion of a rule and nobody chose it; the variable is there
+   * because the value has two branches. So the law follows the identifier: a bare `{x}` in a
+   * mono-styled `<Text>` where `x` is declared in the same file from a `t(...)` call.
+   */
+  it('⛔ no mono-styled <Text> renders a translated string handed to it through a const', () => {
+    const violations: string[] = [];
+    for (const file of tsxFiles(SRC)) {
+      if (file.includes('screens\\dev') || file.includes('screens/dev')) continue;
+      const src = readFileSync(file, 'utf8');
+      const mono = styleKeysUsing(src, 'mono');
+      const sans = styleKeysUsing(src, 'sans');
+      if (mono.size === 0) continue;
+      const jsx = /<Text[^>]*style=\{([^}]*|\[[^\]]*\])\}[^>]*>([\s\S]*?)<\/Text>/g;
+      let j: RegExpExecArray | null;
+      while ((j = jsx.exec(src))) {
+        const [, styleExpr, body] = j;
+        if (/\bt\(/.test(body)) continue; // the direct form — the sweep above owns it
+        const bare = body.match(/^\s*\{\s*([A-Za-z_$][\w$]*)\s*\}\s*$/);
+        if (!bare) continue;
+        // Its declaration, anywhere in the file. A `t(` inside it means this slot draws a word.
+        const decl = new RegExp('(?:const|let)\\s+' + bare[1] + '\\s*=([\\s\\S]{0,300}?);', 'm').exec(src);
+        if (!decl || !/\bt\(/.test(decl[1])) continue;
+        // Same escape hatch as above: a sans key in the style expression is the promise, kept.
+        if ([...sans].some((k) => new RegExp('styles\\.' + k + '\\b').test(styleExpr))) continue;
+        for (const k of mono) {
+          if (!new RegExp('styles\\.' + k + '\\b').test(styleExpr)) continue;
+          const line = src.slice(0, j.index).split('\n').length;
+          violations.push(`${file.split(/[\\/]/).slice(-2).join('/')}:${line} — styles.${k} ← ${bare[1]}`);
+        }
+      }
+    }
+    expect(violations.sort()).toEqual([]);
+  });
+
+  /**
    * ⛔ AND THE LAW HAD NEVER BEEN POINTED AT THE WRIST (found in the 2026-08-05 audit).
    *
    * Everything above sweeps `src/`. The watch is Swift, so for its whole life the wrist has drawn

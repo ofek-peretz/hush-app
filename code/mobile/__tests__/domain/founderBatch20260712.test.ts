@@ -88,7 +88,14 @@ describe('the wheel reads as a measuring rule (v7 1.4 engraved scale)', () => {
     // same measurement now, so the assertion that one was >= the other becomes the property that
     // actually matters: they are the SAME.
     expect(WHEEL_HEIGHT.md).toBeLessThanOrEqual(120); // …and never so tall it crowds the step
-    expect(WHEEL_HEIGHT.lg).toBe(WHEEL_HEIGHT.md);
+    /*
+     * ⛔ NARROWED 2026-08-12 (founder): *"תגדיל את הסרגלים … במסך EDIT SET בלבד ולא בONBORDING. זה
+     * חדר כושר."* The two sizes are deliberately different again — the ONBOARDING ruler is the one
+     * this test is about and it is unchanged; the edit dial is larger because it is turned under a
+     * loaded bar. What must not come back is the old fault, where onboarding was the SMALLER of the
+     * two by accident.
+     */
+    expect(WHEEL_HEIGHT.lg).toBeGreaterThanOrEqual(WHEEL_HEIGHT.md);
   });
 });
 

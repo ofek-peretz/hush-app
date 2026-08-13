@@ -28,12 +28,11 @@ import { GhostClimb, Legend, SegmentedControl, VolumeArea } from '@/components/d
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
-import { progressClaim, progressClaimKey } from '@/domain/progressClaim';
 import { monoCanDraw } from '@/design/monoVoice';
 import type { QuarterlyProgressEntry } from '@/domain/progressReport';
 import type { ProgressAggregate } from '@/domain/progressAggregate';
 import type { Units } from '@/data/local/models';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { color, space, font, textScale, tracking, trackingPx, radius, signal, press } from '@/design/tokens';
 
 interface Props {
@@ -69,18 +68,30 @@ export function ProgressLifts({ entries, aggregate, loaded, units, onLog, onLift
       {/* header — the section name in the coach's serif, and the Lifts / Log choice */}
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
-        <SegmentedControl
-          size="pill"
-          style={styles.lens}
-          options={[
-            { value: 'lifts', label: t('progress.tabLifts') },
-            { value: 'log', label: t('progress.tabLog') },
-          ]}
-          value="lifts"
-          onChange={(v) => {
-            if (v === 'log') onLog?.();
-          }}
-        />
+        {/*
+          ⛔ THE ONBOARDING SHAPE, HERE TOO (founder, 2026-08-12): *"את הפקדים שבצד של LIFT ו-LOG
+          תשנה כמו שעשינו במין של ה-ONBORDING."* — the third control this week to leave
+          `SegmentedControl` for it, which is the point: one gesture, taught once.
+        */}
+        <View style={styles.lensRow}>
+          {([
+            { v: 'lifts', label: t('progress.tabLifts') },
+            { v: 'log', label: t('progress.tabLog') },
+          ] as const).map((o) => (
+            <Pressable
+              key={o.v}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: o.v === 'lifts' }}
+              accessibilityLabel={o.label}
+              onPress={() => {
+                if (o.v === 'log') onLog?.();
+              }}
+              style={({ pressed }) => [styles.lens, o.v === 'lifts' && styles.lensOn, pressed && styles.lensPressed]}
+            >
+              <Text style={[styles.lensText, o.v === 'lifts' && styles.lensTextOn]}>{o.label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -150,16 +161,8 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift }: {
   // Live, not a snapshot taken at import — the graph follows a rotation or a split view.
   const graphW = Math.round(useWindowDimensions().width - 60);
   const a = aggregate;
-  /*
-   * ⚠️ THE kg TOTAL EXCLUDES REPS-MODE LIFTS and the CLAIM does not. A pull-up that went from six
-   * reps to nine got stronger, but its gain is not kilograms — so it counts toward "every lift is
-   * heavier" and adds nothing to "+47 kg". Two questions, two populations, and conflating them
-   * would either lie about the kilograms or erase the bodyweight athlete.
-   */
-  const loadEntries = entries.filter((e) => e.mode !== 'reps');
-  const totalGainKg = loadEntries.reduce((x, e) => x + Math.max(0, e.deltaKg), 0);
-  const totalGain = displayWeight(Math.round(totalGainKg * 10) / 10, units) ?? 0;
-  const claim = progressClaim(entries);
+  /* ⛔ `totalGainKg`, `totalGain` and `progressClaim` went with the head they fed — see the note
+     where it stood. A derivation with no reader is what comes back later as a "summary". */
   const series = a.weeklyTonnes;
   const first = series[0] ?? 0;
   const last = series[series.length - 1] ?? 0;
@@ -167,72 +170,79 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift }: {
   const tonneUnit = t('progress.tonneUnit');
   const raises = t('progress.raises', { count: a.raises });
 
-  const badges: { value: string; unit: string; caption: string }[] = [
-    { value: fmtTonnes(a.liftedKg), unit: t('progress.unitTonnes'), caption: t('progress.badgeLifted') },
-    { value: String(a.workouts), unit: t('progress.unitDone'), caption: t('progress.badgeWorkouts') },
-    { value: fmtK(a.kcal), unit: t('progress.unitKcal'), caption: t('progress.badgeBurned') },
-    { value: String(a.raises), unit: t('progress.unitUp'), caption: t('progress.badgeRaises') },
-    { value: String(Math.round(a.cardioKm)), unit: t('progress.unitKm'), caption: t('progress.badgeCardio') },
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE BOARD — everything she has actually earned (founder, 2026-08-12)
+   *
+   *   *"להציג את כל מה שהמתאמן הרוויח … כמה כוח התווסף, כמה קלוריות, כמה אימונים, כמה קילומטר,
+   *   כמה משקל הרים בסך הכל, כמה שעות … זה אשכרה מסך שמראה את כל ההשקעה של המתאמן בעצמו."*
+   *
+   * ⚠️ AND THE ANSWER TO ALL OF IT WAS ALREADY ON THIS SCREEN, BELOW THE FOLD, AT 17 POINTS.
+   * Every figure he listed was drawn as one of five 60-point dashed circles under the heading
+   * "ALL-TIME MILESTONES", beneath a chart and a table — **five 17-point numerals carrying the
+   * whole of what she has done.** The screen led with a weekly-volume graph, which is not
+   * something she earned; it is a shape that goes up and down.
+   *
+   * So the strip is promoted to the page. Six facts, at a size that means something, each named in
+   * words — and `hours`, the one he asked for that nothing was keeping (`progressAggregate`).
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  const hours = Math.floor(a.minutes / 60);
+  /*
+   * ⛔ AND EACH ONE IS A ROW WITH ITS OWN MARK (founder, 2026-08-12)
+   *
+   *   *"זה נראה לך כמו מסך שכיף להכנס אליו? בלי הצבע הירוק שלנו, בלי שום דבר שמסמל התקדמות …
+   *   הכל בצבעים כבויים ועצומים. אני רוצה מסך שבראשו מופיע ALL TIME PROGRESS ולמטה לכל קטגוריה
+   *   שורה משלה עם אייקון משל עצמו."*
+   *
+   * The 3×2 grid put the facts on the page at a size that meant something, which was the last
+   * message's ask — and left them as six grey numerals with no mark on any of them. **Nothing on a
+   * page about progress was the colour this product uses for progress.** A row each, opened by its
+   * own glyph in moss, so the eye can find "how far have I run" without reading six captions.
+   */
+  const board: { value: string; unit: string; caption: string; icon: IconName }[] = [
+    { value: String(a.workouts), unit: '', caption: t('progress.badgeWorkouts'), icon: 'dumbbell' },
+    { value: hours >= 1 ? String(hours) : String(a.minutes), unit: hours >= 1 ? t('progress.unitHours') : t('progress.unitMinutes'), caption: t('progress.badgeTrained'), icon: 'history' },
+    { value: fmtTonnes(a.liftedKg), unit: t('progress.unitTonnes'), caption: t('progress.badgeLifted'), icon: 'plate' },
+    { value: fmtK(a.kcal), unit: t('progress.unitKcal'), caption: t('progress.badgeBurned'), icon: 'flame' },
+    { value: String(Math.round(a.cardioKm)), unit: t('progress.unitKm'), caption: t('progress.badgeCardio'), icon: 'runner' },
+    { value: String(a.raises), unit: '', caption: t('progress.badgeRaises'), icon: 'star' },
   ];
 
   return (
     <>
       {/*
-        THE ANSWER. `+47 kg` — what she has actually added, not what she has moved. Before any lift
-        has risen there is no total to state and a "+0" would read as a verdict, so the starting-point
-        framing stands in its place: the first mark is what every later gain is measured against.
+        ════════════════════════════════════════════════════════════════════════════════════════
+        ⛔ THE WHOLE HEAD IS DELETED AND THE BOARD LEADS (founder, 2026-08-12)
+
+          *"תמחק את כל החלק העליון … ופשוט תעלה את ה-ALL TIME PROGRESS לראש המסך במקום."*
+
+        It carried "TOTAL STRENGTH ADDED · +41 kg", a derived sentence, the workouts-and-weeks line
+        and a "Share this week" link — four things above the six facts the page is FOR, and on her
+        first week all four degrade into a preamble that says she has not started yet.
+
+        ⚠️ AND THE DERIVED CLAIM WAS THE ONE WORTH ARGUING FOR. `progressClaim` writes a sentence
+        that is true of the table under it and nothing else — the whole difference between this page
+        and a chart. It is deleted anyway: the EVERY LIFT table underneath states each lift's own
+        start and best, per lift, which is the same claim without a narrator.
+        ════════════════════════════════════════════════════════════════════════════════════════
       */}
-      <View style={styles.answer}>
-        {totalGainKg > 0 ? (
-          <>
-            <Legend tone="onStage">{t('report.totalAdded')}</Legend>
-            <View style={styles.heroValueRow}>
-              <Text style={styles.heroValue}>{`+${totalGain}`}</Text>
-              <Text style={[styles.heroUnit, !monoCanDraw(unitLabel(units)) && styles.heroUnitWord]}>{unitLabel(units)}</Text>
+
+      {/* THE BOARD — see the note above `board`. */}
+      <View style={styles.board}>
+        <Legend tone="accent" style={styles.boardHead}>{t('progress.allTime')}</Legend>
+        {board.map((b) => (
+          <View key={b.caption} style={styles.boardRow}>
+            <View style={styles.boardMark}>
+              <Icon name={b.icon} size={20} color={signal[0]} strokeWidth={2} />
             </View>
-          </>
-        ) : (
-          <>
-            <Legend tone="onStage">{t('report.startingPoint')}</Legend>
-            <Text style={styles.claim}>{t('report.startingPointSub')}</Text>
-          </>
-        )}
-
-        {/*
-          ⛔ AND THE SENTENCE, DERIVED (`domain/progressClaim`). It states what is true of the table
-          under it and nothing else — a screen that could be generous about a bad month is a screen
-          whose other figures have to be checked. Only something that watched can write it, which is
-          the whole difference between this page and a chart.
-        */}
-        {claim && totalGainKg > 0 ? (
-          <Text style={styles.claim}>
-            {t(progressClaimKey(claim), claim.kind === 'some' ? { risen: claim.risen, lifts: claim.lifts } : { lifts: claim.kind === 'all' ? claim.lifts : 0 })}
-          </Text>
-        ) : null}
-
-        <Legend size={11} track={0.12}>{t('progress.workoutsWeeks', { workouts: a.workouts, weeks: a.weeks })}</Legend>
-      </View>
-
-      {/* weekly-volume area graph */}
-      <View style={styles.graph}>
-        <VolumeArea
-          data={series}
-          width={graphW}
-          height={150}
-          startLabel={`${first} ${t('progress.unitTonnes')} · ${t('progress.volWeekOne')}`.toUpperCase()}
-          endLabel={`${last} ${t('progress.unitTonnes')} · ${t('progress.volThisWeek')}`.toUpperCase()}
-        />
-        {onShareWeek ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('share.shareWeek')}
-            onPress={onShareWeek}
-            hitSlop={8}
-            style={({ pressed }) => [styles.shareWeek, { opacity: pressed ? press.opacity : 1 }]}
-          >
-            <Text style={styles.shareWeekLabel}>{t('share.shareWeek')}</Text>
-          </Pressable>
-        ) : null}
+            <Text style={styles.boardCaption}>{b.caption}</Text>
+            <View style={styles.boardValueRow}>
+              <Text style={styles.boardValue}>{b.value}</Text>
+              {b.unit ? <Text style={styles.boardUnit}>{b.unit}</Text> : null}
+            </View>
+          </View>
+        ))}
       </View>
 
       {/*
@@ -248,7 +258,7 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift }: {
       */}
       {entries.length > 0 ? (
         <View style={styles.table}>
-          <Legend tone="onStage">{t('progress.everyLift')}</Legend>
+          <Legend tone="accent">{t('progress.everyLift')}</Legend>
           {entries.map((e) => {
             // A bodyweight movement progresses in REPS and is never unit-converted (founder
             // 2026-07-10) — its row reads "9 reps", not a fabricated kilogram.
@@ -264,29 +274,37 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift }: {
                 style={({ pressed }) => [styles.liftRow, pressed && styles.liftRowPressed]}
               >
                 <Text style={styles.liftName} numberOfLines={1}>{exerciseDisplayName(e.exerciseId)}</Text>
-                <Text style={styles.liftFigure}>
-                  <Text style={styles.liftFrom}>{conv(e.initialPeakKg)}</Text>
-                  {' → '}
-                  <Text style={styles.liftTo}>{conv(e.periodPeakKg)}</Text>
-                  {/* A lift that has not moved shows no delta: "+0" reads as a result rather than as
-                      a lift she has done twice at the same weight. */}
-                  {e.deltaKg > 0 ? <Text style={styles.liftDelta}>{`  +${conv(e.deltaKg)}`}</Text> : null}
-                </Text>
+                {/*
+                  ⛔ "25 → 25" IS NOT A JOURNEY (founder, 2026-08-12): *"אם אין דלתא פשוט תציג את
+                  המשקל עצמו, כי כרגע אתה מציג 25 וחץ ל-25 — ברור לך שאין בזה היגיון."*
+
+                  He is right and the fault was one level up from where it looked. The DELTA was
+                  already suppressed at zero — that part was correct — but the arrow and the two
+                  identical figures were drawn unconditionally, so a lift she has done once came out
+                  as a move from a weight to the same weight. **An arrow is a claim that something
+                  travelled.**
+
+                  One weight when nothing has moved; start → best when it has.
+                */}
+                {e.deltaKg > 0 ? (
+                  <Text style={styles.liftFigure}>
+                    <Text style={styles.liftFrom}>{conv(e.initialPeakKg)}</Text>
+                    {' → '}
+                    <Text style={styles.liftTo}>{conv(e.periodPeakKg)}</Text>
+                    <Text style={styles.liftDelta}>{`  +${conv(e.deltaKg)}`}</Text>
+                  </Text>
+                ) : (
+                  <Text style={styles.liftFigure}>
+                    <Text style={styles.liftTo}>{conv(e.periodPeakKg)}</Text>
+                    <Text style={styles.liftUnit}>{` ${unit}`}</Text>
+                  </Text>
+                )}
               </Pressable>
             );
           })}
         </View>
       ) : null}
 
-      {/* all-time milestone badges */}
-      <View style={styles.milestones}>
-        <Legend tone="onStage">{t('progress.allTimeMilestones')}</Legend>
-        <View style={styles.badgeRow}>
-          {badges.map((b) => (
-            <StatBadge key={b.caption} value={b.value} unit={b.unit} caption={b.caption} />
-          ))}
-        </View>
-      </View>
     </>
   );
 }
@@ -329,7 +347,7 @@ function StatBadge({ value, unit, caption }: { value: string; unit: string; capt
       <View style={styles.badgeRing}>
         <View style={styles.badgeInner}>
           <Text style={styles.badgeValue}>{value}</Text>
-          <Legend size={11} track={0.12} align="center">{unit}</Legend>
+          <Legend size={17} track={0.12} align="center">{unit}</Legend>
         </View>
       </View>
       <Text style={styles.badgeCaption} numberOfLines={1}>{caption}</Text>
@@ -351,7 +369,22 @@ const styles = StyleSheet.create({
   // "Progress" at 40 — a surface title, one step below the letter's 56 and above a step's 32.
   title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
   // The Lifts / Log switch rides on the headline's shoulder, not on its baseline.
-  lens: { marginTop: 8 },
+  /* The lens choice, in the onboarding sex control's geometry — see the note at the markup. */
+  lensRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  lens: {
+    minWidth: 76,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.16)',
+  },
+  lensOn: { borderColor: color.textPrimary },
+  lensPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
+  lensText: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textAlign: 'center' },
+  lensTextOn: { color: color.textPrimary },
 
   chipsRow: { flexGrow: 0 },
   chipsWrap: { position: 'relative', overflow: 'hidden' },
@@ -361,7 +394,7 @@ const styles = StyleSheet.create({
   chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: radius.full, justifyContent: 'center' },
   chipActive: { backgroundColor: color.textPrimary },
   chipIdle: { borderWidth: 1, borderColor: 'rgba(241,238,229,0.2)' },
-  chipText: { fontFamily: font.sansMedium, fontSize: 13, textAlign: 'left' },
+  chipText: { fontFamily: font.sansMedium, fontSize: 17, textAlign: 'left' },
   chipTextActive: { color: color.bg, fontFamily: font.sansSemibold }, // rtl-ok: merged onto chipText, which sets textAlign
   chipTextIdle: { color: color.textSecondary },
 
@@ -375,7 +408,7 @@ const styles = StyleSheet.create({
   dayOneTitle: { fontFamily: font.serif, fontSize: 34, lineHeight: 39, color: color.textPrimary, textAlign: 'left' },
   dayOneBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, textAlign: 'left' },
   dayOneNote: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: color.border, paddingTop: 16 },
-  dayOneNoteText: { flex: 1, fontFamily: font.sans, fontSize: 14, color: color.textSecondary, textAlign: 'left' },
+  dayOneNoteText: { flex: 1, fontFamily: font.sans, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
 
   // tonnage hero
   /*
@@ -402,9 +435,13 @@ const styles = StyleSheet.create({
   },
   /* A wash, never a fade — `aPressNeverDimsWhatYouPressed`. */
   liftRowPressed: { backgroundColor: color.surface },
-  liftName: { flex: 1, fontFamily: font.sans, fontSize: 16.5, color: color.textPrimary, textAlign: 'left' },
-  liftFigure: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 15, color: color.textMuted, textAlign: 'left' },
+  /* ⚠️ 17 → 19 with the board above it. These rows are the ONLY door to a lift's own card (3.2b),
+     which the founder asked how to reach — a row at caption size next to 44-point figures does not
+     read as one. See the note above `entries.length` for why they are rows and not chips. */
+  liftName: { flex: 1, fontFamily: font.sans, fontSize: 19, color: color.textPrimary, textAlign: 'left' },
+  liftFigure: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 19, color: color.textMuted, textAlign: 'left' },
   liftFrom: { color: color.textMuted },
+  liftUnit: { color: color.textMuted }, // rtl-ok: nested in liftFigure
   liftTo: { color: color.textPrimary },
   liftDelta: { fontFamily: font.monoMedium, color: signal[0], textAlign: 'left' },
 
@@ -420,9 +457,49 @@ const styles = StyleSheet.create({
   raisesText: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 18, color: signal[0], textAlign: 'left' },
   raisesTextWord: { fontFamily: font.sansSemibold },
 
-  graph: { marginTop: 14, alignItems: 'flex-start' },
-  shareWeek: { marginTop: 14, alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
-  shareWeekLabel: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
+  /* ⛔ THE BOARD. A 3×2 grid across the full width — see the note at `board`. The figures it holds
+     were five 17-point numerals inside 60-point dashed circles at the very foot of the page. */
+  board: { marginTop: 34, paddingHorizontal: space.gutter },
+  boardHead: { marginBottom: 6 },
+  boardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 17,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(241,238,229,0.12)',
+  },
+  /* The glyph's own seat — a moss disc, so the column of marks reads down the page as one axis. */
+  boardMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(169,196,159,0.12)',
+  },
+  boardValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  boardValue: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 44,
+    lineHeight: 48,
+    letterSpacing: -1.4,
+    color: color.textPrimary,
+    includeFontPadding: false,
+    textAlign: 'left',
+  },
+  /* The unit is a WORD in some languages ("שעות", "טון") — sans, never the mono face. */
+  boardUnit: { fontFamily: font.sans, fontSize: 19, color: color.textSecondary, textAlign: 'left' },
+  boardCaption: {
+    flex: 1,
+    fontFamily: font.sansMedium,
+    fontSize: 17,
+    letterSpacing: trackingPx(17, tracking.legend),
+    textTransform: 'uppercase',
+    color: color.textSecondary,
+    textAlign: 'left',
+  },
 
   // all-time milestone badges
   milestones: { marginTop: 26, gap: 14 },
@@ -430,7 +507,8 @@ const styles = StyleSheet.create({
   badgeCell: { flex: 1, alignItems: 'center', gap: 7 },
   badgeRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(241,238,229,0.4)', alignItems: 'center', justifyContent: 'center' },
   badgeInner: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: 'rgba(241,238,229,0.15)', backgroundColor: color.fillSubtle, alignItems: 'center', justifyContent: 'center' },
-  badgeValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14, color: color.textPrimary, textAlign: 'center' },
-  badgeCaption: { fontFamily: font.sans, fontSize: 14, lineHeight: 14, color: color.textSecondary, textAlign: 'center' },
+  badgeValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: color.textPrimary, textAlign: 'center' },
+  // lineHeight follows the floor up: 14 was set against an 11px caption and would clip a 17px one.
+  badgeCaption: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'center' },
 
 });

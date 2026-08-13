@@ -72,7 +72,9 @@ describe('the constraints that must survive', () => {
     // Without `format: "enum"` Gemini treats it as a free string and the constraint is silently
     // ignored — the model may answer with a fifth shape the parse will then reject.
     const kind = nodes(translated()).find((n) => Array.isArray(n.enum) && (n.enum as string[]).includes('reps'))!;
-    expect([...(kind.enum as string[])].sort()).toEqual(['distance', 'open', 'reps', 'time']);
+    // ⛔ THREE, NOT FOUR — `open` was deleted 2026-08-12. An item the product cannot measure is an
+    // item the product cannot coach, and the schema is where that stops being ingestible.
+    expect([...(kind.enum as string[])].sort()).toEqual(['distance', 'reps', 'time']);
     expect(kind.format).toBe('enum');
     expect(kind.type).toBe('STRING');
   });
@@ -150,7 +152,7 @@ describe('the shape it promises is the shape the parse accepts', () => {
           { rounds: 4, restS: 120, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load: 32.5, say: 'Last one near failure.' }] },
           { rounds: 1, items: [{ kind: 'distance', ex: 'run_outdoor', metres: 5000 }] },
           { rounds: 3, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
-          { rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] },
+          { rounds: 1, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
         ],
       }],
       notes: [{ ex: 'bb_bench_press', say: 'Up — you cleared 12 twice.' }],

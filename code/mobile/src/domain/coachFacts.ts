@@ -195,7 +195,8 @@ export interface FactMovement {
   /** She can be holding weight while doing it. */
   loadable?: true;
   /** Outdoors and GPS-tracked — distance and pace come from the phone, not from her report. */
-  gps?: true;
+  /** How the phone measures it, if it does at all — see `coachMovements`. */
+  tracked?: 'gps' | 'motion';
 }
 
 /**
@@ -685,6 +686,21 @@ const NOT_YET_OFFERED = new Set([
    * the coach write a session the app cannot run.
    */
   'sprint', 'shuttle_run', 'box_jump', 'broad_jump', 'sled_push',
+  /*
+   * ⛔ AND THE CARRY, on the same ruling, spelled out again (founder, 2026-08-12):
+   *
+   *   > *"אין נסיעת חקלאי. יש רק הליכה או ריצה בחוץ או הליכה או ריצה בהליכון. זהו."*
+   *
+   * It was the last DISTANCE movement on offer that is not one of the four, and it is the reason a
+   * predicate written as "has a distance ⇒ the phone counts it" sent a forty-metre walk across a
+   * gym floor to the live cardio stage. **With it gone the two questions collapse into one**:
+   * every distance the coach can prescribe is walking or running, and every one of them is tracked
+   * — by the satellite outdoors and by Core Motion on a belt.
+   *
+   * ⚠️ IT STAYS IN `MOVEMENTS`, like `sled_push` beside it, so a session already logged against it
+   * still knows its own name. What it may no longer be is PRESCRIBED.
+   */
+  'farmer_carry',
 ]);
 
 export function coachMovements(): FactMovement[] {
@@ -693,7 +709,13 @@ export function coachMovements(): FactMovement[] {
     name: m.name,
     measures: [...m.measures],
     ...(m.loadable ? { loadable: true as const } : {}),
-    ...(m.gps ? { gps: true as const } : {}),
+    /*
+     * ⛔ `gps` → `tracked` (2026-08-12). The coach is told HOW a movement is measured, and the
+     * answer stopped being binary the day the treadmill path landed: `'gps'` outdoors, `'motion'`
+     * indoors, absent when she does it and says so. A flag called `gps` could only say two of the
+     * three, and it was saying the wrong one about a treadmill.
+     */
+    ...(m.tracked ? { tracked: m.tracked } : {}),
   }));
 }
 

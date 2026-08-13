@@ -51,7 +51,7 @@ export function PlanReceivedView({ plan, splitName, onAdopt, onDecline }: PlanRe
             <Text style={styles.senderLine} numberOfLines={1}>
               {from ? t('planReceived.sharedBy', { name: bidi(from) }) : t('planReceived.sharedAnon')}
             </Text>
-            <Legend size={11} track={0.12}>{t('planReceived.withYou')}</Legend>
+            <Legend size={17} track={0.12}>{t('planReceived.withYou')}</Legend>
           </View>
         </View>
 
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   fact: { gap: 2 },
   factValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 20, color: color.textPrimary, textAlign: 'left' },
-  factLabel: { fontFamily: font.sans, fontSize: 14, color: color.textSecondary, textAlign: 'left' },
+  factLabel: { fontFamily: font.sans, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
 
   assure: {
     flexDirection: 'row',
@@ -141,8 +141,8 @@ const styles = StyleSheet.create({
   },
   assureText: { flex: 1, gap: 4 },
   // The coach's serif — this is Hush speaking, not a legal notice.
-  assureLead: { fontFamily: font.serif, fontSize: 15, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
-  assureSub: { fontFamily: font.sans, fontSize: 15, lineHeight: 18, color: color.textSecondary, textAlign: 'left' },
+  assureLead: { fontFamily: font.serif, fontSize: 17, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
+  assureSub: { fontFamily: font.sans, fontSize: 17, lineHeight: 18, color: color.textSecondary, textAlign: 'left' },
 
   foot: { paddingHorizontal: 26, paddingBottom: 12, gap: 4 },
 });

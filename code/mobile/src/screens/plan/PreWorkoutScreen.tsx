@@ -22,8 +22,13 @@ import type { PlanLift } from '@/components/PlanLifts';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, coachChanges } from '@/domain/coachWeek';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
+import { WhyHereSheet, whyHereProps } from '@/components/WhyHereSheet';
+import { liftPlacement, type LiftPlacement } from '@/domain/whyLiftIsHere';
+import { WEEKLY_SETS_FLOOR, SESSION_MAX } from '@/engine/v5/constants';
+import { exerciseDisplayName } from '@/data/exercises';
 import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
 import { View, StyleSheet } from 'react-native';
@@ -54,18 +59,59 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
    */
   const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
   const [whyFor, setWhyFor] = useState<string | null>(null);
+  /**
+   * ⛔ AND THE REASON A LIFT IS HERE AT ALL (founder 2026-08-11) — the WHY for one **not trained
+   * yet**, which in her first week is every lift on this card.
+   *
+   * A `ChangedLiftCase` needs two programmes to compare, so week one has none and the row used to
+   * fall through to the form clip. `liftPlacement` reads the ENGINE's week — the muscle, her mark,
+   * the dose, the movement it fills — none of which needs a second programme or a single logged set.
+   *
+   * ⚠️ IT READS `db.loadProgram()` AND NOT THE COACH PLAN THIS SCREEN DRAWS FROM. Deliberate, and
+   * the fallback below is what makes it safe: the placement answers for lifts the engine placed and
+   * stays silent for anything else, so a row it cannot explain opens the clip exactly as it did.
+   */
+  const [placements, setPlacements] = useState<Record<string, LiftPlacement>>({});
+  const [hereFor, setHereFor] = useState<string | null>(null);
+  /** The engine's own days, by name — read only for the two verdicts it stamps on them. */
+  const [engineDays, setEngineDays] = useState<Record<string, { overBudget?: boolean; shortOfBudget?: boolean }>>({});
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [now, before, history, weekOpenMs, log] = await Promise.all([
-        db.loadCoachPlan().catch(() => null),
+      const [now, before, history, weekOpenMs, log, program] = await Promise.all([
+        loadWeekPlan().catch(() => null),  // one door — see `data/local/weekPlan`
         db.loadCoachPlanWeek().catch(() => null),
         db.loadHistory().catch(() => []),
         db.loadWeekOpen().catch(() => null),
         db.loadCoachLog().catch(() => null),
+        db.loadProgram().catch(() => null),
       ]);
       if (!alive) return;
+      /*
+       * Built for every lift the engine's week holds rather than for the row she pressed, because
+       * the alternative is a read on every tap — and this is the screen she stands in front of
+       * deciding whether to train, where a sheet that takes a frame to open reads as a stall.
+       */
+      /*
+       * ⛔ THE S-3 SENTENCE, BOTH HALVES (founder 2026-08-12). The engine stamps its verdict on the
+       * DAY (`overBudget` / `shortOfBudget`) and until now only telemetry read it. Matched by NAME,
+       * because that is what survives the conversion into a `CoachPlan` — the bridge carries the
+       * engine's own day name across, so this cannot drift with the ordering.
+       */
+      setEngineDays(
+        Object.fromEntries(
+          (program?.days ?? []).filter((d) => !d.isRest).map((d) => [d.name, d]),
+        ),
+      );
+      const here: Record<string, LiftPlacement> = {};
+      for (const d of program?.days ?? [])
+        if (!d.isRest)
+          for (const s of d.slots) {
+            const p = liftPlacement(s.exerciseId, program, app.profile?.bodyMap, app.profile?.daysPerWeek, history ?? []);
+            if (p) here[s.exerciseId] = p;
+          }
+      setPlacements(here);
       setPlan(now ?? null);
       setWeekPlan(before ?? null);
       const dirs = coachLoadDirections(now, before) as Record<string, LoadDirection>;
@@ -133,15 +179,46 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       shape={
         lifts.length
           ? minutes
-            ? t('home.planShape', { lifts: lifts.length, min: minutes })
-            : t('home.planShapeNoTime', { lifts: lifts.length })
+            ? t('home.planShape', { count: lifts.length, lifts: lifts.length, min: minutes })
+            : t('home.planShapeNoTime', { count: lifts.length, lifts: lifts.length })
           : null
       }
+      minutes={minutes}
       lifts={lifts}
       units={units}
       changes={changes}
+      /*
+       * ⚠️ IT USES THE MINUTES ALREADY ON SCREEN, not a second estimate. The card says "~50 min" one
+       * line above; a sentence quoting a different number would be the two-answers defect this file
+       * has already been audited for once.
+       */
+      budgetNote={
+        workout && engineDays[workout.name]?.overBudget
+          ? t('budgetNote.over', { min: minutes, budget: app.profile?.workoutMinutes ?? SESSION_MAX })
+          : workout && engineDays[workout.name]?.shortOfBudget
+            ? t('budgetNote.short', { min: minutes })
+            : null
+      }
       onForm={(exerciseId) => navigation.navigate('WorkoutDetail', { exerciseId } as never)}
-      onWhy={(exerciseId) => (whyByExercise[exerciseId] ? setWhyFor(exerciseId) : navigation.navigate('WorkoutDetail', { exerciseId } as never))}
+      /*
+       * ⛔ THE ROW ALWAYS ASKS; THIS DECIDES WHICH ANSWER EXISTS — in order of how much it knows.
+       *
+       *   1. the engine MOVED this load ....... the case, on `WhyChangedSheet`
+       *   2. the engine PLACED this lift ...... the placement, on `WhyHereSheet`
+       *   3. neither ......................... the form clip, exactly as before
+       *
+       * ⚠️ THE ORDER IS THE PRODUCT DECISION. A lift whose load moved gets the load's argument even
+       * though a placement also exists for it: she is looking at a figure that changed since last
+       * week, and answering "this trains your back" to that would be answering a question she did
+       * not ask. The placement is what a lift says when it has nothing newer to report.
+       */
+      onWhy={(exerciseId) =>
+        whyByExercise[exerciseId]
+          ? setWhyFor(exerciseId)
+          : placements[exerciseId]
+            ? setHereFor(exerciseId)
+            : navigation.navigate('WorkoutDetail', { exerciseId } as never)
+      }
       done={doneIds.includes(workout.id)}
       onClose={() => navigation.goBack()}
       onStart={() => {
@@ -163,6 +240,14 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       {whyFor && whyByExercise[whyFor] ? (
         <View style={StyleSheet.absoluteFill}>
           <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />
+        </View>
+      ) : null}
+      {hereFor && placements[hereFor] ? (
+        <View style={StyleSheet.absoluteFill}>
+          <WhyHereSheet
+            {...whyHereProps(placements[hereFor], exerciseDisplayName(hereFor), t, WEEKLY_SETS_FLOOR)}
+            onClose={() => setHereFor(null)}
+          />
         </View>
       ) : null}
     </View>

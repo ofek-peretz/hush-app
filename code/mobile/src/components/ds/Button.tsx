@@ -55,7 +55,20 @@ interface Props {
 const HEIGHT: Record<Size, number> = { sm: control.hSm, md: control.h, lg: control.hLg, crossing: 60, act: 62, stage: 64, card: 56, whySheet: 56 };
 // `lg` is the 58px full-width action the handoff draws eight times over, always at 600/16 —
 // never 17, and never tracked. A button label is a word, not a measurement.
-const FONT: Record<Size, number> = { sm: textScale.sm, md: textScale.base, lg: 16, crossing: 17, act: 17, stage: 18, card: 15.5, whySheet: 16 };
+/*
+ * ⛔ NOTHING HERE IS UNDER 17 (founder 2026-08-12, the type floor).
+ *
+ * `lg` was 16, `card` 15.5, `whySheet` 16 — **so the primary act, the single most important string
+ * the app draws, was below the floor on three of its eight sizes.** It is "Begin Upper B": the one
+ * thing the screen exists to offer.
+ *
+ * ⚠️ AND `typeHasAFloor` COULD NOT SEE IT, which is the more useful half. The law sweeps `fontSize:`
+ * and `<Legend size={…}>`; this is a lookup table of bare numbers that happens to be consumed as a
+ * font size two functions later. A general "any number in a Record" rule would flag `RADIUS.card:
+ * 17` on the very next line — a corner radius, not type. So the law names this map explicitly
+ * instead, which is the honest shape for a one-off.
+ */
+const FONT: Record<Size, number> = { sm: textScale.sm, md: textScale.base, lg: 17, crossing: 17, act: 17, stage: 18, card: 17, whySheet: 17 };
 const PADX: Record<Size, number> = { sm: space[3], md: space[5], lg: space[7], crossing: space[7], act: space[7], stage: space[7], card: space[7], whySheet: space[7] };
 const RADIUS: Record<Size, number> = { sm: radius.md, md: radius.control, lg: radius.button, crossing: radius.button, act: radius.button, stage: radius.xl, card: 17, whySheet: 18 };
 

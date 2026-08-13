@@ -220,9 +220,28 @@ describe('⛔ the prompt does not misdescribe what onboarding asks', () => {
     expect(text).toMatch(/do not open by asking her what she is training for/);
   });
 
-  it('⚠️ and the goal screen still requires both, which is why the above is true', () => {
-    const goal = readFileSync(join(__dirname, '../../src/screens/onboarding/YourGoal.tsx'), 'utf8');
-    expect(goal).toMatch(/disabled=\{goal\.trim\(\)\.length === 0 \|\| limits\.trim\(\)\.length === 0\}/);
+  it('⛔ …and the rule was REVISITED when the screen it rested on was deleted', () => {
+    /*
+     * ⛔ THIS TEST USED TO READ `YourGoal.tsx` AND ASSERT THAT IT REQUIRED BOTH FIELDS. Its sibling
+     * in `thePromptDescribesTheAppThatExists` carried the note that mattered: *"if the goal screen
+     * ever stops requiring them, the prompt is free to ask again and this rule has to be revisited
+     * rather than silently kept."*
+     *
+     * On 2026-08-12 the screen was deleted — the body map replaced it, and measuring who READ her
+     * prose found that the ENGINE never has. So both fields are now OPTIONAL: absent for an athlete
+     * who came through onboarding, present only where an imported programme carried them.
+     *
+     * "Do not ask, she already told you" is therefore only true CONDITIONALLY, and a flat instruction
+     * would have left the coach unable to learn her goal at all. The prose says so, and this asserts
+     * the conditional rather than a screen that no longer exists.
+     */
+    const text = promptText();
+    expect(text).toMatch(/PRESENT ONLY WHEN SHE HAS GIVEN THEM/);
+    expect(text).toMatch(/Where a field is ABSENT she has never been asked/);
+    // …and the fields really are optional on the type she is built from.
+    const models = readFileSync(join(__dirname, '../../src/data/local/models.ts'), 'utf8');
+    expect(models).toMatch(/goalText\?: string;/);
+    expect(models).toMatch(/limitsText\?: string;/);
   });
 });
 

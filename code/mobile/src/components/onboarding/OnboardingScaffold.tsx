@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   voice: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 22, lineHeight: 31, color: color.textSecondary, marginTop: 18, textAlign: 'left' },
   // The factual line under the title — sans, 14/1.5, and it sits CLOSE (8): it finishes the
   // headline's sentence rather than starting a new thought.
-  sub: { fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textSecondary, marginTop: 8, textAlign: 'left' },
+  sub: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textSecondary, marginTop: 8, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 30, gap: 14 },
 });

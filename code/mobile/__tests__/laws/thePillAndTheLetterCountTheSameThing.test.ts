@@ -68,7 +68,27 @@ describe('the letter reads the same number the pill did', () => {
    */
   it('and `changedCount` is the measured difference, the same one the pill counts', () => {
     expect(letter()).toContain('const changes = React.useMemo(() => coachChanges(plans.now, plans.before)');
-    expect(letter()).toContain('const changedCount = changes?.length ?? 0;');
+    /*
+     * ⛔ TIGHTENED AGAIN 2026-08-12, AND THIS LAW HAD BEEN ASSERTING THE BUG.
+     *
+     * It pinned `const changedCount = changes?.length ?? 0;` — the diff of two stored `CoachPlan`
+     * snapshots — while the letter's ROWS came from `changes ?? fromCoach ?? view`. Two derivations,
+     * which is the exact fault this whole file exists to forbid.
+     *
+     * ⚠️ AND IT WENT LIVE THE DAY THE MODEL WAS REMOVED. With no coach plans stored, `changes` is
+     * null on every athlete: the count is 0, `steady` is true, and the letter prints "I changed
+     * nothing this week" over a `view` holding every change the engine just made. The founder
+     * photographed it and called it a tax letter; the gallery's own `3.1` — *"a week WITH
+     * decisions"* — could not draw a single one.
+     *
+     * The count is the ROWS' length now. `coachChanges` still feeds them (asserted above), so the
+     * pill and the letter still count one thing; they just cannot fall out of step over which.
+     */
+    expect(letter()).toContain('const changedCount = allChanges.length;');
+    // …and the rows are derived BEFORE the count that describes them, which is what makes it true.
+    expect(letter().indexOf('const allChanges = React.useMemo')).toBeLessThan(
+      letter().indexOf('const changedCount ='),
+    );
     /*
      * ⚠️ AND BOTH READ THE WEEK'S ANCHOR, not `coachPlanPrev`.
      *
@@ -175,9 +195,24 @@ describe('⛔ and on day one there is nothing to have changed', () => {
     expect(read('src/data/local/db.ts')).toContain('if (!anchor || anchor.at < weekOpen)');
   });
 
-  it('⚠️ and the pill is hidden on a null count, not drawn as zero', () => {
-    // `null` and `0` must not read the same: one is "no comparison yet", the other is "compared,
-    // nothing moved" — and only the second is worth a row on her screen.
-    expect(read('src/screens/home/HomeView.tsx')).toContain('props.briefCount != null && props.briefCount > 0 ?');
+  it('⚠️ and the pill is hidden on an absent count, not drawn as zero', () => {
+    /*
+     * `null` and `0` must not read the same: one is "no comparison yet", the other is "compared,
+     * nothing moved" — and neither is worth a pill on her screen.
+     *
+     * ⛔ THE PILL MOVED HOUSE ON 2026-08-12 and this assertion followed it. It read
+     * `props.briefCount != null && props.briefCount > 0` on `HomeView` — the WEEK's total, drawn on
+     * a title row above the column. The pill now belongs to the workout whose loads moved
+     * (`WeekColumn`, `w.changes`), because a count on the queued card that included another day's
+     * work was describing something she could not see.
+     *
+     * ⚠️ `?? 0` COLLAPSES BOTH ABSENT CASES INTO THE SAME SILENCE, which is correct here and is why
+     * the wording of this test changed from "null" to "absent": a workout with no `changes` field and
+     * a workout with zero changes are the same screen — nothing is drawn. What must never happen is
+     * a pill reading "0 CHANGES", and `> 0` is what forbids it.
+     */
+    const col = read('src/components/WeekColumn.tsx');
+    expect(col).toContain('const changes = w.changes ?? 0;');
+    expect(col).toContain('{!done && changes > 0 ? (');
   });
 });

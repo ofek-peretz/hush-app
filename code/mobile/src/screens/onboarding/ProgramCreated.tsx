@@ -74,7 +74,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { programmeName } from '@/domain/programmeName';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
-import type { Program } from '@/data/local/models';
+import type { Program, Profile } from '@/data/local/models';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -221,7 +221,7 @@ export function ProgramCreated({ route }: Props) {
             <View style={styles.freeRow}>
               <Text style={styles.bigNum}>{FREE_SESSION_LIMIT}</Text>
               <View style={styles.freeCol}>
-                <Legend size={12} track={0.22}>{t('ob.readyWorkouts')}</Legend>
+                <Legend size={17} track={0.22}>{t('ob.readyWorkouts')}</Legend>
                 <View style={styles.freePill}>
                   <Legend size={textScale.md} track={0.18} weight="semibold" align="center" style={styles.freePillText}>
                     {t('ob.readyFree')}
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   programWhy: {
     fontFamily: font.serif,
     fontStyle: 'italic',
-    fontSize: 16,
+    fontSize: 17,
     lineHeight: 24,
     color: color.textSecondary,
     textAlign: 'left',
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
 
   // "Cancel anytime" — a moss check + a quiet sans line.
   cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cancelText: { flex: 1, fontFamily: font.sans, fontSize: 14.5, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
+  cancelText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
 
   // The two-phase band.
   howCard: {
@@ -456,9 +456,9 @@ const styles = StyleSheet.create({
   // …and the words beneath them, each free to take the width it needs.
   phaseRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
   phaseCol: { flexShrink: 1 },
-  phaseLabel: { fontFamily: font.monoSemibold, fontSize: 13.5, letterSpacing: 0.95, textAlign: 'left' },
+  phaseLabel: { fontFamily: font.monoSemibold, fontSize: 17, letterSpacing: 0.95, textAlign: 'left' },
   phaseLabelEnd: { textAlign: 'right' }, // rtl-ok: the logical END, merged onto the base above
-  phaseRange: { fontFamily: font.mono, fontSize: 13, color: color.textMuted, textAlign: 'left', marginTop: 3 },
+  phaseRange: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, textAlign: 'left', marginTop: 3 },
 
   // "— hush" — the italic serif signature.
   signature: { fontFamily: font.serif, fontStyle: 'italic', fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },

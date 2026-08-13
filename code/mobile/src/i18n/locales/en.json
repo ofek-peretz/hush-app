@@ -59,8 +59,7 @@
     "briefChangesShort_one": "1 change",
     "briefChangesShort_other": "{{count}} changes",
     "weekLabel": "Week {{n}}",
-    "programEyebrow_one": "Week {{week}} · one day",
-    "programEyebrow_other": "Week {{week}} · {{count}} days",
+    "programEyebrow": "Week {{week}} · {{done}} of {{total}} done",
     "weekComplete": "Week {{n}} complete",
     "begin": "Begin {{name}}",
     "continueWorkout": "Continue {{name}}",
@@ -85,15 +84,16 @@
     "briefChanges_one": "1 change this week",
     "briefChanges_other": "{{count}} changes this week",
     "briefNoChanges": "No changes this week",
-    "restSubNamed": "{{name}}, muscle is built on days like this. Nothing is scheduled — that's the program working.",
     "planMinutes": "~{{min}} min",
-    "planShape": "{{lifts}} lifts · ~{{min}} min",
+    "planShape_one": "1 lift · ~{{min}} min",
+    "planShape_other": "{{lifts}} lifts · ~{{min}} min",
     "overBudget": "This one won't fit in {{n}} minutes. Add time, or turn a muscle off.",
     "trialLeft_one": "1 workout left in your trial",
     "trialLeft_other": "{{count}} workouts left in your trial",
     "undoSwap": "Keep {{lift}}",
     "undoSwapA11y": "Keep {{lift}} — undo the swap",
-    "planShapeNoTime": "{{lifts}} exercises"
+    "planShapeNoTime_one": "1 exercise",
+    "planShapeNoTime_other": "{{lifts}} exercises"
   },
   "cardio": {
     "legend": "Open training",
@@ -166,14 +166,19 @@
     "kilometres": "Kilometres",
     "recordFooter": "Recorded, not coached. Nothing here touches the bar.",
     "kmMomentLabel": "Kilometre {{km}} · Split",
-    "kmMomentQuickest": "Your quickest this run"
+    "kmMomentQuickest": "Your quickest this run",
+    "motionOff": "Motion tracking is off — keep the phone on you",
+    "outside": "Outside",
+    "treadmill": "Treadmill",
+    "outsideNote": "Distance and pace from GPS.",
+    "treadmillNote": "Distance from your steps — keep the phone on you."
   },
   "ob": {
     "continue": "Continue",
     "apple": "Continue with Apple",
     "google": "Continue with Google",
     "signinTagline": "You train.\nI carry the rest.",
-    "signinAffirm": "Built on facts",
+    "signinAffirm": "Every weight from a set you lifted",
     "namePlaceholder": "Your name",
     "healthLegend": "Optional",
     "healthTitle": "Connect health data",
@@ -197,7 +202,6 @@
     "buildChoosing": "Choosing your lifts",
     "buildYourProgramme": "Your programme",
     "weightLabel": "Bodyweight",
-    "ageLabel": "Age",
     "buildSummary": "{{muscles}} muscles · {{lifts}} lifts",
     "minutesLabel": "Minutes per workout",
     "minutesUnit": "min",
@@ -266,7 +270,7 @@
     "mapNormalLine": "{{muscle}} sits in your week like everything else.",
     "weightLegend": "BODYWEIGHT",
     "weightTitle": "What do you weigh?",
-    "aboutTitle": "A little about you",
+    "aboutTitle": "About you",
     "age": "AGE",
     "experience": "HOW LONG YOU'VE TRAINED",
     "expNew": "New to it",
@@ -302,7 +306,23 @@
     "buildingFailedTitle": "I did not reach my coach.",
     "buildingFailedSub": "Nothing is lost — everything you told me is saved.",
     "buildingRetry": "Ask again",
-    "healthSub": "I show it. It never decides a weight."
+    "healthSub": "I show it. It never decides a weight.",
+    "mapSameRegion": "{{a}} already leads that half of your body. One lead per half — an hour cannot serve two.",
+    "mapFullBodyWeek": "At {{n}} days every session trains everything, so a second lead takes from the first. {{a}} has it.",
+    "signinFailedNetwork": "No connection. Your account is safe — try again when you’re back.",
+    "signinFailedProvider": "Apple couldn’t confirm that. Try again, or use the other button.",
+    "signinFailedGoogle": "Google couldn’t confirm that. Try again, or use the other button.",
+    "sexLegend": "Sex",
+    "mapEmphasisOne": "I lead with one muscle — {{n}} of 1 chosen.",
+    "mapSubOne": "Everything's on. Pick one to lead with."
+  },
+  "start": {
+    "legend": "Two ways in",
+    "title": "Where do we start?",
+    "buildTitle": "Build me a programme",
+    "buildNote": "Six questions, then a week shaped around what you can train and the time you have.",
+    "bringTitle": "I already have one",
+    "bringNote": "Photograph it. I’ll read it, keep it exactly as written, and run the weights from your sets."
   },
   "menu": {
     "title": "Menu",
@@ -323,6 +343,7 @@
     "completeSet": "Complete set",
     "editResult": "Edit result",
     "reps": "× {{reps}}",
+    "setHeading": "Set",
     "setOfM": "Set {{n}} of {{m}}",
     "coachingUp": "Up {{delta}} from last week. You're ready for it.",
     "coachingHold": "You can do it.",
@@ -339,12 +360,9 @@
     "exerciseCount": "Lift {{n}} / {{N}}",
     "liftCrossing": "Lift {{from}} → {{to}}",
     "restLearned": "Rest · learned",
-    "yourPace": "Your pace",
-    "upNextNewLift": "Up next · new lift",
+    "upNextNewLift": "New lift",
     "rest": "Rest",
     "paused": "Paused",
-    "setLogged": "Set {{n}} of {{m}} logged",
-    "recorded": "Set recorded.",
     "liftDone": "{{lift}}, done.",
     "liftDonePlain": "That lift is done.",
     "vsLast": "vs. last session",
@@ -392,10 +410,14 @@
     "itemCarrying": "Carrying {{load}} kg",
     "superset": "Superset",
     "repOfM": "REP {{n}} OF {{m}}",
-    "keyPoints": "KEY POINTS",
     "loadUpBy": "Up {{delta}}{{unit}}",
     "loadDownBy": "Down {{delta}}{{unit}}",
-    "bodyweightShort": "BW"
+    "bodyweightShort": "BW",
+    "loadHolds": "{{load}} holds for your next set",
+    "setsDone_one": "{{count}} set",
+    "setsDone_other": "{{count}} sets",
+    "hold": "Hold",
+    "nextTime": "Next time"
   },
   "finishSheet": {
     "legend": "End workout",
@@ -443,6 +465,33 @@
     "today": "today",
     "decidedFrom": "Decided from your sets alone"
   },
+  "whyHere": {
+    "legend": "Why this is here",
+    "titleMarked": "You asked for more {{muscle}}.",
+    "titleEssential": "Your {{muscle}} needs this movement.",
+    "titlePlain": "This is your {{muscle}} work.",
+    "setsToday": "sets today",
+    "weekly": "{{sets}} sets of {{muscle}} across your week",
+    "trains": "Trains your {{muscle}}",
+    "alsoWorks": "Also drives your {{muscles}}",
+    "essential": "One of the movements a {{muscle}} is never programmed without",
+    "marked": "You marked this muscle to lead",
+    "firstTime": "You haven’t trained this yet — your first set sets the load",
+    "doseMet": "{{floor}} sets a week is the least that grows a muscle. This one has {{sets}}.",
+    "doseShort": "{{floor}} sets a week is the least that grows a muscle. This one has {{sets}}, and your hour is why.",
+    "decidedFrom": "Decided from your body map and your hour"
+  },
+  "budgetNote": {
+    "over": "This one runs to about {{min}} min — longer than the {{budget}} you asked for. Every muscle here is down to its last exercise, so there was nothing left to cut.",
+    "short": "This one comes to about {{min}} min. What you left switched on doesn’t hold a longer session — turn a muscle back on, or ask for fewer minutes."
+  },
+  "weekNotice": {
+    "over": "{{day}} runs past the {{budget}} minutes you asked for. Every muscle in it is down to its last exercise, so there was nothing left to cut.",
+    "thinOne": "Two days a week can’t quite feed everything you left on — your {{muscle}} sits under {{floor}} sets. A third day, or a muscle off, would fix it.",
+    "thinMany": "Two days a week can’t feed everything you left on — {{count}} muscles sit under {{floor}} sets. A third day, or a muscle or two off, would fix it.",
+    "shortOne": "{{day}} comes in under {{floor}} minutes. What you left switched on doesn’t hold a longer session.",
+    "shortMany": "{{count}} of your sessions come in under {{floor}} minutes. What you left switched on doesn’t hold longer ones — fewer days would make each one fuller."
+  },
   "whyLoad": {
     "legend": "Why this load",
     "verdictUp": "Moved up",
@@ -487,7 +536,6 @@
     "kcal": "kcal",
     "logged": "Logged",
     "holds": "holds",
-    "stillReading": "Still reading your session…",
     "decisionsWord_one": "decision",
     "decisionsWord_other": "decisions",
     "decisionsFrom": "from this workout",
@@ -497,7 +545,7 @@
     "newBest": "New best",
     "setsLabel": "sets",
     "movedShort": "moved",
-    "everythingHeld": "Every lift held at what you lifted. Nothing needed moving.",
+    "everythingHeld": "Every lift landed where it was asked to. Nothing needed moving, and that is exactly how a session is supposed to go.",
     "volumeUp": "{{muscle}} earned a set",
     "volumeDown": "{{muscle}} gave a set back",
     "topSet": "Top set",
@@ -640,6 +688,10 @@
     "Core": "core"
   },
   "program": {
+    "sheetLifts": "LIFTS",
+    "sheetSets": "SETS",
+    "sheetMin": "MIN",
+    "sheetTheLifts": "The lifts",
     "setsReps": "{{sets}} sets · {{reps}} reps",
     "dayMeta": "{{exercises}} exercises · ~{{min}} min",
     "upNext": "Up next",
@@ -714,7 +766,7 @@
     "badgeLifted": "Lifted",
     "badgeWorkouts": "Workouts",
     "badgeBurned": "Burned",
-    "badgeRaises": "Bests",
+    "badgeRaises": "Personal bests",
     "badgeCardio": "Cardio",
     "unitTonnes": "T",
     "unitDone": "Done",
@@ -750,7 +802,11 @@
     "dayOneTitle": "Your story starts after workout one.",
     "dayOneBody": "Every set you complete lands here: the weight each lift carries, the tonnes you move, the milestones you earn. I only show what was measured — so today, this page is honestly empty.",
     "dayOneFirstMark": "First milestone waiting: your first raise.",
-    "momentClub": "A landmark load on this lift."
+    "momentClub": "A landmark load on this lift.",
+    "unitHours": "h",
+    "unitMinutes": "min",
+    "badgeTrained": "Trained",
+    "allTime": "All-time progress"
   },
   "history": {
     "title": "History",
@@ -836,7 +892,10 @@
     "mapAllOn": "Everything on",
     "mapLeading": "Leading with {{muscles}}",
     "mapOff": "{{n}} off",
-    "tagline": "Built on facts."
+    "tagline": "Built on facts.",
+    "mapSub": "What you train, what you lead with, what hurts.",
+    "programmeDoor": "Bring or share a programme",
+    "programmeDoorSub": "Photograph one you already have, or send someone yours."
   },
   "settings": {
     "units": "Units",
@@ -1011,9 +1070,6 @@
   },
   "paywall": {
     "title": "It was a pleasure training with you.",
-    "benefitProgram": "Every weight decided for you — with the why",
-    "benefitAdapts": "The Saturday letter — your week, mirrored",
-    "benefitPortrait": "Your whole history, kept and yours",
     "annual": "Annual",
     "monthly": "Monthly",
     "perYear": "/year",
@@ -1035,8 +1091,7 @@
     "billedOnce": "{{price}} billed once a year",
     "perMonthShort": "/month",
     "perYearShort": "/year",
-    "trialLeft": "Session {{done}} of {{n}}",
-    "trialConverts": "The trial does not renew by itself. Start now and nothing changes until it runs out."
+    "trialLeft": "Session {{done}} of {{n}}"
   },
   "explain": {
     "progressLoad": {
@@ -1253,21 +1308,52 @@
     "fri": "Fri",
     "sat": "Sat"
   },
-  "sessionCoach": {
-    "invitation": "Tell me anything — I can change what is left of today.",
-    "chipSwap": "Swap this",
-    "chipSkip": "Skip this",
-    "chipBusy": "It's taken",
-    "skipped": "Taken {{name}} out of today.",
-    "cannotSkip": "That is the last thing left today — skipping it ends the workout.",
-    "nothingChanged": "Nothing there for me to change.",
-    "open": "Talk to your coach",
-    "changed": "I have changed the rest of today."
-  },
   "plan": {
     "shapeFull": "Full body",
     "shapeSplit": "Upper / Lower",
     "weekDays": "{{n}} days a week",
     "led": "{{muscles}} led"
+  },
+  "import": {
+    "reviewTitle": "Your programme",
+    "reviewRead": "{{sessions}} sessions · {{lifts}} exercises read",
+    "reviewNothing": "Nothing to flag. This is your programme, and it stays exactly as written — I’ll handle the weights.",
+    "reviewFound": "{{n}} things I noticed:",
+    "findUnmatched": "I couldn’t find “{{name}}” in my catalogue, so it isn’t in the week yet.",
+    "findSetsUnstated": "“{{name}}” doesn’t say how many sets. I’ve put {{n}} for now.",
+    "findLongSession": "{{day}} runs about {{min}} minutes.",
+    "findManySets": "{{name}} is {{n}} sets — more than I’d normally write.",
+    "findUnderDose": "{{muscle}} gets {{n}} sets a week, under what usually grows it.",
+    "findOnceAWeek": "{{muscle}} is trained once a week.",
+    "keepMine": "Keep mine",
+    "letUsBalance": "Let me balance it",
+    "title": "Bring your own programme",
+    "sub": "Photograph it, or type it out. I’ll read it, tell you what I notice, and leave it exactly as it is.",
+    "photograph": "Photograph it",
+    "or": "or",
+    "typePlaceholder": "Push\nBench Press 4x8\nIncline DB Press 3x10\n\nPull\nDeadlift 4x5",
+    "typeLabel": "Your programme",
+    "readMine": "Read mine",
+    "balanceSoon": "Balancing isn’t built yet — for now your programme stays as you wrote it.",
+    "fail": {
+      "nothing_given": "Give me a photo or type it out and I’ll read it.",
+      "unreachable": "I couldn’t reach the reader. Try again in a moment.",
+      "unreadable": "I couldn’t find a programme in that.",
+      "nothing_matched": "None of those exercises are in my catalogue — is that the right page?"
+    },
+    "balancedTitle": "Balanced",
+    "balancedNothing": "Nothing needed changing.",
+    "balancedCount": "{{n}} changes, and nothing else moved:",
+    "changeRemoved": "{{name}} came out of {{day}} — the day could not hold it.",
+    "changeTrimmed": "{{name}}: {{from}} sets → {{to}}.",
+    "changeRaised": "{{name}}: {{from}} sets → {{to}}.",
+    "useBalanced": "Use this",
+    "backToMine": "Back to mine",
+    "alreadyHaveOne": "I already have a programme",
+    "phase": {
+      "reading": "Reading your programme…",
+      "matching": "Checking a couple of exercises…"
+    },
+    "photographSub": "Any photo of the sheet works — a page, a whiteboard, a screenshot."
   }
 }

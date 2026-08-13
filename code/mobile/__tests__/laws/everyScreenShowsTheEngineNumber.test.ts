@@ -23,7 +23,7 @@ import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
-import { observedLoads, railCeilingFor, currentV5Targets, getSessionForwardV5 } from '@/engine/v5/v5Engine';
+import { observedLoads, railCeilingFor, currentV5Targets, getSessionForwardV5, changeMoved } from '@/engine/v5/v5Engine';
 import { getWeeklyPlan } from '@/domain/weeklyUpdate';
 import { liftClimb, liftChanges } from '@/domain/liftDetail';
 import { modelledLoadKg } from '@/domain/startingLoad';
@@ -242,13 +242,46 @@ describe('the app and the engine agree, after six weeks of real training', () =>
   });
 
   it('Complete · a workout that changed nothing says nothing (R7) — never an invented change', async () => {
+    /*
+     * ⛔ TIGHTENED 2026-08-12, and the loosening is the fix (founder: *"כתוב 12 שינויים בזמן שהיו רק
+     * 6 תרגילים … כל דבר שנמצא ב-HOLD זה לא שינוי!"*).
+     *
+     * This pinned "a line for every stamped entry", which let the ledger draw a HOLD and a
+     * muscle-keyed volume move as changes — twelve rows for a six-lift session, half of them
+     * announcing that nothing happened. `getSessionEarnedV5` now returns only entries where a
+     * number actually MOVED (`changeMoved`), so the right ceiling is the stamped entries that pass
+     * the same predicate.
+     *
+     * ⚠️ THE LAW'S OWN CLAIM IS UNTOUCHED AND IS THE HALF THAT MATTERED: the screen may never show
+     * a line the fold did not stamp. It may now show fewer, which is what R7 asks for.
+     */
     const state = await db.loadEngineV5();
+    const real = (state?.changeLog ?? []).filter((c) => c.kind !== 'volume' && changeMoved(c));
     const stamped = new Set((state?.changeLog ?? []).map((c) => c.at));
     for (const at of built.sessionStarts) {
       const earned = (await fixtureModel.sessionEarned?.({ startedAtMs: at })) ?? [];
-      // The screen may show exactly as many lines as the fold stamped for that occurrence — no more.
-      expect({ at, hasLines: earned.length > 0, engineDecided: stamped.has(at) })
-        .toEqual({ at, hasLines: stamped.has(at), engineDecided: stamped.has(at) });
+      const moved = real.filter((c) => c.at === at).length;
+      expect({ at, lines: earned.length, engineDecided: stamped.has(at) })
+        .toEqual({ at, lines: moved, engineDecided: stamped.has(at) });
+    }
+  });
+
+  it('⛔ …and a HOLD is never one of them, nor a MUSCLE', async () => {
+    /*
+     * The two faults he counted, asserted directly on the seam. `getSessionForwardV5` twenty lines
+     * from `getSessionEarnedV5` had excluded holds since the day it was written — *"a hold is not a
+     * change (R7)"* — and the earned list had never asked the same question.
+     */
+    const state = await db.loadEngineV5();
+    const log = state?.changeLog ?? [];
+    expect(log.some((c) => !changeMoved(c))).toBe(true); // the fixture really does hold some lifts
+    for (const at of built.sessionStarts) {
+      const earned = (await fixtureModel.sessionEarned?.({ startedAtMs: at })) ?? [];
+      const held = log.filter((c) => c.at === at && !changeMoved(c)).map((c) => c.exerciseId);
+      const muscles = log.filter((c) => c.at === at && c.kind === 'volume').map((c) => c.exerciseId);
+      for (const id of [...held, ...muscles]) {
+        expect({ at, id, drawn: earned.some((e) => e.slotId === id) }).toEqual({ at, id, drawn: false });
+      }
     }
   });
 

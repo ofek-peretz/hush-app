@@ -64,7 +64,7 @@ export function GhostClimb({ width, height = 150, label }: Props) {
 const styles = StyleSheet.create({
   label: {
     position: 'absolute',
-    fontSize: 14.5,
+    fontSize: 17,
     letterSpacing: trackingPx(11, tracking.legend),
     color: signal[0],
     textAlign: 'left',

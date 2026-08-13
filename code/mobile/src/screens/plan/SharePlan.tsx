@@ -68,7 +68,7 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <View style={styles.eyebrow}>
           <View style={styles.dot} />
-          <Legend size={11} track={0.2} tone="accent">{t('planShare.legend')}</Legend>
+          <Legend size={17} track={0.2} tone="accent">{t('planShare.legend')}</Legend>
         </View>
 
         <Text style={styles.title} accessibilityRole="header">{t('planShare.title')}</Text>
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   // A.4 — the way back, named. A row of its own so the body below keeps its centred composition.
   head: { paddingHorizontal: 22, paddingTop: 8, paddingBottom: 2 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 },
-  backText: { fontFamily: font.sansMedium, fontSize: 16, color: color.textSecondary, textAlign: 'left' },
+  backText: { fontFamily: font.sansMedium, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
   body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 16, gap: 22 },
 
   eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -196,18 +196,18 @@ const styles = StyleSheet.create({
   // A quiet moss pill, not a filled one: on the record poster the moss is spent on a single small
   // mark, and a solid tag here was the loudest thing on a card that is mostly a list.
   daysTag: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: 'rgba(169,196,159,0.16)', borderWidth: 1, borderColor: 'rgba(169,196,159,0.4)' },
-  daysTagText: { fontFamily: font.sansSemibold, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
+  daysTagText: { fontFamily: font.sansSemibold, fontSize: 17, letterSpacing: 0.8, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
 
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: HAIRLINE },
   dayText: { flex: 1, minWidth: 0, gap: 1 },
-  dayName: { fontFamily: font.sansSemibold, fontSize: 14.5, color: stage.ink0, textAlign: 'left' },
-  dayMuscles: { fontFamily: font.sans, fontSize: 13.5, color: stage.ink2, textAlign: 'left' },
+  dayName: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'left' },
+  dayMuscles: { fontFamily: font.sans, fontSize: 17, color: stage.ink2, textAlign: 'left' },
   // A lift COUNT is a measured quantity — mono, like every other figure.
-  dayLifts: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14.5, color: stage.ink1, textAlign: 'right' },
+  dayLifts: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: stage.ink1, textAlign: 'right' },
   dayLiftsWord: { fontFamily: font.sansMedium }, // rtl-ok: nested span inside dayLifts, which sets textAlign
 
   privacy: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.14)', paddingTop: 12 },
-  privacyText: { flex: 1, fontFamily: font.sans, fontSize: 13.5, lineHeight: 19, color: stage.ink1, textAlign: 'left' },
+  privacyText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 19, color: stage.ink1, textAlign: 'left' },
   privacyLead: { fontFamily: font.sansSemibold, color: stage.ink0 }, // rtl-ok: nested span inside privacyText, which sets textAlign
   privacyTail: { color: stage.ink1 }, // rtl-ok: nested span inside privacyText, which sets textAlign
 

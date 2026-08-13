@@ -87,42 +87,29 @@ function homeProps(over: Partial<HomeViewProps> = {}): HomeViewProps {
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
-    onCoach: () => {},
     ...over,
   };
 }
 
-/**
- * "The two-people icon is swallowed by the background — effectively invisible."
+/*
+ * ════ ⛔ THIS LAW'S SUBJECT LEFT THE PRODUCT (2026-08-12) ════
  *
- * The fix is not a brighter colour (it is already the accent, on the darkest surface the palette
- * has). It is that a control needs a BODY: a 34 px touch target with nothing drawn in it reads as
- * decoration beside the wordmark, and a thumb never goes there.
+ * It held the corner door opposite the wordmark. The founder's original complaint was that the glyph
+ * there was *"swallowed by the background — effectively invisible"*, and the finding was that a
+ * control needs a BODY: a 34px hit box with nothing drawn in it reads as decoration, and a thumb
+ * never goes there. That rule is real and is recorded on `HomeView`'s stylesheet, where the next
+ * thing standing in that corner will find it.
  *
- * ⚠️ THE LAW FOLLOWED THE DOOR, NOT ITS LABEL. That corner held the share door when this was
- * written; it holds the COACH now (founder 2026-08-01 — the AI is deliberately not in the tab bar).
- * What the founder complained about was the CORNER being invisible, so the law belongs to whoever
- * is standing in it.
+ * The DOOR is gone. It opened the coach, `Home.tsx` stopped passing `onCoach` when the `Coach` route
+ * was deleted on 2026-08-11, and the prop is deleted now — so there is nothing in the corner to
+ * assert about.
+ *
+ * ⚠️ AND THE SECOND TEST HERE IS THE ONE WORTH REGRETTING. It asserted that the door *"is gone
+ * entirely when there is nowhere for it to go"* — which was PASSING on the shipping configuration
+ * the whole time, because the shipping configuration never passed a handler. A law that green-lights
+ * the absent case while a fixture forces the present one is not measuring the product; it is
+ * measuring the fixture. `theAiHasOneJob` is what actually holds this ground now.
  */
-describe('the corner door reads as a control', () => {
-  it('has a surface under its glyph, not just a hit box', () => {
-    const r = mount(<HomeView {...homeProps()} />);
-    const door = r.root.findAll(
-      (n) => n.props?.accessibilityLabel === tg('coach.title') && typeof n.props.onPress === 'function',
-    )[0];
-    expect(door).toBeTruthy();
-    const style = flat(typeof door.props.style === 'function' ? door.props.style({ pressed: false }) : door.props.style);
-    expect(style?.backgroundColor).toBeTruthy();
-    // …and it is still a circle the size of the target, not a box grown to be noticed.
-    expect(style?.width).toBe(34);
-    expect(style?.borderRadius).toBe(17);
-  });
-
-  it('and it is gone entirely when there is nowhere for it to go', () => {
-    const r = mount(<HomeView {...homeProps({ onCoach: undefined })} />);
-    expect(r.root.findAll((n) => n.props?.accessibilityLabel === tg('coach.title'))).toHaveLength(0);
-  });
-});
 
 /* ══════════════════════════ C.1 ══════════════════════════ */
 

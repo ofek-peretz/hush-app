@@ -32,16 +32,16 @@
 // 
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+
+import { peekImport, settledImport } from '@/domain/pendingImport';
+import { Text, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { BuildingProgrammeView, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
+import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
-import { displayWeight, unitLabel } from '@/domain/schedule';
 import { useApp } from '@/state/stores/appStore';
 import { programmeName, type ProgrammeName } from '@/domain/programmeName';
 import { color, font } from '@/design/tokens';
@@ -50,13 +50,29 @@ import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
 
-/** How long each considered line holds before the next replaces it. */
-/** The rulers own the opening beat — long enough to read three figures land. */
-const RULER_MS = 2200;
-/** A muscle a second while the coach is still thinking; 90 ms once its answer is in hand. */
-const MUSCLE_MS = 900;
-/** Long enough to READ the name. A reveal she cannot see is not a reveal. */
-const REVEAL_MS = 1800;
+/**
+ * ⛔ THE OPENING BEAT IS THE DARK BODY. It was two filling rulers until the founder replaced this
+ * screen with his own design on 2026-08-12; what she reads now is a body with nothing lit yet,
+ * under "READING WHAT YOU TOLD ME". Long enough to register that the body starts empty, because
+ * everything after it is that body filling.
+ */
+const OPENING_MS = 1500;
+/**
+ * ⛔ AND EVERY OTHER NUMBER HERE IS DERIVED FROM THE ANIMATION, NOT SET BESIDE IT.
+ *
+ * FOUNDER, 2026-08-13: *"זה טס במהירות האור ולא נותן לכל שריר את הרגע שלו… כרגע זה אולי 3 שניות."*
+ *
+ * It was **90 ms a muscle** — a value written for the old scrolling list, where a row appearing was
+ * the whole event. In his design a muscle's lifts have a JOURNEY: they rise, they sit long enough
+ * to read, and they travel into the body. At 90 ms every row was replaced before it had finished
+ * rising, so the one thing the beat is built on never completed on screen once.
+ *
+ * ⚠️ THE FIX IS NOT A BIGGER NUMBER, IT IS ASKING. `beatFor(lifts)` is the animation's own arithmetic
+ * — the same constants `LiftIn` runs on — so a muscle owns the screen for exactly as long as its
+ * lifts need, and the two can no longer drift apart.
+ */
+/** Long enough to READ the name, on a body that is now entirely lit. */
+const REVEAL_MS = 2600;
 /**
  * ⚠️ THE MUSCLES A PROGRAMME COVERS, which the app knows without asking anyone — so the screen
  * has something TRUE to draw during the wait rather than a spinner. Their lifts stand as dashes
@@ -87,28 +103,24 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * This holds the CLOCK; the view holds the drawing. What matters here is that neither one ever
    * gets ahead of the truth:
    *
-   *   · `fill` runs 0 → 1 over the first beat and is entirely honest — those are her own numbers.
+   *   · the body opens DARK, with nothing lit — everything after it is that body filling.
    *   · the MUSCLES then arrive one at a time, and they are real: the catalogue knows which muscles
    *     a programme covers without asking anyone. Their lifts stand as DASHES.
-   *   · when the coach's answer lands, the rows fill fast (90 ms each) and the programme is NAMED.
+   *   · each one holds for `beatFor(its own lifts)` — the animation's arithmetic, not a second
+   *     opinion about it — and then the programme is NAMED over the whole lit body.
    *
    * ⚠️ NOTHING INVENTS A LIFT. Animating plausible-looking exercises over a call that has not
    * returned would be the app performing work it had not done, on the one screen whose entire job
    * is showing her what it did.
    */
-  const [fill, setFill] = useState(0);
   const [shownMuscles, setShownMuscles] = useState(0);
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
 
   useEffect(() => {
-    const t0 = setTimeout(() => setFill(1), 120);
-    // The rulers own the first beat; then the muscles begin arriving whether or not the coach has
-    // answered, because the muscles are ours to know.
-    const t1 = setTimeout(() => setShownMuscles(1), RULER_MS);
-    return () => {
-      clearTimeout(t0);
-      clearTimeout(t1);
-    };
+    // The dark body owns the first beat; then the muscles begin arriving whether or not the coach
+    // has answered, because the muscles are ours to know.
+    const id = setTimeout(() => setShownMuscles(1), OPENING_MS);
+    return () => clearTimeout(id);
   }, []);
 
   useEffect(() => {
@@ -122,9 +134,14 @@ export function BuildingProgramme({ navigation, route }: Props) {
 
     const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
     if (shownMuscles >= total) return;
-    /* ⚠️ FAST ONCE THE ANSWER IS IN HAND — his own instruction: it must not drag on after the
-       programme is built. Slow while waiting, so the screen still has somewhere to go. */
-    const id = setTimeout(() => setShownMuscles((n) => n + 1), built ? 90 : MUSCLE_MS);
+    /*
+     * ⚠️ THE MUSCLE ON SCREEN IS THE ONE THAT SETS THE PACE — its own lift count, through the
+     * animation's own arithmetic. The old `built ? 90 : 900` split was written when the coach was a
+     * network call and "the answer is in hand" meant "stop stalling"; the engine is pure now, so
+     * `built` is true before the first muscle ever appears and that branch only ever meant 90 ms.
+     */
+    const rows = built ? built.muscles[shownMuscles - 1]?.lifts.length ?? 1 : 2;
+    const id = setTimeout(() => setShownMuscles((n) => n + 1), beatFor(rows));
     return () => clearTimeout(id);
   }, [shownMuscles, built]);
 
@@ -143,16 +160,53 @@ export function BuildingProgramme({ navigation, route }: Props) {
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (!filled || revealed) return;
-    const id = setTimeout(() => setRevealed(true), 320);
+    /*
+     * ⛔ THE LAST MUSCLE GETS THE SAME BEAT AS EVERY OTHER ONE. This was a flat 320 ms, so the
+     * final muscle's lifts were still rising when the name replaced the feed — the one muscle in
+     * the programme that never got its moment was the one the whole sequence ends on.
+     */
+    const last = built!.muscles[built!.muscles.length - 1]?.lifts.length ?? 1;
+    const id = setTimeout(() => setRevealed(true), beatFor(last));
     return () => clearTimeout(id);
-  }, [filled, revealed]);
+  }, [filled, revealed, built]);
+  /*
+   * ⛔ THE WEEK SHE BROUGHT IS MET HERE (founder 2026-08-11: *"אפשר להוסיף גם מסך המתנה בסוף
+   * הONBORDING … כי יכול להיות שהוא יסיים את הONBORDING ועדיין הבינה לא הצליחה לייבא את הכל"*).
+   *
+   * If she started an import on the first question, it has been running underneath every step since
+   * — and this screen is a waiting screen already, so it is the honest place to meet it. Almost
+   * always it has landed by now and this costs nothing; when it has not, she waits HERE, on a screen
+   * that is about her programme being made, rather than on the one before it.
+   *
+   * ⚠️ `null` MEANS SHE NEVER STARTED ONE, which is the ordinary case, and the intake carries on
+   * exactly as it did. Nothing about the generated path changes.
+   */
+  const [waitingForImport, setWaitingForImport] = useState(() => peekImport().phase !== 'idle');
   useEffect(() => {
-    if (!revealed) return;
+    if (!waitingForImport) return;
+    let alive = true;
+    void settledImport().then((result) => {
+      if (!alive) return;
+      setWaitingForImport(false);
+      /*
+       * A FAILED import is not a dead end. She is dropped back into the ordinary build with her body
+       * map — the week she gets is generated, and the import screen told her why it could not read
+       * her sheet. Losing the whole intake because a photograph was blurry would be indefensible.
+       */
+      if (result?.ok) navigation.replace('ImportPlan', { inputs, review: true });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [waitingForImport, navigation, inputs]);
+
+  useEffect(() => {
+    if (!revealed || waitingForImport) return;
     // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
     // and one that outstays the work is the dragging he asked me to avoid.
     const id = setTimeout(() => navigation.replace('ProgramCreated', { inputs }), REVEAL_MS);
     return () => clearTimeout(id);
-  }, [revealed, navigation, inputs]);
+  }, [revealed, waitingForImport, navigation, inputs]);
 
   /*
    * ⛔ HER PROFILE AS IT **WILL** BE — ASSEMBLED, NOT WRITTEN.
@@ -215,7 +269,12 @@ export function BuildingProgramme({ navigation, route }: Props) {
         name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER),
         lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
       });
-      setShownMuscles(1);
+      /*
+       * ⛔ NO `setShownMuscles(1)` HERE. It was the line that killed the opening beat: a pure call
+       * resolves before the screen has drawn a frame, so this raced past it every single time.
+       * `OPENING_MS` starts the muscles, and having the answer early buys nothing — the beat is
+       * paced by what it is DRAWING, which is the only thing it was ever about.
+       */
     } catch {
       // A pure function that throws is a defect, not an outage — but onboarding may never be a dead
       // end, so the retry stays. It just has nothing to blame a network for any more.
@@ -296,15 +355,14 @@ export function BuildingProgramme({ navigation, route }: Props) {
       ].join(' · ')
     : null;
 
-  /* ⚠️ `weightKg` and `age` are optional on the intake type; a ruler with no number to travel to
-     sits at zero rather than crashing on the last screen before her programme. */
+  /*
+   * ⛔ THE RULERS' FOUR PROPS ARE GONE WITH THE RULERS. `days`, `weight`, `unit` and `fill` were
+   * still being computed and passed here every render — into a component that stopped drawing them
+   * on 2026-08-12, when the founder replaced the beat with the body. Nothing failed, because
+   * nothing checks; that is what `@ts-nocheck` costs.
+   */
   return (
     <BuildingProgrammeView
-      days={inputs.daysPerWeek}
-      weight={Math.round(displayWeight(inputs.weightKg ?? 0, inputs.units) ?? 0)}
-      age={inputs.age ?? 0}
-      unit={unitLabel(inputs.units)}
-      fill={fill}
       muscles={muscles}
       programmeName={revealed ? named : null}
       summary={
@@ -349,19 +407,9 @@ export function buildMusclesFromProgram(program: Program, repBand: string): Buil
 }
 
 const styles = StyleSheet.create({
-  considering: { marginTop: 8 },
-  // The coach's own italic serif — this is it thinking out loud, not the app reporting a status.
-  line: {
-    fontFamily: font.serif,
-    fontStyle: 'italic',
-    fontSize: 22,
-    lineHeight: 32,
-    color: color.textSecondary,
-    textAlign: 'left',
-  },
   failed: {
     fontFamily: font.sans,
-    fontSize: 16,
+    fontSize: 17,
     lineHeight: 25,
     color: color.textSecondary,
     textAlign: 'left',

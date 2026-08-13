@@ -174,7 +174,13 @@ describe('⛔ the lift-done beat names the lift', () => {
   it('the name is not drawn behind the band mark', () => {
     const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8');
     const from = src.indexOf('function ExerciseDone');
-    const beat = src.slice(from, from + 2800);
+    /*
+     * ⚠️ THE WINDOW IS THE FUNCTION, NOT A CHARACTER COUNT. This read `from + 2800`, and on
+     * 2026-08-12 a longer comment inside the beat pushed `{placed ?` past the cutoff — `indexOf`
+     * returned -1, and `title < -1` failed a law about ORDER because of a paragraph. A law that
+     * breaks when a comment grows is measuring the wrong thing.
+     */
+    const beat = src.slice(from, src.indexOf('\n}\n', from));
     const title = beat.indexOf('beatDoneTitle');
     const placed = beat.indexOf('{placed ?');
     expect(title).toBeGreaterThan(-1);

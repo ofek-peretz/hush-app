@@ -79,7 +79,7 @@ export function OnYourWristView({ offer, onDone }: OnYourWristViewProps) {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <Legend size={11} track={0.16}>{t('onWrist.legend')}</Legend>
+        <Legend size={17} track={0.16}>{t('onWrist.legend')}</Legend>
 
         <Text style={styles.title} accessibilityRole="header">
           {install ? t('onWrist.titleInstall') : t('onWrist.title')}
@@ -95,7 +95,7 @@ export function OnYourWristView({ offer, onDone }: OnYourWristViewProps) {
           </View>
           <View style={styles.info}>
             <Text style={styles.cardTitle}>{t('onWrist.cardTitle')}</Text>
-            <Legend size={12.5} track={0} weight="regular" tone="onStage" style={styles.cardSub}>
+            <Legend size={17} track={0} weight="regular" tone="onStage" style={styles.cardSub}>
               {t('onWrist.cardLegend')}
             </Legend>
           </View>
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 20, gap: 18 },
   // 30 in the coach's serif — the same height 8.2's one question stands at.
   title: { fontFamily: font.serif, fontSize: 30, lineHeight: 35, color: color.textPrimary, textAlign: 'left' },
-  sub: { fontFamily: font.sans, fontSize: 15, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
+  sub: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
 
   // 1.3's card, one-to-one, minus the control.
   card: {
@@ -154,16 +154,16 @@ const styles = StyleSheet.create({
   cardOn: { borderColor: color.up, backgroundColor: color.upWash },
   iconBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: color.fillSubtleStrong, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1, minWidth: 0 },
-  cardTitle: { fontFamily: font.sansSemibold, fontSize: 16, color: color.textPrimary, textAlign: 'left' },
+  cardTitle: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
   cardSub: { color: color.textSecondary, marginTop: 3 },
 
   rows: { marginTop: 4 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, paddingVertical: 13, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: HAIRLINE },
   rowLast: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
-  rowText: { flex: 1, fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
+  rowText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
 
   // The law in words, at the bottom — 1.3's helper line, doing 1.3's job.
-  helper: { fontFamily: font.sans, fontSize: 14, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  helper: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
 
   foot: { paddingHorizontal: 26, paddingBottom: 12 },
 });

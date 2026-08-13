@@ -20,6 +20,8 @@
 
 // 
 
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import renderer, { act, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
@@ -100,7 +102,12 @@ function liveBody(r: ReactTestRenderer): ReactTestInstance {
     /* ⚠️ `gap: 34` and `flex-start` since 2026-08-05 — the founder asked for the clock to rise, so
        the body hangs from the top instead of centring. Matched on the SHAPE that identifies it (a
        flexed body with a gap), not on the two numbers that were free to change. */
-    return flat?.flex === 1 && typeof flat?.gap === 'number' && flat?.paddingHorizontal === 28;
+    /* ⚠️ 28 → 26 on 2026-08-12 with the per-kilometre rows. Matched on the SHAPE (a flexed body
+       with a gap and a horizontal padding), never on the padding's value — pinning the number is
+       what made a spacing change break a law about children. */
+    /* ⚠️ Matched on the SHAPE — a flexed body with a gap and horizontal padding — never on the
+       numbers. Pinning `paddingTop: 18` is what broke this law when the body was asked to spread. */
+    return flat?.flex === 1 && typeof flat?.gap === 'number' && typeof flat?.paddingHorizontal === 'number' && typeof flat?.paddingTop === 'number';
   })[0];
 }
 
@@ -117,11 +124,18 @@ describe('nothing on the stage is abandoned by what stands above it', () => {
    * is exactly the empty slot this law was written about.
    */
   it('with a GPS lock and kilometres logged, every child of the body draws', () => {
+    /*
+     * ⛔ FOUR since the founder's ring landed (2026-08-12): the clock, the RING, the GPS line and
+     * the per-kilometre rows. It was five for an afternoon, when the rows and the bar TEXTURE were
+     * both drawn — and he took the texture off: *"תוריד את המשבצות האלה כי זה לא ברור בכלל."* The
+     * rows say 6:19 and 6:24 in figures, which is the same comparison without asking her to measure
+     * rectangles at eight kilometres an hour.
+     */
     expect(liveBody(mount(<CardioLiveView
   paceSec={342} {...live} />)).props.children.filter(Boolean)).toHaveLength(4);
   });
 
-  it('⛔ …and before the first kilometre the SHAPE is absent, not an empty frame', () => {
+  it('⛔ …and before the first kilometre the ROWS do not stand as an empty frame', () => {
     expect(liveBody(mount(<CardioLiveView
   paceSec={342} {...live} splits={[]} />)).props.children.filter(Boolean)).toHaveLength(3);
   });
@@ -140,6 +154,56 @@ describe('nothing on the stage is abandoned by what stands above it', () => {
   paceSec={342} {...live} gps="denied" />))).toContain(label('cardio.gpsOff'));
     expect(said(mount(<CardioLiveView
   paceSec={342} {...live} gps="unavailable" />))).toContain(label('cardio.gpsOff'));
+  });
+});
+
+describe('⛔ the absence sentence names the source she actually chose', () => {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * FOUNDER, 2026-08-12, on a screenshot reading "Motion tracking is off": *"תבדוק את זה עכשיו אם
+   * מדובר בבאג או לא."*
+   *
+   * Two sentences can stand in that slot and each is true of exactly one mode. Outdoors the phone
+   * is waiting for a SATELLITE; on a belt there is no satellite to wait for and the only failure
+   * worth a sentence is having no motion source at all. Saying either one on the other mode is the
+   * same class of lie as a pace on a table, which is the defect this whole module was rebuilt from.
+   *
+   * ⚠️ THE ANSWER TO HIS QUESTION IS: correct on a treadmill, and this is what proves it. On the
+   * web harness `health` is the stub, `distanceSince` returns null, and the indoor mode stands down
+   * exactly as designed — that screenshot was the stub, not a defect.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  it('OUTDOORS with no fix yet: it waits for the satellite', () => {
+    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="acquiring" />);
+    expect(said(r)).toContain(tg('cardio.gpsAcquiring').toUpperCase());
+    expect(said(r)).not.toContain(tg('cardio.motionOff').toUpperCase());
+  });
+
+  it('OUTDOORS with location refused: it says so, and never blames the motion sensor', () => {
+    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="denied" />);
+    expect(said(r)).toContain(tg('cardio.gpsOff').toUpperCase());
+    expect(said(r)).not.toContain(tg('cardio.motionOff').toUpperCase());
+  });
+
+  it('⛔ INDOORS: no satellite is ever mentioned — acquiring or otherwise', () => {
+    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="acquiring" indoor />);
+    expect(said(r)).not.toContain(tg('cardio.gpsAcquiring').toUpperCase());
+    expect(said(r)).not.toContain(tg('cardio.gpsOff').toUpperCase());
+  });
+
+  it('…and INDOORS with no motion source it names that, which is the only thing that can fail there', () => {
+    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="unavailable" indoor />);
+    expect(said(r)).toContain(tg('cardio.motionOff').toUpperCase());
+  });
+
+  it('⚠️ and the mode reaches the stage as an EXPLICIT flag, so it cannot be inherited', () => {
+    /*
+     * `navigate(name, undefined)` does not clear a route's params. A treadmill run followed by an
+     * outdoor one could inherit `{indoor: true}` and spend the whole run reporting a motion sensor
+     * while the satellite sat unopened. An explicit `false` cannot be inherited.
+     */
+    const root = fs.readFileSync(path.join(__dirname, '..', '..', 'src/app/Root.tsx'), 'utf8');
+    expect(root).toContain("navigateMain('CardioLive', { indoor })");
   });
 });
 

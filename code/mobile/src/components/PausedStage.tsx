@@ -56,10 +56,9 @@ interface Props {
    * the one screen that is supposed to hold a single number. Both doors are here now, at the foot
    * of a session that is standing still — which is when talking is a reasonable thing to be doing.
    */
-  onCoach?: () => void;
 }
 
-export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPain, onCoach }: Props) {
+export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPain }: Props) {
   const { t } = useCopy();
 
   return (
@@ -80,7 +79,7 @@ export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPa
               got the small size and none of what makes it legible. The lifting session raises the
               same stage, so it moves with it: one pause screen for the whole product (its own
               header says so) cannot be legible on one surface and not the other. */}
-          <Legend size={12.5} track={0.16} align="center">
+          <Legend size={17} track={0.16} align="center">
             {subject ? `${t('pauseSheet.legend')} · ${subject}` : t('pauseSheet.legend')}
           </Legend>
 
@@ -99,19 +98,10 @@ export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPa
         {/* THE DOOR. Set apart at the foot of the page, in the tone the whole of §13 is written in.
             It is not a third act — pain is not a peer of resume and end. It is a door, and one you
             only find if you are looking for it. */}
-        {onCoach ? (
-          <View style={styles.doorRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('sessionCoach.open')}
-              onPress={onCoach}
-              style={({ pressed }) => [styles.door, { opacity: pressed ? press.opacity : 1 }]}
-            >
-              <Icon name="speech" size={16} color={color.textMuted} strokeWidth={1.8} />
-              <Text style={styles.doorText}>{t('sessionCoach.open')}</Text>
-            </Pressable>
-          </View>
-        ) : null}
+        {/* ⛔ THE COACH'S DOOR IS DELETED (founder, 2026-08-12). It opened a sheet whose three
+            actions he closed in one sentence — swap already has its own control on the first set
+            and on every transition rest, and a lift she wants skipped is a lift she wants replaced.
+            Pain keeps its door; it is the only one left, which is the tone §13 always wanted. */}
         {onPain ? (
           <View style={styles.doorRow}>
             <Pressable
@@ -154,5 +144,5 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(197,106,78,0.3)',
     backgroundColor: 'rgba(197,106,78,0.1)',
   },
-  doorText: { fontFamily: font.sansMedium, fontSize: 14, color: color.alert, textAlign: 'left' },
+  doorText: { fontFamily: font.sansMedium, fontSize: 17, color: color.alert, textAlign: 'left' },
 });

@@ -112,10 +112,18 @@ export interface DistanceItem extends ItemBase {
   metres: number;
   load?: number | null;
 }
-/** No number worth stating. */
-export interface OpenItem extends ItemBase {
-  kind: 'open';
-}
+/*
+ * ⛔ THE `open` ITEM IS DELETED (founder, 2026-08-12: *"חוץ מהפלאנק צריך למחוק את הכל כי אני לא
+ * יודע מה הם קשורים ולאיפה הם קשורים."*).
+ *
+ * It was "no number worth stating — the instruction IS the item": a mobility block, a warm-up. The
+ * stage drew a sentence and a Done button, and there was nothing on it that the engine could read,
+ * progress, or hold against her body map. **An item the product cannot measure is an item the
+ * product cannot coach**, which is why he could not place it.
+ *
+ * ⚠️ `OpenResult` STAYS IN `models.ts` and so do its two readers. A session saved before today can
+ * contain one, and history that cannot read its own record is a worse fault than the screen was.
+ */
 
 export type PlannedItem = RepsItem | TimeItem | DistanceItem | OpenItem;
 
@@ -144,6 +152,25 @@ export interface PlannedSession {
 
 export interface CoachPlan {
   v: number;
+  /**
+   * ⛔ THIS WEEK WAS PRICED BY THE ENGINE, SO IT MUST BE READ BACK AT THE ENGINE'S PRICE.
+   *
+   * Set ONLY by `domain/enginePlan`, and never present on a plan a coach wrote or a plan that came
+   * off the wire — `parseCoachPlan` does not read it, so nothing outside this app can claim it.
+   *
+   * `enforceTimeCap` cuts a day until it fits `SESSION_MAX` at the day-one bootstrap
+   * (`COMPOUND_SET_MIN` / `ISOLATION_SET_MIN`); `coachWeek` priced every set at a flat
+   * `EXEC_S + DEFAULT_REST_S`. Two answers to "how long is this session", and she could see both:
+   * measured over twenty-four generated sessions, Today announced every one of them as longer than
+   * the engine had built it, by up to nine minutes — sixty-six for a session capped at sixty.
+   *
+   * ⚠️ IT IS A FLAG AND NOT AN INFERENCE, and the difference matters. The first cut priced any block
+   * that did not state a rest at the bootstrap, which is a fair reading of "nobody said" — and it
+   * silently re-priced COACH plans too, breaking `theEstimateIsAWorkoutSheCanRecognise`. A coach's
+   * unstated rest is a different fact from the engine's: the coach declined to say, the engine has
+   * a number and chose not to write it into a field the session runner would obey as a prescription.
+   */
+  pricing?: 'engine';
   /**
    * ════ WHAT THIS PROGRAMME IS CALLED ════
    *
@@ -345,7 +372,7 @@ const ITEM_SCHEMA = {
   additionalProperties: false,
   required: ['kind', 'ex'],
   properties: {
-    kind: { type: 'string', enum: ['reps', 'time', 'distance', 'open'] },
+    kind: { type: 'string', enum: ['reps', 'time', 'distance'] },
     ex: { type: 'string' },
     say: { type: 'string' },
     reps: { type: 'array', items: { type: 'integer' }, minItems: 2, maxItems: 2 },
@@ -837,8 +864,6 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
         const load = settle(raw.load as number | null | undefined);
         return { ok: true, item: { kind: 'distance', ex: raw.ex, metres: raw.metres, ...(load != null ? { load } : {}), ...say } };
       }
-      case 'open':
-        return { ok: true, item: { kind: 'open', ex: raw.ex, ...say } };
       default:
         return { ok: false, reason: 'unknown_kind', at: String(raw.kind ?? '') };
     }

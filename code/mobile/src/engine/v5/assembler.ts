@@ -11,7 +11,7 @@
  * Pure. Deterministic.
  */
 
-import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, FULL_BODY_UNTIL_DAYS, MUSCLE_REGION, WEEKLY_SETS_FLOOR, EMPHASIS_FRACTION } from './constants';
+import { STARTING_WEEKLY_SETS, startingWeeklySets, emphasisBonusFor, FULL_BODY_UNTIL_DAYS, MUSCLE_REGION, WEEKLY_SETS_FLOOR, WEEKLY_SETS_CEILING, EMPHASIS_FRACTION } from './constants';
 import { exerciseCountFor, DAY_ONE_EX_DIVISOR } from './programAssembly';
 import { stanceOf, trainableMuscles, emphasisMuscles, type BodyMap } from './bodyMap';
 
@@ -82,16 +82,73 @@ export function weeklyTargets(
   const marked = trainable.filter((m) => stanceOf(map, m) === 'emphasis');
   const donors = trainable.filter((m) => stanceOf(map, m) !== 'emphasis');
   if (days != null && marked.length > 0 && donors.length > 0) {
+    /*
+     * ⛔ NO SINGLE DONOR CARRIES THE WHOLE MARK (founder 2026-08-11).
+     *
+     * The donor is chosen as whoever currently has the most, re-evaluated every block — which sounds
+     * self-balancing and is not, because one large muscle can be the richest three times running.
+     * Measured: marking SHOULDERS at five days took Chest from 18 weekly sets to 6, the MEV floor. She
+     * asked for more shoulders; the engine answered by nearly switching off her chest.
+     *
+     * `weeklyTargets` already refuses to take a donor UNDER the floor and `growEmphasised` refuses
+     * too. What neither bounded is how far a donor may fall TOWARDS it. One block each spreads the
+     * mark's cost across the muscles that can afford it instead of emptying the first one twice.
+     */
+    const given: Record<string, number> = {};
     for (const m of marked) {
       /* How many LIFTS the mark is worth — the same proportional weight, counted in the right unit. */
-      const chunks = Math.max(1, Math.round(exerciseCountFor(out[m]) * EMPHASIS_FRACTION));
+      /*
+       * ⛔ TWO MARKS ON ONE REGION SHARE THAT REGION'S ROOM (founder 2026-08-11, item 8).
+       *
+       * F-4 allows two marks, and on DIFFERENT regions they are independent — each half of the week
+       * has its own sessions to grow into, and measured over the sweep they work perfectly there
+       * (4, 5 and 6 days · cross-region: not one mark lowered). On the SAME region they are not
+       * independent: they compete for the same sessions, and giving each a full mark's worth asks
+       * that region for lifts it cannot hold. The surplus is then deleted by `enforceTimeCap`,
+       * unevenly, and a mark can end up LOWERING the muscle it was placed on.
+       *
+       * Sharing the room is worth having on its own measurement — double-mark cases 12 → 8 and the
+       * weekly sets they lose 35 → 25 — and without it the emphasis ratchet in
+       * `everyAthleteTheEngineCanMeet` fails outright.
+       */
+      const sharing = marked.filter((o) => regionOf(o) === regionOf(m)).length;
+      const chunks = Math.max(1, Math.round((exerciseCountFor(out[m]) * EMPHASIS_FRACTION) / sharing));
       for (let c = 0; c < chunks; c += 1) {
         const donor = donors
           .filter((d) => out[d] - DAY_ONE_EX_DIVISOR >= WEEKLY_SETS_FLOOR
-            && exerciseCountFor(out[d] - DAY_ONE_EX_DIVISOR) >= 2)
+            && exerciseCountFor(out[d] - DAY_ONE_EX_DIVISOR) >= 2
+            && (given[d] ?? 0) < DAY_ONE_EX_DIVISOR) // one block each — see `given` above
           .sort((a, b) => (out[b] - out[a]) || a.localeCompare(b))[0];
         if (!donor) break; // nothing left to give without going under a floor — a smaller mark, not a hole
+        /*
+         * ⛔ AND THE MARK STOPS AT THE CEILING THE ENGINE ALREADY DECLARES (founder 2026-08-11).
+         *
+         * `startingWeeklySets` clamps every target to `WEEKLY_SETS_CEILING`; this transfer was the one
+         * path that ignored it, and it ran a long way past: 81 of 330 reachable marks delivered ABOVE
+         * 30 weekly sets and the worst reached FIFTY. Thirty is already generous — the constant's own
+         * note calls it "deliberately above the ~20 the evidence calls the point of diminishing
+         * returns". Fifty is not a bigger dose, it is volume she cannot recover from, and it is paid
+         * for by muscles the transfer drains to get there.
+         *
+         * ⚠️ THIS EXACT BOUND WAS TRIED EARLIER THE SAME DAY AND BROKE FOUR LAWS. It failed because
+         * `startingWeeklySets` then clamped each muscle SEPARATELY, so by six days every large muscle
+         * already sat at exactly 30 and an absolute ceiling deleted emphasis outright. The clamp is
+         * proportional now — the largest muscle lands on 30 and the rest are squeezed with it — so
+         * there is real headroom underneath, and the bound binds only where it should.
+         *
+         * ⚠️ THE BOUND IS THE CEILING PLUS ONE EXERCISE-BLOCK, NOT THE CEILING ITSELF — measured. A
+         * hard 30 broke `S-4/S-63 · emphasis earns MORE exercises` (a marked chest could no longer
+         * reach a sixth lift) and `the programme is not the same for everyone` (marked and unmarked
+         * weeks collapsed onto each other). One `DAY_ONE_EX_DIVISOR` of headroom is exactly what the
+         * mark is FOR — one more lift than the muscle would otherwise get — and it is bounded, which
+         * fifty was not.
+         *
+         * The donor is not charged for a transfer that does not happen: `break` leaves its target
+         * whole, so a mark with no room left costs the rest of her week nothing.
+         */
+        if (out[m] + DAY_ONE_EX_DIVISOR > WEEKLY_SETS_CEILING + DAY_ONE_EX_DIVISOR) break;
         out[donor] -= DAY_ONE_EX_DIVISOR;
+        given[donor] = (given[donor] ?? 0) + DAY_ONE_EX_DIVISOR;
         out[m] += DAY_ONE_EX_DIVISOR;
       }
     }
@@ -147,7 +204,38 @@ export function assignRegionDays(targets: Record<string, number>, days: number):
   // Largest-remainder apportionment of `days` between upper and lower by volume, each â‰¥ 1.
   const total = upper + lower;
   let lowerDays = Math.round((lower / total) * days);
-  lowerDays = Math.max(1, Math.min(days - 1, lowerDays)); // both sides get at least one day
+  /*
+   * ⛔ AND NEITHER HALF FALLS TO ONE SESSION A WEEK (founder 2026-08-11, item 8 — two marks).
+   *
+   * This floored each side at ONE day, and two emphasis marks on the same region is enough to reach
+   * that floor: marking Chest and Back at four days moves 35 weekly sets onto them, the region
+   * volumes come out 126 upper against 54 lower, and the apportionment returns **three upper days
+   * and one lower**. The whole lower body — quads, hamstrings, glutes, calves — then trains ONCE a
+   * week because she asked for more chest and back.
+   *
+   * ⚠️ THE RULE IS ALREADY WRITTEN, TWENTY LINES ABOVE, AND IT WAS ONLY HALF-APPLIED. The full-body
+   * note says the split "is worth its cost only once there are enough days to give both halves two
+   * sessions each", and cites the reason: twice a week grows roughly 63% more at equal volume. That
+   * test decided WHETHER to split and was never applied to the apportionment that follows, so the
+   * engine could split a week and then hand one half exactly the frequency the split exists to avoid.
+   *
+   * A mark redistributes VOLUME. It is not a request to stop training half the body twice a week —
+   * `off` is the control that does that, and this is the same argument the emphasis-transfer floor in
+   * `weeklyTargets` already makes about MEV.
+   *
+   * ⚠️ Guarded by `days >= 4` (below that every day is already full-body) and by the region holding
+   * two muscles or more — a region that is one muscle because she switched the rest off has nothing
+   * to spread over two days, and forcing it there would be the tidiness this file keeps refusing.
+   *
+   * ⛔ AND THIS IS WHAT CLOSED THE `v5_dayBalance_every_branch` TWIN PIN. Three earlier attempts aimed
+   * at lift SELECTION; the twin was a symptom of a region collapsing to one day, not of the selector.
+   */
+  const muscleCount = (region: 'upper' | 'lower') =>
+    Object.keys(targets).filter((m) => m !== 'Core' && regionOf(m) === region).length;
+  const floorFor = (region: 'upper' | 'lower') => (days >= 4 && muscleCount(region) >= 2 ? 2 : 1);
+  const upperFloor = Math.min(floorFor('upper'), days - 1);
+  const lowerFloor = Math.min(floorFor('lower'), days - upperFloor);
+  lowerDays = Math.max(lowerFloor, Math.min(days - upperFloor, lowerDays)); // both sides get at least one day
   const upperDays = days - lowerDays;
 
   // Interleave so sessions alternate where possible (upper leads â€” the canonical order).

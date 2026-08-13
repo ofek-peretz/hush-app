@@ -159,9 +159,23 @@ function press(r: ReactTestRenderer, label: string): void {
 /** The editor is open when its own title is on the glass. */
 const editorIsOpen = (r: ReactTestRenderer) => textOf(r).includes(tg('workout.editTitle'));
 
-/** Open the editor the way the athlete does — by tapping the weight. The hero's own label is
- *  "<load> <unit>" (see the Pressable in ActiveSet). */
+/**
+ * Open the editor the way the athlete does — by pressing the prescription.
+ *
+ * ⛔ THE LABEL GREW WITH THE BLOCK (2026-08-12). It was `"<load> <unit>"`, because the pressable was
+ * the LOAD alone. The stage redesign made the load and the rep band two peers inside one control, so
+ * the announcement is the whole prescription — a blind athlete must hear what she is about to open,
+ * and "36.5 kg" is now half of it.
+ *
+ * ⚠️ AND THE EDITOR HAS A SECOND, LOUDER DOOR NOW: an `EDIT RESULT` button in the footer, added
+ * because five different marks on the value had all failed to say it was pressable. This test keeps
+ * using the figures deliberately — that path is the one that can silently stop working, since
+ * nothing about it announces itself on the screen.
+ */
 function openEditor(r: ReactTestRenderer): void {
+  /* ⛔ THE LABEL SHRANK BACK (2026-08-12, second pass). It briefly announced the whole prescription
+     because load and band shared one pressable; the vertical redesign gives each fact its own band,
+     so the pressable is the LOAD again and says so. */
   press(r, '36.5 kg');
 }
 

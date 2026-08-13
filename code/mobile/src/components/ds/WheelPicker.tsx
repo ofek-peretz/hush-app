@@ -92,7 +92,7 @@ interface Props {
  * header's "five at a time". The alternative was a smaller numeral, which is the opposite of what
  * the founder asked for twice (2026-07-28, and C.8).
  */
-const ITEM_W = { md: 96, lg: 96 } as const;
+const ITEM_W = { md: 96, lg: 120 } as const;
 
 /**
  * ════ ONE WHEEL, ONE SIZE, EVERYWHERE (founder 2026-07-28) ════
@@ -108,11 +108,36 @@ const ITEM_W = { md: 96, lg: 96 } as const;
  * one and there is nothing left to drift. The `size` prop survives only so existing call sites keep
  * compiling; it selects nothing. `everyWheelIsTheSameWheel` holds this shut.
  */
-export const WHEEL_HEIGHT = { md: 112, lg: 112 } as const;
+export const WHEEL_HEIGHT = { md: 112, lg: 146 } as const;
 
 /** The numeral sizes by distance from centre. Past ±2 the numeral is gone — five read at a time,
  *  the rest is the tick texture. One ladder, both sizes (see WHEEL_HEIGHT). */
-const NUM_SIZE = { md: [48, 24, 18], lg: [48, 24, 18] } as const;
+const NUM_SIZE = { md: [48, 24, 18], lg: [64, 30, 22] } as const;
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE NUMERAL'S OWN BOX — AND WHY IT IS PER SIZE (founder, 2026-08-12)
+ *
+ *   *"למה מסך THE EDIT SET בסרגל שם זה עושה ככה את המספרים שלא שלמים? במסך בONBORDING זה מציג את
+ *   המשקל נהדר במקרה הזה."*
+ *
+ * He photographed the edit dial reading **"37…"** where the value was 37.5, and the onboarding
+ * ruler drawing the same shape of number correctly — which was the tell. This is build 36's "82…"
+ * bug (C.2) arriving a second time through the door that fix left open.
+ *
+ * ⚠️ THE FIRST FIX PINNED A CONSTANT, NOT A RELATIONSHIP. `NUM_CELL_W` was a single 176, measured
+ * against a 48-point numeral, and its centring margin was hardcoded to `ITEM_W.md`. So the cell was
+ * only ever correct while every size was the same size — and the moment this control is asked to
+ * grow (which is the other half of the same message) it truncates again, in exactly the same way.
+ *
+ * **It is derived now.** Six glyphs of IBM Plex Mono at the active size, which is the widest thing
+ * the engine can prescribe ("137.5") with room to spare, plus the centring margin computed from the
+ * size's OWN pitch. A cell that cannot be too small for its numeral by construction.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/** IBM Plex Mono's advance, measured: 0.6 em. Six glyphs is the widest prescribable value + room. */
+const GLYPH_EM = 0.6;
+const numCellW = (size: 'md' | 'lg'): number => Math.ceil(NUM_SIZE[size][0] * GLYPH_EM * 6);
 /**
  * The TONE ladder by distance, per size — and the two are deliberately different.
  *
@@ -130,13 +155,8 @@ const NUM_TONE = {
 // whole axis is being browsed.)
 /** How many detents each side of centre still render a numeral (five total). */
 const SHOW_SPAN = 2;
-/** The measured width of the active numeral's own box — six glyphs of mono at the active size, so
- *  nothing the engine can prescribe is ever ellipsised. See `styles.numCell`. */
-const NUM_CELL_W = 176;
-
-/** The engraved tick strip beneath the numerals — a fixed, even graduation. */
-const TICK_STRIP_W = 230;
-const TICK_STRIP_H = 16;
+/** The engraved tick strip beneath the numerals — an even graduation, scaled with the wheel. */
+const TICK_STRIP = { md: { w: 230, h: 16 }, lg: { w: 300, h: 22 } } as const;
 /** How far the graduation sits off the bottom hairline — the old flow layout's own breathing room
  *  (frame 112 − numerals 62 − gap 8 − strip 16, halved), kept exactly so nothing visibly moved when
  *  the strip left the flow and went behind the touch surface (C.3). */
@@ -190,6 +210,9 @@ export function wheelWindow(anchor: number, count: number, win: number = WINDOW)
 
 export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, ends = 'fade', style }: Props) {
   const itemW = ITEM_W[size];
+  /* ⛔ The numeral's own box, derived from the numeral — see `numCellW`. */
+  const cellW = numCellW(size);
+  const tick = TICK_STRIP[size];
   const h = WHEEL_HEIGHT[size];
   const numSize = NUM_SIZE[size];
   const numTone = NUM_TONE[size];
@@ -338,19 +361,24 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
                 const active = dist === 0;
                 return (
                   <View key={item} style={[styles.item, { width: itemW }]}>
-                    {/* THE NUMERAL IS NEVER ELLIPSISED (founder, build 36 — C.2).
-                        The cell is `itemW` because that is the detent pitch; the numeral inside it
-                        is not. Constrained to the cell, a `numberOfLines={1}` Text truncated the
-                        moment the value grew past three glyphs — the founder photographed the
-                        onboarding ruler reading "82…" where the value was 82.5. `numCell` is wider
-                        than the cell and centred on it by negative margins, so the glyphs get their
-                        natural width while the geometry, the snapping and the offset maths keep
-                        working in `itemW` exactly as before. */}
+                    {/*
+                      ⛔ THE NUMERAL IS OUT OF THE FLEX ROW ENTIRELY (founder, 2026-08-12 — third
+                      attempt, and the first two were both treating a symptom).
+
+                      "37…" survived a wider cell (build 36) and `flexShrink: 0` (this morning),
+                      which between them prove the box's DECLARED width was never what decided it.
+                      A `numberOfLines={1}` Text inside a `width: itemW` flex item can be given less
+                      than it asks for by any of a dozen layout paths, and the moment it is, the
+                      ellipsis does the rest.
+
+                      **So it is absolutely positioned and carries no width at all.** A Text that is
+                      out of the flow cannot be compressed by the flow, and one with no width cannot
+                      be truncated to it — the glyphs measure themselves and the parent centres them.
+                      `numberOfLines` goes with the constraint that made it necessary.
+                    */}
                     <Text
-                      numberOfLines={1}
                       style={[
                         styles.num,
-                        styles.numCell,
                         {
                           fontSize: numSize[dist],
                           fontFamily: active ? font.monoSemibold : font.mono, // rtl-ok — `styles.num` centres it; this only swaps the face
@@ -374,7 +402,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
             It is drawn BEHIND the scroller and takes no touches, so the ruler-looking part of the
             control now turns the wheel instead of swallowing the gesture (C.3). */}
         <View pointerEvents="none" style={styles.ticksLayer}>
-          <TickStrip />
+          <TickStrip w={tick.w} h={tick.h} />
         </View>
 
         {/* THE ENDS SAY WHAT THEY ARE. On a ruler they dissolve into the stage — a window onto a
@@ -411,17 +439,17 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
  * (a printed scale doesn't slide; the reading does), struck at dead centre by a single moss
  * tick: the one unambiguous "this is your number".
  */
-function TickStrip() {
-  const half = TICK_STRIP_W / 2;
+function TickStrip({ w, h }: { w: number; h: number }) {
+  const half = w / 2;
   const ticks: number[] = [];
-  for (let x = 0; x <= TICK_STRIP_W + 0.01; x += TICK_GAP) ticks.push(Math.round(x * 10) / 10);
+  for (let x = 0; x <= w + 0.01; x += TICK_GAP) ticks.push(Math.round(x * 10) / 10);
   return (
-    <View pointerEvents="none" style={styles.tickStrip}>
-      <Svg width={TICK_STRIP_W} height={TICK_STRIP_H}>
+    <View pointerEvents="none" style={[styles.tickStrip, { width: w, height: h }]}>
+      <Svg width={w} height={h}>
         {ticks.map((x) => (
-          <Line key={x} x1={x} y1={7} x2={x} y2={TICK_STRIP_H} stroke="rgba(241,238,229,0.28)" strokeWidth={1} />
+          <Line key={x} x1={x} y1={h * 0.44} x2={x} y2={h} stroke="rgba(241,238,229,0.28)" strokeWidth={1} />
         ))}
-        <Line x1={half} y1={0} x2={half} y2={TICK_STRIP_H} stroke={color.accent} strokeWidth={1.5} strokeLinecap="round" />
+        <Line x1={half} y1={0} x2={half} y2={h} stroke={color.accent} strokeWidth={2} strokeLinecap="round" />
       </Svg>
     </View>
   );
@@ -488,8 +516,8 @@ const styles = StyleSheet.create({
   scroller: { direction: 'ltr' },
   // The numerals rest where the flow layout used to put them — clear of the graduation and the gap
   // that separated the two — now that the scroller owns the full frame height for touch (C.3).
-  scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP_H + 8 },
-  item: { alignItems: 'center', justifyContent: 'flex-end' },
+  scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP.lg.h + 8 },
+  item: { alignItems: 'center', justifyContent: 'flex-end', overflow: 'visible' },
   /**
    * The box the numeral is actually measured in — wider than its cell, centred on it by symmetric
    * negative margins (C.2). Sized for SIX glyphs at the active size so nothing the engine can
@@ -497,16 +525,38 @@ const styles = StyleSheet.create({
    * neighbour's cell, not on its glyphs: at distance 1 the numeral is 24px, so its own text starts
    * further out than this box reaches.
    */
-  numCell: { width: NUM_CELL_W, marginHorizontal: -(NUM_CELL_W - ITEM_W.md) / 2 },
+  /* ⛔ DERIVED PER SIZE at the call site — see `numCellW`. It was a constant here, centred against
+     `ITEM_W.md`, which is why it could only ever be right while every wheel was the same wheel. */
   num: {
+    /* ⛔ OUT OF THE FLOW — see the note at the markup. Absolute, unconstrained, centred by the item
+       it hangs in. This is what makes truncation impossible rather than merely unlikely. */
+    position: 'absolute',
+    bottom: 0,
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
     textAlign: 'center',
     lineHeight: undefined,
+    /*
+     * ⛔ THE BOX MAY NOT BE SHRUNK TO ITS CELL — the other half of the "37…" fault.
+     *
+     * The numeral's own width is set wider than the detent pitch and pulled back into place with
+     * negative margins. That is correct arithmetic and it is not enough: the numeral is a flex
+     * child of a `width: itemW` item, and a flex child whose declared width exceeds its line is a
+     * candidate for shrinking. Where it shrinks, `numberOfLines={1}` does the rest — the box lands
+     * near the pitch and "37.5" comes out "37…", which is a box narrower than its own declaration
+     * rather than a numeral wider than its box.
+     *
+     * ⚠️ AND IT IS WHY THE ARITHMETIC ALONE LOOKED FINE. 176 points holds "37.5" at 48 with room to
+     * spare, which is exactly why the first reading of his screenshot did not find a cause: the
+     * declared width was never the problem. **Measured on the founder's screenshot, the numeral's
+     * box was about 90 points — the detent pitch, not the 176 it asks for.**
+     */
+    flexShrink: 0,
+    flexGrow: 0,
   },
 
   // The fixed engraved graduation, centred under the numerals.
-  tickStrip: { width: TICK_STRIP_W, height: TICK_STRIP_H, alignItems: 'center', justifyContent: 'center' },
+  tickStrip: { alignItems: 'center', justifyContent: 'center' },
   // The edit dial's end marks — 8 in from each edge, vertically centred, never in the way.
   endChevron: { position: 'absolute', top: '50%', marginTop: -8 },
   endChevronStart: { left: 8 },

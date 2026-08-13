@@ -20,6 +20,34 @@ import type { Equipment } from '@/engine/catalog';
 /** F-1 â€” sets per exercise stay in [3, 5]. */
 export const SETS_MIN = 3;
 export const SETS_MAX = 5;
+/*
+ * ⛔ NARROWING F-1 TO [3, 4] WAS MEASURED AND REJECTED (founder 2026-08-11): *"if we lower sets per
+ * exercise to 3–4, does it help — other things would free up, right?"* The instinct is reasonable
+ * and the measurement says no, twice over.
+ *
+ * ── IT CHANGES NOTHING FOR A NORMAL PROGRAMME, BECAUSE THE CEILING IS NEVER REACHED ────────────
+ * Set counts across the plain weeks at every frequency and both sexes:
+ *
+ *     SETS_MAX = 5  →  { 3: 130, 4: 106 }      not one exercise at five sets
+ *     SETS_MAX = 4  →  { 3: 130, 4: 106 }      byte for byte the same
+ *
+ * Average session 59.0 minutes, 6.56 lifts, and the same exercise count for every muscle under both.
+ *
+ * ── AND NOTHING IS "FREED", BECAUSE THE DAY IS TIME-BOUND, NOT SET-BOUND ───────────────────────
+ * `enforceTimeCap` fills the session to her minutes whatever the per-exercise ceiling is: 22.5 sets
+ * a session under both settings. A lower ceiling only spreads the same sets over marginally more
+ * lifts, and each extra lift costs a TRANSITION rest — so it buys walking, not training.
+ *
+ * ── WHAT IT DOES COST IS THE EMPHASIS MARK ────────────────────────────────────────────────────
+ * The fifth set is what a mark BUYS on a muscle whose lifts cannot multiply — a calf, a biceps, any
+ * muscle whose region has no room for another exercise. Take it away and the mark has nowhere to go:
+ *
+ *     inert emphasis marks over the sweep .......... 129 → 199
+ *     ratified laws broken ......................... 3
+ *
+ * So F-1 stays [3, 5]. The ceiling is not a target and is rarely used; it is the headroom that makes
+ * "lead with this muscle" mean something when the clock has no room for another lift.
+ */
 
 /** F-4 â€” the athlete may place at most this many emphasis marks on the body map. */
 export const EMPHASIS_BUDGET = 2;
@@ -218,7 +246,36 @@ export function startingWeeklySets(
     ? trainable.reduce((n, m) => n + (MUSCLE_VOLUME_SHARE[m] ?? 1), 0)
     : Math.max(1, trainableCount);
   const scaled = (pot * share) / totalShares;
-  return Math.min(WEEKLY_SETS_CEILING, Math.max(WEEKLY_SETS_FLOOR, Math.round(scaled)));
+  /*
+   * ⛔ THE CEILING BOUNDS THE WEEK — IT MAY NOT FLATTEN ITS SHAPE (founder 2026-08-11).
+   *
+   * `Math.min(CEILING, …)` was applied to each muscle on its own, which means every muscle whose
+   * share carried it past 30 came out at EXACTLY 30 — and the share table, the thing that knows a
+   * back is not a chest, was erased for precisely the muscles it matters most for:
+   *
+   *     5 days   Back 35 → 30   ·  Chest 30      the 1.5 and the 1.3 become the same number
+   *     6 days   Back 42 → 30   ·  Chest 37 → 30   …and SIX muscles all land on 30 together
+   *
+   * That is why push:pull failed at five and six days and nowhere else. Below five nothing clamps,
+   * the shares hold, and the delivered week comes out at 1.44–1.47. At five and six the targets go
+   * flat, and from there the DEALER decides — by canonical order, which puts Back fourth and Biceps
+   * fifth. Three fixes aimed at the dealer were written and reverted (see `theWeekIsBalanced`); the
+   * dealer was never the problem. It was being handed a week with no shape left in it.
+   *
+   * So the ceiling is applied to the LARGEST muscle and everything is squeezed with it. The biggest
+   * target still lands exactly on `WEEKLY_SETS_CEILING` — the bound the register asks for is kept to
+   * the set — and the ratios between muscles survive it, which is the whole reason the table exists.
+   *
+   * ⚠️ THE FLOOR IS STILL APPLIED AFTER, so squeezing can never take a muscle under MEV.
+   * ⚠️ AND IT NEEDS `trainable` to know who the largest is. Callers that do not pass it (older tests,
+   * the size-blind path) keep the per-muscle clamp exactly as before.
+   */
+  const maxShare = trainable?.length
+    ? Math.max(...trainable.map((m) => MUSCLE_VOLUME_SHARE[m] ?? 1))
+    : share;
+  const maxScaled = (pot * maxShare) / totalShares;
+  const squeeze = maxScaled > WEEKLY_SETS_CEILING ? WEEKLY_SETS_CEILING / maxScaled : 1;
+  return Math.min(WEEKLY_SETS_CEILING, Math.max(WEEKLY_SETS_FLOOR, Math.round(scaled * squeeze)));
 }
 
 /**

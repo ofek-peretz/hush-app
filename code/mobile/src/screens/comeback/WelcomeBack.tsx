@@ -50,14 +50,14 @@ export function WelcomeBackView({ daysAway, lifts, unit, onStart }: WelcomeBackV
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.body}>
         <RangeMark width={44} height={18} tone={signal[0]} />
-        <Legend size={11} track={0.16}>{t('comeback.legend', { days: daysAway })}</Legend>
+        <Legend size={17} track={0.16}>{t('comeback.legend', { days: daysAway })}</Legend>
 
         <Text style={styles.title} accessibilityRole="header">{t('comeback.title')}</Text>
         <Text style={styles.sub}>{t('comeback.sub')}</Text>
 
         {shown.length > 0 ? (
           <View style={styles.card}>
-            <Legend size={11} track={0.14}>{t('comeback.cardLegend')}</Legend>
+            <Legend size={17} track={0.14}>{t('comeback.cardLegend')}</Legend>
             {shown.map((l, i) => (
               <View key={l.exerciseId} style={[styles.row, i > 0 && styles.rowRuled]}>
                 <Text style={styles.liftName} numberOfLines={1}>{l.name}</Text>
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: 32, gap: 24 },
   // 34 in the coach's serif — a greeting, said once.
   title: { fontFamily: font.serif, fontSize: 34, lineHeight: 39, color: color.textPrimary, textAlign: 'left' },
-  sub: { fontFamily: font.sans, fontSize: 15, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
+  sub: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
 
   card: {
     backgroundColor: color.fillSubtle,
@@ -101,12 +101,12 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRuled: { borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 12 },
   // The lift is named in the serif; its load is the measured figure beside it.
-  liftName: { flexShrink: 1, fontFamily: font.serif, fontSize: 15, color: color.textPrimary, textAlign: 'left' },
+  liftName: { flexShrink: 1, fontFamily: font.serif, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
   loadRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   load: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 20, color: color.textPrimary, textAlign: 'left' },
-  unit: { fontFamily: font.mono, fontSize: 15, color: color.textMuted, textAlign: 'left' },
+  unit: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, textAlign: 'left' },
   unitWord: { fontFamily: font.sans, textAlign: 'left' },
-  bodyweight: { fontFamily: font.sansMedium, fontSize: 13, color: color.textMuted, textAlign: 'left' },
+  bodyweight: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textAlign: 'left' },
 
   foot: { paddingHorizontal: 26, paddingBottom: 12 },
 });

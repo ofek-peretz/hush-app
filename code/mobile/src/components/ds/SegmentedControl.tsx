@@ -37,11 +37,21 @@ interface Props {
   style?: ViewStyle | ViewStyle[];
 }
 
-/** Track/cell geometry per size — read straight off the handoff's inline styles. */
+/**
+ * Track/cell geometry per size — read straight off the handoff's inline styles.
+ *
+ * ⛔ `font` OBEYS THE TYPE FLOOR (founder 2026-08-12). It was 12 / 14 / 15, and — like `Button`'s
+ * size table — it is a bare number in a geometry map, so `typeHasAFloor` swept straight past it.
+ * The control it dresses is the units toggle on the You tab: **"kg" and "lb" at 14px, on the screen
+ * where she changes the unit every weight in the app is printed in.**
+ *
+ * ⚠️ THE OTHER NUMBERS HERE ARE NOT TYPE — `track` and `cell` are radii, `padX` is padding — which
+ * is exactly why a law cannot sweep this file generically and has to name the key.
+ */
 const GEOM = {
-  pill: { track: 100, pad: 3, gap: 0, cell: 100, height: 0, padY: 6, padX: 14, font: 12 },
-  md: { track: 16, pad: 4, gap: 4, cell: 12, height: 44, padY: 0, padX: 16, font: 14 },
-  lg: { track: 17, pad: 4, gap: 4, cell: 13, height: 52, padY: 0, padX: 16, font: 15 },
+  pill: { track: 100, pad: 3, gap: 0, cell: 100, height: 0, padY: 6, padX: 14, font: 17 },
+  md: { track: 16, pad: 4, gap: 4, cell: 12, height: 44, padY: 0, padX: 16, font: 17 },
+  lg: { track: 17, pad: 4, gap: 4, cell: 13, height: 52, padY: 0, padX: 16, font: 17 },
 } as const;
 
 export function SegmentedControl({ options, value, onChange, block, stack, size = 'md', style }: Props) {

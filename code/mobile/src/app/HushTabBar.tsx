@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44 },
-  label: { fontFamily: font.sansMedium, fontSize: 14.5, textAlign: 'center' },
+  label: { fontFamily: font.sansMedium, fontSize: 17, textAlign: 'center' },
   labelActive: { fontFamily: font.sansSemibold }, // rtl-ok: merged onto label, which sets textAlign:'center'
   // The moss range-mark under the active tab (16 × 6): a hairline bar struck between two end ticks.
   mark: { width: 16, height: 6 },

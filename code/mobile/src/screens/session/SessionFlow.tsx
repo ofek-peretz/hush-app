@@ -24,18 +24,17 @@ import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-nati
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
-import { Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
+import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, WheelPicker, useToast, type ToastAction } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
-import { SessionCoach } from './SessionCoach';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, type CompleteResult, type LiveCorrection } from '@/state/stores/sessionStore';
 import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
-import { isGpsMovement } from '@/data/movements';
+import { isOutdoorMovement, isTrackedMovement } from '@/data/movements';
 import { TimeStage, DistanceStage, OpenStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
 import { inWorkoutLadder } from '@/domain/replacement';
 import { isSwapMoment } from '@/domain/swapPool';
@@ -43,6 +42,9 @@ import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { heroType, loadSetup, type LoadSetup } from '@/domain/loadPresentation';
 import { db } from '@/data/local/db';
+// ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
+// programme in the same shape when there is not. See `data/local/weekPlan`.
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachChangedCase } from '@/domain/coachWeek';
 import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
@@ -52,12 +54,20 @@ import * as haptics from '@/platform/haptics';
 import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, stage, font, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
+import { monoCanDraw } from '@/design/monoVoice';
 import { bandOf, setRow } from '@/domain/setRow';
 import { loadNews, showsPerSide } from '@/domain/loadNews';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
-type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'coach';
+/*
+ * ⛔ `'coach'` IS GONE (founder, 2026-08-12). The sheet behind it held three chips, and he closed
+ * all three in one sentence: *"להחליף תרגיל יש את כפתור ה-SWAP שמופיע בסט הראשון בתרגיל הראשון ואז
+ * במסכי ה-TRANSITION REST. וזה נראה לי פותר גם את SKIP THIS כי במקום לדלג המתאמן פשוט יכול ללחוץ
+ * SWAP."* He is right on both counts and the second is the sharper one: a lift she wants gone is a
+ * lift she wants REPLACED, and swapping keeps the volume the week was balanced around.
+ */
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points';
 export type Confirm = {
   weight: number | null;
   reps: number;
@@ -327,7 +337,7 @@ export function SessionFlow({ navigation, route }: Props) {
   const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
   useEffect(() => {
     let alive = true;
-    void db.loadCoachPlan().then((p) => alive && setCoachPlan(p));
+    void loadWeekPlan().then((p) => alive && setCoachPlan(p));
     return () => {
       alive = false;
     };
@@ -576,7 +586,25 @@ export function SessionFlow({ navigation, route }: Props) {
     // The phone's own beat is already on the stage (the athlete tapped here and the wrist there,
     // inside the same 1.4 s — the write is idempotent, and one beat is enough).
     if (confirm) return;
-    setWatchBeat({ weight: logged.weight, reps: logged.reps, n: logged.n, m: logged.m });
+    /*
+     * ⛔ AND IT ONLY SPEAKS IF IT HAS SOMETHING TO SAY — the same predicate the phone's own beat
+     * uses (`beatSpeaks`), rather than a second rule that happened to agree most of the time.
+     *
+     * It did not agree. The wrist beat mounted unconditionally and carried no band, so it fell into
+     * the plain "34 kg × 8 · Set recorded" readback — **the exact restatement the founder deleted
+     * from the phone in build 36** — for every set logged on the watch. Now the band travels with
+     * the set (`WatchLoggedSet.band`) and the two devices answer identically.
+     */
+    const beat: Confirm = {
+      weight: logged.weight,
+      reps: logged.reps,
+      n: logged.n,
+      m: logged.m,
+      ...(logged.band ? { band: logged.band } : {}),
+      ...(logged.lift ? { lift: logged.lift } : {}),
+    };
+    if (!(beat.n >= beat.m && beat.m > 1) && bandPlacement(beat) == null) return;
+    setWatchBeat(beat);
     haptics.setLogged(); // one tap — the same rhythm the phone's own capture has
     const id = setTimeout(() => setWatchBeat(null), CONFIRM_DWELL_MS);
     return () => clearTimeout(id);
@@ -680,6 +708,8 @@ export function SessionFlow({ navigation, route }: Props) {
    * one-second logged beat, when there is nothing to reach for.
    */
   const isTransition = session.displayPhase === 'REST_TRANSITION';
+  /** A crossing into a RUN has no form clip and nothing to swap for — see `swapPool`. */
+  const nextIsALift = !!exerciseById(session.nextExerciseId ?? '');
   const exIndex = session.exerciseProgress?.index ?? 0;
   const chromeOrdinal = isTransition
     ? t('workout.liftCrossing', { from: exIndex + 1, to: exIndex + 2 })
@@ -707,9 +737,13 @@ export function SessionFlow({ navigation, route }: Props) {
    * nothing is worse than no door.
    */
   const onLift = !!exerciseById(session.currentExerciseId ?? '');
-  // The swap is offered before the FIRST set of every lift — one rule (`isSwapMoment`), asked by
-  // the phone and the wrist alike, so the two surfaces can never disagree about when a swap is legal.
-  const canSwap = isSwapMoment((session.setLabel?.n ?? 1) - 1) && onLift;
+  /*
+   * ⛔ THE FIRST SET OF THE FIRST LIFT (founder 2026-08-12) — one rule (`isSwapMoment`), asked by the
+   * phone and the wrist alike, so the two surfaces can never disagree about when a swap is legal.
+   * The swap for every OTHER lift lives on the transition rest, which is where she finds out the
+   * machine is taken. See `swapPool` for the argument.
+   */
+  const canSwap = isSwapMoment((session.setLabel?.n ?? 1) - 1, exIndex) && onLift;
 
   return (
     <View style={styles.root}>
@@ -719,8 +753,8 @@ export function SessionFlow({ navigation, route }: Props) {
             rather than a pause, and the same elapsed clock on the same line. Drawing the stage bar
             over it would put that clock on the screen twice. */}
         {editing && onSet ? null : (
+          <>
           <StageBar
-            ordinal={chromeOrdinal}
             elapsedFrom={session.startedAtMs}
             onExit={openPause}
             /*
@@ -738,7 +772,20 @@ export function SessionFlow({ navigation, route }: Props) {
              * lift (`isSwapMoment`), because a swap mid-exercise strands the sets she has already
              * logged. That is what makes the bar's centring worth a test of its own.
              */
-            onSwap={onSet && canSwap ? () => void startQuickSwap('current') : undefined}
+            /*
+             * ⛔ AND ON A TRANSITION REST, FOR THE LIFT SHE IS WALKING TO (founder, 2026-08-12).
+             * It was an outline button on the up-next card, beneath a form disc the bar was already
+             * drawing. The bar is where this stage keeps its controls — and a crossing is the moment
+             * his swap ruling was written for: she has not reached the station yet, so this is when
+             * she finds out the machine is taken.
+             */
+            onSwap={
+              onSet && canSwap
+                ? () => void startQuickSwap('current')
+                : isTransition && nextIsALift
+                  ? () => void startQuickSwap('next')
+                  : undefined
+            }
             onDemo={confirm || !onLift ? undefined : () => setOverlay('demo')}
             /*
              * ⛔ THE COACH IS NOT ON THE STAGE ANY MORE (founder 2026-08-05): *"I suggest you take
@@ -757,6 +804,14 @@ export function SessionFlow({ navigation, route }: Props) {
              * batch have already found. The coach is one tap from Today, where she is not mid-set.
              */
           />
+          {/* The session's shape, drawn — see `LiftRail`. It replaces "LIFT 1 / 6". */}
+          <LiftRail
+            index={exIndex}
+            total={session.exerciseProgress?.total ?? 1}
+            setN={session.setLabel?.n}
+            setM={session.setLabel?.m}
+          />
+          </>
         )}
         {paceBeat ? (
           <RestLearned took={paceBeat.took} was={paceBeat.was} now={paceBeat.now} nextSet={session.nextSetLabel?.n ?? 1} />
@@ -767,7 +822,11 @@ export function SessionFlow({ navigation, route }: Props) {
             item={itemShape}
             onRun={(metres, say) => {
               leftForRunAtRef.current = Date.now();
-              navigation.navigate('CardioLive', { target: { metres, ex: itemShape.ex, ...(say ? { say } : {}) } });
+              navigation.navigate('CardioLive', {
+                target: { metres, ex: itemShape.ex, ...(say ? { say } : {}) },
+                // The source, decided by the movement — see `measuresDistance` above.
+                indoor: !isOutdoorMovement(itemShape.ex),
+              });
             }}
           />
         ) : session.displayPhase === 'SET_PRESENTED' ? (
@@ -784,8 +843,6 @@ export function SessionFlow({ navigation, route }: Props) {
             units={units}
             paused={session.paused}
             notice={notice}
-            onDemo={() => setOverlay('demo')}
-            onSwap={() => void startQuickSwap('next')}
             onLearned={endRestLearned}
           />
         )}
@@ -818,7 +875,6 @@ export function SessionFlow({ navigation, route }: Props) {
           onResume={resume}
           endLabel={t('pauseSheet.endSession')}
           onEnd={() => setOverlay('endConfirm')}
-          onCoach={overlay === 'endConfirm' ? undefined : () => setOverlay('coach')}
           onPain={
             // Hidden while the guard is up — one question at a time.
             overlay === 'endConfirm'
@@ -855,14 +911,6 @@ export function SessionFlow({ navigation, route }: Props) {
         </BottomSheet>
       ) : null}
 
-      {/* ⚠️ THE COACH'S ONE DOOR INSIDE A WORKOUT — opened from the PAUSED stage, never from a live
-          set. See `PausedStage.onCoach` for the founder's ruling. Closing returns to the pause it
-          was opened from, because the session is still standing still behind it. */}
-      {overlay === 'coach' ? (
-        <BottomSheet onClose={() => setOverlay('pause')} heightFraction={0.92}>
-          <SessionCoach onClose={() => setOverlay('pause')} />
-        </BottomSheet>
-      ) : null}
       {overlay === 'reasoning' ? (
         <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
       ) : null}
@@ -995,7 +1043,20 @@ function ItemBeat({
        * the real one, with the map and the live figures — carrying the coach's distance as its
        * target, and that stage ends the run itself when the distance is covered.
        */
-      const measured = isGpsMovement(item.ex);
+      /*
+       * ⛔ AND A TREADMILL RUN IS MEASURED TOO (founder, 2026-08-12).
+       *
+       * This read `isGpsMovement`, so a coach's "5 km on the treadmill" fell to the unmeasured
+       * branch: a figure, a Done button, and an ask to confirm a distance the phone could already
+       * count. **The flag it asked was about the SATELLITE, and the question is about the phone** —
+       * which measures the indoor ones now, from Core Motion.
+       *
+       * ⚠️ AND IT IS NOT "HAS A DISTANCE". A 40 m farmer's carry is measured in distance and the
+       * phone cannot track it — she walks it across a gym floor holding weights. The catalogue
+       * states which movements are tracked and by what (`Movement.tracked`); `isTrackedMovement`
+       * answers whether, `isOutdoorMovement` answers by what.
+       */
+      const measured = isTrackedMovement(item.ex);
       return (
         <DistanceStage
           round={round}
@@ -1006,8 +1067,6 @@ function ItemBeat({
         />
       );
     }
-    case 'open':
-      return <OpenStage item={item} name={name} round={round} onDone={() => finish()} />;
   }
 }
 
@@ -1059,8 +1118,8 @@ function StageBar({
   onCoach?: () => void;
 }) {
   const { t } = useCopy();
-  const hasLabel = !!(ordinal || center);
   const hasClock = elapsedFrom != null;
+  const hasCentre = hasClock || !!center;
   return (
     <View style={styles.stageBar}>
       {/*
@@ -1080,25 +1139,33 @@ function StageBar({
         <StageDisc accessibilityLabel={t('workout.pauseAction')} onPress={onExit}>
           <Icon name="pause" size={15} color={stage.ink0} filled />
         </StageDisc>
-        {onCoach ? (
-          <StageDisc accessibilityLabel={t('sessionCoach.open')} onPress={onCoach}>
-            <Icon name="speech" size={15} color={stage.ink0} strokeWidth={1.7} />
-          </StageDisc>
-        ) : null}
+        {/* ⚠️ AND A SPEECH DISC LIVED HERE THAT NOTHING EVER PASSED. Found while sweeping the
+            deletion above: `onCoach` on this bar had no caller anywhere in the app, so the branch
+            never rendered — which is why it survived every pass over this screen, including the
+            founder's own screenshots. Dead code that LOOKS live is the kind a redesign preserves. */}
       </View>
-      {/* ════ TWO FACTS, STACKED — NOT A ROW (founder 2026-07-28) ════
-          They sat side by side, parted by a dot, both at 15 px: "LIFT 1 / 6 · 24:18". One line, two
-          unrelated questions, and neither large enough to answer at arm's length. The clock is the
-          one running number on the screen and it goes on TOP, at its own size; the lift's position
-          sits under it as the quieter fact it is. The dot is gone — the stack does the parting. */}
-      {hasLabel || hasClock ? (
+      {/*
+        ════ ⛔ THE CLOCK STANDS ALONE, AND "LIFT 1 / 6" IS DRAWN INSTEAD OF WRITTEN ════
+
+        FOUNDER, 2026-08-12: *"לגבי ה-LIFT שלמעלה — ארצה להעיף אותו ולהציג את זה בצורה שונה
+        ויצירתית איזה תרגיל התקדמנו מבלי שזה יוצג במלל. אני רוצה לתת לטיימר את הספייס שלו שיהיה
+        בודד שם."*
+
+        The pair was stacked here on 2026-07-28 to stop them sitting side by side as one cramped
+        line. That fixed the crowding and kept the cause: **two unrelated questions sharing one
+        slot.** Position in the session is not a running number and does not belong beside one.
+
+        It is a RAIL now — one segment per lift, filled behind her — drawn under the whole chrome
+        (`LiftRail`). It answers "how far in am I" in a glance, in no language, and it leaves the
+        clock the only thing in the middle of the bar.
+
+        ⚠️ `center` STAYS. It is not the ordinal: it is what a beat with no clock puts there
+        instead (the rest's own label), and nothing has been said about that.
+      */}
+      {hasCentre ? (
         <View style={styles.stageBarCentre}>
           {hasClock ? <ElapsedClock from={elapsedFrom as number} /> : null}
-          {ordinal ? (
-            <Text style={styles.stageBarOrdinal}>{ordinal}</Text>
-          ) : center ? (
-            <Text style={styles.stageBarCenter}>{center}</Text>
-          ) : null}
+          {!hasClock && center ? <Text style={styles.stageBarCenter}>{center}</Text> : null}
         </View>
       ) : (
         <View style={styles.flex} />
@@ -1146,6 +1213,84 @@ function StageDisc({ accessibilityLabel, onPress, children }: { accessibilityLab
  * The clock reads from `session.startedAtMs` (the epoch instant the workout began), so it survives
  * a screen change and a pause — it is the wall-clock length of the session, not a per-screen timer.
  */
+/**
+ * ════ HOW FAR INTO THE SESSION SHE IS, DRAWN ════
+ *
+ * One segment per lift, in order, filled up to and including the one she is on. It replaces the
+ * words "LIFT 1 / 6" (founder 2026-08-12) and it answers the same question faster and in every
+ * language — a bar that is a third full IS "a third of the way in".
+ *
+ * ⚠️ THE CURRENT SEGMENT IS THE LIT ONE and the ones behind it are dimmer, so the rail says where
+ * she IS rather than only how much is done. A single uniform fill would leave her counting.
+ *
+ * ⚠️ AND IT IS NOT A PROGRESS BAR FOR TIME. It moves once per lift, never continuously — a rail
+ * that crept would invite her to read a rate into it, and there is no rate here to read.
+ */
+/**
+ * ════ ⛔ ONE RAIL. THE LIFT SHE IS ON OPENS INTO ITS SETS ════
+ *
+ * FOUNDER, 2026-08-12: *"התכוונתי למצוא דרך לאחד את מספר הסטים יחד עם מספר התרגיל. בדרך כלשהי."*
+ *
+ * The first attempt stacked two rows — the session above, the sets below. That is not a union, it is
+ * two instruments touching, and he said so.
+ *
+ * A union has to come from what the facts ARE: **her sets live inside her lift.** So the rail is the
+ * session, one segment per lift — and the segment she is standing in EXPANDS and splits into its own
+ * sets. Nothing else on the row moves. One instrument, one row, both facts, and the nesting is the
+ * drawing rather than a caption on it.
+ *
+ * ⚠️ THE ACTIVE SEGMENT IS WIDER BY FLEX, not by a fixed width, so a two-lift day and a nine-lift day
+ * both fill the row. It is the only segment that can be counted, which is right: she needs to COUNT
+ * her sets and only to SEE her position in the session.
+ */
+function LiftRail({
+  index,
+  total,
+  setN,
+  setM,
+}: {
+  index: number;
+  total: number;
+  setN?: number;
+  setM?: number;
+}) {
+  const { t } = useCopy();
+  const sets = setM && setM > 1 && setN ? setM : 0;
+  if (total <= 1 && !sets) return null;
+  return (
+    <View
+      style={styles.railRow}
+      accessibilityRole="progressbar"
+      accessibilityLabel={[
+        total > 1 ? t('workout.exerciseCount', { n: index + 1, N: total }) : null,
+        sets ? t('workout.setOfM', { n: setN, m: setM }) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    >
+      {Array.from({ length: Math.max(1, total) }).map((_, i) => {
+        if (i !== index || !sets) {
+          return <View key={i} style={[styles.railSeg, i < index && styles.railSegDone]} />;
+        }
+        return (
+          <View key={i} style={styles.railOpen}>
+            {Array.from({ length: sets }).map((_, k) => (
+              <View
+                key={k}
+                style={[
+                  styles.setSeg,
+                  k < (setN as number) - 1 && styles.setSegDone,
+                  k === (setN as number) - 1 && styles.setSegNow,
+                ]}
+              />
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function ElapsedClock({ from }: { from: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1464,6 +1609,35 @@ function ActiveSet({
   });
   /* One sentence for VoiceOver, because a row of bare digits announces as a row of bare digits. */
   const setsLabel = t('workout.setOfM', { n: setN, m: setM });
+  /*
+   * ════ ⛔ THE STAGE COMPOSES ITSELF WHEN A SET IS PRESENTED ════
+   *
+   * FOUNDER, 2026-08-12: *"אני עדיין לא חושב שהמסך שלנו ברמת APPLE או SPOTIFY … אתה יכול לקחת את
+   * עצמך לקצה."*
+   *
+   * The screen was a poster. Four sets of a lift produced four pixel-identical frames, so nothing
+   * on it ever acknowledged that a NEW SET had begun — the one event the whole screen exists for.
+   *
+   * `Arrive` is the product's own sequencing primitive (`ARRIVE_STAGGER`, one curve, reduced-motion
+   * safe), already shipping across the intake. Three groups in reading order — who she is lifting,
+   * what to do with it, what is behind her — 70 ms apart, 500 ms end to end.
+   *
+   * ⚠️ THIS IS NOT DECORATION, WHICH IS THE TEST EVERY MOTION IN THIS PRODUCT HAS TO PASS. It marks
+   * a boundary that genuinely exists and that the screen previously hid: set 2 began. The rest beat
+   * between sets already unmounts this body, so the arrival is the truth about what happened rather
+   * than an effect played over a static thing.
+   *
+   * ⚠️ KEYED ON THE BEAT so it re-fires if the body is ever preserved across a set instead of
+   * remounting — a silent one-arrival-per-lift would be worse than none, because the first set would
+   * feel composed and the other three would not.
+   *
+   * ⛔ AND I CANNOT WATCH IT. The harness pane does not composite frames, so this ships on the
+   * founder's eye, at his instruction — *"שים ואני אשפוט ואעדכן"* — after a sweep animation I argued
+   * for without ever seeing it and he deleted on sight. `useNativeDriver: true` means a real device
+   * runs it on the UI thread regardless of what JS is doing, which is the one part I can be sure of.
+   */
+  const beat = `${session.currentExerciseId ?? ''}-${setN}`;
+
   const weight = displayWeight(target.recommendedWeight, units);
   const reason = target.reasonType; // 'increase' | 'hold' | 'decrease' | undefined
   const deltaMag = displayWeight(Math.abs(target.reasonDelta ?? 0), units) ?? 0;
@@ -1518,232 +1692,254 @@ function ActiveSet({
           ONE piece of work rather than two with no rest, because the sheet carries `block`, `round`
           and `position` — same block, same round, two positions.
         */}
-        {session.straightInto ? (
-          <Legend size={12} track={0.28} align="center" style={styles.group}>{t('workout.superset')}</Legend>
-        ) : group ? (
-          <Legend size={12} track={0.22} align="center" style={styles.group}>{t(`muscle.${group}`)}</Legend>
-        ) : null}
-        <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
-        {session.straightInto ? (
-          <Text style={styles.supersetNext} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>
-            {session.straightInto}
-          </Text>
-        ) : null}
-
-        <>
-            {/* 1 · LOAD — Hush's decision, the hero (set before you arrived).
-                  BODYWEIGHT is the one exception (founder 2026-07-11): an athlete on a pull-up
-                  knows what they are lifting — shouting "BODYWEIGHT" tells them nothing. The
-                  number that carries the work (and the one Hush actually progresses on a
-                  bodyweight lift) is the REP COUNT, so it takes the hero mark and "bodyweight"
-                  drops to a whisper beneath it. */}
-            {/* THE NUMBER IS THE DOOR TO THE EDIT (founder 2026-07-12: "I love that pressing the
-                number opens the set edit — it just has to be OBVIOUS that it does, and then the
-                pencil at the bottom can go"). So the hero is a real control now: it carries a
-                dashed rule beneath it — the universal "this value is editable" mark — and the
-                pencil ghost is gone from the footer. One affordance, on the thing it edits. */}
-            {/* The LABEL is the load, not the action. Making the hero a button merges its children
-                into one accessibility element, so an `accessibilityLabel` of "Edit result" would
-                have replaced the announcement of the WEIGHT — VoiceOver would tell a blind athlete
-                that there is an edit button here and never tell them what to lift. The value is
-                the label; the action is the hint. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                isBodyweight
-                  ? `${target.recommendedReps} ${t('workout.repsUnit')} · ${t('workout.bodyweight')}`
-                  : `${heroValue} ${unitLabel(units)}`
-              }
-              accessibilityHint={t('workout.tapToEdit')}
-              onPress={onToggleEdit}
-              hitSlop={12}
-              style={({ pressed }) => [styles.heroPress, pressed && styles.heroPressed]}
-            >
-             {/*
-               ⛔ THE CALIPER (founder 2026-08-04, extended 2026-08-05): *"instead of writing TAP ME
-               TO EDIT, let's put some nice shape around the weight and the reps, or some mark that
-               upgrades the screen and signals that this area is pressable."* Then: *"I like the
-               frame you added, but I think it can be widened to include the reps — because the reps
-               are meant for editing too."*
-
-               Two end ticks around the values. It is the WORDMARK's own glyph — hush is drawn as a
-               rule between two ticks — doing a second job: a measuring caliper closed around a
-               number says "this is a value" in a way no caption can, and it says it in every
-               language, which the dashed pill and its sentence could not.
-
-               ⚠️ IT ENCLOSES EXACTLY WHAT THE EDITOR EDITS. Weight and reps are both inside; the
-               per-side figure is NOT, because it is derived and she cannot set it. A frame around
-               something unpressable is worse than no frame.
-             */}
-             <View style={styles.caliper}>
-              <View style={styles.caliperTick} />
-              <View style={styles.caliperCol}>
-              {isBodyweight ? (
-                <View style={styles.heroRow}>
-                  <Text style={styles.hero} accessibilityLabel={`${target.recommendedReps} ${t('workout.repsUnit')}`}>
-                    {target.recommendedReps}
-                  </Text>
-                  {/* The unit slot is mono because it usually holds `kg`/`lb`. On a bodyweight
-                      lift it holds a translated WORD ("reps"), so it hands over to sans — mono
-                      cannot draw Hebrew at all (monoCarriesNoWords). */}
-                  <Text style={[styles.heroUnit, styles.heroUnitWord]}>{t('workout.repsUnit')}</Text>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.heroRow}>
-                    {/* The figure takes the size it can HAVE, not a size it was promised — see
-                        `heroFontSize`. 5 to 99.5 kg is untouched at the designed 118. */}
-                    <Text
-                      style={[styles.hero, heroType(String(heroValue))]}
-                      accessibilityLabel={`${heroValue} ${unitLabel(units)}`}
-                    >
-                      {heroValue}
-                    </Text>
-                    <Text style={styles.heroUnit}>{unitLabel(units)}</Text>
-                    {/*
-                      ⚠️ THE ARROW AND THE FIGURE, AND NO WORD. "↑1.5" is the fact; "up 1.5 from last
-                      time" is a sentence about it. On the first set it compares to last time, and
-                      mid-lift to the set before — `loadNews` decides which, and she is never shown
-                      both.
-                    */}
-                    {news ? (
-                      <Text
-                        style={[styles.heroNews, { color: directionTone(news.direction) }]}
-                        accessibilityLabel={t(news.direction === 'up' ? 'workout.loadUpBy' : 'workout.loadDownBy', {
-                          delta: displayWeight(news.deltaKg, units),
-                          unit: unitLabel(units),
-                        })}
-                      >
-                        {`${news.direction === 'up' ? '↑' : '↓'}${displayWeight(news.deltaKg, units)}`}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {/*
-                    ⛔ 3 · THE ASK, AS A NUMBER — the band graphic is DELETED (founder 2026-08-04):
-                    *"during a workout everything has to be maximally clear. There can't be a lot of
-                    copy and certainly not small type."* What stood here was 250 px of rule, two
-                    ticks and a legend, to say "6 to 8".
-
-                    ⛔ AND IT LOST THE ACCENT (same day): *"why are we putting the reps in green as a
-                    hero? It is only the rep range that follows from the weight."* The palette's law
-                    is that moss means A DECISION MADE — and the LOAD is the bigger decision by far,
-                    yet it wore cream while the band that follows from it wore the accent.
-
-                    ⚠️ AND IT HAD NO TYPE AT ALL UNTIL 2026-08-05. When the graphic came out, its
-                    CONTAINER style stayed behind on the Text that replaced it — `flexDirection:
-                    'row'`, and nothing else. No family, no size, no colour, on the second most
-                    important figure on the screen, under a comment claiming it was set at 30. That
-                    is the small type the founder photographed four times. `typeHasAFloor` would now
-                    fail on it, but only because it is finally a size.
-                  */}
-                  <Text
-                    style={styles.ask}
-                    accessible
-                    accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
-                  >
-                    {`× ${bandLo}–${bandHi}`}
-                  </Text>
-                </>
-              )}
-              </View>
-              <View style={styles.caliperTick} />
-             </View>
-
-              {/* THE ANNEX SITS UNDER THE FIGURE — and OUTSIDE the caliper, because she cannot set
-                  it. It is derived from the load and the bar, and a frame around an unpressable
-                  value is a worse lie than no frame.
-
-                  ⛔ NOT ON EVERY SET (founder 2026-08-04). It stays — his ruling is that the athlete
-                  never calculates — but she loads the bar ONCE, and on the sets after that it is a
-                  fact she acted on five minutes ago. ⚠️ It returns the instant the load moves. */}
-              {isBodyweight ? (
-                <Text style={styles.bodyweightQuiet}>{t('workout.bodyweight')}</Text>
-              ) : annex && showsPerSide({ setNumber: setN, news }) ? (
-                <Text style={styles.heroAnnex}>
-                  <Text style={styles.heroAnnexValue}>{annex.value}</Text>
-                  {` ${annex.suffix}`}
-                </Text>
-              ) : null}
-            </Pressable>
-
-            {/* 4 · THE REASON IS NOT ON THIS SCREEN (v7 2.2).
-                  A delta pill and its clause used to sit under the band, so the set screen carried
-                  the engine's argument as well as its instruction. v7 splits them: the SET says what
-                  to lift, and nothing else. When a load actually MOVES, the engine takes a whole
-                  screen to say so (2.3 · THE CORRECTION), and the week's reasoning lives in the WHY
-                  sheet off Today (2.1b). Under a bar, one fact. `onWhy` still opens that sheet from
-                  the correction, so nothing the athlete could reach has been taken away. */}
-          </>
+        {/*
+          ⚠️ WRAPPED SO THE STAGE HAS THREE GROUPS, NOT FIVE LOOSE CHILDREN. The muscle, the name and
+          a superset's second lift are ONE thing — who she is lifting — and flex cannot know that
+          while they are siblings of the hero. It matters because `stageBody` distributes its
+          children now (see its style): unwrapped, the eyebrow would be spaced away from the name it
+          belongs to.
+        */}
+        <Arrive key={`id-${beat}`} order={0} style={styles.identity}>
+          {session.straightInto ? (
+            <Legend size={20} track={0.28} align="center" style={styles.group}>{t('workout.superset')}</Legend>
+          ) : group ? (
+            <Legend size={20} track={0.22} align="center" style={styles.group}>{t(`muscle.${group}`)}</Legend>
+          ) : null}
+          <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
+          {session.straightInto ? (
+            <Text style={styles.supersetNext} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>
+              {session.straightInto}
+            </Text>
+          ) : null}
+        </Arrive>
 
         {/*
-          ⛔ THE FOUR SETS, IN FIGURES — and this DELETES "SET 3 OF 4" (founder 2026-08-04).
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ THE PRESCRIPTION IS TWO EQUAL FIGURES — REDESIGNED 2026-08-12, ON HIS APPROVAL
+          ════════════════════════════════════════════════════════════════════════════════════════
 
-          The line said where she was; the row says where she is AND what happened in each set she
-          has finished, in type twice the size, with last time's directly beneath. A line of text
-          that a graphic already states is the thing his copy law exists to remove.
+          FOUNDER: *"עכשיו יש לי כאוס של מלל ומספרים במרכז … ואני מאשר את השינוי שהצעת. רק שהכל
+          יהיה ברור כי זה חדר כושר ושהכל ירגיש נכון ומדויק."*
 
-          ⚠️ NOTHING IS LABELLED. Position IS the set number — that is what lets the sentence go.
+          What stood here was a 118-point load with three different things stacked under it at three
+          different sizes, weights and inks — the band, the per-side line, and (for an hour) a
+          control. Four objects reading as one pile.
 
-          ⚠️ AND THE GHOST ROW REPLACES THE SMALL PRINT. "LAST TIME · 4 DAYS AGO · 57.5 KG · 8·8·7·6"
-          was a ten-point line at the foot of the screen holding the one comparison that matters. Set
-          under its own number at the SAME SIZE and dimmed instead, it stops being a footnote and
-          becomes a comparison standing where the eye already is.
+          **A barbell prescription is one sentence with two numbers in it: fifty kilos, six to eight
+          times.** So it is drawn as two peers on one rule, each with its own label, and nothing else
+          in the block. The load keeps the larger share of attention through POSITION and through the
+          figure it carries, not by being three times the size of the thing she is counting toward.
+
+          ⚠️ THE 118 IS GONE AND THAT IS THE POINT OF THE CHANGE. It made the load the screen and the
+          rep target a footnote — and in a hypertrophy app the band is half the instruction. Sixty-four
+          points of tabular mono is read across a gym; the founder's own type floor argument applies
+          here at the other end.
+
+          ⚠️ AND EVERY FIGURE IS LABELLED, because it is a gym: KG under the load, REPS under the
+          band, "A SIDE" on the loading line. Nothing on this screen is a number she has to identify.
         */}
-        {slots.length ? (
-          <View style={styles.sets} accessibilityRole="summary" accessibilityLabel={setsLabel}>
-            {slots.map((slot, i) => {
-              /*
-               * ⛔ ONE ROW, AND THE SLOT CHANGES HANDS (founder 2026-08-04): *"instead of two rows,
-               * why not one row where each set simply replaces the number from the previous
-               * workout?"*
-               *
-               * Because **the comparison matters before the set, not after.** She reads slot 3 while
-               * walking to the bar — that is when last time's number is worth anything. The moment
-               * she has lifted, it is history, and holding a second row open to keep showing it is
-               * paying rent on a fact that has stopped being useful.
-               *
-               * So a slot holds LAST TIME'S number, dimmed, until she replaces it with her own. The
-               * one she is standing on is the number to beat, and it costs no pixels: the same slot
-               * doing a second job.
-               */
-              const done = slot.reps != null;
-              /*
-               * ⛔ A SLOT SPEAKS ONLY WHEN IT HAS SOMETHING TO SAY (founder 2026-08-04): *"it still
-               * looks like a lot of numbers."* He was right, and the four ghosts were the same
-               * mistake as the per-side line on set two — **a number that is not news yet.**
-               *
-               * She needs the ghost of the set she is ABOUT TO DO; the ones further along are last
-               * week's shape, and she will meet them when she reaches them. So a slot draws a figure
-               * when it is DONE or CURRENT, and a dot otherwise. Seven numerals became four.
-               */
-              const speaks = done || slot.current;
-              const shown = done ? slot.reps : slot.ghost;
-              return (
-                <View key={i} style={styles.setCol}>
-                  {speaks ? (
-                  <Text
-                    style={[
-                      styles.setNum,
-                      !done && styles.setNumGhost,
-                      done && slot.landing === 'above' && styles.setNumUp,
-                      done && slot.landing === 'below' && styles.setNumDown,
-                    ]}
-                  >
-                    {/* A dash where there is no history at all — never a zero, which is a set she
-                        did and failed rather than a set nobody has a record of. */}
-                    {shown == null ? '–' : shown}
-                  </Text>
-                  ) : (
-                    <View style={styles.setDot} />
-                  )}
-                  {/* The set she is standing in. A rule, not a colour: the figures already spend
-                      colour on the verdict, and a second hue here would argue with it. */}
-                  <View style={[styles.setMark, !slot.current && styles.setMarkOff]} />
-                </View>
-              );
-            })}
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ THREE BANDS, EACH WITH ITS OWN HEADING AND ITS OWN SPACE
+          ════════════════════════════════════════════════════════════════════════════════════════
+
+          FOUNDER, 2026-08-12: *"אפשר להרים את שם התרגיל לראש המסך … ואז אפשר לתת כותרת מעל המשקל
+          וכותרת מעל החזרות ולמה יותר איזה סט זה מתוך כמה. אני רוצה לנצל את כל השטח ולתת לכל מרכיב
+          את השטח שלו."*
+
+          The lift's name moves to the top — there were **220 dead points** between the rail and
+          "CHEST" — and the three facts underneath become three BANDS, each opened by a rule and
+          named by a heading above its figure.
+
+          ⚠️ THE HEADING REPLACES THE INLINE LABEL, it does not join it. "WEIGHT" over "34 kg" and
+          "KG" beside it would be the same word twice; the unit stays on the figure because it is
+          part of the number, and the heading names the band.
+
+          ⚠️ AND SET IS DELIBERATELY THE SMALL ONE. It gets a band and a heading like the others —
+          he asked for it — but its figure is 46 to their 92. **The first two are instructions; this
+          is orientation**, and a screen where everything is the largest thing has no hierarchy at
+          all. In a gym that is the difference between reading and searching.
+        */}
+        {/*
+          ⛔ NOT GROUPED (founder 2026-08-12): *"אבל למה שוב הדבקת אותם והותרת חלל ריק? עכשיו רק תן
+          לכל אחד את הספייס שלו."*
+
+          I wrapped the two cards in one container to stop `space-between` parting them by 88 points
+          — and that turned three children into two, so the distribution pushed the PAIR to the foot
+          and left three hundred points of nothing above it. **The gap I was afraid of was the
+          spacing working.**
+
+          Three children, three shares: the lift's name, the load, the reps. Each gets its own space,
+          which is what he asked for the first time.
+        */}
+        <Arrive key={`load-${beat}`} order={1} style={styles.bandArrive}>
+         <View style={styles.band}>
+          {/*
+            ⛔ THE HEADINGS ARE LIT (founder 2026-08-12): *"צריך לשנות את הצבע של הכותרות כי בחדר
+            הכושר לא יראו את זה."*
+
+            `Legend` defaults to `textMuted` = `cream[2]` = #8b8474, which on this card's #1b1914 is
+            about 4.4:1 — a ratio tuned for a caption on paper, read at desk distance.
+
+            ⚠️ AND `tone="onStage"` WOULD HAVE CHANGED NOTHING, which is worth recording: it resolves
+            to `textTertiary`, and `textTertiary` and `textMuted` are **the same token** (`cream[2]`).
+            I set it, measured, and got the identical colour back. A prop that looks like a choice and
+            is not one is how a screen stays broken through a fix.
+
+            `stage.ink1` is the stage's own secondary — about 7:1 here — and it stays below the figure
+            it names, so the hierarchy is untouched.
+          */}
+          {/*
+            ⛔ THE DELTA RIDES THE HEADING, NOT THE FIGURE ROW (founder's screenshot, 2026-08-12).
+
+            On the baseline it was correct as a reading order and wrong as a composition: `34 KG ↑1.5`
+            is a much wider group than `8–10`, and both rows are centred — so **the largest number on
+            the screen sat off the centre line the one below it stands on.** Two figures that must be
+            compared at a glance were not even sharing an axis.
+
+            The heading row carries it instead. It is news ABOUT the weight, which is what a heading
+            names, and the figure rows are now identical in construction: a number, its unit, centred.
+          */}
+          {/*
+            ⚠️ AND THE HEADING NEEDS THE SAME TREATMENT THE FIGURE GOT, for the same reason and one
+            row up. Moving the delta here cured the figure and moved the fault onto the label: `WEIGHT
+            ↑1.5` is one centred group, so "WEIGHT" sat at c=164 while "REPS" below it stood at 195.
+            **Two headings that stack, thirty-one points apart.**
+
+            ⛔ AND A FIXED SLOT WAS THE WRONG CURE — the same wrong cure, twice in one screen. 72
+            points held `↑1.5`; the founder's `↑103.5` **wrapped onto a second line** and dragged the
+            heading row up with it. A slot sized to the case in front of me is not a rule.
+
+            Absolute, hanging off the heading's right edge, one line. The heading is centred because
+            it is the only thing in the row — not because I balanced something against it.
+          */}
+          <View style={styles.headRow}>
+            <Legend size={22} track={0.26} style={styles.cardLabel}>{t('editResult.weight')}</Legend>
+            {news ? (
+              <View style={styles.rxDeltaAbs} pointerEvents="none">
+              <Text
+                numberOfLines={1}
+                style={[styles.rxDelta, { color: directionTone(news.direction) }]}
+                accessibilityLabel={t(news.direction === 'up' ? 'workout.loadUpBy' : 'workout.loadDownBy', {
+                  delta: displayWeight(news.deltaKg, units),
+                  unit: unitLabel(units),
+                })}
+              >
+                {`${news.direction === 'up' ? '↑' : '↓'}${displayWeight(news.deltaKg, units)}`}
+              </Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              isBodyweight
+                ? `${target.recommendedReps} ${t('workout.repsUnit')} · ${t('workout.bodyweight')}`
+                : `${heroValue} ${unitLabel(units)}`
+            }
+            accessibilityHint={t('workout.tapToEdit')}
+            onPress={onToggleEdit}
+            style={({ pressed }) => [styles.bandPress, pressed && styles.bandPressed]}
+          >
+            {/*
+              ════ ⛔ THE UNIT COSTS THE FIGURE NOTHING (founder's `137.5` screenshot, 2026-08-12) ════
+
+              `34 KG` was one centred row, so the number sat 23 points left of the screen's axis while
+              `8–10` in the band below stood on it. **The two figures the athlete compares at a glance
+              were not on the same vertical line.** I balanced it with an empty slot the width of the
+              unit — and that fix bought the axis by spending 144 points of width the figure needed.
+
+              He photographed `137.5`: the figure held the axis exactly, and `KG` was **at x=398 on a
+              390-point screen.** Off the edge. A centring device that narrows the thing it centres is
+              not a fix, it is a trade, and I did not measure the side I was paying with.
+
+              The unit is ABSOLUTE now, hanging off the figure's right edge. It takes no row width, so
+              the figure is centred by simply being the only thing in the row — and `8–10`, which has
+              no unit, lands on the same axis for the same reason rather than by arrangement.
+            */}
+            {/*
+              ════════════════════════════════════════════════════════════════════════════════════
+              ⛔ A BODYWEIGHT LIFT KEEPS THE SCREEN'S SHAPE (founder, 2026-08-12)
+
+                *"למה ב-Hanging Leg Raise או במשקלי גוף זה מציג את זה בצורה מוזרה ככה. תשמור על
+                המבנה של המסך רק במשקל תכתוב BODY WEIGHT במקום מספר."*
+
+              It was folding the two bands into one: the WEIGHT heading over a figure that was the
+              REP COUNT, with "REPS" hanging off it as a unit and "BODYWEIGHT" underneath — so the
+              screen read "WEIGHT · 8 REPS · BODYWEIGHT" and the rep band below it was suppressed
+              entirely. Three facts in the wrong slots and a heading that named none of them.
+
+              **The structure does not change; one slot does.** The weight band says BODYWEIGHT
+              where a number would be, and the rep band underneath draws her reps exactly as it does
+              on every other lift.
+              ════════════════════════════════════════════════════════════════════════════════════
+            */}
+            {isBodyweight ? (
+              <Text style={styles.rxWord} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {t('workout.bodyweight').toUpperCase()}
+              </Text>
+            ) : (
+              <View style={styles.rxRow}>
+                <View>
+                  <Text style={[styles.rxFigure, heroType(String(heroValue))]}>{heroValue}</Text>
+                  <View style={styles.rxUnitAbs} pointerEvents="none">
+                    <Legend size={22} track={0.2} style={styles.cardLabel}>{unitLabel(units)}</Legend>
+                  </View>
+                </View>
+              </View>
+            )}
+            {/*
+              ⛔ THE LOADING LINE BELONGS TO THE LOAD (founder 2026-08-12), so it is inside the load's
+              own band. ⚠️ Not on every set — she loads the bar once, and it returns the instant the
+              load moves (founder 2026-08-04).
+
+              ⚠️ ONE CASE FOR THE WHOLE PHRASE. It read "7 kg A SIDE" for an hour — I uppercased the
+              SUFFIX and left `annex.value`, which carries its own unit, exactly as it was. Two cases
+              inside one phrase reads as a typo, not as emphasis.
+            */}
+            {/* ⚠️ AND NO SECOND "BODYWEIGHT" UNDERNEATH. The word is the figure now — printing it
+                again in the loading line's slot said the same thing twice, one line apart. */}
+            {isBodyweight ? null : annex && showsPerSide({ setNumber: setN, news }) ? (
+              <Text style={styles.rxSide}>
+                <Text style={styles.rxSideValue}>{annex.value.toUpperCase()}</Text>
+                {` ${annex.suffix.toUpperCase()}`}
+              </Text>
+            ) : null}
+          </Pressable>
+         </View>
+        </Arrive>
+
+        {/* ⛔ THE REP BAND IS DRAWN ON EVERY LIFT, bodyweight included (founder, 2026-08-12). It was
+            suppressed there on the grounds that the block above "already carries them" — which it
+            did, in the WEIGHT slot, under the WEIGHT heading. See the note there. */}
+        {(
+          <Arrive key={`reps-${beat}`} order={2} style={styles.bandArrive}>
+           <View style={styles.band}>
+            <Legend size={22} track={0.26} align="center" style={styles.cardLabel}>{t('workout.repsUnit')}</Legend>
+            <Text
+              style={[styles.rxFigure, heroType(`${bandLo}–${bandHi}`)]}
+              accessibilityLabel={`${bandLo}–${bandHi} ${t('workout.repsUnit')}`}
+            >
+              {`${bandLo}–${bandHi}`}
+            </Text>
+           </View>
+          </Arrive>
+        )}
+
+        {/*
+          ════ ⛔ THE SET BAND WENT UP INTO THE RAIL (founder 2026-08-12) ════
+
+          *"הדבר היחיד שמפריע לי עדיין הוא שה-SET תקוע שם למטה ובאיזשהו מקום דווקא מפריע … אולי אפשר
+          לעשות את זה יחד עם הקו שהחליף את ה-LIFT? לעשות איחוד ביניהם."*
+
+          He is right and the reason is that they are the same KIND of fact. "Lift 1 of 6" and "set 2
+          of 4" are both *where am I*, one nested inside the other — and one of them was a rail at the
+          top of the screen while the other was a 40-point figure at the bottom, squeezed against the
+          act. Two answers to one question, in two languages, at opposite ends.
+
+          They are two rows of one instrument now (`LiftRail`): the session above, this lift below.
+          **And the whole bottom third of the stage came free**, which is what pays for the cards.
+        */}
 
         {/*
           ⛔ AND THE "LAST TIME · 57.5 KG" LINE IS DELETED (founder 2026-08-04).
@@ -1767,9 +1963,22 @@ function ActiveSet({
         accessibilityElementsHidden={notice}
         importantForAccessibility={notice ? 'no-hide-descendants' : 'auto'}
       >
-        {/* ONE ACT (v7 2.2). Swap and Form moved into the chrome above; the edit door is the dashed
-            pill on the number itself. What is left at the bottom of the stage is the only thing a
-            hand under a bar should be able to hit: Complete set. */}
+        {/*
+          ════ ⛔ THE ACTIONS LIVE TOGETHER, AT THE FOOT ════
+
+          FOUNDER, 2026-08-12: *"עכשיו יש לי כאוס של מלל ומספרים במרכז. למה לא לשים את זה כפקד
+          מתחת ל-COMPLETE SET?"*
+
+          The edit chip was floating in the middle of the figures — a control standing inside the
+          data, which is what made that block read as four unrelated things stacked. **A control
+          belongs in the action zone.** The middle of this screen is now only what she reads; the
+          foot is only what she presses.
+
+          ⚠️ AND THE OLD NOTE HERE WAS ALREADY STALE: it said *"the edit door is the dashed pill on
+          the number itself"*. That pill has been gone for weeks (a caliper replaced it, and the
+          caliper is gone too). A comment that describes a control the screen no longer draws is how
+          five different marks came to be tried for one job — see the note above the figures.
+        */}
         <Button
           variant="onstage"
           size="stage"
@@ -1777,6 +1986,27 @@ function ActiveSet({
           label={t('workout.completeSet')}
           onPress={onComplete}
           leading={<Icon name="check" size={18} color={stage[0]} strokeWidth={2.4} />}
+        />
+        {/*
+          ⛔ THE SAME BUTTON, IN THE STAGE'S OWN COLOUR (founder 2026-08-12): *"תעשה את הפקד של EDIT
+          RESULT כמו ה-COMPLETE רק בצבע הנוכחי."*
+
+          It was a chip that hugged its label — small, and therefore still arguable as decoration on
+          a screen where five different marks had already failed to read as a control. Same size,
+          same shape, same full width as the act: **there is nothing left to mistake it for.**
+
+          ⚠️ WHAT KEEPS THE HIERARCHY IS THE FILL, and that is enough. `Complete set` is CREAM — light
+          standing on the dark stage, which is this product's whole definition of a primary action.
+          This is the stage's own ground with a hairline round it. Same geometry, opposite weight.
+        */}
+        <Button
+          variant="onstageGhost"
+          size="stage"
+          block
+          label={t('workout.editResult')}
+          onPress={onToggleEdit}
+          leading={<Icon name="pencil" size={18} color={stage.ink0} strokeWidth={1.8} />}
+          style={styles.editSet}
         />
       </View>
     </>
@@ -1850,9 +2080,16 @@ function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => 
   };
   const setReps = (v: number) => session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
 
-  // The dial legends carry WORDS in a mono voice (the mock draws them in Plex Mono). Mono must never
-  // render a literal t() (monoCarriesNoWords) — so each is baked into a variable first and the
-  // <Text> body is that variable, exactly as StageBar does with `ordinal`.
+  /*
+   * ⛔ THIS COMMENT USED TO SAY THE QUIET PART OUT LOUD: *"Mono must never render a literal t()
+   * — so each is baked into a variable first."* That is not obeying `monoCarriesNoWords`, it is
+   * stepping around the only shape the law could see. The rendered string was unchanged, so
+   * "משקל · ק״ג" and "חזרות" went to IBM Plex Mono, which has no Hebrew glyphs at all.
+   *
+   * ⚠️ The variables are still right — the legend IS assembled from two pieces. The face is now
+   * asked of the STRING (`monoCanDraw`), the way this file already treats its hero unit: English
+   * reads exactly as the handoff draws it, Hebrew never breaks mid-line.
+   */
   const weightLegend = `${t('editResult.weight')} · ${unitLabel(units)}`.toUpperCase();
   const repsLegend = t('editResult.repsLabel').toUpperCase();
 
@@ -1889,7 +2126,7 @@ function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => 
           {!isBodyweight ? (
             <View style={styles.editDial}>
               <View style={styles.editDialHead}>
-                <Text style={styles.editDialLegend}>{weightLegend}</Text>
+                <Text style={[styles.editDialLegend, !monoCanDraw(weightLegend) && styles.editDialLegendWord]}>{weightLegend}</Text>
                 <Text style={styles.editDialSub}>{t('workout.editPlanned', { n: displayWeight(planned.weight, units) })}</Text>
               </View>
               <WheelPicker value={weightVal} onChange={setWeight} step={wStep} min={0} max={units === 'kg' ? 500 : 1100} size="lg" ends="chevron" label={weightLegend} onStage />
@@ -1897,7 +2134,7 @@ function EditSet({ units, onDone, onSave }: { units: 'kg' | 'lb'; onDone: () => 
           ) : null}
           <View style={styles.editDial}>
             <View style={styles.editDialHead}>
-              <Text style={styles.editDialLegend}>{repsLegend}</Text>
+              <Text style={[styles.editDialLegend, !monoCanDraw(repsLegend) && styles.editDialLegendWord]}>{repsLegend}</Text>
               <Text style={styles.editDialSub}>{t('workout.editBand', { lo: bandLo, hi: bandHi })}</Text>
             </View>
             <WheelPicker value={repsVal} onChange={setReps} step={1} min={0} max={50} size="lg" ends="chevron" label={repsLegend} onStage />
@@ -1963,40 +2200,31 @@ export function Logged({
    * this is the one surface that was never given the middle one.
    */
   const held = bandPlacement(confirm);
-  if (held) {
-    /*
-     * ⚠️ THE MARK IS THE WHOLE BEAT — no weight, no rep count, no "Set recorded".
-     *
-     * Those three are exactly what he had deleted, and re-printing them under the band would be the
-     * old screen with a graphic on top. She just performed the set; she does not need it read back.
-     * What she cannot see without this is WHERE it landed, which is the one thing the app knows and
-     * she does not.
-     */
-    return (
-      <View style={styles.loggedRoot}>
-        <BandMark tone={held.tone} left={held.left} legend={t(`workout.${held.legend}`, { n: confirm.n })} />
-      </View>
-    );
-  }
-  return (
+  /*
+   * ⛔ AND THE PLAIN "34 kg × 8 · Set recorded" READBACK IS DELETED (founder, 2026-08-12: *"צריך
+   * להעיף לדעתי ולוודא שהם לא מופיעים בשום דבר באפליקציה כי אני לא מבין מה הם בכלל"*).
+   *
+   * He was right that it should not exist, and it turned out not to be a design at all. The phone
+   * could never reach it — `beatSpeaks` requires a correction, a finished lift, or a band — so the
+   * ONLY thing that ever drew it was a set logged on the WATCH, and only because `WatchLoggedSet`
+   * carried no band for `bandPlacement` to place. **A missing field wearing a screen's clothes.**
+   *
+   * The band travels with the wrist's set now and both devices ask one predicate, so this beat has
+   * three states and no fourth. `null` rather than a fallback: a fallback is where the next missing
+   * field would go to hide.
+   */
+  return held ? (
     <View style={styles.loggedRoot}>
-      <View style={styles.loggedHead}>
-        <Icon name="check" size={20} color={up.stage} strokeWidth={2.4} />
-        <Text style={styles.loggedLegend}>{t('workout.setLogged', { n: confirm.n, m: confirm.m }).toUpperCase()}</Text>
-      </View>
-      <View style={styles.loggedValue}>
-        {w != null ? (
-          <>
-            <Text style={styles.loggedNum}>{w}</Text>
-            <Text style={styles.loggedUnit}>{unitLabel(units)}</Text>
-            <Text style={styles.loggedTimes}>×</Text>
-          </>
-        ) : null}
-        <Text style={styles.loggedNum}>{confirm.reps}</Text>
-      </View>
-      <Text style={styles.loggedCopy}>{t('workout.recorded')}</Text>
+      <BandMark
+        tone={held.tone}
+        left={held.left}
+        legend={t(`workout.${held.legend}`, { n: confirm.n })}
+        band={confirm.band}
+        reps={confirm.reps}
+        holds={w != null ? `${w} ${unitLabel(units)}` : null}
+      />
     </View>
-  );
+  ) : null;
 }
 
 /* ----------------------------------------------------- Rest — learned (2.4d) */
@@ -2017,30 +2245,49 @@ export function Logged({
 function RestLearned({ took, was, now, nextSet }: { took: number; was: number; now: number | null; nextSet: number }) {
   const { t } = useCopy();
   const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.max(0, Math.round(sec)) % 60).padStart(2, '0')}`;
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE HERO IS THE REST SHE WILL GET, NOT THE ONE SHE JUST TOOK (founder, 2026-08-12)
+   *
+   *   *"המסך הזה לא ברור. מה זה השניות שמופיעות על המסך ורשום LEARNED? צריך להציג את הזמן שהמנוע
+   *   למד שהמתאמן אוהב ולרשום NEXT TIME זה הזמן שיהיה."*
+   *
+   * It put `took` in the ring under "YOUR PACE" — the raw sample, which on his screenshot was
+   * **0:03**, because he pressed Start immediately in the harness. A three-second rest drawn as the
+   * largest figure on the screen, labelled as though it were a finding.
+   *
+   * ⚠️ AND THE SAMPLE IS NOT THE DECISION. `restWithSample` folds it into a MEDIAN over every rest
+   * she has taken on this lift, so once she has any history an impatient tap moves the prescription
+   * a little rather than to itself. The screen was showing her the INPUT to that calculation and
+   * calling it the result — then printing the actual result, smaller, in the struck row underneath.
+   * **The two were the wrong way round.**
+   *
+   * ⚠️ ON THE VERY FIRST SAMPLE THE MEDIAN *IS* THE SAMPLE, which is exactly what the gallery draws
+   * (`0:00`, from a Start pressed instantly with no history behind it). That is honest — it really
+   * is what the next rest would be — and it is worth knowing that this screen's most alarming state
+   * is reachable only on the first set of a lift she has never rested through.
+   *
+   * `now` in the ring under NEXT TIME; what it WAS, struck, beneath. The new value is not printed
+   * twice — it is the hero, and the row below exists only to say what it replaced.
+   */
+  const next = now ?? took;
   return (
-    <>
-      <View style={styles.paceBody}>
-        <Breathe>
-          <View style={styles.paceRing}>
-            <View style={styles.paceRingInner}>
-              <Text style={styles.paceValue}>{clock(took)}</Text>
-              <Legend size={11} track={0.22} align="center" tone="onStage">{t('workout.yourPace')}</Legend>
-            </View>
+    <View style={styles.paceBody}>
+      <Breathe>
+        <View style={styles.paceRing}>
+          <View style={styles.paceRingInner}>
+            <Text style={styles.paceValue}>{clock(next)}</Text>
+            <Legend size={17} track={0.22} align="center" tone="onStage">{t('workout.nextTime')}</Legend>
           </View>
-        </Breathe>
+        </View>
+      </Breathe>
 
-        <Legend size={11.5} track={0.18} align="center" tone="accent">{t('workout.restLearned')}</Legend>
+      <Legend size={17} track={0.18} align="center" tone="accent">{t('workout.restLearned')}</Legend>
 
-        {/* The plan, moving. Only drawn when the median actually MOVED — a sample that lands on
-            the number already in force has changed nothing, and saying otherwise would be noise. */}
-        {now != null && now !== was ? (
-          <View style={styles.paceChange}>
-            <Text style={styles.paceWas}>{clock(was)}</Text>
-            <Text style={styles.paceNow}>{clock(now)}</Text>
-          </View>
-        ) : null}
-      </View>
-    </>
+      {/* What it was. Only when the median actually MOVED — a struck figure identical to the one
+          above it would announce a change that did not happen. */}
+      {now != null && now !== was ? <Text style={styles.paceWas}>{clock(was)}</Text> : null}
+    </View>
   );
 }
 
@@ -2082,12 +2329,34 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
   const placed = bandPlacement(confirm);
   return (
     <View style={styles.beatHead}>
-      {/* Every pip filled: the lift is spent. It used to be the subject of a question; now it is
-          the whole beat, which is what it always deserved to be. */}
-      <View style={styles.donePips}>
-        {Array.from({ length: confirm.m }).map((_, i) => (
-          <View key={i} style={styles.donePip} />
-        ))}
+      {/*
+        ════ ⛔ THE PIPS ARE AN INSTRUMENT, AND THEY ARE LABELLED (founder 2026-08-12) ════
+
+        *"אם צריך אותו אז אל תמחק אותו אבל תעצב אותו מחדש שיראה נורמלי."* — about `2.3g`, the last
+        set of a lift with NO rep band: a hold, a carry, a distance. It is reachable, so it stays,
+        and on that beat these pips and the lift's name are **the entire screen**. Four 34×10
+        lozenges and a 26px line came to 72 points on an 844-point phone.
+
+        ⚠️ AND ADDING FACTS WAS NOT THE ANSWER. A hold has no reps and often no load; "this lift is
+        finished, it was four sets, here is its name" is genuinely everything we measured, and R7
+        forbids inventing the rest. **The fault was never that the beat had too little to say — it
+        was that it said it at the size of a caption.**
+
+        So the pips take the same 334-point track the band does — one family, one geometry — and
+        they are LABELLED, exactly as the band's ends now are. An anonymous graphic that the athlete
+        has to count is the same defect in both instruments.
+      */}
+      <View style={styles.donePipsWrap}>
+        <View style={styles.donePips}>
+          {Array.from({ length: confirm.m }).map((_, i) => (
+            <View key={i} style={styles.donePip} />
+          ))}
+        </View>
+        {/* ⚠️ SANS, NOT MONO — `monoCarriesNoWords` caught me: this reads "4 סטים" in Hebrew and
+            IBM Plex Mono has no Hebrew. The band's ends stay mono because they are pure figures. */}
+        <Legend size={19} track={0.22} align="center" style={styles.donePipsLegend}>
+          {t('workout.setsDone', { count: confirm.m })}
+        </Legend>
       </View>
       {/*
         ⛔ THE SENTENCE, AND IT IS NOT OPTIONAL (founder 2026-08-05).
@@ -2102,8 +2371,16 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
       <Text style={styles.beatDoneTitle}>
         {confirm.lift ? t('workout.liftDone', { lift: bidi(exerciseDisplayName(confirm.lift)) }) : t('workout.liftDonePlain')}
       </Text>
+      {/* No `holds` on the last set of a lift: there is no next set for a load to hold FOR, and
+          what next week does with it is Loop 2's business, not this beat's (R7). */}
       {placed ? (
-        <BandMark tone={placed.tone} left={placed.left} legend={t(`workout.${placed.legend}`, { n: confirm.n })} />
+        <BandMark
+          tone={placed.tone}
+          left={placed.left}
+          legend={t(`workout.${placed.legend}`, { n: confirm.n })}
+          band={confirm.band}
+          reps={confirm.reps}
+        />
       ) : null}
     </View>
   );
@@ -2127,9 +2404,15 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
  * load still held — and the honest picture is a dot outside the band beside a load that did not
  * move. Reading the placement off the correction would have drawn her a set that landed perfectly.
  */
-const BAND_X_LO = 98; // where the moss span starts, in the 280-wide track
-const BAND_X_HI = 182; // …and ends
-const BAND_DOT = 14;
+/* ⛔ RE-SCALED 2026-08-12 — the instrument is 334 wide, not 280, and the numbers below are the one
+   place its geometry is stated. The track spans the stage; the band occupies its middle third. */
+const BAND_W = 334;
+const BAND_X_LO = 117; // where the span starts, in the 334-wide track
+const BAND_X_HI = 217; // …and ends
+const BAND_DOT = 22; // 14 → 22: at 14 it was smaller than the tick marks it had to be read against
+/** Off the ends. Fixed, not scaled — see the note above `bandPlacement`. */
+const BAND_OUT_LO = 34;
+const BAND_OUT_HI = BAND_W - 34 - BAND_DOT;
 
 /** Where the dot sits and what colour it is, or null on a step with no band. Pure — and exported
  *  so the gallery can drive all three states, which is the only way anyone sees two of them. */
@@ -2142,15 +2425,60 @@ export function bandPlacement(
   const reps = confirm.reps;
   // Outside: the fixed positions the correction reveal has always used — the distance off the end
   // is not a measurement (12 reps over is not twice as far as 6), so it does not scale.
-  if (reps < lo) return { left: 30, tone: down.stage, legend: 'landedBelow' };
-  if (reps > hi) return { left: 240, tone: up.stage, legend: 'landedAbove' };
+  if (reps < lo) return { left: BAND_OUT_LO, tone: down.stage, legend: 'landedBelow' };
+  if (reps > hi) return { left: BAND_OUT_HI, tone: up.stage, legend: 'landedAbove' };
   // Inside: proportional, so a set at the top of the band LOOKS like a set at the top of the band —
   // which is the only warning she gets that the load is about to be raised.
   const t = hi === lo ? 0.5 : (reps - lo) / (hi - lo);
   return { left: BAND_X_LO + t * (BAND_X_HI - BAND_X_LO) - BAND_DOT / 2, tone: hold.stage, legend: 'landedInside' };
 }
 
-function BandMark({ tone, left, legend }: { tone: string; left: number; legend: string }) {
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE END-OF-SET BEAT WAS A FOOTNOTE ON A POSTER (founder, 2026-08-12)
+ *
+ *   *"מסך פלאפון כזה עצום והאישור של סוף סט נראה כל כך עצוב וקטן."*
+ *
+ * He is right and the measurement is brutal. On an 844-point screen the whole beat occupied **59
+ * points**: a 280×2 hairline, an 84×3 span, two 18-point ticks and one line of 17px `ink1`. Nearly
+ * four hundred points of black above it and four hundred below.
+ *
+ * ── AND IT WAS WORSE THAN SMALL: TWO OF THE STATES WERE THE SAME PICTURE ───────────────────────
+ * `2.3d` (landed inside) and `2.3e` (landed above) differed by **one hue and one word at 17px**.
+ * Two opposite training conclusions, told apart by a colour, at a size he had already ruled out on
+ * the set stage that same day. At arm's length in a gym they are one screen.
+ *
+ * ── WHAT THE BEAT NOW SAYS, AND WHY EACH PART IS ALLOWED ───────────────────────────────────────
+ *   the band, at THREE TIMES the scale, with **its ends written** — she has never once been told
+ *     what "your band" is. Two unlabelled ticks asked her to trust a verdict about a range she
+ *     could not read.
+ *   the sentence, at 30px serif in full ink — the voice `beatDoneTitle` already speaks in.
+ *   the consequence, when there is one: **the load that holds.**
+ *
+ * ⚠️ AND THE REP COUNT IS DELIBERATELY NOT THE HERO, though it is the obvious choice and it would
+ * have filled the screen beautifully. `Complete set` records `recommendedReps` — the FLOOR of her
+ * band — so on every unedited set the number is 8 and the dot sits on the left tick. Drawing that
+ * at 92 points is the rep-ghost mistake again, one screen over. **The dot already carries it; a
+ * figure would carry it in a size that makes the defect unmissable.** When the logging path is
+ * fixed, the number is what belongs here.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+function BandMark({
+  tone,
+  left,
+  legend,
+  band,
+  holds,
+}: {
+  tone: string;
+  left: number;
+  legend: string;
+  band?: [number, number];
+  reps?: number;
+  /** The load that does NOT move because of this set — absent on the correction, which moves it. */
+  holds?: string | null;
+}) {
+  const { t } = useCopy();
   const enter = useSharedValue(0);
   useEffect(() => {
     enter.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
@@ -2161,11 +2489,27 @@ function BandMark({ tone, left, legend }: { tone: string; left: number; legend: 
       <View style={styles.corrBeatBand}>
         <View style={styles.corrBeatBandLine} />
         <View style={[styles.corrBeatBandSpan, { backgroundColor: tone, opacity: 0.55 }]} />
-        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickLo, { backgroundColor: tone, opacity: 0.55 }]} />
-        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickHi, { backgroundColor: tone, opacity: 0.55 }]} />
+        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickLo, { backgroundColor: tone }]} />
+        <View style={[styles.corrBeatBandTick, styles.corrBeatBandTickHi, { backgroundColor: tone }]} />
         <Animated.View style={[styles.corrBeatDot, { left, backgroundColor: tone }, dotIn]} />
       </View>
-      <Text style={styles.corrBeatLegend}>{legend.toUpperCase()}</Text>
+      {/*
+        ⛔ THE BAND'S ENDS, WRITTEN. The instrument has drawn two anonymous ticks since it was built
+        and told her she landed inside "your band" without ever saying what the band was. It is the
+        cheapest information on the screen and the only thing here she cannot already infer.
+      */}
+      {band ? (
+        <View style={styles.corrBeatScale}>
+          <Text style={[styles.corrBeatScaleNum, styles.corrBeatScaleLo]}>{band[0]}</Text>
+          <Text style={[styles.corrBeatScaleNum, styles.corrBeatScaleHi]}>{band[1]}</Text>
+        </View>
+      ) : null}
+      <Text style={styles.corrBeatLegend}>{legend}</Text>
+      {holds ? (
+        <Text style={styles.corrBeatHolds}>
+          {t('workout.loadHolds', { load: holds })}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -2220,7 +2564,15 @@ function CorrectionBeat({
   }));
   return (
     <View style={styles.corrBeatRoot}>
-      <BandMark tone={tone} left={placed?.left ?? (below ? 30 : 240)} legend={legend.toUpperCase()} />
+      {/* No `holds` here — this is the one state where the load does NOT hold, and the figures
+          below say what it does instead. */}
+      <BandMark
+        tone={tone}
+        left={placed?.left ?? (below ? BAND_OUT_LO : BAND_OUT_HI)}
+        legend={legend}
+        band={correction.band}
+        reps={correction.reps}
+      />
       <Animated.View style={[styles.corrBeatNums, numsIn]}>
         <Text style={styles.corrBeatFrom}>{from}</Text>
         <Text style={[styles.corrBeatTo, { color: tone, textShadowColor: tone }]}>{to}</Text>
@@ -2235,16 +2587,14 @@ function Rest({
   units,
   paused,
   notice,
-  onDemo,
-  onSwap,
   onLearned,
 }: {
   units: 'kg' | 'lb';
   paused: boolean;
   /** A notice owns the footer while it is up — the buttons stand down (see SessionFlow.notice). */
   notice: boolean;
-  onDemo: () => void;
-  onSwap: () => void;
+  /* ⛔ `onDemo`/`onSwap` ARE GONE FROM THIS COMPONENT (founder, 2026-08-12) — both doors are
+     discs on the stage bar now, which is where every other control on this stage lives. */
   /** Leaving a rest the athlete CHANGED — cut short, or stretched. Carries what she actually
    *  rested and what had been prescribed, so 2.4d can state both. */
   onLearned: (tookS: number, wasS: number) => void;
@@ -2501,14 +2851,29 @@ function Rest({
           <View style={styles.upCard}>
             <View style={styles.upRow}>
               <View style={styles.upInfo}>
-                {/* ONE legend, inside the card, carrying both facts: "UP NEXT · SET 3 OF 4".
-                    It used to sit ABOVE the card saying only "UP NEXT", with the set position
-                    repeated underneath the name — the same idea in two places and neither of them
-                    complete. (A transition names the muscle instead: a new lift is the news.) */}
-                <Legend size={13} track={0.18} tone="onStage" style={styles.upLegend}>
-                  {isTransition
-                    ? t('workout.upNextNewLift')
-                    : `${t('workout.upNext')} · ${t('workout.setOfM', { n: nextSet?.n ?? 1, m: nextSet?.m ?? 1 })}`}
+                {/*
+                  ⛔ THE SET POSITION COMES OFF THIS LINE (founder, 2026-08-12).
+
+                  *"אפשר למחוק את הכיתוב של הסט הבא אם זה מוצג לנו למעלה כבר."* — and his other note
+                  is the proof: *"או שאני מדמיין או שאני רואה באג שבחלק העליון זה מראה סט 2 מתוך 4
+                  ובכיתוב כתוב סט 3 מתוך 4."*
+
+                  ⚠️ IT IS NOT A BUG, AND THAT IS WORSE. The rail says where she IS (set 2, just
+                  finished); the card said what is NEXT (set 3). Both true, neither wrong, and **the
+                  screen reads as though it cannot count.** Two instruments answering one question
+                  with different numbers is a defect whatever the arithmetic says.
+
+                  ⚠️ AND IT WAS ALSO THE LAYOUT FAULT HE PHOTOGRAPHED. "UP NEXT · SET 3 OF 4" is
+                  three lines at 17pt tracked in the width the pill left it, which is why "Bench
+                  Press" broke in half underneath. One short line fixes both at once.
+
+                  ⚠️ "UP NEXT · NEW LIFT" WENT THE SAME WAY, and measured: 230 points of legend in a
+                  175-point column, so the crossing card wrapped its own heading. **"UP NEXT" is not
+                  information on a card that is the only card on the screen** — the news is that the
+                  lift is a new one, and that is what is left.
+                */}
+                <Legend size={17} track={0.18} tone="onStage" style={styles.upLegend}>
+                  {isTransition ? t('workout.upNextNewLift') : t('workout.upNext')}
                 </Legend>
                 <Text style={styles.upName} numberOfLines={2}>{nextName}</Text>
               </View>
@@ -2543,14 +2908,25 @@ function Rest({
                     {displayWeight(correction.to, units)}
                     <Text style={[styles.corrEasedUnit, correction.direction === 'down' && styles.corrEasedDown]}> {unitLabel(units)}</Text>
                   </Text>
-                  <View style={[styles.corrEasedPill, correction.direction === 'down' && styles.corrEasedPillDown]}>
-                    <Legend size={13} track={0.1} tone="onStage" style={correction.direction === 'down' ? styles.corrEasedDown : styles.corrEasedUp}>
-                      {t(correction.direction === 'down' ? 'workout.easedForYou' : 'workout.raisedForYou')}
-                    </Legend>
-                  </View>
                 </View>
               ) : null}
             </View>
+            {/*
+              ⛔ THE PILL CAME OUT OF THE RIGHT COLUMN (founder's screenshot, 2026-08-12).
+
+              "EASED FOR YOU" is 150 points wide at 17pt tracked. Stacked under "31.5 kg" it made the
+              right column the WIDER of the two, so the name — the thing the card is for — was left
+              108 points and "Bench Press" broke across two lines. **A sentence about the load was
+              sizing the column the load lives in.** It is a row of its own now, under both.
+            */}
+            {hasCorrection && correction && !isTransition ? (
+              <View style={[styles.corrEasedPill, correction.direction === 'down' && styles.corrEasedPillDown]}>
+                <Legend size={17} track={0.1} tone="onStage" style={correction.direction === 'down' ? styles.corrEasedDown : styles.corrEasedUp}>
+                  {t(correction.direction === 'down' ? 'workout.easedForYou' : 'workout.raisedForYou')}
+                </Legend>
+              </View>
+            ) : null}
+
             {/* ═══ THE SIGNATURE MOMENT (2026-07-17, moved to the logged beat 2026-07-24) ═══
                 The set she just finished moved the next one — the brief's "single most distinctive
                 moment in the product." The FULL account (old load → new, and the reps that earned
@@ -2566,14 +2942,21 @@ function Rest({
                 is next, and what it weighs. `loadSetup` still runs for the a11y load label. */}
 
           </View>
-          {/* BOTH DOORS, side by side (v7 2.4b): watch the next lift's form, or swap it if the
-              machine is taken. They are equals — two outlines of the same width — because at a
-              crossing neither is more likely than the other. */}
-          {isTransition && nextIsLift ? (
-            <View style={styles.upActions}>
-              <StageOutline icon="playCircle" label={t('workout.form')} onPress={onDemo} />
-              <StageOutline icon="repeat" label={t('workout.swapAction')} onPress={onSwap} />
-            </View>
+          {/*
+            ⛔ BOTH DOORS MOVED INTO THE CHROME (founder, 2026-08-12).
+
+            *"מסך 2.4b transition rest מציג גם צפייה בוידאו בכפתור וגם בחלק העליון בצד. אפשר פשוט
+            לשים את ה-SWAP בפקד למעלה כמו במסך הסט הראשון של התרגיל הראשון."*
+
+            He is right and the FORM half was a plain duplication: the stage bar already carries a
+            form disc through a rest, so this row drew a second control for the same act, one under
+            the other. The swap disc was the missing half — it is offered on the first set of the
+            first lift and nowhere else, and the transition rest is *"the only case where the machine
+            is likely to be taken"* (his own ruling of 2026-08-12). Both are discs now, in the one
+            place the stage puts its controls.
+          */}
+          {false ? (
+            <View style={styles.upActions} />
           ) : null}
         </View>
       </View>
@@ -2651,7 +3034,7 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
     let cancelled = false;
     void (async () => {
       const [now, before, log] = await Promise.all([
-        db.loadCoachPlan().catch(() => null),
+        loadWeekPlan().catch(() => null),
         db.loadCoachPlanPrev().catch(() => null),
         db.loadCoachLog().catch(() => null),
       ]);
@@ -2788,27 +3171,133 @@ const styles = StyleSheet.create({
   // v7 2.2 sets it in the instrument's MONO at .14em — "LIFT 1 / 6" is a position, not a sentence,
   // and it sits on one line with the clock in the same face. (A Hebrew ordinal falls back to
   // Assistant through `Legend`; here the string is figures and a Latin word, so mono draws it.)
-  stageBarOrdinal: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, letterSpacing: trackingPx(14, 0.14), textTransform: 'uppercase', color: stage.ink1, textAlign: 'center' },
+  /*
+   * ── ⛔ ONE INSTRUMENT, TWO ROWS: THE SESSION, AND THIS LIFT ──
+   *
+   * The upper row is the lifts; the lower is the sets of the one she is on. Nested, not adjacent —
+   * which is what they are. See the note where the SET band used to be.
+   *
+   * ⚠️ THEY MUST NOT LOOK ALIKE, or two rows of identical ticks read as one broken row. The session
+   * is thin and quiet (context); the set is thicker and lit (now). Same width, so the second reads
+   * as living inside the first.
+   */
+  railRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 24, marginTop: 18 },
+  /* A lift she is not on: one stroke, and nothing to count. */
+  railSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.12)' },
+  /* ⛔ MOSS, NOT DIM CREAM (founder, 2026-08-12): *"אפשר לעשות שכאשר תרגיל מסתיים להפוך את הקו
+     המלא למעלה לירוק שמסמן הושלם."* A dimmer segment says "behind me"; it does not say DONE, and
+     the difference is the whole point of looking at the rail. Moss is the product's finished colour
+     everywhere else — the pips on the lift-done beat are the same green. */
+  railSegDone: { backgroundColor: up.stage, opacity: 0.55 },
+  /* The lift she IS on: two and a half times the room, opened into its sets. */
+  railOpen: { flex: 2.5, flexDirection: 'row', gap: 3 },
+  setSeg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.14)' },
+  setSegDone: { backgroundColor: up.stage, opacity: 0.7 }, // a finished SET, in the finished colour
+  setSegNow: { backgroundColor: stage.ink0 },
   // The chrome's centre group: [ordinal] · [elapsed] (handoff 2.2). A dim dot parts the ordinal
   // (where am I) from the clock (how long have I been here) — two facts, one line.
   stageBarCentre: { alignItems: 'center', gap: 3 },
-  // The elapsed clock — mono, because it carries only digits and a colon (the two-voice law). Medium
-  // weight, no tracking — mm:ss reads as a running instrument, matching the mock's LIFT ordinal.
-  stageBarClock: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 26, lineHeight: 29, color: stage.ink0, textAlign: 'center' },
+  /*
+   * ════ ⛔ 26 → 17, AND IT GIVES THE TOP OF THE SCREEN BACK ════
+   *
+   * FOUNDER, 2026-08-12: *"אם רצית להוריד את השעון או כל דבר אחר — אני נותן לך יד חופשית."*
+   *
+   * It was set at 26 on 2026-07-28 with a good argument — *"the clock is the one running number on
+   * the screen and it goes on TOP, at its own size"* — and the argument has a hole in it that only
+   * shows when you ask what the number is FOR. **Elapsed session time is the least actionable fact
+   * on a working set.** She cannot spend it, she cannot beat it, and nothing she does about the bar
+   * depends on it. It was the second-largest thing on the screen and the first thing in the eye's
+   * path, ahead of the lift she is about to do.
+   *
+   * ⚠️ IT IS NOT DELETED, and that distinction matters. "How long have I been here" is a real
+   * question between sets and at the end of a session, and a screen that cannot answer it forces a
+   * pause just to look. It sits with the position it belongs beside — one quiet line, two facts,
+   * which is what the line was before 2026-07-28 and is right for the reason that note gave: they
+   * are two answers to the same small question, *where am I in this*.
+   *
+   * ⚠️ AND THE STACK STAYS, so the ordinal is still under it rather than beside it — Hebrew runs
+   * long and a two-fact row wraps, which is what that ruling actually fixed.
+   */
+  stageBarClock: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, lineHeight: 21, color: stage.ink1, textAlign: 'center' },
 
-  stageBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 14 },
+  /*
+   * ════ ⛔ ONE OBJECT, WITH THE AIR AROUND IT — NOT FOUR ISLANDS ════
+   *
+   * FOUNDER, 2026-08-12, on the first screenshot of this screen: *"אתה חותם עליהם כמושלמים?"*
+   *
+   * ── WHAT I DID WRONG EARLIER THE SAME DAY ───────────────────────────────────────────────────────
+   * I measured `justifyContent: 'center'` producing 155 points of nothing above the content and 155
+   * below, called it *"37% empty in two dead blocks"*, and spread the children with `space-evenly`.
+   * The measurement was right and **the diagnosis was wrong.** That air was not a hole — it was the
+   * margin around an object, which is exactly what a stage should have. What I then did was take the
+   * emptiness that was correctly at the ends and distribute it BETWEEN the parts of the object:
+   * 111 points between the lift's name and its load, 106 between the band and her sets.
+   *
+   * **I turned one instrument into four islands**, and the picture is what showed it.
+   *
+   * ── WHAT THE GOOD SCREENS OUTSIDE THIS CATEGORY ACTUALLY DO ─────────────────────────────────────
+   * Spotify's Now Playing, Oura's readout, Nike Run Club, the Watch's own workout face — every one
+   * is **a dominant object with everything else clustered tight against it**, and generous air on
+   * the outside. None of them spaces its parts evenly down the screen; even spacing is what a page
+   * of unrelated rows needs, and this is not that. Today IS that — four peer workouts — which is why
+   * the same fix was right there and wrong here.
+   *
+   * So: centred again, and the internal gaps come DOWN rather than the outer ones. The muscle labels
+   * the name, the name labels the load, the band belongs to the load, and her sets are that load's
+   * history. One block. The screen's emptiness goes back to the edges where it reads as room.
+   */
+  /*
+   * ⛔ `space-between`, AND THE ARGUMENT FINALLY LANDS ON THE RIGHT SIDE. It was `center` (a clump
+   * with air at the ends), then `space-evenly` (four islands), then `center` again once the block
+   * was one object. The block is FOUR bands now and they nearly fill the stage — so distributing is
+   * no longer spreading the parts of one thing, it is giving four things their own space, which is
+   * exactly what the founder asked for: *"אני רוצה לנצל את כל השטח ולתת לכל מרכיב את השטח שלו."*
+   */
+  /*
+   * ⛔ THE BOTTOM GAP IS PADDING, AND IT HAS TO BE BOUGHT (founder 2026-08-12: *"למה החזרות כל כך
+   * קרוב ל-COMPLETE SET?"*).
+   *
+   * `space-between` puts free space BETWEEN children and none after the last one — so the two upper
+   * gaps measured 106 and 104 while the reps card sat 16 points off the act. Three equal-looking
+   * seams and one that is a sixth of them reads as a mistake, because it is one.
+   *
+   * The bottom seam is `paddingBottom`, and paying for it takes it back out of the other two: they
+   * settle around 75 and the card no longer leans on the button.
+   */
+  stageBody: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 6, paddingBottom: 58 },
+  /* Who she is lifting: the eyebrow, the name, and a superset's second lift. One group. */
+  identity: { alignItems: 'center', alignSelf: 'stretch' },
+  /* `Arrive` wraps the set row in a View of its own, which would shrink-wrap and break the row's
+     even columns — the stretch has to live on the wrapper, not only on the row inside it. */
+  setsArrive: { alignSelf: 'stretch' },
+
+  /* ⛔ 30/14 → 20/10 (2026-08-12). The stage grew a second full-width button and a third band; the
+     footer's own generosity was the last ten points the content needed. Measured against the BOX
+     this time, not the text inside it. */
+  stageFooter: { paddingHorizontal: space.gutter, paddingBottom: 20, gap: 10 },
   // A notice is up: the footer holds its space and gives up its surface (nothing peeks out
   // from under the card, nothing under it can be pressed by mistake).
   footerStoodDown: { opacity: 0 },
 
   // Active set
-  // The muscle group — the lift's eyebrow: centred over the name, in the ordinal's ink.
-  group: { marginBottom: 11 },
-  exName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
+  /* The muscle group — the lift's eyebrow. ⛔ It kept the ordinal's muted ink after everything around
+     it was lit; at four metres it was the one line on the stage that vanished. */
+  group: { marginBottom: 11, color: stage.ink1 },
+  /*
+   * ⛔ 29 → 36 (founder 2026-08-12, on the set screen). It was the SMALLEST thing on the stage apart
+   * from its own eyebrow — smaller than the rep band under the load (30) and smaller than the set
+   * figures at the foot (38). **The lift is the subject of the screen**; it was set below two things
+   * that describe it.
+   *
+   * ⚠️ `adjustsFontSizeToFit` IS WHAT MAKES THIS SAFE, and it is why the number can move at all. A
+   * coach names sessions in words and Hebrew runs long — "לחיצת חזה במוט" at 36 would overrun 330
+   * points, and the prop shrinks it to fit rather than clipping. The floor stays 0.72 of 36 = 26,
+   * which is still above the type floor.
+   */
+  exName: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
   // label wears — present as an equal, subordinate only in colour.
-  supersetNext: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
+  supersetNext: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
   heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
@@ -2821,9 +3310,11 @@ const styles = StyleSheet.create({
   // never lands on the physical left in Hebrew.
   heroAnnexValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 21, color: stage.ink0, textAlign: 'center' },
   // The hero IS the edit control — its door is a dashed pill (below), the pencil + caption inside it.
-  heroPress: { alignItems: 'center', marginTop: 34 },
+  /* ⛔ 34 → 22. The load is what the name above it names; a third of an inch of black between them
+     made them two facts instead of one. */
+  heroPress: { alignItems: 'center', marginTop: 22 },
   heroPressed: { opacity: press.opacity },
-  // (the dashed edit pill lived here — replaced by `caliper`, see its note)
+
   // Instruction-first execution: the imperative chip (TO-LOAD) + the quiet confirmation (LOADED),
   // sitting directly under the load — the athlete's "what do I do now?".
   instrChip: { marginTop: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: stage[1], borderWidth: 1, borderColor: stage[2], borderRadius: radius.lg },
@@ -2869,7 +3360,7 @@ const styles = StyleSheet.create({
   },
   addFifteenPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
   crossingFooter: { paddingHorizontal: space.gutter, paddingBottom: 44, gap: 12 },
-  addFifteenLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: stage.ink0, textAlign: 'center' },
+  addFifteenLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'center' },
   // Size, leading and tracking all come from `heroType` at the markup — they move together with
   // the glyph count, and the leading must never fall under the size or RN clips the digit tops.
   // THE LIT HERO (v7 2.2): 132px mono at -.05em in the BRIGHT cream, with a wide soft glow. It is
@@ -2924,10 +3415,15 @@ const styles = StyleSheet.create({
      one. The rule is `ManualInfo.sections`, verbatim: `flex: 1` + `space-evenly` hands the spare
      height to the GAPS, and each label breathes 14 above its own scale. */
   editDials: { flex: 1, justifyContent: 'space-evenly', paddingVertical: 8 },
-  editDial: { gap: 14 },
+  editDial: { gap: 18 },
   editDialHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  editDialLegend: { fontFamily: font.monoMedium, fontSize: textScale.sm, letterSpacing: trackingPx(textScale.sm, tracking.legend), color: stage.ink0, textAlign: 'left' },
-  editDialSub: { fontFamily: font.sans, fontSize: textScale.sm, color: stage.ink2, textAlign: 'left' },
+  /* ⛔ 17 → 22 (founder, 2026-08-12: *"תגדיל את הסרגלים עצמם ואת המלל במסך EDIT SET בלבד … זה חדר
+     כושר זה צריך להיות ברור ומדויק מהרגע הראשון."*). These two lines name what each dial IS, and
+     they were set at the same size as the muted note beside them. This screen only. */
+  editDialLegend: { fontFamily: font.monoMedium, fontSize: 22, letterSpacing: trackingPx(22, tracking.legend), color: stage.ink0, textAlign: 'left' },
+  // The face for a legend mono cannot draw — the tracking stays, only the family moves.
+  editDialLegendWord: { fontFamily: font.sansMedium }, // rtl-ok: merged onto a base that sets textAlign
+  editDialSub: { fontFamily: font.sans, fontSize: 20, color: stage.ink1, textAlign: 'left' }, // …and a step out of shadow with it
   editFooter: { marginTop: 'auto', paddingHorizontal: 26, paddingBottom: 34, gap: 12 },
 
   /* ── 2.4d · REST — LEARNED. A double ring holding the pace she took, and the plan moving. ── */
@@ -2959,15 +3455,28 @@ const styles = StyleSheet.create({
   paceNow: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: up.stage, textAlign: 'left' },
 
   /* ── 2.3b · EXERCISE DONE — a beat, centred, that hands over by itself. ── */
-  beatHead: { alignItems: 'center', paddingTop: 28, gap: 26 },
+  /* ⛔ CENTRED, LIKE EVERY OTHER BEAT IN THE FAMILY (founder's four screenshots, 2026-08-12).
+     `paddingTop: 28` pinned the lift-done beat to the top of the stage while the set-landed beats
+     were vertically centred — **two anchors inside one family**, so his screenshots showed the same
+     instrument in two different places on the screen. It is one composition now. */
+  beatHead: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 30 },
   // The lift, named, in the coach's serif — the beat's subject, drawn whether or not there is a
   // band under it. 26 rather than 29: the pips above it are the mark, this is the caption to them.
-  beatDoneTitle: { fontFamily: font.serif, fontSize: 26, lineHeight: 32, color: stage.ink0, textAlign: 'center', maxWidth: 320 },
+  /* ⛔ 26 → 34 (founder 2026-08-12). On `2.3g` this line and the pips ARE the screen; at 26 it read
+     as the caption of a graphic rather than the statement the beat exists to make. It matches the
+     band beat's own sentence in voice and outranks it in size, which is the right order: the LIFT
+     ending is the larger news, where its last set fell is the detail. */
+  beatDoneTitle: { fontFamily: font.serif, fontSize: 34, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
 
   // The band, resolved: the span lit, the dot landed inside it.
   // Every pip filled — a lift is spent, and that is the whole statement.
-  donePips: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  donePip: { width: 34, height: 10, borderRadius: 5, backgroundColor: up.stage },
+  /* ⛔ THE SAME 334-POINT TRACK THE BAND USES — see the note at the markup. The pips were a row of
+     34×10 lozenges sized to nothing; they are the lift's own shape now, spanning the stage, and the
+     segments divide the track however many sets it held. */
+  donePipsWrap: { width: BAND_W, alignItems: 'center', gap: 14 },
+  donePips: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  donePip: { flex: 1, height: 14, borderRadius: 7, backgroundColor: up.stage },
+  donePipsLegend: { color: stage.ink1 },
 
   /* ── THE HAND-OVER — how long the beat intends to hold the screen. ── */
 
@@ -2997,9 +3506,32 @@ const styles = StyleSheet.create({
   ask: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 30,
-    letterSpacing: trackingPx(30, tracking.tight),
-    color: stage.ink1,
+    /*
+     * ⛔ 30 → 40 (founder 2026-08-12, pushing the screen further). Measured against what was around
+     * it: the band was 30 and the row of sets she had ALREADY DONE was 38. **The target she is
+     * chasing was smaller than the record of what is behind her**, on a screen she reads from a
+     * metre and a half away with a bar in her hands.
+     *
+     * The order the screen now states is the order the work happens in: the LOAD is what she must
+     * put on the bar (118), the BAND is what she must do with it (40), and the sets behind her are
+     * context (34).
+     */
+    fontSize: 40,
+    letterSpacing: trackingPx(40, tracking.tight),
+    /*
+     * ⛔ ink1 → ink0 (founder 2026-08-12): *"למה החזרות ככה חיוורות וקטנות לעומת המשקל?"*
+     *
+     * Because a hierarchy had been built twice into the same pair. The load already outranks the
+     * band by SIZE — 118 against 40 — and the band was then dimmed on top of that, so the second
+     * half of the prescription was quiet AND small on a screen she reads at arm's length with a bar
+     * in her hands. **Rank a thing once.** Size carries it; the ink does not have to say it again.
+     *
+     * ⚠️ THIS IS NOT THE MOSS THE FOUNDER STRUCK DOWN. He removed the band's ACCENT on 2026-08-04 —
+     * *"why are we putting the reps in green as a hero? it is only the rep range that follows from
+     * the weight"* — because moss means A DECISION MADE and the load is the bigger decision. Cream
+     * at full strength is not a claim about importance; it is the difference between legible and not.
+     */
+    color: stage.ink0,
     includeFontPadding: false,
     marginTop: 6,
     textAlign: 'center',
@@ -3015,9 +3547,177 @@ const styles = StyleSheet.create({
    * ⚠️ The ticks are the same 1.6 rule at the same 32% the wordmark uses, so the glyph is
    * recognisably the same object at a different scale rather than a decoration that resembles it.
    */
-  caliper: { flexDirection: 'row', alignItems: 'stretch', gap: 14 },
-  caliperTick: { width: 1.6, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.32)' },
-  caliperCol: { alignItems: 'center', paddingVertical: 4 },
+  /*
+   * ════ ⛔ THE PRESCRIPTION, VERTICAL — SO BOTH FIGURES CAN BE HUGE ════
+   *
+   * FOUNDER, 2026-08-12: *"אולי נעשה את זה אנכי, כלומר אחד מעל השני עם הפרדים ברורים, וכך תוכל
+   * להגדיל משמעותית כל אחד מהם … יש לנו כאן חלל ענק למעלה ולמטה לא מנוצל ואני שואל למה? זה חדר כושר
+   * הכל צריך להיות גדול וברור מהרגע הראשון."*
+   *
+   * Side by side, the two figures had to share 330 points of width, which capped them at 64 — and
+   * "8–10" at 64 is four glyphs wide and already at the edge. Stacked, each one owns the full width
+   * and the ceiling is the SCREEN'S HEIGHT, which the screen had 340 spare points of.
+   *
+   * ⚠️ 92, AND THE LABEL SITS BESIDE THE FIGURE RATHER THAN UNDER IT. A label on its own line costs
+   * 22 points of the height that is buying the size in the first place; on the baseline it costs
+   * nothing and reads as part of the same statement — "ninety-two kilos", not "92" and then "KG".
+   */
+  /* One band: a rule to open it, a heading, and the figure it names. */
+  /*
+  * ⛔ I READ AN OVERLAP HERE THAT DOES NOT EXIST, AND THE REASON IS WORTH KEEPING (2026-08-12).
+  *
+  * The bands measured ten points INSIDE `Complete set`, so I shrank the set figure and the footer's
+  * padding to "fix" it. Then I measured the transform: `opacity: 0, translateY: 10` — every band was
+  * sitting in `Arrive`'s PRE-ARRIVAL state, because the review harness never composites a frame and
+  * the animation had never started. **The ten points were the rise, not a collision.**
+  *
+  * ⚠️ A LAYOUT MEASUREMENT TAKEN DURING AN ANIMATION IS NOT A LAYOUT MEASUREMENT. Twice in one hour
+  * I read a resting position as a final one.
+  *
+  * ⚠️ AND THE SAME READING FOUND SOMETHING REAL: at rest these bands are `opacity: 0`. On a device
+  * `useNativeDriver: true` runs the arrival on the UI thread and it always completes — but anywhere
+  * frames do not come, **the live set screen is blank.** That is the third time today an animation's
+  * un-run state has hidden or erased content (the rulers, the muscle bars, the sweep), and this one
+  * is on the screen she is holding a barbell in front of.
+  *
+  * The clearance below is REAL and is kept: the last band ended exactly on the button's edge once
+  * the rise was subtracted, which is a figure kissing a control.
+  */
+  /*
+   * ════ ⛔ THE BANDS HAVE BODIES (founder 2026-08-12): *"אני כן ארצה שתיתן לרצועות גוף כרטיס
+   * והגבהה כפי שהצעת."* ════
+   *
+   * They were hairline rules over centred text — precise, legible, and four rows of type on black
+   * with nothing that had an EDGE. Today reads better than this screen did for exactly that reason:
+   * it has objects. These are objects now.
+   *
+   * ⚠️ AND THIS BENDS A LAW THE PRODUCT WROTE FOR ITSELF, so it is named rather than slipped in:
+   * *"nothing is a card on the stage — the stage itself is lit, and emphasis is standing in that
+   * light versus resting in shadow"* (v7, 2026-07-22). That rule was made when the stage held ONE
+   * lit object and everything else was chrome. It holds two peers now, and two peers with no edges
+   * are a list. The elevation still means what it always meant — distance from the ground — it is
+   * simply spent on both, because both are the instruction.
+   */
+  bandArrive: { alignSelf: 'stretch' },
+  /*
+   * ⛔ 17 → 22, AND ink1 → ink0 (founder 2026-08-12): *"תגדיל את המלל שלידם ותשנה להם צבע."*
+   *
+   * With the cards gone the labels are the only thing naming these figures, and they were 17 points
+   * of #a8a290 — a caption size in a secondary ink, on a screen read from across a room.
+   *
+   * ⚠️ FULL INK, AND THE HIERARCHY IS UNHARMED, because it was never being carried by colour: the
+   * figure is 92 and the label is 22. **Rank a thing once.** Dimming a word that also has to be read
+   * at four metres is ranking it twice and paying for it in legibility — the same mistake that made
+   * the rep band both small and quiet.
+   */
+  cardLabel: { color: stage.ink0 },
+  /*
+   * ════ ⛔ THE CARDS ARE GONE, AND THEY WERE MY IDEA (founder 2026-08-12) ════
+   *
+   * *"האם הכרטיסים האלה אכן הכרחיים ומשדרגים את המסך? כרגע זה נראה חיוור … לדעתי צריך להוריד אותם
+   * ולעצב את המלל שלידם בצורה שתהיה ברורה. זה חדר כושר אתה חייב להבין את זה."*
+   *
+   * I proposed them, he agreed to try, and they were tried twice — `stage[1]` with no edge, then
+   * `stage[2]` with a hairline. **Both were pale, and the second was pale for a reason no amount of
+   * tuning fixes:** any fill light enough to read as a surface against absolute black is also light
+   * enough to sit ON the figure it holds, and any fill quiet enough not to is invisible. A dark stage
+   * does not have a card in it. The v7 law said so — *"nothing is a card on the stage"* — and I bent
+   * it on a hunch rather than an argument.
+   *
+   * What carries the screen instead is what was carrying it before: TYPE, at gym size, on nothing.
+   * The rule opens the band, the heading names it, the figure is the fact.
+   */
+  band: { alignSelf: 'stretch', alignItems: 'center', gap: 2 },
+  /*
+   * ⛔ THE RULES ARE GONE (founder 2026-08-12): *"השאלה היא האם להוריד את הקווים האלה שבינהם."*
+   *
+   * My answer is yes, and the reason is that they had already been made redundant by the fix before
+   * them. A separator exists to say *these are two different things* — and when the headings were 17
+   * points of muted ink, nothing else was saying it. They are 22 points at full strength now:
+   * **WEIGHT and REPS separate the bands by being read.**
+   *
+   * ⚠️ AND TWO SEPARATORS FOR ONE JOB IS NOT BELT AND BRACES. It made the stage read as a form —
+   * ruled rows, boxed values — which is exactly the "table that lost its table" the caliper was
+   * deleted for. The air between the bands is the separator; there is a lot of it, and it is free.
+   */
+  bandPress: { alignSelf: 'stretch', alignItems: 'center' },
+  /* A.13 — a wash under the block, never a fade of the figures it holds. */
+  bandPressed: { backgroundColor: 'rgba(241,238,229,0.05)', borderRadius: radius.lg },
+  rxRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
+  /* ⛔ The unit hangs off the figure and costs it no width — see the note at the markup. `left:
+     '100%'` is the figure's own right edge, whatever the figure turned out to be. */
+  rxUnitAbs: { position: 'absolute', left: '100%', bottom: 8, paddingStart: 10 },
+  /* ⛔ BODYWEIGHT, where a number would be. Sans — it is a WORD, and mono has no Hebrew to draw
+     "משקל גוף" with at all (`monoCarriesNoWords`). Set below the figures because it is six times
+     their glyph count and the two bands must still read as a pair. */
+  rxWord: {
+    fontFamily: font.sansSemibold,
+    fontSize: 46,
+    lineHeight: 56,
+    letterSpacing: 1,
+    color: stage.ink0,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  /* ⚠️ 46, NOT 92. Set position is orientation, not instruction — see the note at the markup. */
+  setFigure: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 40,
+    lineHeight: 46,
+    letterSpacing: -1,
+    color: stage.ink1,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  rxFigure: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 92,
+    lineHeight: 98,
+    letterSpacing: -3,
+    color: stage.ink0,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  /* The heading and its news, on one line — and the heading keeps the axis. See the markup. */
+  headRow: { flexDirection: 'row', alignItems: 'center' },
+  rxDeltaAbs: { position: 'absolute', left: '100%', top: 0, paddingStart: 10 },
+  /* A step behind the heading it annotates — it reports a change, it is not a quantity to act on. */
+  rxDelta: {
+    fontFamily: font.monoSemibold,
+    fontVariant: ['tabular-nums'],
+    fontSize: 22,
+    lineHeight: 28,
+    textAlign: 'left',
+  },
+  /* How to build the load. The figure is a measurement (mono); "a side" is a word (sans). */
+  /*
+   * ⛔ THE LOADING LINE READS AS AN INSTRUCTION NOW (founder 2026-08-12: *"ה-7 קילו לכל צד נראה קטן
+   * וחיוור"*).
+   *
+   * It was 17 points of muted sans hanging under the label column — a footnote about the load rather
+   * than the one thing she has to DO with it. **She reads this standing at the rack with plates in
+   * her hands.** 24 points, tracked, uppercase like every other instruction on the stage, the figure
+   * at full ink and the words a step behind it.
+   */
+  rxSide: {
+    marginTop: 10,
+    fontFamily: font.sansMedium,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: 1.6,
+    color: stage.ink1,
+    textAlign: 'center',
+  },
+  rxSideValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 24, color: stage.ink0, textAlign: 'center' },
+  /*
+   * The edit control. A hairline outline that hugs its label — it must read as a button and must
+   * never read as the ACT, which is cream, full width and pinned to the foot of the stage.
+   */
+  /* The act's twin: `Button` already draws the geometry, so this only lights its edge. The variant
+     (`onstageGhost`) carries the fill and the pressed wash. */
+  editSet: { borderColor: 'rgba(241,238,229,0.26)' },
   /* The delta rides the hero's own baseline — no line of its own, because it has no vertical cost. */
   heroNews: {
     fontFamily: font.monoSemibold,
@@ -3040,17 +3740,23 @@ const styles = StyleSheet.create({
    *
    * One number, two complaints. It is a normal gap now, and the column centres as a whole.
    */
-  sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 30 },
+  /* ⛔ 30 → 26, and it is the load's HISTORY — it belongs to the block above it, not adrift below. */
+  sets: { flexDirection: 'row', alignSelf: 'stretch', paddingHorizontal: 8, marginTop: 26 },
   setCol: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 43 },
   /* A set she has not reached: present, and saying nothing. */
   setDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.28)' },
   setNum: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    /* ⚠️ 38, up from 34. The second row's height went into the first row's size — the founder's own
-       arithmetic when he proposed the single row. */
-    fontSize: 38,
-    lineHeight: 43,
+    /*
+     * ⚠️ 38 → 34. It went 34 → 38 when the second row was removed and its height went into the first
+     * row's size — the founder's own arithmetic, and right at the time. It became wrong when the
+     * band it sits under stayed at 30: the record of the sets behind her outranked the target in
+     * front of her. This is the same figure it was before that trade, now under a band that is
+     * properly larger than it.
+     */
+    fontSize: 34,
+    lineHeight: 39,
     color: stage.ink0,
     includeFontPadding: false,
     textAlign: 'center',
@@ -3069,7 +3775,7 @@ const styles = StyleSheet.create({
   lastTime: {
     marginTop: 10,
     fontFamily: font.sansMedium,
-    fontSize: 13,
+    fontSize: 17,
     letterSpacing: trackingPx(13, tracking.legend),
     color: stage.ink2,
     textAlign: 'center',
@@ -3107,7 +3813,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(241,238,229,0.28)',
   },
-  stageOutlineLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: stage.ink0, textAlign: 'left' },
+  stageOutlineLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'left' },
   // The rest stage: the ring centred in the space it owns, the up-next card at the 26px gutter.
   restBody: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   upNext: { marginTop: 40, width: '100%', paddingHorizontal: 26, gap: 10 },
@@ -3143,16 +3849,47 @@ const styles = StyleSheet.create({
      receding, the eased/raised one the brightest thing on the stage — READOUT's law, emphasis as
      distance from the ground. A band line places the reps she did; a filling bar says rest is
      coming; no button, one breath, then rest. ── */
-  corrBeatRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 30 },
-  corrBeatTop: { alignItems: 'center', gap: 16 },
-  corrBeatBand: { width: 280, height: 24, justifyContent: 'center' },
-  corrBeatBandLine: { position: 'absolute', left: 0, right: 0, top: 11.5, height: 1.5, backgroundColor: 'rgba(241,238,229,0.20)' },
-  corrBeatBandSpan: { position: 'absolute', left: 98, top: 10, width: 84, height: 3, borderRadius: 1.5 },
-  corrBeatBandTick: { position: 'absolute', top: 3, width: 2, height: 18 },
-  corrBeatBandTickLo: { left: 98 },
-  corrBeatBandTickHi: { left: 182 },
-  corrBeatDot: { position: 'absolute', top: 5, width: 14, height: 14, borderRadius: 7 },
-  corrBeatLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.wide), textTransform: 'uppercase', color: stage.ink1, textAlign: 'center' },
+  corrBeatRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, gap: 44 },
+  corrBeatTop: { alignItems: 'center', gap: 22 },
+  /* ⛔ 280 → 334 wide and 24 → 40 tall. The geometry constants are `BAND_W`/`BAND_X_*` above the
+     placement rule; these must agree with them, which `theBeatIsNotAFootnote` pins. */
+  corrBeatBand: { width: BAND_W, height: 40, justifyContent: 'center' },
+  corrBeatBandLine: { position: 'absolute', left: 0, right: 0, top: 19, height: 2, backgroundColor: 'rgba(241,238,229,0.22)' },
+  corrBeatBandSpan: { position: 'absolute', left: BAND_X_LO, top: 17, width: BAND_X_HI - BAND_X_LO, height: 6, borderRadius: 3 },
+  /* Full opacity, not 0.55 — the ticks are the scale, and a scale drawn at half strength is what
+     made "inside" and "above" the same picture from arm's length. */
+  corrBeatBandTick: { position: 'absolute', top: 6, width: 3, height: 28, borderRadius: 1.5 },
+  corrBeatBandTickLo: { left: BAND_X_LO },
+  corrBeatBandTickHi: { left: BAND_X_HI },
+  /* The band's ends, written under their ticks — see the note in `BandMark`. */
+  corrBeatScale: { alignSelf: 'stretch', height: 22 },
+  corrBeatScaleNum: {
+    position: 'absolute',
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 19,
+    lineHeight: 22,
+    color: stage.ink1,
+    textAlign: 'center',
+    width: 44,
+  },
+  corrBeatScaleLo: { left: BAND_X_LO + 1.5 - 22 },
+  corrBeatScaleHi: { left: BAND_X_HI + 1.5 - 22 },
+  corrBeatDot: { position: 'absolute', top: 9, width: BAND_DOT, height: BAND_DOT, borderRadius: BAND_DOT / 2 },
+  /* ⛔ 17px UPPERCASE `ink1` → 30px SERIF IN FULL INK (founder 2026-08-12). It was a caption on a
+     screen with nothing else on it — the same size and colour he had ruled out on the set stage
+     that morning. It is a sentence about her training and it is allowed to sound like one, in the
+     voice `beatDoneTitle` already speaks. */
+  corrBeatLegend: {
+    fontFamily: font.serif,
+    fontSize: 30,
+    lineHeight: 38,
+    color: stage.ink0,
+    textAlign: 'center',
+    maxWidth: 330,
+  },
+  /* The consequence, a step behind the sentence that earns it. */
+  corrBeatHolds: { fontFamily: font.sansMedium, fontSize: 20, lineHeight: 26, color: stage.ink1, textAlign: 'center' },
   corrBeatNums: { flexDirection: 'row', alignItems: 'baseline', gap: 18 },
   corrBeatFrom: {
     fontFamily: font.mono,
@@ -3182,10 +3919,14 @@ const styles = StyleSheet.create({
   upActions: { flexDirection: 'row', gap: 10 },
 
   // Sheets
-  sheetLegend: { marginBottom: 4 },
-  sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 4, marginBottom: 18, textAlign: 'left' },
-  sheetBody: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textSecondary, marginTop: 6, marginBottom: 18, textAlign: 'left' },
-  sheetActions: { gap: 10 },
+  sheetLegend: { marginBottom: 8 },
+  /* ════ ⛔ THE END SHEET IS A DECISION, AND IT WAS SET LIKE A TOOLTIP (founder, 2026-08-12) ════
+     *"למה חלונית END WORKOUT נראת ככה ולא גדולה וברורה יותר?"* — a 22-point question over 17-point
+     body copy, in the smallest sheet the component draws, asking her to end the workout she is
+     standing in. It is the most consequential thing this screen ever asks. */
+  sheetTitle: { fontFamily: font.sansSemibold, fontSize: 30, lineHeight: 38, letterSpacing: trackingPx(30, tracking.tight), color: color.textPrimary, marginTop: 6, marginBottom: 14, textAlign: 'left' },
+  sheetBody: { fontFamily: font.sans, fontSize: 20, lineHeight: 29, color: color.textSecondary, marginTop: 4, marginBottom: 26, textAlign: 'left' },
+  sheetActions: { gap: 12, paddingBottom: 6 },
 
   // 2.0 · THE FIRST FOUR — a card FLOATING on the dimmed stage, not a sheet stuck to its floor.
   calScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,12,0.62)' },

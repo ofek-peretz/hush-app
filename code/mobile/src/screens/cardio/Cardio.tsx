@@ -29,14 +29,14 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
+import { DistanceRing } from './DistanceRing';
 import { RangeMark } from '@/components/RangeMark';
 import { Legend, Button } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
-import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
 import { BottomSheet } from '@/components/BottomSheet';
 import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
-import { movementById } from '@/data/movements';
+import { movementById, isOutdoorMovement } from '@/data/movements';
 import { monoCanDraw } from '@/design/monoVoice';
 import { db } from '@/data/local/db';
 import { useApp } from '@/state/stores/appStore';
@@ -102,11 +102,25 @@ export function Cardio({ navigation, route: nav }: Props) {
 
   // GPS warms up during the 3·2·1 countdown; the clock and accumulation start only once the phase
   // is truly 'active' and unpaused.
+  /*
+   * ⛔ INDOORS IS A SOURCE, NOT A SCREEN (founder, 2026-08-12). An indoor movement from the
+   * catalogue (`run_treadmill`, `walk_treadmill`) carries no `gps` flag, so a prescribed treadmill
+   * session selects it without anyone choosing — and the route param carries it for the athlete
+   * who opens the tab herself.
+   */
+  /*
+   * ⚠️ `nav`, NOT `route` — and this line was written as `route?.params?.indoor` and typechecked
+   * clean, because this file carries `@ts-nocheck`. **The prop is destructured as `nav` and there
+   * is no `route` in this scope**; it would have thrown a ReferenceError on the first treadmill
+   * session and on nothing else. Caught by reading, which is the only thing left that can.
+   */
+  const indoor = nav.params?.indoor ?? (target?.ex ? !isOutdoorMovement(target.ex) : false);
   const sample = useCardioTracker(
     phase === 'countdown' || phase === 'active',
     paused || phase !== 'active',
     live,
     app.profile?.weightKg,
+    indoor,
   );
   const { elapsedSec, distanceKm, paceSec, hr, avgHr, calories, splits, gps, route } = sample;
 
@@ -249,6 +263,13 @@ export function Cardio({ navigation, route: nav }: Props) {
       confirmEnd={confirmEnd}
       kmMoment={kmMoment}
       onPause={() => setPaused(true)}
+      /*
+       * ⛔ THE RUN STAYS PAUSED BEHIND THE REPORT, exactly as the gym session does — the report is
+       * pushed over this screen, so Back reveals the run she left rather than a stage that moved.
+       * The movement travels with it so the ease is filed against what she was actually doing.
+       */
+      onPain={() => navigation.navigate('PainWhere', { exerciseId: target?.ex ?? undefined })}
+      indoor={indoor}
       onResume={() => {
         setConfirmEnd(false);
         setPaused(false);
@@ -361,6 +382,18 @@ export function CardioLiveView(props: {
   confirmEnd: boolean;
   kmMoment: CardioSplit | null;
   onPause: () => void;
+  /** ⛔ The pain door on the paused run — see the note at `PausedStage`. Absent in the harness. */
+  onPain?: () => void;
+  /**
+   * ⛔ INDOORS — a treadmill (founder, 2026-08-12). The view needs it for ONE thing: which absence
+   * to name when there is no distance. Everything else about the mode is decided above it.
+   *
+   * ⚠️ IT IS A PROP AND NOT A LOCAL, and the render suite is what said so. The sentence lives here
+   * in `CardioLiveView` while the mode is computed in `Cardio`; writing `indoor` here typechecked
+   * clean because this file carries `@ts-nocheck`, and threw `ReferenceError: indoor is not
+   * defined` the instant anything mounted the view. Three render tests caught it in one run.
+   */
+  indoor?: boolean;
   onResume: () => void;
   onAskEnd: () => void;
   onKeepGoing: () => void;
@@ -370,10 +403,24 @@ export function CardioLiveView(props: {
   const [points, setPoints] = useState(false);
   const metresUnit = t('cardio.metresUnit');
   const kmUnit = t('cardio.km');
+  /* ⚠️ READ HERE, not borrowed from the container. `CardioLiveView` is a separate component and the
+     `perKm` in `Cardio` is out of its scope — `@ts-nocheck` let a `ReferenceError` compile clean,
+     and three render tests caught it in one run. Same shape as `indoor` an hour ago. */
+  const perKm = t('cardio.perKm');
   const { elapsedSec, distanceKm, hr, calories, splits, gps, paused, confirmEnd, kmMoment } = props;
   // One line, or none at all — see the block where it is drawn.
   const gpsNote =
-    gps === 'acquiring'
+    /*
+     * ⛔ AN INDOOR SESSION IS NOT WAITING FOR A SATELLITE, AND IT DOES NOT LOSE ONE. Both of these
+     * lines name GPS, and neither is true on a treadmill — "Acquiring GPS signal" over a belt is
+     * the same class of lie as a pace on a table. Indoors the only failure worth a sentence is
+     * having no motion source at all, which is what `unavailable` means there.
+     */
+    props.indoor
+      ? gps === 'unavailable'
+        ? t('cardio.motionOff')
+        : ''
+      : gps === 'acquiring'
       ? t('cardio.gpsAcquiring')
       : gps === 'denied' || gps === 'unavailable'
         ? t('cardio.gpsOff')
@@ -432,19 +479,9 @@ export function CardioLiveView(props: {
             {/* The run's own name when the coach wrote one — a run with a purpose is not "cardio". */}
             <Legend size={RUN_LEGEND_PT} tone="onStage">{props.runName ?? t('cardio.liveLegend')}</Legend>
           </View>
-          {props.say ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('workout.keyPoints')}
-              hitSlop={8}
-              onPress={() => setPoints(true)}
-              style={({ pressed }) => [styles.pointsDisc, pressed && styles.pointsDiscPressed]}
-            >
-              <Icon name="speech" size={15} color={stageC.ink0} strokeWidth={1.7} />
-            </Pressable>
-          ) : (
-            <View style={styles.liveTopSpacer} />
-          )}
+          {/* ⛔ THE SPEECH DISC WENT WITH `EmphasesSheet` (founder, 2026-08-12). The spacer stays:
+              it is what keeps the run's name on the screen's centre line against the pause disc. */}
+          <View style={styles.liveTopSpacer} />
         </View>
 
         {/*
@@ -464,93 +501,73 @@ export function CardioLiveView(props: {
           <Text style={styles.clock}>{fmtClock(elapsedSec)}</Text>
 
           {/*
-            ⛔ THE BAND WAS LABELLED TWO DIFFERENT WAYS (founder 2026-08-05): *"on one side it says
-            1KM and on the other 1000M, and obviously that makes no sense."*
+            ════════════════════════════════════════════════════════════════════════════════════
+            ⛔ THE BAND IS REPLACED BY A RING — the founder's own design (2026-08-12)
 
-            He is right, and it is worse than an inconsistency: the two labels answered **two
-            different questions.** The left said WHICH KILOMETRE she is in ("KM 5"); the right said
-            HOW MANY METRES ARE IN ONE ("1,000 m"). One instrument, two units, neither wrong on its
-            own.
+              *"למה שלא נשים טבעת ענקית במרכז המסך שבתוכה יופיע המספר של המטרים שהמתאמן רץ — זה
+              יהיה במטרים בלבד — וככל שהמטרים גדלים הטבעת מתחילה לסגור את הסיבוב שלה בצבע הירוק."*
 
-            The right label goes. A bar labelled "KM 5" does not need its own end explained — the
-            end of the bar IS the end of that kilometre, which is what the label already said.
+            Three passes at spreading the old layout failed on the same state, and he was right that
+            the layout was not the problem. **A 334-point horizontal rule is a footnote's shape**;
+            no amount of space around it makes it the subject of a screen. And `0.00 km` cannot move
+            for the first ten seconds of a run — two decimals of a kilometre is a number that sits
+            still while she is running.
 
-            ⚠️ A PRESCRIBED RUN KEEPS BOTH, and there the pair is coherent: the band spans the whole
-            target, so "0" and "5 km" are two ends of ONE measurement rather than two answers.
+            Metres move on every stride. See `DistanceRing`.
+            ════════════════════════════════════════════════════════════════════════════════════
           */}
-          <View style={styles.band}>
-            <View style={styles.bandLabels}>
-              <Legend size={RUN_LABEL_PT} track={0.14}>
-                {target ? '0' : t('cardio.kmOrdinal', { n: kmDone + 1 })}
-              </Legend>
-              {target ? (
-                <Legend size={RUN_LABEL_PT} track={0.14}>
-                  {t('cardio.targetEnd', { km: +(target / 1000).toFixed(2) })}
-                </Legend>
-              ) : null}
-            </View>
-            <View style={styles.bandLine} />
-            <View style={styles.bandCapL} />
-            <View style={styles.bandCapR} />
-            <View style={[styles.bandFill, { width: `${dotFrac * 100}%` }]} />
-            <View style={[styles.bandDot, { left: `${dotFrac * 100}%` }]} />
-            <View style={[styles.bandMetres, { left: `${dotFrac * 100}%` }]}>
-              {/* Inside a prescribed run the readout is KILOMETRES COVERED, because that is what the
-                  band is measuring; inside a free one it is metres into this kilometre. */}
-              {/*
-                ⛔ THE TOTAL, NOT THE METRES INTO THIS KILOMETRE (founder 2026-08-05: *"the 0 metres
-                to 1000 metres is written small, and it is a shame because you have so much room
-                here"*).
+          <DistanceRing
+            metres={metresIntoSpan}
+            spanM={spanM}
+            label={target ? t('cardio.targetEnd', { km: +(target / 1000).toFixed(2) }) : t('cardio.kmOrdinal', { n: kmDone + 1 })}
+            unit={t('cardio.metresUnit')}
+          />
 
-                The BAR above already draws her position inside the kilometre — as a position,
-                which is what a bar is for. Printing the same thing again as a number under it was
-                the one seat this line had, spent saying it twice. It carries the distance she has
-                actually covered now, which is the number every runner reads first.
-              */}
-              <Text style={styles.bandMetresNum}>{distanceKm.toFixed(2)}</Text>
-              <Text style={[styles.bandMetresUnit, !monoCanDraw(kmUnit) && styles.unitWord]}>
-                {` ${kmUnit}`}
-              </Text>
-            </View>
-          </View>
-
-          {/* ════ THE GPS LINE SPEAKS ONLY WHEN IT HAS SOMETHING TO SAY (founder C.19) ════
-              It used to sit in a FIXED 20 px slot — "no jump" — which sounded careful and was the
-              bug: with a lock (the normal case, and the one on his phone) the slot drew nothing,
-              and between the body's two 30 px gaps it left an EIGHTY-pixel void above the stat
-              row's hairline. That is his "line across the middle connected to nothing": the rule
-              was fine, it had simply been abandoned by everything above it. The canonical stage
-              has three children and a 32 px rhythm; this had four. Now it has three, and the rule
-              sits 30 px under the band where the handoff draws it.
-
-              The jump the slot was avoiding barely exists: GPS warms up DURING the 3·2·1, so a
-              lock is usually there before this screen is, and a denied/unavailable phone shows the
-              line for the whole run without ever moving. */}
           {gpsNote ? <Text style={styles.gpsStatus}>{gpsNote}</Text> : null}
 
           {/*
-            ⛔ THE SHAPE OF THE RUN — one bar per kilometre, taller = faster (founder 2026-08-04,
-            approving the drawn proposal).
+            ⛔ THE BAR TEXTURE IS DELETED (founder, 2026-08-12: *"תוריד את המשבצות האלה כי זה לא ברור
+            בכלל"*).
 
-            Every kilometre has been stored with the time it took since the tracker was written, and
-            the only place it surfaced was a pill announcing the one that had just landed. She could
-            not see the run she was in the middle of.
+            One bar per kilometre, height = pace, approved on a drawing in August and kept when the
+            per-kilometre ROWS landed beside it on the argument that the bars answer *what shape is
+            this run* while the rows answer *what did I do*. **Two readings of one fact, and the
+            unlabelled one goes** — the rows say 6:19 and 6:24 in figures, which is the same
+            comparison without asking her to measure rectangles at eight kilometres an hour.
+          */}
 
-            ⚠️ IT MUST STAY FURNITURE. At 8 km/h nothing may compete with the clock, so there are no
-            numbers on it, no axis, no labels — a texture, read at a glance or not at all. Heights
-            are relative to her own fastest kilometre, never to a table.
+          {/*
+            ════════════════════════════════════════════════════════════════════════════════════════
+            ⛔ EVERY KILOMETRE, ON ITS OWN ROW, WITH THE TIME IT TOOK (founder, 2026-08-12)
+
+              *"מסך שלם שהכל מתנקז לחלק העליון של המסך למה?! תתפרש על המסך. ובחלק התחתון לכל
+              קילומטר תציג אותו בשורה נפרדת ובכמה זמן הוא בוצע."*
+
+            The whole run lived in the top third: clock, band, pace, calories — and then four hundred
+            points of black. The splits existed as a 38-point bar texture and nowhere else, so the
+            one thing a runner actually wants mid-run — *how fast was the last one* — could only be
+            read as a HEIGHT.
+
+            ⚠️ THE TEXTURE STAYS AND IS NOT REPLACED. It answers "what shape is this run" at a
+            glance, which is what a bar chart is for; the rows answer "what did I do", which is what
+            a number is for. Newest first, because the kilometre she just finished is the one she is
+            asking about.
+            ════════════════════════════════════════════════════════════════════════════════════════
           */}
           {splits.length > 0 ? (
-            <View style={styles.shape} accessibilityRole="image" accessibilityLabel={t('cardio.shapeLabel', { count: splits.length })}>
-              {splits.map((sp) => {
-                const best = Math.min(...splits.map((x) => x.paceSec));
-                // A slower kilometre is a shorter bar; the floor keeps the slowest one visible
-                // rather than collapsing it to a line she cannot see.
-                const h = Math.max(0.26, Math.min(1, best / Math.max(1, sp.paceSec)));
-                return <View key={sp.km} style={[styles.shapeBar, { height: `${h * 100}%` }]} />;
-              })}
-              {/* The kilometre she is inside, growing as she runs it. */}
-              <View style={[styles.shapeBar, styles.shapeBarLive, { height: `${Math.max(0.12, dotFrac) * 100}%` }]} />
+            <View style={styles.kmRows}>
+              {[...splits].reverse().map((sp) => (
+                <View key={sp.km} style={styles.kmRow}>
+                  <Legend size={RUN_SMALL_PT} track={0.16} tone="onStage" style={styles.kmRowOrdinal}>
+                    {t('cardio.kmOrdinal', { n: sp.km })}
+                  </Legend>
+                  <Text style={styles.kmRowTime}>{fmtPace(sp.paceSec)}</Text>
+                  {/* The same per-string face this file already gives its three other unit slots —
+                      this row was added later and missed it, so "‏/ק״מ" sat in a face with no
+                      Hebrew glyphs (`monoCarriesNoWords`). */}
+                  <Text style={[styles.kmRowUnit, !monoCanDraw(perKm) && styles.unitWord]}>{perKm}</Text>
+                </View>
+              ))}
             </View>
           ) : null}
 
@@ -588,17 +605,36 @@ export function CardioLiveView(props: {
           the body takes the whole screen — which is what the founder freed it for.
         */}
 
-        {/* 13.1 · PAUSED — the SAME stage the gym session raises. One pause screen for the whole
-            product: same mark, same sentence, same two acts. What differs is only what is stated
-            under it (the run's clock and distance) and that a run offers no pain door — it trains
-            no muscle Hush prescribes, so there is nothing for a report to act on. v7 fixes the
-            gait to a run (no picker, no in-run toggle), so the subject is one word. */}
+        {/*
+          13.1 · PAUSED — the SAME stage the gym session raises. One pause screen for the whole
+          product: same mark, same sentence, same two acts.
+
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ AND THE PAIN DOOR IS HERE NOW (founder, 2026-08-12: *"למה ב-PAUSE בקרדיו אין את
+          האפשרות לפציעה כמו באימון בחדר הכושר?"*)
+
+          The note that used to sit here gave the reason, and the reason does not survive being
+          checked: *"a run offers no pain door — it trains no muscle Hush prescribes, so there is
+          nothing for a report to act on."*
+
+          **A run loads calves, quads, hamstrings, hips and shins**, and every one of them is a
+          muscle on her body map that the assembler prescribes and `PainEase` can rest. A shin that
+          starts hurting at kilometre three is precisely a report the engine acts on — it eases that
+          muscle, and the ease window is the thing Home asks her about when it lapses.
+
+          ⚠️ AND IT IS THE MOMENT SHE IS MOST LIKELY TO NEED IT. Something going wrong mid-run is
+          why a runner stops; the pause screen was the one place she could reach and the only one
+          that refused to ask. `exerciseId` travels with it exactly as the gym's does, so the report
+          is filed against the movement she was doing.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
         {paused ? (
           <PausedStage
             subject={t('cardio.run')}
             onResume={props.onResume}
             endLabel={t('cardio.finish')}
             onEnd={props.onAskEnd}
+            onPain={props.confirmEnd ? undefined : props.onPain}
           >
             <View style={styles.pausedFacts}>
               <Text style={styles.pausedClock}>{fmtClock(elapsedSec)}</Text>
@@ -626,13 +662,6 @@ export function CardioLiveView(props: {
         {/* 3.4b · KILOMETRE LOGGED — fires over the run each km, clears itself. */}
         {kmMoment ? <KmMoment split={kmMoment} splits={splits} /> : null}
 
-        {/* The coach's words for this run, in full — see the control on the top line. */}
-        {points && props.say ? (
-          <EmphasesSheet
-            emphases={[{ ex: props.exerciseId ?? 'run_outdoor', say: props.say }]}
-            onClose={() => setPoints(false)}
-          />
-        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -665,7 +694,11 @@ export function KmMoment({ split, splits }: { split: CardioSplit; splits: Cardio
             <View style={[styles.kmBandCap, { left: '76%' }]} />
             <View style={[styles.kmBandDot, { left: `${dotFrac * 100}%` }]} />
           </View>
-          <Legend size={RUN_SMALL_PT} tone="onStage">{t('cardio.kmMomentLabel', { km: split.km })}</Legend>
+          {/* ⛔ The rail's own caption, at the size of a statement — it names the kilometre this
+              whole beat is about, and it was the same 17 points as the "quickest" footnote. */}
+          <Legend size={26} track={0.2} align="center" style={styles.kmBandLabel}>
+            {t('cardio.kmMomentLabel', { km: split.km })}
+          </Legend>
         </View>
 
         {/* the split — figures alone in the light: mono. */}
@@ -782,7 +815,27 @@ export function CardioComplete(props: {
             disagree with the number under it — and it disagrees exactly when she stopped short,
             which is the moment a poster must not be caught arguing with her.
           */}
-          <Text style={styles.posterName}>{t(gaitFromPace(avgPace) === 'walk' ? 'cardio.walk' : 'cardio.run')}</Text>
+          {/*
+            ════════════════════════════════════════════════════════════════════════════════════════
+            ⛔ THE FINISHED ACTIVITY IS "CARDIO", NOT "RUN" OR "WALK" (founder, 2026-08-12)
+
+              *"אם המתאמן גם רץ וגם הולך באותו אימון איך נציג את זה כריצה או הליכה?! צריך להציג את
+              זה כקרדיו אחד בדיוק כמו שאמרת שאנו עושים קרדיו מדויק מאוד."*
+
+            He caught me holding two positions at once, and he is right about which one to drop. I
+            argued that no gait question is needed because `kcalPerKgKm` interpolates continuously
+            through the walk-run region **and bills every segment at its own pace** — and then this
+            line collapsed the whole activity into one word by taking `gaitFromPace` of the AVERAGE.
+
+            ⚠️ ON A MIXED SESSION THE AVERAGE IS NOBODY'S GAIT. Twenty minutes walking and twenty
+            running averages to a jog that never happened, and the poster titles her session with it.
+            The energy underneath was right the entire time; only the headline was picking a side.
+
+            **The splits already carry the truth** — each one is stamped with its own `gait` — so
+            nothing is lost by the title telling the honest, general fact instead.
+            ════════════════════════════════════════════════════════════════════════════════════════
+          */}
+          <Text style={styles.posterName}>{t('cardio.liveLegend')}</Text>
 
           <View style={styles.doneHero}>
             <Text style={styles.doneHeroNum}>{distanceKm.toFixed(1)}</Text>
@@ -898,8 +951,22 @@ const LINE = 'rgba(241,238,229,0.16)';
  * on the saved stage) and the run's own legend appears twice (live, and the kilometre moment). One
  * of those drifting away from the others is precisely how a screen ends up half-fixed.
  */
+/*
+ * ════ ⛔ ALL FOUR ARE 17 NOW, AND THIS IS THE SCREEN HE NAMED ════
+ *
+ * FOUNDER, on this file, twice: *"שוב מסך הקרדיו בפעם האלף — ביקשתי ממך להגדיל את הכתב ואתה לא
+ * מקשיב לי."* And on 2026-08-12, ruling the floor at 17 for the whole product.
+ *
+ * They were 15, 12.5, 15 and 13. ⚠️ **AND THEY HID FROM THE LAW BY BEING NAMED.** `typeHasAFloor`
+ * matched `<Legend size={12.5}>` — a literal — and these are `<Legend size={RUN_SMALL_PT}>`. The
+ * constants were introduced to stop the four drifting apart, which they did; nobody noticed they
+ * had also stepped out of the sweep's line of sight, so the one screen he complained about most
+ * kept its small type through every pass of a law written because of it.
+ *
+ * The law resolves module-level constants now. See `typeHasAFloor`.
+ */
 /** "CARDIO" — the legend over the run, and over the kilometre moment. */
-const RUN_LEGEND_PT = 15;
+const RUN_LEGEND_PT = 17;
 /**
  * THE FLOOR for every other word on a cardio stage — the 1,000 m band's end labels, the split
  * pill, the kilometre moment's label and its "quickest" tag, and the saved stage's legend.
@@ -908,11 +975,11 @@ const RUN_LEGEND_PT = 15;
  * particular labels. He named the three he happened to be looking at; the rest of the surface was
  * set the same way and would have failed the same reading. `nothingOnTheRunIsTooSmall` holds it.
  */
-const RUN_SMALL_PT = 12.5;
+const RUN_SMALL_PT = 17;
 /** The band's own label — raised from 12.5 because it is read at arm's length, mid-run. */
-const RUN_LABEL_PT = 15;
+const RUN_LABEL_PT = 17;
 /** KM · HR · KCAL under their figures — live, and on the saved stage, which must agree with it. */
-const READOUT_LABEL_PT = 13;
+const READOUT_LABEL_PT = 17;
 
 const styles = StyleSheet.create({
   // stage (shared)
@@ -944,7 +1011,46 @@ const styles = StyleSheet.create({
    * air between them, which on a tall phone left the clock floating in the middle of a screen whose
    * top third was empty. It hangs from the top now and the band follows it.
    */
-  liveBody: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 34, paddingTop: 18, paddingHorizontal: 28 },
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ AND IT IS STILL TOP-HEAVY BEFORE THE FIRST KILOMETRE (founder, 2026-08-12, second time)
+   *
+   * The per-kilometre rows landed and he photographed the screen again — at **0:00**, where there
+   * are no splits yet, so neither the rows nor the bar texture render and the body is three items
+   * hanging from `flex-start` over four hundred points of black. **The fix I shipped only helps
+   * from the first kilometre on**, and the first minute is exactly the founder's complaint both
+   * times.
+   *
+   * `space-between` distributes whatever the run has: three items at the start, five once she is
+   * running. The screen is full either way, which is what "spread out" has to mean on a surface
+   * whose contents grow.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  /*
+   * ⛔ BACK TO `flex-start`, AND THIS TIME IT IS RIGHT — because the RING fills the screen.
+   *
+   * `space-between` was the third attempt at fixing a top-heavy stage by moving spacing around; the
+   * founder's ring is what actually fixed it. With a 268-point instrument under the clock the body
+   * is full from the top whether or not any kilometres have landed — and `space-between` now does
+   * harm: with three children it pushes the ring into the middle of the page and with five it does
+   * not, so the same screen sits in two places depending on how long she has been running.
+   *
+   * **The ring must not move between the first minute and the fortieth.**
+   */
+  liveBody: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 26, paddingTop: 18, paddingBottom: 28, paddingHorizontal: 26 },
+  /* One kilometre, one row — see the note at the markup. */
+  kmRows: { alignSelf: 'stretch', marginTop: 4 },
+  kmRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 14,
+    paddingVertical: 13,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(241,238,229,0.14)',
+  },
+  kmRowOrdinal: { flex: 1 },
+  kmRowTime: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 30, lineHeight: 34, color: stageC.ink0, includeFontPadding: false, textAlign: 'left' },
+  kmRowUnit: { fontFamily: font.mono, fontSize: 17, color: stageC.ink2, textAlign: 'left' },
   // The elapsed clock is the lit thing on a run, exactly as the load is on a set: the BRIGHT
   // cream with a wide soft glow, never the plain ink.
   clock: {
@@ -964,20 +1070,8 @@ const styles = StyleSheet.create({
   // ── the 1,000 m band, at the canonical handoff's own offsets (C.19: "not what the HTML draws")
   //    The labels belong ABOVE the box (top:-16), not tucked inside it — having them inside is what
   //    pushed every internal down ~15 px and left the metres readout hanging off the bottom edge.
-  band: { width: '100%', maxWidth: 310, height: 64, marginTop: 10 },
-  bandLabels: { position: 'absolute', left: 0, right: 0, top: -16, flexDirection: 'row', justifyContent: 'space-between' },
-  bandLine: { position: 'absolute', left: 0, right: 0, top: 14.5, height: 1, backgroundColor: LINE },
-  bandCapL: { position: 'absolute', left: 0, top: 6, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
-  bandCapR: { position: 'absolute', right: 0, top: 6, width: 2, height: 18, backgroundColor: 'rgba(241,238,229,0.4)' },
-  bandFill: { position: 'absolute', left: 0, top: 13.5, height: 3, borderRadius: 2, backgroundColor: signal[0] },
-  bandDot: { position: 'absolute', top: 8, marginLeft: -7, width: 14, height: 14, borderRadius: 7, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  // ⚠️ 150 WIDE, UP FROM 88. It held a three-digit metre count at 25 pt; it holds "4.62 km" at 44
-  // now, and a box that clips the number it grew for would be the change undoing itself.
-  bandMetres: { position: 'absolute', top: 34, marginLeft: -75, flexDirection: 'row', alignItems: 'baseline', width: 150, justifyContent: 'center' }, // rtl-ok: centering offset pairs with the physical `left` set inline; the distance band is a direction-neutral data axis
-  // 44 and 17, up from 25 and 25 — this is the distance she has covered, and it is the second
-  // thing she looks at after the clock. The unit shrinks so the FIGURE is what grew.
-  bandMetresNum: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 44, color: signal[0], textAlign: 'left' },
-  bandMetresUnit: { fontFamily: font.monoSemibold, fontSize: 17, color: signal[0], textAlign: 'left' },
+  /* ⛔ The `band*` styles went with the horizontal rule they drew — see `DistanceRing`. An
+     orphaned style is what comes back a year later attached to something it was never about. */
 
   /*
    * ⛔ THE SHAPE OF THE RUN — furniture, and it has to stay furniture (founder 2026-08-04).
@@ -989,9 +1083,10 @@ const styles = StyleSheet.create({
    * ⚠️ It draws NOTHING before the first kilometre lands, rather than an empty frame — an axis with
    * no data on it is a promise the screen has not kept yet.
    */
-  shape: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 38, width: '100%', maxWidth: 310 },
+  /* ⛔ `shape` (the LIVE texture) is deleted with its markup. `shapeBar` survives because the DONE
+     poster still draws the finished run's bars, where there is nothing beside them saying the same
+     thing in figures — the objection was to two readings of one fact on the live stage. */
   shapeBar: { flex: 1, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.22)' },
-  shapeBarLive: { backgroundColor: signal[0], opacity: 0.55 },
 
   gpsStatus: { fontFamily: font.sans, fontSize: textScale.xs, color: stageC.ink2, letterSpacing: 0.3, textAlign: 'left' },
 
@@ -1031,7 +1126,7 @@ const styles = StyleSheet.create({
   posterWord: { fontFamily: font.serif, fontSize: 20, color: stageC.ink0, textAlign: 'left' },
   posterDate: {
     fontFamily: font.sansMedium,
-    fontSize: 13,
+    fontSize: 17,
     letterSpacing: 1.9,
     color: stageC.ink2,
     textAlign: 'center',
@@ -1048,7 +1143,7 @@ const styles = StyleSheet.create({
     color: signal[0],
     textAlign: 'left',
   },
-  posterPaceUnit: { fontFamily: font.mono, fontSize: 16, color: stageC.ink2, textAlign: 'left' },
+  posterPaceUnit: { fontFamily: font.mono, fontSize: 17, color: stageC.ink2, textAlign: 'left' },
   /* The same instrument as the live stage's, so a run looks the same finished as it did inside it. */
   doneShape: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 46, width: '100%', maxWidth: 300 },
   doneHero: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 10 },
@@ -1073,13 +1168,30 @@ const styles = StyleSheet.create({
 
   // KILOMETRE LOGGED (3.4b) — a full, opaque overlay; the run keeps tracking underneath.
   kmMoment: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: stageC[0] },
-  kmBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingHorizontal: 34, marginTop: -16 },
-  kmBandWrap: { alignItems: 'center', gap: 12 },
-  kmBand: { width: 230, height: 20, justifyContent: 'center' },
-  kmBandLine: { position: 'absolute', left: 0, right: 0, top: 9.5, height: 1, backgroundColor: 'rgba(241,238,229,0.18)' },
-  kmBandSeg: { position: 'absolute', left: '24%', right: '24%', top: 9, height: 2, backgroundColor: 'rgba(169,196,159,0.5)' },
-  kmBandCap: { position: 'absolute', top: 3, width: 1.5, height: 14, backgroundColor: 'rgba(169,196,159,0.5)' },
-  kmBandDot: { position: 'absolute', top: 4.5, marginLeft: -5.5, width: 11, height: 11, borderRadius: 6, backgroundColor: stageC.ink0, borderWidth: 2.5, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the km band is a direction-neutral data axis
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE KILOMETRE BEAT TAKES THE WHOLE SCREEN (founder, 2026-08-12)
+   *
+   *   *"תגדיל את כל החלק שמעל הזמן ואת ה-KM שליד הזמן — זה באמצע ריצה והליכה ויש לנו את כל המסך
+   *   תתפרש עליו."*
+   *
+   * It was a 230-point rail, a 17-point label and a `/km` at 20, floated as one centred block with a
+   * 24-point gap — measured, everything above the split occupied about a hundred points of an
+   * 844-point screen and the rest was black.
+   *
+   * ⚠️ AND SHE IS READING IT AT EIGHT KILOMETRES AN HOUR, which is the whole argument. This is the
+   * one beat in the product with no thumb on the way — it fires by itself and clears itself — so
+   * there is nothing to reach and nothing to avoid covering. Every point on the page is available
+   * and none of it was being used.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  kmBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 46, paddingHorizontal: 26, marginTop: -16 },
+  kmBandWrap: { alignSelf: 'stretch', alignItems: 'center', gap: 20 },
+  kmBand: { alignSelf: 'stretch', height: 30, justifyContent: 'center' }, // 230 → the full stage
+  kmBandLine: { position: 'absolute', left: 0, right: 0, top: 14, height: 2, backgroundColor: 'rgba(241,238,229,0.22)' },
+  kmBandSeg: { position: 'absolute', left: '24%', right: '24%', top: 12, height: 6, borderRadius: 3, backgroundColor: 'rgba(169,196,159,0.55)' },
+  kmBandCap: { position: 'absolute', top: 2, width: 3, height: 26, borderRadius: 1.5, backgroundColor: signal[0] },
+  kmBandDot: { position: 'absolute', top: 1, marginLeft: -14, width: 28, height: 28, borderRadius: 14, backgroundColor: stageC.ink0, borderWidth: 4, borderColor: signal[0] }, // rtl-ok: centering offset pairs with the physical `left` set inline; the km band is a direction-neutral data axis
   kmSplit: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
   kmSplitNum: {
     fontFamily: font.monoMedium,
@@ -1094,7 +1206,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 44,
     textShadowOffset: { width: 0, height: 0 },
   },
-  kmSplitUnit: { fontFamily: font.mono, fontSize: 20, color: stageC.ink1, textAlign: 'left' },
+  /* ⛔ 20 → 30 (founder: *"ואת ה-KM שליד הזמן"*). It is the unit of the largest figure on the
+     screen and it was set smaller than the label above the rail. */
+  kmSplitUnit: { fontFamily: font.mono, fontSize: 30, color: stageC.ink1, textAlign: 'left' },
+  kmBandLabel: { color: stageC.ink0 },
   kmQuickest: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The sans sibling every mono UNIT slot hands over to when the locale spells it in Hebrew.
   unitWord: { fontFamily: font.sans },

@@ -30,8 +30,8 @@
 
 // 
 
-import { REST_TRANSITION_S } from './restPrescription';
-import { exerciseDisplayName } from '@/data/exercises';
+import { REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN } from './restPrescription';
+import { exerciseDisplayName, exerciseById } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPlan';
 
@@ -130,25 +130,53 @@ export function coachWorkoutId(index: number): string {
  * Counted per ROUND, because that is what she actually does: a block of two items done four times
  * is eight pieces of work and four rests, not two and one.
  */
-function timeOf(session: PlannedSession): { minutes: number; hasUncountedWork: boolean } {
+/** The tier the day-one bootstrap prices by — the same question `fixtureModel` asks of a slot. */
+function isCompound(exerciseId: string): boolean {
+  return exerciseById(exerciseId)?.tier === 'compound';
+}
+
+function timeOf(session: PlannedSession, enginePriced = false): { minutes: number; hasUncountedWork: boolean } {
   let seconds = 0;
   let uncounted = false;
   for (const block of session.blocks) {
+    /*
+     * ⛔ A BLOCK THAT PRESCRIBES NO REST IS PRICED THE WAY THE ENGINE PRICES IT (2026-08-11).
+     *
+     * The engine's week arrives here with `restS` absent on every block — deliberately, because
+     * `restAfterStep` reads that field as a PRESCRIPTION and the engine has never prescribed rest.
+     * Priced at the flat `EXEC_S + DEFAULT_REST_S` below, Today announced sessions the engine had
+     * capped at sixty minutes as sixty-six, because `enforceTimeCap` prices a set at the day-one
+     * bootstrap (`COMPOUND_SET_MIN` / `ISOLATION_SET_MIN`) and this priced it at 160 seconds flat.
+     *
+     * Two answers to "how long is this session", and she could see both. So when nobody has said
+     * what the rest is, this asks the one module that owns the number.
+     *
+     * ⚠️ AND THE BOOTSTRAP BUNDLES THE WALK, so a bootstrapped block is not charged a transition on
+     * top — see the note on those constants. A block whose rest the COACH did state keeps the
+     * arithmetic it has always had, unchanged, including the transition.
+     */
+    const bootstrap = enginePriced && block.restS == null;
     const rest = block.restS ?? DEFAULT_REST_S;
     for (const item of block.items) {
-      if (item.kind === 'reps') seconds += EXEC_S * block.rounds;
-      else if (item.kind === 'time') seconds += item.seconds * block.rounds;
+      if (item.kind === 'reps') {
+        seconds += bootstrap
+          ? (isCompound(item.ex) ? COMPOUND_SET_MIN : ISOLATION_SET_MIN) * 60 * block.rounds
+          : EXEC_S * block.rounds;
+      } else if (item.kind === 'time') seconds += item.seconds * block.rounds;
       // `distance` needs a pace we do not have, and `open` has no number by definition.
       else if (item.kind === 'distance') uncounted = true;
     }
     // Rest sits BETWEEN rounds, so a block of one round has none — the same rule `planRun` runs by.
-    seconds += rest * Math.max(0, block.rounds - 1);
+    // A bootstrapped rep block has already paid for its rest inside the per-set figure above.
+    const repsOnly = block.items.every((i) => i.kind === 'reps');
+    if (!(bootstrap && repsOnly)) seconds += rest * Math.max(0, block.rounds - 1);
     /*
      * ⚠️ AND BETWEEN BLOCKS. `restAfterS` is what the COACH asked for after this block — usually
      * absent, and absent used to mean free. It is not free: she has to get to the next exercise.
      * The last block has nothing after it, so it is not charged.
      */
-    seconds += block.restAfterS ?? (block === session.blocks[session.blocks.length - 1] ? 0 : REST_TRANSITION_S);
+    const last = block === session.blocks[session.blocks.length - 1];
+    seconds += block.restAfterS ?? (last || (bootstrap && repsOnly) ? 0 : REST_TRANSITION_S);
   }
   return { minutes: Math.round(seconds / 60), hasUncountedWork: uncounted };
 }
@@ -160,7 +188,7 @@ export function coachWeek(plan: CoachPlan | null | undefined): CoachWorkout[] {
     name: s.name,
     ...(s.day ? { day: s.day } : {}),
     items: s.blocks.reduce((n, b) => n + b.items.length * b.rounds, 0),
-    ...timeOf(s),
+    ...timeOf(s, plan?.pricing === 'engine'),
   }));
 }
 

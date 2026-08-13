@@ -137,7 +137,10 @@ describe('onboarding asks for every one of them', () => {
     /* ⚠️ `NameEntry` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-04) — four answering
        screens now, not five. The list is the PATH, so it changes when the path does; what may not
        change is that every requirement is still collected on it. */
-    const flow = ['AboutYou', 'ConnectHealth', 'BodyMap']
+    /* ⛔ `Start` JOINED THE PATH ON 2026-08-12 — the fork where she says whether she already has a
+       programme. It collects nothing the coach needs, but a law that lists "the only path through"
+       and omits a step on it is a law describing a flow that does not exist. */
+    const flow = ['Start', 'AboutYou', 'ConnectHealth', 'BodyMap']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -147,7 +150,12 @@ describe('onboarding asks for every one of them', () => {
        * two labelled choices need no third word above them. The law is that sex is COLLECTED on the
        * path, so it asks after the control rather than after the caption that used to sit on it.
        */
-      const asked = r.key === 'sex' ? flow.includes("t('ob.female')") : new RegExp(`\\b${r.key}\\b`).test(flow);
+      /*
+       * ⚠️ BY THE KEY, NOT BY THE CALL. This read `t('ob.female')` literally, and on 2026-08-12 the
+       * segmented control became two mapped choices — `t(v === 'female' ? 'ob.female' : 'ob.male')`
+       * — so the probe went looking for a spelling rather than for the question being asked.
+       */
+      const asked = r.key === 'sex' ? flow.includes("'ob.female'") : new RegExp(`\\b${r.key}\\b`).test(flow);
       expect({ key: r.key, asked }).toEqual({ key: r.key, asked: true });
     }
   });
@@ -232,7 +240,10 @@ describe('onboarding asks for every one of them', () => {
        registered is a screen a deep link can still reach. */
     expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
     expect(read('src/app/Root.tsx')).not.toContain('YourGoal');
-    expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('AboutYou')");
+    /* ⛔ THE FRONT DOOR OPENS ONTO THE FORK NOW (founder 2026-08-12), and the fork opens onto the
+       intake — so the chain is asserted in both halves rather than pinned to the old first step. */
+    expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('Start')");
+    expect(read('src/screens/onboarding/Start.tsx')).toContain("navigation.navigate('AboutYou')");
   });
 
   it('and the LAST step puts it into the inputs the profile is built from', () => {

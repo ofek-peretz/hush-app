@@ -20,26 +20,23 @@ import { SessionContext } from '@/state/stores/sessionStore';
 import { HushTabBar } from '@/app/HushTabBar';
 import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
+import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
-import { BodyMapFigure } from '@/components/BodyMapFigure';
-import { FormMedia } from '@/components/FormMedia';
+import { ImportPlan } from '@/screens/import/ImportPlan';
+import { ImportReview } from '@/screens/import/ImportReview';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
-import { PlanWeek } from '@/components/PlanWeek';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
 import { WheelPicker } from '@/components/ds';
-import { EmphasesSheet } from '@/screens/session/EmphasesSheet';
-import { SessionCoach } from '@/screens/session/SessionCoach';
-import { TimeStage, DistanceStage, OpenStage } from '@/screens/session/ItemStage';
-import { CoachChat, type CoachTurn } from '@/screens/coach/CoachChat';
-import { useCoach } from '@/screens/coach/useCoach';
+import { TimeStage } from '@/screens/session/ItemStage';
 import { coachFacts } from '@/domain/coachFacts';
 import { coachRequest } from '@/domain/coachPrompt';
 import { COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
 import { askCoach } from '@/platform/coach/coachClient';
+import { fixtureModel } from '@/data/api/fixtureModel';
 import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan, PlannedItem } from '@/domain/coachPlan';
 import { askAfterSession } from '@/platform/coach/afterSession';
@@ -57,7 +54,6 @@ import { CardioLiveView, CardioComplete, CardioCountdown, KmMoment } from '@/scr
 import { HistoryView } from '@/screens/history/History';
 import { WorkoutDetailView } from '@/screens/history/WorkoutDetail';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
-import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
@@ -87,10 +83,18 @@ import { cream, font, stage } from '@/design/tokens';
  *              engine, or a beat that only a real session produces. Its correctness is held by the
  *              unit tests, not by this page.
  *   `todo`   — not built yet, and still wanted.
- *   `cancelled` — WITHDRAWN from the product (founder 2026-07-29). Not "later" and not "blocked":
- *              these are off the list, and they stay listed only so the id is never silently
- *              reused and nobody re-derives them from the handoff as missing work. They do not
- *              count against "built" — a screen the product does not want is not a screen it owes.
+ *   `cancelled` — WITHDRAWN from the product (founder 2026-07-29).
+ *
+ * ⛔ AND THERE ARE NO `cancelled` ENTRIES LEFT (founder 2026-08-12, on the last one: *"לא קיים? אם
+ * כן למחוק."*). The status stays in the type because the next withdrawal will want it for one
+ * commit; what does not stay is the argument that used to sit here — that a withdrawn screen should
+ * remain listed *"so the id is never silently reused and nobody re-derives it from the handoff as
+ * missing work."*
+ *
+ * That was a bookkeeping argument, and it lost to the only reader this page has. **He walks the
+ * index screen by screen, and every row he stops on that turns out to be nothing is a row that cost
+ * him a note.** Four of them were sitting in here: the day that would not fit, the sealed block, the
+ * next twelve, the widgets. Git remembers the ids; a review page is not an archive.
  */
 export type ScreenStatus = 'live' | 'device' | 'todo' | 'cancelled';
 
@@ -100,6 +104,32 @@ export interface GalleryEntry {
   status: ScreenStatus;
   /** Why it cannot be shown here, or why it is not built. One short line. */
   note?: string;
+  /**
+   * ⛔ THE ID OF THE SCREEN THIS IS A **STATE** OF (founder 2026-08-12).
+   *
+   * *"יש 5 מסכי TODAY. מה זה?"* … *"יש כאן 3 מסכים Pre workout"* … *"יש כאן לא פחות מ9 מסכי The
+   * set, למה?"*
+   *
+   * There are not. There is **one** Today, **one** pre-workout card and **one** set screen, and
+   * between them about eighteen states worth looking at — a lift with no history, a load the engine
+   * eased mid-set, a week she brought that names its own days. Every one guards a rule that has
+   * broken at least once.
+   *
+   * The fault was never that they exist. It is that the index printed each of them as a peer of the
+   * screen it belongs to, in the same type, at the same indent, with the same mark. **A page whose
+   * job is "walk the product screen by screen" was answering the question "how many screens are
+   * there" with a number three times too big** — and the founder spent three separate notes asking
+   * what the extra ones were.
+   *
+   * So a state DECLARES its screen and the index nests it. Nothing is deleted, nothing is hidden,
+   * and the count at the top of the page finally means screens.
+   *
+   * ⚠️ IT IS AN EXPLICIT FIELD RATHER THAN AN ID PREFIX, because the prefix does not carry it:
+   * `2.1b` is the WHY sheet and `2.1f` is the pre-workout card — two different surfaces inside the
+   * `2.1` family. Deriving the relationship from the number would have nested them under Today,
+   * which is exactly the wrong answer stated confidently.
+   */
+  of?: string;
   render?: () => React.ReactNode;
 }
 
@@ -118,9 +148,18 @@ const appFixture = {
   program: null,
   sessions: [],
   entitlement: { status: 'trial', sessionsUsed: 0 },
-  // The model seam, empty: every member a screen reaches for is optional there, so a gallery
-  // mount simply yields nothing rather than booting the engine.
-  model: {},
+  /*
+   * ⛔ THE REAL ENGINE, NOT AN EMPTY SEAM (founder 2026-08-12: *"מסך 1.5 Ready מציג This screen threw"*).
+   *
+   * This was `model: {}` under a comment claiming "every member a screen reaches for is optional
+   * there, so a gallery mount cannot call one by accident". That stopped being true the day
+   * `ProgramCreated` began previewing her week — it calls `generateProgram` on mount, unguarded, and
+   * the gallery answered `undefined is not a function`.
+   *
+   * `fixtureModel` IS the deterministic engine: pure, local, no network, no key. Handing it over is
+   * not a fixture pretending to be the app — it is the app, which is the only thing worth looking at.
+   */
+  model: fixtureModel,
   pendingName: () => 'Erez',
   setPendingName: noop,
   setPendingSex: noop,
@@ -400,8 +439,8 @@ stored: ${plan.sessions.length} sessions · ${plan.notes?.length ?? 0} reasons` 
   return (
     <View style={{ padding: 16, gap: 14 }}>
       <Button label="Finish a workout and ask the coach" onPress={() => { void run(); }} />
-      <Text style={{ color: cream[1], fontSize: 13 }}>{state}</Text>
-      <Text style={{ color: cream[2], fontSize: 13 }}>
+      <Text style={{ color: cream[1], fontSize: 17 }}>{state}</Text>
+      <Text style={{ color: cream[2], fontSize: 17 }}>
         Told 8, did 12, three sets at 30 kg. A reply that changes nothing here is a finding.
       </Text>
     </View>
@@ -459,12 +498,12 @@ function StoredCoachWeek() {
 const sw = StyleSheet.create({
   page: { padding: 16, gap: 18 },
   session: { gap: 8 },
-  name: { color: cream[0], fontSize: 15, fontWeight: '600' },
+  name: { color: cream[0], fontSize: 17, fontWeight: '600' },
   block: { gap: 2, paddingStart: 10 },
-  rounds: { color: cream[2], fontSize: 13 },
-  item: { color: cream[1], fontSize: 13 },
-  say: { color: cream[2], fontSize: 13, fontStyle: 'italic' },
-  dim: { color: cream[2], fontSize: 13, padding: 16 },
+  rounds: { color: cream[2], fontSize: 17 },
+  item: { color: cream[1], fontSize: 17 },
+  say: { color: cream[2], fontSize: 17, fontStyle: 'italic' },
+  dim: { color: cream[2], fontSize: 17, padding: 16 },
 });
 
 /**
@@ -498,74 +537,6 @@ function installProbe() {
     if (!parsed.ok) return `UNREADABLE: ${parsed.reason}`;
     return { say: parsed.answer.say, attachedAProgramme: parsed.answer.plan != null, out: reply.usage?.candidatesTokenCount ?? null };
   };
-}
-
-function LiveCoachChat() {
-  React.useEffect(installProbe, []);
-  // The coach's own past decisions, read back so they travel with the next call. Without this the
-  // log is written and never read, which is the whole mechanism missing its return half.
-  const [decided, setDecided] = React.useState<CoachDecision[]>([]);
-  React.useEffect(() => { void db.loadCoachLog().then(setDecided); }, []);
-  const facts = React.useMemo(
-    () => coachFacts({
-      profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
-      plan: null,
-      history: [],
-      decided,
-    }),
-    [decided],
-  );
-  const [note, setNote] = React.useState<string | null>(null);
-  const coach = useCoach({
-    facts,
-    mode: 'intake',
-    onAnswer: (a, meta) => {
-      // The gallery is the only place a REAL answer can be inspected before it has anywhere to go.
-      // A count on screen proves it parsed; it does not show whether the plan is any good, and it
-      // does not show what the call cost — which is the number the model was chosen on.
-      (globalThis as unknown as { __coachAnswer?: unknown }).__coachAnswer = { answer: a, meta };
-      const u = meta.usage;
-      setNote(
-        [a.plan ? `${a.plan.sessions.length} sessions` : 'words only',
-         u ? `in ${u.promptTokenCount} · out ${u.candidatesTokenCount} · thought ${u.thoughtsTokenCount ?? 0}` : meta.model,
-        ].join(' — '),
-      );
-    },
-    onTrouble: (t) => setNote(`no answer — ${t}`),
-  });
-  return (
-    <>
-      <CoachChat turns={coach.turns} busy={coach.busy} onSend={coach.send} invitation="Erez — tell me what you want, and I'll build it." />
-      {note ? <Text style={{ color: cream[2], fontSize: 13, padding: 8 }}>{note}</Text> : null}
-    </>
-  );
-}
-
-function ScriptedCoachChat() {
-  const [turns, setTurns] = React.useState<CoachTurn[]>([]);
-  const [busy, setBusy] = React.useState(false);
-  const n = React.useRef(0);
-  const REPLIES = [
-    'Good — that gives me the shape of it. How many days a week can you actually train, and roughly how long do you have each time?',
-    'Right. And has anything been bothering you — anything that hurts, or that you have been working around?',
-    'That is enough to start. I will build you the first week and we will correct it from what you actually do.',
-  ];
-  return (
-    <CoachChat
-      turns={turns}
-      busy={busy}
-      invitation={"Erez — tell me what you want, and I’ll build it."}
-      onSend={(text) => {
-        setTurns((t) => [...t, { id: `a${t.length}`, by: 'athlete', text }]);
-        setBusy(true);
-        setTimeout(() => {
-          setBusy(false);
-          const reply = REPLIES[Math.min(n.current++, REPLIES.length - 1)];
-          setTurns((t) => [...t, { id: `c${t.length}`, by: 'coach', text: reply }]);
-        }, 1400);
-      }}
-    />
-  );
 }
 
 /** The stage's own ground — `SessionFlow.root`. A stage component drawn on white is not the screen. */
@@ -631,13 +602,31 @@ const sessionSummary = {
   trained: true,
 };
 
-/** The onboarding answers 1.5 reads its name out of. */
+/**
+ * The onboarding answers 0.0e and 1.5 read her week out of.
+ *
+ * ⛔ TWO KEYS IN IT WERE FICTION, AND `@ts-nocheck` ON THIS FILE IS WHY (founder 2026-08-12, on
+ * 0.0e: *"למה זה ניראה רע ומשעמם וכל כך חסר חיים?"*).
+ *
+ *   · `bodyweightKg` — there is no such field. `OnboardingInputs.weightKg` is the one every screen
+ *     reads, so the bodyweight ruler on 0.0e counted from zero **to zero**, forever.
+ *   · `units: 'metric'` — `Units` is `'kg' | 'lb'`, and `unitLabel` returns its argument. The ruler
+ *     was labelled **"0 metric"**.
+ *
+ * Neither is a fixture detail: they are the two numbers movement one is entirely made of, so the
+ * screen he was asked to judge had nothing in it to look at. TypeScript knew about both and had
+ * been told, at the top of this file, not to mention it.
+ *
+ * ⚠️ AND IT NOW CARRIES HER MAP, because `generateProgram` reads it — without one, 1.5 and 0.0e
+ * previewed a week with no emphasis in it while `appFixture.profile` marks her chest.
+ */
 const onboardingInputs = {
   name: 'Erez',
   sex: 'male',
-  units: 'metric',
+  units: 'kg',
   daysPerWeek: 4,
-  bodyweightKg: 78,
+  weightKg: 78,
+  bodyMap: { Chest: 'emphasis' },
   healthConnected: false,
 } as never;
 
@@ -699,13 +688,13 @@ const whyEased: WhyChangedProps = {
 function MilestoneBeat({ value, caption, title, meta, glyph }: { value: string; caption: string; title: string; meta: string; glyph?: 'plates' }) {
   return (
     <View style={milestoneStyles.body}>
-      <Legend size={12} track={0.24} align="center" tone="onStage">MILESTONE</Legend>
+      <Legend size={17} track={0.24} align="center" tone="onStage">MILESTONE</Legend>
       <View style={milestoneStyles.seal}>
         <MilestoneEmblem size={216} onStage pulse value={value} caption={caption} glyph={glyph} />
       </View>
       <View style={milestoneStyles.words}>
         <Text style={milestoneStyles.title}>{title}</Text>
-        <Legend size={13.5} track={0} weight="regular" align="center" tone="onStage">{meta}</Legend>
+        <Legend size={17} track={0} weight="regular" align="center" tone="onStage">{meta}</Legend>
       </View>
     </View>
   );
@@ -739,6 +728,10 @@ const progressView = (
       kcal: 82000,
       raises: 38,
       cardioKm: 32,
+      // ⛔ 18 workouts at ~55 min + the runs. The fixture had no `minutes` and the board drew the
+      // word "undefined" at 44 points — a fixture that cannot produce a field is how a field ships
+      // unlooked-at, which is this file's oldest lesson.
+      minutes: 1180,
       weeklyTonnes: [7.9, 7.2, 9.4, 8.8, 10.6, 10.1, 11.8, 12.4],
     } as never}
     onLog={noop}
@@ -819,15 +812,6 @@ const cardioRecord = () => mount(CardioDetail, {
   },
 });
 
-/**
- * Sun→Sat, four of them trained. `today` follows the DEVICE's weekday, because the eyebrow above
- * the strip reads off the same clock — a fixture that froze Friday would contradict itself on a
- * Monday, and this page's whole job is to show what the device shows.
- */
-const weekStrip = [true, false, true, true, false, true, false].map((trained, i) => ({
-  trained,
-  today: i === new Date().getDay(),
-}));
 
 /* ── 3.1 · THE SATURDAY LETTER ────────────────────────────────────────────────────────────────
  * The letter's rows are a WEEK OF ENGINE DECISIONS, so with no engine behind it the harness could
@@ -1037,13 +1021,16 @@ const weekDoneView = (
     weekNumber={6}
     units="kg"
     plan={null}
+    /* ⚠️ ALL FOUR CARRY THEIR CHECK, because this is the week-COMPLETE state and the ledger that
+       replaced the day strip reads `done` per workout rather than assuming the week's verdict. A
+       fixture with no checks would draw four blank rows under a seal that says 4/4 — the same
+       contradiction, one component later. */
     workouts={[
-      { id: 'd0', name: 'Upper A', muscles: '' },
-      { id: 'd1', name: 'Lower A', muscles: '' },
-      { id: 'd2', name: 'Upper B', muscles: '' },
-      { id: 'd3', name: 'Lower B', muscles: '' },
+      { id: 'd0', name: 'Upper A', muscles: '', items: 6, minutes: 55, done: true },
+      { id: 'd1', name: 'Lower A', muscles: '', items: 5, minutes: 50, done: true },
+      { id: 'd2', name: 'Upper B', muscles: '', items: 6, minutes: 55, done: true },
+      { id: 'd3', name: 'Lower B', muscles: '', items: 5, minutes: 48, done: true },
     ]}
-    weekDays={weekStrip}
     weekStats={{ tonnes: 46.8, kcal: 3120, loadsUp: 12 }}
     nextWorkoutName="Upper A"
     brief={null}
@@ -1081,11 +1068,11 @@ function TodayDriven() {
   const workouts = [
     // Two of them name a DAY, which is what an endurance plan looks like — and the label was
     // decided, stored and sent back to the coach for a whole build without ever being drawn.
-    { id: 'd0', name: 'Push A', muscles: '', done: true },
-    { id: 'd1', name: 'Pull A', muscles: '', day: 'tue' },
-    { id: 'd2', name: 'Legs A', muscles: '' },
-    { id: 'd3', name: 'Push B', muscles: '' },
-    { id: 'd4', name: 'Pull B', muscles: '', done: true, day: 'sun' },
+    { id: 'd0', name: 'Push A', muscles: '', items: 5, minutes: 48, done: true },
+    { id: 'd1', name: 'Pull A', muscles: 'Back · Biceps', items: 4, minutes: 52, day: 'tue', changes: 3 },
+    { id: 'd2', name: 'Legs A', muscles: '', items: 5, minutes: 55 },
+    { id: 'd3', name: 'Push B', muscles: '', items: 5, minutes: 50, changes: 1 },
+    { id: 'd4', name: 'Pull B', muscles: '', items: 4, minutes: 46, done: true, day: 'sun' },
   ];
 
   // The day's slots — names and set counts, known synchronously (this is the whole point of A.12).
@@ -1139,9 +1126,7 @@ function TodayDriven() {
       name="Erez"
       dayName={name}
       dayId={chosen}
-      trainingDays={days}
-      programTitle="Twelve weeks to the half"
-      programWhy="You gave me a date, so the lifting serves the running and the long day is protected."
+      programTitle="Upper / Lower · 4 days a week · leading with Chest"
       muscles=""
       trainedThisWeek={2}
       startError={false}
@@ -1159,7 +1144,6 @@ function TodayDriven() {
       onStart={noop}
       onChooseWorkout={setChosen}
       onWeeklyUpdate={noop}
-      onCoach={noop}
     />
   );
 }
@@ -1180,34 +1164,60 @@ const todayView = (
   <HomeView
     resting={false}
     name="Erez"
-    /* The coach's own name for the programme — it is the HEADLINE now (2026-08-04). */
-    programTitle="Twelve weeks to the half"
-    programWhy="You gave me a date, so the lifting serves the running and the long day is protected."
-    /* ⚠️ AN EARNED PATTERN. Absent, this fixture would draw the numbered column and the week form
-       would have no entry on the page at all — which is how the chips' own states used to hide. */
-    trainingDays={new Set(['sun', 'tue', 'thu', 'sat'] as const)}
-    dayName="Upper A"
-    dayId="d0"
+    /*
+     * ⛔ THE SECOND AI ARTEFACT ON THIS SCREEN, AND THE ONE THE FOUNDER ACTUALLY READ.
+     *
+     * He asked about *"החלונית של הAI למעלה"*. The corner door was one half of it; this was the
+     * other, and it is the half with words in it:
+     *
+     *     "Twelve weeks to the half"
+     *     "You gave me a date, so the lifting serves the running and the long day is protected."
+     *
+     * A programme name and a paragraph of the coach's reasoning — **and the engine cannot write the
+     * second one.** `domain/enginePlan` sets `title` and leaves `why` deliberately absent (R7: Hush
+     * never states a reason it did not measure), and `Home.tsx` reads `coachPlan?.why ?? null`. On
+     * every device in existence that italic sentence is null and draws nothing. Only this line put
+     * it on a screen.
+     *
+     * ⚠️ THE TITLE IS REAL AND STAYS — but as the engine composes it, not as a marathon coach would:
+     * `programmeName` returns the shape, the days and the muscles she leads with. Reviewing Today
+     * against a headline no athlete can ever see is reviewing a different product.
+     */
+    programTitle="Upper / Lower · 4 days a week · leading with Chest"
+    /* ⚠️ THE QUEUE IS THE THIRD ROW, AND THE FIRST TWO CARRY THEIR CHECKS. The eyebrow states
+       "2 OF 4 DONE" now, so the column has to agree with it — it did not, and a screen that counts
+       two finished workouts above four rows with no check on any of them is contradicting itself in
+       the two places she looks first. Mid-week is also simply the truest state to review Today in. */
+    dayName="Upper B"
+    dayId="d2"
     muscles="Chest · Shoulders · Triceps"
     trainedThisWeek={2}
     startError={false}
     weekNumber={11}
     units="kg"
     planMinutes={55}
+    /*
+     * ⚠️ REAL CATALOGUE IDS. These were `bench`, `ohp`, `row`, `curl`, `push`, `ab` — six ids that
+     * exist in no catalogue. Each row's press calls `onForm(exerciseId)` and the WHY sheet calls
+     * `liftPlacement(exerciseId, …)`, which answers `null` for a lift it cannot find — so every
+     * door on this screen opened onto nothing, on the entry that IS Today.
+     */
     plan={[
       // Two raises and one ease, so Today shows the direction law in one glance.
-      { exerciseId: 'bench', name: 'Barbell Bench Press', load: 41, sets: 4, band: [8, 10], changed: 'up' as const },
-      { exerciseId: 'ohp', name: 'Overhead Press', load: 22.5, sets: 4, band: [8, 10], changed: 'down' as const },
-      { exerciseId: 'row', name: 'Barbell Row', load: 47.5, sets: 4, band: [8, 10], changed: 'up' as const },
-      { exerciseId: 'curl', name: 'Barbell Curl', load: 25, sets: 3, band: [8, 10] },
-      { exerciseId: 'push', name: 'Triceps Pushdown', load: 16, sets: 3, band: [8, 10] },
-      { exerciseId: 'ab', name: 'Ab Crunch Machine', load: 25, sets: 3, band: [8, 10] },
+      { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 41, sets: 4, band: [8, 10], changed: 'up' as const },
+      { exerciseId: 'bb_overhead_press', name: 'Overhead Press', load: 22.5, sets: 4, band: [8, 10], changed: 'down' as const },
+      { exerciseId: 'bb_row', name: 'Barbell Row', load: 47.5, sets: 4, band: [8, 10], changed: 'up' as const },
+      { exerciseId: 'bb_curl', name: 'Barbell Curl', load: 25, sets: 3, band: [8, 10] },
+      { exerciseId: 'triceps_pushdown', name: 'Triceps Pushdown', load: 16, sets: 3, band: [8, 10] },
+      { exerciseId: 'lateral_raise', name: 'Lateral Raise', load: 9, sets: 3, band: [10, 12] },
     ]}
+    /* ⚠️ EVERY ROW CARRIES ITS OWN SHAPE. The week is a sequence of workouts now, and a row with
+       nothing but a name is what made three quarters of it look like filler. */
     workouts={[
-      { id: 'd0', name: 'Upper A', muscles: '' },
-      { id: 'd1', name: 'Lower A', muscles: '' },
-      { id: 'd2', name: 'Upper B', muscles: '' },
-      { id: 'd3', name: 'Lower B', muscles: '' },
+      { id: 'd0', name: 'Upper A', muscles: '', items: 6, minutes: 55, done: true },
+      { id: 'd1', name: 'Lower A', muscles: '', items: 5, minutes: 50, done: true },
+      { id: 'd2', name: 'Upper B', muscles: 'Chest · Shoulders · Triceps', items: 6, minutes: 55, changes: 3 },
+      { id: 'd3', name: 'Lower B', muscles: 'Quads · Hamstrings · Calves', items: 5, minutes: 48, changes: 1 },
     ]}
     brief={null}
     briefCount={3}
@@ -1217,13 +1227,48 @@ const todayView = (
     onStart={noop}
     onChooseWorkout={noop}
     onWeeklyUpdate={noop}
-    /* ⚠️ WITHOUT THIS THE COACH'S DOOR IS NOT DRAWN AT ALL. `HomeView` renders the corner only when
-       it is handed a handler, and no fixture on this page ever was — so the one control that IS the
-       coach's whole presence in the app has never appeared in the harness, through every pass that
-       argued about which glyph belongs in it. */
-    onCoach={noop}
+    /* ⛔ `onCoach` IS GONE, AND THE NOTE THAT USED TO SIT HERE IS THE WHOLE LESSON. It read: *"without
+       this the coach's door is not drawn at all — no fixture on this page ever was handed a handler."*
+       True, and the right conclusion was the opposite one: **the app never hands it a handler either.**
+       Handing the harness a function the product does not have did not restore a missing control, it
+       manufactured one — and cost the founder a review note on 2026-08-12 asking what it was. */
   />
 );
+
+/**
+ * The pre-workout card, with its header count DERIVED from the rows under it.
+ *
+ * Two of the three entries used to hand `shape` a hand-typed string that disagreed with their own
+ * lift array. A card that announces six lifts and lists two is not a fixture detail — it is the
+ * screen contradicting itself in the largest type on it.
+ */
+function preWorkout(p: {
+  name: string;
+  dayLabel?: string;
+  minutes: number;
+  changes?: number;
+  done?: boolean;
+  lifts: { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; changed?: 'up' | 'down' }[];
+}): React.ReactNode {
+  return (
+    <InApp>
+      <PreWorkoutView
+        name={p.name}
+        {...(p.dayLabel ? { dayLabel: p.dayLabel } : {})}
+        shape={`${p.lifts.length} LIFTS \u00b7 ~${p.minutes} MIN`}
+        minutes={p.minutes}
+        units="kg"
+        {...(p.changes != null ? { changes: p.changes } : {})}
+        {...(p.done ? { done: true } : {})}
+        lifts={p.lifts as never}
+        onForm={noop}
+        onWhy={noop}
+        onStart={noop}
+        onClose={noop}
+      />
+    </InApp>
+  );
+}
 
 /**
  * EVERY SCREEN IN THE HANDOFF, and where it stands. The ids match the handoff exactly, in the
@@ -1232,6 +1277,16 @@ const todayView = (
 export const GALLERY: GalleryEntry[] = [
   // ── 01 · ARRIVE ────────────────────────────────────────────────────────────────────────────
   { id: '1.1', label: 'Sign in', status: 'live', render: () => mount(Authentication) },
+  /*
+   * ⛔ THE FORK (founder 2026-08-12) — the two ways this product begins, the same size.
+   *
+   * ⛔ AND IT IS FILED AS `1.1b`, NOT `1.0` (founder, same day): *"למה מסך 1.0 … לפני מסך 1.1?! הוא
+   * צריך להופיע אחריו."* He is reading the index in flow order, which is the only order it is worth
+   * reading in — and `1.0` sorted it in front of the front door while `Root` has always pushed it
+   * AFTER `Authentication`. **The index disagreed with the app about what comes first**, on the one
+   * page that exists so the flow can be walked. An id is an address, and this one was lying.
+   */
+  { id: '1.1b', label: 'Where do we start?', status: 'live', note: 'the fork, after sign-in: build one, or bring the one she has. Bringing it was a 14px underline under a button', render: () => mount(Start) },
   /*
    * ⛔ THE ONE NUMBER THE COACH CANNOT INFER (founder 2026-08-03): *"the coach didn't ask for my
    * weight, and it's critical for it."* Nobody asked — `coachFacts` spreads it conditionally, so an
@@ -1256,7 +1311,19 @@ export const GALLERY: GalleryEntry[] = [
    * Continue live. The refusals (a third lead, an all-off body) are reached by pressing, not by a
    * fixture — they are the two things this screen exists to say out loud.
    */
-  { id: '1.2e', label: 'What do I train? — the body map', status: 'live', note: 'replaces the goal/limits prose (founder 2026-08-08): off · normal · lead, on one body she presses', render: () => mount(BodyMap, { sex: 'female', weightKg: 62, daysPerWeek: 4 }) },
+  { id: '1.2e', label: 'What do I train? — the body map', status: 'live', note: 'four days · off · normal · lead, on one body she presses — two leads are honourable here', render: () => mount(BodyMap, { sex: 'female', weightKg: 62, daysPerWeek: 4 }) },
+  /*
+     ⛔ THREE DAYS — the state the founder hit and no fixture could produce (2026-08-12).
+
+     *"אני מנסה לשים 2 שרירים על EMPHASIS וזה נותן לי רק על אחד משום מה."* It is the rule, not a
+     bug: below the split every session trains the whole body, so a second lead always competes
+     (`FULL_BODY_UNTIL_DAYS`). **What was broken is that the screen promised two anyway** — and the
+     sentence explaining the refusal rendered below the fold, so he met a silent refusal.
+
+     Every entry on this page sat at FOUR days, where two leads are honourable, so nothing here
+     could draw the week most athletes actually pick.
+  */
+  { id: '1.2f', label: 'the body map on a THREE-day week', of: '1.2e', status: 'live', note: 'one lead, not two — and the refusal says why, where the control is', render: () => mount(BodyMap, { sex: 'female', weightKg: 62, daysPerWeek: 3 }) },
   /*
    * ⛔ THE FIGURE ITSELF, BOTH FACES AND ALL THREE STANCES ON ONE PAGE.
    *
@@ -1267,38 +1334,37 @@ export const GALLERY: GalleryEntry[] = [
    * with, one turned OFF and one open for editing, so every state the painter can produce is on
    * screen at once and a regression in any of them is visible without a single press.
    */
-  {
-    id: '1.2f',
-    label: 'The body — both faces, all three stances',
-    status: 'live',
-    note: 'the drawing under a lamp: chest is a LEAD, calves are OFF, back is the one being edited',
-    render: () => (
-      <View style={{ flex: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 8, paddingTop: 28 }}>
-        <View style={{ flex: 1 }}>
-          <BodyMapFigure face="front" map={{ Chest: 'emphasis', Calves: 'off' }} selected={null} onSelect={noop} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <BodyMapFigure face="back" map={{ Chest: 'emphasis', Calves: 'off' }} selected="Back" onSelect={noop} />
-        </View>
-      </View>
-    ),
-  },
   /*
-   * ⚠️ THE DEMONSTRATION, PUT WHERE IT CAN BE LOOKED AT. `FormMedia` is reachable in the product
-   * only from inside a live workout, which is a poor place to judge a drawing. The founder's note
-   * on 2026-08-10 — that the figure in the demos reads as robotic beside the body map — cannot be
-   * answered without both on one screen, and this is the cheap half of that.
+   * ⛔ 1.2f IS GONE (founder 2026-08-12): *"אותו דבר? אם כן אז תוריד את המסך שמציג את 2 הצדדים."*
+   *
+   * It mounted `BodyMapFigure` twice side by side — a DRAWING under a lamp, not a screen. It existed
+   * to judge the artwork while the body was being made, and the body is made. `1.2e` is the screen,
+   * and a screen index that also lists its own parts is an index nobody can read down.
    */
-  { id: '2.9', label: 'The demonstration — the motion figure', status: 'live', note: 'bench press, the rig that exists today; compare against 1.2e', render: () => (
-    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 18 }}>
-      <FormMedia exerciseId="bb_bench_press" title="Barbell Bench Press" />
-    </View>
-  ) },
+  /*
+   * ⛔ AND THE DEMONSTRATION WENT WITH IT (founder 2026-08-12): *"תמחק את מסך 2.9 … זה סך הכל
+   * הדגמה."* Same answer as 1.2f, one line down: `FormMedia` drawn on its own is a DRAWING under a
+   * lamp. It was filed here to judge the motion rig beside the body map while the body was being
+   * made; that comparison is closed.
+   *
+   * ⛔ AND IT WAS SITTING ON AN ID THAT ALREADY BELONGED TO A SCREEN. `2.9` is *Paused · the stage
+   * held*, declared 1,100 lines below — so `#2.9` resolved to the demonstration and **the paused
+   * stage had no address in the harness at all**. `addressOf` catches the collision for the index's
+   * links (it falls back to `i<n>`), which is why nothing looked wrong; a typed hash still went to
+   * the wrong screen. `everyGalleryScreenIsListed` now refuses a duplicate id outright.
+   */
   { id: '1.3', label: 'Connect health', status: 'live', note: 'no watch paired — the wrist row is absent, which is most phones', render: () => mount(ConnectHealth, { sex: 'male' }) },
   // The harness has no WCSession, so without the seam the wrist row could only ever be looked at
   // ABSENT — and "absent" is the one state it says nothing in. Both faces, driven.
-  { id: '1.3b', label: 'Connect health — a watch is paired', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'confirm' }) },
-  { id: '1.3c', label: 'Connect health — watch, not installed', status: 'live', render: () => mount(ConnectHealth, { sex: 'male', previewWrist: 'install' }) },
+  /*
+   * ⛔ 1.3b AND 1.3c ARE GONE (founder 2026-08-12): *"הם גם מייצגים אותו דבר לא? אם כן אז תוריד את
+   * השניים המיותרים."*
+   *
+   * They were `ConnectHealth` with `previewWrist` set two other ways — one SCREEN filed three times
+   * as if it were three surfaces. The gallery has made this mistake before and its own §00 note
+   * records the founder catching it: *"I don't understand what you did here."* The states are still
+   * reachable from the screen's own props for anyone reconciling it against a PNG.
+   */
   // 1.4 · ABOUT YOU + YOUR WEEK — deleted 2026-08-01. Two wheel pickers asking a coach's
   // questions one screen before a coach; the intake prompt asks for both now.
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
@@ -1309,55 +1375,44 @@ export const GALLERY: GalleryEntry[] = [
    *
    * The plan below is real output from the four-week simulation, notes and all.
    */
-  { id: '1.5b', label: 'The week she is handed — with the coach reasons', status: 'live', note: 'move 4: the wedge in the first 60 seconds. `say` is HOW to do it; the italic line is WHY it is here at all', render: () => (
-    <InApp>
-      <PlanWeek units="kg" plan={{
-        v: 2,
-        title: 'Back & Shoulder Volume Split',
-        sessions: [
-          { name: 'Upper — Back Focus', day: 'mon', blocks: [
-            { rounds: 4, restS: 90, items: [{ kind: 'reps', ex: 'bb_row', reps: [8, 10], load: 32.5, say: 'One rep short of failure on the last set.' }] },
-            { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'landmine_press', reps: [8, 10], load: 20 }] },
-            { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: 'lat_pulldown', reps: [8, 10], load: 35 }] },
-            { rounds: 3, restS: 60, items: [{ kind: 'reps', ex: 'face_pull', reps: [12, 15], load: 15 }] },
-          ] },
-        ],
-        notes: [
-          { ex: 'landmine_press', say: 'Replaces barbell overhead press so you can push overhead without the shoulder clicking.' },
-          { ex: 'bb_row', say: 'Your main back builder — everything else this session is built around it.' },
-        ],
-      }} />
-    </InApp>
-  ) },
-  { id: '1.6', label: 'Bring your history', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
+  /*
+   * ⛔ 1.5b IS GONE, AND SO IS THE COMPONENT IT MOUNTED (founder 2026-08-12: *"מה זה המסך הזה? …
+   * הוא מעוצב ממש לא בצורה של איך שאפליקציה אכן צריכה להיות מעוצבת."*).
+   *
+   * It drew `PlanWeek` from a hand-written `CoachPlan` full of `say` and `notes` — the AI era's
+   * "here is your week, and here is why", from move 4. Checked before removing: **no shipping screen
+   * renders `PlanWeek`.** Its last consumer was `ProgramCreated`, whose own header records that it
+   * stopped reading a coach plan; the component and this entry survived as each other's only reason
+   * to exist. A fixture is not a user, and a gallery entry is not a consumer.
+   */
 
   // ── 02 · TRAIN ─────────────────────────────────────────────────────────────────────────────
   // The card rises once per install, so the harness has to hold it open — and it hands the
   // learning length (the handoff's own four) rather than reading a programme it does not have.
   { id: '2.0', label: 'First workout — the first four', status: 'live', note: 'shown over 2.2', render: () => mount(SessionFlow, { previewFirstGym: 4 }) },
   { id: '2.1', label: 'Today', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView}</UnderTabs></InApp> },
-  /* ⛔ THE WEEK BEFORE IT KNOWS HER — the founder's own N-workouts model, and the state EVERY new
-     athlete is in for a fortnight. `trainingDays` returns null until the pattern is earned, and
-     nothing in a live harness can produce two weeks of history: without an entry here this is the
-     form of Home most first-time users see and nobody on the team ever looks at. */
-  { id: '2.1c', label: 'Today — week one, no days yet', status: 'live', note: 'the column NUMBERS its rows; no rest rows are invented', render: () => (
+  /* ⛔ WEEK ONE — nothing has been compared to anything, so there is no change pill and no arrow on
+     any lift, and the eyebrow reads "0 OF 4". It used to differ from 2.1 by having no earned weekday
+     pattern; the pattern is gone from Today entirely (founder 2026-08-12), so what is left is the
+     honest difference: a week with no history behind it. */
+  { id: '2.1c', label: 'week one — nothing compared yet', of: '2.1', status: 'live', note: 'no changes pill, no arrows: there is no previous week to read', render: () => (
     <InApp><UnderTabs active={0}>
-      {React.cloneElement(todayView, { trainingDays: null, weekNumber: 1, briefCount: 0, trialLeft: 4 })}
+      {React.cloneElement(todayView, { weekNumber: 1, briefCount: 0, trainedThisWeek: 0, trialLeft: 4 })}
     </UnderTabs></InApp>
   ) },
   /* ⚠️ A DONE SESSION AS THE OPEN ROW — founder A.16, in the one place it can still happen: she taps
      a finished workout to re-read it and the row opens exactly as an offer does. */
-  { id: '2.1d', label: 'Today — a finished session, re-read', status: 'live', note: 'the check holds, and the act refuses it', render: () => (
+  { id: '2.1d', label: 'a finished session, re-read', of: '2.1', status: 'live', note: 'the check holds, and the act refuses it', render: () => (
     <InApp><UnderTabs active={0}>
       {React.cloneElement(todayView, {
         dayId: 'd0',
         dayName: 'Upper A',
         dayDone: true,
         workouts: [
-          { id: 'd0', name: 'Upper A', muscles: '', done: true },
-          { id: 'd1', name: 'Lower A', muscles: '' },
-          { id: 'd2', name: 'Upper B', muscles: '' },
-          { id: 'd3', name: 'Lower B', muscles: '' },
+          { id: 'd0', name: 'Upper A', muscles: '', items: 6, minutes: 55, done: true },
+          { id: 'd1', name: 'Lower A', muscles: 'Quads · Hamstrings · Glutes', items: 5, minutes: 50, changes: 2 },
+          { id: 'd2', name: 'Upper B', muscles: '', items: 6, minutes: 55 },
+          { id: 'd3', name: 'Lower B', muscles: '', items: 5, minutes: 48 },
         ],
       })}
     </UnderTabs></InApp>
@@ -1365,90 +1420,150 @@ export const GALLERY: GalleryEntry[] = [
   /* ⚠️ AND A WEEK THE COACH DATED ITSELF — an endurance plan names every day for a reason, and the
      column must place each session on ITS day rather than on her habit. No hypertrophy fixture can
      show this, because a hypertrophy week carries no days at all. */
-  { id: '2.1e', label: 'Today — a week the coach dated', status: 'live', note: 'coach days outrank her pattern', render: () => (
+  /*
+   * ⛔ THIS SAID "a week the COACH dated", AND THE COACH IS GONE (2026-08-12).
+   *
+   * The founder read the label and reasonably asked what it was. The STATE is real and still
+   * reachable — but only one thing produces it now: a programme she **brought**. An imported plan
+   * can name its own weekdays ("Tuesday, easy 5 km") and `authored` says we never rewrite it, so
+   * those days outrank the pattern she earned. The engine dates nothing; `enginePlan` writes no
+   * `day` at all, which is why a generated week is the numbered N-workouts model she asked for.
+   */
+  { id: '2.1e', label: 'a week that names its own days', of: '2.1', status: 'live', note: 'only an IMPORTED programme does this — its days outrank her earned pattern', render: () => (
     <InApp><UnderTabs active={0}>
       {React.cloneElement(todayView, {
         dayId: 'd1',
         dayName: 'Tempo + Core',
         workouts: [
-          { id: 'd0', name: 'Easy 6k', muscles: '', day: 'sun', done: true },
-          { id: 'd1', name: 'Tempo + Core', muscles: '', day: 'wed' },
-          { id: 'd2', name: 'Long run', muscles: '', day: 'fri' },
+          { id: 'd0', name: 'Easy 6k', muscles: '', day: 'sun', items: 1, timeUnknown: true, done: true },
+          { id: 'd1', name: 'Tempo + Core', muscles: 'Core', day: 'wed', items: 7, minutes: 48 },
+          /* ⚠️ `timeUnknown` — a long run has no honest minute count without a pace, and the card
+             says how many things she does rather than inventing one. */
+          { id: 'd2', name: 'Long run', muscles: '', day: 'fri', items: 1, timeUnknown: true },
         ],
       })}
     </UnderTabs></InApp>
   ) },
-  { id: '2.1a', label: 'Today — driven', status: 'live', note: 'tap the ROWS: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done row', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
+  { id: '2.1a', label: 'driven — tap the rows', of: '2.1', status: 'live', note: 'tap the ROWS: A.5 units · A.12 no flicker · A.15 the long name · A.16 the done row', render: () => <InApp><UnderTabs active={0}><TodayDriven /></UnderTabs></InApp> },
   { id: '2.1b', label: 'The why sheet — raised', status: 'live', render: () => <InApp><WhyChangedSheet {...whyRaised} /></InApp> },
   /*
-    ⛔ 2.1c · THE PRE-WORKOUT CARD (founder 2026-08-05) — what a day on the week board opens, and
-    where the lift table went when it left Today. Three entries, because the three states differ in
-    the only thing that matters: whether the act is offered.
+    ⛔ THE PRE-WORKOUT CARD (founder 2026-08-05) — what a day on the week board opens, and where the
+    lift table went when it left Today. Three entries, because the three states differ in the only
+    thing that matters: whether the act is offered.
+
+    ⛔ FILED `2.1f–h`, AND IT USED TO BE `2.1c–e` — WHICH THREE OTHER SCREENS ALSO ANSWERED TO
+    (2026-08-12). Nine ids in this file were held by two or three entries each: three Today states,
+    these three, three why-sheets, three set states, three item stages and six cardio screens. Since
+    `resolve()` is `GALLERY.find(g => g.id === id)`, **twelve screens had no address anyone could
+    type** — the first holder took every one of them.
+
+    ⚠️ NOBODY NOTICED FOR MONTHS BECAUSE THE INDEX ALREADY COMPENSATES: `addressOf` links a
+    non-first holder as `i<n>` instead, so clicking always worked and only typing an id failed. The
+    workaround removed the symptom and with it the report. `everyGalleryScreenIsListed` refuses a
+    duplicate outright now, which is how the other eight were found — by writing the law for `2.9`.
   */
-  { id: '2.1c', label: 'Pre-workout', status: 'live', note: 'the lifts, the changes, and the one act', render: () => (
-    <InApp>
-      <PreWorkoutView
-        name="Upper Body A"
-        dayLabel="Monday"
-        shape="6 LIFTS · ~50 MIN"
-        units="kg"
-        changes={2}
-        lifts={[
-          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 57.5, sets: 4, band: [8, 10], changed: 'up' },
-          { exerciseId: 'bb_row', name: 'Barbell Row', load: 45, sets: 4, band: [8, 10] },
-          { exerciseId: 'lat_pulldown', name: 'Lat Pulldown', load: 42.5, sets: 3, band: [8, 10], changed: 'down' },
-          { exerciseId: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', load: 16, sets: 3, band: [8, 10] },
-          { exerciseId: 'lateral_raise', name: 'Lateral Raise', load: 7, sets: 3, band: [10, 12] },
-          { exerciseId: 'tri_pushdown', name: 'Triceps Pushdown', load: 20, sets: 3, band: [10, 12] },
-        ]}
-        onForm={noop} onWhy={noop} onStart={noop} onClose={noop}
-      />
-    </InApp>
-  ) },
+  /*
+   * ⛔ THE SHAPE LINE IS DERIVED, NOT TYPED (founder 2026-08-12): *"אחד ניראה מדהים עם צבעים והסבר
+   * והאחרים נראים אפורים ועצובים."*
+   *
+   * He is describing two real faults and the second one is a straight contradiction. `2.1g` said
+   * **"5 LIFTS · ~45 MIN"** above a list of TWO, and `2.1h` said the same above THREE — a
+   * hand-typed `shape` string beside a hand-typed array, drifting the moment either was edited.
+   * Half of each screen was empty because half of each workout was missing, and "grey and sad" is
+   * exactly what a card looks like when its own header says there should be more on it.
+   *
+   * So the count comes off `lifts.length` here and can never disagree with the rows again — the
+   * same rule the app follows, where both come off the programme.
+   *
+   * ⚠️ THE FIRST FAULT IS NOT A FAULT, AND IT MATTERS THAT IT ISN'T. `2.1f` has arrows and a
+   * changes pill because loads MOVED; the other two have none because nothing has been compared
+   * yet — a week-one card has no previous week, and a finished session's numbers are a record.
+   * Painting arrows on them to even the three screens out would be inventing engine decisions on
+   * the screen she stands in front of deciding whether the numbers are right (R7).
+   */
+  { id: '2.1f', label: 'Pre-workout', status: 'live', note: 'the lifts, the changes, and the one act', render: () => preWorkout({
+    name: 'Upper Body A', dayLabel: 'Monday', minutes: 50, changes: 2,
+    lifts: [
+      { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 57.5, sets: 4, band: [8, 10], changed: 'up' },
+      { exerciseId: 'bb_row', name: 'Barbell Row', load: 45, sets: 4, band: [8, 10] },
+      { exerciseId: 'lat_pulldown', name: 'Lat Pulldown', load: 42.5, sets: 3, band: [8, 10], changed: 'down' },
+      { exerciseId: 'db_shoulder_press', name: 'Dumbbell Shoulder Press', load: 16, sets: 3, band: [8, 10] },
+      { exerciseId: 'lateral_raise', name: 'Lateral Raise', load: 7, sets: 3, band: [10, 12] },
+      /* `tri_pushdown` was not an exercise. The catalogue calls it `triceps_pushdown`, and every
+         sibling row here uses a real id — so `onForm` on this one row opened a lift that does not
+         exist. Another thing `@ts-nocheck` on this file had nothing to say about. */
+      { exerciseId: 'triceps_pushdown', name: 'Triceps Pushdown', load: 20, sets: 3, band: [10, 12] },
+    ],
+  }) },
   /* ⚠️ A FINISHED SESSION she opened to re-read. The plan is hers to read; the act is refused —
      a record must never wear an offer's clothes (founder 2026-07-11). */
-  { id: '2.1d', label: 'Pre-workout — already trained', status: 'live', note: 'a record, not an offer', render: () => (
-    <InApp>
-      <PreWorkoutView
-        name="Lower Body A" dayLabel="Wednesday" shape="5 LIFTS · ~45 MIN" units="kg" done
-        lifts={[
-          { exerciseId: 'leg_press', name: 'Leg Press', load: 100, sets: 4, band: [10, 12] },
-          { exerciseId: 'leg_extension', name: 'Leg Extension', load: 50, sets: 3, band: [10, 12] },
-        ]}
-        onForm={noop} onStart={noop} onClose={noop}
-      />
-    </InApp>
-  ) },
+  { id: '2.1g', label: 'already trained', of: '2.1f', status: 'live', note: 'a record, not an offer', render: () => preWorkout({
+    name: 'Lower Body A', dayLabel: 'Wednesday', minutes: 45, done: true,
+    lifts: [
+      { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', load: 72.5, sets: 4, band: [8, 10] },
+      { exerciseId: 'bb_rdl', name: 'Romanian Deadlift', load: 62.5, sets: 4, band: [8, 10] },
+      { exerciseId: 'leg_press', name: 'Leg Press', load: 100, sets: 4, band: [10, 12] },
+      { exerciseId: 'leg_curl', name: 'Leg Curl', load: 34, sets: 3, band: [10, 12] },
+      { exerciseId: 'standing_calf_raise', name: 'Standing Calf Raise', load: 42.5, sets: 3, band: [10, 12] },
+    ],
+  }) },
   /* ⚠️ AND A WEEK WITH NO DAYS YET — the commonest state for a new athlete, and the one a live
      harness cannot reach because it takes a fortnight of history to leave it. No day label, no
      change pill: nothing has been compared against anything. */
-  { id: '2.1e', label: 'Pre-workout — week one', status: 'live', note: 'no day, no changes: nothing to compare yet', render: () => (
-    <InApp>
-      <PreWorkoutView
-        name="Full Body A" shape="5 LIFTS · ~45 MIN" units="kg" changes={0}
-        lifts={[
-          { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', load: 40, sets: 3, band: [8, 10] },
-          { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 30, sets: 3, band: [8, 10] },
-          { exerciseId: 'pull_up', name: 'Pull-up', load: null, sets: 3, band: [5, 8] },
-        ]}
-        onForm={noop} onStart={noop} onClose={noop}
-      />
-    </InApp>
-  ) },
-
-  { id: '2.1c', label: 'Why — held', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
-  { id: '2.1d', label: 'Why — eased', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
-  { id: '2.1e', label: "When the day won't fit", status: 'cancelled', note: 'founder 2026-07-29 — withdrawn' },
-  { id: '2.2', label: 'The set', status: 'live', render: () => mount(SessionFlow) },
+  { id: '2.1h', label: 'week one', of: '2.1f', status: 'live', note: 'no day, no changes: nothing to compare yet', render: () => preWorkout({
+    name: 'Full Body A', minutes: 45, changes: 0,
+    lifts: [
+      { exerciseId: 'bb_back_squat', name: 'Barbell Back Squat', load: 40, sets: 3, band: [8, 10] },
+      { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 30, sets: 3, band: [8, 10] },
+      { exerciseId: 'bb_row', name: 'Barbell Row', load: 30, sets: 3, band: [8, 10] },
+      { exerciseId: 'bb_rdl', name: 'Romanian Deadlift', load: 35, sets: 3, band: [8, 10] },
+      { exerciseId: 'pull_up', name: 'Pull-up', load: null, sets: 3, band: [5, 8] },
+    ],
+  }) },
+  { id: '2.1j', label: 'held', of: '2.1b', status: 'live', render: () => <InApp><WhyChangedSheet {...whyHeld} /></InApp> },
+  { id: '2.1k', label: 'eased', of: '2.1b', status: 'live', render: () => <InApp><WhyChangedSheet {...whyEased} /></InApp> },
+  /*
+   * ⛔ THE SET — ONE SCREEN, AND `of` NOW SAYS SO (founder 2026-08-12: *"יש כאן לא פחות מ9 מסכי The
+   * set למה?"*). Nine of the rows he counted are STATES of this mount, each one a rule that has
+   * broken before: a lift with no history to ghost, a load Loop 1 eased between two sets, a set
+   * count that grew, a superset with no rest in it.
+   *
+   * ⛔ AND ONE OF THEM WAS NOT A STATE AT ALL. `2.2b · Edit set` rendered `mount(SessionFlow)` —
+   * **byte-for-byte the same call as this line** — under the note *"tap the weight on 2.2"*. It was
+   * an INSTRUCTION filed as a screen: a row that opened this exact screen and told you to press
+   * something on it. Deleted; the instruction is here, where it applies.
+   */
+  /*
+   * ⛔ WHY THE PER-SIDE LINE IS ON SOME OF THESE AND NOT OTHERS (founder 2026-08-12: *"יש בגלריה
+   * מסכי THE SET שכתוב גם כמה לשים בכל צד ובחלק לא. צריך להסגר."*).
+   *
+   * It is one rule, ruled on 2026-08-04, and every entry below obeys it — `domain/loadNews`:
+   *
+   *     showsPerSide = setNumber <= 1 || the load moved
+   *
+   * **She loads the bar once.** On set 1 the line tells her how; on sets 2–4 it is a fact she acted
+   * on five minutes ago and taking the space is the founder's own *"it still looks like a lot of
+   * numbers"*. It returns the instant the load changes, because then the bar must be re-loaded —
+   * which is why `2.2k` and `2.2l` carry it and `2.2m` and `2.2i` do not.
+   *
+   * ⚠️ NOTHING WAS BROKEN HERE; THE INDEX WAS SILENT. The entries showed the states without saying
+   * which state each one was, so the rule looked like inconsistency. Each note names its set now.
+   *
+   * ⛔ AND THE SWAP DISC IS ON EXACTLY ONE OF THEM (founder, same message): the first set of the
+   * FIRST lift. `2.2e` is that entry — three discs. Every other set state shows two, and the swap
+   * for later lifts lives on the transition rest (`2.4b`), where she has just walked to the machine
+   * and found out whether it is free. See `domain/swapPool.isSwapMoment`.
+   */
+  { id: '2.2', label: 'The set', status: 'live', note: 'set 2 of 4 · the dashed rule under the figures is the door to the set editor', render: () => mount(SessionFlow) },
   /* ⛔ THE ROW OF FIGURES, IN THE STATES A LIVE SESSION CANNOT BE ASKED FOR (2026-08-04). The row is
      the whole set stage now — it replaced the rep-band graphic AND "SET 3 OF 4" — and three of its
      states are unreachable by simply running a workout in the harness. */
-  { id: '2.2h', label: 'The set — a lift she has never done', status: 'live', note: 'no ghosts at all, and no last-load line', render: () =>
+  { id: '2.2h', label: 'a lift she has never done', of: '2.2', status: 'live', note: 'set 2 · no history AND no load change, so no delta and no per-side line', render: () =>
     mount(SessionFlow, undefined, { ...sessionFixture, lastTime: null, setsSoFar: [] }) },
   /* ⛔ THE LOAD'S NEWS, IN ITS THREE STATES (founder 2026-08-04). None is reachable by running the
      harness: the first needs a HISTORY to compare against, the second needs Loop 1 to have fired
      mid-lift, and the third — silence — is the one that looks like nothing is wired. */
-  { id: '2.2k', label: 'The set — heavier than last time', status: 'live', note: 'set 1: ↑1.5 against last week, and the per-side line is up', render: () =>
+  { id: '2.2k', label: 'heavier than last time', of: '2.2', status: 'live', note: 'set 1 · ↑1.5 against last week, and the per-side line is up with it', render: () =>
     mount(SessionFlow, undefined, {
       ...sessionFixture,
       setsSoFar: [],
@@ -1456,7 +1571,7 @@ export const GALLERY: GalleryEntry[] = [
       setLabel: { n: 1, m: 4 },
       lastTime: { ago: 4, loadKg: 32.5, reps: [8, 8, 7, 6] },
     }) },
-  { id: '2.2l', label: 'The set — Loop 1 eased it mid-lift', status: 'live', note: '↓2.5 against the SET BEFORE, and the per-side returns because the bar must be re-loaded', render: () =>
+  { id: '2.2l', label: 'Loop 1 eased it mid-lift', of: '2.2', status: 'live', note: 'mid-lift · ↓2.5 against the SET BEFORE, and the per-side RETURNS because the bar must be re-loaded', render: () =>
     mount(SessionFlow, undefined, {
       ...sessionFixture,
       setsSoFar: [9, 5],
@@ -1465,7 +1580,7 @@ export const GALLERY: GalleryEntry[] = [
       currentTarget: { ...sessionFixture.currentTarget!, recommendedWeight: 31.5 },
       lastTime: { ago: 4, loadKg: 30, reps: [8, 8, 7, 6] },
     }) },
-  { id: '2.2m', label: 'The set — nothing moved', status: 'live', note: 'no delta, no per-side: three things on the screen', render: () =>
+  { id: '2.2m', label: 'nothing moved', of: '2.2', status: 'live', note: 'set 3 of 4 · nothing moved, so no delta and no per-side: three things on the screen', render: () =>
     mount(SessionFlow, undefined, {
       ...sessionFixture,
       setsSoFar: [8, 7],
@@ -1473,23 +1588,27 @@ export const GALLERY: GalleryEntry[] = [
       setLabel: { n: 3, m: 4 },
       lastTime: { ago: 4, loadKg: 34, reps: [8, 8, 7, 6] },
     }) },
-  { id: '2.2i', label: 'The set — a rep down, and a rep up', status: 'live', note: 'moss above the band, blue below — the landing law, on her own sets', render: () =>
+  { id: '2.2i', label: 'a rep down, and a rep up', of: '2.2', status: 'live', note: 'set 3 of 4 · moss above the band, blue below — the landing law, on her own sets', render: () =>
     mount(SessionFlow, undefined, {
       ...sessionFixture,
       setsSoFar: [11, 6],
       setLabel: { n: 3, m: 4 },
       lastTime: { ago: 4, loadKg: 32.5, reps: [9, 9, 8, 8] },
     }) },
-  /* ⚠️ AND THE SET COUNT CHANGED. The coach writes four sets this week where it wrote two last week;
-     the surplus slots must carry NO ghost rather than repeating the last one, which would tell her
-     she did a set she never did. Nothing in a live harness changes a set count mid-history. */
-  { id: '2.2j', label: 'The set — the coach changed the set count', status: 'live', note: 'the extra slots have no ghost, and invent none', render: () =>
-    mount(SessionFlow, undefined, {
-      ...sessionFixture,
-      setsSoFar: [9],
-      setLabel: { n: 2, m: 4 },
-      lastTime: { ago: 6, loadKg: 30, reps: [9, 8] },
-    }) },
+  /* ⛔ FIVE NOTES IN THIS BLOCK NAMED A SET THE FIXTURE DOES NOT PRODUCE (founder, 2026-08-12:
+     *"למה לא מופיע בחלק מהמסכים כמה צריך להרים בכל צד ורק בחלק כן?"*).
+
+     `2.2h` and `2.2d` said "set 1" and inherit `sessionFixture`'s `{ n: 2, m: 4 }`; `2.2m` and
+     `2.2i` said "set 4 of 4" and are on set 3; `2.2j` said "of 6" and is of 4. **The per-side rule
+     turns on the set number**, so a browser reading these notes sees the line appear and vanish
+     against a set count that is not the one on the screen — the behaviour looks arbitrary and is
+     not. Only the notes were wrong; every screen was obeying `showsPerSide` exactly.
+
+     ⛔ AND `2.2j` IS DELETED (founder, 2026-08-12). Its subject was the surplus ghost slots carrying
+     no rep figure when the coach writes four sets where it wrote two — and **that row was deleted on
+     2026-08-12**, so the entry drew the base `2.2` with a different `lastTime` and demonstrated
+     nothing. A gallery entry whose subject no longer exists is worse than a missing one: it is a
+     screen someone will one day design against. */
   /* THE CASE THAT WAS INVISIBLE. Every fixture here held a two-digit whole load, so nobody could
      see that a decimal — or plain 100 kg — pushed the figure and its per-side annex off the screen
      (founder, build 36 · C.9). A widest-load entry is now standing furniture: 137.5 on a barbell is
@@ -1498,19 +1617,18 @@ export const GALLERY: GalleryEntry[] = [
      swap + form right). It is the only state in which the stage bar's sides are uneven, and it is
      the state the founder photographed for A.6; every other 2.2 fixture sits on set 2, where the
      swap is gone and the bar self-corrects. Nothing could see it. */
-  { id: '2.2e', label: 'The set — first set (swap offered)', status: 'live', note: 'set 1 — the bar now carries the SAME three discs on every set; the coach disc replaced the swap, which is a chip inside it', render: () =>
+  { id: '2.2e', label: 'first set (swap offered)', of: '2.2', status: 'live', note: 'set 1 of the FIRST lift — the only state that carries the SWAP disc, beside the form clip', render: () =>
     mount(SessionFlow, undefined, {
       ...(sessionFixture as unknown as Record<string, unknown>),
       setLabel: { n: 1, m: 4 },
       nextSetLabel: { n: 2, m: 4 },
       currentTarget: { exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     } as unknown as React.ContextType<typeof SessionContext>) },
-  { id: '2.2d', label: 'The set — the widest load', status: 'live', note: 'a decimal load + a decimal per-side annex: the C.9 overflow', render: () =>
+  { id: '2.2d', label: 'the widest load', of: '2.2', status: 'live', note: 'set 2, load moved · a decimal load + a decimal per-side annex: the C.9 overflow', render: () =>
     mount(SessionFlow, undefined, {
       ...(sessionFixture as unknown as Record<string, unknown>),
       currentTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 137.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
     } as unknown as React.ContextType<typeof SessionContext>) },
-  { id: '2.2b', label: 'Edit set', status: 'live', note: 'tap the weight on 2.2', render: () => mount(SessionFlow) },
   { id: '2.2c', label: 'Form', status: 'live', note: 'the clip itself needs a device build; the cues and chrome are real', render: () => (
     <InApp>
       <ExerciseDemo
@@ -1537,7 +1655,7 @@ export const GALLERY: GalleryEntry[] = [
      correction, so for a year this page could only ever show the band on a set that MISSED — and so
      could the app. A set that lands where it was asked to had no picture anywhere, which is how it
      stayed missing: nothing here could produce the state, so nobody looked at it. */
-  { id: '2.3d', label: 'The set that landed', status: 'live', note: 'in the band — cream, and the load holds', render: () => (
+  { id: '2.3d', label: 'the set that landed', of: '2.3', status: 'live', note: 'in the band — cream, and the load holds', render: () => (
     <InApp>
       <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] }} />
     </InApp>
@@ -1545,7 +1663,7 @@ export const GALLERY: GalleryEntry[] = [
   /* ⚠️ OUT OF THE BAND WITH THE LOAD HELD — the case the correction reveal cannot draw. Two
      corrections per lift is the cap, there is none after the last set, and the rail can cancel a
      raise: in all three her reps left the band and nothing moved. The dot must still be outside. */
-  { id: '2.3e', label: 'Out of the band, load held', status: 'live', note: 'the correction budget is spent — honest, not silent', render: () => (
+  { id: '2.3e', label: 'out of the band, load held', of: '2.3', status: 'live', note: 'the correction budget is spent — honest, not silent', render: () => (
     <InApp>
       <Logged units="kg" confirm={{ weight: 34, reps: 13, n: 3, m: 4, band: [8, 10] }} />
     </InApp>
@@ -1560,26 +1678,27 @@ export const GALLERY: GalleryEntry[] = [
      happens inside a live session, and a live session almost always has a band. Two entries now,
      because the difference between them is the bug.
   */
-  { id: '2.3f', label: 'The lift is done', status: 'live', note: 'every pip filled, the lift named, the band under it', render: () => (
+  { id: '2.3f', label: 'the lift is done', of: '2.3', status: 'live', note: 'every pip filled, the lift named, the band under it', render: () => (
     <InApp>
       <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 4, m: 4, band: [8, 10], lift: 'bb_bench_press' }} />
     </InApp>
   ) },
-  { id: '2.3g', label: 'The lift is done — no band', status: 'live', note: '⚠️ this was four dots on black; the name is the floor now', render: () => (
+  { id: '2.3g', label: 'the lift is done — no band', of: '2.3', status: 'live', note: '⚠️ this was four dots on black; the name is the floor now', render: () => (
     <InApp>
       <Logged units="kg" confirm={{ weight: 34, reps: 9, n: 4, m: 4, lift: 'bb_bench_press' }} />
     </InApp>
   ) },
-  /* THE BEAT THAT NOBODY COULD SEE. 2.3 above mounts `Logged` WITH a correction, so only the
-     correction form was ever on this page — the plain "Set recorded" form had no entry at all, and
-     survived a whole rebuild unlooked-at until the founder met it on a device (C.13). It no longer
-     runs after an ordinary set; it is still what the phone shows for a set logged on the WRIST,
-     which is the one place the athlete pressed nothing on this device. Standing furniture now. */
-  { id: '2.3c', label: 'The wrist’s set, read back', status: 'live', note: 'the plain capture beat — only the watch raises it now', render: () => (
-    <InApp>
-      <Logged units="kg" confirm={{ weight: 14, reps: 8, n: 2, m: 4 }} />
-    </InApp>
-  ) },
+  /* ⛔ `2.3c` — THE PLAIN "34 kg × 8 · Set recorded" READBACK — IS DELETED (founder, 2026-08-12:
+     *"צריך להעיף לדעתי ולוודא שהם לא מופיעים בשום דבר באפליקציה כי אני לא מבין מה הם בכלל"*).
+
+     He asked what it was, and the answer is that it was not a design. **The phone could never reach
+     it** — `beatSpeaks` requires a correction, a finished lift or a band — so the only thing that
+     ever drew it was a set logged on the WATCH, and only because `WatchLoggedSet` carried no band
+     for `bandPlacement` to place. A missing field wearing a screen's clothes, and the wrist and the
+     phone gave two different answers about one set depending on which the athlete tapped.
+
+     The band travels with the wrist's set now, both devices ask one predicate, and the form has no
+     caller left. Deleted from the component, the locales and this page in one move. */
   /* ═══ THE THREE SHAPES THE STAGE COULD NOT RUN (2026-07-31) ═══
      `coachPlan` can write a marathon week, a circuit and a footballer's session. These are where
      the athlete meets the parts of them that are not "a weight for a number of reps". Each one is
@@ -1605,31 +1724,17 @@ export const GALLERY: GalleryEntry[] = [
    * answers being considered rather than a spinner.
    */
   { id: '0.0e', label: 'Building her programme', status: 'live', note: 'where the intake chat was: one call, and the wait shows HER facts, not a percentage nobody can measure', render: () => mount(BuildingProgramme, { inputs: onboardingInputs }) },
-  { id: '0.0b', label: 'The conversation — from Today', status: 'live', note: 'the real screen behind the corner of Today', render: () => mount(CoachScreen) },
-  { id: '0.0d', label: 'The conversation — LIVE (a tool, not a design target)', status: 'live', note: 'talks to the real Worker; with no token it shows the not-sent state honestly', render: () => (
-    <InApp>
-      <OnStage>
-        <LiveCoachChat />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '0.0c', label: 'The conversation — a message that did not land', status: 'live', note: 'sent, unanswered, and failed — the three states side by side', render: () => (
-    <InApp>
-      <OnStage>
-        <CoachChat
-          invitation={"Erez — tell me what you want, and I’ll build it."}
-          onSend={noop}
-          turns={[
-            { id: '1', by: 'coach', text: 'How did the long run go?' },
-            { id: '2', by: 'athlete', text: 'Eighteen kilometres, felt good.' },
-            { id: '3', by: 'athlete', text: 'Slight twinge in the right hamstring at 14.', pending: true },
-            { id: '4', by: 'athlete', text: 'Should I still do Thursday?', failed: true },
-          ]}
-        />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '2.2f', label: 'A held duration', status: 'live', note: 'press Start — it counts down; Stop ends it with what she actually held', render: () => (
+  /*
+   * ⛔ 0.0d AND 0.0c WERE THE CONVERSATION, AND THEY ARE DELETED WITH IT (founder 2026-08-12).
+   *
+   * `CoachChat` and `useCoach` are gone: the two screens that mounted them — the in-workout coach
+   * and the pain report — are an action sheet and the body map now, and the gallery was the last
+   * thing keeping a chat component (and a hook that could still write a `CoachPlan`) alive.
+   *
+   * ⚠️ THE GALLERY IS WHY THEY SURVIVED, which is worth remembering: a surface that only the dev
+   * gallery renders reads as "unreachable" to a grep and as "still built" to the app.
+   */
+  { id: '2.2f', label: 'a held duration', of: '2.2q', status: 'live', note: 'press Start — it counts down; Stop ends it with what she actually held', render: () => (
     <InApp>
       <OnStage>
         <TimeStage
@@ -1640,69 +1745,39 @@ export const GALLERY: GalleryEntry[] = [
       </OnStage>
     </InApp>
   ) },
-  { id: '2.2g', label: 'A distance to cover', status: 'live', note: 'a loaded carry — no GPS, she does it and says so', render: () => (
-    <InApp>
-      <OnStage>
-        <DistanceStage
-          name="Farmer’s Carry"
-          item={{ kind: 'distance', ex: 'farmer_carry', metres: 40, load: 24, say: 'Tall and slow. Put them down before your grip goes.' }}
-          onDone={noop}
-        />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '2.2h', label: 'Open — no number worth stating', status: 'live', note: 'the instruction IS the item', render: () => (
-    <InApp>
-      <OnStage>
-        <OpenStage
-          name="Mobility"
-          item={{ kind: 'open', ex: 'mobility', say: 'Whatever your hips need today. Five minutes, no counting.' }}
-          onDone={noop}
-        />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '2.2m', label: 'An interval — rep 3 of 6', status: 'live', note: 'the founder’s option B: six 400s used to be six identical screens, indistinguishable from a new exercise', render: () => (
-    <InApp>
-      <OnStage>
-        <DistanceStage
-          name="Run"
-          round={{ n: 3, m: 6 }}
-          item={{ kind: 'distance', ex: 'run_outdoor', metres: 400, say: 'Hard, but not a sprint — you should be able to hold this pace for all six.' }}
-          onDone={noop}
-        />
-      </OnStage>
-    </InApp>
-  ) },
   /*
-   * ⚠️ MOUNTED ON SET **1**, and that is the whole reason this fixture exists.
-   *
-   * `sessionFixture` sits on set 2, where `isSwapMoment` is false — so the SWAP chip is correctly
-   * absent, and the gallery could not see the control the founder's ruling is actually about. Same
-   * law as `gallery-cannot-see-what-it-cannot-drive`: a state the harness cannot produce is a state
-   * nobody looks at.
-   */
-  { id: '2.2p', label: 'The coach, inside the workout', status: 'live', note: 'the disc that used to be SWAP: the points open the thread, the chips are the old controls, typing is everything else', render: () => (
-    <InApp session={{ ...sessionFixture, setLabel: { n: 1, m: 4 } } as React.ContextType<typeof SessionContext>}>
-      <OnStage>
-        <SessionCoach onClose={noop} onSwap={noop} />
-      </OnStage>
-    </InApp>
-  ) },
-  { id: '2.2n', label: 'Key points — the coach’s words (cardio)', status: 'live', note: 'the read-only sheet: cardio keeps it, because she is running and cannot type', render: () => (
-    <InApp>
-      <OnStage>
-        <EmphasesSheet
-          emphases={[
-            { ex: 'bb_bench_press', say: 'Leave one rep in the tank on the first two sets. The last one is the one I am reading.' },
-            { ex: 'db_row', say: 'Your right side has been the slower one for three weeks, so start every set on it.' },
-            { ex: 'run_outdoor', say: 'Easy pace. This is here to help you recover from Tuesday, not to add to it.' },
-          ]}
-          onClose={noop}
-        />
-      </OnStage>
-    </InApp>
-  ) },
+     ⛔ `2.2g`, `2.2r` AND `2.2s` ARE DELETED (founder, 2026-08-12: *"חוץ מהפלאנק צריך למחוק את הכל
+     כי אני לא יודע מה הם קשורים ולאיפה הם קשורים."*).
+
+       `2.2r` open — the item went with it. Nothing on that screen could be measured, progressed or
+         held against her body map, which is exactly why it could not be placed.
+       `2.2g` a loaded carry, and `2.2s` a 400 m repeat — both `DistanceStage`, and `2.2s` drew it
+         in a variant that cannot happen: an outdoor run IS a gps movement, so `measured` is true
+         and Done hands off to the cardio stage rather than ending the item here. The entry showed
+         a screen the app does not produce.
+
+     ⚠️ `DistanceStage` ITSELF IS STILL IN THE CODE, and this is a deliberate exception he should
+     know about. It is **the only door from a session into the cardio screens** — a gps distance
+     hands over to `CardioLive` with the coach's target — and he has said those screens are next:
+     *"לגבי קרדיו, נטפל בזה בהמשך… ונעשה אפשרות של הליכה / ריצה גם בחדר הכושר וגם בחוץ."* Deleting
+     it now would delete the entrance to the thing being designed. It gets its entry back then. */
+  /*
+     ⛔ `2.2p` AND `2.2n` ARE DELETED (founder, 2026-08-12).
+
+     He asked what they were, and the answer was worse than "not relevant": the mid-workout sheet
+     held three chips, and every one of them already had a better home.
+
+       SWAP THIS LIFT        *"להחליף תרגיל יש את כפתור ה-SWAP שמופיע בסט הראשון בתרגיל הראשון ואז
+                             במסכי ה-TRANSITION REST."* — two controls, both on the stage, both at
+                             the moment the machine is actually likely to be taken.
+       SKIP THIS LIFT        *"וזה נראה לי פותר גם את SKIP THIS כי במקום לדלג המתאמן פשוט יכול
+                             ללחוץ SWAP."* — and this is the sharper of the two. A lift she wants
+                             gone is a lift she wants REPLACED; swapping keeps the volume the week
+                             was balanced around, and skipping quietly takes it out of her back.
+       THE MACHINE IS TAKEN  the one that had no other door on the phone. It keeps the one on the
+                             WRIST (`watchBridge.markEquipmentOccupied`) and loses this one.
+
+     `2.2n`'s sheet had a single caller — the speech disc on the cardio run — and went with it. */
   /*
    * ⛔ `itemFixture` WAS DECLARED AND MOUNTED NOWHERE, and that is exactly how the hole below got
    * in. 2.2f/2.2g/2.2h draw the item STAGES directly, without the chrome around them — so the one
@@ -1720,21 +1795,27 @@ export const GALLERY: GalleryEntry[] = [
    * cannot see it either: the law calls `onLayout` ITSELF with a hard-coded width, which is exactly
    * the input that turns out to be missing in the real app.
    */
-  { id: '1.4', label: 'The wheel, on its own', status: 'live', note: 'the measuring rule: numerals, graduation, detents — mounted bare so the track is visible without driving the editor', render: () => (
-    <InApp>
-      <OnStage>
-        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 28 }}>
-          <WheelPicker value={137.5} onChange={noop} step={0.5} min={0} max={500} size="lg" ends="chevron" label="Load" onStage />
-        </View>
-      </OnStage>
-    </InApp>
-  ) },
+  /*
+   * ⛔ 1.4 IS GONE (founder 2026-08-12): *"אפשר להוריד זה לא באמת מסכים."*
+   *
+   * It mounted the `WheelPicker` bare, to see the track without the editor driving it. That is a
+   * CONTROL being inspected, not a surface an athlete reaches — and the index is a list of places
+   * she can stand. The wheel is judged where she meets it, on `1.2c`.
+   */
   { id: '2.2q', label: 'An item, inside the session — with its chrome', status: 'live', note: 'a plank on the real stage: the coach disc must be here too, and for half an hour it was not', render: () => mount(SessionFlow, undefined, itemFixture) },
-  { id: '2.2k', label: 'The set — straight into the next lift', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
+  { id: '2.2t', label: 'straight into the next lift', of: '2.2', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
-  { id: '2.4b', label: 'Transition rest', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
-  { id: '2.4e', label: 'Crossing into a run', status: 'live', note: 'the up-next card states the distance — it used to say “bodyweight”', render: () => mount(SessionFlow, undefined, crossingToRunFixture) },
-  { id: '2.4c', label: 'The scan', status: 'live', note: 'held mid-read — lift 3 of 6', render: () => (
+  { id: '2.4b', label: 'transition rest', of: '2.4', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
+  /* ⛔ `2.4e` (crossing into a run) IS DELETED (founder, 2026-08-12) — it followed the item-stage
+     cull: the run it crossed into was `DistanceStage`'s, and those entries went with it. The
+     crossing card itself still states a distance correctly; it gets an entry back when the cardio
+     screens are designed. */
+  /* ⛔ THE SCAN IS NOT A REST (founder, 2026-08-12): *"למה מסך 2.4c נמצא תחת קטגוריית REST ולא
+     בנישה משל עצמו? זה הסריקה של סיום האימון שבודקת באנימציה מה בוצע."* He is right — it filed as a
+     STATE of the rest screen because of `of: '2.4'`, and it is not a rest at all: it runs once, at
+     the end, reading back what she did. Its own screen now, between the rest and what the session
+     earned, which is where it actually happens. */
+  { id: '2.45', label: 'The end-of-session scan', status: 'live', note: 'held mid-read — lift 3 of 6; it reads every lift back before the session closes', render: () => (
     <InApp>
       <SessionScan
         read={2}
@@ -1751,7 +1832,7 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '2.4d', label: 'Rest — learned', status: 'live', note: 'press Start next set on 2.4', render: () => mount(SessionFlow, undefined, restFixture) },
+  { id: '2.4d', label: 'learned', of: '2.4', status: 'live', note: 'press Start next set on 2.4', render: () => mount(SessionFlow, undefined, restFixture) },
   // Mounting the whole of WellDone showed the SCAN for 3.4 s and then an empty ledger — the harness
   // has no history and no engine, so the one thing 2.5 exists to say could not be seen at all. The
   // beat is a view now, and this is the handoff's own Upper A: three decided lifts and Loop 3's set.
@@ -1806,7 +1887,7 @@ export const GALLERY: GalleryEntry[] = [
     decisions were made … pressing it opens the screen of what changed"*), which means the rows
     themselves left this page unless something could raise them. Same seam as `previewPlan`.
   */
-  { id: '2.5d', label: 'What changed — opened', status: 'live', note: 'the rows the decisions box holds', render: () => (
+  { id: '2.5d', label: 'what changed — opened', of: '2.5', status: 'live', note: 'the rows the decisions box holds', render: () => (
     <InApp>
       <SessionEarned
         poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
@@ -1834,7 +1915,7 @@ export const GALLERY: GalleryEntry[] = [
     ⚠️ A WEEK WHERE NOTHING NEEDED CHANGING. The same frame, no figure, no chevron, not pressable
     — a hold is a verdict she is owed, but it is not a door, because there is nothing behind it.
   */
-  { id: '2.5e', label: 'The poster — nothing changed', status: 'live', note: 'a verdict, not a door', render: () => (
+  { id: '2.5e', label: 'the poster — nothing changed', of: '2.5', status: 'live', note: 'a verdict, not a door', render: () => (
     <InApp>
       <SessionEarned
         poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
@@ -1857,30 +1938,14 @@ export const GALLERY: GalleryEntry[] = [
     real workout — the box draws NOTHING there, because a count is a claim and there is no count.
     The one state a live harness always races past.
   */
-  { id: '2.5f', label: 'The poster — still thinking', status: 'live', note: 'no box: a count with no answer behind it is a claim', render: () => (
-    <InApp>
-      <SessionEarned
-        poster={{ hero: { kind: 'tonnes', value: 4.2 }, minutes: 58, kcal: 412, tonnes: 4.2, sets: 19, lifts: [] }}
-        workoutName="Lower A"
-        savedLegend="Upper A · Saved"
-        partial={false}
-        durationLabel="52"
-        kcal={412}
-        tonnes={4.2}
-        answered={false}
-        decisions={[]}
-        volume={[]}
-        onDone={noop}
-        onRecord={noop}
-      />
-    </InApp>
-  ) },
-  /*
-    ⛔ THE POSTER WHEN SHE BROKE SOMETHING. A record takes the largest figure — and nothing in a live
-    harness can set an all-time best, because that needs a HISTORY the poster is read against. Two of
-    the three states below were unreachable before this entry existed.
-  */
-  { id: '2.5b', label: 'The poster — a new best', status: 'live', note: 'the record takes the hero; the tonnage drops to the row', render: () => (
+  /* ⛔ `2.5f` (the poster — still thinking) IS DELETED (founder, 2026-08-12: *"כבר לא רלוונטי
+     לדעתי כי זה היה כאשר היה את ה-AI. אפשר למחוק ולוודא שכל הצינור הזה סגור."*).
+
+     It drew the ~15 s the post-session MODEL call took. `sessionStore` stopped making that call on
+     2026-08-12 — the engine owns the programme after every session — so `coachIsDeciding()` is
+     permanently false and the branch could not render. Deleted from the screen, the prop, the
+     locales and here; the pipe is closed at the source. */
+  { id: '2.5b', label: 'the poster — a new best', of: '2.5', status: 'live', note: 'the record takes the hero; the tonnage drops to the row', render: () => (
     <InApp>
       <SessionEarned
         poster={{
@@ -1912,43 +1977,22 @@ export const GALLERY: GalleryEntry[] = [
     ⚠️ AND A SESSION WITH NO LOAD IN IT. Tonnes is 0, and leading the one screen meant to make her
     proud with "0.0 t" would be a report of nothing — so the hero falls through to the set count.
   */
-  { id: '2.5c', label: 'The poster — a bodyweight session', status: 'live', note: 'never "0.0 t"; the sets carry it', render: () => (
-    <InApp>
-      <SessionEarned
-        poster={{
-          hero: { kind: 'sets', value: 14 },
-          minutes: 34,
-          kcal: 240,
-          tonnes: 0,
-          sets: 14,
-          lifts: [
-            { exerciseId: 'pull_up', load: null, unit: '', reps: [8, 7, 6] },
-            { exerciseId: 'push_up', load: null, unit: '', reps: [20, 18, 15] },
-            { exerciseId: 'plank', load: null, unit: '', reps: [1, 1] },
-          ],
-        }}
-        workoutName="Upper — bodyweight"
-        savedLegend="Upper · Saved"
-        partial={false}
-        durationLabel="34"
-        kcal={240}
-        tonnes={0}
-        answered
-        decisions={[]}
-        volume={[]}
-        onDone={noop}
-        onRecord={noop}
-      />
-    </InApp>
-  ) },
+  /* ⛔ `2.5c` (the poster — a bodyweight session) IS DELETED (founder, 2026-08-12: *"למה שכל
+     האימון יהיה BODYWEIGHT כשאנחנו בחדר הכושר בלבד מבחינת הציוד?"*).
+
+     He is right that it is not a designed state, and the entry presented it as one.
+
+     ⚠️ THE FALLBACK IN `sessionPoster` STAYS, and he should know it. `hero` is a record, else the
+     tonnage, else the SET COUNT — and that last arm is a guard against printing "0.0 t", not a
+     bodyweight feature. Deleting it would put the exact figure its own comment forbids onto the one
+     session that reaches it. No entry draws it now, which is what he asked for. */
   { id: '2.6', label: 'Milestone', status: 'live', render: () => <InApp><MilestoneBeat value="40" caption="kg" title="Forty on the bench." meta="MEASURED · 17 JULY 2026" glyph="plates" /></InApp> },
-  { id: '2.6b', label: 'Milestone — ten workouts', status: 'live', render: () => <InApp><MilestoneBeat value="10" caption="workouts" title="Ten workouts. You kept coming." meta="21.4 T MOVED · 8 RAISES · 3 WEEKS" /></InApp> },
-  { id: '2.6c', label: 'The block, sealed', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
+  { id: '2.6b', label: 'ten workouts', of: '2.6', status: 'live', render: () => <InApp><MilestoneBeat value="10" caption="workouts" title="Ten workouts. You kept coming." meta="21.4 T MOVED · 8 RAISES · 3 WEEKS" /></InApp> },
 
   // ── 03 · REFLECT ───────────────────────────────────────────────────────────────────────────
   { id: '3.1', label: 'The Saturday letter', status: 'live', note: "a week WITH decisions — the handoff's own example, nothing special about its number", render: () => mount(WeeklyUpdate, { previewPlan: letterWeek }) },
-  { id: '3.1b', label: 'The one question', status: 'live', note: 'held open on Quads', render: () => mount(WeeklyUpdate, { previewAskBack: 'Quads' }) },
-  { id: '3.1c', label: 'The Saturday letter — a steady week', status: 'live', note: 'nothing changed; the standing record answers', render: () => mount(WeeklyUpdate, { previewPlan: steadyWeek }) },
+  { id: '3.1b', label: 'the one question', of: '3.1', status: 'live', note: 'held open on Quads', render: () => mount(WeeklyUpdate, { previewAskBack: 'Quads' }) },
+  { id: '3.1c', label: 'a steady week', of: '3.1', status: 'live', note: 'nothing changed; the standing record answers', render: () => mount(WeeklyUpdate, { previewPlan: steadyWeek }) },
   /*
    * ⚠️ THE FIRST ATTEMPT AT THIS ENTRY WAS BROKEN, AND THE SCREEN WAS NOT.
    *
@@ -1966,49 +2010,19 @@ export const GALLERY: GalleryEntry[] = [
     can only ever show one of them — and the two it cannot show are the ones a screen gets wrong: a
     mixed month, and an athlete who has not gained yet. Neither is reachable by using the app.
   */
-  { id: '3.2f', label: 'Progress — a mixed month', status: 'live', note: 'the claim counts, and does not round up', render: () => (
-    <InApp><UnderTabs active={2}>
-      {React.cloneElement(progressView, {
-        entries: [
-          { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 47.5, currentKg: 47.5, deltaKg: 7.5, series: [40, 44, 47.5] },
-          { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 41, periodPeakKg: 41, currentKg: 41, deltaKg: 0, series: [41, 41, 41] },
-          { exerciseId: 'bb_deadlift', mode: 'weight', initialPeakKg: 92.5, periodPeakKg: 92.5, currentKg: 85, deltaKg: 0, series: [92.5, 92.5, 85] },
-        ] as never,
-      })}
-    </UnderTabs></InApp>
-  ) },
-  { id: '3.2g', label: 'Progress — nothing has moved yet', status: 'live', note: 'her starting point, never a "+0"', render: () => (
-    <InApp><UnderTabs active={2}>
-      {React.cloneElement(progressView, {
-        entries: [
-          { exerciseId: 'bb_row', mode: 'weight', initialPeakKg: 40, periodPeakKg: 40, currentKg: 40, deltaKg: 0, series: [40, 40] },
-          { exerciseId: 'bb_bench_press', mode: 'weight', initialPeakKg: 30, periodPeakKg: 30, currentKg: 30, deltaKg: 0, series: [30, 30] },
-        ] as never,
-      })}
-    </UnderTabs></InApp>
-  ) },
-  { id: '3.2e', label: 'Progress — the all-time report', status: 'live', note: 'peak vs where she is now, per lift', render: () => (
-    <InApp>
-      <ProgressReportView
-        title="כל הזמנים"
-        legend="שבועות 1–24"
-        loaded
-        units="kg"
-        milestones={null}
-        entries={[
-          { exerciseId: 'bb_bench_press', initialPeakKg: 30, periodPeakKg: 42.5, deltaKg: 12.5, currentKg: 42.5, weeksTrained: 14, series: [30, 32.5, 35, 35, 37.5, 40, 42.5] },
-          { exerciseId: 'bb_back_squat', initialPeakKg: 40, periodPeakKg: 60, deltaKg: 20, currentKg: 57.5, weeksTrained: 12, series: [40, 45, 47.5, 50, 55, 60, 57.5] },
-          { exerciseId: 'lat_pulldown', initialPeakKg: 25, periodPeakKg: 35, deltaKg: 10, currentKg: 35, weeksTrained: 11, series: [25, 27.5, 30, 30, 32.5, 35, 35] },
-        ]}
-      />
-    </InApp>
-  ) },
+  /* ⛔ `3.2f`, `3.2g` AND `3.2e` ARE DELETED (founder, 2026-08-12: *"יש כאן מלא מסכים שלא צריך —
+     צריך רק את 3.6b שמייצג את ההתחלה ואת 3.2 עם התיקונים שאמרתי לך."*).
+
+     `3.2f` and `3.2g` were states of the CLAIM sentence — "a mixed month", "nothing has moved yet".
+     The second still exists and is `3.6b`, which he kept; the first is one sentence's wording, not
+     a screen. `3.2e` mounted `ProgressReportView`, the quarterly peak-vs-now report — still routed
+     from the twelve-week notification, and not this screen. */
   { id: '3.2', label: 'Progress — lifts', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressView}</UnderTabs></InApp> },
   { id: '3.2b', label: 'Lift detail', status: 'live', note: 'tap a point on the climb', render: () => <InApp>{liftDetailView}</InApp> },
   // C.18's own states. 3.2b hands the screen EIGHT training days, so the two an athlete actually
   // opens it on first — one day, and none — had no entry at all. One day is where "no graph" came
   // from: `Climb` drew a lone dot in a 138 px box.
-  { id: '3.2c', label: 'Lift detail — one day', status: 'live', note: 'the climb has not started yet — C.18', render: () => (
+  { id: '3.2c', label: 'one day', of: '3.2b', status: 'live', note: 'the climb has not started yet — C.18', render: () => (
     <InApp>
       <LiftDetailView
         exerciseId="bb_row"
@@ -2022,7 +2036,7 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '3.2d', label: 'Lift detail — never trained', status: 'live', render: () => (
+  { id: '3.2d', label: 'never trained', of: '3.2b', status: 'live', render: () => (
     <InApp>
       <LiftDetailView
         exerciseId="bb_row"
@@ -2050,7 +2064,7 @@ export const GALLERY: GalleryEntry[] = [
       </UnderTabs>
     </InApp>
   ) },
-  { id: '3.3b', label: 'The record', status: 'live', render: () => (
+  { id: '3.3b', label: 'the record', of: '3.3', status: 'live', render: () => (
     <InApp>
       <WorkoutDetailView
         session={savedSession}
@@ -2063,7 +2077,7 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '3.3c', label: 'Cardio record', status: 'live', render: cardioRecord },
+  { id: '3.3c', label: 'a cardio record', of: '3.3', status: 'live', render: cardioRecord },
   { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach's words are behind the speech disc, top end", render: () => (
     <InApp>
       <CardioLiveView
@@ -2097,7 +2111,7 @@ export const GALLERY: GalleryEntry[] = [
     and the run wears its own name instead of the word "cardio". Unreachable in a live harness twice
     over: it needs a prescribed target on the route AND a GPS fix to move the dot along it.
   */
-  { id: '3.4e', label: 'Cardio — a run the coach wrote', status: 'live', note: 'the band is the whole 6 km; the name is the coach’s', render: () => (
+  { id: '3.4e', label: 'a run her programme prescribed', of: '3.4', status: 'live', note: 'the band is the whole 6 km; the name is the coach’s', render: () => (
     <InApp>
       <CardioLiveView
         paceSec={342}
@@ -2127,7 +2141,7 @@ export const GALLERY: GalleryEntry[] = [
     ⚠️ THE FIRST KILOMETRE, BEFORE ANY SPLIT EXISTS. The shape must be ABSENT here — not an empty
     frame — which is the one thing the rhythm law on this stage was originally written about.
   */
-  { id: '3.4f', label: 'Cardio — the first kilometre', status: 'live', note: 'no bars yet, and no empty frame where they will be', render: () => (
+  { id: '3.4f', label: 'the first kilometre', of: '3.4', status: 'live', note: 'no bars yet, and no empty frame where they will be', render: () => (
     <InApp>
       <CardioLiveView
         paceSec={0}
@@ -2149,10 +2163,44 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '3.4d', label: 'Cardio — 3·2·1', status: 'live', note: 'the countdown legend — B.6', render: () => <InApp><CardioCountdown count={2} /></InApp> },
+  /*
+     ⛔ THE FIRST SECONDS OF A KILOMETRE — the state the founder photographed and no fixture could
+     draw (2026-08-12).
+
+     The distance readout rides under the moving dot (`left: dotFrac%`, `marginLeft: -75`), so at
+     the start of a kilometre the 150-wide box begins at **x = −75** and the leading `0` is off the
+     screen: he saw ".00 km". Every run on this page sat mid-kilometre — `3.4f` is at 31%, where it
+     centres perfectly — so the one state it breaks in had no entry. **It is the first minute of
+     every run**, which is when she looks at the phone.
+  */
+  { id: '3.4n', label: 'the first seconds of a kilometre', of: '3.4', status: 'live', note: 'the distance readout is clamped inside the rail — it used to read ".00 km"', render: () => (
+    <InApp>
+      <CardioLiveView
+        paceSec={0}
+        elapsedSec={127}
+        distanceKm={0}
+        exerciseId="run_outdoor"
+        hr={null}
+        calories={0}
+        splits={[]}
+        gps="acquiring"
+        watchPaired={false}
+        paused={false}
+        confirmEnd={false}
+        kmMoment={null}
+        onPause={noop}
+        onPain={noop}
+        onResume={noop}
+        onAskEnd={noop}
+        onKeepGoing={noop}
+        onFinish={noop}
+      />
+    </InApp>
+  ) },
+  { id: '3.4d', label: '3·2·1', of: '3.4', status: 'live', note: 'the countdown legend — B.6', render: () => <InApp><CardioCountdown count={2} /></InApp> },
   // B.8's two doors. 3.4 mounts the run UNPAUSED, so neither the pause stage's end control nor
   // the confirmation behind it could be read — and "סיים ושמור" (masculine) was on both.
-  { id: '3.4e', label: 'Cardio — paused', status: 'live', note: 'the finish control — B.8', render: () => (
+  { id: '3.4j', label: 'paused', of: '3.4', status: 'live', note: 'the finish control — B.8', render: () => (
     <InApp>
       <CardioLiveView
 
@@ -2168,6 +2216,7 @@ export const GALLERY: GalleryEntry[] = [
         confirmEnd={false}
         kmMoment={null}
         onPause={noop}
+        onPain={noop}
         onResume={noop}
         onAskEnd={noop}
         onKeepGoing={noop}
@@ -2175,7 +2224,7 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '3.4f', label: 'Cardio — end sheet', status: 'live', note: 'the confirmation behind the finish — B.8', render: () => (
+  { id: '3.4k', label: 'end sheet', of: '3.4', status: 'live', note: 'the confirmation behind the finish — B.8', render: () => (
     <InApp>
       <CardioLiveView
 
@@ -2201,7 +2250,7 @@ export const GALLERY: GalleryEntry[] = [
   // C.19's own case. 3.4 mounts a PAIRED athlete, so the heart draws — and the screen he was
   // looking at (no watch, an em-dash sitting in a seat labelled דופק on every run she will ever
   // take) had no entry at all.
-  { id: '3.4g', label: 'Cardio — live, no watch', status: 'live', note: 'no heart readout at all — C.19', render: () => (
+  { id: '3.4g', label: 'no watch', of: '3.4', status: 'live', note: 'no heart readout at all — C.19', render: () => (
     <InApp>
       <CardioLiveView
 
@@ -2224,8 +2273,8 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
-  { id: '3.4a', label: 'Cardio — ready', status: 'live', render: () => <InApp><UnderTabs active={1}><CardioReady onBegin={noop} /></UnderTabs></InApp> },
-  { id: '3.4b', label: 'Kilometre logged', status: 'live', render: () => (
+  { id: '3.4a', label: 'Cardio — ready', status: 'live', note: 'the one question: outdoors or a belt — walking vs running is measured, never asked', render: () => <InApp><UnderTabs active={1}><CardioReady onBegin={noop} /></UnderTabs></InApp> },
+  { id: '3.4b', label: 'kilometre logged', of: '3.4', status: 'live', render: () => (
     <InApp>
       <View style={styles.kmStage}>
         <KmMoment split={runSplits[3]} splits={runSplits} />
@@ -2253,23 +2302,17 @@ export const GALLERY: GalleryEntry[] = [
     by running the stage: the title is derived from the average pace, and the pace line is absent
     below the distance floor — "0:00 /km" is a fabrication, not a measurement.
   */
-  { id: '3.4g', label: 'Cardio — done, a walk', status: 'live', note: 'the title follows the PACE; nobody was asked', render: () => (
-    <InApp>
-      <CardioComplete
-        preview
-        navigation={{ goBack: noop, navigate: noop } as never}
-        gait="walk"
-        startedAt={new Date(daysAgo(0)).toISOString()}
-        elapsedSec={52 * 60}
-        distanceKm={4.4}
-        avgHr={null}
-        calories={190}
-        splits={runSplits.map((sp) => ({ ...sp, paceSec: 700, durationSec: 700, gait: 'walk' as const }))}
-        route={[]}
-      />
-    </InApp>
-  ) },
-  { id: '3.4h', label: 'Cardio — done, too short for a pace', status: 'live', note: 'no pace line, no bars — and no zeros standing in for them', render: () => (
+  /* ⛔ `3.4m` ("a walk") IS DELETED (founder, 2026-08-12) — and my own audit two messages earlier
+     said this family had no redundancy in it. It did, and he found the argument I had missed:
+
+       *"מצד אחד אתה אומר שאין צורך ליצור אפשרויות להליכה או ריצה … ומצד שני אתה שם את מסכי הסיום
+       בגלריה שמייצגים הליכה או ריצה בנפרד. אז תחליט."*
+
+     The entry existed to show the finish poster titled "Walk" instead of "Run" — a state produced
+     by `gaitFromPace(avgPace)`, which is the ONE place the product collapsed a mixed session into a
+     single gait. The title is "Cardio" now, so the two posters are the same poster and this is the
+     same entry as `3.4c`. */
+  { id: '3.4h', label: 'too short for a pace', of: '3.4c', status: 'live', note: 'no pace line, no bars — and no zeros standing in for them', render: () => (
     <InApp>
       <CardioComplete
         preview
@@ -2286,8 +2329,7 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '3.5', label: 'The week is done', status: 'live', render: () => <InApp><UnderTabs active={0}>{weekDoneView}</UnderTabs></InApp> },
-  { id: '3.6b', label: 'Progress — day one', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
-  { id: '3.6c', label: 'The next twelve', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn with the 12-session block' },
+  { id: '3.6b', label: 'day one', of: '3.2', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
 
   // ── 04 · OWN ───────────────────────────────────────────────────────────────────────────────
   /*
@@ -2303,6 +2345,8 @@ export const GALLERY: GalleryEntry[] = [
    * the missing module for as long as that was true.
    */
   { id: '4.1', label: 'Body map — hers to change', status: 'live', note: 'the map after onboarding: a muscle off or led with, its rep band, and a rest window that has run out', render: () => mount(BodyMapEdit) },
+  { id: '4.2', label: 'Bring your own programme', status: 'live', note: 'photograph a coach’s sheet or type it out — the door for the coach track', render: () => mount(ImportPlan) },
+  { id: '4.2a', label: 'What we found in it', status: 'live', note: 'the report she reads before she chooses — nothing here is fixed, only named', render: () => mount(ImportReview, { sessionCount: 3, liftCount: 12, findings: [{ kind: 'unmatched_lift', subject: 'Zercher Squat' }, { kind: 'session_over_hour', subject: 'Push', value: 74 }, { kind: 'sets_above_ceiling', subject: 'bb_back_squat', value: 6 }], onKeep: () => {}, onBalance: () => {} }) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
 
   // ── 06–11 · SURFACES ───────────────────────────────────────────────────────────────────────
@@ -2314,7 +2358,6 @@ export const GALLERY: GalleryEntry[] = [
   { id: '6.2', label: 'Lock screen · live activity', status: 'device', note: 'the same activity, expanded — strength and cardio both' },
   // The one WidgetKit StaticConfiguration in the repo is the WATCH complication; there is no iOS
   // home-screen widget yet, so this stays honest.
-  { id: '7.1', label: 'Widgets', status: 'cancelled', note: 'founder 2026-07-29 — withdrawn; the WATCH complication ships, the iOS home-screen widget is not wanted' },
   { id: '8.1', label: 'Notifications', status: 'device', note: 'built + scheduled locally (platform/notifications.ts) — the OS draws them' },
   { id: '8.2', label: 'Permission · the honest ask', status: 'live', note: 'shown once, after the first session', render: () => <InApp><NotificationAsk onAllow={noop} onDecline={noop} /></InApp> },
   { id: '8.3', label: 'In-workout · rest ending', status: 'device', note: 'the 7-second tap — fires on a running rest (platform/restHaptics.ts)' },
@@ -2356,7 +2399,7 @@ export const GALLERY: GalleryEntry[] = [
   { id: '10.4', label: 'On your wrist', status: 'live', note: 'for the athlete who got a watch SINCE — someone who had one was told at 1.3b', render: () => (
     <InApp><OnYourWristView offer="confirm" onDone={noop} /></InApp>
   ) },
-  { id: '10.4b', label: 'On your wrist — not installed', status: 'live', note: 'auto-install is off on this iPhone', render: () => (
+  { id: '10.4b', label: 'not installed', of: '10.4', status: 'live', note: 'auto-install is off on this iPhone', render: () => (
     <InApp><OnYourWristView offer="install" onDone={noop} /></InApp>
   ) },
   // §11's live half (invite / shared session / the partner feed) needs a server between two

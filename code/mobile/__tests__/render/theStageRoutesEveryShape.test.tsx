@@ -140,14 +140,17 @@ const labels = (r: ReactTestRenderer): string[] =>
 
 const PLANK = { kind: 'time', ex: 'plank', seconds: 45, say: 'Ribs down.' } as const;
 const CARRY = { kind: 'distance', ex: 'farmer_carry', metres: 40, load: 24 } as const;
-const MOBILITY = { kind: 'open', ex: 'mobility', say: 'Whatever your hips need.' } as const;
 
+/*
+ * ⛔ THE OPEN ROW IS OUT OF THE TABLE (founder, 2026-08-12). `{kind:'open'}` is deleted — an item
+ * with no number is an item the engine cannot read, progress, or hold against her body map, which
+ * is exactly why he could not place it on the gallery. Two shapes reach this stage now.
+ */
 describe('a step that is not a set never reaches the set stage', () => {
   // The act's KEY, resolved inside the test: the table is built before `initI18n` has run.
   it.each([
     ['a hold', PLANK as PlannedItem, 'workout.itemStart'],
     ['a distance', CARRY as PlannedItem, 'workout.itemDone'],
-    ['an open item', MOBILITY as PlannedItem, 'workout.itemDone'],
   ])('%s draws its own stage, with its own one act', (_name, item, actKey) => {
     const r = draw(makeSession(item));
     expect(labels(r)).toContain(tg(actKey));

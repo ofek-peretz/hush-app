@@ -30,6 +30,9 @@ import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db, type EngineV5State } from '@/data/local/db';
+// ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
+// programme in the same shape when there is not. See `data/local/weekPlan`.
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { exerciseById, exerciseDisplayName } from '@/data/exercises';
@@ -99,7 +102,7 @@ export function LiftDetail({ navigation, route }: Props) {
      * changes": it is "we stopped recording", on the one screen that exists to answer *why did this
      * lift move?*
      */
-    void Promise.all([db.loadCoachLog(), db.loadCoachPlan()])
+    void Promise.all([db.loadCoachLog(), loadWeekPlan()])
       .then(([l, p]) => {
         if (!active) return;
         setCoachLog(l);
@@ -232,7 +235,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         >
           <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
         </Pressable>
-        <Legend align="center" size={11.5} style={styles.headLegend}>
+        <Legend align="center" size={17} style={styles.headLegend}>
           {`${t('progress.title')} · ${t('progress.tabLifts')}`}
         </Legend>
         <View style={styles.headSpacer} />
@@ -244,7 +247,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
           <Text style={styles.name} accessibilityRole="header" numberOfLines={2}>
             {exerciseDisplayName(exerciseId)}
           </Text>
-          {meta ? <Legend size={11.5} track={0.1}>{meta}</Legend> : null}
+          {meta ? <Legend size={17} track={0.1}>{meta}</Legend> : null}
         </View>
         {!empty ? (
           <View style={styles.standRow}>
@@ -408,7 +411,7 @@ function MomentRow({ moment, value, unit, units }: { moment: LiftMoment; value: 
             {value}
             <Text style={styles.rowUnit}> {unit}</Text>
           </Text>
-          <Legend size={11} track={0.06}>{dateWord(moment.atMs)}</Legend>
+          <Legend size={17} track={0.06}>{dateWord(moment.atMs)}</Legend>
         </View>
         <Text style={styles.rowLine}>{line}</Text>
       </View>
@@ -457,7 +460,7 @@ function ChangeRow({ change, conv, unit }: { change: LiftChange; conv: (v: numbe
                 : t(`progress.dir_${dir}`)}
             </Text>
           )}
-          <Legend size={11} track={0.06}>{dateWord(change.atMs)}</Legend>
+          <Legend size={17} track={0.06}>{dateWord(change.atMs)}</Legend>
         </View>
         <Text style={styles.rowLine}>
           {structural || !moved
@@ -499,7 +502,7 @@ const styles = StyleSheet.create({
   // C.18 — the climb's own slot, holding the reason it is not drawn yet. Same box, so the page
   // below it does not move when the second day arrives and the graph takes the space over.
   graphWaiting: { marginHorizontal: 30, marginTop: 14, height: 138, justifyContent: 'center' },
-  climbWaiting: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 16, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
+  climbWaiting: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
 
   body: { flex: 1, minHeight: 0, paddingHorizontal: 30, paddingTop: 12 },
 
@@ -518,7 +521,7 @@ const styles = StyleSheet.create({
   tabLabelOn: { color: color.textPrimary },
   tabLabelOff: { color: color.textMuted },
   // The count is a FIGURE — mono, and it wears the moss stamp only on the open tab.
-  tabCount: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14, paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.full, overflow: 'hidden', textAlign: 'center' },
+  tabCount: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.full, overflow: 'hidden', textAlign: 'center' },
   tabCountOn: { color: color.onAccent, backgroundColor: signal[0] },
   tabCountOff: { color: color.textMuted, borderWidth: 1, borderColor: 'rgba(241,238,229,0.2)' },
 
@@ -541,10 +544,10 @@ const styles = StyleSheet.create({
   // The unit is a translated slot (he: "ק״מ" / "חזרות") — sans, never mono.
   rowUnit: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textMuted }, // rtl-ok: nested span inside rowValue, which sets textAlign
   // The line the mark earns is the coach speaking — serif italic, the one voice on this page.
-  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 13.5, lineHeight: 19, color: color.textSecondary, textAlign: 'left' },
+  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 19, color: color.textSecondary, textAlign: 'left' },
 
-  emptyLine: { paddingTop: 22, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  emptyLine: { paddingTop: 22, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 
   hint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.08)' },
-  hintText: { fontFamily: font.sans, fontSize: 15, color: color.textMuted, textAlign: 'center' },
+  hintText: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'center' },
 });

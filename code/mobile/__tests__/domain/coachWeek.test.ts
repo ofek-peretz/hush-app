@@ -15,7 +15,14 @@ import { REST_TRANSITION_S } from '@/domain/restPrescription';
 import { coachWeek, coachRows, coachSession, coachWorkoutId, coachPlanRows } from '@/domain/coachWeek';
 import { parseCoachPlan, type CoachPlan } from '@/domain/coachPlan';
 
-/** A week only the widened vocabulary can hold: intervals, a lift, a hold, and open work. */
+/**
+ * A week only the widened vocabulary can hold: intervals, a lift and a hold.
+ *
+ * ⛔ THE OPEN ITEM IS OUT (founder, 2026-08-12). This fixture carried `{kind:'open', ex:'mobility'}`
+ * and two assertions hung off it — that it states no load, and that its detail column is empty. The
+ * kind is deleted, so both are gone rather than rewritten: **there is no shape left for them to be
+ * about.** The block it sat in is now the pair of holds, which is what the fixture needed it for.
+ */
 const plan = (): CoachPlan => {
   const r = parseCoachPlan(JSON.stringify({
     say: 'Here is your week.',
@@ -33,10 +40,7 @@ const plan = (): CoachPlan => {
         name: 'Lower',
         blocks: [
           { rounds: 3, restS: 120, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [8, 12], load: 40 }] },
-          { rounds: 2, restS: 60, items: [
-            { kind: 'time', ex: 'plank', seconds: 45 },
-            { kind: 'open', ex: 'mobility' },
-          ] },
+          { rounds: 2, restS: 60, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
         ],
       },
     ],
@@ -60,7 +64,8 @@ describe('the week, as chips', () => {
   it('counts every ROUND, because that is what she actually does', () => {
     // A block of two items done four times is eight pieces of work, not two.
     expect(coachWeek(plan())[0].items).toBe(8);
-    expect(coachWeek(plan())[1].items).toBe(3 + 4);
+    // 3 squats + one hold done twice — the open item that used to make this `3 + 4` is deleted.
+    expect(coachWeek(plan())[1].items).toBe(3 + 2);
   });
 
   it('carries the day only where the programme has one', () => {
@@ -138,12 +143,6 @@ describe('the rows keep every shape the coach can write', () => {
     expect('metres' in squat).toBe(false);
   });
 
-  it('states no load at all on open work, rather than a null that reads as bodyweight', () => {
-    const rows = coachRows(plan(), coachWorkoutId(1))!;
-    const open = rows.find((r) => r.kind === 'open')!;
-    expect('load' in open).toBe(false);
-  });
-
   it('names a movement from its own catalogue, not from the lifts', () => {
     // `run_outdoor` is not in EXERCISES and never will be — see `data/movements`.
     expect(coachRows(plan(), coachWorkoutId(0))![0].name).not.toBe('run_outdoor');
@@ -194,13 +193,6 @@ describe('the rows Today prints', () => {
     expect(plank.detail).toBe('2×45s');
     const walk = rowsFor(coachWorkoutId(0)).find((r) => r.exerciseId === 'walk_outdoor')!;
     expect(walk.detail).toBe('4×1:30');
-  });
-
-  it('says nothing at all on open work', () => {
-    // The founder's law: a control that has nothing to say says nothing. A "3×" on mobility is a
-    // number invented to fill a column.
-    const open = rowsFor(coachWorkoutId(1)).find((r) => r.exerciseId === 'mobility')!;
-    expect(open.detail).toBe('');
   });
 
   it('is null before the coach has decided, so the section stands down rather than lying', () => {

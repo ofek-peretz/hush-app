@@ -236,17 +236,23 @@ describe('the consequence is stated — calmly, once, never argued with', () => 
 });
 
 describe('F-4 · the emphasis budget is legible, not a hidden error', () => {
+  /*
+   * ⚠️ THE PAIR IS CHEST + QUADS, NOT CHEST + BACK (2026-08-11). Two marks on the same half of the
+   * body are refused now — see `emphasisRefusal` and the block below — so a scenario that fills the
+   * budget has to fill it with a LEGAL pair. F-4 itself is untouched: the budget is still two, and
+   * the third mark is still refused out loud.
+   */
   it('a third mark is refused OUT LOUD — naming the two that hold it', () => {
     // The old build hit `return` with a tick: the athlete tapped, nothing happened, and nothing
     // explained why. The brief: "make that limit legible, not a hidden error."
     const { p } = props();
     const r = mount(<BodyMap {...p} />);
     tap(r, 'Chest', 'Emphasis');
-    tap(r, 'Back', 'Emphasis');
-    tap(r, 'Quads', 'Emphasis'); // the third — refused
+    tap(r, 'Quads', 'Emphasis');
+    tap(r, 'Calves', 'Emphasis'); // the third — refused
 
     expect(texts(r).join(' ')).toContain(
-      tg('ob.mapBudgetFull', { a: tg('muscle.Chest'), b: tg('muscle.Back') }),
+      tg('ob.mapBudgetFull', { a: tg('muscle.Chest'), b: tg('muscle.Quads') }),
     );
   });
 
@@ -254,13 +260,58 @@ describe('F-4 · the emphasis budget is legible, not a hidden error', () => {
     const { p, nav } = props();
     const r = mount(<BodyMap {...p} />);
     tap(r, 'Chest', 'Emphasis');
-    tap(r, 'Back', 'Emphasis');
     tap(r, 'Quads', 'Emphasis');
+    tap(r, 'Calves', 'Emphasis');
     act(() => continueBtn(r).props.onPress());
 
     const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
     expect(Object.values(map).filter((s) => s === 'emphasis')).toHaveLength(EMPHASIS_BUDGET);
-    expect(map.Quads).toBeUndefined();
+    expect(map.Calves).toBeUndefined();
+  });
+
+  /*
+   * ⛔ AND THE SECOND MARK MUST BE ON THE OTHER HALF OF THE BODY (founder 2026-08-11).
+   *
+   * Measured over every legal pair × five frequencies × both sexes: two marks are honoured perfectly
+   * when they do not compete for the same sessions (36 marks at 4–6 days cross-region, none lowered)
+   * and cannot be when they do — a same-region mark could take Chest from 15 weekly sets to 10. Ten
+   * engine fixes were written and reverted before this was accepted as a constraint of her hour
+   * rather than a defect; the record is on the pin in `theWeekIsBalanced`.
+   *
+   * The refusal is legible for the same reason F-4's is: she tapped, and something must say why.
+   */
+  it('⛔ a second mark on the SAME half of the body is refused, and says which mark holds it', () => {
+    const { p } = props();
+    const r = mount(<BodyMap {...p} />);
+    tap(r, 'Chest', 'Emphasis');
+    tap(r, 'Back', 'Emphasis'); // upper, like Chest — refused
+
+    expect(texts(r).join(' ')).toContain(tg('ob.mapSameRegion', { a: tg('muscle.Chest') }));
+  });
+
+  it('⛔ …and it really holds — the same-region muscle did not take the mark', () => {
+    const { p, nav } = props();
+    const r = mount(<BodyMap {...p} />);
+    tap(r, 'Chest', 'Emphasis');
+    tap(r, 'Back', 'Emphasis');
+    act(() => continueBtn(r).props.onPress());
+
+    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
+    expect(map.Back).toBeUndefined();
+    expect(map.Chest).toBe('emphasis');
+  });
+
+  it('the other half of the body is still hers to lead with', () => {
+    // The rule refuses a COMPETING mark, never a second mark as such. F-4's two still stand.
+    const { p, nav } = props();
+    const r = mount(<BodyMap {...p} />);
+    tap(r, 'Chest', 'Emphasis');
+    tap(r, 'Glutes', 'Emphasis'); // lower — allowed
+    act(() => continueBtn(r).props.onPress());
+
+    const map = (nav[0] as { p: { inputs: { bodyMap: Record<string, string> } } }).p.inputs.bodyMap;
+    expect(map.Chest).toBe('emphasis');
+    expect(map.Glutes).toBe('emphasis');
   });
 
   it('freeing a mark clears the refusal — it answers an act, it does not stand there scolding', () => {

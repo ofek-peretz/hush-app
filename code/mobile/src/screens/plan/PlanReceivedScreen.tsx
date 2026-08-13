@@ -17,7 +17,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PlanReceivedView } from '@/screens/plan/PlanReceived';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { askCoachToRevise } from '@/platform/coach/afterSession';
+import { toProgram, type MatchedWeek } from '@/domain/importedPlan';
+import { exerciseDisplayName } from '@/data/exercises';
 import { decodePlan } from '@/domain/planShare';
 import { track } from '@/platform/telemetry';
 import { useToast } from '@/components/ds';
@@ -45,34 +46,43 @@ export function PlanReceivedScreen({ navigation, route }: Props) {
       onAdopt={async () => {
         void track('plan_adopted', { days: plan.days.length });
         /*
-         * ════ THE PLAN ACTUALLY CROSSES OVER NOW (founder, 2026-08-02) ════
+         * ════════════════════════════════════════════════════════════════════════════════════════
+         * ⛔ THE ENGINE ADOPTS IT. NO MODEL IS ASKED. (founder 2026-08-12)
          *
-         * ⚠️ THIS SCREEN PROMISED "you adopt the shape" AND ADOPTED NOTHING BUT A NUMBER. It wrote
-         * `daysPerWeek` and the rep bands, on a comment reading "the days and lifts reshape the week
-         * through the ordinary map+frequency road the store already owns". That road was the
-         * GENERATOR, and the generator is deleted. So she read a screen listing her friend's split,
-         * pressed Adopt, saw a toast — and got the same programme she already had, with a different
-         * number of days.
+         * This called `askCoachToRevise` with a paragraph of prose — *"write it as HER programme,
+         * change what does not suit her and say what you changed"* — which was the fifth and last
+         * AI surface in the product, and the only one still able to author a week. It was written
+         * on 2026-08-02 for a good reason at the time: nothing else could turn a friend's split
+         * into her programme, because the deterministic path did not exist yet.
          *
-         * The shape goes to the coach, which is the only thing that can adopt it honestly: it knows
-         * what she has lifted, so it can write her friend's split at HER loads. That is the founder's
-         * own question answered — the weights are not adapted, they are DECIDED, from her record.
+         * It exists now, it is better, and it is already the answer to the identical question. The
+         * IMPORT flow adopts a programme she brings from outside: `toProgram` builds it, it is
+         * stamped `authored: 'athlete_or_coach'`, and `engineMayRebuild` then forbids the engine
+         * from ever rewriting its shape while Loop 1 and Loop 2 run the loads from her record.
          *
-         * Her rep bands still cross directly: they are a preference she chose, not a decision.
-         * `daysPerWeek` deliberately does NOT go through `updateProfileInfo` here — it would fire a
-         * second, competing revise call. The coach writes N sessions and the day count follows from
-         * the plan itself (`learned.daysPerWeek`).
+         * ⚠️ AND A SHARED PLAN IS EASIER THAN AN IMPORT, NOT HARDER. An import arrives as words on a
+         * photograph and has to be matched to the catalogue. This arrives as catalogue IDS — they
+         * were encoded by a copy of this app — so there is nothing to match and nothing to guess.
+         * `unmatched` is empty by construction.
+         *
+         * ⛔ WHAT SHE GETS IS NOW WHAT THE SCREEN PROMISED. The note this replaces admitted the
+         * screen "promised you adopt the shape and adopted nothing but a number". The model was the
+         * fix for that; this is the fix that does not need one — her friend's days, her friend's
+         * lifts, in her friend's order, and HER loads, decided from her own record.
+         * ════════════════════════════════════════════════════════════════════════════════════════
          */
         if (plan.repBandByMuscle) {
+          // Her rep bands are a PREFERENCE she chose, not a measurement — they cross directly.
           await app.updateProfileInfo({ repBandByMuscle: plan.repBandByMuscle as never }).catch(() => {});
         }
-        await askCoachToRevise(
-          `She has adopted a programme shared with her${plan.from ? ` by ${plan.from}` : ''} and wants to train it. ` +
-            `It is ${plan.days.length} days a week: ` +
-            plan.days.map((d) => `"${d.name}" (${d.exerciseIds.join(', ')})`).join('; ') +
-            '. Write it as HER programme — her loads, from her record, and her own rep bands. ' +
-            'Change what does not suit her and say what you changed.',
-        ).catch(() => {});
+        const matched: MatchedWeek = {
+          sessions: plan.days.map((d) => ({
+            name: d.name,
+            lifts: d.exerciseIds.map((id) => ({ name: exerciseDisplayName(id), match: { id } })),
+          })),
+          unmatched: [],
+        };
+        await app.adoptImportedProgram(toProgram(matched, `shared-${Date.now()}`)).catch(() => {});
         toast.show(t('profileEdit.savedDays'));
         navigation.goBack();
       }}

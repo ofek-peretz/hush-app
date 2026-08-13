@@ -350,6 +350,20 @@ export const db = {
 
   loadCoachPlan: () => getJSON<CoachPlan>(K.coachPlan),
   /**
+   * ⛔ FORGET A PROGRAMME A MODEL WROTE — once, at the schema boundary (`appStore`).
+   *
+   * Nothing writes a `CoachPlan` any more: the post-session call that did is gone, and the engine
+   * owns her week. On a fresh install the key is simply never set. On a phone that already HAS one,
+   * `loadWeekPlan` would have gone on preferring it forever, and the engine would never have taken
+   * over on the one device where that mattered most.
+   *
+   * ⚠️ IT IS NOT CALLED ON EVERY LAUNCH, and that is deliberate. The shape stays for the coach
+   * track — the day a human coach writes her a week, it must survive a restart.
+   */
+  clearCoachPlan: async (): Promise<void> => {
+    await AsyncStorage.multiRemove([K.coachPlan, K.coachPlanPrev, K.coachPlanWeek]);
+  },
+  /**
    * Stored in the coach's own vocabulary, NOT converted into `Program`.
    *
    * The obvious move is to translate it into the shape the screens already read. It is also the one

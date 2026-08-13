@@ -133,6 +133,53 @@ export const healthKitGate: HealthGate = {
    * a workout with no distance is most sports. Nothing here throws, and a denial is indistinguishable
    * from "no workouts" by HealthKit's design — both are an empty list.
    */
+  /**
+   * ════ THE INDOOR DISTANCE — see `HealthGate.distanceSince` for why this is not GPS ════
+   *
+   * ⚠️ SUMMED, NOT "LATEST". Every other read on this gate takes one newest sample; distance is a
+   * CUMULATIVE quantity written in short segments as she moves, so the answer is the sum of every
+   * segment inside the window. Taking `samples[0]` would report the last thirty seconds of a
+   * forty-minute walk.
+   *
+   * ⚠️ AND THE WINDOW IS CLAMPED AT BOTH ENDS. A segment that straddles the start of the session
+   * carries distance she covered walking to the gym; HealthKit returns the whole sample, so the
+   * overlap is prorated by time rather than counted or dropped whole. Neither is exact — a sample is
+   * not uniform — but it is bounded, and the alternatives are wrong by a whole segment.
+   */
+  async distanceSince(sinceMs: number, untilMs?: number): Promise<number | null> {
+    try {
+      if (!(await isHealthDataAvailableAsync())) return null;
+      const from = new Date(sinceMs);
+      const to = new Date(untilMs ?? Date.now());
+      if (!(to.getTime() > from.getTime())) return 0;
+      const samples = await queryQuantitySamples(DISTANCE, {
+        unit: 'km',
+        ascending: true,
+        filter: { startDate: from, endDate: to },
+      });
+      let km = 0;
+      for (const x of samples) {
+        const a0 = new Date(x.startDate).getTime();
+        const b0 = new Date(x.endDate ?? x.startDate).getTime();
+        const q = x.quantity;
+        if (!Number.isFinite(q) || q <= 0) continue;
+        const span = b0 - a0;
+        if (!Number.isFinite(span) || span <= 0) {
+          // An instantaneous sample belongs wholly to the window that contains it.
+          if (a0 >= from.getTime() && a0 <= to.getTime()) km += q;
+          continue;
+        }
+        const lo = Math.max(a0, from.getTime());
+        const hi = Math.min(b0, to.getTime());
+        if (hi <= lo) continue;
+        km += q * ((hi - lo) / span);
+      }
+      return +km.toFixed(3);
+    } catch {
+      return null;
+    }
+  },
+
   async recentWorkouts(sinceMs: number): Promise<ExternalWorkout[]> {
     try {
       const samples = await queryWorkoutSamples({

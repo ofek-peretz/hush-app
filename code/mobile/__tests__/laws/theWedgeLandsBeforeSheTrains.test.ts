@@ -1,85 +1,135 @@
 // @ts-nocheck
-// 
+//
 import fs from 'fs';
 import path from 'path';
+
+import { liftPlacement } from '@/domain/whyLiftIsHere';
+import { fixtureModel } from '@/data/api/fixtureModel';
 
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * THE THING THAT MAKES THIS PRODUCT DIFFERENT IS ON THE FIRST SCREEN SHE MEETS.
+ * THE THING THAT MAKES THIS PRODUCT DIFFERENT IS THERE BEFORE SHE TRAINS ONCE.
  *
  * ⛔ FOUNDER'S PLAN, move 4: *"the advantage has to show up in the first 60 seconds — before she
  * closes the app for the first time."*
  *
- * The four-week simulation produced this on the FIRST programme, before she had trained once:
+ * **Every app can hand her a plan. Only one that DECIDED the programme can say why a lift is in it.**
+ * That sentence is the whole wedge and it has not changed. What carries it has.
  *
- *   > *"landmine_press → Replaces barbell overhead press to allow overhead pushing without shoulder
- *   > clicking."*
+ * ── ⛔ REWRITTEN 2026-08-12, BECAUSE ITS SUBJECT MOVED ──────────────────────────────────────────
+ * This file used to assert that `PlanWeek` drew the coach's `notes` — prose a model wrote about each
+ * lift — on the programme screen. Both halves of that are gone:
  *
- * That is the whole wedge. Every app can hand her a plan; Fitbod hands her a plan. **Only one that
- * decided the programme can tell her why a lift is in it.** And she never saw it: `notes` went to
- * the coach log, which surfaces in the Why sheet and the Saturday letter — one behind a tap, the
- * other six days away.
+ *   · the MODEL is gone from the programme. The engine writes the week and writes no prose (R7 —
+ *     Hush never states a reason it did not measure), so there are no `notes` to draw.
+ *   · `PlanWeek` is deleted. It had no shipping consumer left; the dev gallery was keeping it alive.
  *
- * ── ⚠️ A REASON IS NOT AN INSTRUCTION ───────────────────────────────────────────────────────────
- * The row shows both and they are different things. `say` is HOW to do the lift — "a rep short of
- * failure". A note is WHY the lift is there at all. Any app can write the first.
+ * What replaced it is stronger, and it is what this file guards now: `domain/whyLiftIsHere` builds
+ * the reason from the engine's OWN decisions — the muscle, her mark, the dose, the movement the
+ * muscle is never programmed without. It works on the first week, for every lift, with no model and
+ * no history, which the coach's notes never did: they existed only where a model had written one.
+ *
+ * ── ⚠️ AND ONE THING GOT WORSE, WHICH IS RECORDED RATHER THAN GLOSSED ───────────────────────────
+ * The note used to be INLINE on the programme screen. The reason is now behind a press on the row.
+ * That is a real cost against "the first 60 seconds", and it is the honest trade: an engine that
+ * writes no prose has nothing to print in a row, and inventing a sentence to fill the space is the
+ * exact failure R7 exists to prevent. What is guaranteed instead is that the door is never locked —
+ * every row, on both surfaces, from the first week.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
-const week = () => read('src/components/PlanWeek.tsx');
+const athlete = (over = {}) => ({
+  id: 'p1', sex: 'female', units: 'kg', weightKg: 62, startWeightKg: 62,
+  daysPerWeek: 4, repBand: '8-10', repBandByMuscle: {},
+  memberSince: new Date('2026-01-01').toISOString(), ...over,
+});
 
-describe('the coach\'s reason rides with the lift', () => {
-  it('⛔ the week draws the plan notes, not just the item instructions', () => {
-    expect(week()).toContain('const reasons = React.useMemo(');
-    expect(week()).toContain('{reasons.get(r.exerciseId) ? (');
-  });
-
-  it('⚠️ and BOTH are shown — they answer different questions', () => {
-    // Losing `say` to make room for the reason would trade "how hard" for "why" and leave her
-    // without the one the coach writes on nearly every item.
-    expect(week()).toContain('{rows[i]?.say ?');
-    expect(week()).toContain('styles.reason');
-  });
-
-  it('is silent on a lift the coach did not explain', () => {
-    // Most lifts need no defence. A row that says "—" where a reason would be is worse than a row
-    // that says nothing: it advertises an absence.
-    expect(week()).toMatch(/reasons\.get\(r\.exerciseId\) \? \(/);
-  });
-
-  it('takes the FIRST note per lift, so a repeated one cannot stack', () => {
-    // The coach may write about the same lift twice across a week's decisions. Two italic lines
-    // under one row reads as a stutter.
-    expect(week()).toContain('if (n.ex && !m.has(n.ex)) m.set(n.ex, n.say);');
-  });
-
-  it('⚠️ wears the coach\'s own face, not the app\'s', () => {
-    // The serif italic its notes carry on the Why sheet and in the Saturday letter. One voice with
-    // one face everywhere it speaks — she never has to work out who is talking.
-    expect(week()).toMatch(/reason: \{ fontFamily: font\.serif, fontStyle: 'italic'/);
-  });
-
-  it('⛔ and the screen it lands on is the one she meets first', () => {
-    // `ProgramCreated` is the last step of onboarding — the plan, before she has trained once.
+describe('⛔ the reason exists before she has trained once', () => {
+  it('⛔ every lift of her FIRST week can say why it is there — no history, no model', async () => {
     /*
-     * ⛔ `PlanWeek` IS GONE FROM THIS SCREEN (founder 2026-08-10) — nobody scrolled to it. The wedge
-     * this law is about is the REASON riding with the lift, and it still lands where she meets it:
-     * on Today and inside the session. What is asserted here is that she is not moved past her
-     * programme unmet — she meets it by name.
+     * The wedge, measured. Week one: nothing logged, no previous programme, nothing for a model to
+     * have written. Every lift still answers, because the answer is the engine's own decision read
+     * back rather than a sentence someone stored.
      */
-    expect(read('src/screens/onboarding/ProgramCreated.tsx')).not.toContain('<PlanWeek');
-    expect(read('src/screens/onboarding/BuildingProgramme.tsx')).toContain("navigation.replace('ProgramCreated'");
+    const bodyMap = { Back: 'emphasis' };
+    const program = await fixtureModel.generateProgram(athlete({ bodyMap }));
+    const lifts = program.days.flatMap((d) => (d.isRest ? [] : d.slots));
+    expect(lifts.length).toBeGreaterThan(10);
+    for (const s of lifts) {
+      const p = liftPlacement(s.exerciseId, program, bodyMap, 4, []);
+      expect(p).not.toBeNull();
+      expect(p.muscle).toBeTruthy();
+      expect(p.setsHere).toBeGreaterThan(0);
+    }
   });
 
-  it('⚠️ and it is visible in the gallery, which is how this was checked at all', () => {
+  it('⚠️ a REASON is not an INSTRUCTION — they answer different questions', () => {
     /*
-     * 1.5 mounts `ProgramCreated`, which reads the plan from the db — and the harness has no db, so
-     * the week it exists to present had never been visible in here. Same blind spot that hid the
-     * coach disc and the wheel: what the gallery cannot drive, nobody looks at.
+     * The distinction the original file was built on, and it survives the rewrite. `say` was HOW to
+     * perform the lift — "a rep short of failure" — and any app can write that. The placement is WHY
+     * the lift is in her week at all, which only the thing that chose it can answer.
+     *
+     * ⚠️ The engine writes no `say`. `domain/enginePlan` refuses to invent one, and that refusal is
+     * asserted on its own law — so on the engine's week the row carries the reason and nothing else.
      */
-    expect(read('src/screens/dev/gallery.tsx')).toContain("{ id: '1.5b'");
-    expect(read('src/screens/dev/gallery.tsx')).toContain('Replaces barbell overhead press');
+    const sheet = read('src/components/WhyHereSheet.tsx');
+    expect(sheet).toContain('whyHere.trains'); // the muscle it serves
+    expect(sheet).toContain('whyHere.essential'); // the movement it may not be programmed without
+    expect(sheet).toContain('whyHere.marked'); // her own mark
+    expect(read('src/domain/enginePlan.ts')).toContain('`say` is left absent');
+  });
+
+  it('⛔ and the door is on BOTH surfaces she can reach it from', () => {
+    /*
+     * ⛔ THE HALF THAT WAS BROKEN FOR MOST OF THIS PRODUCT'S LIFE. The row opened its reason only
+     * when the engine had MOVED the load — which needs two programmes to compare, so in her first
+     * week it opened nothing at all, on the one screen this law is about.
+     */
+    expect(read('src/components/PlanLifts.tsx')).toContain('onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId)');
+    for (const f of ['src/screens/plan/PreWorkoutScreen.tsx', 'src/screens/home/Home.tsx']) {
+      expect(read(f)).toContain('WhyHereSheet');
+      expect(read(f)).toContain('liftPlacement');
+    }
+  });
+
+  it('⛔ …and the sheet the week opens is where that table lives', () => {
+    /*
+     * ════ THE ASSERTION ABOVE WAS GREEN WHILE THE DOOR DID NOT EXIST ════
+     *
+     * Found 2026-08-12, redesigning Today. `Home.tsx` mounts `WhyHereSheet`, `WhyChangedSheet` and
+     * the form clip, and routes all three through one `onForm` it passes to `HomeView`. **`HomeView`
+     * never called it.** The lift table had left that screen on 2026-08-05 and the handler stayed —
+     * so `plan` arrived, `onForm` arrived, and nothing she could touch opened any of them.
+     *
+     * ⚠️ AND THIS FILE SAID IT WAS FINE, because it read the CONTAINER's source for the strings
+     * `WhyHereSheet` and `liftPlacement` and found them. Both were there. Neither was reachable.
+     * **A law that checks a sheet is mounted cannot tell you whether anything opens it** — the same
+     * shape as `theProgrammeIsAThingWithAName` demanding a `programWhy` that was permanently null,
+     * found the same afternoon.
+     *
+     * ⛔ I THEN FIXED IT IN THE WRONG PLACE, and the founder caught that inside the hour: I drew the
+     * whole table on Today, which duplicated `PreWorkout` outright. One workout's contents belong in
+     * ONE surface. Today is the WEEK — a sequence of workouts and nothing else — and pressing one
+     * raises the sheet that holds it.
+     *
+     * So the door is asserted on the sheet, where a door actually is: it renders the table, and the
+     * handler it hands over is the one that picks WHICH answer that lift has.
+     */
+    const sheet = read('src/screens/plan/PreWorkout.tsx');
+    expect(sheet).toContain('PlanLifts');
+    expect(sheet).toMatch(/onWhy=\{/);
+    expect(read('src/screens/plan/PreWorkoutScreen.tsx')).toContain('liftPlacement');
+    // …and Today does NOT, which is what stops the duplication coming back.
+    expect(read('src/screens/home/HomeView.tsx')).not.toContain('<PlanLifts');
+  });
+
+  it('⚠️ it is reachable in the gallery, which is how any of this gets looked at', () => {
+    // The original file's last assertion, kept: a wedge nobody can put on a screen is a wedge nobody
+    // reviews. `1.5` is the programme she meets first, and it now mounts against the real engine.
+    const gallery = read('src/screens/dev/gallery.tsx');
+    expect(gallery).toContain("{ id: '1.5'");
+    expect(gallery).toContain('model: fixtureModel');
   });
 });

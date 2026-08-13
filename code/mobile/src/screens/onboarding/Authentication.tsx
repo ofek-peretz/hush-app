@@ -9,11 +9,30 @@
  * one line beneath the buttons. Consent is still affirmative, still versioned, still
  * idempotent (OD-3 / BB-33): pressing a provider button IS the agreement, `acceptConsent()`
  * records it the moment the provider returns, and the line above the buttons says so before
- * a finger lands on one. On success → NameEntry.
+ * a finger lands on one. On success → `Start`, the fork. (This line said `NameEntry` until
+ * 2026-08-12 — a screen deleted long before — and then `AboutYou` for an afternoon, until bringing
+ * your own programme became a screen of its own rather than a line under a button.)
  *
  * v7 1.1 button treatment: Apple is the CREAM primary (dark glyph + label on paper), Google
  * the dark hairline-outline secondary with cream label and no logo. The account is the action,
  * not either brand — so the two share one geometry and the design carries no platform colour.
+ *
+ * ── ⛔ APPLE AND GOOGLE ONLY, AND IT IS A DECISION (founder 2026-08-12) ──────────────────────────
+ * There is no email path and there will not be one. Two reasons, and the second is the real one:
+ *
+ *   · Apple's own rule (App Store 4.8) requires Sign in with Apple wherever a third-party login is
+ *     offered, so the pair is the smallest set that ships at all.
+ *   · An email account is a PASSWORD, and a password is a support surface — reset mail, a lockout,
+ *     a screen for choosing one — none of which this product would do well, and all of which would
+ *     stand between her and a programme. Two buttons and no field is the whole front door.
+ *
+ * ⚠️ THE COST IS REAL AND IT IS ACCEPTED: an athlete with neither account cannot use Hush. That is
+ * a small number of people and a large amount of surface, and it is written down here so nobody has
+ * to re-derive it from the absence of a text field.
+ *
+ * ── THE SEQUENCE ────────────────────────────────────────────────────────────────────────────────
+ * The hero ARRIVES rather than appearing: mark, wordmark, promise, affirmation, then the buttons,
+ * in reading order at one step apart (`components/ds/Arrive`). Everything is home in under 700 ms.
  */
 // @ts-nocheck
 
@@ -24,7 +43,8 @@ import { View, Text, Pressable, Animated, Easing, StyleSheet } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SegmentedControl } from '@/components/ds';
+import { Arrive } from '@/components/ds';
+import * as Haptics from 'expo-haptics';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
@@ -42,7 +62,15 @@ export function Authentication({ navigation }: Props) {
   const app = useApp();
   const reduced = useReducedMotion();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  /**
+   * ⛔ WHAT WENT WRONG, NOT THAT SOMETHING DID (founder 2026-08-12).
+   *
+   * This was a boolean behind `errors.general` — *"Something went wrong. Try again."* — which is the
+   * sentence every app on the phone shows and the reason none of them are believed. The three things
+   * that actually happen here are different problems with different answers: she has no signal, the
+   * provider declined, or she backed out (which is not a failure and says nothing at all).
+   */
+  const [failed, setFailed] = useState<null | 'network' | 'apple' | 'google'>(null);
   const locale = currentLocale();
   const affirm = t('ob.signinAffirm').toUpperCase();
 
@@ -80,14 +108,29 @@ export function Authentication({ navigation }: Props) {
   async function onSignIn(provider: AuthProvider) {
     if (busy) return;
     setBusy(true);
-    setError(false);
+    setFailed(null);
+    /*
+     * ⚠️ THE ONE HAPTIC ON THIS SCREEN, and it fires on the PRESS rather than on the result. It is
+     * the acknowledgement that the tap landed, on a button whose work then takes a system sheet and
+     * a network round trip — the beat Apple puts under every primary action for exactly this reason.
+     * Best-effort: a device without a taptic engine is not an error.
+     */
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       await app.signIn(provider);
       // Continuing IS the agreement (see header) — recorded before the first question.
       void app.acceptConsent();
-      navigation.navigate('AboutYou');
+      navigation.navigate('Start');
     } catch (e) {
-      if (!(e instanceof SignInCanceledError)) setError(true);
+      /*
+       * ⛔ A CANCELLED SIGN-IN IS SILENT, AND THAT IS THE RULE THIS BRANCH EXISTS FOR. She pressed
+       * Apple, read the sheet, and changed her mind — telling her that "something went wrong" would
+       * be the app arguing with a decision she just made.
+       */
+      if (e instanceof SignInCanceledError) return;
+      const offline = /network|offline|timeout|connect/i.test(String((e as Error)?.message ?? ''));
+      setFailed(offline ? 'network' : provider === 'apple' ? 'apple' : 'google');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -95,18 +138,31 @@ export function Authentication({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/*
+        ⛔ A WORD, NOT A SWITCH (founder 2026-08-12: *"כל משפט צריך להיות אייקוני ומדויק"*).
+        It was a segmented pill — `EN | עב` — which is a SETTINGS idiom, and it was the only object
+        on a ceremonial screen that looked like a form control. It also asked her to read her own
+        language as an abbreviation in a typeface chosen for numbers.
+
+        The offer is one thing, so it is one word, in the language it would switch TO — the way a
+        person offers it. Nothing to parse: an English reader sees "עברית", a Hebrew reader sees
+        "English", and the word IS the button.
+      */}
       <View style={styles.topBar}>
-        <SegmentedControl
-          size="pill"
-          options={[{ value: 'en', label: 'EN' }, { value: 'he', label: 'עב' }]}
-          value={locale}
-          onChange={(v) => void pickLocale(v)}
-        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={locale === 'he' ? 'English' : 'עברית'}
+          hitSlop={16}
+          onPress={() => void pickLocale(locale === 'he' ? 'en' : 'he')}
+          style={({ pressed }) => [styles.langSwap, pressed && styles.langSwapPressed]}
+        >
+          <Text style={styles.langSwapText}>{locale === 'he' ? 'English' : 'עברית'}</Text>
+        </Pressable>
       </View>
       <View style={styles.hero}>
         {/* v7 1.1 mark: a moss ring blooms behind the cream span-bracket, and a moss dot
             rests at its centre — "line grows, ticks strike, the dot rolls home". */}
-        <View style={styles.markWrap}>
+        <Arrive order={0} style={styles.markWrap}>
           <Animated.View
             pointerEvents="none"
             style={[
@@ -123,27 +179,33 @@ export function Authentication({ navigation }: Props) {
             <View style={styles.bracketTickEnd} />
             <View style={styles.bracketDot} />
           </View>
-        </View>
+        </Arrive>
         {/* v7 1.1: just "hush" in the coach's serif — no trailing moss dot. The moss on this
             screen lives once, in the mark's halo above (the pulse ring), not after the word. */}
-        <View style={styles.brand}>
+        <Arrive order={1} style={styles.brand}>
           <Text style={styles.wordmark}>hush</Text>
-        </View>
+        </Arrive>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
             This was a boast — "The best training experience in the world." — above the deal that
             earns it. Two sentences saying one thing, and the weaker one was on top: a superlative
             Hush cannot measure (R7), on the one screen the brief says "sells nothing". The deal is
             better in every way — first person, provable, and it IS the promise. So it takes the
             size the boast was wearing, and the boast is gone. */}
-        <Text style={styles.promise}>{t('ob.signinTagline')}</Text>
+        <Arrive order={2}><Text style={styles.promise}>{t('ob.signinTagline')}</Text></Arrive>
         {/* v7 1.1: the coach's affirmation under the promise — IBM Plex Mono 500 at .22em,
             exactly as the handoff draws it. The face is chosen from the STRING: a locale mono
             cannot draw falls back to Assistant rather than breaking mid-line. */}
-        <View style={styles.affirmRule} />
-        <Text style={[styles.affirm, !monoCanDraw(affirm) && styles.affirmSans]}>{affirm}</Text>
+        <Arrive order={3}>
+          <View style={styles.affirmRule} />
+          <Text style={[styles.affirm, !monoCanDraw(affirm) && styles.affirmSans]}>{affirm}</Text>
+        </Arrive>
       </View>
-      <View style={styles.actions}>
-        {error ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
+      <Arrive order={4} style={styles.actions}>
+        {failed ? (
+          <Text style={styles.error}>
+            {t(failed === 'network' ? 'ob.signinFailedNetwork' : failed === 'apple' ? 'ob.signinFailedProvider' : 'ob.signinFailedGoogle')}
+          </Text>
+        ) : null}
         {/* v7 1.1: Apple is the cream PRIMARY (dark glyph on paper); Google is the dark
             outline SECONDARY with no logo — the account is the action, not either brand. */}
         <ProviderButton
@@ -176,7 +238,7 @@ export function Authentication({ navigation }: Props) {
             GONE (founder 2026-07-12). Nobody arrives at a training app suspecting we sell them;
             volunteering the denial is what plants the thought. The agreement above is the record;
             the promise belongs in the policy it links to, not on the front door. */}
-      </View>
+      </Arrive>
     </SafeAreaView>
   );
 }
@@ -236,8 +298,21 @@ function AppleLogo({ color: c }: { color: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg, justifyContent: 'space-between' },
-  // The switch sits at the READING START of the top bar, 30px in — where the handoff puts it.
+  // The offer sits at the READING START of the top bar, 30px in — where the handoff puts it.
   topBar: { paddingHorizontal: 30, paddingTop: 18, alignItems: 'flex-start' },
+  /* The language offer: a word with a hairline under it, so it reads as something to press without
+     wearing the chrome of a control. Muted — it is the one thing on this screen that is not the
+     decision she came to make. */
+  langSwap: { paddingVertical: 4 },
+  /* Same law as everywhere else: a press is a WASH under the word, never a fade of it (A.13). */
+  langSwapPressed: { backgroundColor: 'rgba(241,238,229,0.06)', borderRadius: radius.sm },
+  langSwapText: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale.sm,
+    color: color.textMuted,
+    textDecorationLine: 'underline',
+    textAlign: 'left',
+  },
   // One 30px rhythm down the whole hero (mark → wordmark → promise → affirmation).
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20, gap: 30 },
   markWrap: { width: 180, height: 120, alignItems: 'center', justifyContent: 'center' },
@@ -307,7 +382,7 @@ const styles = StyleSheet.create({
   },
   providerPressed: { transform: [{ translateY: press.translateY }] },
   providerDisabled: { opacity: 0.4 },
-  providerLabel: { fontFamily: font.sansSemibold, fontSize: 16, textAlign: 'left' },
+  providerLabel: { fontFamily: font.sansSemibold, fontSize: 17, textAlign: 'left' },
   // Apple — the cream PRIMARY, dark glyph + label on paper.
   apple: { backgroundColor: color.accentFill },
   applePressed: { backgroundColor: color.accentFillPressed },

@@ -103,12 +103,38 @@ describe('Rev 7 · generateProgram is map-driven for a v5 profile', () => {
     expect(p.days.flatMap((d) => d.slots.map((s) => s.exerciseId))).toContain('machine_chest_press');
   });
 
-  it('everything off never crashes — the belt keeps a workout existing (unreachable via validateMap)', async () => {
+  it('⛔ everything off yields NO workout (S-3) — the belt used to invent one, and that was the bug', async () => {
+    /*
+     * ⛔ THIS TEST PINNED THE DEFECT, AND IT IS REWRITTEN RATHER THAN DELETED (2026-08-12).
+     *
+     * It read: *"everything off never crashes — the belt keeps a workout existing (unreachable via
+     * validateMap)"*, and it passed for as long as it existed. Both of its premises were wrong.
+     *
+     *   · NOT UNREACHABLE. `validateMap` guards ONBOARDING. The profile's body-map editor never
+     *     learned the rule, so an athlete could switch off all ten muscles there and press save.
+     *   · AND "A WORKOUT EXISTING" WAS THE WRONG THING TO WANT. The belt re-ran the assembler with
+     *     NO body map, so she was handed three full-body days of seven lifts — every muscle she had
+     *     just switched off, trained. S-2 says an off muscle never appears; S-3 says everything off
+     *     yields no workout. The belt broke both to avoid an empty array.
+     *
+     * ⛔ FOUNDER, 2026-08-12: *"אם יש לנו משתמש שלא רוצה לאמן רגליים בכלל, יש לנו אפשרות כזאת?"* —
+     * asking about a whole region, which works. The extreme is what this covers.
+     *
+     * The rule is what the register always said, and the guard on the editor is what makes sure she
+     * never sees it. See `theMapSheDrewIsTheWeekSheGets` for both halves.
+     */
     const allOff = Object.fromEntries(
       ['Chest', 'Shoulders', 'Back', 'Biceps', 'Triceps', 'Core', 'Quads', 'Hamstrings', 'Glutes', 'Calves'].map((m) => [m, 'off' as const]),
     );
     const p = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: allOff }));
-    expect(p.days.length).toBeGreaterThan(0);
-    for (const d of p.days) expect(d.slots.length).toBeGreaterThan(0);
+    expect(p.days.filter((d) => !d.isRest)).toEqual([]);
+    // …and it still does not CRASH, which is the half of the original claim that was worth keeping.
+    expect(p.frequency).toBeGreaterThan(0);
+  });
+
+  it('…but a map with something still ON always builds — the belt was scoped, not deleted', async () => {
+    // The belt exists for an assembler defect, not for a decision of hers. That case still catches.
+    const p = await fixtureModel.generateProgram(profile({ repBand: '8-10', bodyMap: { Quads: 'off' } as never }));
+    expect(p.days.filter((d) => !d.isRest).length).toBeGreaterThan(0);
   });
 });

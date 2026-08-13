@@ -76,9 +76,9 @@ const styles = StyleSheet.create({
   title: { fontFamily: font.sansSemibold, fontSize: 18, color: stage.ink0, textAlign: 'left' },
   cueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 11 },
   // The ordinal, in moss: this is step one, then two, then three.
-  index: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 14.5, color: signal[0], textAlign: 'left' },
+  index: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: signal[0], textAlign: 'left' },
   // A cue is READ under load: brighter than the app's secondary ink, short of the headline's.
-  cue: { flex: 1, fontFamily: font.sans, fontSize: 14.5, lineHeight: 20, color: '#d8d4c8', textAlign: 'left' },
+  cue: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: '#d8d4c8', textAlign: 'left' },
   // The one instruction on the screen, under the card, on the backdrop it describes.
-  hint: { position: 'absolute', left: 0, right: 0, bottom: 60, fontFamily: font.sans, fontSize: 13, color: stage.ink1, textAlign: 'center' },
+  hint: { position: 'absolute', left: 0, right: 0, bottom: 60, fontFamily: font.sans, fontSize: 17, color: stage.ink1, textAlign: 'center' },
 });

@@ -45,28 +45,44 @@ import {
 } from '@/data/exercises';
 
 /**
- * WHEN the swap verb is offered: before the first set of a lift, and never after.
+ * ════ WHEN THE SWAP VERB IS OFFERED ON THE STAGE ════
  *
- * The module header tells the story of four pools disagreeing about WHAT a legal swap is. This is
- * the same law one axis over — WHEN — and it drifted the same way, for the same reason: two
- * surfaces each hard-coded their own answer. The wrist gated on `exerciseSetIndex === 0` (the first
- * set of any lift); the phone's stage gated on `exNo === 1 && setN === 1` (the first set of the
- * FIRST lift only). So an athlete standing at lift 4 saw the swap glyph on her watch and nothing on
- * her phone, in the same instant, for the same lift.
+ * ⛔ FOUNDER, 2026-08-12: *"צריך להחזיר את כפתור הSWAP ליד הוידאו רק בסט הראשון בתרגיל הראשון של
+ * האימון, ולגבי הSWAP של שאר התרגילים — זה מופיע במסכי הTRANSITION REST, כי אלו המקרים היחידים
+ * שבהם המכשיר כנראה תפוס."*
  *
- * The phone's narrower rule was survivable only while the programme-edit screen existed — a lift you
- * wanted rid of could be handled by planning. **S-73 deleted that screen**, and the brief names the
- * consequence: the in-workout swap is now the athlete's main exercise-selection lever, and the stage
- * is the ONLY place the verb is taught.
+ * **The first set of the FIRST lift, and nowhere else on the stage.** His reasoning is better than
+ * the rule it replaces, and it is worth stating because it is a product argument, not a tidy-up:
+ *
+ *   · A swap answers ONE question — *the machine is taken.* She discovers that by walking to it.
+ *   · She walks to a station at exactly two moments: when the session starts, and on the crossing
+ *     between two lifts. The first is this gate; the second is the TRANSITION REST, which already
+ *     carries its own swap (`swapNextExercise`) aimed at the lift she is about to walk to.
+ *   · Every other "first set" happens when she is ALREADY standing at the bar she just walked to —
+ *     she has known whether it was free for thirty seconds. Offering the verb there answered a
+ *     question that had already been answered.
+ *
+ * ── ⛔ WHAT THIS REVERSES, AND THE HALF OF IT THAT WAS RIGHT ─────────────────────────────────────
+ * The rule was `setIndexInExercise === 0` — the first set of ANY lift — and it was widened to that
+ * from `exNo === 1 && setN === 1` because the two surfaces disagreed: the wrist gated on the first
+ * set of any lift, the phone on the first set of the first lift, so an athlete at lift 4 saw the
+ * glyph on her watch and nothing on her phone.
+ *
+ * **That finding stands and is the reason this function exists at all.** What was wrong was the
+ * direction the disagreement got resolved in: the phone was widened to match the wrist, when the
+ * phone was right. One rule, one place, still — the answer it gives is now his.
+ *
+ * ⚠️ AND `exerciseIndexInSession` DEFAULTS TO 0 so a caller that only knows the set index gets the
+ * old answer for the first lift. That is deliberate for the wrist bridge, which reasons in
+ * `exerciseSetIndex` alone; if it ever needs the full gate it must pass the second argument rather
+ * than re-deriving the rule, which is how the two surfaces drifted the first time.
  *
  * Why set 0 and not later: a swap belongs BEFORE the work. Once a set is logged against a lift, the
  * athlete has trained it — replacing it mid-lift would strand those sets on an exercise that is no
  * longer in the session.
- *
- * Both surfaces ask THIS function. Not "both surfaces happen to agree" — one rule, one place.
  */
-export function isSwapMoment(setIndexInExercise: number): boolean {
-  return setIndexInExercise === 0;
+export function isSwapMoment(setIndexInExercise: number, exerciseIndexInSession = 0): boolean {
+  return setIndexInExercise === 0 && exerciseIndexInSession === 0;
 }
 
 /** The athlete's standing preferences for a lift, if they have set any. */

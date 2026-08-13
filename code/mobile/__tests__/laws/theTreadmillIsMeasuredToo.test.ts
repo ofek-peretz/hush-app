@@ -1,0 +1,267 @@
+// @ts-nocheck
+import fs from 'fs';
+import path from 'path';
+import {
+  beginRun,
+  endRun,
+  ingestStride,
+  isIndoor,
+  setPaused,
+  snapshot,
+} from '@/platform/cardio/cardioRun';
+import { kcalPerKgKm, gaitFromPace } from '@/platform/cardio/cardioMath';
+
+const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * A TREADMILL IS MEASURED, NOT ESTIMATED FROM THE CLOCK.
+ *
+ * ⛔ FOUNDER, 2026-08-12: *"אני ארצה לעשות אפשרות לריצה והליכה גם בהליכון וגם בחוץ. אני לא יודע איך
+ * APPLE WORKOUT יודעים בהליכון כמה המשתמש הלך אם לפי ה-GPS זה במקום."*
+ *
+ * They do not use GPS. `DistanceWalkingRunning` is written by the phone's motion coprocessor from
+ * step cadence and a stride-length model calibrated against her outdoor GPS work — the same number
+ * Apple's own indoor workouts report. **The read scope has held it since `healthKitGate` was
+ * written and nothing had ever read it**, which is the third time that exact shape has turned up in
+ * this file's neighbours (the heart rate and the external workouts were the first two).
+ *
+ * ⚠️ AND IT NEEDS NO WATCH — the question he asked before saying go. Core Motion is in the phone. A
+ * watch improves the calibration and is not required; what a watch-less athlete loses indoors is
+ * the HEART RATE, which the stage already draws as absent (`3.4g`).
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+afterEach(() => endRun());
+
+describe('the indoor run credits what the phone measured', () => {
+  it('⛔ credits the DELTA, never the running total', () => {
+    /*
+     * The reading is cumulative. Adding it whole on every poll would make a 5 km treadmill run
+     * report 15 km inside a minute — the same defect the GPS path's monotonic guard exists for,
+     * arriving through a different door.
+     */
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(0, 1_000); // the cursor only
+    ingestStride(0.2, 61_000);
+    ingestStride(0.4, 121_000);
+    ingestStride(0.6, 181_000);
+    expect(+snapshot().distanceKm.toFixed(3)).toBe(0.6);
+  });
+
+  it('⚠️ the first reading sets the cursor and credits nothing — there is no interval yet', () => {
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(1.4, 1_000); // she walked to the gym with the phone in her pocket
+    expect(snapshot().distanceKm).toBe(0);
+  });
+
+  it('⛔ a reading that goes backwards is dropped, not credited as negative distance', () => {
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(0, 1_000);
+    ingestStride(0.5, 61_000);
+    ingestStride(0.3, 121_000); // a source resetting under us
+    expect(+snapshot().distanceKm.toFixed(3)).toBe(0.5);
+  });
+
+  it('⚠️ standing still on a moving belt credits nothing and blanks the pace', () => {
+    // The whole point of the outdoor gates, arriving on the indoor path: a phone that is not moving
+    // must read 0.00 km and "--:--", never a pace inferred from elapsed time.
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(0, 1_000);
+    ingestStride(0.2, 61_000);
+    expect(snapshot().paceSec).toBeGreaterThan(0);
+    ingestStride(0.2, 121_000);
+    expect(snapshot().paceSec).toBe(0);
+    expect(+snapshot().distanceKm.toFixed(3)).toBe(0.2);
+  });
+
+  it('⛔ a PAUSE credits nothing, and the cursor still advances', () => {
+    /*
+     * Otherwise the walk to the water fountain arrives in one lump the moment she resumes — the
+     * distance is real, the run it would be attributed to is not.
+     */
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(0, 1_000);
+    setPaused(true);
+    ingestStride(0.3, 61_000);
+    setPaused(false);
+    ingestStride(0.4, 121_000);
+    expect(+snapshot().distanceKm.toFixed(3)).toBe(0.1);
+  });
+
+  it('⚠️ an OUTDOOR run ignores stride readings entirely', () => {
+    // Both sources deliver whenever the app is on screen. Crediting both would double every run.
+    beginRun('run', 70, false);
+    setPaused(false);
+    expect(isIndoor()).toBe(false);
+    ingestStride(0, 1_000);
+    ingestStride(1, 61_000);
+    expect(snapshot().distanceKm).toBe(0);
+  });
+
+  it("⚠️ and it is never 'acquiring' — there is no satellite to wait for", () => {
+    beginRun('run', 70, true);
+    expect(snapshot().gps).toBe('ready');
+  });
+});
+
+describe('⛔ the gait question answers itself indoors, exactly as it does outdoors', () => {
+  /*
+   * FOUNDER: *"האם זה באמת מחשב שונה הליכה או ריצה מבחינת המדדים? או שאפשר לעשות מצב קרדיו אחד?"*
+   *
+   * Distance, pace and time are the same arithmetic for both. **Only the energy differs**, and
+   * `cardioMath` already interpolates it continuously between ACSM's walking equation (valid to
+   * 6.4 km/h) and its running equation (valid from 8 km/h) rather than picking a side. So one mode
+   * serves both, nobody is asked, and there is no cliff to land on the wrong side of.
+   */
+  it('a walking pace is billed as a walk and a running pace as a run — on the same run', () => {
+    const walkPace = 3600 / 5; // 5 km/h
+    const runPace = 3600 / 12; // 12 km/h
+    expect(kcalPerKgKm(walkPace)).toBeLessThan(kcalPerKgKm(runPace));
+    expect(gaitFromPace(walkPace)).toBe('walk');
+    expect(gaitFromPace(runPace)).toBe('run');
+  });
+
+  it('⚠️ and a treadmill segment is billed at its OWN pace, not the session average', () => {
+    // A walk-run interval on a belt is the case a single declared gait gets wrong in both
+    // directions; `creditDistance` bills each segment as it is credited.
+    beginRun('run', 70, true);
+    // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
+    setPaused(false);
+    ingestStride(0, 0);
+    ingestStride(0.1, 120_000); // 0.1 km in 2 min → 3 km/h, a walk
+    const afterWalk = snapshot().calories;
+    ingestStride(0.6, 271_000); // 0.5 km in 2.5 min → 12 km/h, a run
+    const runOnly = snapshot().calories - afterWalk;
+    // Five times the distance at more than five times the cost — because the rate rose too.
+    expect(runOnly / afterWalk).toBeGreaterThan(5);
+  });
+});
+
+describe('⛔ and the wire reaches the screen', () => {
+  const tracker = () => read('src/platform/cardio/cardioTracker.ts');
+  const cardio = () => read('src/screens/cardio/Cardio.tsx');
+
+  it('the indoor poll feeds `ingestStride`, and the GPS watcher never opens beside it', () => {
+    /*
+     * ⚠️ TWO SOURCES RUNNING TOGETHER WOULD DOUBLE THE RUN. `ingestStride` refuses outdoors and
+     * `ingestFix` credits nothing from a stationary phone, so nothing would actually be counted
+     * twice — but a treadmill session that ASKS for location spends the battery on a receiver
+     * watching a stationary phone, and burns the one permission prompt she will ever grant on a
+     * belt. Both effects are gated on the mode.
+     */
+    expect(tracker()).toContain('if (!active || !indoor) return;');
+    expect(tracker()).toContain('if (!active || indoor) return;');
+    expect(tracker()).toMatch(/health\s*\.distanceSince\(startedAt\)/);
+    expect(tracker()).toContain('beginRun(liveGait, weightKg, indoor);');
+  });
+
+  it('⚠️ a source that drops out mid-run keeps what it already credited', () => {
+    // `null` before the first reading stands the mode down; `null` afterwards must not retract the
+    // kilometres she actually covered.
+    expect(tracker()).toContain('if (!sawAny) {');
+  });
+
+  it("⛔ and it never says 'Acquiring GPS signal' over a treadmill", () => {
+    /*
+     * Both of the stage's absence sentences name GPS, and neither is true indoors — a satellite
+     * message over a belt is the same class of lie as a pace on a table, which is the defect this
+     * whole module was rebuilt around.
+     */
+    expect(cardio()).toContain("t('cardio.motionOff')");
+    // The absence sentence is chosen by the MODE first, before either GPS branch is reached.
+    expect(cardio()).toMatch(/indoor\s*\?\s*gps === 'unavailable'/);
+  });
+
+  it('⚠️ the mode is read off the MOVEMENT, so a prescribed treadmill needs no question', () => {
+    expect(cardio()).toContain("nav.params?.indoor ?? (target?.ex ? !isOutdoorMovement(target.ex) : false)");
+  });
+
+  it('⛔ and the athlete who opens the tab herself is asked ONE thing — where, not what', () => {
+    /*
+     * FOUNDER: *"יש רק הליכה או ריצה בחוץ או הליכה או ריצה בהליכון. זהו."* — four things she can
+     * do, one bit the app needs. Walking versus running is measured from her pace, per segment.
+     *
+     * ⚠️ A FOUR-WAY PICKER WOULD BE THE BUG THIS WHOLE THREAD IS ABOUT. It would ask her to declare
+     * something the phone measures better than she can guess, and would be wrong the moment she
+     * walks a hill in the middle of a run.
+     */
+    const ready = read('src/screens/cardio/CardioReady.tsx');
+    expect(ready).toContain("t(v ? 'cardio.treadmill' : 'cardio.outside')");
+    /*
+     * ⛔ AND THE PLACE IS DRAWN, not only named (founder, 2026-08-12). The choice she is making is
+     * about a PLACE, and a place is a thing you recognise before you read it. ⚠️ Nothing in either
+     * drawing is a measurement — a track with a distance on it would be the first thing on this
+     * screen claiming something before she has moved.
+     */
+    expect(ready).toContain('<TreadmillArt');
+    expect(ready).toContain('<TrackArt');
+    // …and nothing on it asks her to pick a gait.
+    expect(ready).not.toMatch(/cardio\.(run|walk)'/);
+    // The answer reaches the live stage.
+    /* ⛔ EXPLICIT, INCLUDING `false` — `navigate(name, undefined)` does not clear a route's params,
+       so the ternary let an outdoor run inherit a treadmill's flag. See the note in `Root`. */
+    expect(read('src/app/Root.tsx')).toContain("navigateMain('CardioLive', { indoor })");
+  });
+
+  it('⛔ and a CARRY can no longer be prescribed — every distance is walking or running', () => {
+    /*
+     * *"אין נסיעת חקלאי."* It was the last distance movement on offer that is not one of the four,
+     * and it is why "has a distance ⇒ the phone counts it" was ever a tempting predicate. With it
+     * gone the two questions collapse: everything the coach can prescribe a distance for is
+     * tracked, by the satellite or by Core Motion.
+     */
+    const facts = read('src/domain/coachFacts.ts');
+    expect(facts).toContain("'farmer_carry',");
+    const offered = facts.slice(facts.indexOf('const NOT_YET_OFFERED'), facts.indexOf('export function coachMovements'));
+    expect(offered).toContain("'farmer_carry'");
+  });
+});
+
+describe('the wire it rides on', () => {
+  it('⛔ the read scope already held the distance type — this is a wire, not a model', () => {
+    const gate = read('src/platform/health/healthKitGate.ts');
+    expect(gate).toContain("const DISTANCE = 'HKQuantityTypeIdentifierDistanceWalkingRunning';");
+    expect(gate).toContain('toRead: [HEART_RATE, ACTIVE_ENERGY, DISTANCE, WORKOUT]');
+    expect(gate).toContain('async distanceSince(');
+  });
+
+  it('⚠️ every gate implements it, and the stub returns null rather than a confident zero', () => {
+    // 0 is "she did not move"; null is "nothing was measured". The indoor stage must be able to
+    // refuse to run rather than draw a flat zero for forty minutes — Android reaches here today.
+    const health = read('src/platform/health.ts');
+    expect(health).toContain('distanceSince(sinceMs: number, untilMs?: number): Promise<number | null>;');
+    const stub = health.slice(health.indexOf('export const healthStub'));
+    expect(stub).toContain('async distanceSince()');
+    expect(stub.slice(stub.indexOf('async distanceSince()'))).toMatch(/^async distanceSince\(\) \{\s*return null;/);
+  });
+
+  it('⚠️ and both indoor corners exist in the catalogue — a walk on a belt had no name at all', () => {
+    const moves = read('src/data/movements.ts');
+    expect(moves).toContain("{ id: 'run_treadmill'");
+    expect(moves).toContain("{ id: 'walk_treadmill'");
+    /*
+     * ⚠️ NEITHER CARRIES `gps` — the whole distinction this work turns on. Asserted per LINE: a
+     * window between two ids swept up `walk_outdoor` in the middle and the law failed on a
+     * neighbour, which is a law measuring the file's layout rather than its content.
+     */
+    const lines = moves.split(/\r?\n/);
+    for (const id of ['run_treadmill', 'walk_treadmill']) {
+      const line = lines.find((l) => l.includes(`id: '${id}'`))!;
+      expect({ id, tracked: /tracked: 'motion'/.test(line) }).toEqual({ id, tracked: true });
+    }
+    for (const id of ['run_outdoor', 'walk_outdoor']) {
+      expect(lines.find((l) => l.includes(`id: '${id}'`))).toContain("tracked: 'gps'");
+    }
+  });
+});

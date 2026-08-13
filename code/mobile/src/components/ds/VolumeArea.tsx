@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   // Hebrew reading falls back rather than breaking (see `monoVoice`).
   label: {
     position: 'absolute',
-    fontSize: 14.5,
+    fontSize: 17,
     textAlign: 'left', // logical start; the `end` variant overrides to 'right'
   },
   start: { left: 10, bottom: 4, color: color.textMuted },

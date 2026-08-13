@@ -96,5 +96,27 @@ export function loadNews(opts: {
  * on the screen. It comes back for exactly that set.
  */
 export function showsPerSide(opts: { setNumber: number; news: LoadNews | null }): boolean {
-  return opts.setNumber <= 1 || opts.news != null;
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ IT SHOWS ON EVERY SET NOW (founder, 2026-08-12): *"במסך התרגיל החי לא מופיע כמה לשים בכל
+   * צד."* — photographed on set 2 at 37.5 kg, where the rule above was correctly hiding it.
+   *
+   * ⚠️ THIS REVERSES A RULE HE APPROVED, AND THE REVERSAL IS HIS. The argument for hiding it was
+   * mine and it was good: she loads the bar once, so on sets two, three and four the line is a fact
+   * she acted on five minutes ago, taking a row on the smallest screen in the product.
+   *
+   * What that argument assumed is that she loaded the bar and did not leave it. **She racks between
+   * sets, someone borrows a plate, she comes back from the water fountain** — and the one number
+   * she needs to rebuild it was the one the screen had decided she remembered. A loading
+   * instruction is cheap to show and expensive to be missing.
+   *
+   * ⚠️ AND THE SPACE COST IS PAID BY THE REDESIGN, not argued away: the set stage has two bands and
+   * an annex line now, not the seven stacked figures it had when this rule was written.
+   *
+   * The `news` half is kept as documentation of the case that made hiding it worst — a load Loop 1
+   * moved mid-lift MUST be re-loaded — even though the constant makes it unreachable.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  void opts;
+  return true;
 }

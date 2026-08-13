@@ -375,11 +375,30 @@ export const font = {
  * it is simply legible now. `2xs` is the mono eyebrow, which is the smallest thing the product is
  * allowed to say, and 13 is where it stops being a whisper.
  */
+/*
+ * ════ ⛔ THE FLOOR ARRIVED, AND THE BOTTOM OF THE SCALE COLLAPSED INTO IT ════
+ *
+ * FOUNDER, 2026-08-12: *"הכיתוב הקטן ביותר במסך מאוד מאוד קטן … אני אמרתי לך את זה בערך 999 פעמים.
+ * בוא נגיד שהגודל הקטן ביותר בכל האפליקציה הוא כמו שכתוב 57.5 ליד הBarbell bench press. יותר קטן
+ * מזה פשוט לא רואים — זה בלתי אפשרי, אל תשכח שזה מסך של פלאפון."*
+ *
+ * That reference is `PlanLifts.planFigure`, and it is **17**. So 17 is the floor for every piece of
+ * type this app draws on a phone, and `typeHasAFloor` enforces it on every file in `src`.
+ *
+ * ⚠️ FOUR NAMES NOW MEAN ONE NUMBER, and that is the honest thing rather than a smell. `2xs`, `xs`,
+ * `sm` and `base` were 13, 14, 15 and 16 — four steps inside three points, which is not a scale, it
+ * is a habit. Below 17 there is no room for steps on a phone, so there is one small size and the
+ * names are kept only so 200-odd call sites do not have to be rewritten to say the same thing.
+ *
+ * ⚠️ AND THE COUNT IS THE POINT: 269 declarations across 49 files were under the floor. He has said
+ * this in nearly every review, and it kept coming back because it was being fixed one screen at a
+ * time. It is a law now.
+ */
 export const textScale = {
-  '2xs': 13,
-  xs: 14,
-  sm: 15,
-  base: 16,
+  '2xs': 17,
+  xs: 17,
+  sm: 17,
+  base: 17,
   md: 18,
   lg: 20,
   xl: 24,

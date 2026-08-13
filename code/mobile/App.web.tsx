@@ -314,49 +314,80 @@ function Index({ id, entry }: { id: string; entry?: GalleryEntry }) {
   ];
   const unfiled = GALLERY.filter((g) => !sections.some((s) => s.test(g)));
   if (unfiled.length) sections.unshift({ title: '⚠ UNFILED', test: (g) => unfiled.includes(g) });
-  const live = GALLERY.filter((g) => g.status === 'live').length;
-  const built = GALLERY.filter((g) => g.status === 'live' || g.status === 'device').length;
-  // A withdrawn screen is not work outstanding, so it leaves the denominator entirely — otherwise
-  // this line reads as five screens still owed, forever, and someone eventually rebuilds them.
-  const owed = GALLERY.filter((g) => g.status !== 'cancelled').length;
+
+  /*
+   * ════ ⛔ A STATE IS NOT A SCREEN, AND THIS PAGE SAID IT WAS ════
+   *
+   * FOUNDER, 2026-08-12, three notes in one message: *"יש 5 מסכי TODAY. מה זה?"* … *"יש כאן 3
+   * מסכים Pre workout"* … *"יש כאן לא פחות מ9 מסכי The set למה?"*
+   *
+   * There is one of each. What he counted was eighteen STATES printed as peers of the screen they
+   * belong to — same indent, same mark, same type — on the page whose entire job is "walk the
+   * product screen by screen". **It answered "how many screens are there" with a number three
+   * times too big**, and cost him three separate notes asking what the extras were.
+   *
+   * ⚠️ AND THE HEADER COUNT WAS PART OF THE LIE. It read "N built" off `GALLERY.length`, so the
+   * product looked like it had a hundred and eleven surfaces. It counts SCREENS now, with the
+   * states beside it as their own figure — two facts, said as two numbers.
+   *
+   * The relationship is declared on the entry (`of`), never derived from the id: `2.1b` is the WHY
+   * sheet and `2.1f` is the pre-workout card, so nesting by number prefix would have filed two
+   * unrelated surfaces under Today.
+   */
+  const statesOf = (parentId: string) => GALLERY.filter((g) => g.of === parentId);
+  const screens = GALLERY.filter((g) => !g.of);
+
+  const live = screens.filter((g) => g.status === 'live').length;
+  const built = screens.filter((g) => g.status === 'live' || g.status === 'device').length;
+  const states = GALLERY.length - screens.length;
+
+  /** One row — a screen, or one of its states drawn a step in and a shade back. */
+  const Row = ({ g, state }: { g: GalleryEntry; state?: boolean }) => (
+    // Keyed by INDEX, not id: the duplicate ids collided as React keys too, so two rows in the
+    // same section shared one identity.
+    <Pressable
+      key={GALLERY.indexOf(g)}
+      disabled={!g.render}
+      onPress={() => {
+        window.location.hash = addressOf(g, GALLERY.indexOf(g));
+      }}
+      style={[styles.indexRowWrap, state && styles.indexStateWrap]}
+    >
+      <Text style={[styles.indexRow, state && styles.indexStateRow, !g.render && styles.indexRowIdle]}>
+        {`${state ? '·' : MARK[g.status]}  ${g.id.padEnd(5, ' ')} ${g.label}`}
+      </Text>
+      {g.note ? <Text style={[styles.indexRowNote, state && styles.indexStateNote]}>{g.note}</Text> : null}
+    </Pressable>
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.index}>
       <Text style={styles.indexTitle}>{entry ? entry.label : id ? `No screen "${id}"` : 'v7'}</Text>
       {entry?.note ? <Text style={styles.indexNote}>{entry.note}</Text> : null}
       <Text style={styles.indexNote}>
-        {`${built} of ${owed} built · ${live} open here · ${GALLERY.length - owed} withdrawn`}
+        {`${built} of ${screens.length} screens built · ${live} open here · ${states} states beneath them`}
       </Text>
 
       {sections.map((sec) => {
-        const rows = GALLERY.filter(sec.test);
+        const rows = screens.filter(sec.test);
         if (!rows.length) return null;
         return (
           <View key={sec.title} style={styles.indexSection}>
             <Text style={styles.indexSectionTitle}>{sec.title}</Text>
             {rows.map((g) => (
-              // Keyed by INDEX, not id: the duplicate ids collided as React keys too, so two
-              // rows in the same section shared one identity.
-              <Pressable
-                key={GALLERY.indexOf(g)}
-                disabled={!g.render}
-                onPress={() => {
-                  window.location.hash = addressOf(g, GALLERY.indexOf(g));
-                }}
-                style={styles.indexRowWrap}
-              >
-                <Text style={[styles.indexRow, !g.render && styles.indexRowIdle]}>
-                  {`${MARK[g.status]}  ${g.id.padEnd(5, ' ')} ${g.label}`}
-                </Text>
-                {g.note ? <Text style={styles.indexRowNote}>{g.note}</Text> : null}
-              </Pressable>
+              <View key={GALLERY.indexOf(g)}>
+                <Row g={g} />
+                {statesOf(g.id).map((s) => (
+                  <Row key={GALLERY.indexOf(s)} g={s} state />
+                ))}
+              </View>
             ))}
           </View>
         );
       })}
 
       <Text style={styles.indexNote}>
-        {'●  opens here     ◐  built, device-only     ○  not built     ×  withdrawn'}
+        {'●  opens here     ◐  built, device-only     ○  not built     ·  a state of the screen above'}
       </Text>
     </ScrollView>
   );
@@ -382,4 +413,10 @@ const styles = StyleSheet.create({
   indexRow: { fontFamily: font.mono, fontSize: 12, lineHeight: 17, color: color.textPrimary },
   indexRowIdle: { color: color.textMuted },
   indexRowNote: { fontFamily: font.sans, fontSize: 10.5, color: color.textMuted, marginTop: 1, marginStart: 22 },
+  // A state is indented under its screen and set one shade back — it reads as belonging to the row
+  // above rather than competing with it. The dot replaces the status mark for the same reason: a
+  // state has no build status of its own, it is whatever its screen is.
+  indexStateWrap: { paddingVertical: 2, marginStart: 20 },
+  indexStateRow: { fontSize: 11.5, color: color.textSecondary },
+  indexStateNote: { marginStart: 22, opacity: 0.8 },
 });

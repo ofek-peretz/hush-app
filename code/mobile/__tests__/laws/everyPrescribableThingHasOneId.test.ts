@@ -74,7 +74,10 @@ describe('every prescribable thing has exactly one id', () => {
     // in fact it was never given the list.
     const facts = coachFacts({ profile, plan: null, history: [] });
     expect(facts.movements.length).toBe(coachMovements().length);
-    expect(facts.movements.some((m) => m.gps)).toBe(true); // a run is in there
+    // ⛔ `gps` → `tracked` (2026-08-12): the coach is told HOW a movement is measured, and there are
+    // three answers now — the satellite, the phone's own motion, or nothing.
+    expect(facts.movements.some((m) => m.tracked === 'gps')).toBe(true); // a run outdoors
+    expect(facts.movements.some((m) => m.tracked === 'motion')).toBe(true); // …and one on a belt
     expect(facts.movements.some((m) => m.loadable)).toBe(true); // and something she can carry
   });
 

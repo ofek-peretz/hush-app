@@ -23,7 +23,7 @@ import { Text } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { PreWorkoutView, type PreWorkoutProps } from '@/screens/plan/PreWorkout';
 import type { PlanLift } from '@/components/PlanLifts';
-import { initI18n } from '@/i18n';
+import { initI18n, tg } from '@/i18n';
 
 beforeAll(async () => {
   await initI18n();
@@ -43,7 +43,7 @@ afterEach(() => {
 
 const LIFTS: PlanLift[] = [
   { exerciseId: 'bb_bench_press', name: 'Barbell Bench Press', load: 57.5, sets: 4, band: [8, 10], changed: 'up' },
-  { exerciseId: 'overhead_triceps_extension', name: 'Overhead Triceps Extension', load: 20, sets: 3, band: [10, 12] },
+  { exerciseId: 'triceps_pushdown', name: 'Overhead Triceps Extension', load: 20, sets: 3, band: [10, 12] },
   { exerciseId: 'pull_up', name: 'Pull-up', load: null, sets: 3, band: [5, 8] },
 ];
 
@@ -56,6 +56,7 @@ function mount(over: Partial<PreWorkoutProps> = {}): ReactTestRenderer {
           name="Upper Body A"
           dayLabel="Monday"
           shape="3 LIFTS · ~35 MIN"
+          minutes={35}
           lifts={LIFTS}
           units="kg"
           changes={1}
@@ -78,10 +79,45 @@ const texts = (r: ReactTestRenderer): string[] =>
   });
 
 describe('⛔ the card carries the workout', () => {
-  it('the name is the screen, and the shape is under it', () => {
+  it('⛔ the name is the screen, and the session is stated as FIGURES under it', () => {
+    /*
+     * ⛔ THIS ASSERTED THE `shape` STRING — "3 LIFTS · ~35 MIN" (2026-08-12).
+     *
+     * FOUNDER, on the sheet: *"בצורה הרבה יותר מרשימה מאשר מסך הPREWORKOUT."* That legend was the
+     * exact line the row she pressed already carried, so the sheet opened to repeat the thing that
+     * opened it. **A summary that restates its own trigger has told her nothing.**
+     *
+     * It is three figures now — lifts, SETS (which nothing said before), minutes — and each is
+     * arithmetic on the table below it, so nothing here can drift from what she is about to do.
+     */
     const said = texts(mount()).join('|');
     expect(said).toContain('Upper Body A');
-    expect(said).toContain('3 LIFTS · ~35 MIN');
+    expect(said).toContain('3'); // lifts
+    expect(said).toContain('10'); // 4 + 3 + 3 sets — the figure the old line never carried
+    expect(said).toContain('~35');
+    // …and the line that duplicated the row is not drawn twice.
+    expect(said).not.toContain('3 LIFTS · ~35 MIN');
+  });
+
+  it('⛔ AND "WHERE THE WORK GOES" IS DELETED — the lifts are what she came for', () => {
+    /*
+     * ⛔ FOUNDER, 2026-08-12: *"להוריד את ההקצאה לכל שריר שכתוב שם, זה לא מעניין אף אחד. תציג את
+     * התוכנית במקום זה ותעצב את זה בגדול וברור."*
+     *
+     * The case for it was mine: seven labelled bars answered *what is this session FOR* — a
+     * question a list of exercises cannot. The case was sound and made about the wrong reader.
+     * **She is standing in a gym about to start**, and on a 390-point phone the bars pushed the
+     * lifts under the fold.
+     *
+     * ⚠️ NOTHING SHE ASKS FOR IS LOST. The allocation is still the REASON each lift is here, and
+     * `whyLiftIsHere` gives it one row at a time, on the row it is about — which is where a reason
+     * belongs and where she actually goes looking for one.
+     */
+    const said = texts(mount()).join('|');
+    expect(said).not.toContain(tg('program.sheetWhere').toUpperCase());
+    expect(said).not.toContain(tg('muscle.Chest').toUpperCase());
+    // …and what stands in its place is the plan, which the next test reads in full.
+    expect(said).toContain(tg('program.sheetTheLifts').toUpperCase());
   });
 
   it('the lifts are on it, with the loads the coach set', () => {
@@ -110,14 +146,35 @@ describe('⛔ the card carries the workout', () => {
     expect(name!.props.numberOfLines).toBeUndefined();
   });
 
-  it('the unit and the scheme are set smaller than the load they annotate', () => {
+  it('⛔ the unit and the scheme are QUIETER than the load — by weight now, not by size', () => {
+    /*
+     * ════ THE FLOOR TOOK THIS LAW'S MECHANISM AWAY, AND THE LAW SURVIVES IT ════
+     *
+     * FOUNDER, 2026-08-12: *"בוא נגיד שהגודל הקטן ביותר בכל האפליקציה הוא כמו שכתוב 57.5."*
+     *
+     * This asserted `fontSize < 17` on the annex — the ` kg · 4×8–10` that trails the load. It was
+     * 13.5, and the rule it protected is real: **the load is the fact, the unit and the scheme are
+     * its footnotes, and a row where all three shout says nothing.**
+     *
+     * 13.5 is now below the floor of the product. So the hierarchy is carried where it should always
+     * have been carried — in COLOUR and WEIGHT rather than in point size. The load stands in the
+     * stage's brightest ink; its annex sits in the muted step beside it, at the same size, legible.
+     *
+     * ⚠️ THIS IS THE TRADE THE FLOOR BUYS, AND IT IS WORTH NAMING. Type size is the cheapest way to
+     * make something recede and the only one that also makes it unreadable. Everything that was
+     * whispering by being small now whispers by being dim.
+     */
     const r = mount();
     const flat = (s: unknown): Record<string, unknown> =>
       Array.isArray(s) ? Object.assign({}, ...s.map(flat)) : ((s ?? {}) as Record<string, unknown>);
     const figure = r.root.findAllByType(Text).find((n) => String(n.props.children).includes('57.5'));
     expect(figure).toBeDefined();
     const meta = r.root.findAllByType(Text).find((n) => String(n.props.children).includes('4×8–10'));
-    expect(Number(flat(meta!.props.style).fontSize)).toBeLessThan(17);
+    expect(meta).toBeDefined();
+    // Never below the floor…
+    expect(Number(flat(meta!.props.style).fontSize)).toBeGreaterThanOrEqual(17);
+    // …and never as loud as the number it annotates.
+    expect(flat(meta!.props.style).color).not.toBe(flat(figure!.props.style).color);
   });
 
   it('⚠️ a pending row still names its lift and claims no number', () => {

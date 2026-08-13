@@ -28,7 +28,6 @@ import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { runSteps } from '@/domain/planRun';
-import { askAfterSession } from '@/platform/coach/afterSession';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -66,10 +65,9 @@ function worthQueuing(e: unknown): boolean {
 // (day-one tier bootstraps + the learned per-lift INTER median + the learned pooled TRANSITION
 // median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
 // importer (Home, the watch plan, tests) keeps its single import point.
-import { emphasesOf, type Emphasis } from '@/domain/emphases';
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
-import { currentBlockSets } from '@/domain/setRow';
+import { bandOf, currentBlockSets } from '@/domain/setRow';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
 
@@ -277,6 +275,19 @@ export interface WatchLoggedSet {
   n: number;
   m: number;
   seq: number;
+  /*
+   * ⛔ THE BAND THE SET WAS DECIDED AGAINST — added 2026-08-12, and it closes a real split.
+   *
+   * The wrist reported four numbers and no band, so `bandPlacement` could never place a set logged
+   * on the watch. **The same set showed the band instrument on the phone and a bare "34 kg × 8 ·
+   * Set recorded" readback from the wrist** — two different answers to one set, decided by which
+   * device the athlete happened to tap. It looked like a designed state; it was a missing field.
+   *
+   * Captured beside `weight` and `reps`, before the machine advances, for the identical reason.
+   */
+  band?: [number, number];
+  /** Which lift it belonged to — the last set of one closes it, and the beat says its name. */
+  lift?: string;
 }
 
 export interface SessionView {
@@ -312,14 +323,15 @@ export interface SessionView {
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   setLabel: { n: number; m: number } | null; // set n of m within the exercise
-  /**
-   * Everything the coach wrote about THIS workout, one line per exercise — the KEY POINTS control.
+  /*
+   * ⛔ `emphases` IS DELETED (founder, 2026-08-12). It carried the coach's sentence per exercise and
+   * had exactly two readers — the mid-workout sheet and the cardio sheet — and both are gone.
    *
-   * Derived from the plan rather than stored, so it is right after a swap and right on a resumed
-   * session. Empty means the coach was quiet, and the control is absent rather than opening onto
-   * nothing (see `domain/emphases`).
+   * ⚠️ THE SENTENCE ITSELF IS NOT LOST. `ItemStage` draws an item's `say` on the stage it belongs
+   * to (`SayLine`), which is the better place for it anyway: beside the thing it is about, not
+   * collected onto a page she has to go and open. What no longer has a surface is the `say` on an
+   * ordinary LIFT — see the note left with the deletion.
    */
-  emphases: Emphasis[];
   /**
    * ⛔ WHAT SHE DID LAST TIME ON THE LIFT IN FRONT OF HER (founder 2026-08-04).
    *
@@ -1147,18 +1159,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         await app.markWorkoutCompleted(session.programDayId);
       }
       /*
-       * ════ AND THE COACH IS ASKED WHAT HAPPENS NEXT ════
+       * ⛔ THE COACH IS NOT ASKED WHAT HAPPENS NEXT. THE ENGINE ALREADY KNOWS.
        *
-       * The sentence the product is built around: the workout ended, everything measured about it
-       * goes to the coach, and the coach decides the next programme.
+       * ⛔ FOUNDER, 2026-08-12: *"אחרי כל אימון — המנוע אחראי לתוכנית."*
        *
-       * `void` is the whole design. She has finished and left; the call can take a minute and must
-       * not hold Well Done, the watch frame, or anything below this line. The session is already in
-       * history — a finished workout is finished whatever happens out there. `askAfterSession`
-       * never rejects, records its own outcome, and never retries: no connection means nothing is
-       * decided, the app says so, and the update waits.
+       * This line was `void askAfterSession(saved)`, and the comment above it called that "the
+       * sentence the product is built around: the workout ended … and **the coach decides the next
+       * programme**." That sentence was true of the AI era and it survived the AI being removed —
+       * which meant the engine owned her week for exactly ONE week. She trained once, the model
+       * wrote a `CoachPlan`, and every surface preferred it from then on.
+       *
+       * ⚠️ SO EVERY GUARANTEE THE ENGINE MAKES APPLIED TO HER FIRST WEEK ONLY. The share table, the
+       * 45–60 minutes, the repair pass, the effective dose, the 270-week scoreboard — all of it,
+       * replaced after her first session by a model that had none of those rules.
+       *
+       * ── AND NOTHING IS LOST BY REMOVING IT, WHICH IS THE POINT ─────────────────────────────────
+       * The engine has always done this work and does it from her record rather than from prose:
+       *
+       *   Loop 1  moves the load BETWEEN sets, from the reps she just did
+       *   Loop 2  decides the next session's load from the last one (S-38 … S-53)
+       *   Loop 3  grows or trims a muscle's weekly volume from what she earned
+       *
+       * `sessionTargets` re-reads her history on every call, so the next workout is already the
+       * answer to this one. There was never a second opinion to add — only one to override.
        */
-      void askAfterSession(saved);
 
       void track('session_finished', {
         sessionId: saved.id,
@@ -1345,7 +1369,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ? exerciseById(next.exerciseId)?.name ?? exerciseDisplayName(next.exerciseId)
           : null,
       setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
-      emphases: emphasesOf(plan),
       /*
        * ⚠️ THE LIVE SESSION IS EXCLUDED BY ID. History is written as she goes, so without this
        * "last time" would become "the set you just did" — useless and wrong.
@@ -1975,7 +1998,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const weight = actualWeight !== undefined ? actualWeight : tgt?.recommendedWeight ?? null;
     const reps = actualReps ?? tgt?.recommendedReps ?? 0;
     if (view.setLabel) {
-      setWatchLoggedSet({ weight, reps, n: view.setLabel.n, m: view.setLabel.m, seq: ++watchLogSeqRef.current });
+      setWatchLoggedSet({
+        weight,
+        reps,
+        n: view.setLabel.n,
+        m: view.setLabel.m,
+        seq: ++watchLogSeqRef.current,
+        // Same capture, same instant, same reason as `weight` and `reps` above — see `WatchLoggedSet`.
+        ...(bandOf(tgt) ? { band: bandOf(tgt)! } : {}),
+        ...(tgt?.exerciseId ? { lift: tgt.exerciseId } : {}),
+      });
     }
     if (actualReps == null && actualWeight === undefined) {
       void view.completeSet(); // nothing adjusted → log the prescribed target

@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   rows: {},
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, paddingVertical: 14, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: HAIRLINE },
   rowLast: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
-  rowText: { flex: 1, fontFamily: font.sans, fontSize: 15, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
+  rowText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
 
   foot: { paddingHorizontal: 26, paddingBottom: 12, gap: 4 },
 });

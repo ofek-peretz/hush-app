@@ -28,7 +28,7 @@ import type {
   SetTarget,
   Slot,
 } from '@/data/local/models';
-import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, patternFamily, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, patternFamily, indirectMusclesOf, INDIRECT_SHARE, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { swapScore } from '@/domain/swapPool';
 import { startingWeight } from '@/domain/startingLoad';
 import { computePortrait } from '@/data/progression';
@@ -36,9 +36,10 @@ import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { advanceV5, currentV5Targets, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
-import { assembleV5DayLists, ESSENTIAL_PATTERNS } from '@/engine/v5/programAssembly';
+import { assembleV5DayLists, ESSENTIAL_PATTERNS, essentialPatternOf } from '@/engine/v5/programAssembly';
+import { repairWeek } from '@/domain/weekRepair';
 import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
-import { learnedTransitionRestS, REST_TRANSITION_S } from '@/domain/restPrescription';
+import { learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
@@ -217,8 +218,11 @@ function coreHostIndex(days: ProgramDay[]): number {
 // Prescribed WORK SETS only — warm-ups, walks and setup are the athlete's, never counted.
 // Per-set minutes ≈ rest + execution; compounds rest longer than isolation. These are the DAY-ONE
 // bootstrap, used until she has rest data — then her MEASURED rest replaces the rest portion (S-64).
-const COMPOUND_SET_MIN = 3;
-const ISOLATION_SET_MIN = 2;
+//
+// ⛔ THEY LIVE IN `domain/restPrescription` NOW (2026-08-11). They were declared here and `coachWeek`
+// priced the same session differently, so Today announced sessions the engine had capped at sixty as
+// sixty-six. One home; see the note there for the measurement.
+// eslint-disable-next-line no-restricted-imports
 const MAX_SESSION_MIN = SESSION_MAX; // F-15 — one length for everyone; see the constant's note
 // B-4, the WORK half — the active seconds of a set before she has performed any. B-4 names BOTH
 // facts that replace this bootstrap: "her measured rest (built, Stage 0) AND HER SET DURATIONS
@@ -387,10 +391,16 @@ function enforceTimeCap(
     const ex = exerciseById(slot.exerciseId);
     if (!ex) return false;
     const essential = ESSENTIAL_PATTERNS[ex.muscle];
-    if (!essential?.includes(ex.pattern)) return false;
+    /*
+     * Matched through `essentialPatternOf`, so a `row_supported` counts as the day's ROW — see the
+     * note on that function. Matching the raw name left a cable row unprotected and cost a full-body
+     * session its only back lift.
+     */
+    const movement = essentialPatternOf(ex.pattern);
+    if (!essential?.includes(movement)) return false;
     const sameOnDay = day.slots.filter((s) => {
       const e = exerciseById(s.exerciseId);
-      return !s.supplemental && e?.muscle === ex.muscle && e.pattern === ex.pattern;
+      return !s.supplemental && e?.muscle === ex.muscle && essentialPatternOf(e.pattern) === movement;
     });
     return sameOnDay.length <= 1;
   };
@@ -413,6 +423,12 @@ function enforceTimeCap(
   // An EMPHASIS mark raises a muscle's claim here exactly as it raises its weekly target (S-4), so
   // the cap cannot quietly undo what she asked for. Without this, `chooseDonor` protected an
   // emphasised chest and then this pass cut it back to the same size as an unmarked one.
+  /*
+   * ⚠️ READING THE REAL `weeklyTargets` HERE INSTEAD WAS MEASURED AND REVERTED (2026-08-11). It is
+   * the more principled expression — the table is only a reconstruction of the target — but it moved
+   * nothing on the case it was written for (two marks on one region) and cost three inert marks on
+   * the ratchet. A more correct number that changes no outcome is not worth the extra wiring.
+   */
   const claimOf = (m: string) =>
     (MUSCLE_VOLUME_SHARE[m] ?? 1) * (emphasised.has(m) ? 1 + EMPHASIS_FRACTION : 1);
   const overServed = (): Map<number, number> => {
@@ -433,7 +449,23 @@ function enforceTimeCap(
     });
     return score;
   };
-  /** Slot indices, most over-served muscle first; ties keep the trailing-first order. */
+  /*
+   * Slot indices, most over-served muscle first; ties keep the trailing-first order.
+   *
+   * ⛔ MOVING THE TIER RULE INSIDE THE MUSCLE WAS MEASURED AND REVERTED (2026-08-11) — the sixth and
+   * last attempt on the two-marks-one-region defect, written down so it is not tried a seventh time.
+   *
+   * The diagnosis is right: "drop isolations before compounds" is applied ACROSS the day, so the
+   * isolation pass takes every isolation in the room before the compound pass sees one — and that
+   * stops being a training rule and becomes a rule about the CATALOGUE. Glutes' pool is three
+   * compounds and five isolations, Quads' is eight compounds, and with identical targets at six days
+   * the day drains every glute isolation and leaves the quad untouched.
+   *
+   * Ranking by muscle share first and tier only WITHIN a muscle is the principled correction. It
+   * broke two ratified laws at once: `everyAthleteTheEngineCanMeet`'s inert-mark ratchet went over
+   * its ceiling again, and `whenSheChangesHerMind` caught a mark LOWERING its own muscle (Quads
+   * 16 → 15 at four days). Same shape as every other attempt: single marks pay for double marks.
+   */
   const dropOrder = (): number[] => {
     const score = overServed();
     return day.slots
@@ -459,20 +491,81 @@ function enforceTimeCap(
   // do (a generated core block is `supplemental`, and calves are always their muscle's only lift).
   // The order is recomputed after every removal: dropping a slot changes which muscle is now the
   // most over-served, and it also invalidates every index computed before the splice.
-  for (const allowLeaveIt of [false, true]) {
-    for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
-      const i = dropOrder().find((j) => {
-        const slot = day.slots[j];
-        const ex = slot && exerciseById(slot.exerciseId);
-        if (!ex || slot.supplemental || ex.tier !== 'isolation') return false;
-        if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) return false; // S-59: leave-its are cut last
-        // S-35/S-63: never a muscle's only lift — unless the WEEK trains it on another day too.
-        if ((exCountByMuscle()[ex.muscle] ?? 0) <= 1 && !trainedOnOtherDays.has(ex.muscle)) return false;
-        if (lastOfEssentialPattern(slot)) return false; // never the day's last row / pulldown
-        return true;
-      });
-      if (i === undefined) break;
-      day.slots.splice(i, 1);
+  /*
+   * ⛔ AND A MARK IS SPARED WHILE THE DAY HAS A CHEAPER MOVE (S-4, founder 2026-08-11).
+   *
+   * `trainedOnOtherDays` waives S-35 because a muscle trained Monday and Thursday does not go dark
+   * if Monday gives one up. For an EMPHASISED muscle that waiver is exactly how the cap undoes the
+   * mark: marking Chest at three days emptied Full Body A of chest entirely, and the week came out
+   * at 10 weekly sets against 11 unmarked. A mark may never LOWER the muscle it is placed on.
+   *
+   * ⚠️ A TIER, NOT A VETO — measured. Enforcing it as a veto put a 2-day week with Glutes marked at
+   * 61 minutes, because the marked muscle's lift was the only legal drop left on the day. So the
+   * pass looks for a drop that spares the mark first and takes one that does not only when the day
+   * has nothing else, exactly as `allowLeaveIt` beside it already works. The mark wins whenever the
+   * cap has another option; the hour wins when it does not (S-64 is a hard ceiling).
+   */
+  for (const sparesTheMark of [true, false]) {
+    for (const allowLeaveIt of [false, true]) {
+      for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
+        const i = dropOrder().find((j) => {
+          const slot = day.slots[j];
+          const ex = slot && exerciseById(slot.exerciseId);
+          if (!ex || slot.supplemental || ex.tier !== 'isolation') return false;
+          if (!allowLeaveIt && protectedIds.has(slot.exerciseId)) return false; // S-59: leave-its are cut last
+          // S-35/S-63: never a muscle's only lift — unless the WEEK trains it on another day too.
+          const onlyOne = (exCountByMuscle()[ex.muscle] ?? 0) <= 1;
+          if (onlyOne && !trainedOnOtherDays.has(ex.muscle)) return false;
+          /*
+           * ⛔ S-4 · A MARKED MUSCLE IS NOT TOUCHED WHILE ANY UNMARKED WORK IS STILL DROPPABLE.
+           *
+           * This guard used to read `onlyOne && emphasised`, which protected a mark's LAST lift on a
+           * day and nothing before it — and that is not where the mark was dying. Two marks on one
+           * region exposed it: at six days Quads and Glutes get IDENTICAL targets (50 each) and are
+           * dealt nearly the same number of lifts (9 and 8), and the week came out Quads 36 · Glutes
+           * 12. The difference is not training, it is FILING. Quads' eight lifts are compounds;
+           * Glutes' pool is three compounds and five isolations, and this pass drops isolations
+           * first. Chest lost its three flies to Back's rows for exactly the same reason.
+           *
+           * It is the fault named on `ESSENTIAL_PATTERNS.Hamstrings`, one layer over: *"the engine was
+           * penalising a muscle for the TIER its catalogue entries happen to carry, which is a fact
+           * about equipment, not about training."* A cable kickback is not spare volume because it is
+           * single-joint; it is the volume she asked for.
+           *
+           * So the first tier spares the mark ENTIRELY. The second tier below still yields, so a day
+           * that cannot fit any other way is not held hostage to it — the hour stays a hard ceiling.
+           */
+          if (sparesTheMark && emphasised.has(ex.muscle)) return false;
+          if (lastOfEssentialPattern(slot)) return false; // never the day's last row / pulldown
+          /*
+           * ⛔ MEASURED AND REVERTED, 2026-08-11 — the next reader will try this, so it is written down.
+           *
+           * This pass drops ISOLATIONS, and it drops every droppable one in the day before step 4 may
+           * touch a compound. That sacrifices a muscle for the TIER its catalogue entries carry:
+           * Glutes' pool is three compounds and five isolations, Quads' is eight compounds, and with
+           * both marked and given the SAME target the day drained every glute isolation and left the
+           * quad untouched (Quads 36 · Glutes 12, from targets of 40 and 40).
+           *
+           * The obvious fix is to require the muscle to be OVER its share before taking from it —
+           * `overServed().get(j) > 0`, one line, using machinery this function already has. It works:
+           * Glutes went 12 → 21 and double-marks that lower their own muscle fell from 8 to 5.
+           *
+           * ⛔ AND IT BREAKS THE RATCHET IN `everyAthleteTheEngineCanMeet`, which is not negotiable:
+           * inert emphasis marks over the 1,455-programme sweep went 147 → 205 (the ratified ceiling
+           * is 192, and that file says in as many words that the number may only ever go DOWN).
+           * Protecting an under-served muscle's isolation leaves the cap fewer legal moves, so SINGLE
+           * marks — far more common than two on one region — stop being served at all. Fifty-eight
+           * single-mark regressions to fix three double-mark ones is not a trade worth making.
+           *
+           * The real fault is upstream and is already named on the pin in `theWeekIsBalanced`: a
+           * muscle should not be dealt more lifts than its region can hold, so that nothing has to be
+           * deleted here at all.
+           */
+          return true;
+        });
+        if (i === undefined) break;
+        day.slots.splice(i, 1);
+      }
     }
   }
   const compoundIdx = day.slots.map((_s, i) => i).filter((i) => isCompound(day.slots[i].exerciseId));
@@ -483,25 +576,42 @@ function enforceTimeCap(
   // Step 4 — the last resort. Recompute the per-muscle exercise count each pass and drop the trailing
   // compound whose muscle keeps another lift; unpinned first (S-59). Stop when nothing qualifies —
   // the day genuinely cannot fit her minutes (S-3), and the engine says so rather than starve a muscle.
-  for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
-    const counts = exCountByMuscle();
-    let dropped = false;
-    for (const allowLeaveIt of [false, true]) {
-      for (let i = day.slots.length - 1; i >= 0; i--) {
-        const s = day.slots[i];
-        if (s.supplemental || !isCompound(s.exerciseId)) continue;
-        if (!allowLeaveIt && protectedIds.has(s.exerciseId)) continue; // S-59
-        const m = exerciseById(s.exerciseId)?.muscle;
-        if (!m || (counts[m] <= 1 && !trainedOnOtherDays.has(m))) continue; // S-35, read across the week
-        if (lastOfEssentialPattern(s)) continue; // never the day's last row / pulldown
-        day.slots.splice(i, 1);
-        dropped = true;
-        break;
+  /*
+   * ⛔ THE MARK IS SPARED HERE TOO — but the YIELD is moved past step 5 (S-4, founder 2026-08-11).
+   *
+   * `sparesTheMark` is the same tier the isolation pass above uses, and for the same reason: without
+   * it, marking Chest at three days emptied Full Body A of chest and cost the week a set. What is
+   * different here is WHERE the tier's second half runs. Step 4 REMOVES a lift; step 5 below only
+   * SHAVES a set. Yielding inside this loop meant a marked muscle lost a whole lift while sets that
+   * cost the day nothing to give were still on the board — so the yield is step 6, after step 5 has
+   * taken every set it legally can. Measured: with the yield here the marked week stays at 11, and
+   * with it inside this loop it fell to 10.
+   */
+  const dropCompounds = (sparesTheMark: boolean): void => {
+    for (let guard = 0; guard < day.slots.length * 2 && over(); guard++) {
+      const counts = exCountByMuscle();
+      let dropped = false;
+      for (const allowLeaveIt of [false, true]) {
+        for (let i = day.slots.length - 1; i >= 0; i--) {
+          const s = day.slots[i];
+          if (s.supplemental || !isCompound(s.exerciseId)) continue;
+          if (!allowLeaveIt && protectedIds.has(s.exerciseId)) continue; // S-59
+          const m = exerciseById(s.exerciseId)?.muscle;
+          if (!m) continue;
+          const onlyOne = counts[m] <= 1;
+          if (onlyOne && !trainedOnOtherDays.has(m)) continue; // S-35, read across the week
+          if (sparesTheMark && emphasised.has(m)) continue; // S-4 in full — see the isolation pass above
+          if (lastOfEssentialPattern(s)) continue; // never the day's last row / pulldown
+          day.slots.splice(i, 1);
+          dropped = true;
+          break;
+        }
+        if (dropped) break;
       }
-      if (dropped) break;
+      if (!dropped) break; // only single-exercise muscles remain → the day cannot fit (S-3)
     }
-    if (!dropped) break; // only single-exercise muscles remain → the day cannot fit (S-3)
-  }
+  };
+  dropCompounds(true);
   /*
    * Step 5 — SHAVE A SET rather than lose a lift.
    *
@@ -515,14 +625,115 @@ function enforceTimeCap(
    * stays, the muscle stays, and F-1's floor of three still holds. It is last because a set is the
    * cheapest thing to lose and should therefore be the last thing tried, not the first.
    */
-  for (let guard = 0; guard < day.slots.length * V5_SETS_MAX && over(); guard++) {
-    const i = dropOrder().find((j) => {
-      const s = day.slots[j];
-      return s && !s.supplemental && s.setCount > V5_SETS_MIN;
-    });
-    if (i === undefined) break; // every lift is at the floor — the day genuinely cannot fit (S-3)
-    day.slots[i].setCount -= 1;
-  }
+  const shaveSets = (): void => {
+    for (let guard = 0; guard < day.slots.length * V5_SETS_MAX && over(); guard++) {
+      const i = dropOrder().find((j) => {
+        const s = day.slots[j];
+        return s && !s.supplemental && s.setCount > V5_SETS_MIN;
+      });
+      if (i === undefined) break; // every lift is at the floor — the day genuinely cannot fit (S-3)
+      day.slots[i].setCount -= 1;
+    }
+  };
+  shaveSets();
+  /*
+   * Step 6 — and only NOW does the mark yield.
+   *
+   * A set is the cheapest thing to lose, so it goes first: the day takes every legal shave above,
+   * and a marked muscle gives up its last lift on a day only when shaving has run out too. This
+   * ordering is what lets the single-mark week keep its 11 sets AND the 2-day marked week keep its
+   * hour — the two measurements that pulled against each other while the yield sat inside step 4.
+   */
+  dropCompounds(false);
+  /*
+   * …and shave again, because step 6 may have just changed what is shaveable.
+   *
+   * Measured: without this the 2-day week with Glutes marked came out at 61 minutes. Step 6 removes
+   * a lift and the removal re-prices the day, but the pass that turns a re-priced day into a fitting
+   * one had already run. The passes are cheap and idempotent — a day already inside its minutes is
+   * untouched, since every one of them is gated on `over()`.
+   */
+  shaveSets();
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ SHE ASKED US TO BALANCE THE WEEK SHE BROUGHT — and this is the whole of what that means.
+ *
+ * FOUNDER, 2026-08-11: *"תציע לי מה אתה חושב שכפתור תאזן לי צריך לעשות."*
+ *
+ * The obvious build is to throw her programme away and generate a Hush week from her profile. That
+ * is not what the button says and it is not what she asked for: she arrived WITH a programme, read a
+ * report about it, and pressed a button that says *balance MINE*. Regenerating would answer a
+ * different question — "give me a new one" — and lose the exercise selection, the day structure and
+ * the order that were the reason she imported anything.
+ *
+ * So this keeps every decision that was hers and fixes only what the report named:
+ *
+ *     HERS, untouched      which exercises · which days · what order · which muscles she trains
+ *     OURS to fix          a session past her hour · a muscle under the effective dose
+ *
+ * ⚠️ IT STAYS `authored`. She asked for one adjustment; she did not hand the week over. If this
+ * returned an `engine` programme, her next profile edit would silently regenerate the whole thing —
+ * which is exactly the promise `engineMayRebuild` exists to keep, undone by a button press she read
+ * as "tidy this up".
+ *
+ * ⚠️ AND IT REPORTS WHAT IT DID. The cap can REMOVE a lift when a day cannot fit any other way. That
+ * is a real change to her programme, made at her request, and she is owed the sentence.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export interface BalanceChange {
+  kind: 'lift_removed' | 'sets_trimmed' | 'sets_raised';
+  day: string;
+  exerciseId: string;
+  from: number;
+  to: number;
+}
+
+export function balanceAuthoredWeek(
+  program: Program,
+  bodyMap?: Profile['bodyMap'],
+): { program: Program; changes: BalanceChange[] } {
+  const before = program.days.map((d) => ({
+    name: d.name,
+    slots: d.slots.map((s) => ({ id: s.exerciseId, n: s.setCount })),
+  }));
+  /*
+   * A deep copy, because every pass below mutates. Balancing must never edit the programme she is
+   * still looking at — if she backs out of the review, the week she brought is untouched on disk.
+   */
+  const days: ProgramDay[] = program.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s })) }));
+
+  const emphasised = new Set(
+    Object.entries(bodyMap ?? {}).filter(([, v]) => v === 'emphasis').map(([m]) => m),
+  );
+  /*
+   * The same "trained on another day" guard the generator uses, so the cap can never take a muscle's
+   * only lift and switch it off behind her.
+   */
+  const trainedTwice = (): ReadonlySet<string> => {
+    const n: Record<string, number> = {};
+    for (const d of days)
+      for (const m of new Set(d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter(Boolean)))
+        n[m as string] = (n[m as string] ?? 0) + 1;
+    return new Set(Object.entries(n).filter(([, c]) => c > 1).map(([m]) => m));
+  };
+
+  for (const d of days) enforceTimeCap(d, MAX_SESSION_MIN, undefined, undefined, new Set(), undefined, emphasised, trainedTwice());
+  raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, MAX_SESSION_MIN);
+
+  const changes: BalanceChange[] = [];
+  before.forEach((b, i) => {
+    const after = days[i];
+    for (const s of b.slots) {
+      const still = after.slots.find((x) => x.exerciseId === s.id);
+      if (!still) changes.push({ kind: 'lift_removed', day: b.name, exerciseId: s.id, from: s.n, to: 0 });
+      else if (still.setCount < s.n) changes.push({ kind: 'sets_trimmed', day: b.name, exerciseId: s.id, from: s.n, to: still.setCount });
+      else if (still.setCount > s.n) changes.push({ kind: 'sets_raised', day: b.name, exerciseId: s.id, from: s.n, to: still.setCount });
+    }
+  });
+
+  return { program: { ...program, days }, changes };
 }
 
 /**
@@ -848,13 +1059,34 @@ function raiseToWeeklyFloor(
   execSecFor?: (id: string) => number | null,
   transitionSec?: number | null,
 ): void {
+  /*
+   * ⛔ THE FLOOR IS READ AGAINST EFFECTIVE VOLUME, NOT THE FILING (founder 2026-08-11:
+   * *"תלמד את חישוב הנפח לקרוא את capability"*).
+   *
+   * This pass exists to stop a muscle finishing the week under MEV, and it was asking the question
+   * of a number the catalogue's one-muscle-per-lift convention makes untrue. Every row and pulldown
+   * trains the biceps and every press trains the triceps, and neither was counted: measured at two
+   * days, DIRECT sets said seven muscles were under the floor while EFFECTIVE sets said five —
+   * Triceps sat at 4 direct and 6.5 real, Biceps at 4 and 7. Both were already fed.
+   *
+   * That is not a cosmetic difference. A two-day week has no spare minutes, so every set this pass
+   * spends topping up a muscle that is already at MEV is a set the chest, quads or glutes — which
+   * genuinely ARE short — do not get. It was solving the wrong shortage.
+   *
+   * ⚠️ ONLY THE MEASUREMENT MOVES. The set is still added to a lift that trains the muscle DIRECTLY
+   * (the `taker` below is unchanged), because indirect work is what a muscle receives, never what it
+   * can be prescribed. See `indirectMusclesOf` for why this reads movement patterns rather than
+   * `capability` itself.
+   */
   const weekly = (): Record<string, number> => {
     const n: Record<string, number> = {};
     for (const d of days)
       for (const s of d.slots) {
         if (s.supplemental) continue;
         const m = exerciseById(s.exerciseId)?.muscle;
-        if (m) n[m] = (n[m] ?? 0) + s.setCount;
+        if (!m) continue;
+        n[m] = (n[m] ?? 0) + s.setCount;
+        for (const im of indirectMusclesOf(s.exerciseId)) n[im] = (n[im] ?? 0) + s.setCount * INDIRECT_SHARE;
       }
     return n;
   };
@@ -904,12 +1136,80 @@ function raiseToWeeklyFloor(
         if (!giver) continue;
         giver.setCount -= 1;
         taker.setCount += 1;
+        /*
+         * ⛔ …AND RE-PRICED, BECAUSE A TRANSFER IS NOT FREE (founder 2026-08-11).
+         *
+         * The note above claims "the day's length does not move, so nothing downstream has to be
+         * re-checked". That holds only if a set costs the same on both lifts, and it does not: the
+         * budget prices every set at HER MEASURED rest and set duration for THAT exercise (S-17 /
+         * B-4). Moving a set from a quick isolation onto a heavy compound lengthens the day with the
+         * set COUNT unchanged — a 2-day week with Glutes marked came out at 61 minutes this way,
+         * one past a ceiling S-64 calls hard. `growEmphasised` carried the identical bug and the
+         * identical comment; both are re-priced now.
+         *
+         * An undone transfer is not a failure: it means this pair cannot help, so the search moves
+         * on to the next day and, failing that, stops — which is S-3, said honestly.
+         */
+        if (estimateSessionMinutes(d, restSecFor, execSecFor, transitionSec) > budgetMin) {
+          taker.setCount -= 1;
+          giver.setCount += 1;
+          continue;
+        }
         moved = true;
         break;
       }
       if (moved) break;
     }
-    if (!moved) return; // every short muscle is boxed in by the clock, by F-1, or by its neighbours
+    if (moved) continue;
+    /*
+     * ⛔ …AND FAILING THAT, ACROSS DAYS (founder 2026-08-11, item 8 — two emphasis marks).
+     *
+     * Every transfer above is SAME-DAY, and that is why two marks could still leave a muscle under
+     * MEV. Marking Chest and Back at four days moves 35 weekly sets onto them (targets 24→39 and
+     * 28→48), and the muscles that pay are on the OTHER days: Glutes and Calves finished on 5 sets
+     * against a floor of 6. A same-day search can never fix that — Glutes trains on the lower days
+     * and the muscles holding the spare volume are on the upper ones, so no legal pair exists on any
+     * single day, and the pass gave up while the week as a whole had plenty to spare.
+     *
+     * So the last resort reads the WEEK: take the set from the muscle with the most to spare wherever
+     * it sits, and give it to the short muscle on its own day. The donor's day only gets SHORTER, so
+     * it needs no check; the taker's day is re-priced and the move is undone if it does not fit
+     * (S-64 stays a hard ceiling, and a set is not free — see the note in `growEmphasised`).
+     *
+     * ⚠️ AN EMPHASISED MUSCLE IS A LEGAL DONOR HERE, and deliberately. A mark redistributes training;
+     * it is not permission to stop training a muscle she left ON (S-4 is bounded by B-2's floor, and
+     * the comment on `growEmphasised`'s own donor guard already says so). The donor still may not
+     * fall under the floor itself, so a mark can only ever give back what it took beyond it.
+     */
+    let crossed = false;
+    for (const m of short) {
+      const takerDay = days.find((d) => d.slots.some((s) => !s.supplemental && s.setCount < V5_SETS_MAX && exerciseById(s.exerciseId)?.muscle === m));
+      if (!takerDay) continue;
+      const taker = takerDay.slots.find((s) => !s.supplemental && s.setCount < V5_SETS_MAX && exerciseById(s.exerciseId)?.muscle === m)!;
+      // The muscle with the most to spare, anywhere in the week. Ties fall to canonical order (F-9).
+      let giver: Slot | undefined;
+      let giverDay: ProgramDay | undefined;
+      let bestSpare = 0;
+      for (const d of days)
+        for (const s of d.slots) {
+          if (s.supplemental || s === taker || s.setCount <= V5_SETS_MIN) continue;
+          const gm = exerciseById(s.exerciseId)?.muscle;
+          if (!gm || gm === m) continue;
+          const spare = (sets[gm] ?? 0) - floorSets;
+          if (spare >= 1 && spare > bestSpare) { bestSpare = spare; giver = s; giverDay = d; }
+        }
+      if (!giver || !giverDay) continue;
+      giver.setCount -= 1;
+      taker.setCount += 1;
+      if (estimateSessionMinutes(takerDay, restSecFor, execSecFor, transitionSec) > budgetMin) {
+        taker.setCount -= 1;
+        giver.setCount += 1;
+        continue; // her hour wins; try the next short muscle
+      }
+      crossed = true;
+      break;
+    }
+    if (!crossed) return; // every short muscle is boxed in by the clock, by F-1, or by its neighbours
   }
 }
 
@@ -935,6 +1235,8 @@ function growEmphasised(
     }
     return n;
   };
+  /** What this call has already donated per muscle — the floor guard below reads the LIVE number. */
+  const taken: Record<string, number> = {};
   for (let guard = 0; guard < day.slots.length * V5_SETS_MAX; guard++) {
     /*
      * The THINNEST marked muscle grows first. Taking the first slot in day order instead meant that
@@ -967,14 +1269,61 @@ function growEmphasised(
     // …and the donor may not fall below the effective dose itself. Without this, marking Chest and
     // Back took a four-day week's Glutes to 4 weekly sets and Calves to 3: a mark she placed on one
     // muscle is not permission to stop training another she left on.
+    /*
+     * ⛔ …AND THE GUARD COUNTS WHAT THIS CALL HAS ALREADY TAKEN (founder 2026-08-11, item 8).
+     *
+     * `weeklySets` is a SNAPSHOT, taken before this day's loop begins. The loop donates repeatedly —
+     * up to `slots × 5` times — and every iteration re-checked the SAME stale total, so each single
+     * donation looked safe while their sum was not. Two marks are the case that reaches it: Chest and
+     * Back marked at four days took Glutes and Calves to 5 weekly sets, under the MEV floor of 6,
+     * which is precisely the thing the comment above says this guard exists to prevent.
+     *
+     * `taken` is what this call has already removed from each muscle, so the floor is checked against
+     * the number that will actually be true when the day is finished.
+     */
     const giver = day.slots.find((s) => {
       if (s.supplemental || s === slot || s.setCount <= V5_SETS_MIN) return false;
       const gm = exerciseById(s.exerciseId)?.muscle;
-      return !!gm && !emphasised.has(gm) && (weeklySets[gm] ?? 0) - 1 >= WEEKLY_SETS_FLOOR;
+      if (!gm || emphasised.has(gm)) return false;
+      /*
+       * ⛔ A DONOR GIVES A SHARE OF ITS WORK, NOT ALL OF IT DOWN TO THE FLOOR (founder 2026-08-11).
+       *
+       * The only bound here was the MEV floor, so a mark could take an unmarked muscle all the way to
+       * six weekly sets. Measured at five days with SHOULDERS marked: the TARGET moved one block
+       * (Chest 26 → 21), and the DELIVERED week moved twelve (Chest 18 → 6). This pass is the
+       * amplifier — it runs after the cap, and it kept taking because six was still legal.
+       *
+       * She asked to lead with her shoulders. She did not ask to stop training her chest. So a donor
+       * may give up to a THIRD of what it holds, and the floor still applies underneath: leading with
+       * one muscle costs another some of its work, never most of it.
+       */
+      const held = weeklySets[gm] ?? 0;
+      const after = held - (taken[gm] ?? 0) - 1;
+      return after >= WEEKLY_SETS_FLOOR && after >= Math.ceil(held * (2 / 3));
     });
     if (!giver) return;
+    const giverMuscle = exerciseById(giver.exerciseId)?.muscle;
+    if (giverMuscle) taken[giverMuscle] = (taken[giverMuscle] ?? 0) + 1;
     giver.setCount -= 1;
     slot.setCount += 1;
+    /*
+     * ⛔ …AND THE TRANSFER IS RE-PRICED, BECAUSE IT IS NOT FREE (founder 2026-08-11).
+     *
+     * The note above says "the session's length does not move", and that is true only if a set costs
+     * the same on both lifts. It does not: the budget prices every set at HER MEASURED rest and HER
+     * MEASURED set duration for THAT exercise (S-17 / B-4), so moving a set from a quick isolation to
+     * a heavy compound with a longer rest makes the day longer even though the set COUNT is
+     * unchanged. Nothing re-checked, and a 2-day week with Glutes marked came out at 61 minutes —
+     * one minute past a ceiling S-64 calls hard.
+     *
+     * If the swap costs time the day does not have, it is simply undone: the mark then costs nothing
+     * on this day, which is the outcome the `!giver` branch above already accepts and says so.
+     */
+    if (minutes() > budgetMin) {
+      slot.setCount -= 1;
+      giver.setCount += 1;
+      return;
+    }
   }
 }
 
@@ -1133,15 +1482,40 @@ export const fixtureModel: ModelClient = {
       void track('engine_error', { op: 'getVolumeTargetsV5', message: String(e) });
       return {};
     });
+    /*
+     * ⛔ NOTHING ON MEANS NO WORKOUT (S-3), AND THE "SAFETY NET" HERE WAS BREAKING THAT RULE.
+     *
+     * ⛔ FOUNDER, 2026-08-12, asking whether an athlete can refuse a whole region. She can, and it
+     * works: legs off at three, four and five days gives Upper A–E, 45–60 minutes each, no leg work
+     * anywhere. Checking the extreme found this.
+     *
+     * The line here read: *"if a map ever yields no workout, fall back to an ALL-NORMAL map so a
+     * workout always exists. Unreachable in practice."* Both halves were wrong.
+     *
+     *   · REACHABLE. Onboarding refuses an empty map; the PROFILE editor never learned the rule, so
+     *     she could switch off all ten muscles there and press save. (Now guarded — `BodyMapEdit`.)
+     *   · AND THE FALLBACK IS THE WORST POSSIBLE ANSWER. She switched off every muscle and the
+     *     engine handed back three full-body days of seven lifts, training every one of them. The
+     *     body map's entire purpose is that an `off` muscle never appears (S-2); a net that ignores
+     *     the whole map to avoid an empty result is the engine overruling her in silence.
+     *
+     * S-3 is explicit — everything off yields no workout — so that is what it yields. An empty week
+     * is a state the surfaces can render honestly; a week she refused is not.
+     *
+     * ⚠️ THE NET IS KEPT FOR WHAT IT WAS ACTUALLY FOR. A map with something still ON that produces
+     * no days is a defect in the assembler, not a decision of hers, and falling back beats a blank
+     * screen. That case is now separated from the one where she said no to everything.
+     */
     let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
-    // Safety net: everything-off (S-3) is prevented by the body-map screen (validateMap), but if a map
-    // ever yields no workout, fall back to an ALL-NORMAL map (never a demographic shelf) so a workout
-    // always exists. Unreachable in practice.
-    if (dayLists.length === 0) dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
+    const everythingOff =
+      CANONICAL_MUSCLE_ORDER.length > 0 && CANONICAL_MUSCLE_ORDER.every((m) => profile.bodyMap?.[m] === 'off');
+    if (dayLists.length === 0 && !everythingOff) {
+      dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile);
+    }
     const emphasisedMuscles = new Set(
       Object.entries(profile.bodyMap ?? {}).filter(([, v]) => v === 'emphasis').map(([m]) => m),
     );
-    const days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts, emphasisedMuscles));
+    let days: ProgramDay[] = dayLists.map((dl, i) => dayFromBlueprint(i, dl.name, dl.exerciseIds, dl.setCounts, emphasisedMuscles));
 
     // S-29 · "The same exercise in two workouts in one week. **One progression, fed by both
     // sessions** — automatic under exercise-keying. The `canonicalEngineId` unification hack is
@@ -1257,6 +1631,32 @@ export const fixtureModel: ModelClient = {
     // …and no muscle she left ON leaves the week below the minimum effective dose, where the clock
     // has room to prevent it (B-2's WEEKLY_SETS_FLOOR).
     raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, budgetMin, restSecFor, execSecFor, transitionS);
+
+    /*
+     * ════════════════════════════════════════════════════════════════════════════════════════════
+     * ⛔ AND THEN THE FINISHED WEEK IS READ BACK AND MENDED (founder 2026-08-12, stage B).
+     *
+     * Every pass above decides with partial information and hands on: the targets do not know what a
+     * lift costs, the dealer does not know what the clock will cut, and the cap prices ONE day at a
+     * time and cannot see the week. Thirteen attempts to fix a defect inside one of those stages each
+     * broke something in another, and the diagnosis they produced was not "the pipeline is wrong" —
+     * it was that **nothing had ever looked at the finished week**.
+     *
+     * `domain/weekQuality` is the written definition of a good one; `domain/weekRepair` reads a week
+     * against it and makes small named moves, keeping a move ONLY when the whole board improves.
+     * Measured over the 270 weeks the product can actually produce:
+     *
+     *     a muscle past the ceiling ....... 34 → 0      closed outright
+     *     share inversions ................ 104 → 92    and 82 of the 92 are cross-region
+     *     weeks made worse ................ 0
+     *     cost ............................ ~1.3 ms a week
+     *
+     * ⚠️ IT RUNS BEFORE THE VERDICTS BELOW, not after. `overBudget` and `shortOfBudget` are what the
+     * engine SAYS about the week it is handing over, and repairs move sets between days — so a flag
+     * stamped first would describe a week that no longer exists.
+     */
+    const repaired = repairWeek({ id: 'program_v1', frequency: n, days }, { bodyMap: profile.bodyMap, daysPerWeek: n });
+    if (repaired.program) days = repaired.program.days;
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
@@ -1281,6 +1681,30 @@ export const fixtureModel: ModelClient = {
         // Same estimate the trims enforced, so the sentence can never disagree with the enforcement.
         d.overBudget = true;
         void track('engine_cannot_fit_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
+      }
+      /*
+       * ⛔ AND THE OTHER DIRECTION, WHICH NOTHING HAS EVER REPORTED (founder 2026-08-12).
+       *
+       * Checking whether an athlete may refuse a whole region — she may, and it works — the extreme
+       * case showed the gap: a map with only CHEST left on produces three sessions of TWENTY-FIVE
+       * MINUTES against the hour she asked for, and says nothing about it. Not a bug in the
+       * arithmetic: the chest owns nine lifts, F-1 caps a block at five sets, and a day may not
+       * repeat a movement — so there is no legal way to fill her hour from one muscle. The week is
+       * correct AND it is not the week she thinks she asked for.
+       *
+       * `overBudget` already exists for the day that cannot fit her minutes. This is its mirror: the
+       * day her minutes cannot be FILLED, because the map she drew does not contain enough work.
+       * Both are the same promise — the engine says what it could not do rather than leaving her to
+       * notice. And the remedy is hers and is real: turn a muscle back on, or ask for fewer minutes.
+       *
+       * ⚠️ THE THRESHOLD IS `SESSION_MIN`, NOT HER BUDGET. A 52-minute session against a 60-minute
+       * budget is an ordinary week and saying anything about it would be nagging. Below 45 is the
+       * line the engine already holds itself to everywhere else (F-15), and a session under it is
+       * one no arrangement of her map was able to reach.
+       */
+      if (mins < SESSION_MIN - 1e-9) {
+        d.shortOfBudget = true;
+        void track('engine_cannot_fill_budget', { day: d.name, minutes: Math.round(mins), budgetMin, slots: d.slots.length });
       }
     }
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order

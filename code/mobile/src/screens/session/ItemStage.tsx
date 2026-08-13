@@ -38,7 +38,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseById } from '@/data/exercises';
 import { font, space, stage } from '@/design/tokens';
@@ -126,7 +126,7 @@ function RoundLine({ round }: { round?: { n: number; m: number } | null }) {
   const { t } = useCopy();
   if (!round || round.m <= 1) return null;
   return (
-    <Legend size={15} track={0.2} align="center" tone="onStage" style={styles.roundLine}>
+    <Legend size={17} track={0.2} align="center" tone="onStage" style={styles.roundLine}>
       {t('workout.repOfM', { n: round.n, m: round.m })}
     </Legend>
   );
@@ -136,7 +136,7 @@ function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
   return (
     <>
       {muscle ? (
-        <Legend size={12} track={0.22} align="center" style={styles.itemMuscle}>
+        <Legend size={17} track={0.22} align="center" style={styles.itemMuscle}>
           {muscle}
         </Legend>
       ) : null}
@@ -202,13 +202,44 @@ export function TimeStage({
   const figure = clockOf(remaining);
   return (
     <>
+      {/*
+        ════════════════════════════════════════════════════════════════════════════════════════
+        ⛔ BUILT IN THE SET STAGE'S LANGUAGE (founder, 2026-08-12)
+
+          *"מה שאני כן רוצה מהPLANK שתעצב אותו כמו מסכים THE SET 2.2 כי זה תרגיל לכל דבר."*
+
+        He is right that it is a lift like any other, and the three things that made it read as a
+        different app were all things `2.2` had already fixed and this screen had not:
+
+          THE IDENTITY sat in the middle of a centred stack. It goes to the top, where the set
+            stage put it once there were 220 dead points above "CHEST".
+
+          THE FIGURE had no heading. On `2.2` every figure is opened by a lit 22-point word —
+            WEIGHT, REPS — and an unlabelled `0:45` is the same defect as an unlabelled band tick:
+            the athlete is asked to infer what she is looking at.
+
+          ⛔ AND "REP 2 OF 3" WAS PRINTED TWICE. The rail above this stage already draws it — the
+            same `LiftRail`, fed the same `session.setLabel` — which is the merge he asked for on
+            the set stage and got: *"אולי אפשר לעשות את זה יחד עם הקו שהחליף את ה-LIFT."* This
+            screen kept the words as well, so the fact was on the screen in two languages at once.
+            `RoundLine` is deleted.
+        ════════════════════════════════════════════════════════════════════════════════════════
+      */}
       <View style={styles.body}>
-        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
-        <RoundLine round={round} />
-        <Text style={[styles.hero, heroType(figure)]} numberOfLines={1} accessibilityLabel={figure}>
-          {figure}
-        </Text>
-        <SayLine say={item.say} />
+        <Arrive order={0} style={styles.identity}>
+          <ItemName name={name} muscle={muscleFor(item.ex, t)} />
+        </Arrive>
+        <Arrive order={1} style={styles.band}>
+          <Legend size={22} track={0.26} align="center" style={styles.bandLabel}>
+            {t('workout.hold')}
+          </Legend>
+          <Text style={[styles.hero, heroType(figure)]} numberOfLines={1} accessibilityLabel={figure}>
+            {figure}
+          </Text>
+        </Arrive>
+        <Arrive order={2} style={styles.sayBlock}>
+          <SayLine say={item.say} />
+        </Arrive>
       </View>
       <View style={styles.footer}>
         <Button
@@ -256,8 +287,13 @@ export function DistanceStage({
   return (
     <>
       <View style={styles.body}>
-        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
-        <RoundLine round={round} />
+        {/* The three stages compose on arrival, exactly as the SET stage does — a plank and a
+            400 m repeat are steps of the same workout and must not feel like a different app.
+            See `SessionFlow`'s `beat` for the argument and the caveat. */}
+        <Arrive order={0} style={styles.identity}>
+          <ItemName name={name} muscle={muscleFor(item.ex, t)} />
+          <RoundLine round={round} />
+        </Arrive>
         <View style={styles.figureRow}>
           <Text style={[styles.hero, heroType(figure)]} numberOfLines={1}>
             {figure}
@@ -265,7 +301,7 @@ export function DistanceStage({
           <Text style={styles.unit}>{unit}</Text>
         </View>
         {item.load != null ? (
-          <Legend size={13} track={0.14} align="center" tone="onStage">
+          <Legend size={17} track={0.14} align="center" tone="onStage">
             {t('workout.itemCarrying', { load: item.load })}
           </Legend>
         ) : null}
@@ -284,43 +320,29 @@ export function DistanceStage({
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────────── open */
-
-/**
- * No number worth stating — mobility, skill work, a warm-up.
- *
- * The instruction IS the item, so it takes the whole stage instead of sitting under a figure. There
- * is no hero number because inventing one ("5 minutes of mobility") would be the app deciding
- * something the coach deliberately left open.
- */
-export function OpenStage({
-  item,
-  name,
-  round,
-  onDone,
-}: {
-  item: Extract<PlannedItem, { kind: 'open' }>;
-  name: string;
-  round?: { n: number; m: number } | null;
-  onDone: () => void;
-}) {
-  const { t } = useCopy();
-  return (
-    <>
-      <View style={styles.body}>
-        <ItemName name={name} muscle={muscleFor(item.ex, t)} />
-        <RoundLine round={round} />
-        <Text style={styles.openHero}>{item.say ?? name}</Text>
-      </View>
-      <View style={styles.footer}>
-        <Button variant="onstage" size="stage" block label={t('workout.itemDone')} onPress={onDone} />
-      </View>
-    </>
-  );
-}
 
 const styles = StyleSheet.create({
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, paddingHorizontal: 28 },
+  /*
+   * ⛔ THE SAME 'center' CLUMP THE SET STAGE HAD (founder 2026-08-12) — measured at 187 points of
+   * nothing above the content and 208 below it, on a screen holding four short lines.
+   *
+   * ⚠️ `gap` GOES WITH IT. A fixed 18-point gap plus even distribution is two spacing systems
+   * arguing; the gap wins between siblings and the distribution only pads the ends, which is how a
+   * "centred" layout ends up with all its air at the edges in the first place.
+   */
+  /* ⛔ CENTRED, WITH THE AIR OUTSIDE — the same correction as the set stage, and for the same reason:
+     a movement, its round and its instruction are one object, and spacing them evenly down the
+     screen made them three. See `SessionFlow.stageBody` for the argument. The `gap` is back and is
+     what holds the cluster together now. */
+  /* ⛔ `space-between` AND THE SET STAGE'S OWN PADDING (2026-08-12). It was `center` with a 22-point
+     gap, so the whole item floated as one block in the middle with dead space above and below —
+     the exact shape `2.2` was rebuilt out of. Each part owns its space now. */
+  body: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 6, paddingBottom: 58 },
+  identity: { alignItems: 'center', alignSelf: 'stretch' },
+  /* The figure and the word that names it — the set stage's `band`, to the point. */
+  band: { alignSelf: 'stretch', alignItems: 'center', gap: 2 },
+  bandLabel: { color: stage.ink0 },
+  sayBlock: { alignSelf: 'stretch', alignItems: 'center' },
   // The same lit figure as the load hero — one thing on the stage stands in the light, whatever it
   // is measuring. `heroType` carries the size, leading and tracking together (`noGlyphIsClipped`).
   hero: {
@@ -329,21 +351,25 @@ const styles = StyleSheet.create({
     color: '#f6f3ea',
     includeFontPadding: false,
     textAlign: 'center',
-    textShadowColor: 'rgba(246,243,234,0.16)',
-    textShadowRadius: 50,
-    textShadowOffset: { width: 0, height: 0 },
+    /* ⛔ THE 50-POINT BLOOM IS GONE. It was meant to read as lit; over a tabular figure it paints
+       the whole line box, so `0:45` and `40 m` sat inside a visible grey RECTANGLE in the founder's
+       screenshots. `2.2`'s own hero has never had one — the size is what makes it the subject. */
   },
   figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   unit: { fontFamily: font.monoMedium, fontSize: 22, color: stage.ink2, textAlign: 'left' },
   // Matched to the set stage, measured: 12 / 29, the muscle in the label tone and the lift in cream.
   itemMuscle: { marginBottom: 4 },
   roundLine: { marginTop: 10 },
-  itemName: { fontFamily: font.sansSemibold, fontSize: 29, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
+  /* 29 → 36, with the set stage: the movement is the subject of its screen, and it was set smaller
+     than the instruction beneath it. `adjustsFontSizeToFit` at the call site protects long names. */
+  itemName: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // The instruction: the coach's serif, resting in shadow beneath the fact she acts on.
+  /* 17 → 20. The same ruling as the set stage's headings: this is read standing up, at arm's
+     length, under a bar — and it is the only sentence on the screen. */
   say: {
     fontFamily: font.serif,
-    fontSize: 17,
-    lineHeight: 25,
+    fontSize: 20,
+    lineHeight: 29,
     color: stage.ink1,
     textAlign: 'center',
     maxWidth: 320,
@@ -357,5 +383,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 330,
   },
-  footer: { paddingHorizontal: space.gutter, paddingBottom: 34 },
+  footer: { paddingHorizontal: space.gutter, paddingBottom: 20 }, // with `stageFooter` on 2.2
 });

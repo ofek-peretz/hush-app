@@ -195,8 +195,22 @@ describe('⛔ the levelling pass — no day carries the week', () => {
    *
    * `it.failing` because these ARE reachable maps — a knee that hurts is why someone switches Quads
    * off — and a coach reading a Lower A with two hip hinges in it would mark that.
+   *
+   * ════ CLOSED 2026-08-11 — BY REMOVING THE PRECONDITION, NOT BY TEACHING THE SELECTOR ════
+   *
+   * Every attempt above tried to stop the selector or the dealer producing a twin ON a one-day region.
+   * The answer was that the region should never have been one day. `assignRegionDays` floored each
+   * half of the week at ONE session, so switching a lower muscle off (or marking two upper ones) could
+   * hand the entire lower body a single day — and that floor contradicted the rule stated in the same
+   * function: a split is worth its cost only when both halves get TWO sessions. With the floor raised
+   * to two (at four days or more, where the region has two muscles to spread), the region cannot
+   * collapse, the second hinge has somewhere to go, and the twin has nowhere to come from.
+   *
+   * ⚠️ WHICH MEANS THE FIRST THREE ATTEMPTS WERE ALL AIMED ONE LAYER TOO LOW. The twin was a symptom
+   * of the week's SHAPE, and three rounds of work went into the lift SELECTION because that is where
+   * the symptom was visible. Worth remembering the next time a defect resists three fixes.
    */
-  it.failing('⛔ …including when a switched-off muscle collapses the region to one day', () => {
+  it('⛔ …including when a switched-off muscle collapses the region to one day', () => {
     const twins: string[] = [];
     for (const off of ['Quads', 'Hamstrings', 'Glutes']) {
       for (const d of lists(4, { [off]: 'off' as MuscleStance })) {

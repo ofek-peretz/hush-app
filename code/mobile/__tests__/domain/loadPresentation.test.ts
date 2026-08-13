@@ -7,6 +7,8 @@
 
 // 
 
+import fs from 'fs';
+import path from 'path';
 import { HERO_FONT_SIZE, heroFontSize, loadSetup, platesPerSide } from '@/domain/loadPresentation';
 
 describe('barbell load setup', () => {
@@ -111,28 +113,44 @@ describe('helpers', () => {
  * glyph cost is what makes the rule true, and it lives nowhere else.
  */
 describe('the lit figure fits the stage', () => {
-  /** Measured in the browser at the hero's exact typography: IBM Plex Mono Medium, -5.6 tracking. */
-  const GLYPH_PT_AT_118 = 65.2;
-  /** 393pt phone − stageBody's 30pt each side. */
-  const STAGE_WIDTH = 333;
-  /** The `kg` chip that always rides beside the figure (26px mono + 10 marginStart). */
-  const UNIT_CHIP = 45;
+  /**
+   * ⛔ RE-MEASURED FOR THE VERTICAL STAGE (2026-08-12). Browser, IBM Plex Mono Medium at 92/-4.4:
+   * "137.5" → 261pt over 5 glyphs, "8–10" → 208 over 4. Both give **52.2pt per glyph**.
+   */
+  const GLYPH_PT_AT_92 = 52.2;
+  /** The screen, not the content box — the unit is absolute and may sit in the padding. */
+  const PHONE = 390;
+  /** The figure is centred on the screen's axis. */
+  const AXIS = PHONE / 2;
+  /** `KG` beside the figure: 22px mono tracked, + the 10pt it hangs by. */
+  const UNIT_CHIP = 37 + 10;
+  /** The screen edge is not a place to land on. */
+  const EDGE_MARGIN = 8;
 
   const widthOf = (figure: string) =>
-    figure.length * GLYPH_PT_AT_118 * (heroFontSize(figure) / HERO_FONT_SIZE);
+    figure.length * GLYPH_PT_AT_92 * (heroFontSize(figure) / HERO_FONT_SIZE);
+  /** Where the unit's right edge lands, which is the thing that went off the screen. */
+  const unitRightEdge = (figure: string) => AXIS + widthOf(figure) / 2 + UNIT_CHIP;
 
   /** Every load the engine can prescribe, from the smallest rung to well past a real lifter. */
   const FIGURES = ['5', '7.5', '20', '37', '42.5', '100', '102.5', '137.5', '200'];
 
-  it('no prescribable load pushes the figure or its unit off the stage', () => {
-    const over = FIGURES.filter((f) => widthOf(f) + UNIT_CHIP > STAGE_WIDTH).map(
-      (f) => `${f} → ${Math.round(widthOf(f) + UNIT_CHIP)}pt of ${STAGE_WIDTH}`,
+  it('⛔ no prescribable load pushes the figure or its unit off the SCREEN', () => {
+    /*
+     * The founder photographed `137.5` with `KG` at x=398 on a 390-point phone. The figure held the
+     * centre axis exactly and the unit was past the edge — because the centring device of the hour
+     * was an empty spacer mirroring the unit, which bought the axis with 144 points of the width the
+     * figure needed. **A budget that only counts the figure cannot see that.** It counts the unit's
+     * right edge now, which is the thing that actually left the screen.
+     */
+    const over = FIGURES.filter((f) => unitRightEdge(f) > PHONE - EDGE_MARGIN).map(
+      (f) => `${f} → unit ends at ${Math.round(unitRightEdge(f))} of ${PHONE}`,
     );
-    expect({ figuresOverflowingTheStage: over }).toEqual({ figuresOverflowingTheStage: [] });
+    expect({ figuresOverflowingTheScreen: over }).toEqual({ figuresOverflowingTheScreen: [] });
   });
 
-  it('leaves the common case at its full designed size — 5 kg to 99.5 kg is untouched', () => {
-    for (const f of ['5', '7.5', '20', '37', '42.5']) {
+  it('leaves every load a barbell can hold at its full designed size — 5 kg to 137.5 kg', () => {
+    for (const f of ['5', '7.5', '20', '37', '42.5', '100', '102.5', '137.5']) {
       expect({ figure: f, size: heroFontSize(f) }).toEqual({ figure: f, size: HERO_FONT_SIZE });
     }
   });
@@ -141,6 +159,33 @@ describe('the lit figure fits the stage', () => {
     // This is WHY the rule counts characters and not digits: under `fontVariant: tabular-nums` the
     // point occupies a full digit cell, so "7.5" is exactly as wide as "100".
     expect(widthOf('7.5')).toBeCloseTo(widthOf('100'), 5);
+  });
+
+  it('⛔ AND THE SCREEN ACTUALLY CALLS IT — the hole that let `137.5` reach him', () => {
+    /*
+     * ════════════════════════════════════════════════════════════════════════════════════════════
+     * THE RULE WAS RIGHT, THE LAWS WERE GREEN, AND THE SCREEN HAD STOPPED ASKING.
+     *
+     * The 2026-08-12 redesign hardcoded `fontSize: 92` into `rxFigure` and `heroFontSize` survived
+     * in this codebase only as a word inside a comment. Every test above kept passing — they test a
+     * PURE FUNCTION against its own constants, and a pure function cannot notice that nobody calls
+     * it. `noGlyphIsClipped` compared `heroType` to `heroFontSize`: two things that agree with each
+     * other whether or not the app agrees with either.
+     *
+     * ⚠️ SO THIS IS THE ONLY ASSERTION IN THE FILE THAT READS THE SCREEN. It is deliberately crude —
+     * it looks for the call — because the failure was not subtle: the wiring was simply cut, and no
+     * amount of precision about sizes would have found that.
+     * ════════════════════════════════════════════════════════════════════════════════════════════
+     */
+    const flow = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'src/screens/session/SessionFlow.tsx'),
+      'utf8',
+    );
+    // Both figures on the stage — the load and the rep band — take their type from the rule.
+    expect(flow.match(/heroType\(/g) ?? []).toHaveLength(2);
+    // And nothing overrides it back to a constant afterwards.
+    const at = flow.indexOf('rxFigure: {');
+    expect(flow.slice(at, flow.indexOf('},', at))).toContain(`fontSize: ${HERO_FONT_SIZE}`);
   });
 
   it('steps down only when it must, and never continuously', () => {

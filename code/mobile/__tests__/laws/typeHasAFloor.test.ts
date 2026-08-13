@@ -18,19 +18,23 @@
  * scale is a suggestion; a screen writes `fontSize: 9.5` and nothing objects. Every violation found
  * on the first run of this test was a raw number, never a scale rung.
  *
+ * ⛔ AND HE ASKED A FIFTH TIME ON 2026-08-12, which is when it was raised to 17 — see the floors
+ * below. The paragraph above was written when the number was 13, and it was true then in the sense
+ * that matters least: the law held, and the type was still too small to read.
+ *
  * ── THE TWO FLOORS, AND WHY THEY DIFFER ─────────────────────────────────────────────────────────
- *   PHONE  13 pt of body, 11 pt for an uppercase tracked legend.
+ *   PHONE  17, for everything. There is no legend exemption any more — see below.
  *   WRIST  12 pt of body, 11 pt for a legend.
  *
- * A legend is allowed lower because it is three or four uppercase words at .16 em of tracking —
- * uppercase has no descenders and tracking buys back most of what the size costs — and because
- * 13 pt uppercase legends WRAP in Hebrew, where the words are longer. **A wrapped word is less
- * readable than a whole smaller one**, which is the trade this exemption buys and the reason it is
- * narrow rather than generous.
+ * ⚠️ THE LEGEND'S LOWER FLOOR IS GONE. It existed on a real argument — uppercase tracked type reads
+ * larger than its point size, and long Hebrew legends WRAP at a bigger one — and it was being spent
+ * as a licence for 11 pt labels on a phone. The wrapping cost is accepted instead: a legend that
+ * takes two lines is legible, and one that takes one line and cannot be read is not.
  *
- * ⚠️ THE WRIST FLOOR IS 12, NOT 13. On a 41 mm case four 13 pt figures do not fit one row and the
- * layout truncates. Truncation is the failure this law exists to prevent, so raising the number
- * past what the canvas holds would defeat it.
+ * ⚠️ THE WRIST FLOOR IS 12, NOT 17, and the founder drew that line himself: *"אל תשכח שזה מסך של
+ * פלאפון"* — the phone is the subject. On a 41 mm case four 17 pt figures do not fit one row and the
+ * layout truncates. Truncation is the failure this law exists to prevent, so raising the number past
+ * what the canvas holds would defeat it.
  *
  * ── WHAT THIS CANNOT SEE ────────────────────────────────────────────────────────────────────────
  * ⚠️ It reads DECLARED sizes. It cannot see wrapping, clipping, or a Hebrew string that is twice
@@ -49,9 +53,32 @@ import { textScale } from '@/design/tokens';
 const SRC = join(__dirname, '../../src');
 const WATCH = join(__dirname, '../../targets/watch');
 
-/** The phone: body type, and the uppercase tracked legend that may go lower (see the header). */
-export const PHONE_FLOOR = 13;
-export const PHONE_LEGEND_FLOOR = 11;
+/*
+ * ════ ⛔ THE FLOOR IS 17, AND HE NAMED IT HIMSELF ════
+ *
+ * FOUNDER, 2026-08-12: *"הכיתוב הקטן ביותר במסך מאוד מאוד קטן. אתה יכול לעשות חוק שתקף לכל המסכים
+ * להגדיל אותו? אני אמרתי לך את זה בערך 999 פעמים. בוא נגיד שהגודל הקטן ביותר בכל האפליקציה הוא כמו
+ * שכתוב 57.5 ליד הBarbell bench press. יותר קטן מזה פשוט לא רואים — זה בלתי אפשרי, אל תשכח שזה מסך
+ * של פלאפון."*
+ *
+ * The reference he pointed at is `PlanLifts.planFigure`, and it is **17**.
+ *
+ * ── ⛔ WHY IT KEPT COMING BACK, WHICH IS THE PART WORTH RECORDING ────────────────────────────────
+ * He is right that he has said this many times, and the reason it never stuck is that it was always
+ * fixed **one screen at a time**, in the screen he happened to be looking at. The sweep that raised
+ * this floor found **269 declarations under it across 49 files**. No amount of per-screen diligence
+ * closes a gap that size; only a law does.
+ *
+ * ⚠️ AND THE LEGEND'S SEPARATE, LOWER FLOOR IS GONE. It existed on the argument that uppercase
+ * tracked type reads larger than its point size — true, and it was being spent as a licence to set
+ * 11px labels on a phone. A legend is text she has to read. There is one floor now.
+ *
+ * ⚠️ THE WRIST KEEPS ITS OWN, and he said why in the same breath: *"אל תשכח שזה מסך של פלאפון."*
+ * The phone is the subject. A watch face is a third the width at arm's length and has its own
+ * typography; forcing 17 there would push two words off the screen.
+ */
+export const PHONE_FLOOR = 17;
+export const PHONE_LEGEND_FLOOR = 17;
 /** The wrist: one point lower on both, because the canvas is one third the width. */
 export const WRIST_FLOOR = 12;
 export const WRIST_LEGEND_FLOOR = 11;
@@ -89,13 +116,102 @@ describe('type has a floor, and it is measured', () => {
         const px = Number(m[1]);
         if (px < PHONE_FLOOR) violations.push(`${rel(file)} — fontSize: ${px}`);
       }
-      // `<Legend size={10.5}>` — the legend's own prop, which bypasses the style sweep entirely.
-      for (const m of code.matchAll(/\bsize=\{([0-9]+(?:\.[0-9]+)?)\}/g)) {
-        const px = Number(m[1]);
-        if (px < PHONE_LEGEND_FLOOR) violations.push(`${rel(file)} — size={${px}}`);
+      /*
+       * `<Legend size={10.5}>` — the legend's own prop, which bypasses the style sweep entirely.
+       *
+       * ⛔ SCOPED TO `Legend`, NOT TO ANY `size=` (2026-08-12). The pattern used to match the bare
+       * prop name, which was harmless while the floor was 11 — nothing in the product was smaller —
+       * and became wrong the moment it rose to 17: **`<Icon size={15}>` is a glyph box, not type.**
+       * The sweep that raised the floor caught 38 of them before this was fixed, and an icon grown
+       * by a sixth because a law could not tell a picture from a word is a law doing damage.
+       */
+      /*
+       * ⛔ AND IT READS THE WHOLE EXPRESSION, NOT ONLY A BARE NUMBER (2026-08-12).
+       *
+       * This matched `size={12.5}`. Type escaped it in two ways, and both were found by walking the
+       * gallery after the floor was raised rather than by reading code:
+       *
+       *   · A CONSTANT. `<Legend size={RUN_SMALL_PT}>` — and `RUN_SMALL_PT = 12.5` sat at the foot
+       *     of `screens/cardio/Cardio.tsx`. Those constants were introduced so four labels could not
+       *     drift apart, which worked; nobody noticed they had also stepped out of this sweep's line
+       *     of sight. **So the one screen the founder complained about most — "the cardio screen for
+       *     the thousandth time" — kept its small type through every pass of the law written for
+       *     it.**
+       *   · A TERNARY. `<Legend size={size >= 220 ? 16 : textScale['2xs']}>` in `RestRing`, which is
+       *     the word REST in the middle of the rest dial.
+       *
+       * So every numeric literal inside the expression is checked, and a bare identifier is resolved
+       * against the module's own `const NAME = <number>`. An unresolvable identifier is left alone
+       * rather than guessed at — `textScale.sm` is a token and the scale has its own assertion.
+       */
+      /*
+       * ⚠️ ONE EXEMPTION, AND IT IS A PICTURE RATHER THAN A SCREEN. `components/share/ShareCard` is
+       * authored at 296pt and drawn through `px(n) = round(n * width / 296)` so that ONE component
+       * serves both the on-screen preview and the 1080px image she actually shares. Its `10` and
+       * `11` are proportions of a poster, not points on a phone — forcing them to 17 would give the
+       * exported artwork labels a sixth larger than its own design, on every share, forever.
+       *
+       * ⚠️ AND THE COST IS REAL AND IS NAMED RATHER THAN WAVED AWAY: `ShareCardModal` previews at
+       * `min(300, width - 88)`, so k ≈ 1 and those labels do render at 10–11px on the preview. She
+       * is looking at a thumbnail of a poster there, not reading an interface — but if the founder
+       * says the preview is too small, the fix is a larger preview, not smaller artwork.
+       */
+      if (rel(file) === 'share/ShareCard.tsx') continue;
+
+      const consts = new Map<string, number>();
+      for (const m of code.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*(?::\s*number\s*)?=\s*([0-9]+(?:\.[0-9]+)?)\s*;/g)) {
+        consts.set(m[1], Number(m[2]));
+      }
+      for (const m of code.matchAll(/<Legend\b[^>]*?\bsize=\{([^}]*)\}/gs)) {
+        const expr = m[1];
+        const seen: number[] = [];
+        for (const lit of expr.matchAll(/(?<![\w.$])([0-9]+(?:\.[0-9]+)?)(?![\w$])/g)) seen.push(Number(lit[1]));
+        for (const id of expr.matchAll(/(?<![\w.$'"])([A-Z][A-Z0-9_]{2,})(?![\w$])/g)) {
+          const v = consts.get(id[1]);
+          if (v != null) seen.push(v);
+        }
+        for (const px of seen) {
+          if (px < PHONE_LEGEND_FLOOR) violations.push(`${rel(file)} — <Legend size={${expr.trim()}}> → ${px}`);
+        }
       }
     }
     expect(violations.sort()).toEqual([]);
+  });
+
+  it('⛔ …including the one string the whole screen exists to offer — the act', () => {
+    /*
+     * `components/ds/Button` maps its size names to font sizes in a plain lookup table of numbers.
+     * It is consumed as `fontSize: FONT[size]` two functions later, so the sweep above — which reads
+     * `fontSize:` and `<Legend size={…}>` — cannot see it, and **`lg`, `card` and `whySheet` sat at
+     * 16, 15.5 and 16 through every pass of this law.** The primary act. "Begin Upper B".
+     *
+     * ⚠️ NAMED EXPLICITLY RATHER THAN GENERALISED. A rule that flagged every number in a `Record`
+     * would flag `RADIUS.card: 17` on the next line, which is a corner. A blind spot with a name is
+     * worth more than a sweep that cries wolf.
+     */
+    const src = readFileSync(join(SRC, 'components', 'ds', 'Button.tsx'), 'utf8');
+    const line = /const FONT: Record<Size, number> = \{([^}]*)\}/.exec(src);
+    expect(line).not.toBeNull();
+    const sizes = [...line![1].matchAll(/:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(3); // the literals; the rest come off `textScale`
+    expect(sizes.filter((px) => px < PHONE_FLOOR)).toEqual([]);
+  });
+
+  it('⛔ …and the segmented control, whose sizes hide inside a GEOMETRY map', () => {
+    /*
+     * The same blind spot, found by walking the gallery after the sweep rather than by reading code:
+     * the You tab still drew **"kg" and "lb" at 14px** — on the screen where she sets the unit every
+     * weight in the app is printed in.
+     *
+     * `SegmentedControl.GEOM` mixes `font` in with `track`, `cell` and `padX` — radii and padding —
+     * so there is nothing generic to match on. Two of these tables have now been found this way,
+     * which is the argument for the assertion being a NAMED LIST that grows rather than a clever
+     * pattern: a font size hiding in a geometry map is a thing this codebase does.
+     */
+    const src = readFileSync(join(SRC, 'components', 'ds', 'SegmentedControl.tsx'), 'utf8');
+    const sizes = [...stripComments(src).matchAll(/\bfont:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(2);
+    expect(sizes.filter((px) => px < PHONE_FLOOR)).toEqual([]);
   });
 
   it('the wrist sets no type below the floor', () => {

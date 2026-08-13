@@ -36,6 +36,9 @@ import { currentLocale } from '@/i18n';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+// ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
+// programme in the same shape when there is not. See `data/local/weekPlan`.
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachBrief } from '@/domain/coachEarned';
 import { coachChanges } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
@@ -231,7 +234,136 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    */
   const [plans, setPlans] = useState<{ now: CoachPlan | null; before: CoachPlan | null }>({ now: null, before: null });
   const changes = React.useMemo(() => coachChanges(plans.now, plans.before), [plans]);
-  const changedCount = changes?.length ?? 0;
+  const allChanges = React.useMemo(() => {
+    /*
+     * A COACH ROW HAS NO from→to AND NO "WHY?" PILL, and both absences are the point.
+     *
+     * The coach states the next programme whole rather than a set of deltas, so there is nothing to
+     * print in a move column — and the arrow exists to show a direction, which a sentence does not
+     * have. The pill existed because the engine's reason was a three-part case folded behind a
+     * chevron; the coach's reason is one sentence, and a control that hides one sentence is a
+     * control stealing the job of the thing underneath it (the founder's law: let the control
+     * speak). So the sentence is simply on the row.
+     */
+    if (changes) {
+      /*
+       * ⛔ A ROW IS A CHANGE, AND ITS SENTENCE IS THE COACH'S (rebuilt 2026-08-05).
+       *
+       * These used to be the coach's NOTES — one row per thing it wrote about, which meant a lift
+       * it held and explained got a row in a letter titled "What changed". The founder's ruling:
+       * *"a change is only if there is a drop or a raise or added sets or anything else."*
+       *
+       * So the rows are the measured differences, and the coach's sentence is JOINED to the lift it
+       * is about. A change with no sentence still draws — the figure is a fact and she is owed it —
+       * and a sentence with no change is not in a letter about changes.
+       *
+       * ⚠️ THE COUNT IS `changes.length` AND SO IS THIS. One derivation, which is the whole point.
+       */
+      const saidFor = new Map((fromCoach?.lines ?? []).filter((l) => l.ex).map((l) => [l.ex as string, l.say]));
+      const rows: LetterRow[] = changes.map((c) => {
+        const structural = c.kind === 'added' || c.kind === 'dropped';
+        return {
+          key: `${c.ex}:${c.kind}`,
+          name: exerciseDisplayName(c.ex),
+          from: structural || c.from == null ? '' : String(+c.from.toFixed(2)),
+          to: structural || c.to == null ? '' : String(+c.to.toFixed(2)),
+          suffix: c.kind === 'sets' ? t('weekly.setsUnit') : '',
+          // A lift arriving or leaving has no direction — it did not move, it appeared. It reads in
+          // the neutral tone, which is the same three-way law every other surface obeys.
+          dir: (c.direction ?? 'hold') as LoadDirection,
+          magnitude: c.from != null && c.to != null ? Math.abs(c.to - c.from) : 0,
+          slotId: null,
+          line: saidFor.get(c.ex) ?? (structural ? t(c.kind === 'added' ? 'weekly.liftAdded' : 'weekly.liftDropped') : null),
+        };
+      });
+      return rows.sort((a, b) => b.magnitude - a.magnitude);
+    }
+    const lifts = (view?.workouts ?? []).flatMap((w) => w.lifts.filter((l) => l.change));
+    const rows: LetterRow[] = lifts.map((l) => {
+      const c = l.change!.snapshot;
+      return {
+        key: c.slotId,
+        name: exerciseDisplayName(l.exerciseId),
+        from: fmtLoad(c.loadFrom, units) ?? '',
+        to: fmtLoad(c.loadTo, units) ?? '',
+        suffix: '',
+        /**
+         * THE SAME THREE-WAY ANSWER TODAY GIVES (founder 2026-07-29's law).
+         *
+         * This was a BOOLEAN — `rose`, i.e. "up or not-up" — and not-up was drawn as a fall. So the
+         * one narrated HOLD the engine makes (S-28, the rung out of reach, stamped with equal
+         * from/to loads) came out BLUE in the letter and CREAM on Today, for the same decision, on
+         * the same day. A two-way answer cannot carry a three-way law.
+         */
+        dir: liftDirection(c.loadFrom, c.loadTo),
+        magnitude: Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)),
+        slotId: c.slotId,
+        /*
+         * ⛔ THE ENGINE'S OWN SENTENCE, ON THE ROW (founder, 2026-08-12: *"תציג את הנקודות
+         * לשינוי"*). This was `null`, so every load change in the letter was a name and two numbers
+         * and the reason was one press away inside the case sheet — which is what made a page of
+         * them read as a statement from a bank.
+         *
+         * ⚠️ IT IS NOT A NEW SENTENCE. `lift.change.explanation.text` is the same line the case
+         * sheet opens with and the same one Today prints; nothing is authored here, which is why
+         * the three surfaces cannot start explaining one decision three ways.
+         */
+        line: l.change!.explanation?.text?.key
+          ? t(l.change!.explanation.text.key, l.change!.explanation.text.params)
+          : null,
+      };
+    });
+    // A volume move is news of the same kind and reads as one more row — "Chest, volume  3 → 4 sets".
+    for (const v of view?.volume ?? []) {
+      rows.push({
+        key: `vol:${v.muscle}`,
+        name: t('weekly.volumeRowName', { muscle: t(`muscle.${v.muscle}`) }),
+        from: String(v.setsFrom),
+        to: String(v.setsTo),
+        suffix: t('weekly.setsUnit'),
+        dir: v.setsTo > v.setsFrom ? 'up' : ('down' as LoadDirection),
+        magnitude: Math.abs(v.setsTo - v.setsFrom),
+        slotId: null,
+        // The muscle is stamped raw by the engine (it is pure); the letter says it in her
+        // language, exactly as the row's own name does above.
+        line: t(v.explanation.text.key, { ...(v.explanation.text.params ?? {}), muscle: t(`muscle.${v.muscle}`) }),
+      });
+    }
+    return rows.sort((a, b) => b.magnitude - a.magnitude);
+    /*
+     * ⛔ `fromCoach` WAS MISSING FROM THIS LIST, AND THAT IS THE WHOLE BUG (founder 2026-08-05):
+     *
+     *   > *"It shows 10 changes, but when you press it THE MIRROR opens and it says 0 workouts of 4
+     *   > were done, 0 tonnes lifted, but that the AI read the sessions and decided on 10 changes —
+     *   > it's obvious to you that this isn't right. And it doesn't show the changes at all."*
+     *
+     * The rows and the count came from the same object and disagreed anyway, because only one of
+     * them was memoised. This runs once, on the first render, while `coachLog` is still `null` —
+     * so `fromCoach` is null, it takes the dead engine's branch, `view` is null, and it produces
+     * an empty array. `changedCount` two lines above is a plain expression, so it recomputed the
+     * instant the log landed and printed 10.
+     *
+     * **A count and its rows must be one derivation.** The dependency is the fix; the memo was
+     * never the problem, its list was.
+     */
+  }, [changes, fromCoach, view, units, t]);
+  /*
+   * ⛔ THE COUNT IS THE ROWS' OWN LENGTH — AND IT WAS NOT (founder's screenshot, 2026-08-12).
+   *
+   * This file's own header records the 2026-08-03 bug it was written after: *"a count and its rows
+   * must be one derivation."* It then kept two anyway. `changedCount` read `changes` — the diff of
+   * two stored `CoachPlan` snapshots — while the ROWS came from `changes ?? fromCoach ?? view`, and
+   * `view` is the engine's weekly plan.
+   *
+   * ⚠️ SO A WEEK WITH ELEVEN MOVED LIFTS RENDERED AS A STEADY WEEK. With no coach plans stored —
+   * which is every athlete now, since the model was taken out — `changes` is null, `changedCount`
+   * is 0, `steady` is true, and the screen prints *"I changed nothing this week"* over a `view`
+   * holding every change it just made. The gallery's `3.1` said "a week WITH decisions" and drew
+   * the opposite; that is the screen the founder photographed and called a tax letter.
+   *
+   * One derivation now: the count IS the rows, so the two cannot disagree about the week again.
+   */
+  const changedCount = allChanges.length;
   const steady = loaded && changedCount === 0;
   useEffect(() => {
     if (!steady) return;
@@ -315,7 +447,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
       try {
         const [history, weekPlan, prevPlan] = await Promise.all([
           db.loadHistory(),
-          db.loadCoachPlan().catch(() => null),
+          loadWeekPlan().catch(() => null),
           // The programme this WEEK opened on — the other half of every change on this screen, and
           // the same pair Today's pill reads. `coachPlanPrev` is one SESSION old, which would make
           // a letter about the week report only its last workout.
@@ -389,107 +521,6 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * four largest moves; everything else is one press away. Ordered by how far the load actually
    * travelled — the biggest decision is the one worth reading first.
    */
-  const allChanges = React.useMemo(() => {
-    /*
-     * A COACH ROW HAS NO from→to AND NO "WHY?" PILL, and both absences are the point.
-     *
-     * The coach states the next programme whole rather than a set of deltas, so there is nothing to
-     * print in a move column — and the arrow exists to show a direction, which a sentence does not
-     * have. The pill existed because the engine's reason was a three-part case folded behind a
-     * chevron; the coach's reason is one sentence, and a control that hides one sentence is a
-     * control stealing the job of the thing underneath it (the founder's law: let the control
-     * speak). So the sentence is simply on the row.
-     */
-    if (changes) {
-      /*
-       * ⛔ A ROW IS A CHANGE, AND ITS SENTENCE IS THE COACH'S (rebuilt 2026-08-05).
-       *
-       * These used to be the coach's NOTES — one row per thing it wrote about, which meant a lift
-       * it held and explained got a row in a letter titled "What changed". The founder's ruling:
-       * *"a change is only if there is a drop or a raise or added sets or anything else."*
-       *
-       * So the rows are the measured differences, and the coach's sentence is JOINED to the lift it
-       * is about. A change with no sentence still draws — the figure is a fact and she is owed it —
-       * and a sentence with no change is not in a letter about changes.
-       *
-       * ⚠️ THE COUNT IS `changes.length` AND SO IS THIS. One derivation, which is the whole point.
-       */
-      const saidFor = new Map((fromCoach?.lines ?? []).filter((l) => l.ex).map((l) => [l.ex as string, l.say]));
-      const rows: LetterRow[] = changes.map((c) => {
-        const structural = c.kind === 'added' || c.kind === 'dropped';
-        return {
-          key: `${c.ex}:${c.kind}`,
-          name: exerciseDisplayName(c.ex),
-          from: structural || c.from == null ? '' : String(+c.from.toFixed(2)),
-          to: structural || c.to == null ? '' : String(+c.to.toFixed(2)),
-          suffix: c.kind === 'sets' ? t('weekly.setsUnit') : '',
-          // A lift arriving or leaving has no direction — it did not move, it appeared. It reads in
-          // the neutral tone, which is the same three-way law every other surface obeys.
-          dir: (c.direction ?? 'hold') as LoadDirection,
-          magnitude: c.from != null && c.to != null ? Math.abs(c.to - c.from) : 0,
-          slotId: null,
-          line: saidFor.get(c.ex) ?? (structural ? t(c.kind === 'added' ? 'weekly.liftAdded' : 'weekly.liftDropped') : null),
-        };
-      });
-      return rows.sort((a, b) => b.magnitude - a.magnitude);
-    }
-    const lifts = (view?.workouts ?? []).flatMap((w) => w.lifts.filter((l) => l.change));
-    const rows: LetterRow[] = lifts.map((l) => {
-      const c = l.change!.snapshot;
-      return {
-        key: c.slotId,
-        name: exerciseDisplayName(l.exerciseId),
-        from: fmtLoad(c.loadFrom, units) ?? '',
-        to: fmtLoad(c.loadTo, units) ?? '',
-        suffix: '',
-        /**
-         * THE SAME THREE-WAY ANSWER TODAY GIVES (founder 2026-07-29's law).
-         *
-         * This was a BOOLEAN — `rose`, i.e. "up or not-up" — and not-up was drawn as a fall. So the
-         * one narrated HOLD the engine makes (S-28, the rung out of reach, stamped with equal
-         * from/to loads) came out BLUE in the letter and CREAM on Today, for the same decision, on
-         * the same day. A two-way answer cannot carry a three-way law.
-         */
-        dir: liftDirection(c.loadFrom, c.loadTo),
-        magnitude: Math.abs((c.loadTo ?? 0) - (c.loadFrom ?? 0)),
-        slotId: c.slotId,
-        line: null,
-      };
-    });
-    // A volume move is news of the same kind and reads as one more row — "Chest, volume  3 → 4 sets".
-    for (const v of view?.volume ?? []) {
-      rows.push({
-        key: `vol:${v.muscle}`,
-        name: t('weekly.volumeRowName', { muscle: t(`muscle.${v.muscle}`) }),
-        from: String(v.setsFrom),
-        to: String(v.setsTo),
-        suffix: t('weekly.setsUnit'),
-        dir: v.setsTo > v.setsFrom ? 'up' : ('down' as LoadDirection),
-        magnitude: Math.abs(v.setsTo - v.setsFrom),
-        slotId: null,
-        // The muscle is stamped raw by the engine (it is pure); the letter says it in her
-        // language, exactly as the row's own name does above.
-        line: t(v.explanation.text.key, { ...(v.explanation.text.params ?? {}), muscle: t(`muscle.${v.muscle}`) }),
-      });
-    }
-    return rows.sort((a, b) => b.magnitude - a.magnitude);
-    /*
-     * ⛔ `fromCoach` WAS MISSING FROM THIS LIST, AND THAT IS THE WHOLE BUG (founder 2026-08-05):
-     *
-     *   > *"It shows 10 changes, but when you press it THE MIRROR opens and it says 0 workouts of 4
-     *   > were done, 0 tonnes lifted, but that the AI read the sessions and decided on 10 changes —
-     *   > it's obvious to you that this isn't right. And it doesn't show the changes at all."*
-     *
-     * The rows and the count came from the same object and disagreed anyway, because only one of
-     * them was memoised. This runs once, on the first render, while `coachLog` is still `null` —
-     * so `fromCoach` is null, it takes the dead engine's branch, `view` is null, and it produces
-     * an empty array. `changedCount` two lines above is a plain expression, so it recomputed the
-     * instant the log landed and printed 10.
-     *
-     * **A count and its rows must be one derivation.** The dependency is the fix; the memo was
-     * never the problem, its list was.
-     */
-  }, [changes, fromCoach, view, units, t]);
   const shown = showAll ? allChanges : allChanges.slice(0, LETTER_ROWS);
 
   return (
@@ -498,7 +529,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           the training stage uses. */}
       <View style={styles.header}>
         <View style={styles.headSpacer} />
-        <Legend size={11.5} align="center" style={styles.when}>{whenLabel}</Legend>
+        <Legend size={17} align="center" style={styles.when}>{whenLabel}</Legend>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
@@ -512,7 +543,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headBlock}>
-          <Legend size={11} track={0.22}>
+          <Legend size={17} track={0.22}>
             {askBack ? t('weekly.askLegend') : steady ? t('weekly.evidenceLegend') : t('weekly.eyebrow')}
           </Legend>
           {/* A week with a question in it steps its headline DOWN (40, not 56): the biggest thing
@@ -562,7 +593,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             <View style={styles.askCard}>
               <View style={styles.askHead}>
                 <View style={styles.askDot} />
-                <Legend size={11} tone="accent">{t('weekly.askSince')}</Legend>
+                <Legend size={17} tone="accent">{t('weekly.askSince')}</Legend>
               </View>
               <Text style={styles.askTitle} accessibilityRole="header">
                 {/* `muscle.*` is written for mid-sentence (English keeps it singular and
@@ -605,42 +636,53 @@ export function WeeklyUpdate({ navigation, route }: Props) {
         {!steady && !askBack
           ? shown.map((row, i) => {
               const open = openId === (row.slotId ?? row.key);
+              const id = row.slotId ?? row.key;
+              const hasCase = !!(row.from || row.to);
               return (
-                <View key={row.key} style={[styles.row, i === shown.length - 1 && styles.rowLast]}>
-                  {/* A ROW WITH NO MOVE HAS NO ARROW AND NO PILL. The coach states a programme
-                      whole rather than a set of deltas, so there is no from→to to draw — and its
-                      reason is one sentence, which a "Why?" pill would hide rather than announce
-                      (let the control speak). The name may be empty too: a note about the whole
-                      week belongs to no single lift, and inventing one to fill the column would be
-                      attributing a decision to a lift it was not about. */}
-                  <View style={styles.rowTop}>
-                    {row.name ? (
-                      <Text style={styles.rowName} numberOfLines={1}>{bidi(row.name)}</Text>
-                    ) : null}
-                    {row.from || row.to ? (
-                      <View style={styles.rowRight}>
-                        <Text style={styles.rowMove} numberOfLines={1}>
-                          <Text style={styles.rowFrom}>{`${row.from} `}</Text>
-                          <Text style={{ color: directionTone(row.dir) }}>
-                            {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
-                          </Text>
-                        </Text>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={t('weekly.whyLink')}
-                          onPress={() => setOpenId((cur) => (cur === (row.slotId ?? row.key) ? null : (row.slotId ?? row.key)))}
-                          hitSlop={6}
-                          style={({ pressed }) => [styles.whyPill, pressed && styles.pressedDim]}
-                        >
-                          <Legend size={11} track={0.08} tone="onStage">{t('weekly.whyWord')}</Legend>
-                        </Pressable>
-                      </View>
-                    ) : null}
-                  </View>
-                  {(open || !(row.from || row.to)) && row.line ? (
-                    <Text style={styles.rowLine}>{row.line}</Text>
+                <Pressable
+                  key={row.key}
+                  accessibilityRole={hasCase ? 'button' : undefined}
+                  accessibilityLabel={hasCase ? `${row.name} · ${t('weekly.whyLink')}` : undefined}
+                  disabled={!hasCase}
+                  onPress={() => setOpenId((cur) => (cur === id ? null : id))}
+                  style={({ pressed }) => [
+                    styles.row,
+                    i === shown.length - 1 && styles.rowLast,
+                    pressed && hasCase && styles.rowPressed,
+                  ]}
+                >
+                  {/*
+                    ════════════════════════════════════════════════════════════════════════════
+                    ⛔ THE REASON IS NOT BEHIND A PILL ANY MORE (founder, 2026-08-12)
+
+                      *"מסך כל כך עצוב ומשעמם שלמה לעזאזל מישהו ירצה לקרוא אותו … תן חיים למסך
+                      הזה, לא תיבת טקסט אלא תתפרש על המסך, תציג את הנקודות לשינוי … כרגע הוא נראה
+                      כמו מכתב לתשלום ממס הכנסה."*
+
+                    A tax letter is exactly what it was, and structurally: a name at 17, a figure at
+                    17 pushed to the right margin, and the SENTENCE — the only part anyone would
+                    actually want — collapsed behind a "WHY?" pill. **The reasons are the letter.**
+                    Every row was a line item you had to click to find out what it meant.
+
+                    Each change is a block now, in the same shape the finish screen's decisions
+                    take: the lift, the move at 40 points, the coach's sentence underneath. The row
+                    still opens the full case — pressing anywhere on it does — but she no longer has
+                    to press to be told anything at all.
+                    ════════════════════════════════════════════════════════════════════════════
+                  */}
+                  {row.name ? (
+                    <Text style={styles.rowName} numberOfLines={2}>{bidi(row.name)}</Text>
                   ) : null}
-                </View>
+                  {hasCase ? (
+                    <Text style={styles.rowMove} numberOfLines={1}>
+                      <Text style={styles.rowFrom}>{`${row.from} `}</Text>
+                      <Text style={{ color: directionTone(row.dir) }}>
+                        {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
+                      </Text>
+                    </Text>
+                  ) : null}
+                  {row.line ? <Text style={styles.rowLine}>{row.line}</Text> : null}
+                </Pressable>
               );
             })
           : null}
@@ -651,7 +693,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             band of three zeroes on her first Saturday would be the emptiness this exists to fix. */}
         {steady && standing && standing.workouts > 0 ? (
           <View style={styles.standing}>
-            <Legend size={11} track={0.2}>{t('weekly.standingLegend')}</Legend>
+            <Legend size={17} track={0.2}>{t('weekly.standingLegend')}</Legend>
             <View style={styles.statBand}>
               <LetterFact value={String(standing.workouts)} label={t('weekly.statWorkouts')} />
               <LetterFact value={`${standing.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
@@ -684,7 +726,16 @@ export function WeeklyUpdate({ navigation, route }: Props) {
                   </View>
                 );
               })}
-              <Text style={styles.evidenceClose}>{t('weekly.evidenceClose')}</Text>
+              {/*
+                ⛔ THE CLOSING PARAGRAPH IS DELETED (founder, 2026-08-12: *"גם הוא צריך קצת פוליש של
+                הורדת מלל ולתת קצת אוויר לכל דבר"*).
+
+                It read *"I read every set you lift and tune the program to what you showed me. This
+                week it needed nothing."* — under an intro that had already said *"I changed nothing
+                this week — the program is working. Here is what it has done so far."* **The same
+                claim, twice, with the evidence sandwiched between them.** The rows are the argument;
+                a paragraph after them repeating the headline is what made the page read as prose.
+              */}
             </View>
           ) : (
             // Too early to have proof of anything — so we claim none.
@@ -759,7 +810,7 @@ function LetterFact({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.fact}>
       <Text style={styles.factValue}>{value}</Text>
-      <Legend size={11} track={0.14}>{label}</Legend>
+      <Legend size={17} track={0.14}>{label}</Legend>
     </View>
   );
 }
@@ -777,7 +828,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressedDim: { opacity: 0.62 },
+  /* ⛔ A.13 — five controls on the Saturday letter answered a press by fading themselves, including
+     both answers to the one question it asks. A wash, under them. */
+  pressedDim: { backgroundColor: 'rgba(241,238,229,0.08)' },
   headSpacer: { width: 36 },
   when: { flex: 1 },
 
@@ -792,8 +845,10 @@ const styles = StyleSheet.create({
   title: { fontFamily: font.serif, fontSize: 56, lineHeight: 59, color: color.textPrimary, textAlign: 'left' },
   titleAsking: { fontSize: 40, lineHeight: 42 }, // rtl-ok: merged onto title, which sets textAlign
   // The framing sentence is the COACH speaking, so it is the serif — not UI sans.
-  intro: { marginTop: 16, fontFamily: font.serif, fontSize: 17, lineHeight: 26, color: color.textPrimary, textAlign: 'left' },
-  introAsking: { marginTop: 14, fontSize: 16, lineHeight: 24, color: color.textSecondary }, // rtl-ok: merged onto intro
+  /* 17/26 → 19/29. It is the letter's opening sentence and the only prose left on a steady week;
+     air is what he asked for, and leading is where a page gets it. */
+  intro: { marginTop: 22, fontFamily: font.serif, fontSize: 19, lineHeight: 29, color: color.textPrimary, textAlign: 'left' },
+  introAsking: { marginTop: 14, fontSize: 17, lineHeight: 24, color: color.textSecondary }, // rtl-ok: merged onto intro
 
   // The week's facts (v7 3.1) — three mono figures bound top and bottom by a hairline, sitting
   // directly beneath the headline before the letter's prose begins.
@@ -810,7 +865,7 @@ const styles = StyleSheet.create({
 
   // …and the same band again at the scale of everything she has logged, on a steady week. Its own
   // legend, because two identical bands with nothing to tell them apart would read as a repeat.
-  standing: { marginTop: 26, gap: 2 },
+  standing: { marginTop: 34, gap: 6 },
 
   lift: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: color.border },
   liftTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -843,19 +898,21 @@ const styles = StyleSheet.create({
 
   // the rest of the plan stands — said once, at the end
   /* ── The changes: one ruled list, largest move first. ── */
+  /* ⛔ A BLOCK, NOT A LINE ITEM — see the note at the markup. 15 points of padding and three
+     17-point type sizes is a table; this is the same rhythm the finish screen's decisions run on. */
   row: {
-    paddingVertical: 16,
-    gap: 8,
+    paddingVertical: 22,
+    gap: 9,
     borderTopWidth: 1,
     borderTopColor: 'rgba(241,238,229,0.14)',
   },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  rowPressed: { backgroundColor: 'rgba(241,238,229,0.05)' },
   // A volume move's reason, unfolded in place — one sentence, in the coach's voice.
-  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
+  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: color.textSecondary, textAlign: 'left' },
   rowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.14)' },
-  rowName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 16, color: color.textPrimary, textAlign: 'left' },
+  rowName: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, color: color.textPrimary, textAlign: 'left' },
   rowRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rowMove: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 15, textAlign: 'right' },
+  rowMove: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 40, lineHeight: 46, letterSpacing: -1, includeFontPadding: false, textAlign: 'left' },
   // Where it came FROM rests in shadow; where it went stands in the accent — and a load coming
   // DOWN is drawn in exactly the same moss as one going up. It is the engine matching what she
   // demonstrated, not a setback, and the letter never colours it like one.
@@ -875,7 +932,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(241,238,229,0.3)',
   },
-  viewAllLabel: { fontFamily: font.sansSemibold, fontSize: 14.5, color: color.textPrimary, textAlign: 'center' },
+  viewAllLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
 
   // Loop 3 — a volume move is a muscle's news, so it gets a muscle row, not a fake lift row.
 
@@ -896,23 +953,24 @@ const styles = StyleSheet.create({
   askDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: signal[0] },
   // The question is the coach speaking, so it is the serif — and it is the biggest thing here.
   askTitle: { fontFamily: font.serif, fontSize: 27, lineHeight: 31, color: color.textPrimary, textAlign: 'left' },
-  askBody: { fontFamily: font.sans, fontSize: 14.5, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  askBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
   askActions: { gap: 10, marginTop: 4 },
   // The one MOSS-FILLED button in the product: this is the answer that gives something back.
   askYes: { height: 52, borderRadius: 15, backgroundColor: signal[0], alignItems: 'center', justifyContent: 'center' },
-  askYesLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: '#141310', textAlign: 'center' },
+  askYesLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: '#141310', textAlign: 'center' },
   askNo: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(241,238,229,0.24)', alignItems: 'center', justifyContent: 'center' },
-  askNoLabel: { fontFamily: font.sansSemibold, fontSize: 15, color: color.textPrimary, textAlign: 'center' },
-  askNote: { marginTop: 18, fontFamily: font.sans, fontSize: 15, lineHeight: 18, color: color.textMuted, textAlign: 'left' },
+  askNoLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
+  askNote: { marginTop: 18, fontFamily: font.sans, fontSize: 17, lineHeight: 18, color: color.textMuted, textAlign: 'left' },
 
   // the steady week: the athlete's own history, as proof
-  evidence: { marginTop: 24 },
+  evidence: { marginTop: 30, gap: 2 },
+  /* Air, not more words — his polish note. The rows carry the whole argument on a steady week. */
   evidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    paddingVertical: 14,
+    paddingVertical: 19,
     borderBottomWidth: 1,
     borderBottomColor: color.border,
   },

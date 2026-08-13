@@ -15,7 +15,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
-import { color, font, textScale, tracking, trackingPx } from '@/design/tokens';
+import { line, color, font, textScale, tracking, trackingPx } from '@/design/tokens';
 
 interface Props extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -68,11 +68,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'left',
   },
-  // The rule: a baseline the value is written on. No box, no fill — 12px of air above a
-  // 1.5px INK line (`rgba(27,25,19,.35)`), which on the stage reads as a shadow, not a border.
+  /*
+   * The rule: a baseline the value is written on. No box, no fill — 12px of air above a hairline.
+   *
+   * ⛔ THE HAIRLINE WAS INK, ON A DARK STAGE, AND SO IT WAS NOT THERE (founder 2026-08-12: *"האפשרות
+   * של רישום השם אין סימן בכלל שזה חלון שאפשר לכתוב בו זה פשוט חלל שחור וזהו"*).
+   *
+   * It read `rgba(27,25,19,0.35)` under a comment saying it "reads as a shadow, not a border" — true
+   * of a PAPER card and false of the only surface this control has ever been used on. Dark ink at
+   * 35% on `stage[0]` is invisible, so the field was a name-shaped hole in a black screen with no
+   * indication anything could be typed there.
+   *
+   * `line[1]` is the emphasised cream hairline the rest of the stage draws with, and the focused
+   * rule is lit moss (`color.accent` resolves to it on the stage). One family, both states visible.
+   */
   well: {
     borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(27,25,19,0.35)',
+    borderBottomColor: line[1],
     paddingBottom: 12,
     justifyContent: 'center',
   },

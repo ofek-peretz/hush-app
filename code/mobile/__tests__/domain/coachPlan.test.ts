@@ -134,17 +134,19 @@ describe('the vocabulary carries what a coach would actually say', () => {
   it('writes a footballer\'s session — sprints, jumps and lifts in one place', () => {
     const plan = read(wrap([
       { name: 'Speed + lower', day: 'wed', blocks: [
-        { rounds: 1, items: [{ kind: 'open', ex: 'mobility', say: 'Whatever your hips need today.' }] },
+        { rounds: 1, items: [{ kind: 'time', ex: 'plank', seconds: 45, say: 'Whatever your hips need today.' }] },
         { rounds: 6, restS: 180, items: [{ kind: 'distance', ex: 'sprint', metres: 30,
           say: 'Full effort. If the sixth is slower than the first, stop at five.' }] },
         { rounds: 4, restS: 120, items: [{ kind: 'reps', ex: 'box_jump', reps: [3, 3], load: null }] },
         { rounds: 3, restS: 150, items: [{ kind: 'reps', ex: 'bb_back_squat', reps: [5, 5], load: 60 }] },
       ] },
     ])).plan;
-    expect(plan.sessions[0].blocks.map((b) => b.items[0].kind)).toEqual(['open', 'distance', 'reps', 'reps']);
+    // ⛔ `time` where `open` used to be: the open item is deleted, and a footballer's session still
+    // needs a shape that is neither a lift nor a distance. A hold is that shape.
+    expect(plan.sessions[0].blocks.map((b) => b.items[0].kind)).toEqual(['time', 'distance', 'reps', 'reps']);
     // An `open` item carries no number at all, and that is a complete instruction.
     expect(plan.sessions[0].blocks[0].items[0]).toEqual({
-      kind: 'open', ex: 'mobility', say: 'Whatever your hips need today.',
+      kind: 'time', ex: 'plank', seconds: 45, say: 'Whatever your hips need today.',
     });
   });
 
@@ -327,7 +329,8 @@ describe('the schema is what makes a small model succeed', () => {
   it('names every shape the parse accepts, and no shape it does not', () => {
     const kinds = COACH_PLAN_SCHEMA.properties.sessions.items.properties.blocks.items
       .properties.items.items.properties.kind.enum;
-    expect([...kinds].sort()).toEqual(['distance', 'open', 'reps', 'time']);
+    // ⛔ `open` DELETED 2026-08-12 — see the note on `PlannedItem`.
+    expect([...kinds].sort()).toEqual(['distance', 'reps', 'time']);
     // And a kind outside that list must be unreadable, or the schema claims a constraint the code
     // does not hold.
     expect(unreadable(wrap([{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'tempo', ex: 'plank' }] }] }])))
@@ -384,7 +387,7 @@ describe('a turn speaks, and only some turns decide', () => {
     // A plan with no sentence attached is the thing this app exists to not be — see the WHY law.
     expect(unreadable(JSON.stringify({
       v: COACH_PLAN_VERSION,
-      sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }],
+      sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }] }],
     }))).toBe('nothing_said');
     expect(unreadable(JSON.stringify({ say: '   ' }))).toBe('nothing_said');
   });
@@ -405,12 +408,12 @@ describe('the contract version is ours to stamp, never the coach to guess', () =
    * answerer cannot possibly get right is not a check; it is a trap.
    */
   it('reads a reply that never mentions a version', () => {
-    const r = read(JSON.stringify({ say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }] }));
+    const r = read(JSON.stringify({ say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }] }] }));
     expect(r.plan.v).toBe(COACH_PLAN_VERSION);
   });
 
   it('ignores a version the coach invented rather than refusing the plan', () => {
-    const r = read(JSON.stringify({ v: 99, say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility' }] }] }] }));
+    const r = read(JSON.stringify({ v: 99, say: 'ok', sessions: [{ name: 'D', blocks: [{ rounds: 1, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }] }] }));
     expect(r.plan.v).toBe(COACH_PLAN_VERSION);
   });
 

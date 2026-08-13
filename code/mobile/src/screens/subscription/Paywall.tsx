@@ -1,9 +1,26 @@
 /**
  * PAYWALL (v7 4.3) — "the trial closes like a milestone".
  *
- * Rebuilt on the stage: the fourteenth session is named as a fact, three quiet promises replace the
- * pitch, and the annual plan is a PAPER card that pops off the dark — the one object on the page you
- * want to pick up. The monthly plan stands beside it in the dark, equally choosable and quieter.
+ * ⛔ FOUNDER, 2026-08-13: *"אני חושב שצריך לשנות אותו ולהסיר את כל המלל הזה… ופשוט להגדיל את שני
+ * הכרטיסים ולשים אותם במרכז ותעצב אותם כמו שעשית לשאר הכרטיסים באפליקציה. גם למה הלבן הזה בתוך
+ * הכרטיס — מאיפה הוא הגיע בכלל?"*
+ *
+ * ── WHAT WENT, AND WHY IT WAS NEVER EARNING ITS PLACE ───────────────────────────────────────────
+ * Three ruled "promises" and a sentence about renewal stood between the headline and the prices.
+ * **Every one of them was a claim she had already spent fourteen sessions verifying.** A person who
+ * has trained with the app for two weeks does not need to be told the coach decides her weights;
+ * she needs to know what it costs. The renewal terms were the same sentence the legal line at the
+ * foot already carries, said twice.
+ *
+ * ⚠️ AND THE WHITE CARD IS GONE. It was a deliberate "paper" slab — the annual plan cut from cream
+ * so it would pop off the dark — and it is the only object in the product that used that trick.
+ * That is precisely what made it look imported: an app whose entire card vocabulary is *a dark
+ * field with a hairline border that lights up when chosen* had one screen shouting in a different
+ * language, on the screen where trust matters most. Both plans now stand in the shape she has
+ * already used to pick her sex, her units and her language.
+ *
+ * The two cards are TALL, EQUAL and CENTRED in the space the copy vacated — the only thing on the
+ * page once the headline has spoken.
  *
  * Surfaced two ways: as the free-trial GATE when the athlete tries to start a session past the free
  * limit (`source: 'gate'`), and from Profile → Membership (`source: 'profile'`). Dismissible — Apple
@@ -34,7 +51,7 @@ import { BILLING_EVENTS } from '@/platform/events';
 import { billing, PRODUCT_IDS, type ProductId, type SubscriptionProduct } from '@/platform/billing';
 import { annualSavingPct, monthlyEquivalentLabel } from '@/domain/pricing';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
-import { color, space, font, textScale, tracking, trackingPx, radius, signal, paper, ink } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Paywall'>;
@@ -146,10 +163,8 @@ export function Paywall({ navigation, route }: Props) {
           * been spent. A screen asking her to pay is the worst place in the product to be wrong
           * about how much she has already had.
           *
-          * And when the trial is still running the screen is an INVITATION rather than a gate, so
-          * it says the one thing that makes deciding early safe: it does not renew by itself, and
-          * starting now changes nothing until it runs out. His words — people may want to subscribe
-          * before the fourteen are gone.
+          * The renewal terms that used to sit under this headline are gone: the legal line at the
+          * foot of the screen says the same thing, and it is the line Apple requires anyway.
           */}
         <RangeMark width={44} height={18} tone={signal[0]} />
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>
@@ -158,39 +173,35 @@ export function Paywall({ navigation, route }: Props) {
             : t('paywall.trialLeft', { done: sessionsDone, n: FREE_SESSION_LIMIT })}
         </Legend>
         <Text style={styles.title} accessibilityRole="header">{t('paywall.title')}</Text>
-        {trialSpent ? null : <Text style={styles.converts}>{t('paywall.trialConverts')}</Text>}
 
-        {/* THREE QUIET PROMISES, not a pitch. Hairline-ruled, so they read as a list of facts. */}
-        <View style={styles.promises}>
-          <Promise text={t('paywall.benefitProgram')} />
-          <Promise text={t('paywall.benefitAdapts')} />
-          <Promise text={t('paywall.benefitPortrait')} />
+        {/* ⛔ THE PRICES ARE THE SCREEN. With the pitch gone they take the whole middle of the page
+            rather than trailing a list of claims. */}
+        <View style={styles.plansWrap}>
+          {loading ? (
+            <ActivityIndicator color={color.accent} style={styles.loader} />
+          ) : products.length === 0 ? (
+            <Text style={styles.unavailable}>{t('paywall.unavailable')}</Text>
+          ) : (
+            <View style={styles.plans}>
+              {products.map((p) => (
+                <PlanCard
+                  key={p.id}
+                  product={p}
+                  selected={selected === p.id}
+                  // The annual saving, as a NUMBER (founder 2026-07-12). "Best value" is a claim the
+                  // athlete has to verify by doing arithmetic on two prices in different units;
+                  // "Save 30%" is the arithmetic, done. Computed from the live store prices — never a
+                  // hardcoded figure that could quietly go wrong when pricing changes, and absent
+                  // entirely when the two plans don't give us the maths.
+                  savingPct={p.period === 'annual' ? annualSavingPct(products) : null}
+                  onSelect={() => setSelected(p.id)}
+                />
+              ))}
+            </View>
+          )}
+
+          {failed ? <Text style={styles.error}>{t('paywall.error')}</Text> : null}
         </View>
-
-        {loading ? (
-          <ActivityIndicator color={color.accent} style={styles.loader} />
-        ) : products.length === 0 ? (
-          <Text style={styles.unavailable}>{t('paywall.unavailable')}</Text>
-        ) : (
-          <View style={styles.plans}>
-            {products.map((p) => (
-              <PlanCard
-                key={p.id}
-                product={p}
-                selected={selected === p.id}
-                // The annual saving, as a NUMBER (founder 2026-07-12). "Best value" is a claim the
-                // athlete has to verify by doing arithmetic on two prices in different units;
-                // "Save 30%" is the arithmetic, done. Computed from the live store prices — never a
-                // hardcoded figure that could quietly go wrong when pricing changes, and absent
-                // entirely when the two plans don't give us the maths.
-                savingPct={p.period === 'annual' ? annualSavingPct(products) : null}
-                onSelect={() => setSelected(p.id)}
-              />
-            ))}
-          </View>
-        )}
-
-        {failed ? <Text style={styles.error}>{t('paywall.error')}</Text> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -228,22 +239,15 @@ export function Paywall({ navigation, route }: Props) {
   );
 }
 
-/** One promise: a moss check, a fact, and the hairline that separates it from the next. */
-function Promise({ text }: { text: string }) {
-  return (
-    <View style={styles.promise}>
-      <Icon name="check" size={15} color={signal[0]} strokeWidth={2.4} />
-      <Text style={styles.promiseText}>{text}</Text>
-    </View>
-  );
-}
-
 /**
  * ONE PLAN.
  *
- * The annual is cut from PAPER — the one object on a dark page you want to pick up — and states its
- * price per MONTH so the two plans stand in the same unit, with the year's real total beneath it.
- * The monthly stands in the dark beside it: quieter, never lesser, and one tap away.
+ * ⛔ THE CARD SHE ALREADY KNOWS — the onboarding sex control's geometry, the same one Profile's
+ * units and language and Progress's Lifts/Log now wear: equal fields, a hairline that LIGHTS to
+ * cream on the answer, a wash on press and never a fade (A.13). Two cards teaching one gesture.
+ *
+ * Both plans state their price per MONTH — the two are only comparable in the same unit — with the
+ * year's real total beneath the annual, so the divided figure never has to be taken on trust.
  */
 function PlanCard({
   product,
@@ -277,12 +281,7 @@ function PlanCard({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       accessibilityLabel={`${name} ${figure}`}
-      style={({ pressed }) => [
-        styles.plan,
-        annual ? styles.planPaper : styles.planStage,
-        selected && !annual && styles.planStageOn,
-        pressed && styles.planPressed,
-      ]}
+      style={({ pressed }) => [styles.plan, selected && styles.planOn, pressed && styles.planPressed]}
     >
       {savingPct != null ? (
         <View style={styles.saveTag}>
@@ -290,42 +289,35 @@ function PlanCard({
         </View>
       ) : null}
 
-      <View style={styles.planLeft}>
-        <View style={[styles.radio, annual ? styles.radioPaper : styles.radioStage]}>
-          {selected ? <View style={[styles.radioDot, annual ? styles.radioDotPaper : styles.radioDotStage]} /> : null}
-        </View>
-        <View style={styles.planText}>
-          <Text style={[styles.planName, annual && styles.onPaper]} numberOfLines={1}>{name}</Text>
-          <Text style={[styles.planSub, annual && styles.onPaperMuted]} numberOfLines={1}>{sub}</Text>
-        </View>
+      <View style={styles.planText}>
+        <Text style={[styles.planName, selected && styles.onChosen]} numberOfLines={1}>{name}</Text>
+        <Text style={styles.planSub} numberOfLines={1}>{sub}</Text>
       </View>
 
       <View style={styles.planPriceCol}>
-        <Text style={[styles.planPrice, annual && styles.onPaper]} numberOfLines={1}>{figure}</Text>
-        <Text style={[styles.cadence, annual && styles.onPaperMuted]} numberOfLines={1}>{cadence}</Text>
+        {/* The figure may be a long localized price; it shrinks rather than wraps or truncates,
+            because a price with a missing digit is the one thing this card cannot do. */}
+        <Text
+          style={[styles.planPrice, selected && styles.onChosen]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.55}
+        >
+          {figure}
+        </Text>
+        <Text style={styles.cadence} numberOfLines={1}>{cadence}</Text>
       </View>
     </Pressable>
   );
 }
-
-const HAIRLINE = 'rgba(241,238,229,0.12)';
 
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: color.bg },
   header: { paddingHorizontal: 26, paddingTop: space[2], paddingBottom: space[1], alignItems: 'flex-end' },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(241,238,229,0.08)', alignItems: 'center', justifyContent: 'center' },
   closePressed: { backgroundColor: color.fillSubtleStrong },
-  scroll: { paddingHorizontal: 30, paddingTop: 8, paddingBottom: space[5] },
-
-  // The one line that makes deciding EARLY safe. Quiet — it is a fact, not a pitch.
-  converts: {
-    color: color.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    marginTop: 10,
-    paddingHorizontal: 18,
-  },
+  // `flexGrow` so the plans can take the space the copy left rather than stacking under the title.
+  scroll: { flexGrow: 1, paddingHorizontal: 30, paddingTop: 8, paddingBottom: space[4] },
   eyebrow: { marginTop: 14, marginBottom: 12 },
   // v7 4.3: the close of the trial is the coach speaking — the serif at 36, not UI chrome.
   title: {
@@ -337,63 +329,65 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
 
-  promises: { marginTop: 16 },
-  promise: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: HAIRLINE },
-  promiseText: { flex: 1, color: color.textPrimary, fontFamily: font.sans, fontSize: textScale.base, lineHeight: 21, textAlign: 'left' },
-
   loader: { marginVertical: space[8] },
   unavailable: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.base, textAlign: 'center', marginVertical: space[8] },
 
-  plans: { gap: 20, marginTop: 30 },
+  /* ⛔ CENTRED IN WHAT THE COPY LEFT — the prices are the only object between the headline and the
+     act, so they sit in the middle of the page rather than at the top of the leftovers. */
+  plansWrap: { flex: 1, justifyContent: 'center', paddingVertical: 24 },
+  /*
+   * ⛔ HORIZONTAL, ANNUAL FIRST, EACH WITH ITS OWN SPACE (founder, 2026-08-13). Two narrow columns
+   * made both plans compete for the same 159 points and squeezed the price into a shrinking figure.
+   * A plan is a NAME and a PRICE — a line, not a column — so each takes the full width and the
+   * reading order becomes the comparison: annual above, monthly below, one glance apart.
+   */
+  plans: { gap: 18 },
   plan: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    borderRadius: 22,
-    paddingVertical: 22,
-    paddingHorizontal: 22,
+    gap: 14,
+    minHeight: 128,
+    paddingVertical: 26,
+    paddingHorizontal: 26,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.16)',
   },
-  // THE ANNUAL IS PAPER — the one object on the dark page, and it carries the product's one shadow
-  // outside the training stage, because a card you are meant to pick up has to stand off the page.
-  planPaper: {
-    backgroundColor: paper[0],
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 24 },
-    elevation: 12,
-  },
-  planStage: { backgroundColor: 'rgba(241,238,229,0.06)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },
-  // Paper is already the loudest thing here, so only the DARK card needs a chosen state to show.
-  planStageOn: { borderColor: color.textPrimary },
-  // A.13 — the same law, and here it was doing nothing anyway: 0.9 is invisible.
-  planPressed: { backgroundColor: color.fillSubtle },
+  // The answer is the LIT EDGE — the same signal the sex, units and language controls give.
+  planOn: { borderColor: color.textPrimary },
+  // A.13: a press washes, it never fades.
+  planPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
 
-  planLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 13, minWidth: 0 },
-  planText: { flex: 1, minWidth: 0, gap: 2 },
-  planName: { color: color.textPrimary, fontFamily: font.sansSemibold, fontSize: textScale.md, textAlign: 'left' },
-  planSub: { color: color.textSecondary, fontFamily: font.sans, fontSize: 15, textAlign: 'left' },
+  planText: { flex: 1, minWidth: 0, gap: 4 },
   planPriceCol: { flexShrink: 0, alignItems: 'flex-end' },
-  planPrice: { color: color.textSecondary, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 26, textAlign: 'right' },
-  cadence: { color: color.textMuted, fontFamily: font.mono, fontSize: 14.5, letterSpacing: trackingPx(11, tracking.tight), textAlign: 'right' },
-  // Dark ink, for everything sitting on the paper card.
-  onPaper: { color: ink[0] }, // rtl-ok: merged onto a base that sets textAlign
-  onPaperMuted: { color: color.onPaperMuted }, // rtl-ok: merged onto a base that sets textAlign
+  planName: { color: color.textMuted, fontFamily: font.sansMedium, fontSize: 22, textAlign: 'left' },
+  planPrice: {
+    color: color.textSecondary,
+    fontFamily: font.monoSemibold,
+    fontVariant: ['tabular-nums'],
+    fontSize: 40,
+    lineHeight: 46,
+    letterSpacing: -1,
+    textAlign: 'right',
+  },
+  /*
+   * ⚠️ SANS, AND IT WAS MONO UNTIL TODAY. "/month" is a WORD, and in Hebrew it is "/חודש" — glyphs
+   * IBM Plex Mono does not contain (`monoCarriesNoWords`). The law never caught it because the
+   * string arrives through a variable rather than a `t(...)` inside the tag, so the cadence has been
+   * one OS font substitution away from tofu on every Hebrew paywall.
+   */
+  cadence: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, textAlign: 'right' },
+  onChosen: { color: color.textPrimary }, // rtl-ok: merged onto a base that sets textAlign
 
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  radioPaper: { borderColor: signal[1] },
-  radioStage: { borderColor: 'rgba(241,238,229,0.35)' },
-  radioDot: { width: 10, height: 10, borderRadius: 5 },
-  radioDotPaper: { backgroundColor: signal[1] },
-  radioDotStage: { backgroundColor: color.textPrimary },
+  planSub: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'left' },
 
-  // The saving tag straddles the paper card's top edge — the one figure allowed to be loud, struck
-  // in deep moss on the paper it sits on.
+  // The saving tag straddles the card's top edge — the one figure allowed to be loud, struck in
+  // deep moss, sitting over the name it qualifies.
   saveTag: {
     position: 'absolute',
-    top: -12,
-    start: 20,
+    top: -13,
+    start: 22,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: radius.full,
@@ -404,7 +398,7 @@ const styles = StyleSheet.create({
     // carries every other word on a dark surface, not "whatever the paper ladder's first rung is".
     color: color.textPrimary,
     fontFamily: font.sansSemibold,
-    fontSize: 14,
+    fontSize: 17,
     letterSpacing: trackingPx(10.5, tracking.wide),
     textTransform: 'uppercase',
     textAlign: 'left',
@@ -414,12 +408,13 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: 26, paddingTop: space[3], gap: 12 },
   quietRow: { flexDirection: 'row', justifyContent: 'center', gap: 26 },
-  quiet: { color: color.textSecondary, fontFamily: font.sansMedium, fontSize: 13.5, textAlign: 'center' },
+  quiet: { color: color.textSecondary, fontFamily: font.sansMedium, fontSize: 17, textAlign: 'center' },
   legal: {
     color: color.textMuted,
     fontFamily: font.sans,
-    fontSize: 14.5,
-    lineHeight: 16,
+    fontSize: 17,
+    // lineHeight follows the floor up — 16 was set against a 12px line and would clip a 17px one.
+    lineHeight: 22,
     textAlign: 'center',
   },
 });

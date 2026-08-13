@@ -116,7 +116,10 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
         <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
         {label ? (
           <Legend
-            size={size >= 220 ? 16 : textScale['2xs']}
+            /* ⛔ 16 → 17 (the type floor). It hid from `typeHasAFloor` inside a TERNARY — the law
+               matched `size={<number>}` and this is `size={cond ? a : b}`. The law reads every
+               literal in the expression now. */
+            size={size >= 220 ? 17 : textScale['2xs']}
             track={size >= 220 ? 0.34 : undefined}
             tone={onStage ? 'onStage' : 'muted'}
             style={size >= 220 ? styles.bigLabel : undefined}

@@ -14,6 +14,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+// ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
+// programme in the same shape when there is not. See `data/local/weekPlan`.
+import { loadWeekPlan } from '@/data/local/weekPlan';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
 import { encodePlan, sharedPlan } from '@/domain/planShare';
@@ -32,7 +35,7 @@ export function SharePlanScreen({ navigation }: Props) {
   const [programme, setProgramme] = React.useState<CoachPlan | null | undefined>(undefined);
   React.useEffect(() => {
     let alive = true;
-    void db.loadCoachPlan().then((p) => alive && setProgramme(p));
+    void loadWeekPlan().then((p) => alive && setProgramme(p));
     return () => {
       alive = false;
     };

@@ -124,21 +124,44 @@ export function loadSetup(exerciseId: string | null | undefined, displayValue: n
  * BOUNDED width — and the hero's row is content-sized, so it would have done nothing at all.
  * ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** The stage's lit figure at its full, designed size (v7 2.2). */
-export const HERO_FONT_SIZE = 118;
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ RE-MEASURED FOR THE VERTICAL STAGE (founder's screenshot of `137.5`, 2026-08-12)
+ *
+ * He photographed the widest-load state and it was broken in three places at once. The one that
+ * matters here: **the screen had stopped calling this function at all.** The 2026-08-12 redesign
+ * hardcoded `fontSize: 92` into `rxFigure`, and `heroFontSize` survived only as a word in a comment.
+ *
+ * ⚠️ AND EVERY LAW STAYED GREEN, which is the part worth keeping. `loadPresentation.test.ts` tests
+ * the FUNCTION against its own constants, and a pure function cannot notice that nobody calls it.
+ * `noGlyphIsClipped` compared `heroType` to `heroFontSize` — two things that agree with each other
+ * whether or not the app agrees with either. The hole is closed by a law that reads the screen, in
+ * `theLitFigureFitsTheStage`.
+ *
+ * ── THE NEW BUDGET, MEASURED IN THE BROWSER ─────────────────────────────────────────────────────
+ * A 390pt phone. The figure is centred on the screen's axis (195) and the unit is ABSOLUTE, hanging
+ * off its right edge — so the unit no longer costs the figure any width, which is what the old
+ * mirrored spacer did. Measured at 92px/-4.4: **52.2pt per glyph** ("137.5" → 261, "8–10" → 208).
+ *
+ *     195 + w/2 + GAP(10) + UNIT("KG" ≈ 37) ≤ 390 − 8   →   w ≤ 280   →   5.36 glyphs
+ *
+ * So five glyphs — every load a barbell can hold, 137.5 included — keep the full 92.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The stage's lit figure at its full, designed size (the vertical stage, 2026-08-12). */
+export const HERO_FONT_SIZE = 92;
 
 /**
  * The size the lit figure may take for `figure`, so it and its unit always sit inside the stage.
  * Steps rather than a continuous scale: a figure that resized by a few px per rung would breathe
- * differently every session, and the athlete would read the SIZE as meaning something. Two, three
- * and four glyphs keep the full 118 — which is every load from 5 to 99.5 kg, and the reason the
- * common case is untouched. Only five glyphs (102.5, 137.5) step down, and only as far as they must.
+ * differently every session, and the athlete would read the SIZE as meaning something. Up to five
+ * glyphs keep the full 92 — every load from 5 to 137.5 kg, which is the reason the common case and
+ * the heaviest real case are both untouched. Only six step down, and only as far as they must.
  */
 export function heroFontSize(figure: string): number {
   const glyphs = figure.length; // tabular-nums: '.' occupies a digit cell, so it counts as one
-  if (glyphs <= 4) return HERO_FONT_SIZE;
-  if (glyphs === 5) return 96;
-  return 80; // 1000+ / 4 decimals — not reachable today, but never clipped either
+  if (glyphs <= 5) return HERO_FONT_SIZE;
+  if (glyphs === 6) return 80;
+  return 68; // 1000+ / 4 decimals — not reachable today, but never clipped either
 }
 
 /**

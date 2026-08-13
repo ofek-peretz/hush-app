@@ -67,9 +67,7 @@
     "briefChangesShort_two": "שני שינויים",
     "briefChangesShort_other": "{{count}} שינויים",
     "weekLabel": "שבוע {{n}}",
-    "programEyebrow_one": "שבוע {{week}} · יום אחד",
-    "programEyebrow_two": "שבוע {{week}} · יומיים",
-    "programEyebrow_other": "שבוע {{week}} · {{count}} ימים",
+    "programEyebrow": "שבוע {{week}} · {{done}} מתוך {{total}}",
     "weekComplete": "שבוע {{n}} הושלם",
     "begin": "התחל {{name}}",
     "begin_female": "התחילי {{name}}",
@@ -97,9 +95,10 @@
     "briefChanges_two": "שני שינויים השבוע",
     "briefChanges_other": "{{count}} שינויים השבוע",
     "briefNoChanges": "אין שינויים השבוע",
-    "restSubNamed": "{{name}}, שריר נבנה בימים כאלה. שום דבר לא מתוכנן — זו התוכנית עובדת.",
     "planMinutes": "~{{min}} דק׳",
-    "planShape": "{{lifts}} תרגילים · ~{{min}} דק׳",
+    "planShape_one": "תרגיל אחד · ~{{min}} דקות",
+    "planShape_two": "שני תרגילים · ~{{min}} דקות",
+    "planShape_other": "{{lifts}} תרגילים · ~{{min}} דקות",
     "overBudget": "האימון הזה לא נכנס ב־{{n}} דקות. הוסף זמן, או כבה שריר.",
     "overBudget_female": "האימון הזה לא נכנס ב־{{n}} דקות. הוסיפי זמן, או כבי שריר.",
     "trialLeft_one": "אימון אחד נותר בתקופת הניסיון",
@@ -107,7 +106,9 @@
     "trialLeft_other": "{{count}} אימונים נותרו בתקופת הניסיון",
     "undoSwap": "להשאיר את {{lift}}",
     "undoSwapA11y": "להשאיר את {{lift}} — ביטול ההחלפה",
-    "planShapeNoTime": "{{lifts}} תרגילים"
+    "planShapeNoTime_one": "תרגיל אחד",
+    "planShapeNoTime_two": "שני תרגילים",
+    "planShapeNoTime_other": "{{lifts}} תרגילים"
   },
   "cardio": {
     "legend": "אימון חופשי",
@@ -187,7 +188,12 @@
     "kilometres": "קילומטרים",
     "recordFooter": "מתועד, ללא הנחיה. שום דבר כאן לא נוגע במוט.",
     "kmMomentLabel": "קילומטר {{km}} · פיצול",
-    "kmMomentQuickest": "המהיר ביותר בריצה זו"
+    "kmMomentQuickest": "המהיר ביותר בריצה זו",
+    "motionOff": "מדידת התנועה כבויה — שמרי את הטלפון עלייך",
+    "outside": "בחוץ",
+    "treadmill": "הליכון",
+    "outsideNote": "מרחק וקצב מה-GPS.",
+    "treadmillNote": "מרחק לפי הצעדים שלך — שמרי את הטלפון עלייך."
   },
   "ob": {
     "continue": "המשך",
@@ -195,7 +201,7 @@
     "apple": "כניסה עם Apple",
     "google": "כניסה עם Google",
     "signinTagline": "רק להתאמן.\nכל השאר עליי.",
-    "signinAffirm": "בנוי על עובדות",
+    "signinAffirm": "כל משקל מסט שהרמת",
     "namePlaceholder": "השם שלך",
     "healthLegend": "אופציונלי",
     "healthTitle": "חיבור נתוני בריאות",
@@ -220,7 +226,6 @@
     "buildChoosing": "בוחר את התרגילים שלך",
     "buildYourProgramme": "התוכנית שלך",
     "weightLabel": "משקל גוף",
-    "ageLabel": "גיל",
     "buildSummary": "{{muscles}} שרירים · {{lifts}} תרגילים",
     "minutesLabel": "דקות לאימון",
     "minutesUnit": "דק׳",
@@ -346,7 +351,25 @@
     "buildingRetry_female": "שאלי שוב",
     "healthSub": "אני מציג אותם. הם לא קובעים משקל.",
     "healthSub_female": "אני מציגה אותם. הם לא קובעים משקל.",
-    "limitsTitle_female": "יש משהו שתעדיפי שאאמן סביבו?"
+    "limitsTitle_female": "יש משהו שתעדיפי שאאמן סביבו?",
+    "mapSameRegion": "{{a}} כבר מוביל בחצי הזה של הגוף. מוביל אחד לכל חצי — שעה אחת לא יכולה לשרת שניים.",
+    "mapFullBodyWeek": "ב-{{n}} ימים כל אימון מאמן הכל, ולכן מוביל שני בא על חשבון הראשון. {{a}} מחזיק בזה.",
+    "signinFailedNetwork": "אין חיבור. החשבון שלך במקום — אפשר לנסות שוב כשחוזר.",
+    "signinFailedProvider": "Apple לא הצליחה לאשר. אפשר לנסות שוב, או להשתמש בכפתור השני.",
+    "signinFailedGoogle": "Google לא הצליחה לאשר. אפשר לנסות שוב, או להשתמש בכפתור השני.",
+    "sexLegend": "מין",
+    "mapEmphasisOne": "אני מוביל עם שריר אחד — {{n}} מתוך 1 נבחר.",
+    "mapEmphasisOne_female": "אני מובילה עם שריר אחד — {{n}} מתוך 1 נבחר.",
+    "mapSubOne": "הכול דלוק. בחר אחד להוביל איתו.",
+    "mapSubOne_female": "הכול דלוק. בחרי אחד להוביל איתו."
+  },
+  "start": {
+    "legend": "שתי דרכים להתחיל",
+    "title": "איפה מתחילים?",
+    "buildTitle": "תבנה לי תוכנית",
+    "buildNote": "שש שאלות, ואז שבוע שנבנה סביב מה שאפשר לאמן והזמן שיש.",
+    "bringTitle": "כבר יש לי אחת",
+    "bringNote": "מספיק לצלם. אני אקרא, אשאיר בדיוק כמו שנכתב, וארוץ על המשקלים מהסטים שלך."
   },
   "menu": {
     "title": "תפריט",
@@ -368,6 +391,7 @@
     "completeSet_female": "סיימי סט",
     "editResult": "עריכת תוצאה",
     "reps": "× {{reps}}",
+    "setHeading": "סט",
     "setOfM": "סט {{n}} מתוך {{m}}",
     "coachingUp": "עלייה של {{delta}} מהשבוע שעבר. אתה מוכן לזה.",
     "coachingUp_female": "עלייה של {{delta}} מהשבוע שעבר. את מוכנה לזה.",
@@ -386,12 +410,9 @@
     "exerciseCount": "תרגיל {{n}} / {{N}}",
     "liftCrossing": "תרגיל {{from}} ← {{to}}",
     "restLearned": "מנוחה · נלמדה",
-    "yourPace": "הקצב שלך",
-    "upNextNewLift": "הבא בתור · תרגיל חדש",
+    "upNextNewLift": "תרגיל חדש",
     "rest": "מנוחה",
     "paused": "מושהה",
-    "setLogged": "סט {{n}} מתוך {{m}} נרשם",
-    "recorded": "הסט תועד.",
     "liftDone": "{{lift}} — סיימנו.",
     "liftDonePlain": "התרגיל הזה נגמר.",
     "vsLast": "מול האימון הקודם",
@@ -446,10 +467,15 @@
     "itemCarrying": "נושאת {{load}} ק\"ג",
     "superset": "סופרסט",
     "repOfM": "חזרה {{n}} מתוך {{m}}",
-    "keyPoints": "דגשים",
     "loadUpBy": "עלייה של {{delta}}{{unit}}",
     "loadDownBy": "ירידה של {{delta}}{{unit}}",
-    "bodyweightShort": "משקל גוף"
+    "bodyweightShort": "משקל גוף",
+    "loadHolds": "{{load}} נשאר לסט הבא",
+    "setsDone_one": "סט אחד",
+    "setsDone_other": "{{count}} סטים",
+    "setsDone_two": "שני סטים",
+    "hold": "החזקה",
+    "nextTime": "בפעם הבאה"
   },
   "finishSheet": {
     "legend": "סיום אימון",
@@ -495,6 +521,33 @@
     "lastSession": "האימון הקודם",
     "today": "היום",
     "decidedFrom": "נקבע מהסטים שלך בלבד"
+  },
+  "whyHere": {
+    "legend": "למה זה כאן",
+    "titleMarked": "ביקשת יותר {{muscle}}.",
+    "titleEssential": "ה{{muscle}} שלך צריך את התנועה הזאת.",
+    "titlePlain": "זו עבודת ה{{muscle}} שלך.",
+    "setsToday": "סטים היום",
+    "weekly": "{{sets}} סטים של {{muscle}} לאורך השבוע",
+    "trains": "מאמן את ה{{muscle}}",
+    "alsoWorks": "מניע גם את ה{{muscles}}",
+    "essential": "אחת מהתנועות ש{{muscle}} לעולם לא מתוכנן בלעדיהן",
+    "marked": "סימנת את השריר הזה להוביל",
+    "firstTime": "עוד לא התאמנת בזה — הסט הראשון שלך יקבע את המשקל",
+    "doseMet": "{{floor}} סטים בשבוע הם המינימום שמגדל שריר. לזה יש {{sets}}.",
+    "doseShort": "{{floor}} סטים בשבוע הם המינימום שמגדל שריר. לזה יש {{sets}}, והשעה שלך היא הסיבה.",
+    "decidedFrom": "נקבע ממפת הגוף שלך ומהשעה שנתת"
+  },
+  "budgetNote": {
+    "over": "האימון הזה בערך {{min}} דקות — יותר מ-{{budget}} שביקשת. כל שריר כאן נשאר עם תרגיל אחד, אז לא היה מה להוריד.",
+    "short": "האימון הזה בערך {{min}} דקות. מה שהשארת דלוק לא מחזיק אימון ארוך יותר — אפשר להחזיר שריר, או לבקש פחות דקות."
+  },
+  "weekNotice": {
+    "over": "{{day}} חורג מ-{{budget}} הדקות שביקשת. כל שריר בו נשאר עם תרגיל אחד, אז לא היה מה להוריד.",
+    "thinOne": "פעמיים בשבוע לא ממש מספיקות לכל מה שהשארת דלוק — ה{{muscle}} מתחת ל-{{floor}} סטים. יום שלישי, או שריר אחד כבוי, יסגרו את זה.",
+    "thinMany": "פעמיים בשבוע לא מספיקות לכל מה שהשארת דלוק — {{count}} שרירים מתחת ל-{{floor}} סטים. יום שלישי, או שריר או שניים כבויים, יסגרו את זה.",
+    "shortOne": "{{day}} יוצא מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימון ארוך יותר.",
+    "shortMany": "{{count}} מהאימונים שלך יוצאים מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימונים ארוכים יותר — פחות ימים יעשו כל אחד מלא יותר."
   },
   "whyLoad": {
     "legend": "למה המשקל הזה",
@@ -542,7 +595,6 @@
     "kcal": "קק״ל",
     "logged": "נרשם",
     "holds": "נשאר על",
-    "stillReading": "עוד קורא את האימון שלך…",
     "decisionsWord_one": "החלטה",
     "decisionsWord_two": "החלטות",
     "decisionsWord_other": "החלטות",
@@ -554,7 +606,7 @@
     "newBest": "שיא חדש",
     "setsLabel": "סטים",
     "movedShort": "הונפו",
-    "everythingHeld": "כל תרגיל נשאר על מה שהרמת. שום דבר לא היה צריך לזוז.",
+    "everythingHeld": "כל תרגיל נחת בדיוק איפה שביקשנו. שום דבר לא היה צריך לזוז — וככה בדיוק אימון אמור להיראות.",
     "volumeUp": "סט נוסף ל{{muscle}}",
     "volumeDown": "סט אחד פחות ל{{muscle}}",
     "topSet": "הסט המוביל",
@@ -709,6 +761,10 @@
     "Core": "בטן"
   },
   "program": {
+    "sheetLifts": "תרגילים",
+    "sheetSets": "סטים",
+    "sheetMin": "דקות",
+    "sheetTheLifts": "התרגילים",
     "setsReps": "{{sets}} סטים · {{reps}} חזרות",
     "dayMeta": "{{exercises}} תרגילים · ~{{min}} דק׳",
     "upNext": "הבא בתור",
@@ -786,7 +842,7 @@
     "badgeLifted": "הורם",
     "badgeWorkouts": "אימונים",
     "badgeBurned": "נשרף",
-    "badgeRaises": "שיאים",
+    "badgeRaises": "שיאים אישיים",
     "badgeCardio": "קרדיו",
     "unitTonnes": "T",
     "unitDone": "בוצעו",
@@ -823,7 +879,11 @@
     "dayOneBody": "כל סט שתסיים נוחת כאן: המשקל שכל תרגיל נושא, הטונות שהזזת, אבני הדרך שהרווחת. אני מציג רק מה שנמדד — אז היום הדף הזה ריק, בכנות.",
     "dayOneBody_female": "כל סט שתסיימי נוחת כאן: המשקל שכל תרגיל נושא, הטונות שהזזת, אבני הדרך שהרווחת. אני מציגה רק מה שנמדד — אז היום הדף הזה ריק, בכנות.",
     "dayOneFirstMark": "אבן הדרך הראשונה שמחכה: ההעלאה הראשונה שלך.",
-    "momentClub": "משקל ציון־דרך בתרגיל הזה."
+    "momentClub": "משקל ציון־דרך בתרגיל הזה.",
+    "unitHours": "שעות",
+    "unitMinutes": "דק׳",
+    "badgeTrained": "זמן אימון",
+    "allTime": "ההתקדמות מאז ומעולם"
   },
   "history": {
     "title": "היסטוריה",
@@ -917,7 +977,13 @@
     "mapAllOn": "הכל דלוק",
     "mapLeading": "מוביל עם {{muscles}}",
     "mapOff": "{{n}} כבויים",
-    "tagline": "בנוי על עובדות."
+    "tagline": "בנוי על עובדות.",
+    "mapSub": "מה אתה מאמן, במה אתה מוביל, ומה כואב.",
+    "programmeDoor": "הבא או שתף תוכנית",
+    "programmeDoorSub": "צלם תוכנית שכבר יש לך, או שלח למישהו את שלך.",
+    "mapSub_female": "מה את מאמנת, במה את מובילה, ומה כואב.",
+    "programmeDoor_female": "הביאי או שתפי תוכנית",
+    "programmeDoorSub_female": "צלמי תוכנית שכבר יש לך, או שלחי למישהו את שלך."
   },
   "settings": {
     "units": "יחידות",
@@ -1125,9 +1191,6 @@
   },
   "paywall": {
     "title": "היה תענוג להתאמן איתך.",
-    "benefitProgram": "כל משקל נקבע עבורך — ועם ההסבר",
-    "benefitAdapts": "מכתב שבת — השבוע שלך, במראה",
-    "benefitPortrait": "כל ההיסטוריה שלך, נשמרת ושלך",
     "annual": "שנתי",
     "monthly": "חודשי",
     "perYear": "/שנה",
@@ -1149,8 +1212,7 @@
     "billedOnce": "{{price}} בחיוב אחד לשנה",
     "perMonthShort": "/חודש",
     "perYearShort": "/שנה",
-    "trialLeft": "אימון {{done}} מתוך {{n}}",
-    "trialConverts": "הניסיון לא מתחדש מעצמו. אפשר להתחיל עכשיו — שום דבר לא משתנה עד שהוא ייגמר."
+    "trialLeft": "אימון {{done}} מתוך {{n}}"
   },
   "explain": {
     "progressLoad": {
@@ -2600,21 +2662,55 @@
     "fri": "ו'",
     "sat": "שבת"
   },
-  "sessionCoach": {
-    "invitation": "תגידי לי כל דבר — אני יכול לשנות את מה שנשאר מהיום.",
-    "chipSwap": "להחליף",
-    "chipSkip": "לדלג",
-    "chipBusy": "תפוס",
-    "skipped": "הורדתי את {{name}} מהיום.",
-    "cannotSkip": "זה הדבר האחרון שנשאר היום — דילוג עליו מסיים את האימון.",
-    "nothingChanged": "אין שם מה לשנות.",
-    "open": "לדבר עם המאמן",
-    "changed": "שיניתי את מה שנשאר מהיום."
-  },
   "plan": {
     "shapeFull": "גוף מלא",
     "shapeSplit": "עליון / תחתון",
     "weekDays": "{{n}} ימים בשבוע",
     "led": "בהובלת {{muscles}}"
+  },
+  "import": {
+    "reviewTitle": "התוכנית שלך",
+    "reviewRead": "{{sessions}} אימונים · {{lifts}} תרגילים נקראו",
+    "reviewNothing": "אין מה לציין. זו התוכנית שלך והיא נשארת בדיוק כפי שנכתבה — המשקלים עליי.",
+    "reviewFound": "{{n}} דברים ששמתי לב אליהם:",
+    "findUnmatched": "לא מצאתי את «{{name}}» במאגר שלי, אז הוא עדיין לא בשבוע.",
+    "findSetsUnstated": "ל«{{name}}» לא רשום כמה סטים. שמתי {{n}} בינתיים.",
+    "findLongSession": "{{day}} נמשך בערך {{min}} דקות.",
+    "findManySets": "{{name}} הוא {{n}} סטים — יותר ממה שאני בדרך כלל כותב.",
+    "findUnderDose": "{{muscle}} מקבל {{n}} סטים בשבוע, מתחת למה שבדרך כלל מצמיח.",
+    "findOnceAWeek": "{{muscle}} מאומן פעם בשבוע.",
+    "keepMine": "להשאיר שלי",
+    "letUsBalance": "תאזן לי",
+    "title": "להביא תוכנית משלך",
+    "sub": "תצלם אותה, או תכתוב אותה. אקרא, אגיד לך מה שמתי לב אליו, ואשאיר אותה בדיוק כמו שהיא.",
+    "photograph": "לצלם אותה",
+    "or": "או",
+    "typePlaceholder": "דחיפה\nלחיצת חזה 4x8\nלחיצה בשיפוע 3x10\n\nמשיכה\nדדליפט 4x5",
+    "typeLabel": "התוכנית שלך",
+    "readMine": "תקרא את שלי",
+    "balanceSoon": "האיזון עוד לא נבנה — בינתיים התוכנית נשארת כפי שהיא.",
+    "fail": {
+      "nothing_given": "תן לי תמונה או כתוב אותה ואקרא.",
+      "unreachable": "לא הצלחתי להגיע לקורא. נסה שוב בעוד רגע.",
+      "unreadable": "לא מצאתי שם תוכנית אימונים.",
+      "nothing_matched": "אף אחד מהתרגילים האלה לא במאגר שלי — זה הדף הנכון?",
+      "nothing_given_female": "תני לי תמונה או כתבי אותה ואקרא.",
+      "unreachable_female": "לא הצלחתי להגיע לקורא. נסי שוב בעוד רגע."
+    },
+    "sub_female": "תצלמי אותה, או תכתבי אותה. אקרא, אגיד לך מה שמתי לב אליו, ואשאיר אותה בדיוק כמו שהיא.",
+    "balancedTitle": "מאוזן",
+    "balancedNothing": "לא היה צורך לשנות כלום.",
+    "balancedCount": "{{n}} שינויים, ושום דבר אחר לא זז:",
+    "changeRemoved": "{{name}} יצא מ{{day}} — היום לא יכול היה להכיל אותו.",
+    "changeTrimmed": "{{name}}: {{from}} סטים ← {{to}}.",
+    "changeRaised": "{{name}}: {{from}} סטים ← {{to}}.",
+    "useBalanced": "להשתמש בזה",
+    "backToMine": "חזרה לשלי",
+    "alreadyHaveOne": "כבר יש לי תוכנית",
+    "phase": {
+      "reading": "קורא את התוכנית שלך…",
+      "matching": "בודק כמה תרגילים…"
+    },
+    "photographSub": "כל תמונה של הדף עובדת — נייר, לוח מחיק, צילום מסך."
   }
 }

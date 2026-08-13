@@ -28,9 +28,25 @@ export interface WeeklyBand {
 }
 
 export type OnboardingParamList = {
+  /*
+   * ⛔ THE IMPORT IS AN ONBOARDING STEP TOO (2026-08-11). It carries the relay so that keeping the
+   * week she brought still FINISHES the intake — see `BodyMap.bringYourOwn`. Absent params mean it
+   * was opened from the profile instead, where there is no intake to finish.
+   */
+  ImportPlan: { fromOnboarding?: true; review?: true; inputs?: OnboardingInputs } | undefined;
   // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
   // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
+  /**
+   * ⛔ THE FORK, AND THE FIRST REAL DECISION IN THE PRODUCT (founder 2026-08-12).
+   *
+   * Bringing a programme was one grey underlined line under a Continue button — the largest system
+   * in the intake drawn as its smallest control. It is one of the two ways this app begins, so it
+   * is a screen, and it is first: what she answers here changes what every step after it is FOR,
+   * and the model's read of a photograph runs underneath the rest of the intake rather than in
+   * front of her (`domain/pendingImport`).
+   */
+  Start: undefined;
   /*
    * ⛔ WHAT SHE WEIGHS (founder 2026-08-03) — *"the coach didn't ask for my weight, and it's
    * critical for it."* It was never asked by anyone: `coachFacts` spreads it conditionally, so an
@@ -201,7 +217,21 @@ export type MainParamList = {
    * because that would signal hardest of all that we're just another AI app — when we really,
    * really aren't."* A tab is a section; this is who decides what the other sections show.
    */
-  Coach: undefined;
+  /*
+   * ⛔ `Coach` WAS A ROUTE AND IS NOT ONE (founder 2026-08-11). The conversation had two doors; the
+   * onboarding one went on 2026-08-04 and the corner of Today kept the other. Both are closed, and
+   * `CoachScreen` — the 228-line wrapper that was the chat — is deleted.
+   *
+   * ⛔ AND ON 2026-08-12 SO ARE `CoachChat` AND `useCoach`. This note used to end "…remain in use by
+   * the pain screen and the live session", which was true and was the whole problem: two screens
+   * were still conversations. The pain report is the body map again and the in-workout window is an
+   * action sheet, so the components had no consumer left but the dev gallery — which is exactly how
+   * a deleted feature keeps voting. `theAiHasOneJob` is the law that keeps them gone.
+   *
+   * Removing the button alone was not enough and the laws said so: `everyScreenIsReachable` flagged a
+   * registered route with no door, and `everythingBuiltCanBeReached` then flagged a screen that only
+   * the dev gallery rendered. A feature is out when nothing reaches it, not when its button is hidden.
+   */
   // The tab host is the stack's root. Everything below is pushed on top of the tabs.
   HomeTabs: NavigatorScreenParams<HomeTabsParamList> | undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
@@ -215,7 +245,12 @@ export type MainParamList = {
    * wrote — "5 km" inside a session — and it is what lets the phone end the run itself instead of
    * asking her to confirm a distance it is already measuring.
    */
-  CardioLive: { target?: { metres: number; say?: string; ex?: string } } | undefined;
+  /**
+   * ⛔ `indoor` — a treadmill (founder, 2026-08-12). It selects the DISTANCE SOURCE and nothing
+   * else: the stage, the maths and the calorie model are one, and `kcalPerKgKm` already prices a
+   * walking segment differently from a running one without being asked which this is.
+   */
+  CardioLive: { target?: { metres: number; say?: string; ex?: string }; indoor?: boolean } | undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
   // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
@@ -269,6 +304,8 @@ export type MainParamList = {
    * in You → Body map."* The app was promising a screen that did not exist.
    */
   BodyMapEdit: undefined;
+  /** The programme she already has — photographed or typed. See `screens/import`. */
+  ImportPlan: undefined;
   SharePlan: undefined;
   PlanReceived: { token: string };
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent

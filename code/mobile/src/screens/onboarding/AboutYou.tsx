@@ -29,12 +29,41 @@
 // 
 
 import React, { useState } from 'react';
-import { View, Keyboard, StyleSheet } from 'react-native';
+/*
+ * ⛔ `Pressable` WAS MISSING TOO — the SECOND crash in this one file, found in the same audit.
+ *
+ * The import door added on 2026-08-11 is a `<Pressable>` wrapping a `<Text>`, and NONE of the three
+ * things it needs were imported. Three crashes in one edit, each hidden differently:
+ *
+ *   `font` / `color`  threw at MODULE scope — the whole app died on launch, every platform
+ *   `Pressable`       threw at RENDER — step two of onboarding, the moment she pressed Continue
+ *   `Text`            ⛔ threw NOTHING anywhere, and is the worst of the three
+ *
+ * ⚠️ `Text` IS A DOM CONSTRUCTOR. On web `window.Text` exists, so the name resolved silently to the
+ * browser's global and React tried to call it as a component — "Please use the 'new' operator".
+ * There is no `ReferenceError` for the bundle to report and no `TS2304` for the typechecker to find,
+ * because `lib.dom` says `Text` is perfectly defined. On Hermes there is no such global and it would
+ * have been a plain crash instead. One bug, two different failures, and neither one visible from
+ * inside this repo's tooling — see `everyComponentIsImported`, written for this class.
+ */
+import { View, Text, Keyboard, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Legend, TextField, SegmentedControl, WheelPicker } from '@/components/ds';
+import { Button, Legend, TextField, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+/*
+ * ⛔ THIS LINE WAS MISSING AND IT CRASHED THE WHOLE APP (found 2026-08-12, in a browser).
+ *
+ * The import door was added to this step on 2026-08-11 with a style that reads `font.sans` and
+ * `color.textMuted`, and the import for them was never added. `StyleSheet.create` runs at MODULE
+ * scope, `Root` imports every screen eagerly, so the reference threw before a single frame — the
+ * entire bundle died on `font is not defined`, on every platform, from the first launch.
+ *
+ * ⚠️ AND NOTHING CAUGHT IT: this file carries `@ts-nocheck`, so the typechecker never looked, and
+ * no test mounts `AboutYou`. 2,639 laws, a clean `tsc`, and the app did not start.
+ */
+import { line, color, font, textScale } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
@@ -146,15 +175,29 @@ export function AboutYou({ navigation }: Props) {
       title={t('ob.aboutTitle')}
       headGap={26}
       footer={
-        <Button
-          variant="primary"
-          size="lg"
-          block
-          label={t('ob.continue')}
-          onPress={onContinue}
-          /* Sex has no default, so there is genuinely nothing to continue with until she picks. */
-          disabled={!sex}
-        />
+        <>
+          <Button
+            variant="primary"
+            size="lg"
+            block
+            label={t('ob.continue')}
+            onPress={onContinue}
+            /* Sex has no default, so there is genuinely nothing to continue with until she picks. */
+            disabled={!sex}
+          />
+          {/*
+            ⛔ THE DOOR FOR A PROGRAMME SHE ALREADY HAS IS NOT HERE ANY MORE (founder 2026-08-12).
+
+            It was a 14px underlined line under this button, and behind it sat a matcher, a prompt, a
+            background runner, a review screen and 96 laws — *"זה לא פיצ'ר אלא זה חלק מהמוצר שלנו
+            שהגדרנו מערכת שלמה עבורו"*. A control's SIZE is the app saying how much it matters, and
+            this one said "footnote".
+
+            It is `screens/onboarding/Start` now: a fork, before the intake, where the two ways to
+            begin are the same size. The reasoning that put it EARLY still holds and is written
+            there — the model's read runs underneath the rest of the questions.
+          */}
+        </>
       }
     >
       <View style={styles.rows}>
@@ -174,13 +217,47 @@ export function AboutYou({ navigation }: Props) {
           maxLength={40}
           returnKeyType="done"
         />
-        <SegmentedControl
-          block
-          size="lg"
-          options={[{ value: 'female', label: t('ob.female') }, { value: 'male', label: t('ob.male') }]}
-          value={sex ?? ''}
-          onChange={pickSex}
-        />
+        {/*
+          ⛔ NOT A SEGMENTED CONTROL (founder 2026-08-12: *"הפקדים של זכר ונקבה לא קשורים למסך
+          וניראים בנאליים"*).
+
+          He is right twice. A segmented pill is the iOS idiom for a VIEW FILTER — All / Unread /
+          Flagged — so putting her sex in one framed it as a display preference rather than a fact
+          about her body. And it was the only control on the screen with that shape, sitting between
+          a written line and two measuring wheels, belonging to neither.
+
+          Two plain choices on the same rules the wheels below are drawn with: a hairline each, the
+          chosen one lit. It reads as an answer to a question, which is what it is.
+
+          ⛔ AND IT CARRIES NO CAPTION EXPLAINING ITSELF. My first cut added one, and
+          `appMatchesEngine` refused it by name: `ob.sexWhy` was deleted by the founder on
+          2026-07-28 as *"a note defending a control nobody had objected to, pointing at a body map
+          two steps ahead that she has not seen."*
+
+          ⚠️ THAT RULING STILL STANDS AND TODAY'S OBJECTION WAS A DIFFERENT ONE. He called the
+          control banal and unrelated to the screen — a complaint about its SHAPE, which is what
+          changed. Answering it with prose would have been defending the old shape instead of
+          fixing it, twice.
+        */}
+        <View style={styles.col}>
+          <Legend>{t('ob.sexLegend')}</Legend>
+          <View style={styles.choices}>
+            {(['female', 'male'] as const).map((v) => (
+              <Pressable
+                key={v}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: sex === v }}
+                accessibilityLabel={t(v === 'female' ? 'ob.female' : 'ob.male')}
+                onPress={() => pickSex(v)}
+                style={({ pressed }) => [styles.choice, sex === v && styles.choiceOn, pressed && styles.choicePressed]}
+              >
+                <Text style={[styles.choiceText, sex === v && styles.choiceTextOn]}>
+                  {t(v === 'female' ? 'ob.female' : 'ob.male')}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         {/*
           ⛔ THE EXPERIENCE CONTROL STOOD HERE AND IS DELETED — see the note on the state above.
           What is left above is the two things the app cannot learn any other way: what to call her,
@@ -219,6 +296,25 @@ export function AboutYou({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  bringYours: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 16 },
+  /* Two answers, drawn on the same rules the wheels below are drawn with — a hairline each, the
+     chosen one lit. Whole-row targets: this is a question, not a toolbar. */
+  choices: { flexDirection: 'row', gap: 10 },
+  choice: {
+    flex: 1,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: line[0],
+  },
+  choiceOn: { borderColor: color.textPrimary },
+  /* A press is a WASH, never a fade (founder A.13). */
+  choicePressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
+  choiceText: { fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textMuted, textAlign: 'center' },
+  choiceTextOn: { color: color.textPrimary },
+
   rows: { gap: 20 },
   col: { gap: 12 },
 });

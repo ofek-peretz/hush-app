@@ -34,21 +34,32 @@ const done = () => {
  */
 
 describe('⛔ the title can never disagree with the figure under it', () => {
-  it('the run is named by its MOVEMENT, never by a prescribed distance', () => {
+  it('the activity is named by what it IS, never by a prescribed distance', () => {
     /*
      * A name with a number in it disagrees with the distance below it exactly when she stopped
      * short — which is the moment a poster must not be caught arguing with her.
      */
-    expect(done()).toContain("t(gaitFromPace(avgPace) === 'walk' ? 'cardio.walk' : 'cardio.run')");
     expect(done()).not.toMatch(/targetMetres|runName/);
   });
 
-  it('and both names exist in both languages', () => {
-    for (const loc of ['en', 'he']) {
-      const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as { cardio: Record<string, string> };
-      expect(copy.cardio.run).toBeTruthy();
-      expect(copy.cardio.walk).toBeTruthy();
-    }
+  it('⛔ …and never by a GAIT, because a mixed session has no single one', () => {
+    /*
+     * ⛔ TIGHTENED 2026-08-12, and the founder caught me holding two positions at once:
+     *
+     *   *"אם המתאמן גם רץ וגם הולך באותו אימון איך נציג את זה כריצה או הליכה?! צריך להציג את זה
+     *   כקרדיו אחד."*
+     *
+     * This line pinned `gaitFromPace(avgPace)` — the ONE place the product collapsed a session into
+     * a single gait. I had just argued that no gait question is needed because `kcalPerKgKm` bills
+     * **every segment at its own pace**, and then the poster titled the whole thing from the
+     * average. **Twenty minutes walking and twenty running averages to a jog that never happened.**
+     *
+     * ⚠️ THE ENERGY WAS RIGHT THE WHOLE TIME — only the headline was picking a side, and the splits
+     * already carry each kilometre's own gait. So the title states the general fact and the record
+     * keeps the specific ones.
+     */
+    expect(done()).toContain("<Text style={styles.posterName}>{t('cardio.liveLegend')}</Text>");
+    expect(done()).not.toContain('gaitFromPace(avgPace) ===');
   });
 
   it('⚠️ and the sentence it replaced is DELETED from both locales, not merely unused', () => {

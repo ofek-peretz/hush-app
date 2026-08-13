@@ -112,20 +112,53 @@ describe('and it reaches two screens, not one', () => {
     expect(code).not.toContain('coachPlan');
   });
 
-  it('⚠️ and so does TODAY, where she looks every morning', () => {
+  it('⛔ …and NOT on Today, which is the screen that has to be about today', () => {
     /*
-     * Drawn only on the day it arrives, a name is an announcement rather than a thing she is doing.
+     * ════ THIS LAW USED TO REQUIRE THE OPPOSITE, AND BOTH VERSIONS ARE RIGHT IN THEIR TURN ════
      *
-     * ⚠️ IT WAS THE EYEBROW AND IT IS THE HEADLINE NOW (founder 2026-08-04, the week-column
-     * rebuild). Same law, moved up: the name went from replacing "MONDAY · UP NEXT" in the chrome's
-     * mono to being the largest type on the screen, in the coach's serif. The old assertion pinned
-     * `.toUpperCase()`, which was about the eyebrow's styling and not about the law at all.
+     * It asserted `programTitle={coachPlan?.title ?? null}` on `Home` and a 38px serif drawing it —
+     * won on 2026-08-04, when Today led with "MONDAY · UP NEXT" and could not answer *what am I on?*
+     * at all.
+     *
+     * ⛔ FOUNDER, 2026-08-12, after measuring the finished screen: *"תוריד את שם התוכנית."*
+     *
+     * The fix outgrew its reason. A programme's name never changes, and it was taking **50 pixels of
+     * the first fold, every morning, for the life of the programme** — above a week whose first
+     * workout began a fifth of the way down the screen. The same argument that put it there (*a
+     * screen should be biggest where it changes*) is what took it away one level up.
+     *
+     * ⚠️ THE NAME IS NOT DELETED FROM THE PRODUCT, and that distinction is the whole of this file.
+     * `ProgramCreated` hands it to her by name the day it is made — the beat that turns a week into
+     * a thing she was given — and `programmeName` composes it from the programme rather than from a
+     * model. What went is a permanent fact charging daily rent.
      */
-    expect(read('src/screens/home/Home.tsx')).toContain('programTitle={coachPlan?.title ?? null}');
-    expect(read('src/screens/home/HomeView.tsx')).toContain('<Text style={styles.programName}');
-    // …and its REASON with it, which is the half that was never drawn anywhere she looks.
-    expect(read('src/screens/home/Home.tsx')).toContain('programWhy={coachPlan?.why ?? null}');
-    expect(read('src/screens/home/HomeView.tsx')).toContain('<Text style={styles.programWhy}');
+    expect(read('src/screens/home/Home.tsx')).not.toMatch(/programTitle=\{/);
+    expect(read('src/screens/home/HomeView.tsx')).not.toMatch(/styles\.programName/);
+    // …and Today leads with the week it is in, not with a caption about the programme.
+    expect(read('src/screens/home/HomeView.tsx')).toContain("t('home.weekLabel', { n: props.weekNumber })");
+  });
+
+  it('⛔ …but NOT the coach’s paragraph, because the engine does not write one', () => {
+    /*
+     * ════ THIS ASSERTION USED TO REQUIRE A LINE THAT COULD ONLY EVER BE NULL ════
+     *
+     * It read: *"…and its REASON with it, which is the half that was never drawn anywhere she
+     * looks"* — and it pinned `programWhy={coachPlan?.why ?? null}` into `Home.tsx`. True when the
+     * coach wrote the programme and wrote a paragraph about it. **`domain/enginePlan` leaves `why`
+     * deliberately absent** (R7: Hush never states a reason it did not measure), so from the day the
+     * engine took the week that expression was null on every device in existence.
+     *
+     * ⚠️ SO THE LAW WAS GREEN ON A DEAD LINE, and the only place the paragraph was ever seen again
+     * was a gallery fixture that invented one — *"You gave me a date, so the lifting serves the
+     * running…"* — which is what the founder read on 2026-08-12 and asked about. A law that checks a
+     * prop is WIRED cannot tell you whether anything ever arrives through it.
+     *
+     * The NAME is real and is asserted above: `enginePlan` sets `title` from `programmeName`. The
+     * reason is refused, and this is now the assertion that keeps it refused rather than the one
+     * that demanded it.
+     */
+    expect(read('src/domain/enginePlan.ts')).toContain('`why` is left absent');
+    expect(read('src/screens/home/Home.tsx')).not.toMatch(/programWhy=\{/);
   });
 
   it('and both fall back cleanly when there is no name', () => {

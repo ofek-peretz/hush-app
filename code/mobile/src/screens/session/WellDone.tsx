@@ -621,7 +621,7 @@ export function WellDone({ navigation, route }: Props) {
                 transform: [{ scale: stamp.interpolate({ inputRange: [0, 1], outputRange: [1.6, 1] }) }],
               }}
             >
-              <Legend size={12} track={0.24} align="center" tone="onStage">{t('milestones.legend')}</Legend>
+              <Legend size={17} track={0.24} align="center" tone="onStage">{t('milestones.legend')}</Legend>
               <View style={styles.milestoneEmblem}>
                 {/* the one licensed loud moment — the seal gives off heat here, and nowhere else
                     in the app (founder 2026-07-12) */}
@@ -631,7 +631,7 @@ export function WellDone({ navigation, route }: Props) {
                 <Text style={styles.milestoneTitle} accessibilityRole="header">{mc.title}</Text>
                 {mc.sub ? <Text style={styles.milestoneSub}>{mc.sub}</Text> : null}
                 {/* MEASURED · 17 JULY 2026 — the mark is a record, and a record is dated. */}
-                <Legend size={13.5} track={0} weight="regular" align="center" tone="onStage">
+                <Legend size={17} track={0} weight="regular" align="center" tone="onStage">
                   {`${t('milestones.measured')} · ${dateLabel}`}
                 </Legend>
               </View>
@@ -740,12 +740,6 @@ export function WellDone({ navigation, route }: Props) {
        */
       decisions={coachLines.length ? coachLines : decisions}
       volume={volume}
-      /*
-       * `answered` is what stops the screen drawing "nothing changed" over a decision that is still
-       * in the post. `thinking` is the one state the old surface never had, because the engine
-       * answered in a millisecond and this one takes fifteen seconds.
-       */
-      answered={coachDecided.state !== 'thinking' && earned !== null}
       onDone={() => leave(goHome)}
       onRecord={() => leave(goRecord)}
     />
@@ -771,7 +765,6 @@ export function SessionEarned({
   units,
   decisions,
   volume,
-  answered,
   onDone,
   onRecord,
   previewSheetOpen,
@@ -794,9 +787,6 @@ export function SessionEarned({
   units?: 'kg' | 'lb';
   decisions: EarnedLine[];
   volume: VolumeMove[];
-  /** The engine has answered. Only then is an empty ledger a verdict ("everything held") rather
-   *  than a read still in flight, which must draw nothing at all. */
-  answered: boolean;
   onDone: () => void;
   onRecord: () => void;
   /** Offered only when this session set a real record (§9.1) — there is no card for a session that
@@ -839,58 +829,84 @@ export function SessionEarned({
           */}
           {poster ? (
             <View style={styles.poster}>
-              {/* The mark, so a screenshot carries the product without a word of advertising. */}
-              <View style={styles.posterMark}>
-                <RangeMark />
-                <Text style={styles.posterWord}>hush</Text>
+              {/*
+                ════════════════════════════════════════════════════════════════════════════════
+                ⛔ FOUR GROUPS, EACH WITH ITS OWN SPACE (founder, 2026-08-12)
+
+                  *"יש לך כאן המון חלל מת ומה שמופיע במסך הזה לא מסודר בצורה טובה מספיק."*
+
+                Every gap on this poster was a hard `marginTop` — 22 under the mark, 6 under the
+                legend, 18 over the hero, 26 over the stats, 26 over the box — stacked inside a
+                block that was then CENTRED as a whole. So the spacing was fixed and the leftover
+                went to the ends: measured, **190 points of black above the mark and 210 below the
+                box**, with the four things she came for crushed into the middle third.
+
+                The block owns the stage now and the groups are spread through it. The spacing
+                inside each group is a `gap`; the spacing BETWEEN them is whatever the screen has
+                left, which is the same rule the set stage and the end-of-set beat both run on.
+                ════════════════════════════════════════════════════════════════════════════════
+              */}
+              <View style={styles.posterHead}>
+                {/* The mark, so a screenshot carries the product without a word of advertising. */}
+                <View style={styles.posterMark}>
+                  <RangeMark />
+                  <Text style={styles.posterWord}>hush</Text>
+                </View>
+
+                <Legend size={17} track={0.2} align="center" style={styles.posterLegend}>{savedLegend}</Legend>
+
+                {/*
+                  ⚠️ THE IDENTITY IS ONE GROUP WHATEVER THE HERO IS. A record names the LIFT, an
+                  ordinary session names the WORKOUT, and either way it is the line under the mark —
+                  so the branch is on the words, never on the structure. The two used to fork the
+                  whole poster, which is how the record variant ended up with its own spacing.
+                */}
+                {poster.hero.kind === 'record' ? (
+                  <>
+                    {/* A record takes the poster: it is the one thing more postable than a total. */}
+                    <View style={styles.bestPill}>
+                      <Text style={styles.bestPillText}>{t('complete.newBest')}</Text>
+                    </View>
+                    <Text style={styles.posterName} numberOfLines={2}>
+                      {bidi(exerciseDisplayName(poster.hero.exerciseId))}
+                    </Text>
+                  </>
+                ) : workoutName ? (
+                  <Text style={styles.posterName} numberOfLines={2}>{bidi(workoutName)}</Text>
+                ) : null}
               </View>
 
-              <Legend size={12} track={0.2} align="center" style={styles.posterLegend}>{savedLegend}</Legend>
-
-              {poster.hero.kind === 'record' ? (
-                <>
-                  {/* A record takes the poster: it is the one thing more postable than a total. */}
-                  <View style={styles.bestPill}>
-                    <Text style={styles.bestPillText}>{t('complete.newBest')}</Text>
-                  </View>
-                  <Text style={styles.posterName} numberOfLines={2}>
-                    {bidi(exerciseDisplayName(poster.hero.exerciseId))}
-                  </Text>
+              <View style={styles.posterHero}>
+                {poster.hero.kind === 'record' ? (
+                  /*
+                   * ⛔ NO FOOTNOTE UNDER A RECORD (founder 2026-08-05): *"take off the × 8 reps · up
+                   * 3.5 kg — it is just stuck there and not interesting."* This poster exists because
+                   * a number is the story; a rep count and a delta are the ARGUMENT for why the
+                   * number is a record, and nobody photographs an argument.
+                   */
                   <View style={styles.heroRow}>
                     <Text style={styles.heroNum}>{poster.hero.value}</Text>
                     <Text style={styles.heroUnit}>{poster.hero.unit}</Text>
                   </View>
-                  {/*
-                    ⛔ THE FOOTNOTE IS DELETED (founder 2026-08-05): *"and for a new record, take off
-                    the × 8 reps · up 3.5 kg — it is just stuck there and not interesting."*
-
-                    He is right and the reason is the screen's own logic: this poster exists because
-                    a number is the story. A rep count and a delta underneath it are the ARGUMENT for
-                    why the number is a record, and nobody photographs an argument. The delta is
-                    still on the set stage, where she needed it while the bar was in front of her.
-                  */}
-                </>
-              ) : (
-                <>
-                  {workoutName ? (
-                    <Text style={styles.posterName} numberOfLines={2}>{bidi(workoutName)}</Text>
-                  ) : null}
-                  <View style={styles.heroRow}>
-                    <Text style={styles.heroNum}>
-                      {poster.hero.kind === 'tonnes' ? poster.hero.value.toFixed(1) : String(poster.hero.value)}
+                ) : (
+                  <>
+                    <View style={styles.heroRow}>
+                      <Text style={styles.heroNum}>
+                        {poster.hero.kind === 'tonnes' ? poster.hero.value.toFixed(1) : String(poster.hero.value)}
+                      </Text>
+                      {/* ⚠️ SANS. "t" is a translated WORD ("טון"), and mono cannot draw Hebrew at
+                          all — the same two-voice split the set stage makes between a unit that is a
+                          symbol (kg/lb, mono) and one that is a word. `monoCarriesNoWords` caught it. */}
+                      {poster.hero.kind === 'tonnes' ? (
+                        <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.heroLabel}>
+                      {poster.hero.kind === 'tonnes' ? t('complete.movedShort') : t('complete.setsLabel')}
                     </Text>
-                    {/* ⚠️ SANS. "t" is a translated WORD ("טון"), and mono cannot draw Hebrew at
-                        all — the same two-voice split the set stage makes between a unit that is a
-                        symbol (kg/lb, mono) and one that is a word. `monoCarriesNoWords` caught it. */}
-                    {poster.hero.kind === 'tonnes' ? (
-                      <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.heroLabel}>
-                    {poster.hero.kind === 'tonnes' ? t('complete.movedShort') : t('complete.setsLabel')}
-                  </Text>
-                </>
-              )}
+                  </>
+                )}
+              </View>
 
               {/*
                 THE THREE FACTS, as figures. A record poster swaps calories for the tonnage, because
@@ -928,8 +944,6 @@ export function SessionEarned({
               */}
 
               {partial ? <Text style={styles.posterPartial}>{t('complete.partialTitle')}</Text> : null}
-            </View>
-          ) : null}
 
           {/*
             ⛔ THE DECISIONS GO BEHIND A DOOR (founder 2026-08-05):
@@ -947,24 +961,20 @@ export function SessionEarned({
             defect this same batch fixed on the Mirror, where a count and its rows updated by
             different rules and the screen printed "10 changes" over nothing.
           */}
-          {!answered ? (
-            /*
-             * ⚠️ THE FIFTEEN SECONDS BEFORE THE BOX EXISTS.
-             *
-             * `answered` is false while the coach's call is out, and nothing was drawn there — so
-             * the box appeared out of nowhere under her thumb, or never at all if she tapped
-             * Finish first. **The most valuable thing on the screen was invisible to anyone
-             * quick.**
-             *
-             * A quiet line, in the box's own slot, holding its place. It states what is happening
-             * and claims nothing: there is no count yet, and a count is a claim. It is not a
-             * control and it never blocks Finish — she may leave, and the decisions are on Today
-             * and in the Saturday letter either way.
-             */
-            <View style={[styles.decisionBox, styles.decisionBoxThinking]}>
-              <Text style={styles.decisionHeld}>{t('complete.stillReading')}</Text>
-            </View>
-          ) : (
+          {/*
+            ⛔ "STILL READING YOUR SESSION" IS DELETED (founder, 2026-08-12: *"כבר לא רלוונטי לדעתי
+            כי זה היה כאשר היה את ה-AI. אפשר למחוק ולוודא שכל הצינור הזה סגור."*).
+
+            It held the box's slot for the ~15 s the post-session model call took. **That call is no
+            longer made** — `sessionStore` stopped invoking `askAfterSession` on 2026-08-12, because
+            the engine owns the programme after every session — so `coachIsDeciding()` is always
+            false, `answered` is always true, and this branch could not render.
+
+            ⚠️ AND THE ENGINE ANSWERS IN A MILLISECOND, which is the real reason it goes rather than
+            being kept "just in case": there is no fifteen seconds left to fill. The pipe is closed
+            at the source, not hidden behind a flag that would let it back in.
+          */}
+          {(
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -977,8 +987,18 @@ export function SessionEarned({
               style={({ pressed }) => [styles.decisionBox, pressed && !nothingDecided && styles.decisionBoxPressed]}
             >
               {nothingDecided ? (
-                /* ⚠️ A HOLD IS A VERDICT AND SHE IS OWED IT — but it is not a DOOR, because there is
-                   nothing behind it. Same box, no chevron, not pressable. */
+                /*
+                  ⚠️ A HOLD IS A VERDICT AND SHE IS OWED IT — but it is not a DOOR, because there is
+                  nothing behind it. Same box, no chevron, not pressable.
+
+                  ⛔ AND IT IS ALLOWED TO SOUND LIKE THE RESULT IT IS (founder, 2026-08-12): *"אם אין
+                  שינוי לפחות תן לו ברכה מסוימת או פרגון מסוים. או משהו שבכל זאת יסב לו גאווה."*
+
+                  It read "Every lift held at what you lifted. Nothing needed moving." — true, and
+                  written like a receipt. **Landing every lift inside its band is the hardest thing
+                  this product asks of her**, and the one week it happens the screen told her nothing
+                  happened. The sentence stays inside what was measured; only the tone changed.
+                */
                 <Text style={styles.decisionHeld}>{t('complete.everythingHeld')}</Text>
               ) : (
                 <>
@@ -996,13 +1016,15 @@ export function SessionEarned({
               )}
             </Pressable>
           )}
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* WHAT CHANGED — the rows, when she asks for them. */}
         {sheetOpen ? (
           <View style={styles.sheetWrap}>
             <View style={styles.sheetHead}>
-              <Legend size={11} track={0.2}>{t('complete.decisionsFrom')}</Legend>
+              <Legend size={17} track={0.2}>{t('complete.decisionsFrom')}</Legend>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('common.close')}
@@ -1018,7 +1040,7 @@ export function SessionEarned({
               {decisions.map((d) => (
                 <View key={d.key} style={styles.earnedRow}>
                   <View style={styles.earnedHead}>
-                    <Text style={styles.earnedName} numberOfLines={1}>{bidi(d.name)}</Text>
+                    <Text style={styles.earnedName} numberOfLines={2}>{bidi(d.name)}</Text>
                     {/* The held verdict puts a WORD in a mono slot — which the handoff does, and
                         which mono can only draw in a Latin script. When it cannot, the whole figure
                         hands over to sans rather than falling back mid-line (monoCarriesNoWords). */}
@@ -1057,7 +1079,7 @@ export function SessionEarned({
                 return (
                   <View key={`vol:${v.muscle}`} style={styles.earnedRow}>
                     <View style={styles.earnedHead}>
-                      <Text style={styles.earnedName} numberOfLines={1}>
+                      <Text style={styles.earnedName} numberOfLines={2}>
                         {t(rose ? 'complete.volumeUp' : 'complete.volumeDown', {
                           // `muscle.*` is authored for mid-sentence (English is singular lowercase),
                           // so a phrase that OPENS on it capitalises rather than earning a second key.
@@ -1141,7 +1163,7 @@ export function SessionScan({
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           <Pressable style={styles.scanRoot} onPress={onSkip} accessibilityRole="button" accessibilityLabel={t('complete.tapSkip')}>
             <View style={styles.scanHead}>
-              <Legend size={12} track={0.22} tone="onStage">{t('complete.scanLegend')}</Legend>
+              <Legend size={17} track={0.22} tone="onStage">{t('complete.scanLegend')}</Legend>
               <Text style={styles.scanTitle} accessibilityRole="header">{t('complete.scanTitle')}</Text>
             </View>
 
@@ -1164,10 +1186,10 @@ export function SessionScan({
                     <Text style={styles.scanName} numberOfLines={1}>{bidi(l.name)}</Text>
                     {reading ? (
                       <ScanPulse>
-                        <Legend size={12.5} track={0} weight="regular" tone="accent">{t('complete.scanReading')}</Legend>
+                        <Legend size={20} track={0} weight="regular" tone="accent">{t('complete.scanReading')}</Legend>
                       </ScanPulse>
                     ) : (
-                      <Legend size={12.5} track={0} weight="regular" tone="onStage">
+                      <Legend size={20} track={0} weight="regular" tone="onStage">
                         {t('complete.setsCount', { count: setsOf(l.exerciseId), n: setsOf(l.exerciseId) })}
                       </Legend>
                     )}
@@ -1197,9 +1219,24 @@ export function SessionScan({
  * "kg" small and quiet beside it. Three of these read as three measurements; three legends, which
  * is what they were, read as a caption.
  */
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ONE FACT, ONE ROW (founder, 2026-08-12)
+ *
+ *   *"תן ל-3 המשתנים של הקלוריות משך האימון והטון שהורם כל שורה משל עצמו ותגדיל אותם — יש לך כאן
+ *   מסך שלם למה אתה לא מנצל את כל האיזור במסך אני משתגע מזה."*
+ *
+ * Three facts shared one 18-point strip, side by side at 30 points, and on a record poster a THIRD
+ * squeezed in beside them — "58 min · 3.6 t moved · 412 kcal" reading as one crowded line of small
+ * print under a 92-point hero. They are three separate things she spent.
+ *
+ * A row each: the figure on the start edge at 44, its name on the end edge, a hairline between. The
+ * block grows with the poster instead of competing with it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
 function Fact({ value, unit }: { value: string; unit: string }) {
   return (
-    <View style={styles.fact}>
+    <View style={styles.factRow}>
       <Text style={styles.factValue}>{value}</Text>
       <Text style={styles.factUnit}>{unit}</Text>
     </View>
@@ -1222,15 +1259,20 @@ const styles = StyleSheet.create({
   savedTitle: { fontFamily: font.serif, fontSize: textScale['3xl'], lineHeight: Math.round(textScale['3xl'] * 1.1), letterSpacing: trackingPx(textScale['3xl'], tracking.display), color: stage.ink0, marginTop: 14, textAlign: 'left' },
 
   scanRoot: { flex: 1 },
-  scanHead: { paddingHorizontal: 30, paddingTop: 90, gap: 8 },
-  scanTitle: { fontFamily: font.serif, fontSize: 36, lineHeight: 40, color: stage.ink0, textAlign: 'left' },
-  scanList: { paddingHorizontal: 30, paddingTop: 26 },
+  /* ════ ⛔ THE SCAN TAKES THE SCREEN (founder, 2026-08-12) ════
+     *"למה מסך טעינת התרגילים הכל קטן ומינורי ולא גדול ובולט על כל המסך. תתפרש על המסך."* — this is
+     the beat where the engine reads back every set she did, and it was drawn as a 17-point list
+     under a 90-point top margin, ending a third of the way down. It is the only screen in the
+     product whose whole job is to be watched. */
+  scanHead: { paddingHorizontal: 26, paddingTop: 44, gap: 10 },
+  scanTitle: { fontFamily: font.serif, fontSize: 46, lineHeight: 52, color: stage.ink0, textAlign: 'left' },
+  scanList: { paddingHorizontal: 26, paddingTop: 28 },
   scanRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    paddingVertical: 15,
+    paddingVertical: 21,
     paddingHorizontal: 2,
     borderTopWidth: 1,
     borderTopColor: 'rgba(241,238,229,0.12)',
@@ -1239,30 +1281,32 @@ const styles = StyleSheet.create({
   // Not yet read: the row is PRESENT, just not spoken for. It never disappears — the athlete can
   // see the whole session waiting to be taken in.
   scanRowAhead: { opacity: 0.4 },
-  scanName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 15.5, color: stage.ink0, textAlign: 'left' },
-  scanFooter: { marginTop: 'auto', alignItems: 'center', gap: 10, paddingHorizontal: 30, paddingBottom: 60 },
-  scanTrack: { width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.12)', overflow: 'hidden' },
+  scanName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 22, lineHeight: 28, color: stage.ink0, textAlign: 'left' },
+  scanFooter: { marginTop: 'auto', alignItems: 'center', gap: 16, paddingHorizontal: 26, paddingBottom: 54 },
+  scanTrack: { width: '100%', height: 6, borderRadius: 3, backgroundColor: 'rgba(241,238,229,0.12)', overflow: 'hidden' },
   scanFill: { height: '100%', backgroundColor: up.stage },
-  scanNote: { fontFamily: font.sans, fontSize: 15, color: stage.ink1, textAlign: 'center' },
+  scanNote: { fontFamily: font.sans, fontSize: 20, lineHeight: 27, color: stage.ink1, textAlign: 'center' },
 
   // beat 3
-  resultScroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 16, flexGrow: 1, justifyContent: 'center' },
+  resultScroll: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 14, flexGrow: 1 },
   // v7 2.5: "That's the work." is Frank Ruhl Libre serif, ~46px — the workout's closing sentence.
   resultTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: stage.ink0, marginTop: 12, textAlign: 'left' },
   copy: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: stage.ink1, marginTop: 10, maxWidth: 320, textAlign: 'left' },
 
-  // v7 2.5 · WHAT IT COST — three measured facts on one mono line under the closing sentence.
-  factRow: { flexDirection: 'row', gap: 26, marginTop: 18, alignItems: 'flex-end' },
-  // The number and its unit sit on one baseline, the way every figure in this app is set.
-  fact: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  // v7 2.5 · WHAT IT COST — one measured fact per row. See the note at `Fact`.
   factValue: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 30,
+    fontSize: 44,
+    lineHeight: 50,
+    letterSpacing: -1,
     color: stage.ink0,
+    includeFontPadding: false,
     textAlign: 'left',
   },
-  factUnit: { fontFamily: font.sans, fontSize: 13, color: stage.ink2, textAlign: 'left' },
+  /* 17 → 20, and out of `ink2`. It names the figure beside it; at caption size in the dimmest ink
+     it read as a footnote to a number that is the point of the row. */
+  factUnit: { fontFamily: font.sans, fontSize: 20, color: stage.ink1, textAlign: 'left' },
 
   // v7 2.5 · THE DECISIONS — a ruled ledger. Each line opens on a hairline, so the block reads as
   // a record rather than a stack of cards, and the last line closes it.
@@ -1273,12 +1317,16 @@ const styles = StyleSheet.create({
    * only screen in this app with that requirement. His standing rule applies hardest here: *"there
    * can't be a lot of copy and certainly not small type."* Nothing below 12.5.
    */
-  poster: { alignItems: 'center', paddingTop: 8 },
+  /* ⛔ THE BLOCK OWNS THE STAGE AND THE FOUR GROUPS SPREAD THROUGH IT — see the note at the
+     markup. It was `alignItems: center` inside a centred scroll, so every gap was a hard margin and
+     the leftover piled up at the two ends: 190 points of black above, 210 below. */
+  poster: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  posterHead: { alignSelf: 'stretch', alignItems: 'center', gap: 10 },
+  posterHero: { alignItems: 'center', gap: 6 },
   posterMark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   posterWord: { fontFamily: font.serif, fontSize: 20, color: stage.ink0, textAlign: 'left' },
-  posterLegend: { marginTop: 22, color: stage.ink2 },
+  posterLegend: { color: stage.ink2 },
   posterName: {
-    marginTop: 6,
     fontFamily: font.serif,
     fontSize: 36,
     lineHeight: 41,
@@ -1286,7 +1334,7 @@ const styles = StyleSheet.create({
     color: stage.ink0,
     textAlign: 'center',
   },
-  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 18 },
+  heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   heroNum: {
     fontFamily: font.monoSemibold,
     fontVariant: ['tabular-nums'],
@@ -1300,16 +1348,14 @@ const styles = StyleSheet.create({
   heroUnit: { fontFamily: font.mono, fontSize: 24, color: stage.ink1, textAlign: 'left' },
   heroUnitWord: { fontFamily: font.sans, fontSize: 24, color: stage.ink1, textAlign: 'left' },
   heroLabel: {
-    marginTop: 8,
     fontFamily: font.sansMedium,
-    fontSize: 13,
+    fontSize: 17,
     letterSpacing: trackingPx(13, tracking.legend),
     textTransform: 'uppercase',
     color: stage.ink2,
     textAlign: 'center',
   },
   bestPill: {
-    marginTop: 14,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
@@ -1317,21 +1363,25 @@ const styles = StyleSheet.create({
   },
   bestPillText: {
     fontFamily: font.sansMedium,
-    fontSize: 13,
+    fontSize: 17,
     letterSpacing: trackingPx(12.5, tracking.legend),
     textTransform: 'uppercase',
     color: up.stage,
     textAlign: 'left',
   },
+  /* ⛔ A COLUMN, NOT A STRIP — see the note at `Fact`. */
   posterStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignSelf: 'stretch',
-    marginTop: 26,
-    paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(241,238,229,0.12)',
+  },
+  factRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(241,238,229,0.12)',
   },
   posterPartial: {
     marginTop: 20,
@@ -1349,7 +1399,7 @@ const styles = StyleSheet.create({
    * on the finish screen where the app claims to have done something.
    */
   decisionBox: {
-    marginTop: 26,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -1366,28 +1416,44 @@ const styles = StyleSheet.create({
   decisionLead: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   decisionNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: signal[0], textAlign: 'left' },
   decisionWords: { flex: 1, gap: 1 },
-  decisionWord: { fontFamily: font.sansSemibold, fontSize: 15, color: stage.ink0, textAlign: 'left' },
-  decisionFrom: { fontFamily: font.sans, fontSize: 13, color: stage.ink2, textAlign: 'left' },
+  decisionWord: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'left' },
+  decisionFrom: { fontFamily: font.sans, fontSize: 17, color: stage.ink2, textAlign: 'left' },
   // A held week: the same frame, no figure, no chevron — a verdict rather than a door.
-  decisionHeld: { flex: 1, fontFamily: font.serif, fontSize: 16, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
+  decisionHeld: { flex: 1, fontFamily: font.serif, fontSize: 17, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
 
   /* ── …and what it opens. Full-bleed over the poster, because the rows are the subject once
    *    she has asked for them — not a card peeking over the thing she was reading. ── */
   sheetWrap: { ...StyleSheet.absoluteFillObject, backgroundColor: stage[0], paddingTop: 8 },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, paddingTop: 16, paddingBottom: 4 },
   sheetClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(241,238,229,0.10)', alignItems: 'center', justifyContent: 'center' },
-  sheetScroll: { paddingHorizontal: 26, paddingBottom: 40 },
+  sheetScroll: { paddingHorizontal: 26, paddingBottom: 30 },
 
-  earned: { marginTop: 22 },
+  /* ════════════════════════════════════════════════════════════════════════════════════════════
+     ⛔ THE DECISIONS ARE THE PRODUCT, AND THEY WERE DRAWN AS A TABLE (founder, 2026-08-12)
+
+       *"מסך עצוב שגם בו יש מלא מקום במסך ויש מלא הזדמנויות ממש להציג את ההחלטות שלנו בצורה מדהימה
+       והמסך הזה פשוט לא טוב מספיק."*
+
+     He is right, and the measurement says how far off it was: a 17-point name, a 17-point figure
+     pushed to the right margin, a 17-point reason — **three type sizes that are all the same size**
+     — stacked at 15 points apart, ending a third of the way down an 844-point sheet.
+
+     ⚠️ AND THE NUMBER WAS THE SMALLEST THING IN THE ROW. "34 → 41" is the whole claim this product
+     makes: it read her sets and moved the bar. It sat in the right margin at caption size, in the
+     same weight as the word "Barbell". Here it is the largest thing in its block, on its own line,
+     with the reason underneath in the coach's voice.
+     ════════════════════════════════════════════════════════════════════════════════════════════ */
+  earned: { marginTop: 10, gap: 4 },
   earnedRow: {
-    gap: 5,
-    paddingVertical: 15,
+    gap: 9,
+    paddingVertical: 22,
     borderTopWidth: 1,
     borderTopColor: 'rgba(241,238,229,0.12)',
   },
-  earnedHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  earnedName: { flexShrink: 1, fontFamily: font.sansSemibold, fontSize: 16, color: stage.ink0, textAlign: 'left' },
-  earnedFigure: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 16, color: stage.ink1, textAlign: 'right' },
+  /* Column, not a row: the figure is not an annotation of the name, it is the news. */
+  earnedHead: { gap: 7 },
+  earnedName: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, color: stage.ink0, textAlign: 'left' },
+  earnedFigure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 40, lineHeight: 46, letterSpacing: -1, color: stage.ink1, includeFontPadding: false, textAlign: 'left' },
   // The load it came FROM rests in shadow; the load it moved TO stands in moss — the decision is
   // the only thing on this line the engine actually made.
   earnedFrom: { color: stage.ink1 }, // rtl-ok: nested in earnedFigure
@@ -1402,7 +1468,9 @@ const styles = StyleSheet.create({
   earnedFigureSans: { fontFamily: font.sans },
   earnedHoldNum: { color: stage.ink0 }, // rtl-ok: nested in earnedFigure
   // The reason, in the coach's own italic serif — the sentence that earned the number above it.
-  earnedReason: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 21, color: stage.ink1, textAlign: 'left' },
+  /* 17/21 → 19/27. It is the sentence that earns the figure above it and the only prose on the
+     sheet; at caption size and caption leading it read as a footnote to a table. */
+  earnedReason: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: stage.ink1, textAlign: 'left' },
 
   // beat 4 — the milestone stamp
   // v7 2.6: one 30px rhythm — legend, seal, words — centred with the whole column lifted 20.

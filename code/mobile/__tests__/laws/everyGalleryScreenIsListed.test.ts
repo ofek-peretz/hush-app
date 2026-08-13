@@ -98,7 +98,65 @@ describe('the index lists what the gallery holds', () => {
      * The floor stays, because the coach section going EMPTY would mean the intake had quietly
      * stopped being reachable from the harness, which is a real failure and has happened before.
      */
-    expect(ids.filter((id) => id.startsWith('0.')).length).toBeGreaterThanOrEqual(3);
+    /*
+     * ⛔ AND THE FLOOR IS ONE NOW (2026-08-12). The paragraph above is the record of a section that
+     * held four CONVERSATION entries. There are no conversation screens left: the founder removed
+     * the AI from everything but the plan import, so `CoachChat` and `useCoach` are deleted and the
+     * two demos that mounted them went with the components.
+     *
+     * ⚠️ THE SECTION STAYS, AND SO DOES A FLOOR, for the reason the old note gives: an empty §00
+     * would mean the beginning of the product had quietly stopped being reachable from the harness,
+     * which is a real failure and has happened before. What lives there now is `0.0e` — the build
+     * screen that replaced the intake conversation.
+     */
+    expect(ids.filter((id) => id.startsWith('0.')).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('⛔ gives every screen an id NOBODY ELSE HAS — `2.9` was two screens', () => {
+    /*
+     * ════ AN ID IS AN ADDRESS, AND ONE OF THEM POINTED AT THE WRONG SCREEN ════
+     *
+     * `2.9` was declared twice: *The demonstration — the motion figure*, and — 1,100 lines below —
+     * *Paused · the stage held*. `resolve()` is `GALLERY.find(g => g.id === id)`, so typing `#2.9`
+     * always landed on the demonstration and **the paused stage had no address in the harness at
+     * all**. It is the one surface the founder reported a fade on twice.
+     *
+     * ⚠️ IT HID BECAUSE THE INDEX ALREADY WORKS AROUND IT. `addressOf` detects that an entry is not
+     * the first holder of its id and links it as `i<n>` instead — a fix for exactly this, written
+     * for eleven session states that collided the same way, which then made the NEXT collision
+     * invisible from the page. A workaround that removes the symptom removes the report.
+     *
+     * So the collision is refused here rather than absorbed there.
+     */
+    const seen = new Map<string, number>();
+    for (const id of ids) seen.set(id, (seen.get(id) ?? 0) + 1);
+    expect([...seen].filter(([, n]) => n > 1).map(([id]) => id)).toEqual([]);
+  });
+
+  it('⛔ every STATE names a screen that exists — an orphan state is drawn nowhere at all', () => {
+    /*
+     * ════ THE FAILURE MODE THE NESTING INTRODUCED, CLOSED IN THE SAME COMMIT ════
+     *
+     * The index draws a state UNDER its screen (`statesOf(g.id)`) and nowhere else. So an entry
+     * carrying `of: '2.1x'` — a typo, or a parent that was renumbered or deleted afterwards — is not
+     * "filed oddly": **it vanishes from the page entirely**, exactly like the five §00 screens this
+     * file was written for. A grouping feature that can silently hide rows has to be measured, or it
+     * is the same bug in nicer clothing.
+     *
+     * ⚠️ AND NO STATE MAY BE A STATE OF A STATE. `2.1j` hangs off `2.1b`, which is itself a screen;
+     * if `2.1b` ever gained an `of`, the index would draw one level and drop the other.
+     */
+    const entries = [...GALLERY.matchAll(/^ {2}\{ id: '([^']+)'(?:[^\n]*?\bof: '([^']+)')?/gm)]
+      .map((m) => ({ id: m[1], of: m[2] }));
+    expect(entries.length).toBe(ids.length);
+
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const states = entries.filter((e) => e.of);
+    // The parser must actually see the field, or every assertion here is vacuous.
+    expect(states.length).toBeGreaterThan(20);
+
+    expect(states.filter((e) => !byId.has(e.of!)).map((e) => `${e.id} → ${e.of}`)).toEqual([]);
+    expect(states.filter((e) => byId.get(e.of!)?.of).map((e) => `${e.id} → ${e.of}`)).toEqual([]);
   });
 
   it('keeps the catch-all, because the section list will drift again', () => {

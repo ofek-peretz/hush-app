@@ -41,8 +41,19 @@ describe('the thinking level follows who is waiting', () => {
     expect(read('src/platform/coach/afterSession.ts')).toContain("occasion.kind === 'in_session' ? 'low' : undefined,");
   });
 
-  it('and the chat does too — it always has', () => {
-    expect(read('src/screens/coach/useCoach.ts')).toContain("askOnce(COACH_PLAN_SCHEMA, 'low')");
+  it('⛔ …and there is no chat left to run on it (2026-08-12)', () => {
+    /*
+     * This asserted `useCoach` asked at `'low'` — the right thinking level for a person watching a
+     * cursor blink. The hook is deleted with the two screens that mounted it: the in-workout window
+     * is an action sheet and the pain report is the body map again.
+     *
+     * ⚠️ THE RULE THIS FILE IS ABOUT STILL STANDS AND NOW HAS ONE SUBJECT: the IMPORT is the only
+     * call an athlete waits on, and it is the one that must be fast.
+     */
+    const fs = require('fs');
+    const path = require('path');
+    expect(fs.existsSync(path.join(__dirname, '..', '..', 'src/screens/coach/useCoach.ts'))).toBe(false);
+    expect(read('src/domain/importPrompt.ts')).toContain("think: 'low'");
   });
 
   it('⚠️ but the post-session call and a rebuild still THINK', () => {

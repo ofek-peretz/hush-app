@@ -34,6 +34,14 @@ import { forbiddenFor } from '@/domain/painReport';
 export const DAY_ONE_EX_DIVISOR = 5;
 
 /**
+ * The most lifts a day realistically holds — seven is a 60-minute session at three to five sets a
+ * lift, the same arithmetic `enforceTimeCap` prices. Declared here rather than inside the dealer
+ * because the region's CAPACITY is now read before the deal (see the share-scaling note below), and
+ * one number must answer both.
+ */
+const MAX_LIFTS_PER_DAY = 7;
+
+/**
  * ════ PATTERNS A MUSCLE MAY NOT BE PROGRAMMED WITHOUT (founder 2026-08-08) ════
  *
  * The diversity score below rewards a NEW movement pattern (+4), which is enough to spread a muscle
@@ -77,6 +85,61 @@ export const ESSENTIAL_PATTERNS: Record<string, readonly SwapPattern[]> = {
    * its catalogue entries happen to carry, which is a fact about equipment, not about training.
    */
   Hamstrings: ['hinge', 'knee_flexion'],
+  /*
+   * ⛔ BICEPS, ADDED 2026-08-11 — and the note that said it had nothing to state here is now stale.
+   *
+   * That note read: *"A muscle whose whole pool trains one shape (Biceps: every entry is a curl) has
+   * nothing to state here."* True when it was written, and false since the arm was SPLIT into
+   * `curl` / `curl_lengthened` / `curl_shortened` / `brachialis` — a split whose own justification in
+   * `SwapPattern` is that the incline curl holds the biceps at full stretch and the preacher holds it
+   * shortened, and that *"the 2025 work on stretch-mediated hypertrophy makes the lengthened end the
+   * one that must not be swapped away."* Nothing enforced that.
+   *
+   * Measured on the plain six-day week: Biceps and Triceps carry the SAME share (0.7) and the SAME
+   * target (20), and delivered 6 sets against 14. The difference is tier, not training — the triceps
+   * pool has four compounds (`press`) and the biceps pool has none, and the time cap drops isolations
+   * first. Push:pull came out 2.19:1 on a programme nobody had customised.
+   *
+   * Naming the two ends of the curve is the same statement `Hamstrings` makes one line up: a muscle
+   * is not trained by one shape of its movement, and the engine must not price the second shape as
+   * spare volume because the catalogue happens to file it as an isolation.
+   *
+   * ⚠️ AND WHAT IT ACTUALLY BOUGHT IS SELECTION, NOT VOLUME — measured both ways. It did NOT move
+   * push:pull (12 of 70 programmes over 2.0, before and after), because the biceps' shortfall is in
+   * the DEAL: the region has room for two of its lifts, not four. What it did move is which two:
+   *
+   *     weeks containing a LENGTHENED curl ....... 0 of 8 → 8 of 8
+   *
+   * The incline curl appeared in NO generated programme before this line. The catalogue split the arm
+   * on the length-tension curve and then never asked for the stretched end; every week trained the
+   * biceps at one length. That is worth the entry on its own.
+   */
+  Biceps: ['curl', 'curl_lengthened'],
+  /*
+   * ⛔ GLUTES IS DELIBERATELY ABSENT, AND IT WAS MEASURED TWICE ON 2026-08-11 BEFORE BEING LEFT OUT.
+   *
+   * The diagnosis is exactly the Hamstrings one above. Traced through the pipeline at four and five
+   * days: the assembler DEALS the glutes four lifts and the athlete receives two. `hip_thrust` and
+   * `single_leg_hip_thrust` survive; `cable_pull_through` and `hip_abduction` die — both isolations,
+   * and `enforceTimeCap` drops isolations first. So the glutes lose their HINGE while the quads,
+   * whose work is squats and presses, lose almost nothing. And the thrust is not a substitute: the
+   * thrust family loads the glute at its SHORTEST, a hinge loads it at its LONGEST, and the
+   * stretch-mediated hypertrophy work makes the lengthened end the one you cannot skip.
+   *
+   * ⛔ NAMING IT HERE FIXES THE GLUTES AND BREAKS EVERYTHING ELSE. `Glutes: ['thrust','hinge']` took
+   * the muscle from 2 lifts to 3 at four and five days — and `everyAthleteTheEngineCanMeet`'s inert-
+   * mark ratchet went 147 → 236. Narrowing it to `['hinge']` still gave 215. And the damage is NOT
+   * the moving-baseline artefact it looks like: broken down by muscle, Shoulders went 3 → 28 and
+   * Triceps 7 → 26 — muscles a lower-body protection has no business touching. Protecting a lift
+   * removes a legal move from the cap, and the cap needs those moves to serve emphasis marks
+   * everywhere in the week.
+   *
+   * ⚠️ WHAT THIS MEANS FOR THE NEXT READER: the glutes' problem is NOT that this list is missing an
+   * entry. It is that at four and five days the lower region has only two sessions to hold four
+   * muscles, so any protection has to be paid for out of another muscle's lift. See the six reverted
+   * attempts recorded on the pin in `theWeekIsBalanced` — this is the seventh, and it fails the same
+   * way for the same reason.
+   */
 };
 
 /**
@@ -102,6 +165,34 @@ export const ESSENTIAL_PATTERNS: Record<string, readonly SwapPattern[]> = {
  * ⛔ This is not a list of lifts to avoid. Every pattern here is worth training; the claim is only
  * about ORDER of claim on a limited number of slots.
  */
+/**
+ * ⛔ THE SPLIT PATTERNS, MAPPED BACK TO THE MOVEMENT THEY ARE (founder 2026-08-11 · push:pull).
+ *
+ * `ESSENTIAL_PATTERNS` names the movements a muscle may not be programmed without, and the time cap
+ * refuses to orphan the day's last one. Then the catalogue SPLIT three of those movements in two —
+ * `row`/`row_supported`, `squat`/`squat_supported`, `hinge`/`hinge_isolated` — and the protection
+ * silently stopped covering half of each pair, because it matched on the pattern NAME.
+ *
+ * Measured, that is where the push:pull imbalance came from. Male, three days: Full Body B was dealt
+ * `machine_row` as its ONLY back lift, the cap did not recognise a `row_supported` as the day's row,
+ * and the session finished with NO BACK WORK AT ALL. Back delivered 7 weekly sets against a target of
+ * 21 while Chest delivered 15 of 18 — and push:pull came out 2.08:1 on a default programme nobody
+ * had customised.
+ *
+ * A cable row is a row. This maps the split names back onto the movement so a protection written
+ * before the split keeps meaning what it meant.
+ */
+const ESSENTIAL_EQUIVALENT: Partial<Record<SwapPattern, SwapPattern>> = {
+  row_supported: 'row',
+  squat_supported: 'squat',
+  hinge_isolated: 'hinge',
+};
+
+/** The movement a pattern counts AS for `ESSENTIAL_PATTERNS` — itself, unless it is a split half. */
+export function essentialPatternOf(pattern: SwapPattern): SwapPattern {
+  return ESSENTIAL_EQUIVALENT[pattern] ?? pattern;
+}
+
 export const ACCESSORY_PATTERNS: ReadonlySet<SwapPattern> = new Set<SwapPattern>([
   'rear_delt', 'shrug', // Back — the lats and the mid-back are the work
   'front_raise', // Shoulders — the front delt is saturated by every press
@@ -354,6 +445,15 @@ export function assembleV5DayLists(
   // frequency drew the same 10 sets a muscle and the extra days were empty calories.
   const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER, days); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
+  /*
+   * The same week WITHOUT her marks — the muscle's natural claim, used to bound how far a mark may
+   * carry its exercise COUNT. Her `off` stances are kept, because those are not marks and they
+   * genuinely change what the week is for. See the count bound in the selection loop below.
+   */
+  const plainMap = Object.fromEntries(
+    Object.entries(map ?? {}).filter(([, v]) => v !== 'emphasis'),
+  ) as BodyMap;
+  const plainTargets = weeklyTargets(plainMap, CANONICAL_MUSCLE_ORDER, days);
   const trainable = Object.keys(targets);
   if (trainable.length === 0 || days <= 0) return []; // S-3
 
@@ -479,7 +579,6 @@ export function assembleV5DayLists(
      * Seven is a 60-minute session at three to five sets a lift, which is the same arithmetic the
      * time cap prices — one number, not two opinions about how long an hour is.
      */
-    const MAX_LIFTS_PER_DAY = 7;
     const dealTo = (exId: string) => {
       const ex = exerciseById(exId);
       const load = (i: number) => dayExercises[i].length;
@@ -498,6 +597,19 @@ export function assembleV5DayLists(
       // Capacity also yields for the lift that brings a muscle to a SECOND day. Twice a week is the
       // best-supported number in the literature and the whole reason a low-frequency week is now
       // full-body; refusing that lift to keep a day at seven trades the dose for the tidiness.
+      /*
+       * ⛔ …AND A MARKED MUSCLE'S LIFTS ARE NOT THE ONES CAPACITY TURNS AWAY (S-4, 2026-08-11).
+       *
+       * The count a marked muscle asks for is now bounded at ONE more than it would get unmarked
+       * (see the selection loop). That bound is only worth having if the extra lift survives the
+       * deal — and it did not: at four days a marked chest asked for six, the days were full, and the
+       * dealer turned the sixth away, so marked and unmarked both came out at five and S-4/S-63 broke.
+       *
+       * So capacity yields for a mark, exactly as it already yields for a muscle's FIRST lift and for
+       * the lift that brings it to a second day. It is safe here precisely BECAUSE the count is
+       * bounded: a mark can push one lift past a full day, never three, which is what made the
+       * unbounded version of this idea unshippable.
+       */
       const mustPlace = daysWithMuscle < 2;
       if (!mustPlace && regionIdxs.every((i) => load(i) >= MAX_LIFTS_PER_DAY)) return; // every day is full
       const clashes = (i: number) =>
@@ -529,12 +641,112 @@ export function assembleV5DayLists(
        */
       if (free.length === 0 && !mustPlace) return;
       const pool = free.length > 0 ? free : candidates;
-      let best = pool[0];
-      for (const i of pool) if (load(i) < load(best)) best = i; // strict: ties keep the lowest index
+      /*
+       * ⛔ A MUSCLE IS SPREAD ACROSS ITS DAYS BEFORE THE WEEK IS LEVELLED (founder 2026-08-11).
+       *
+       * This chose the day with the fewest lifts IN TOTAL, which balances the DAYS and is blind to
+       * where a given muscle's own lifts have landed. Measured at five days: Chest's six lifts came
+       * out 2 / 2 / 2 across its three upper days and Back's six came out 1 / 3 / 2 — same target
+       * (30), same region, opposite shapes.
+       *
+       * The clump is then punished, correctly, by a pass that cannot see the week: `enforceTimeCap`
+       * prices ONE day and drops from whichever muscle is most over-served ON IT. Back holding three
+       * lifts on Upper B is the most over-served muscle on Upper B, so Upper B is where Back was cut
+       * — twice. Delivered: Chest kept all six lifts and 21 sets, Back kept four and 15, against
+       * equal targets and the LARGER share (1.5 vs 1.3). Push:pull came out 2.29:1.
+       *
+       * Neither pass was wrong on its own terms. The dealer balanced days; the cap balanced a day.
+       * Nothing balanced a MUSCLE across its days, and that is the gap the delivered week fell into.
+       *
+       * ⚠️ THIS IS A TIE-BREAK, NOT A NEW RULE. Every existing constraint has already had its say by
+       * the time `pool` is built — the pattern clash, capacity, `mustPlace`, the region. This only
+       * chooses among days that are ALL equally legal, and it still falls back to total load.
+       *
+       * ⚠️ AND IT MAY NOT COST THE DAY BALANCE MORE THAN ONE LIFT — measured, not assumed. Spreading
+       * against the whole pool regressed S-4: marking Chest at three days took it from 11 weekly sets
+       * to 10, because the mark's extra lift was spread onto a day already one fuller than the
+       * emptiest and the time cap then took MORE off that day than the mark had added. A mark that
+       * lowers the marked muscle is the one thing emphasis may never do. So the spread chooses only
+       * among days that are already the emptiest, give or take one: day balance stays the outer rule
+       * (it is what keeps every session inside the hour), and spreading a muscle is the choice made
+       * INSIDE it.
+       */
+      const mineOn = (i: number) =>
+        ex ? dayExercises[i].filter((o) => exerciseById(o)?.muscle === ex.muscle).length : 0;
+      const minLoad = Math.min(...pool.map(load));
+      const level = pool.filter((i) => load(i) <= minLoad + 1);
+      let best = level[0];
+      for (const i of level) {
+        // strict `<` throughout: ties keep the lowest index, so the deal stays deterministic (F-9).
+        if (mineOn(i) < mineOn(best) || (mineOn(i) === mineOn(best) && load(i) < load(best))) best = i;
+      }
       dayExercises[best].push(exId);
     };
-    for (const id of picks.filter((id) => exerciseById(id)?.tier === 'compound')) dealTo(id);
-    for (const id of picks.filter((id) => exerciseById(id)?.tier !== 'compound')) dealTo(id);
+    /**
+     * ══════════════════════════════════════════════════════════════════════════════════════════
+     * ⛔ THE LIFT WITH THE FEWEST DAYS OPEN TO IT IS DEALT FIRST.
+     *
+     * ⛔ FOUNDER'S PIN, `theWeekIsBalanced` · *"a muscle's lifts are SPREAD across its days, never
+     * clumped onto one."* Eight cases survived the spread tie-break below, and every one of them
+     * was the same muscle in the same shape — Shoulders at 1/1/3 across three upper days:
+     *
+     *     Upper A   cable_lateral_raise
+     *     Upper B   machine_lateral_raise
+     *     Upper C   db_shoulder_press · db_front_raise · lateral_raise      ⛔
+     *
+     * The tie-break was not beaten; it was arrived at too late. Shoulders holds THREE lifts of one
+     * pattern (`lateral_raise`) and a day may not repeat a muscle's movement, so those three can
+     * only be one-per-day — but the catalogue hands them over interleaved with `front_raise`, and
+     * `front_raise` was dealt THIRD. At that moment every day held exactly one shoulder lift, the
+     * spread tie-break had nothing to separate them, and it fell through to total load and chose
+     * Upper C. The last lateral raise then arrived with A and B both already holding one, so the
+     * clash rule left it exactly one legal day — C — and C came out with three.
+     *
+     * Nothing here was wrong. `front_raise` had every day open to it and was allowed to take the
+     * one the third lateral raise was going to need.
+     *
+     * ── THE RULE ────────────────────────────────────────────────────────────────────────────────
+     * So a muscle's lifts are dealt most-constrained first: the more of this muscle's remaining
+     * picks share a lift's pattern, the fewer days will still be legal for it later, and the
+     * earlier it goes. Deal the three lateral raises A/B/C, and the front raise — which fits
+     * anywhere — lands on whichever day the spread now wants. 1/1/3 becomes 2/1/2.
+     *
+     * ⚠️ IT REORDERS ONLY INSIDE A MUSCLE, and that bound is the whole reason it is shippable. The
+     * muscles keep their canonical order and the two passes keep theirs, so a lift never overtakes
+     * another muscle's lift and no muscle's claim on the region moves by one slot. A wider sort was
+     * measured on 2026-08-11 — queueing every muscle's picks by `rank / target`, to make the share
+     * table decide which lift a full region turns away — and it regressed every number in this
+     * file's scoreboard at once (clumps 8 → 16, inversions 38 → 48, push:pull 1.80 → 1.83, and a
+     * muscle under MEV). Reverted. Reordering across muscles moves lifts onto different days and
+     * the time cap, which prices one day at a time, charges for it.
+     *
+     * ⚠️ AND IT MOVES NOTHING WHEN NOTHING IS CONSTRAINED. A muscle whose picks are all distinct
+     * patterns sorts to itself, so the great majority of the week is byte-identical.
+     *
+     * Deterministic (F-9): a stable sort on one integer key, ties keeping catalogue order.
+     */
+    const patternPressure = (id: string) => {
+      const ex = exerciseById(id);
+      if (!ex) return 0;
+      return picks.filter((o) => {
+        const e = exerciseById(o);
+        return e && e.muscle === ex.muscle && e.pattern === ex.pattern;
+      }).length;
+    };
+    /*
+     * ⚠️ THE MUSCLE IS THE OUTER KEY, NOT A SPECIAL CASE IN THE COMPARATOR. Comparing "same muscle?
+     * then pressure, else index" is not a total order — `sort` may compare non-adjacent pairs and
+     * two picks of one muscle can end up ordered through a third from another. Keying on the
+     * muscle's canonical position first makes the order total, and leaves it identical to `picks`
+     * for every muscle whose patterns are all distinct.
+     */
+    const dealOrder = (ids: string[]) =>
+      ids
+        .map((id, i) => ({ id, i, m: CANONICAL_MUSCLE_ORDER.indexOf(exerciseById(id)?.muscle ?? '') }))
+        .sort((a, b) => a.m - b.m || patternPressure(b.id) - patternPressure(a.id) || a.i - b.i)
+        .map((p) => p.id);
+    for (const id of dealOrder(picks.filter((id) => exerciseById(id)?.tier === 'compound'))) dealTo(id);
+    for (const id of dealOrder(picks.filter((id) => exerciseById(id)?.tier !== 'compound'))) dealTo(id);
   }
 
   /*

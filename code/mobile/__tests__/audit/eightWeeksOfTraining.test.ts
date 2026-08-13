@@ -200,8 +200,23 @@ describe('⛔ eight weeks — the week she trains in month two', () => {
    * flooring Loop 3's `minSets` breaks seven ratified laws. What is left is the seam where a muscle
    * that sits at the bottom of its share drifts down one set at a time — and finding it needs a fold-
    * by-fold read of Loop 3's decisions for those two muscles, not another guess.
+   *
+   * ════ CLOSED 2026-08-11 — AND NEITHER CANDIDATE WAS THE ANSWER ════
+   *
+   * The drift was never inside Loop 3 and never inside the trim. It was the DEALER: a muscle's lifts
+   * were placed on the emptiest day by TOTAL load, blind to where that muscle's own lifts had already
+   * landed, so a muscle could come out clumped (Back 1/3/2 across three days where Chest came out
+   * 2/2/2). `enforceTimeCap` prices ONE day and drops from whoever is most over-served on it, so the
+   * clumped muscle was cut on the day it clumped — every week, in the same place, one set at a time.
+   * That is the slow drift, and it is why a fold-by-fold read of Loop 3 would never have found it:
+   * Loop 3 was learning correctly from a week that had already been shaped wrong.
+   *
+   * The fix is a tie-break in `dealTo`: among days that are ALL equally legal and equally empty (give
+   * or take one), place the lift on the day holding fewest of this muscle. Measured over the full
+   * sweep: muscles under MEV at three days or more went 6 → 0, and push:pull at five days went
+   * 2.29 → 1.88. See `programAssembly.dealTo` for the numbers and the two reverted attempts.
    */
-  it.failing('⛔ …and no muscle sinks under the effective dose either', async () => {
+  it('⛔ …and no muscle sinks under the effective dose either', async () => {
     // The other direction. A muscle that drifts under MEV week after week is training that costs her
     // time and buys nothing, and it would be invisible on any single week.
     const weeks = await live(athlete());

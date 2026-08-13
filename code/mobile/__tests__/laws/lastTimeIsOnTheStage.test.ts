@@ -90,8 +90,20 @@ describe('and it reaches the stage', () => {
      * the slot until she replaces it. And the LOAD stopped being a line at all: it is a delta on the
      * hero now (`↑1.5`), because "32.5 last time" is a sum she has to do and the delta is the fact.
      */
-    expect(flow()).toContain('lastTimeKg: lastTime.loadKg'); // the load, as news on the hero
-    expect(flow()).toContain('lastReps: lastTime.reps'); // …and the reps, into the row
+    expect(flow()).toContain('lastTimeKg: lastTime.loadKg'); // the load, as news beside the figure
+    /*
+     * ⛔ `lastReps` NO LONGER REACHES A ROW (founder 2026-08-12). The set row drew the reps of each
+     * finished set, and `Complete set` records `recommendedReps` — the FLOOR of her band — so an
+     * athlete who did ten and pressed once saw her own set written down as eight. He removed the
+     * figures himself: *"זה נותן את הלגיטימציה להוריד את המספרים של החזרות הקודמות, פשוט להציג איזה
+     * SET זה מתוך כמה."*
+     *
+     * ⚠️ THE LAW'S SUBJECT SURVIVES INTACT AND IS THE HALF THAT MATTERED. "Last time" reaches the
+     * stage as the LOAD's comparison — the delta beside the figure — which is what turns "34 kg"
+     * from an instruction into a conclusion she can check. That was always the argument in this
+     * file's header; the rep ghosts were the part that could lie.
+     */
+    expect(flow()).toContain('setRow({');
     expect(flow()).toContain('const lastTime = session.lastTime;');
   });
 
@@ -118,7 +130,7 @@ describe('and it reaches the stage', () => {
      */
     // `textTransform:` with its colon — a DECLARATION. The bare word appears in the comment that
     // explains why it must not be there, and matching that would make the law unfixable.
-    const at = flow().indexOf('heroNews: {');
+    const at = flow().indexOf('rxDelta: {'); // `heroNews` until the stage went vertical (2026-08-12)
     const style = flow().slice(at, flow().indexOf('},', at));
     expect(style).not.toContain('textTransform:');
   });
@@ -133,7 +145,15 @@ describe('and it reaches the stage', () => {
      * form she has to do arithmetic on.
      */
     expect(flow()).not.toContain('styles.lastLoad');
-    expect(flow()).toContain("shown == null ? '–' : shown");
+    /*
+     * ⛔ THE DASH WENT WITH THE ROW IT LIVED IN. It printed "–" for a set with no history rather than
+     * a zero — a zero is a set she DID and failed — and that distinction was real for as long as the
+     * row drew rep figures at all. It no longer does; see the note above.
+     *
+     * What must still hold on a lift with no history is that nothing is claimed: `loadNews` returns
+     * null without a comparison, so the delta beside the load is simply absent.
+     */
+    expect(flow()).toContain('{news ? (');
   });
 
   it('is written in both languages', () => {

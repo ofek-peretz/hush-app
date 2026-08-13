@@ -197,58 +197,49 @@ describe('it never claims a change it did not make', () => {
     expect(applyLiveEdit(only, 0, { do: 'drop', ex: 'plank' })).toBe(only);
   });
 
-  it('the screen tells her when nothing landed', () => {
-    // The domain refusing is only half of it; the other half is her being told. Silence here lets
-    // her walk away believing her workout changed.
-    const src = read('src/screens/session/SessionCoach.tsx');
-    expect(src).toContain('if (update.today?.length && landed === 0) speak');
-    expect(src).toContain("t('sessionCoach.nothingChanged')");
+  it('⛔ AND THE SCREEN THAT SAID SO IS GONE — the refusal now lives only in the domain', () => {
+    /*
+     * ⛔ TWICE REWRITTEN, AND THE SECOND TIME IT LOST ITS SUBJECT (founder, 2026-08-12: *"תמחק אותם
+     * בבקשה"*).
+     *
+     * First this pinned a CHAT — the model's answer applied to the running session. Then it pinned
+     * the SKIP chip that replaced it, and the line the sheet spoke when the drop was refused. Now
+     * the sheet is deleted too: swap already sits on the stage at the first set and on every
+     * transition rest, and **a lift she wants gone is a lift she wants replaced.**
+     *
+     * ⚠️ WHAT SURVIVES IS THE HALF THAT MATTERED. `applyLiveEdit` still refuses to leave her with
+     * nothing in front of her — asserted directly above, on the domain, where it cannot be lost to
+     * a screen being deleted. There is no longer any surface that can ask it for a drop, so there
+     * is nothing left to tell her about.
+     */
+    expect(fs.existsSync(path.join(__dirname, '..', '..', 'src/screens/session/SessionCoach.tsx'))).toBe(false);
+    for (const loc of ['en', 'he']) {
+      const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as Record<string, unknown>;
+      expect(copy.sessionCoach).toBeUndefined(); // the whole block, not one dead key
+    }
   });
 });
 
-describe('the door is reachable, and every chip does something', () => {
+describe('⛔ and the door itself is gone', () => {
   /*
-   * ⛔ THREE HOLES FOUND IN THE AUDIT AFTER THIS SHIPPED, all of the same kind: a control that is
-   * offered and cannot act, or an act with no control. None was visible from the domain.
+   * ⛔ THIS BLOCK GUARDED THREE HOLES OF ONE KIND — a control offered where it cannot act, or an act
+   * with no control. All three are moot: the sheet that held the controls was deleted on 2026-08-12.
+   *
+   * ⚠️ ONE OF THEM IS A REAL LOSS AND IS RECORDED RATHER THAN QUIETLY DROPPED. "The machine is
+   * taken" (`markEquipmentOccupied`) had exactly one door on the phone and it was that sheet. The
+   * WRIST keeps its own (`watchBridge.markEquipmentOccupied`), so the action survives; on the phone
+   * it does not. That is the founder's call to reopen, and it is written here so it can be found.
    */
   const flow = () => read('src/screens/session/SessionFlow.tsx');
-  const coach = () => read('src/screens/session/SessionCoach.tsx');
 
-  it('⚠️ the coach is reachable during a PLANK, a RUN and a CARRY — not only on a lift', () => {
-    /*
-     * The disc was gated on `onLift`, copied from the FORM control, which is `onLift` for a good
-     * reason: a plank has no film to play. Measured, `exerciseById` is false for `plank`,
-     * `run_outdoor`, `farmer_carry` and `mobility` — so the one door out of the workout was missing
-     * on every item stage, including mid-interval, which is exactly when she would reach for it.
-     */
-    /*
-     * ⛔ AND THE GATE IS GONE ALTOGETHER (founder 2026-08-05) — the door moved to the PAUSED stage,
-     * which is reachable from every step including mid-interval. The bug this test was written for
-     * (a plank with no way out of the workout) is closed more completely than by any gate: there is
-     * no per-step condition left to get wrong.
-     */
-    expect(flow()).toContain("onCoach={overlay === 'endConfirm' ? undefined : () => setOverlay('coach')}");
-    expect(flow()).not.toMatch(/onCoach=\{onLift/);
-    expect(flow()).not.toMatch(/onCoach=\{session\.currentExerciseId/);
+  it('nothing on the phone opens a mid-workout sheet', () => {
+    expect(flow()).not.toContain("setOverlay('coach')");
+    expect(read('src/components/PausedStage.tsx')).not.toContain('onCoach');
   });
 
-  it('⚠️ the "it is taken" chip is offered only where it can act', () => {
-    /*
-     * `markEquipmentOccupied` returns silently unless she is at the START of an exercise and there
-     * is something left to move past. The chip was shown whenever a lift was on the stage, so on
-     * set 2 it closed the window and did nothing.
-     *
-     * It is also true to the world: on set 2 she is holding the equipment, so "it's taken" is not
-     * a thing she can mean.
-     */
-    expect(coach()).toContain('if (atStart && somethingAfter) {');
-  });
-
-  it('⚠️ never changes the screen without saying so', () => {
-    // The founder's own rule, in the prompt: a screen that changes under her with nothing said is
-    // alarming. `say` is required by the schema — and "required" is how the post-session call came
-    // back describing a programme it had not attached.
-    expect(coach()).toContain('if (!update.say && landed > 0) speak');
+  it('⚠️ and the phone has no door left to "the machine is taken" — the wrist still does', () => {
+    expect(flow()).not.toContain('markEquipmentOccupied');
+    expect(read('src/platform/watch/watchBridge.ts')).toContain('markEquipmentOccupied');
   });
 });
 
@@ -320,7 +311,27 @@ describe('the wire carries what the coach writes', () => {
      * lift is still ahead of her.
      */
     expect(read('src/platform/coach/afterSession.ts')).not.toContain('reviseToday');
-    expect(read('src/screens/session/SessionCoach.tsx')).toContain('session.reviseToday(update.today)');
+    /*
+     * ⛔ REWRITTEN 2026-08-12 — THE CONVERSATION THIS PINNED NO LONGER EXISTS.
+     *
+     * ⛔ FOUNDER: *"צ'אט בתוך אימון חי — הורדנו."* The in-workout window was a chat, and the model's
+     * answer was APPLIED to the running session. That is a model editing the workout she is standing
+     * in, which is exactly the authority the engine was given back.
+     *
+     * The three CHIPS were never the model's work — they are the old chrome controls, running the
+     * same local code — so they stayed, and the empty box went. What follows asserts the rule that
+     * replaced this one, because a law describing a deleted feature is a law that votes for it.
+     */
+    /*
+     * ⛔ AND THE MODEL IS NOT CALLED FROM INSIDE A WORKOUT AT ALL — the load-bearing half, and the
+     * only half left. `reviseToday` still exists in the store; what is gone is every surface that
+     * could reach it during a session, so nothing on the stage can hand the running workout to a
+     * model or to anything else.
+     */
+    const flow = read('src/screens/session/SessionFlow.tsx');
+    expect(flow).not.toContain('askCoachInSession');
+    expect(flow).not.toContain('askCoach');
+    expect(flow).not.toContain('reviseToday');
   });
 });
 

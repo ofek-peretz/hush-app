@@ -104,7 +104,7 @@ function BandStat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.bandStat}>
       <Text style={styles.bandVal}>{value}</Text>
-      <Legend size={11} style={styles.bandLabel}>{label}</Legend>
+      <Legend size={17} style={styles.bandLabel}>{label}</Legend>
     </View>
   );
 }
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   splitRowLast: { borderBottomWidth: 1, borderBottomColor: HAIRLINE },
   splitKm: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textSecondary, textAlign: 'left' },
   splitPace: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
-  splitTail: { minWidth: 44, fontFamily: font.sansMedium, fontSize: 13, letterSpacing: trackingPx(9, tracking.legend), textTransform: 'uppercase', color: color.textMuted, textAlign: 'right' },
+  splitTail: { minWidth: 44, fontFamily: font.sansMedium, fontSize: 17, letterSpacing: trackingPx(9, tracking.legend), textTransform: 'uppercase', color: color.textMuted, textAlign: 'right' },
 
-  footer: { marginTop: 'auto', paddingTop: 32, fontFamily: font.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  footer: { marginTop: 'auto', paddingTop: 32, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

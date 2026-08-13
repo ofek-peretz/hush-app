@@ -7,6 +7,7 @@
 // 
 
 export { Card } from './Card';
+export { Arrive, ARRIVE_STAGGER } from './Arrive';
 export { Badge } from './Badge';
 export { Button } from './Button';
 export { IconButton } from './IconButton';

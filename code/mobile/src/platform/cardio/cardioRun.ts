@@ -117,6 +117,16 @@ const EMPTY = () => ({
   departedM: 0,
   movingRun: 0,
   proven: false,
+  /*
+   * ⛔ INDOORS — no satellite, and no route (founder, 2026-08-12). The distance arrives as a
+   * CUMULATIVE reading from Core Motion by way of HealthKit rather than as positions, so there is
+   * nothing to draw a line between and none of the GPS gates apply: they exist to reject a phone on
+   * a table, and Core Motion already refuses to invent steps for one.
+   */
+  indoor: false,
+  /** The last cumulative kilometres read. The DELTA is what gets credited — see `ingestStride`. */
+  strideKm: 0,
+  strideTsMs: 0,
 });
 
 let s = EMPTY();
@@ -140,12 +150,22 @@ export function elapsedSec(): number {
 }
 
 /** A fresh activity. Everything the previous one accumulated is gone. */
-export function beginRun(gait: CardioGait, weightKg?: number | null): void {
+export function beginRun(gait: CardioGait, weightKg?: number | null, indoor = false): void {
   s = EMPTY();
   s.active = true;
   s.gait = gait;
   s.weightKg = weightKg;
-  s.gps = 'acquiring';
+  s.indoor = indoor;
+  /*
+   * ⚠️ AN INDOOR RUN IS NEVER "acquiring". That word names a satellite it is not waiting for, and
+   * the stage draws a spinner for it — so a treadmill session would sit under "acquiring GPS"
+   * forever. `ready` is the truth: the source is the phone's own motion, and it is available now.
+   */
+  s.gps = indoor ? 'ready' : 'acquiring';
+}
+
+export function isIndoor(): boolean {
+  return s.indoor;
 }
 
 export function endRun(): void {
@@ -304,8 +324,28 @@ export function ingestFix(fix: Fix): void {
   // new reference each second would only churn.
   if (s.route.length === 0) s.route.push({ lat: prev.lat, lon: prev.lon });
   s.route.push({ lat: latitude, lon: longitude });
+  creditDistance(segM, rate);
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE CREDITED TAIL, SHARED BY BOTH SOURCES (2026-08-12)
+ *
+ * Everything that happens once a stretch of ground has been EARNED: the metres, the calories at the
+ * pace they were covered at, the kilometre split, and the notification.
+ *
+ * ⚠️ IT IS EXTRACTED RATHER THAN COPIED, and that is the point. The indoor path credits the same
+ * facts from a different sensor, and two copies of "add the metres, bill the calories, cut the
+ * split" would eventually disagree about a kilometre — which is the shape of nearly every defect
+ * this module's own header records.
+ *
+ * What is NOT here is the route: a treadmill has no positions, and the trace is written by the
+ * caller that has them.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+function creditDistance(segM: number, paceSecPerKm: number): void {
   s.distM += segM;
-  s.cal += kcalForSegment(segM / 1000, rate, s.weightKg);
+  s.cal += kcalForSegment(segM / 1000, paceSecPerKm, s.weightKg);
   const kmDone = Math.floor(s.distM / 1000);
   if (kmDone > s.lastKm) {
     s.lastKm = kmDone;
@@ -321,4 +361,48 @@ export function ingestFix(fix: Fix): void {
      */
     void notifier.kilometre(kmDone, fmtPace(sec));
   }
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ONE CUMULATIVE DISTANCE READING — THE TREADMILL'S FIX (founder, 2026-08-12)
+ *
+ * `HKQuantityTypeIdentifierDistanceWalkingRunning` since the run began, in kilometres. Core Motion
+ * derives it from step cadence and a stride-length model calibrated on her outdoor GPS work, so it
+ * is the same measurement Apple's own indoor workouts report — **and it needs no watch**: the
+ * coprocessor is in the phone.
+ *
+ * ⚠️ CUMULATIVE, SO THE DELTA IS WHAT IS CREDITED. Reading the total and adding it would double the
+ * run every poll. It is also monotonic by construction; a reading that went backwards would be a
+ * source resetting under us, and it is dropped rather than credited as negative distance.
+ *
+ * ⚠️ AND THE PACE IS DERIVED FROM THE SEGMENT, not asked for. That is what lets `kcalPerKgKm`
+ * interpolate a walk and a run correctly on a treadmill exactly as it already does outdoors —
+ * nobody is asked which one this is, indoors or out.
+ *
+ * ⚠️ NOTHING IS CREDITED WHILE PAUSED, and the cursor still advances. Otherwise the distance she
+ * covered walking to the water fountain would arrive in one lump on resume.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export function ingestStride(cumulativeKm: number, tsMs: number = Date.now()): void {
+  if (!s.active || !s.indoor) return;
+  if (!Number.isFinite(cumulativeKm) || cumulativeKm < 0) return;
+  if (tsMs <= s.strideTsMs) return;
+  const prevKm = s.strideKm;
+  const prevTs = s.strideTsMs;
+  s.strideKm = cumulativeKm;
+  s.strideTsMs = tsMs;
+  if (prevTs === 0) return; // the first reading only sets the cursor — there is no interval yet
+  if (s.paused) return;
+  const segKm = cumulativeKm - prevKm;
+  const dtS = (tsMs - prevTs) / 1000;
+  if (segKm <= 0 || dtS <= 0) {
+    // Standing still on a moving belt is still standing still. No distance, and the pace blanks
+    // rather than holding the last number it liked.
+    s.paceSec = 0;
+    return;
+  }
+  const inst = Math.round(dtS / segKm); // sec/km over this segment
+  s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : inst;
+  creditDistance(segKm * 1000, s.paceSec);
 }

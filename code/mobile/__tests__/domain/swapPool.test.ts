@@ -188,18 +188,40 @@ describe('the score encodes the law, in order', () => {
  * teaching it once per session and then hiding it is not teaching it.
  */
 describe('when the swap verb is offered (isSwapMoment)', () => {
-  it('is offered before the first set of a lift, and never after one is logged', () => {
-    // A swap belongs BEFORE the work: once a set is logged against the lift she has trained it, and
-    // replacing it would strand those sets on an exercise no longer in the session.
-    expect(isSwapMoment(0)).toBe(true);
-    expect(isSwapMoment(1)).toBe(false);
-    expect(isSwapMoment(3)).toBe(false);
+  /*
+   * ════ ⛔ THE RULE NARROWED, AND THIS FILE STAYED GREEN THROUGH IT ════
+   *
+   * FOUNDER, 2026-08-12: *"צריך להחזיר את כפתור הSWAP ליד הוידאו רק בסט הראשון בתרגיל הראשון של
+   * האימון … לגבי שאר התרגילים זה מופיע במסכי הTRANSITION REST, כי אלו המקרים היחידים שבהם המכשיר
+   * כנראה תפוס."*
+   *
+   * ⚠️ AND THE ASSERTION THAT WAS SUPPOSED TO CATCH EXACTLY THIS COULD NOT. It read
+   * `expect(isSwapMoment.length).toBe(1)` under the comment *"there is no session-position argument
+   * to pass, by design"* — and **`Function.length` does not count parameters with defaults.** The
+   * signature gained `exerciseIndexInSession = 0`, the rule changed, and `.length` still reported 1.
+   * A law written to guard a shape, defeated by a language rule about that shape.
+   *
+   * It asserts BEHAVIOUR now. A rule is what a function answers, never what its signature looks like.
+   */
+  it('⛔ the first set of the FIRST lift — and nothing else on the stage', () => {
+    expect(isSwapMoment(0, 0)).toBe(true);
+    // Later sets of that same lift: she is already standing at the bar she walked to.
+    expect(isSwapMoment(1, 0)).toBe(false);
+    expect(isSwapMoment(3, 0)).toBe(false);
+    // The first set of lift 2, 4, 6: the crossing before it already offered the swap, which is the
+    // moment she actually discovers the machine is taken.
+    expect(isSwapMoment(0, 1)).toBe(false);
+    expect(isSwapMoment(0, 3)).toBe(false);
   });
 
-  it('does not care WHICH lift it is — the 4th lift is as swappable as the 1st', () => {
-    // The regression itself: the rule is about the set index within the lift, never the lift's
-    // ordinal in the session. There is no session-position argument to pass, by design.
-    expect(isSwapMoment.length).toBe(1);
+  it('⚠️ a caller that names only the set index still gets the first lift’s answer', () => {
+    /*
+     * The wrist bridge reasons in `exerciseSetIndex` alone. The default keeps it correct for lift 1
+     * rather than crashing or inverting — and if it ever needs the full gate it must PASS the second
+     * argument, not re-derive the rule, which is how the two surfaces drifted the first time.
+     */
+    expect(isSwapMoment(0)).toBe(true);
+    expect(isSwapMoment(2)).toBe(false);
   });
 
   it('BOTH surfaces ask this function — not two rules that happen to agree', () => {

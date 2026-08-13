@@ -39,15 +39,16 @@ import { track } from '@/platform/telemetry';
 import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
+import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
-import { CoachScreen } from '@/screens/coach/CoachScreen';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { ImportPlan } from '@/screens/import/ImportPlan';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
@@ -73,7 +74,23 @@ const Tabs = createBottomTabNavigator<HomeTabsParamList>();
  *  bottom bar stays visible while at rest. "Start cardio" pushes the full-screen live stage onto the
  *  Main stack (which opens straight into the 3·2·1 countdown), so a live run carries no tab bar. */
 function CardioTab() {
-  return <CardioReady onBegin={() => navigateMain('CardioLive')} />;
+  /* ⛔ The one bit the live stage needs — see `CardioReady`. Outdoors or a belt; walking versus
+     running is measured from her pace and never asked. */
+  /*
+   * ⛔ THE FLAG IS PASSED EXPLICITLY, ALWAYS — including `false` (founder, 2026-08-12, asking
+   * whether "Motion tracking is off" on an outdoor run would be a bug).
+   *
+   * It read `indoor ? { indoor: true } : undefined`, and `navigate(name, undefined)` does not CLEAR
+   * a route's existing params — it goes to the route as it stands. `CardioLive` is normally popped
+   * when a run ends, so the entry is usually fresh; **usually is not a guarantee**, and the failure
+   * it allows is silent and exactly the one he described: a treadmill run, then an outdoor one that
+   * inherits `{indoor: true}` and spends the whole run saying the motion tracker is off while a
+   * satellite sits unopened.
+   *
+   * An explicit `false` cannot be inherited. This is a one-word fix for a bug I could not reproduce
+   * and could not rule out, which is the only honest thing to do with that pair of facts.
+   */
+  return <CardioReady onBegin={(indoor) => navigateMain('CardioLive', { indoor })} />;
 }
 
 /** The four peer surfaces, under the bottom bar (v7: Today · Cardio · Progress · You). Everything
@@ -114,6 +131,10 @@ function OnboardingNavigator() {
       }}
     >
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
+      {/* ⛔ THE FORK (founder 2026-08-12) — see `Start`. It sits between the front door and the
+          intake because what she answers here decides what the intake is for, and because the
+          import's read needs the whole of onboarding to finish underneath it. */}
+      <OnboardingStack.Screen name="Start" component={Start} />
       {/* ⛔ TWO WHEELS LIVE ON THIS STEP NOW, so its full-screen back-drag is off (founder
           2026-07-13): a horizontal gesture over a horizontal rule is the rule losing. The step
           keeps a hand-held way back across its FOOTER, the one band with no wheel in it
@@ -129,6 +150,14 @@ function OnboardingNavigator() {
           and her programme. */}
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
       <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
+      {/*
+        ⛔ REGISTERED IN BOTH STACKS, AND IT HAS TO BE (2026-08-11). `OnboardingStack` and
+        `MainStack` are separate navigators, so the line on the body-map step could not have reached
+        a route that existed only in the main one — the tap would have found nothing at runtime.
+        The same component serves both; what differs is only where it goes when she keeps the week,
+        which it reads from its own params.
+      */}
+      <OnboardingStack.Screen name="ImportPlan" component={ImportPlan} />
       {/* BODY DATA DOES NOT SWIPE BACK (founder 2026-07-13). Its body is three horizontal wheels,
           and a full-screen horizontal back gesture over them means every attempt to set an age
           drags the STEP instead of turning the rule. The step keeps a hand-held way back — a drag
@@ -170,13 +199,26 @@ function MainNavigator() {
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
-      <MainStack.Screen name="Coach" component={CoachScreen} />
       <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} />
+      <MainStack.Screen name="ImportPlan" component={ImportPlan} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />
-      {/* The pre-workout card — what a day on the week board opens (founder 2026-08-05). */}
-      <MainStack.Screen name="PreWorkout" component={PreWorkoutScreen} />
+      {/*
+        ⛔ THE WORKOUT SHEET — IT RISES FROM THE BOTTOM (founder 2026-08-12): *"לחיצה על אימון פותחת
+        MODAL שעולה מלמטה שמציגה את תוכן האימון."*
+
+        It was a pushed screen: it slid in from the side like History or Lift detail, which is the
+        grammar of GOING somewhere. This is not somewhere — it is the week opening one of its rows to
+        show what is inside it, and she comes straight back. A sheet says that and a push does not.
+
+        ⚠️ `presentation: 'modal'` IS THE PLATFORM'S OWN SHEET, not a re-implementation of one. It
+        rises, it holds the screen behind it visible at the top, and it dismisses by dragging down —
+        every one of those behaviours is free, native, and already what an iPhone owner expects.
+        Building a custom bottom sheet would have meant owning the gesture, the spring and the
+        backdrop, and getting all three slightly wrong.
+      */}
+      <MainStack.Screen name="PreWorkout" component={PreWorkoutScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="SharePlan" component={SharePlanScreen} />
       <MainStack.Screen name="PlanReceived" component={PlanReceivedScreen} />
       <MainStack.Screen name="PainWhere" component={PainWhere} />

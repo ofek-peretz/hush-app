@@ -68,6 +68,35 @@ export interface HealthGate {
    * about this week, not her history.
    */
   recentWorkouts(sinceMs: number): Promise<ExternalWorkout[]>;
+  /**
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ HOW FAR SHE HAS TRAVELLED SINCE `sinceMs`, WITH NO SATELLITE (founder, 2026-08-12)
+   *
+   *   *"אני ארצה לעשות אפשרות לריצה והליכה גם בהליכון וגם בחוץ. אני לא יודע איך APPLE WORKOUT
+   *   יודעים בהליכון כמה המשתמש הלך אם לפי ה-GPS זה במקום."*
+   *
+   * They do not use GPS. `DistanceWalkingRunning` is written by the phone's own motion coprocessor
+   * from step cadence and a stride-length model, and the model is CALIBRATED against her outdoor
+   * GPS walks and runs. On a treadmill the satellite says she is standing still and this does not.
+   *
+   * ⚠️ AND IT DOES NOT NEED A WATCH — which is the question he asked before saying go. Core Motion
+   * runs on the iPhone whether or not a watch is paired; a watch improves it (wrist motion, its own
+   * calibration) and is not required. **What a watch-less athlete loses indoors is the heart rate,
+   * not the distance** — a state the cardio stage already draws (`3.4g`).
+   *
+   * ⚠️ THE PHONE MUST BE ON HER BODY. Resting on the treadmill's console there is no motion to read
+   * and this returns ~0 — which is the truth, and the same truth `cardioMath` already tells about a
+   * phone on a table. Nothing here invents a distance from elapsed time.
+   *
+   * ⚠️ AND THE READ SCOPE HAS ALWAYS HELD IT. `DISTANCE` has been in `READ_AUTH` since the gate was
+   * written and nothing ever read it — the same shape as the heart rate and the workouts before it.
+   * This is a wire, not a model.
+   *
+   * Kilometres, or null when Health is unreadable — never 0, because 0 is a measurement and null is
+   * the absence of one, and the caller must be able to tell them apart.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  distanceSince(sinceMs: number, untilMs?: number): Promise<number | null>;
 }
 
 /** v1 stub: reports unavailable, so onboarding routes through About You and the
@@ -90,6 +119,15 @@ export const healthStub: HealthGate = {
   },
   async recentWorkouts() {
     return [];
+  },
+  /*
+   * ⚠️ `null`, NOT 0 — the distinction the contract turns on. Zero is "she did not move"; null is
+   * "nothing was measured", and the indoor stage must refuse to run rather than draw a flat zero
+   * for forty minutes. Android reaches here today: Health Connect's `Distance` record is the
+   * equivalent and is not a dependency yet.
+   */
+  async distanceSince() {
+    return null;
   },
 };
 

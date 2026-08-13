@@ -207,7 +207,7 @@ export function Climb({
 const styles = StyleSheet.create({
   // The newest reading rides above its point in the instrument's mono — it is a reading off the
   // trace, not a caption about it.
-  endLabel: { position: 'absolute', top: 2, fontSize: 14, color: signal[0], textAlign: 'right' },
+  endLabel: { position: 'absolute', top: 2, fontSize: 17, color: signal[0], textAlign: 'right' },
   callout: {
     position: 'absolute',
     width: 88,
@@ -220,5 +220,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  calloutText: { fontSize: 14, color: signal[0], textAlign: 'center' },
+  calloutText: { fontSize: 17, color: signal[0], textAlign: 'center' },
 });

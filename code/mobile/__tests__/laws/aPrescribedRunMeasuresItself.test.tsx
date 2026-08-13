@@ -36,7 +36,7 @@ import { ToastProvider } from '@/components/ds';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { db } from '@/data/local/db';
 import { initI18n, tg } from '@/i18n';
-import { isGpsMovement } from '@/data/movements';
+import { isOutdoorMovement, isTrackedMovement } from '@/data/movements';
 import type { PlannedItem } from '@/domain/coachPlan';
 import type { CardioActivity } from '@/data/local/models';
 
@@ -147,9 +147,48 @@ function ran(agoMs: number, distanceKm = 5.02, durationSec = 1620): CardioActivi
 }
 
 describe('the catalogue decides who measures', () => {
-  it('a run outdoors is the phone’s to measure; a loaded carry is not', () => {
-    expect(isGpsMovement('run_outdoor')).toBe(true);
-    expect(isGpsMovement('farmer_carry')).toBe(false);
+  /*
+   * ⛔ SPLIT IN TWO 2026-08-12, because one flag was answering two questions and had started
+   * getting one of them wrong (founder: *"אמרת שקרדיו זה קרדיו כולל אז אני לא מבין"*).
+   *
+   *   `measuresDistance`     WHETHER the phone can measure it — true indoors and out, since the
+   *                          treadmill path reads Core Motion.
+   *   `isOutdoorMovement`    BY WHAT — the satellite, or the phone's own motion.
+   *
+   * The old `isGpsMovement` was being asked the first question and answering the second, so a
+   * coach's "5 km on the treadmill" fell to the unmeasured branch: a Done button asking her to
+   * confirm a distance the phone was already counting.
+   */
+  it('a run outdoors is the SATELLITE’S; a treadmill run is the phone’s; a carry is neither', () => {
+    expect(isOutdoorMovement('run_outdoor')).toBe(true);
+    expect(isOutdoorMovement('run_treadmill')).toBe(false);
+    expect(isOutdoorMovement('farmer_carry')).toBe(false);
+
+    // …and BOTH runs are tracked. This is the line that was wrong.
+    expect(isTrackedMovement('run_outdoor')).toBe(true);
+    expect(isTrackedMovement('run_treadmill')).toBe(true);
+    /*
+     * ⛔ AND A CARRY IS NOT — the regression this predicate was rewritten for. Its catalogue entry
+     * measures in DISTANCE, so a first attempt read "has a distance" as "the phone counts it" and
+     * sent a 40-metre farmer's carry to the live cardio stage. Tracked is a property of the
+     * movement, and the catalogue says so.
+     */
+    expect(isTrackedMovement('farmer_carry')).toBe(false);
+    expect(isTrackedMovement('plank')).toBe(false);
+  });
+
+  it('⚠️ walk and run differ in NAME only — nothing branches on the gait half of an id', () => {
+    /*
+     * The founder's question, asserted rather than argued: if walk-vs-run were a real fork there
+     * would be two of something. There is one — the same source, the same maths, the same screen —
+     * and `kcalPerKgKm` prices each SEGMENT on its own pace regardless of what the movement is
+     * called. The four ids are labels a coach can write.
+     */
+    for (const pair of [['run_outdoor', 'walk_outdoor'], ['run_treadmill', 'walk_treadmill']]) {
+      const [a, b] = pair;
+      expect({ pair, sameSource: isOutdoorMovement(a) === isOutdoorMovement(b) }).toEqual({ pair, sameSource: true });
+      expect({ pair, bothTracked: isTrackedMovement(a) === isTrackedMovement(b) }).toEqual({ pair, bothTracked: true });
+    }
   });
 
   it('a carry keeps its one act — she does it and says so', () => {
@@ -170,7 +209,15 @@ describe('the catalogue decides who measures', () => {
     // what lets it end the run without asking.
     // `ex` rides along so the run's KEY POINTS sheet can NAME the exercise its point is about —
     // without it every cardio point would be titled "run_outdoor", including a row, a bike and a walk.
-    expect(c.navigate).toHaveBeenCalledWith('CardioLive', { target: { metres: 5000, ex: 'run_outdoor', say: 'Conversation pace.' } });
+    /*
+     * ⚠️ AND `indoor` RIDES WITH IT (2026-08-12). It is the SOURCE, not a second screen: the same
+     * stage, the same maths, the same record — a satellite outdoors, the phone's own motion on a
+     * belt. Read off the movement, so a coach's treadmill session selects it and nobody is asked.
+     */
+    expect(c.navigate).toHaveBeenCalledWith('CardioLive', {
+      target: { metres: 5000, ex: 'run_outdoor', say: 'Conversation pace.' },
+      indoor: false,
+    });
     // And nothing is recorded on the way out. She has not run yet.
     expect(c.completeItem).not.toHaveBeenCalled();
   });

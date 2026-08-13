@@ -13,7 +13,6 @@ import { applyLearned } from '@/domain/coachLearned';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import { trialUsed, nextLedger } from '@/domain/trialLedger';
 import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
-import { askCoachToRevise, retryWaitingUpdate } from '@/platform/coach/afterSession';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
 import { agedProfile } from '@/domain/profileAge';
@@ -215,6 +214,17 @@ interface AppApi extends AppState {
    * pool by the caller. Returns the ease so the response screen can state it as a fact.
    */
   reportPain: (muscle: string, severity: PainSeverity) => Promise<void>;
+  /**
+   * ⛔ ADOPT A WEEK SHE BROUGHT — the only writer of `authored`, and the only way it is ever set.
+   *
+   * FOUNDER, 2026-08-11: *"אסור למנוע שלנו לשנות את זה אלא רק לנהל את המתאמן בהסתמך על התוכנית שהוא
+   * קיבל."* From the moment this lands, `engineMayRebuild` returns false for her and no assembly pass
+   * runs over the week again — not on a profile edit, not on a pain report, not on a rest answer.
+   *
+   * ⚠️ IT SAVES WHAT IT IS GIVEN, WITHOUT TOUCHING IT. Not one clamp, not one reflow, not one floor
+   * raise. `importedPlan.toProgram` already stamped it; this writes it to disk and tells the app.
+   */
+  adoptImportedProgram: (program: Program) => Promise<void>;
   /** The rest windows that have run out and are still waiting on her. */
   easeChecks: () => PainEase[];
   /** Her answer to one of them: clear, still tender, or still hurting. */
@@ -301,6 +311,31 @@ export const AppContext = Ctx;
  * Every `generateProgram` call goes through here; a call that did not would quietly train a muscle
  * she just told us hurts.
  */
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ A WEEK SHE BROUGHT IS NOT OURS TO REWRITE — the one gate every rebuild passes.
+ *
+ * FOUNDER, 2026-08-11: *"נצטרך שהמנוע לא יחתוך למתאמן וישמר לו את התוכנית ורק ינהל אותה… אסור
+ * למנוע שלנו לשנות את זה אלא רק לנהל את המתאמן בהסתמך על התוכנית שהוא קיבל."*
+ *
+ * There are FOUR places that rebuild her programme — finishing onboarding, editing her profile,
+ * reporting pain, and answering a rest-window question — and every one of them calls
+ * `generateProgram`, which runs the whole assembly: `trimV5ToBudget`, `enforceTimeCap`,
+ * `raiseToWeeklyFloor`, `growEmphasised`, the lot. Any of them would silently rewrite an imported
+ * week into a Hush week: her 74-minute Monday cut to 60, her coach's exercise order reflowed, her
+ * accessory work deleted for sitting under MEV.
+ *
+ * So the rebuild asks this first. It is a FUNCTION rather than a flag checked in four places for the
+ * reason `programProfile` above it is: four copies of a rule are three places for it to drift.
+ *
+ * ⚠️ IT GUARDS THE SHAPE, NOT THE LOADS. Loop 1 and Loop 2 never come through here — they write
+ * `SetTarget`s against the programme that exists, which is exactly the management she wants.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export function engineMayRebuild(program: Program | null | undefined): boolean {
+  return (program?.authored ?? 'engine') === 'engine';
+}
+
 function programProfile(profile: Profile, nowMs = Date.now()): Profile {
   const eases = activeEases(profile.painEases, nowMs);
   if (eases.length === 0) return profile;
@@ -370,6 +405,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const storedVersion = await db.getSchemaVersion();
       if (storedVersion != null && storedVersion !== SCHEMA_VERSION) {
         void track('schema_version_mismatch', { stored: storedVersion, current: SCHEMA_VERSION });
+      }
+      /*
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       * ⛔ A STORED COACH PLAN IS A FOSSIL NOW, AND IT WOULD HAVE OUTLIVED THE ENGINE FOREVER.
+       *
+       * ⛔ FOUNDER, 2026-08-12: *"תוודא שוב שהכל מחובר ומכויל שלא יהיו לנו עוד הפתעות חדשות."*
+       * This is the surprise that sweep found, and nothing else would have.
+       *
+       * `loadWeekPlan` prefers a stored `CoachPlan` over the engine's week — correctly, because that
+       * shape is where a real COACH's programme will live. And as of today NOTHING WRITES ONE: the
+       * post-session call is gone, so on a fresh install the branch is simply never taken.
+       *
+       * ⚠️ BUT NOT ON A PHONE THAT ALREADY HAS ONE. Every athlete on a previous build has a
+       * `hush.coachPlan` in storage, written by a model that no longer runs — and every screen would
+       * have kept preferring it, week after week, with no way on earth for it to change. She would
+       * have been the only person in the world whose engine never took over, and the app would have
+       * looked completely correct while it happened.
+       *
+       * So it is cleared ONCE, at the version boundary. Not on every launch: the coach track is
+       * coming, and the day a human coach writes her a week, that plan must survive a restart.
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       */
+      if (storedVersion != null && storedVersion < SCHEMA_VERSION) {
+        await db.clearCoachPlan().catch(() => {});
       }
       await db.setSchemaVersion(SCHEMA_VERSION);
 
@@ -664,10 +723,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * `db.recordCoachAnswer` one screen earlier; with nothing writing that record any more, a
          * programme held only in React state would vanish on the first cold start.
          */
-        const program: Program | null = await live.generateProgram(programProfile(profile)).catch((e) => {
-          void track('engine_error', { op: 'generateProgram', message: String(e) });
-          return null;
-        });
+        /*
+         * ⛔ SHE MAY ALREADY HAVE BROUGHT ONE (founder 2026-08-11) — and this was the hole in the
+         * chain. `ImportPlan` is reachable from onboarding, `adoptImportedProgram` writes her week to
+         * disk, and then THIS line generated a Hush week over the top of it at the last step. The
+         * import would have appeared to work and been gone by the first screen after it.
+         *
+         * It asks the SAME gate every other rebuild asks, so there is one rule with one home: a week
+         * she brought is not ours to rewrite, and that holds on the very first build as much as on
+         * the hundredth.
+         */
+        const brought = await db.loadProgram().catch(() => null);
+        const program: Program | null = engineMayRebuild(brought)
+          ? await live.generateProgram(programProfile(profile)).catch((e) => {
+              void track('engine_error', { op: 'generateProgram', message: String(e) });
+              return null;
+            })
+          : brought;
 
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
@@ -797,16 +869,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         /*
-         * ════ AND THE WEEK THAT NEVER ARRIVED ════
+         * ⛔ THE RETRY OF THE POST-SESSION CALL IS GONE WITH THE CALL (founder 2026-08-12).
          *
-         * If the post-session call died — the model unreachable for an hour, her phone in a
-         * basement — the app said the update was waiting and nothing ever tried again. Her next
-         * week was simply lost. This is the trying again, on the one occasion that costs nothing to
-         * wait for: her coming back. Not awaited — she is looking at Today, and a decision that
-         * takes a minute must not hold the screen. `retryWaitingUpdate` returns null instantly when
-         * there is nothing waiting, which is almost always.
+         * It read: *"if the post-session call died … her next week was simply lost."* True, and no
+         * longer a risk anyone can run: the engine decides the next week from her record, so there
+         * is no call to have died and nothing to wait for. See the note in `sessionStore`.
          */
-        void retryWaitingUpdate().catch(() => {});
 
         /*
          * ════ AND THE MUSCLE THAT HAS COME BACK (2026-08-02) ════
@@ -957,6 +1025,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * from a body map that does not yet know about the injury, which is the exact defect that
          * function's own comment warns about.
          */
+        // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
+        if (!engineMayRebuild(state.program)) return;
         const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
@@ -965,6 +1035,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.saveProgram(rebuilt);
           dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
         }
+      },
+
+      async adoptImportedProgram(program) {
+        /*
+         * ⛔ NO GENERATION, NO VALIDATION, NO TIDYING — see the note on the interface above. A
+         * `saveProgram` that ran her week through anything on the way past would undo the entire
+         * feature, silently, at the last possible moment.
+         */
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        void track('plan_imported', {
+          sessions: program.days.filter((d) => !d.isRest).length,
+          lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
+        });
       },
 
       easeChecks() {
@@ -995,6 +1079,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('pain_ease_answered', { muscle, answer });
+        // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
+        if (!engineMayRebuild(state.program)) return;
         const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
@@ -1057,6 +1143,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
            * Generation touches no engine state — that is what makes a rebuild safe to do on an edit
            * rather than something to save for a Saturday.
            */
+          // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
+          if (!engineMayRebuild(state.program)) return;
           const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
             void track('engine_error', { op: 'generateProgram', message: String(e) });
             return null;

@@ -282,7 +282,7 @@ export function HistoryView({
                   style={({ pressed }) => [styles.row, last && styles.rowLast, pressed && styles.rowPressed]}
                 >
                   <View style={styles.dateCol}>
-                    <Legend size={11} track={0}>{dowOf(item.startedAt)}</Legend>
+                    <Legend size={17} track={0}>{dowOf(item.startedAt)}</Legend>
                     <Text style={styles.day}>{dayOf(item.startedAt)}</Text>
                   </View>
 
@@ -300,13 +300,13 @@ export function HistoryView({
                     ) : (
                       <Text style={styles.rowName} numberOfLines={1}>{name}</Text>
                     )}
-                    <Legend size={11.5} track={0} weight="regular" style={styles.rowMeta}>{meta}</Legend>
+                    <Legend size={17} track={0} weight="regular" style={styles.rowMeta}>{meta}</Legend>
                   </View>
 
                   {isCardio ? (
-                    <Legend size={11} track={0.06}>{t('history.rowRecorded')}</Legend>
+                    <Legend size={17} track={0.06}>{t('history.rowRecorded')}</Legend>
                   ) : raiseN > 0 ? (
-                    <Legend size={12.5} track={0} tone="accent">{t('history.rowRaises', { count: raiseN })}</Legend>
+                    <Legend size={17} track={0} tone="accent">{t('history.rowRaises', { count: raiseN })}</Legend>
                   ) : null}
 
                   <Icon name="chevronRight" size={15} color={color.textTertiary} strokeWidth={1.8} />
@@ -354,9 +354,9 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 30, paddingBottom: 40 },
 
   // One-line summary: a sans sentence with mono figures.
-  summaryLine: { fontFamily: font.sans, fontSize: 14, lineHeight: 21, color: color.textSecondary, marginBottom: 6, textAlign: 'left' },
+  summaryLine: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textSecondary, marginBottom: 6, textAlign: 'left' },
   // The figures ride mono INSIDE the sans sentence — a reading quoted in prose.
-  summaryFig: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 13.5, color: color.textPrimary }, // rtl-ok: nested figure span, inherits textAlign from summaryLine
+  summaryFig: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: color.textPrimary }, // rtl-ok: nested figure span, inherits textAlign from summaryLine
 
   // Month chapter — the coach's serif.
   // The month is a CHAPTER, so it is the coach's serif at 26 — the ledger's only headline.

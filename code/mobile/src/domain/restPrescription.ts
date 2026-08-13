@@ -39,6 +39,29 @@ export const REST_TRANSITION_S = 120; // between exercises (the walk + setup)
 export const REST_INTER_S = 90;
 
 /**
+ * ════ WHAT ONE SET COSTS THE HOUR, BEFORE SHE HAS PERFORMED ANY (B-4, the day-one bootstrap) ════
+ *
+ * ⛔ MOVED HERE FROM `fixtureModel` ON 2026-08-11, BECAUSE THERE WERE TWO ANSWERS AND SHE COULD SEE
+ * BOTH. The engine builds the week against these numbers — `enforceTimeCap` cuts a day until it
+ * fits `SESSION_MAX` priced this way — and `coachWeek` priced the SAME session at a flat
+ * `EXEC_S + DEFAULT_REST_S` for every lift. Measured over twenty-four generated sessions, Today
+ * overstated every one of them and by up to nine minutes:
+ *
+ *     female · 5 days · Upper A     engine 60 min      Today said 66 min
+ *
+ * A session the engine capped at sixty, announced to her as sixty-six, on the screen where the
+ * founder has already caught this exact class of defect once ("the home screen still shows about 35
+ * minutes for a longer workout"). Neither number was wrong on its own terms; there were simply two
+ * of them, which L5 does not allow for a fact one module already owns.
+ *
+ * These bundle the whole set cycle — the walk, the loading, the reps, the writing down, and the
+ * rest — so a caller pricing with them must NOT also charge a transition on top. Her MEASURED rest
+ * and set durations replace them per lift the moment she has any (S-64/S-17).
+ */
+export const COMPOUND_SET_MIN = 3;
+export const ISOLATION_SET_MIN = 2;
+
+/**
  * ════ WHAT THE CLOCK RUNS WHEN THE COACH DID NOT SAY ════
  *
  * A CONSTANT, and that is the whole point of it (founder, 2026-08-02).
