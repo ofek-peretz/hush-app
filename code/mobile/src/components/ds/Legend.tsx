@@ -49,14 +49,31 @@ export function Legend({
   const label = children.toUpperCase();
   const monoFamily = weight === 'semibold' ? font.monoSemibold : weight === 'regular' ? font.mono : font.monoMedium;
   const sansFamily = weight === 'semibold' ? font.sansSemibold : weight === 'regular' ? font.sans : font.sansMedium;
+  /**
+   * ⛔ THE TRACKING FOLLOWS THE FACE, BECAUSE TRACKING IS A LATIN DEVICE.
+   *
+   * This component already asks the STRING and not the locale — a label mono cannot draw falls
+   * back to Assistant. The letter-spacing did not follow, so a Hebrew legend was drawn in the
+   * sans face and then opened up by .16em anyway, and the founder saw the result on the live
+   * stage: `מ ש ק ל` and `ח ז ר ו ת`, every legend in the app, in every Hebrew screen.
+   *
+   * Tracked all-caps is a convention of an alphabet that HAS caps and whose letters are built to
+   * stand apart. Hebrew has no majuscule and its letters carry the word as a connected block —
+   * pushing them apart does not read as "instrument label", it reads as a rendering fault. The
+   * `.toUpperCase()` above is already a no-op on Hebrew for the same reason; this closes the
+   * other half of the same idea.
+   *
+   * Same test as the face, deliberately: one question decides both, so they can never disagree.
+   */
+  const latinFace = monoCanDraw(label);
   return (
     <Text
       style={[
         styles.base,
         {
-          fontFamily: monoCanDraw(label) ? monoFamily : sansFamily,
+          fontFamily: latinFace ? monoFamily : sansFamily,
           fontSize: size,
-          letterSpacing: trackingPx(size, track),
+          letterSpacing: latinFace ? trackingPx(size, track) : 0,
           color: colorFor,
           textAlign: align,
         },
