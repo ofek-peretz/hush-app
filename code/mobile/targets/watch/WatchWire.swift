@@ -10,6 +10,16 @@ import Foundation
 //   - src/platform/watch/protocol.ts (WatchStateEnvelope / WatchIntent / WatchLobby)
 
 let WATCH_PROTOCOL_VERSION = 1
+
+/// How long Begin waits for the phone before this watch runs the workout itself — and the same
+/// window the PHONE uses to decide a `start_workout` is still wanted. Mirror of protocol.ts
+/// `WATCH_START_GRACE_MS`; the two must not drift.
+///
+/// They used to: the wrist gave up at 3 seconds and the phone accepted a start at any age, because
+/// lobby intents return above its staleness gate. A phone woken from cold at t+6 s then began a
+/// second session for a workout already running here — and `WatchModel.apply` can only surrender
+/// authority before her first set. See the note on `WATCH_START_GRACE_MS`.
+let WATCH_START_GRACE_S: TimeInterval = 3
 let MIRROR_SCHEMA_VERSION = 1
 
 struct WireSwapOption: Codable, Equatable {
@@ -219,6 +229,24 @@ struct WireEnvelope: Codable {
   /// English it shipped with.
   var copy: WireCopyPack?
   var authoritySeq: Int
+  /// Which PHONE PROCESS `authoritySeq` counts inside — mirror of protocol.ts `authorityEpoch`.
+  ///
+  /// The sequence restarts at zero every time the phone app launches, while `highestSeq` below
+  /// lives in this app's memory and outlives it. Without the epoch a relaunched phone is
+  /// indistinguishable from a flood of stale messages, and the wrist discards everything it sends
+  /// until this process happens to die. See `apply(_:)`.
+  ///
+  /// Optional, like every post-v1 field: a phone one build behind sends none, and `nil` must mean
+  /// "keep the seq-only rule", never "epoch zero" — reading it as zero would reject that phone
+  /// forever, which is the same bug wearing the other hat.
+  var authorityEpoch: Int?
+  /// The live handover this phone is holding — mirror of protocol.ts `adoptedRecordId`.
+  ///
+  /// A wrist that has handed a running workout to the phone may only let go once the phone HAS it,
+  /// and a live mirror alone does not say that: it says the phone is running something, which could
+  /// be a different workout entirely. This names the session, so the wrist's release is an exact id
+  /// match instead of an inference. `nil` is "no claim" — never "not yours".
+  var adoptedRecordId: String?
   var sentAt: String
 }
 
@@ -364,6 +392,35 @@ struct WireIntent: Codable {
   var area: String?
 }
 
+/// A workout this watch is RUNNING, offered to the phone so the authority can move — mirror of
+/// protocol.ts `WatchLocalSession`.
+///
+/// ⛔ NOT AN INTENT. Every one of the eleven intents is a PROPOSAL about a session the phone is
+/// running, and the phone judges each one. This is the opposite direction: the wrist stating facts
+/// about a workout the phone knows nothing about, because it began while the phone was away.
+/// Without it, opening the phone mid-workout showed Today and offered to start the very workout she
+/// was in the middle of.
+///
+/// `recordId` is the session's identity from the moment it starts and is the same id its finished
+/// record carries, which is what makes the handover idempotent: if the record arrives anyway, the
+/// phone recognises a session it already holds.
+struct WireLocalSession: Codable {
+  var v: Int
+  var type: String // "local_session"
+  var recordId: String
+  var workoutId: String
+  var workoutName: String
+  var startedAt: String
+  var phase: String
+  var pausedFrom: String?
+  var currentIndex: Int
+  var restEndsAt: String?
+  var restTotalS: Int?
+  var steps: [WirePlanStep]
+  var sets: [WireRecordSet]
+  var sentAt: String
+}
+
 enum WatchWire {
   static func decodeEnvelope(_ json: String) -> WireEnvelope? {
     guard let data = json.data(using: .utf8) else { return nil }
@@ -372,6 +429,14 @@ enum WatchWire {
 
   static func encodeIntent(_ intent: WireIntent) -> String? {
     guard let data = try? JSONEncoder().encode(intent) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  /// The live handover — see `WireLocalSession`. Rides the same reachable-only channel the intents
+  /// use: a handover only matters while the phone is there to receive it, and one delivered an hour
+  /// later would describe a workout that has since ended.
+  static func encodeLocalSession(_ offer: WireLocalSession) -> String? {
+    guard let data = try? JSONEncoder().encode(offer) else { return nil }
     return String(data: data, encoding: .utf8)
   }
 

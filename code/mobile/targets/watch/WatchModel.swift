@@ -104,6 +104,9 @@ final class WatchModel: ObservableObject {
   // backgrounded) is normal and applicationContext still syncs, so we keep showing the last mirror.
   private var connection: ConnectionState = .connected
   private var highestSeq = Int.min
+  /// The phone process `highestSeq` belongs to — see `apply(_:)`. `Int.min` = none seen yet, so the
+  /// first epoch-bearing envelope always wins and the sequence starts clean under it.
+  private var lastEpoch = Int.min
 
   // Local UI (presentation only — never workout state).
   private var editDraft: EditDraft?
@@ -165,8 +168,13 @@ final class WatchModel: ObservableObject {
   // Begin fallback (founder 2026-07-10, "it froze — wouldn't let me start"): a
   // reachable phone whose app never answers the start intent must not strand the
   // athlete on Start — after a short grace the watch runs the stored plan itself.
-  // `fallbackStarted` marks a local session created this way: it is provisional, so a
-  // phone that answers late (before any set is logged) reclaims authority in apply().
+  // `fallbackStarted` marks a local session created this way.
+  //
+  // ⚠️ IT IS NO LONGER PART OF THE RECLAIM TEST — see `apply()`. It gated the reclaim until it was
+  // found to exclude standalone RECOVERY (a session restored after the watch app was killed), which
+  // is the same situation wearing a different provenance. What decides whether a local session may
+  // be discarded is that nothing has been logged into it, not how it began. The flag is kept
+  // because it records where the session came from, which is worth having in hand.
   private var beginFallback: DispatchWorkItem?
   private var fallbackStarted = false
   /// The paywall gate as last published by the phone. A gated athlete must not be able to
@@ -271,6 +279,35 @@ final class WatchModel: ObservableObject {
   // MARK: Inbound (from WatchSessionManager)
 
   func apply(_ envelope: WireEnvelope) {
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // ⛔ A RELAUNCHED PHONE IS NOT A REORDERED MESSAGE.
+    //
+    // `highestSeq` guards against envelopes arriving out of order, and it must. But the sequence
+    // it compares restarts at zero every time the PHONE APP launches, while this counter lives in
+    // the watch app's memory and outlives it. iOS reclaims a backgrounded phone app routinely, so
+    // the shape below happened on ordinary days:
+    //
+    //   morning · a few hundred envelopes → highestSeq ≈ 300
+    //   daytime · iOS jettisons the phone app
+    //   evening · she reopens Hush; the sequence starts again at 1
+    //   → every envelope loses to 300 and is dropped, including the applicationContext adopted at
+    //     activation, and the wrist shows the morning until this process dies.
+    //
+    // The epoch names the process, so the two cases are finally distinguishable:
+    //   epoch >  lastEpoch → a NEW phone process. Reset the high-water mark and adopt.
+    //   epoch <  lastEpoch → a straggler from a dead process. Still ignored, which is the point.
+    //   epoch == lastEpoch → same process; the sequence rule decides, exactly as before.
+    //
+    // ⚠️ `nil` KEEPS THE OLD RULE. A phone one build behind sends no epoch, and treating that as
+    // zero would put it permanently below `lastEpoch` — the same deafness, mirrored.
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    if let epoch = envelope.authorityEpoch {
+      if epoch < lastEpoch { return }
+      if epoch > lastEpoch {
+        lastEpoch = epoch
+        highestSeq = Int.min
+      }
+    }
     guard envelope.authoritySeq > highestSeq else { return } // reorder-proof
     highestSeq = envelope.authoritySeq
 
@@ -317,7 +354,43 @@ final class WatchModel: ObservableObject {
     // it reclaims authority here: the untouched local session (no set logged) is discarded
     // without a trace. Once the athlete has logged a set on the wrist, the local session is
     // the truth and keeps it (the phone's session reconciles against the transferred record).
-    if let engine = localEngine, fallbackStarted, phoneLive, engine.state.sets.isEmpty {
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // ⛔ THE PHONE HAS TAKEN THIS EXACT SESSION — the wrist may let go.
+    //
+    // A workout begun here with the phone away is offered to the phone the moment it is reachable
+    // (`offerLocalSession`). The phone answers by NAMING it on every frame it sends. That name is
+    // the whole safety of this branch: a live mirror on its own says the phone is running
+    // something, which could be a different workout entirely, and letting go of an engine that is
+    // carrying real sets on that basis is how a workout vanishes between two devices.
+    //
+    // ⚠️ `release()`, NOT `discard()`. Discard refuses a session with sets and must keep refusing —
+    // it guards the never-used fallback session. Here the sets are not lost; they are on the phone.
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    if let engine = localEngine,
+       let adopted = envelope.adoptedRecordId,
+       adopted == engine.state.recordId {
+      engine.release()
+      localEngine = nil
+      localMirror = nil
+      fallbackStarted = false
+      cancelRestHaptics() // beats scheduled against the released local rest
+    }
+
+    // ⛔ `fallbackStarted` WAS PART OF THIS CONDITION, AND IT LET TWO AUTHORITIES RUN.
+    //
+    // The flag marks a session this watch started because a reachable phone never answered — which
+    // is only ONE of the ways a local session can be live when the phone turns out to be live too.
+    // The other is standalone RECOVERY: a session that survived the watch app being killed is
+    // restored unconditionally at launch (see the restore in `activate`), and it carries no flag,
+    // so it could never be reclaimed. The founder's own report is that shape — kill the watch app
+    // mid-workout, carry on with the phone, and the wrist comes back holding a second live session
+    // that ignores every phone frame and will enqueue its own record for the same workout.
+    //
+    // What actually makes a local session safe to discard is not HOW it started; it is that no work
+    // has been logged into it. `sets.isEmpty` is the whole guarantee, and it is unchanged — a local
+    // session with even one set in it is still the truth and still keeps authority, because the
+    // alternative is throwing away sets she performed.
+    if let engine = localEngine, phoneLive, engine.state.sets.isEmpty {
       engine.discard()
       localEngine = nil
       localMirror = nil
@@ -478,6 +551,38 @@ final class WatchModel: ObservableObject {
     )
   }
 
+  /// Offer a RUNNING local session to the phone — the live handover.
+  ///
+  /// ⛔ FOUNDER: *"אם התחלתי אימון בשעון ואני נכנס לאפליקציה בפלאפון המסך של האימון צריך להופיע."*
+  /// A standalone workout used to be invisible to the phone until it was over, because everything
+  /// this watch does while `localEngine` is live goes to that engine and no message leaves.
+  ///
+  /// ⚠️ FIRE AND FORGET, AND SAFE TO REPEAT. The phone answers `duplicate` for a session it already
+  /// holds, so re-offering on every reconnect costs nothing and is the only retry this needs. The
+  /// wrist keeps running its workout either way — it lets go only when the phone names the session
+  /// back (see `apply`).
+  private func offerLocalSession() {
+    guard let engine = localEngine else { return }
+    let s = engine.state
+    let offer = WireLocalSession(
+      v: WATCH_PROTOCOL_VERSION,
+      type: "local_session",
+      recordId: s.recordId,
+      workoutId: s.workoutId,
+      workoutName: s.workoutName,
+      startedAt: s.startedAt,
+      phase: s.phase,
+      pausedFrom: s.pausedFrom,
+      currentIndex: s.currentIndex,
+      restEndsAt: s.restEndsAt,
+      restTotalS: s.restTotalS,
+      steps: s.steps,
+      sets: s.sets,
+      sentAt: WatchWire.iso(Date())
+    )
+    if let json = WatchWire.encodeLocalSession(offer) { manager.send(intentJSON: json) }
+  }
+
   /// Re-offer every unacked local session record (at-least-once; the phone
   /// de-dupes on recordId and acks durably).
   private func flushOutbox() {
@@ -506,6 +611,9 @@ final class WatchModel: ObservableObject {
       graceWork?.cancel()
       graceWork = nil
       flushOutbox() // the phone is back — re-offer any unacked local session records
+      /* …and if a workout is RUNNING here, offer that too, so she opens the phone and finds her
+         workout rather than an invitation to start the one she is in the middle of. */
+      offerLocalSession()
       guard connection != .connected else { return }
       connection = .connected
       recompute()
@@ -629,12 +737,27 @@ final class WatchModel: ObservableObject {
       engine.completeSet(weight: weight, reps: reps)
     } else {
       let edited = editDraft != nil
-      sendIntent(
+      let delivered = sendIntent(
         type: "complete_set",
         expectedIndex: m.globalIndex,
         actualReps: edited ? reps : nil,
         actualWeight: edited ? weight : nil
       )
+      /*
+       * ⛔ NO CONFIRMATION FOR A SET THAT WENT NOWHERE.
+       *
+       * Under phone authority this watch logs nothing itself — it proposes, and the phone decides
+       * and records. When the proposal cannot be delivered there is no set anywhere, and the code
+       * below used to run regardless: `setConfirm` drawn, the confirm beat played. She feels the
+       * haptic and moves to the next set believing it is saved.
+       *
+       * ⚠️ THE DRAFT IS KEPT, deliberately. Clearing it would throw away the weight and reps she
+       * just dialled in, and she will have to send exactly those again when the phone is back.
+       */
+      guard delivered else {
+        intentDidNotLeave()
+        return
+      }
     }
     editDraft = nil
     // The LAST local set completes the workout synchronously — the completion
@@ -645,20 +768,28 @@ final class WatchModel: ObservableObject {
     scheduleSetConfirmClear()
   }
 
+  /* ⛔ EVERY PROPOSAL SAYS SO WHEN IT DOES NOT LEAVE — see `completeSet()` and
+     `intentDidNotLeave()`. Under phone authority none of these change anything on the watch; they
+     ask the phone to change something. An unreachable phone means the tap did nothing at all, and
+     the wrist has to show that rather than sit on a live-looking stage for twelve seconds. */
   func ready() {
-    if let engine = localEngine { engine.endRest() } else { sendIntent(type: "end_rest") }
+    if let engine = localEngine { engine.endRest() } else if !sendIntent(type: "end_rest") { intentDidNotLeave() }
   }
 
   func addRest() {
-    if let engine = localEngine { engine.addRest(seconds: 15) } else { sendIntent(type: "add_rest", seconds: 15) }
+    if let engine = localEngine {
+      engine.addRest(seconds: 15)
+    } else if !sendIntent(type: "add_rest", seconds: 15) {
+      intentDidNotLeave()
+    }
   }
 
   func pause() {
-    if let engine = localEngine { engine.pause() } else { sendIntent(type: "pause") }
+    if let engine = localEngine { engine.pause() } else if !sendIntent(type: "pause") { intentDidNotLeave() }
   }
 
   func resume() {
-    if let engine = localEngine { engine.resume() } else { sendIntent(type: "resume") }
+    if let engine = localEngine { engine.resume() } else if !sendIntent(type: "resume") { intentDidNotLeave() }
   }
 
   func endWorkout() {
@@ -779,7 +910,7 @@ final class WatchModel: ObservableObject {
         self.startLocalWorkout(viaFallback: true)
       }
       beginFallback = work
-      DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+      DispatchQueue.main.asyncAfter(deadline: .now() + WATCH_START_GRACE_S, execute: work)
     } else {
       // Phone absent — the watch runs the stored plan itself (standalone).
       startLocalWorkout()
@@ -1013,6 +1144,7 @@ final class WatchModel: ObservableObject {
     recompute()
   }
 
+  @discardableResult
   private func sendIntent(
     type: String,
     expectedIndex: Int? = nil,
@@ -1023,7 +1155,7 @@ final class WatchModel: ObservableObject {
     seconds: Int? = nil,
     area: String? = nil,
     severity: String? = nil
-  ) {
+  ) -> Bool {
     let intent = WireIntent(
       v: WATCH_PROTOCOL_VERSION,
       type: type,
@@ -1038,7 +1170,22 @@ final class WatchModel: ObservableObject {
       severity: severity,
       area: area
     )
-    if let json = WatchWire.encodeIntent(intent) { manager.send(intentJSON: json) }
+    guard let json = WatchWire.encodeIntent(intent) else { return false }
+    return manager.send(intentJSON: json)
+  }
+
+  /// An intent did not leave the watch — the phone is not reachable right now.
+  ///
+  /// Drop straight to the honest viewer instead of waiting out `reconnectGraceS`. The grace exists
+  /// because a dropped reachability is NORMAL while she is just looking at the screen — but a tap
+  /// that could not be delivered is not a quiet background fact, it is the thing she just did, and
+  /// twelve seconds of a live-looking stage after it is twelve seconds of a lie.
+  private func intentDidNotLeave() {
+    graceWork?.cancel()
+    graceWork = nil
+    guard connection != .reconnecting else { return }
+    connection = .reconnecting
+    recompute()
   }
 
   // MARK: Projection (port of projectWatchScreen)

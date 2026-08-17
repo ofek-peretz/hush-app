@@ -87,11 +87,15 @@ export const watchTransportNative: WatchTransport | null = native
           return false;
         }
       },
-      sendState(env: WatchStateEnvelope) {
+      sendState(env: WatchStateEnvelope): boolean {
         try {
           native.sendState(serializeEnvelope(env));
+          return true;
         } catch {
-          /* transport unavailable — drop; the bridge re-publishes on next change */
+          /* The OS refused it. It is reported now rather than dropped in silence — and the bridge
+             restates the whole state when the wrist next becomes reachable (`resync`), so a refusal
+             heals instead of waiting for a state change that may be two minutes away. */
+          return false;
         }
       },
       onIntent(cb: (raw: unknown) => void) {

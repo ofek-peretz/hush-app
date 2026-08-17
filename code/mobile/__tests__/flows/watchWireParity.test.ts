@@ -410,9 +410,39 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
   it('WireEnvelope — the wrapper every frame arrives in', () => {
     // BOTH shapes: `copy` rides the lobby and is absent from a mirror frame, so an envelope built
     // without one would leave the wrist decoding a field this test had never seen sent.
-    const mirrorFrame = makeStateEnvelope(widestMirror(), 7, NOW, null, null);
-    const lobbyFrame = makeStateEnvelope(null, 8, NOW, null, null, watchCopyPack());
+    /* ⚠️ BOTH FRAMES CARRY AN EPOCH, because the bridge always does: `authorityEpoch` is taken from
+       the clock in `WatchSession`'s constructor, so no envelope the app emits is ever without one.
+       A sample that omitted it would let the field be decoded on the wrist and never sent from the
+       phone — precisely the one-directional drift this file exists to fail on. */
+    const mirrorFrame = makeStateEnvelope(widestMirror(), 7, NOW, null, null, null, NOW, 'rec-parity');
+    const lobbyFrame = makeStateEnvelope(null, 8, NOW, null, null, watchCopyPack(), NOW);
     joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame));
+  });
+
+  it('WireLocalSession — the workout the wrist hands over mid-flight', () => {
+    /*
+     * ⛔ THE ONE MESSAGE THAT CARRIES A WHOLE WORKOUT. It travels wrist → phone and is written into
+     * her session log, so a field misspelled on one side is not a degraded screen: it is a handover
+     * the phone silently refuses as malformed, leaving her workout stranded on the wrist with the
+     * app showing Today — the exact bug this was built to fix, arriving through its own contract.
+     */
+    const offer = {
+      v: WATCH_PROTOCOL_VERSION,
+      type: 'local_session',
+      recordId: 'rec-1',
+      workoutId: 'day_1',
+      workoutName: 'Upper A',
+      startedAt: new Date(NOW - 600_000).toISOString(),
+      phase: 'rest_inter',
+      pausedFrom: 'active_set',
+      currentIndex: 1,
+      restEndsAt: new Date(NOW + 45_000).toISOString(),
+      restTotalS: 90,
+      steps: [],
+      sets: [],
+      sentAt: new Date(NOW).toISOString(),
+    };
+    joined('WireLocalSession', keysOf(offer));
   });
 
   it('WireSwapOption — the replacement the wrist offers is one the phone chose', () => {

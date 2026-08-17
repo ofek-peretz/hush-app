@@ -53,11 +53,23 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
   }
 
   /// Send a proposed intent to the phone. Reachable only, never queued.
-  func send(intentJSON json: String) {
-    guard WCSession.isSupported() else { return }
+  ///
+  /// ⛔ IT REPORTS WHETHER IT LEFT. This returned Void and dropped in silence, and the caller went
+  /// on to show a confirmation regardless — so a set completed with the phone in a locker played
+  /// the confirm haptic, drew the tick, and was logged nowhere. Losing the set is bad; telling her
+  /// it was saved is worse, because she has no reason to look again.
+  ///
+  /// `false` means "this did not leave the watch". It is NOT queued for later on purpose: an
+  /// intent is a proposal about the set she is standing in, and one delivered twenty minutes late
+  /// would be judged against a session that has moved on (or ended). The honest answer is to say
+  /// so now — see `WatchModel.intentDidNotLeave()`.
+  @discardableResult
+  func send(intentJSON json: String) -> Bool {
+    guard WCSession.isSupported() else { return false }
     let session = WCSession.default
-    guard session.isReachable else { return }
+    guard session.isReachable else { return false }
     session.sendMessage(["intent": json], replyHandler: nil, errorHandler: nil)
+    return true
   }
 
   /// Transfer a watch-local session record to the phone — the DURABLE channel

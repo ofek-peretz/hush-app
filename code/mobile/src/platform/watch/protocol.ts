@@ -38,6 +38,38 @@ export const WATCH_PLAN_SCHEMA_VERSION = 1 as const;
  *  reconnect, when the phone has already moved on (audit offline rule). */
 export const WATCH_INTENT_TTL_MS = 15_000;
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * HOW LONG A `start_workout` IS STILL WANTED — the number the two devices must agree on.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * The wrist's Begin button sends `start_workout` and then waits this long for a live frame. If none
+ * arrives — the phone app was killed, and `sendMessage` to a dead app evaporates in silence — it
+ * starts the workout ITSELF from the stored plan snapshot, which is the whole point of standalone.
+ *
+ * ⛔ THE BUG THIS CLOSES: the wrist gave up after 3 seconds and the phone accepted a start at ANY
+ * age — lobby intents return above the staleness gate, so `start_workout` had no expiry at all.
+ * Between those two facts:
+ *
+ *   t+0.0s  wrist taps Begin; the phone is cold, iOS begins waking it
+ *   t+3.0s  no live frame → the wrist starts the workout locally and she begins lifting
+ *   t+6.0s  React Native finishes booting; the phone accepts the intent and starts a SECOND session
+ *   → the phone can only reclaim authority while no set has been logged on the wrist
+ *     (`WatchModel.apply`), and by now one has. Two live authorities, one workout: the wrist's
+ *     record comes home and is credited, and the phone is left holding an interrupted session it
+ *     will later offer her to "continue" — a workout she has already finished.
+ *
+ * The rule is that the phone must not start something the wrist has already given up waiting for.
+ * One constant, read by both sides, instead of a 3 here and a 15 there that never knew about each
+ * other. `WatchWire.startGraceMS` mirrors it, and the wire-parity law holds the two together.
+ *
+ * ⚠️ IT DOES NOT NEED A MARGIN. If the phone accepts at 2.9 s and its first live frame lands after
+ * the wrist has already fired the fallback, the existing reclaim in `WatchModel.apply` handles it
+ * cleanly — no set has been logged that early, so the local session is discarded without a trace.
+ * The only window that was ever unrecoverable is the late one, and this closes it.
+ */
+export const WATCH_START_GRACE_MS = 3_000;
+
 // ---- Phone → Watch ---------------------------------------------------------
 
 /** The envelope the phone publishes to the watch on every state change. */
@@ -52,6 +84,46 @@ export interface WatchStateEnvelope {
   /** Monotonic authority sequence. The watch keeps the highest it has seen and
    *  ignores any envelope with a lower seq (last-write-wins, reorder-proof). */
   authoritySeq: number;
+  /**
+   * ⛔ WHICH PHONE PROCESS THE SEQUENCE BELONGS TO — the fix for a wrist that went deaf.
+   *
+   * `authoritySeq` counts from zero inside one JS context (`WatchSession` is built once per app
+   * launch), while the watch's high-water mark lives in the watch app's own memory and outlives it.
+   * iOS jettisons a backgrounded phone app as a matter of routine, so:
+   *
+   *   morning  · the phone publishes a few hundred envelopes → the wrist's high-water mark is ~300
+   *   daytime  · iOS reclaims the phone app
+   *   evening  · she reopens Hush; the sequence restarts at 1
+   *   → every envelope is BELOW the high-water mark and is discarded, for as long as the watch app
+   *     process happens to stay alive. The wrist sits on the morning's state and nothing heals it.
+   *
+   * The epoch names the process the count belongs to, so the watch can tell "an old message that
+   * arrived late" (ignore) from "a new phone, counting again" (reset and adopt). It is wall-clock
+   * milliseconds at construction, which makes it monotonic across launches without persisting
+   * anything, and comparable so a straggler from the previous process still loses.
+   *
+   * ⚠️ OPTIONAL, AND 0 MEANS "NOT STATED". A watch binary installs asynchronously from the phone
+   * app, so a newer wrist will meet older envelopes for a while; those keep the seq-only rule
+   * rather than being read as epoch 0 and rejected forever, which would be this same bug mirrored.
+   */
+  authorityEpoch?: number;
+  /**
+   * ⛔ THE ACK FOR A LIVE HANDOVER — "this session is the one your wrist gave me, and here is its id."
+   *
+   * The wrist may only let go of a local session it has handed over ONCE THE PHONE HOLDS IT. Its
+   * engine is carrying real sets; discarding on a guess is the one mistake in this whole layer that
+   * loses a workout outright.
+   *
+   * A live mirror alone is not that proof — it says the phone is running SOMETHING, which could as
+   * easily be a different workout. `SessionMirror` carries no session identity at all (checked), and
+   * threading one through the projector's several return points is how a field goes missing on one
+   * of them; a wrist that then saw an unstamped frame would either hold a session forever or, worse,
+   * drop one that was never adopted. The envelope has a single construction site.
+   *
+   * Present on every frame while the phone is running an adopted session, so a wrist that missed the
+   * first one is told again on the next — no retry logic, and no state to keep true on either side.
+   */
+  adoptedRecordId?: string;
   sentAt: string; // ISO
   /** Standalone plan snapshot — the full per-set prescriptions of the week's
    *  remaining workouts, so the watch can EXECUTE a workout with the phone absent.
@@ -84,6 +156,8 @@ export function makeStateEnvelope(
   lobby: WatchLobby | null = null,
   plan: WatchPlanSnapshot | null = null,
   copy: WatchCopyPack | null = null,
+  authorityEpoch = 0,
+  adoptedRecordId: string | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
@@ -95,6 +169,12 @@ export function makeStateEnvelope(
     // byte-identical for an older watch that has never seen the field.
     ...(copy ? { copy } : {}),
     authoritySeq,
+    // Same rule as `copy`: omitted rather than sent as 0, so "not stated" and "stated as zero"
+    // cannot be confused by the wrist — see the field's note.
+    ...(authorityEpoch ? { authorityEpoch } : {}),
+    /* Omitted rather than sent as null, like every other optional here — a wrist that decodes an
+       absent key gets `nil`, which is "no claim", never "not yours". */
+    ...(adoptedRecordId ? { adoptedRecordId } : {}),
     sentAt: new Date(sentAtMs).toISOString(),
   };
 }
@@ -703,6 +783,24 @@ export function decideWatchIntent(
   // the phone is the authority and performs the actual select/start.
   if (isLobbyIntent(intent.type)) {
     if (!noActiveSession) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    /*
+     * ⛔ A START THE WRIST HAS ALREADY GIVEN UP ON IS NOT A START — see `WATCH_START_GRACE_MS`.
+     *
+     * This branch returns above the staleness gate below, so `start_workout` was valid at any age.
+     * A phone woken from cold six seconds after the tap would begin a session the wrist had already
+     * begun itself at three, and the wrist can only be talked out of it before her first set.
+     *
+     * ⚠️ ONLY THE START. `select_workout` merely queues a choice and is idempotent — expiring it
+     * would drop a harmless message and leave the Start screen disagreeing with the phone about
+     * which workout is teed up.
+     */
+    if (
+      intent.type === 'start_workout' &&
+      !Number.isNaN(issuedMs) &&
+      nowMs - issuedMs > WATCH_START_GRACE_MS
+    ) {
+      return { accept: false, reason: 'stale', action: null, latencyMs };
+    }
     const action = intentToAction(intent);
     if (!action) return { accept: false, reason: 'malformed', action: null, latencyMs };
     return { accept: true, action, latencyMs };
@@ -786,4 +884,124 @@ export function parseEnvelope(raw: unknown): WatchStateEnvelope | null {
 
 export function serializeIntent(intent: WatchIntent): string {
   return JSON.stringify(intent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE LIVE HANDOVER — a workout that began on the wrist, offered to the phone while it is running.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ⛔ THE GAP THIS CLOSES, in the founder's words: *"אם התחלתי אימון בשעון ואני נכנס לאפליקציה
+ * בפלאפון המסך של האימון צריך להופיע."*
+ *
+ * Today it cannot. The wrist has eleven things it can say and every one of them is a PROPOSAL about
+ * a session the phone is running (`WatchIntentType`). While the wrist runs its own — the standalone
+ * path, for a phone in a locker — it says nothing at all: every action goes to `localEngine` and no
+ * message leaves. The phone first hears of that workout when it is over and the durable record
+ * arrives. So opening the phone mid-workout showed Today, and offered to start the very workout she
+ * was in the middle of.
+ *
+ * This is the missing sentence: **"I am running this, here is exactly where I am."** It is not an
+ * intent — nothing about it is a proposal, and the phone does not get to refuse the facts. It is
+ * the wrist's session state, offered so the authority can MOVE to the phone.
+ *
+ * ── WHY THE ID IS THE WHOLE DESIGN ──────────────────────────────────────────────────────────────
+ * `recordId` is minted when the local session starts and is the same id its finished record will
+ * carry. The phone adopts the session under `watchSessionId(recordId)` — the identity
+ * `applyWatchSessionRecord` already de-dupes on. So if the handover succeeds and the wrist's record
+ * arrives later anyway (the outbox is at-least-once, by design), the phone sees a session it
+ * already holds and acks it as a duplicate. **The handover is idempotent through machinery that
+ * already exists and is already tested**, rather than through a new rule I would have to keep true.
+ *
+ * ── WHAT IS DELIBERATELY NOT HERE ───────────────────────────────────────────────────────────────
+ * ⚠️ NO `kcal`. The wrist measures energy and the phone estimates it, and that stays the record's
+ * business at the end. A live figure would be a number changing under her on two screens.
+ * ⚠️ NO REST LENGTHS. `restEndsAt` is absolute, which is the product's whole answer to drift — the
+ * phone recomputes what remains from the clock, exactly as its own resume path does.
+ */
+export interface WatchLocalSession {
+  v: typeof WATCH_PROTOCOL_VERSION;
+  type: 'local_session';
+  /** Minted at start; the id the finished record will carry. The handover's identity. */
+  recordId: string;
+  workoutId: string;
+  workoutName: string;
+  startedAt: string; // ISO
+  /** The wrist's phase, in its own vocabulary — mapped to the phone's machine on adoption. */
+  phase: 'active_set' | 'rest_inter' | 'rest_transition' | 'paused';
+  /** The phase frozen under pause, when `phase` is 'paused'. */
+  pausedFrom?: 'active_set' | 'rest_inter' | 'rest_transition' | null;
+  /** Index of the PRESENTED step (during a rest it stays on the just-completed set). */
+  currentIndex: number;
+  /** Absolute instant the running rest ends — never a remaining count. */
+  restEndsAt?: string | null;
+  /** What that rest was prescribed as, so the phone can draw a ring with the right denominator. */
+  restTotalS?: number | null;
+  /** The prescriptions the wrist is executing — a full copy, so adoption never depends on the
+   *  phone's plan file agreeing with the one the wrist was handed days ago. */
+  steps: WatchPlanStep[];
+  /** What she has logged so far, in order. */
+  sets: WatchRecordSet[];
+  sentAt: string; // ISO
+}
+
+/**
+ * Parse a live-session offer, hardened the same way `parseWatchIntent` is: a frame with one
+ * impossible number is rejected WHOLE rather than half-believed. This one writes into her session
+ * log, so the cost of believing junk here is a workout that records something she never did.
+ */
+export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!o || typeof o !== 'object') return null;
+  const r = o as Record<string, unknown>;
+  if (r.v !== WATCH_PROTOCOL_VERSION || r.type !== 'local_session') return null;
+  if (typeof r.recordId !== 'string' || r.recordId.length === 0) return null;
+  if (typeof r.workoutId !== 'string' || r.workoutId.length === 0) return null;
+  if (typeof r.workoutName !== 'string') return null;
+  if (typeof r.startedAt !== 'string' || Number.isNaN(Date.parse(r.startedAt))) return null;
+  const PHASES = ['active_set', 'rest_inter', 'rest_transition', 'paused'];
+  if (typeof r.phase !== 'string' || !PHASES.includes(r.phase)) return null;
+  if (r.pausedFrom != null && (typeof r.pausedFrom !== 'string' || !PHASES.includes(r.pausedFrom))) return null;
+  if (typeof r.currentIndex !== 'number' || !Number.isInteger(r.currentIndex) || r.currentIndex < 0) return null;
+  if (r.restEndsAt != null && (typeof r.restEndsAt !== 'string' || Number.isNaN(Date.parse(r.restEndsAt)))) {
+    return null;
+  }
+  if (r.restTotalS != null && (typeof r.restTotalS !== 'number' || !Number.isFinite(r.restTotalS) || r.restTotalS < 0)) {
+    return null;
+  }
+  if (!Array.isArray(r.steps) || r.steps.length === 0) return null;
+  for (const s of r.steps) {
+    if (!s || typeof s !== 'object') return null;
+    const st = s as Record<string, unknown>;
+    if (typeof st.exerciseId !== 'string' || st.exerciseId.length === 0) return null;
+    if (typeof st.globalIndex !== 'number' || !Number.isInteger(st.globalIndex) || st.globalIndex < 0) return null;
+    if (typeof st.setIndexInExercise !== 'number' || !Number.isInteger(st.setIndexInExercise)) return null;
+    if (typeof st.totalSetsInExercise !== 'number' || st.totalSetsInExercise <= 0) return null;
+    if (typeof st.targetReps !== 'number' || !Number.isFinite(st.targetReps) || st.targetReps < 0) return null;
+    if (st.targetWeight != null && (typeof st.targetWeight !== 'number' || !Number.isFinite(st.targetWeight))) {
+      return null;
+    }
+  }
+  /** The presented step must exist in the plan she sent, or "where she is" means nothing. */
+  if (r.currentIndex >= (r.steps as unknown[]).length) return null;
+  if (!Array.isArray(r.sets)) return null;
+  for (const s of r.sets) {
+    if (!s || typeof s !== 'object') return null;
+    const set = s as Record<string, unknown>;
+    if (typeof set.exerciseId !== 'string' || set.exerciseId.length === 0) return null;
+    if (typeof set.setIndex !== 'number' || !Number.isInteger(set.setIndex) || set.setIndex < 0) return null;
+    if (typeof set.actualReps !== 'number' || !Number.isFinite(set.actualReps) || set.actualReps < 0) return null;
+    if (set.actualWeight != null && (typeof set.actualWeight !== 'number' || !Number.isFinite(set.actualWeight))) {
+      return null;
+    }
+    if (typeof set.completedAt !== 'string' || Number.isNaN(Date.parse(set.completedAt))) return null;
+  }
+  if (typeof r.sentAt !== 'string' || Number.isNaN(Date.parse(r.sentAt))) return null;
+  return o as WatchLocalSession;
 }

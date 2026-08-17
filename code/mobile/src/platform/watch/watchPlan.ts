@@ -288,3 +288,94 @@ export function buildCoachWatchPlan(inp: {
     workouts,
   };
 }
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * "THERE IS NOTHING LEFT FOR YOU TO RUN" — the sentence the phone could not say.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ⛔ THE BUG, AS THE FOUNDER MET IT: a workout finished on one device, and the OTHER device still
+ * offering to start that same workout.
+ *
+ * The wrist prunes finished workouts with `doneWorkoutIds`, and that set only ever holds workouts
+ * **this watch finished itself**. A workout completed on the PHONE leaves her wrist by exactly one
+ * mechanism: the phone publishing a new snapshot without it. And when the last one is done the
+ * builders above return `null` — which the wrist reads as *nothing to store*
+ * (`if let plan = envelope.plan { store.savePlan(plan) }`), so it keeps the previous plan. She walks
+ * away from her phone, and the Start screen offers the workout she has just finished. Starting it
+ * writes a second record for one workout.
+ *
+ * ── WHY THE NULL IS RIGHT, AND STILL HAD TO BE ANSWERED ─────────────────────────────────────────
+ * `null` conflates two facts, and only one of them is safe to act on:
+ *
+ *   · "there is nothing the wrist can run"  → she must stop being offered stale work
+ *   · "I do not know yet"                   → `coachPlan` is null until an async read returns, so
+ *                                             EVERY cold start passes through this state. Sending an
+ *                                             empty plan there would wipe a good snapshot off her
+ *                                             wrist on every launch and break standalone training —
+ *                                             a worse bug than the one being fixed.
+ *
+ * The builders cannot tell those apart: they are handed sessions and asked what is runnable. Only
+ * the caller knows whether the week has actually been READ. So the builders keep their contract
+ * untouched, and the caller answers the second question by reaching for this.
+ *
+ * ⚠️ AN EMPTY `workouts` IS ENOUGH, AND NO SWIFT HAD TO CHANGE — read off the wrist to be sure:
+ * `WatchStore.savePlan` has no emptiness guard, and both `offlineLobby()` and `startLocalWorkout()`
+ * derive `remaining` from `stored.plan.workouts`. An empty list makes the offline Start screen
+ * return nil and a local start a no-op. Which is precisely "nothing left", said in the vocabulary
+ * the watch already speaks.
+ */
+export function emptyWatchPlan(inp: {
+  nowMs: number;
+  restInterS: number;
+  restTransitionS: number;
+}): WatchPlanSnapshot {
+  return {
+    schema: WATCH_PLAN_SCHEMA_VERSION,
+    planId: contentHash([]),
+    generatedAt: new Date(inp.nowMs).toISOString(),
+    restInterS: inp.restInterS,
+    restTransitionS: inp.restTransitionS,
+    workouts: [],
+  };
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * WHAT TO PUBLISH TO THE WRIST — the rule, in one testable place.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * The builders answer *what can the watch run?* and say `null` for "none". The wrist reads a null
+ * plan as *no news* and keeps whatever it stored last. Between those two truthful statements sat
+ * the founder's bug: a workout finished on the phone stayed on the wrist's Start screen, and
+ * starting it there wrote a second record for one workout.
+ *
+ * The missing question is *do we KNOW?*, and only the caller can answer it:
+ *
+ *   builder said a plan   → publish it
+ *   builder said null, week KNOWN    → publish an EMPTY plan: "there is nothing left to run"
+ *   builder said null, week UNKNOWN  → publish nothing, and leave her wrist exactly as it is
+ *
+ * ⚠️ THE THIRD LINE IS THE ONE THAT MAKES THIS SAFE. `coachPlan` is null until an async read
+ * returns, so every cold start passes through "unknown". Publishing an empty plan there would clear
+ * the snapshot off her wrist on every launch and break training with the phone in a locker — a
+ * worse failure than the one being fixed, and the reason this rule is a function and not an
+ * `?? empty` at the call site.
+ */
+export function watchPlanToPublish(inp: {
+  /** Whatever `buildCoachWatchPlan` / `buildWatchPlanSnapshot` returned. */
+  built: WatchPlanSnapshot | null;
+  /** True once the week has actually been read — NOT merely "the read was attempted". */
+  weekLoaded: boolean;
+  nowMs: number;
+  restInterS: number;
+  restTransitionS: number;
+}): WatchPlanSnapshot | null {
+  if (inp.built) return inp.built;
+  if (!inp.weekLoaded) return null;
+  return emptyWatchPlan({
+    nowMs: inp.nowMs,
+    restInterS: inp.restInterS,
+    restTransitionS: inp.restTransitionS,
+  });
+}

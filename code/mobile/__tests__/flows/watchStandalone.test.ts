@@ -13,7 +13,7 @@
 
 // 
 
-import { buildWatchPlanSnapshot } from '@/platform/watch/watchPlan';
+import { buildWatchPlanSnapshot, emptyWatchPlan, watchPlanToPublish } from '@/platform/watch/watchPlan';
 import {
   applyWatchCardioRecord,
   applyWatchSessionRecord,
@@ -26,6 +26,7 @@ import {
   isCardioRecordPayload,
   parseCardioRecord,
   parseSessionRecord,
+  WATCH_PLAN_SCHEMA_VERSION,
   WATCH_PROTOCOL_VERSION,
 } from '@/platform/watch/protocol';
 import { WATCH_EVENTS } from '@/platform/events';
@@ -477,5 +478,60 @@ describe('the last mile — a reconciled wrist run actually SURFACES', () => {
     expect(cardioPerformed(indoor.durationSec, indoor.distanceKm)).toBe(true); // duration carries it
     const agg = progressAggregate([], [indoor], '2026-07-01T00:00:00.000Z', 70, Date.parse('2026-07-28T12:00:00Z'));
     expect(agg.cardioKm).toBe(0);
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * A WORKOUT FINISHED ON ONE DEVICE MUST STOP BEING OFFERED ON THE OTHER.
+ *
+ * ⛔ THE FOUNDER'S REPORT: *"לפעמים למשל זה סיים אימון בשעון או בפלאפון אבל במסך של הצד השני זה כן
+ * נתן לי להתחיל את אותו האימון."*
+ *
+ * The wrist prunes finished workouts with `doneWorkoutIds`, and that set only holds workouts the
+ * WATCH finished. One finished on the phone leaves her wrist only when the phone publishes a new
+ * snapshot without it — and when the last one is done the builder returns `null`, which the wrist
+ * reads as *no news*, keeping the plan that still contains it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('the phone can say "there is nothing left to run"', () => {
+  const REST = { nowMs: NOW, restInterS: 90, restTransitionS: 120 };
+
+  it('⛔ publishes an EMPTY plan when the week is known and nothing remains', () => {
+    const out = watchPlanToPublish({ built: null, weekLoaded: true, ...REST });
+    expect(out).not.toBeNull();
+    expect(out!.workouts).toEqual([]);
+    expect(out!.schema).toBe(WATCH_PLAN_SCHEMA_VERSION);
+    // A real id, so the wrist's `savePlan` treats it as a NEW plan and resets its local done marks.
+    expect(out!.planId).toMatch(/^plan_/);
+  });
+
+  it('⛔ publishes NOTHING while the week is still unknown — a cold start must not wipe her wrist', () => {
+    /*
+     * `coachPlan` is null until an async read returns, so every launch passes through this state.
+     * Publishing an empty plan here would clear the snapshot off her wrist on every cold start and
+     * break training with the phone in a locker — a worse failure than the one being fixed.
+     */
+    expect(watchPlanToPublish({ built: null, weekLoaded: false, ...REST })).toBeNull();
+  });
+
+  it('passes a real plan through untouched, whatever the week flag says', () => {
+    const built = snapshot();
+    expect(watchPlanToPublish({ built, weekLoaded: true, ...REST })).toBe(built);
+    expect(watchPlanToPublish({ built, weekLoaded: false, ...REST })).toBe(built);
+  });
+
+  it('the empty plan is the shape the wrist already knows how to read', () => {
+    /*
+     * Verified against the watch rather than assumed: `WatchStore.savePlan` has no emptiness guard,
+     * and both `offlineLobby()` and `startLocalWorkout()` derive `remaining` from
+     * `stored.plan.workouts` — so an empty list makes the offline Start screen return nil and a
+     * local start a no-op. No Swift needed changing; this asserts the shape that relies on.
+     */
+    const empty = emptyWatchPlan(REST);
+    expect(Object.keys(empty).sort()).toEqual(
+      ['generatedAt', 'planId', 'restInterS', 'restTransitionS', 'schema', 'workouts'].sort(),
+    );
+    expect(empty.workouts).toHaveLength(0);
   });
 });

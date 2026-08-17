@@ -197,6 +197,25 @@ final class LocalWorkoutEngine {
     store.clearActiveSession()
   }
 
+  /// Tear the local session down because the PHONE HAS TAKEN IT OVER — the live handover.
+  ///
+  /// ⛔ THIS IS NOT `discard()`, AND THE DIFFERENCE IS THE WHOLE POINT. `discard` refuses a session
+  /// with sets in it, and must: it exists for a local session that was never used, and a guard is
+  /// the only thing standing between that path and deleting work. Here the sets are not being
+  /// thrown away — they are ON THE PHONE, which said so by name.
+  ///
+  /// ⚠️ THE CALLER MUST HAVE MATCHED `adoptedRecordId` AGAINST `state.recordId`. Releasing on
+  /// anything weaker — "the phone seems to be running something" — is how a workout disappears
+  /// between two devices with nobody able to say where it went.
+  func release() {
+    guard !finished else { return }
+    finished = true
+    cancelRestAdvance()
+    onFrame = nil
+    onComplete = nil
+    store.clearActiveSession()
+  }
+
   // MARK: Internals
 
   private func isResting(_ phase: String) -> Bool {

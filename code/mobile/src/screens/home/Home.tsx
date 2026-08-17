@@ -30,7 +30,7 @@ import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections,
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
-import { buildWatchPlanSnapshot, buildCoachWatchPlan } from '@/platform/watch/watchPlan';
+import { buildCoachWatchPlan, watchPlanToPublish } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
 import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
@@ -96,6 +96,18 @@ export function Home({ navigation, route }: Props) {
    */
   const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
   const [doneCoachIds, setDoneCoachIds] = useState<string[]>([]);
+  /**
+   * ⛔ HAS THE WEEK ACTUALLY BEEN READ? — the question `coachPlan === null` cannot answer.
+   *
+   * `null` is BOTH "the read has not returned yet" (every cold start) and "there is no week". The
+   * standalone watch plan needs to tell those apart: only once the week is genuinely known may the
+   * phone say "there is nothing left to run" and clear the wrist's stored plan. Before that, saying
+   * it would wipe a good snapshot off her wrist on every launch. See `emptyWatchPlan`.
+   *
+   * ⚠️ SET ONLY ON THE SUCCESSFUL READ. A throw leaves it false: a read that failed is not knowledge
+   * about her week, and the safe answer to "I do not know" is to leave the wrist exactly as it is.
+   */
+  const [weekLoaded, setWeekLoaded] = useState(false);
 
   const [chosenId, setChosenId] = useState<string | null>(null);
 
@@ -198,6 +210,8 @@ export function Home({ navigation, route }: Props) {
          * translating this way is honest when `coachWeek`'s header refuses the other direction.
          */
         setCoachPlan(plan);
+        // The week is now KNOWN — whatever it turned out to be. See `weekLoaded`.
+        setWeekLoaded(true);
         /*
          * The placements come off the ENGINE's week, which is the only thing that knows why a lift
          * was chosen. Built for the whole week rather than per tap: this is the screen she opens
@@ -447,7 +461,8 @@ export function Home({ navigation, route }: Props) {
       refreshLearnedRests(history);
       if (cancelled) return;
       setWatchPlan(
-        buildCoachWatchPlan({
+        watchPlanToPublish({
+          built: buildCoachWatchPlan({
           /*
            * ⛔ THE HISTORY GOES TO THE WRIST (founder 2026-08-04): *"send the history for a
            * standalone workout too."* Without it a phone-in-a-locker workout drew dashes where a
@@ -469,6 +484,11 @@ export function Home({ navigation, route }: Props) {
           restInterSFor: (exerciseId: string) => (restIsLearnedFor(exerciseId) ? restInterSecondsFor(exerciseId) : null),
           restInterS: REST_INTER_S,
           restTransitionS: restTransitionSeconds(),
+          }),
+          weekLoaded,
+          nowMs: Date.now(),
+          restInterS: REST_INTER_S,
+          restTransitionS: restTransitionSeconds(),
         }),
       );
     })();
@@ -476,7 +496,7 @@ export function Home({ navigation, route }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, coachPlan, coachWorkouts, doneCoachIds]);
+  }, [isFocused, coachPlan, coachWorkouts, doneCoachIds, weekLoaded]);
 
   /**
    * THE BRIEFING — Hush's own sentence about what it did to this week's plan (domain/weekBriefing).

@@ -76,6 +76,13 @@ export const WATCH_EVENTS = {
   reconnected: 'watch_reconnected',
   /** A state envelope was pushed to the watch. */
   statePublished: 'watch_state_published',
+  /**
+   * The OS refused a state envelope — `updateApplicationContext` throws when the session is not
+   * activated and on payload-too-large. It used to be swallowed while `statePublished` fired
+   * anyway, so a frame that never left the phone was recorded as a success. A wrist stuck on stale
+   * state is invisible in the dataset without this.
+   */
+  statePublishFailed: 'watch_state_publish_failed',
   /** A watch-originated intent was accepted and mapped to a session event.
    *  Carries `latencyMs` (issuedAt→received) = watch completion latency. */
   actionReceived: 'watch_action_received',
@@ -100,6 +107,16 @@ export const WATCH_EVENTS = {
   recordReceived: 'watch_record_received',
   /** A run/walk the WRIST recorded, delivered for reconciliation (founder 2026-07-28). */
   cardioRecordReceived: 'watch_cardio_record_received',
+  /**
+   * The wrist offered a workout it is RUNNING, so the phone can take it over mid-flight — the live
+   * handover (`WatchLocalSession`). `outcome`: 'adopted' | 'duplicate' | 'refused' | 'rejected',
+   * with `reason` on the last two.
+   *
+   * This is the one event that says whether "start on the wrist, open the phone, see the workout"
+   * actually worked in the field. A handover that silently fails is invisible otherwise: she just
+   * sees Today, which is exactly what she saw before it was built.
+   */
+  localSessionOffered: 'watch_local_session_offered',
 } as const;
 
 /** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */

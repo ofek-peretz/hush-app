@@ -36,8 +36,9 @@ import { i18n } from '@/i18n';
 import { loadSetup } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { WatchSession } from '@/platform/watch/watchBridge';
-import { isCardioRecordPayload, type WatchLobby, type WatchPlanSnapshot } from '@/platform/watch/protocol';
-import { applyWatchCardioRecord, applyWatchSessionRecord } from '@/platform/watch/watchReconcile';
+import { isCardioRecordPayload, type WatchLobby, type WatchLocalSession, type WatchPlanSnapshot } from '@/platform/watch/protocol';
+import { applyWatchCardioRecord, applyWatchSessionRecord, watchSessionId } from '@/platform/watch/watchReconcile';
+import { adoptWatchSession, decideAdoption } from '@/platform/watch/watchAdopt';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
@@ -397,6 +398,16 @@ export interface SessionView {
   /** Rebuild the interrupted session exactly where it was (logged sets kept, wall-clock
    *  rest caught up). False when nothing usable remains — the caller falls back to Begin. */
   resumeSaved: () => Promise<boolean>;
+  /**
+   * Take over a workout the WRIST is running (the live handover). Resolves with what happened:
+   * `adopted` — the phone now holds it and the stage will draw; `duplicate` — it already does, or
+   * the workout has already come home as a finished record; `refused` — a different session is live
+   * here, or the offered state is one the phone could not honestly stand in.
+   *
+   * Never overwrites a live session, and never half-adopts: every question is answered before
+   * anything is mutated. See the implementation.
+   */
+  adoptLocalSession: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
   /**
    * End the current step when it is NOT a set — held, covered, or simply done.
@@ -975,6 +986,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // authority; the longer rest re-publishes to every surface).
   const watchAddRestRef = useRef<(seconds: number) => void>(() => {});
   const watchPainRef = useRef<(area: string, severity: string) => void>(() => {});
+  /** The live handover — see the store's `adoptLocalSession`. Bound below, like every other wrist
+   *  action, so the bridge is built once and never closes over a stale implementation. */
+  const watchAdoptRef = useRef<(local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>>(
+    async () => 'refused',
+  );
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
   // never closes over stale actions. Transport is a no-op until the watchOS target
   // exists — all authority/validation/telemetry runs regardless.
@@ -995,6 +1011,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // This key was MISSING — the bridge's `this.d.reportPain?.(area)` evaluated to undefined and
       // the athlete's report died in silence, with every other layer of the chain correct.
       reportPain: (area, severity) => watchPainRef.current(area, severity),
+      // The wrist offering a workout it is already running — the live handover (WT: "start on the
+      // watch, open the phone, see the workout"). The store owns the decision; see below.
+      adoptLocalSession: (local) => watchAdoptRef.current(local),
     });
   }
 
@@ -1658,6 +1677,80 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
+      /**
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       * THE WRIST IS RUNNING A WORKOUT — TAKE IT OVER.
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       *
+       * ⛔ FOUNDER: *"אם התחלתי אימון בשעון ואני נכנס לאפליקציה בפלאפון המסך של האימון צריך
+       * להופיע."*
+       *
+       * A workout begun with the phone away runs on the wrist's own engine, which by design says
+       * nothing until it is over. So opening the phone mid-workout showed Today — and offered to
+       * start the very workout she was in the middle of.
+       *
+       * This is the phone taking the authority BACK, mid-flight. It walks the same road
+       * `resumeSaved` walks — one session, one plan, one machine, then `START` — because inventing
+       * a second way to put a live session into this store is inventing a second way to log a set.
+       *
+       * ── THE ORDER IS THE SAFETY ─────────────────────────────────────────────────────────────
+       * Every question that can be answered is answered BEFORE anything is mutated. A refusal must
+       * leave this store exactly as it found it; a half-adopted session — plan swapped, machine
+       * not — is the one outcome worse than not adopting at all.
+       */
+      async adoptLocalSession(local: WatchLocalSession): Promise<'adopted' | 'duplicate' | 'refused'> {
+        const id = watchSessionId(local.recordId);
+        /* The cheap refusals first, on facts already in memory — no read of her history is needed
+           to know that a different workout is live on this phone. */
+        const quick = decideAdoption({
+          liveSessionId: sessionRef.current?.id ?? null,
+          liveSessionActive: plan.length > 0,
+          historyIds: [],
+          offeredId: id,
+        });
+        if (quick !== 'proceed') return quick;
+
+        const history = await db.loadHistory().catch(() => []);
+        /* …and then the one that needs her record: already finished and come home. The wrist's
+           record may beat its own offer, and a straggler must not resurrect a saved workout. */
+        const verdict = decideAdoption({
+          liveSessionId: sessionRef.current?.id ?? null,
+          liveSessionActive: plan.length > 0,
+          historyIds: history.map((h) => h.id),
+          offeredId: id,
+        });
+        if (verdict !== 'proceed') return verdict;
+
+        const adopted = adoptWatchSession(local, Date.now());
+        /* A state the phone could not honestly stand in (a pause that does not say what it froze,
+           a step index outside the plan she sent). Refuse and leave the workout on her wrist. */
+        if (!adopted) return 'refused';
+
+        sessionRef.current = adopted.session;
+        historyRef.current = history; // her learned grid for live Loop 1
+        refreshLearnedRests(history); // …and her learned REST timer (S-17)
+        restStartedAtRef.current = adopted.restStartedAtMs;
+        /* The wrist's +15s is already inside the absolute `restEndsAt` it sent, so there is no
+           extra left to carry — counting it twice would hand her a rest she never asked for. */
+        restExtraSecondsRef.current = 0;
+        pendingRestSRef.current = null;
+        pauseStartedAtRef.current = null;
+        setRestResumeRemainingS(adopted.restRemainingS);
+        /*
+         * ⛔ BEFORE THE DISPATCH, NOT AFTER THE RESOLVE. Going live is what triggers the first
+         * mirror frame, and that frame has to carry the ack — otherwise the wrist, which is still
+         * running this workout, has no way to know it may let go until the phone's next state
+         * change. Mid-rest that is ninety seconds of both devices believing they are in charge.
+         */
+        watchRef.current?.noteAdopted(local.recordId);
+        dispatch({ type: 'START', plan: adopted.plan, session: adopted.session, machine: adopted.machine });
+        /* Best-effort, and deliberately not awaited into the outcome: the session is live in this
+           store either way, and the wrist keeps its own copy until it sees the phone's mirror — so
+           a failed write costs a crash-resume, never the workout. */
+        void db.saveActiveSession(adopted.session).catch(() => {});
+        return 'adopted';
+      },
+
       async completeSet(override): Promise<CompleteResult> {
         const session = sessionRef.current;
         if (!current || !session) return { ended: false, unlockedPortrait: false };
@@ -2080,6 +2173,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!sharpness) return; // she never answered — the engine may not choose a window for her
     for (const muscle of musclesForWristArea(area)) void app.reportPain(muscle, sharpness);
   };
+  // The live handover, straight to the store's own action — no translation layer, because there is
+  // nothing to translate: the wrist is handing over a session, not proposing one.
+  watchAdoptRef.current = (local) => view.adoptLocalSession(local);
 
   return <Ctx.Provider value={view}>{children}</Ctx.Provider>;
 }
