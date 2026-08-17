@@ -40,7 +40,24 @@ export function decideVolume(inp: VolumeInput): VolumeResult {
   const { sets, minSets, maxSets, completedAll, anyAdvanced, unfinishedStreak } = inp;
 
   if (completedAll && anyAdvanced) {
-    // S-32: earn a set — unless the time budget is already full (S-64 ceiling).
+    /*
+     * S-32: earn a set — unless the time budget is already full (S-64 ceiling).
+     *
+     * ⛔ AND A TOTAL ALREADY ABOVE THE CEILING IS BROUGHT BACK TO IT. This only ever refused to
+     * GROW, and `sets` is her PERSISTED total while `maxSets` is recomputed from the current week —
+     * so the two can start out of order, and nothing here could ever restore them:
+     *
+     *     she trains 6 days, Loop 3 climbs Back to 30 · she switches to 3 days · maxSets is now 16
+     *     → every occurrence for ever after returned { sets: 30, 'capped' }
+     *
+     * Thirty is then what `distributeMuscleSets` is handed on every regeneration, and the clock
+     * has to cut it back by hand each time. The header's claim — *"the ceiling is her time budget
+     * (S-64)"* — is unenforceable if the state is allowed to sit above it, and `capped` said "you
+     * earned a set and the clock is full" on a week where she had earned nothing.
+     *
+     * A drop to the ceiling is not a punishment and not a cut: `maxSets` IS what her minutes hold.
+     */
+    if (sets > maxSets) return { sets: maxSets, decision: 'capped' };
     if (sets + 1 > maxSets) return { sets, decision: 'capped' };
     return { sets: sets + 1, decision: 'progress' };
   }
@@ -52,8 +69,24 @@ export function decideVolume(inp: VolumeInput): VolumeResult {
 
   // Not completed.
   if (unfinishedStreak >= 2) {
-    // S-34: cut a set, but never below the floor (S-35).
-    if (sets - 1 < minSets) return { sets: minSets, decision: 'at_floor' }; // S-35/36: assembly acts
+    /*
+     * S-34: cut a set, but never below the floor (S-35).
+     *
+     * ⛔ THE FLOOR CLAMP USED TO *RAISE* VOLUME ON A FAILED WEEK. It read
+     * `if (sets - 1 < minSets) return { sets: minSets }`, and that condition is true for every
+     * `sets <= minSets` — including `sets < minSets`, where returning `minSets` is an INCREASE:
+     *
+     *     sets 1, minSets 3, she failed to finish twice  →  { sets: 3, 'at_floor' }
+     *
+     * Two failed occurrences bought her two extra sets, and because `v5Engine` logs any move
+     * (`res.sets !== current`), the Saturday mirror then narrated "I added a set" about a week she
+     * could not finish. `sets` starts below the floor whenever a muscle's whole-week prescription
+     * does — a muscle the clock has squeezed to one or two sets, which is exactly the muscle least
+     * able to absorb more.
+     *
+     * The floor is a floor, not a target: never go under it, and never climb to it on a failure.
+     */
+    if (sets <= minSets) return { sets: Math.min(sets, minSets), decision: 'at_floor' }; // S-35/36: assembly acts
     return { sets: sets - 1, decision: 'cut' };
   }
 

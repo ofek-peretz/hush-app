@@ -7,7 +7,7 @@ export * from './types';
 export * from './constants';
 export { snapDown, nextRung, prevRung, moveRungs, loadFloor } from './grid';
 export { median, percentileNearestRank, theilSenSlope } from './stats';
-export { repsPerRung, rungsForHeadroom } from './repsPerRung';
+export { repsPerRung, rungsForHeadroom, bootstrapPerRung } from './repsPerRung';
 export { correctInSession, type Loop1Input, type Loop1Result } from './loop1';
 export { learnedRestS, setsToMinutes, maxSetsInBudget, fitsBudget } from './timeBudget';
 export { bandFor, DEFAULT_REP_BAND } from './repBand';

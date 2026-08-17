@@ -152,12 +152,81 @@ export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
  * racks step in 2s and often skip, but that is a per-gym inventory question and inventing a ladder
  * here would be the engine guessing — which it does not do. Flagged for the founder, not assumed.
  */
-function snapToStock(kg: number, ex: Exercise): number {
+export function snapToStock(kg: number, ex: Exercise): number {
   const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
   if (inc <= 0) return kg; // bodyweight — no load axis to land on
   const floor = ex.equipment === 'barbell' ? BAR_KG : 0;
   const rungs = Math.max(0, Math.round((kg - floor) / inc));
   return floor + rungs * inc;
+}
+
+/**
+ * ════ B-1b · HOW FAR OFF THE MODEL SHE ACTUALLY IS, IN ONE NUMBER ════
+ *
+ * ⛔ MEASURED, 2026-08-16 — three athletes, ten weeks, the first set of every lift never performed:
+ *
+ *     athlete the model fits .......  85.0% in band  ·  0% over  ·  15% under
+ *     athlete the model fits .......  57.7% in band  ·  0% over  ·  42% under
+ *     athlete WEAKER than modelled    0.0% in band  ·  0% over  · 100% under, by 6.6 reps
+ *
+ * B-1 has exactly one failure mode and it is the wrong one. Its own register row says the seed must
+ * err LIGHT — *"a light seed becomes Loop 1's visible 'you did 14, so I added weight'; a heavy one
+ * fails her very first set"* — and shipped, it is never light and routinely heavy.
+ *
+ * ── ⚠️ WHY THIS IS NOT A NEW BOOTSTRAP ──────────────────────────────────────────────────────────
+ * It introduces no number about bodies. It is the ratio between what B-1 PREDICTED for the lifts she
+ * has done and what she DEMONSTRATED on them — entirely her own data, the same move S-9 makes with a
+ * single load, taken one level up. The median across her lifts, for the F-13 reason: one freak
+ * session may not move it.
+ *
+ * ── ⛔ IT MAY ONLY MAKE THE SEED LIGHTER, AND THAT ASYMMETRY IS THE POINT ────────────────────────
+ * Clamped at 1. The two errors are not equal and the register already says so: light costs her one
+ * set that Loop 1 raises from inside and is the product's best moment; heavy costs her the first set
+ * of a lift she has never met. Measured, "over" was 0% for every athlete — the model is never too
+ * light — so a factor that can only reduce fixes the failure that exists and cannot create the one
+ * that does not.
+ *
+ * ⚠️ AND IT IS FLOORED, because a ratio is only as good as its sample: 0.5 is the least the model may
+ * be scaled to, which is far past any athlete this measured and stops a single mis-logged set (a
+ * 2.5 kg entry for 25) from halving her whole programme.
+ *
+ * `null` until she has `MIN_SCALE_LIFTS` distinct lifts — an evidence gate of the F-12 family. Below
+ * it the model stands alone, exactly as it does today.
+ */
+export const MIN_SCALE_LIFTS = 3;
+export const PERSONAL_SCALE_FLOOR = 0.5;
+
+export function personalScale(
+  history: readonly { sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean }[] }[],
+  profile: LoadProfile,
+  exerciseById: (id: string) => Exercise | undefined,
+  /** Her Tlo — what "a working load" means to her. The ratio is taken at the same rep target B-1 is. */
+  repTarget: number,
+  epley: (load: number, reps: number) => number,
+): number | null {
+  /** Per lift, the heaviest thing she has demonstrated — one sample each, so a favourite cannot vote twice. */
+  const best = new Map<string, number>();
+  for (const s of history)
+    for (const log of s.sets) {
+      if (log.isApproach || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
+      const e1rm = epley(log.actualWeight, log.actualReps);
+      if (e1rm > (best.get(log.exerciseId) ?? 0)) best.set(log.exerciseId, e1rm);
+    }
+
+  const ratios: number[] = [];
+  for (const [id, e1rm] of best) {
+    const ex = exerciseById(id);
+    if (!ex) continue;
+    const modelled = modelledLoadKg(ex, profile);
+    if (modelled == null || modelled <= 0) continue;
+    ratios.push(e1rm / (1 + repTarget / 30) / modelled); // her working load ÷ the one B-1 predicted
+  }
+  if (ratios.length < MIN_SCALE_LIFTS) return null;
+
+  ratios.sort((a, b) => a - b);
+  const mid = ratios.length >> 1;
+  const median = ratios.length % 2 ? ratios[mid] : (ratios[mid - 1] + ratios[mid]) / 2;
+  return clamp(median, PERSONAL_SCALE_FLOOR, 1);
 }
 
 export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {

@@ -364,6 +364,11 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
        */
       lastReps: [8, 8, 7], lastLoadKg: 20,
       blockId: 'b1', reasonType: 'increase', reasonDelta: 2.5, loadSetup: null, restInterS: 90,
+      /* ⛔ AND WHETHER THAT REST IS HERS (2026-08-16). The wrist's "your pace" line used to infer it
+         from `restInterS != nil`, which is also true of a rest the COACH wrote — so the badge put
+         her name on a number she had never produced. The phone states it now, and this sample is
+         what proves the phone really sends it: exactly the check that caught `lastReps`. */
+      restIsLearned: true,
     };
     const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step] };
     const plan: WatchPlanSnapshot = {

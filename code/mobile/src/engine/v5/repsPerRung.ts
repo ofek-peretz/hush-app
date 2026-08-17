@@ -8,9 +8,16 @@
  */
 
 import type { Band, SetPerf, SessionRecord, ExerciseMeta } from './types';
-import { median } from './stats';
+import { theilSenSlope } from './stats';
 import { nextRung, isBigJump } from './grid';
-import { MIN_PAIRS_FOR_SLOPE, REST_BAND_WIDTH_S, RECENCY_WINDOW_SESSIONS, BOOTSTRAP_RUNGS_PER_MOVE } from './constants';
+import { epley, loadForReps } from '@/engine/loadMath';
+import {
+  MIN_PAIRS_FOR_SLOPE,
+  REST_BAND_WIDTH_S,
+  RECENCY_WINDOW_SESSIONS,
+  BOOTSTRAP_RUNGS_PER_MOVE,
+  EPLEY_VALID_REPS,
+} from './constants';
 
 interface FitPoint {
   load: number;
@@ -57,37 +64,47 @@ export function repsPerRung(
   const pts = fitPoints(session, history);
   if (pts.length < 2) return null;
 
-  const slopes: number[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    for (let j = i + 1; j < pts.length; j++) {
-      if (Math.abs(pts[j].load - pts[i].load) < 1e-9) continue; // same load — no slope
-      if (Math.abs(pts[j].rest - pts[i].rest) > REST_BAND_WIDTH_S) continue; // not like-for-like (L3)
-      // ════ L3 ALSO MEANS THE SAME PLACE IN THE EXERCISE ════
-      //
-      // Set 1 and set 4 are not comparable however equal their rest: the accumulated fatigue between
-      // them is a larger confound than the rest ever was, and it is not noise — it is signed. Loop 1
-      // moves the load as the sets go on, so a set-1/set-4 pair reads "less weight AND fewer reps",
-      // a POSITIVE slope, which drags the median toward zero, SHRINKS perRung, and — since a move is
-      // headroom ÷ perRung — makes every correction BIGGER than her own number warrants.
-      //
-      // Refusing those pairs only WITHIN one occurrence closed half the door. Set 1 of Monday
-      // against set 4 of Thursday carries the identical confound, and across a sixteen-week
-      // simulation it was the dominant one: a fitted 1.0 rep/rung where her real number was 2.5, so
-      // a 12-rep set on a 7 kg dumbbell raised her TWO rungs, she got 6 reps, the occurrence stopped
-      // clearing — and S-22 needs every set to clear. Loop 1's overshoot was quietly cancelling
-      // Loop 2's progression, over and over.
-      //
-      // So the pair must come from two different occurrences AND the same place in the exercise.
-      // When that leaves too few pairs, F-12 is not met and B-5's one cautious rung stands — the
-      // failure direction that cannot hurt her.
-      if (pts[i].occurrence === pts[j].occurrence) continue;
-      if (pts[i].position !== pts[j].position) continue;
-      slopes.push((pts[j].reps - pts[i].reps) / (pts[j].load - pts[i].load));
-    }
-  }
-  if (slopes.length < MIN_PAIRS_FOR_SLOPE) return null;
+  /*
+   * ⛔ ONE IMPLEMENTATION OF F-13 (2026-08-16). This loop WAS a second Theil–Sen, hand-rolled beside
+   * the declared one in `stats.theilSenSlope` — which had no production caller at all. F-13 says
+   * *"'a robust fit' is an algorithm FAMILY; this is the single algorithm chosen, and nothing else
+   * may be substituted"*, and the engine carried two, of which the unused one was the one under test.
+   *
+   * The split had a real cause: L3 refuses a PAIR, not a point, and a fit that only sees `{x, y}`
+   * cannot ask about rest, occurrence or position. `theilSenSlope` now takes the predicate, so the
+   * estimator is shared and the FILTER — which is this file's business — stays here.
+   *
+   * ════ WHAT THE PREDICATE REFUSES, AND WHY EACH CLAUSE EARNED ITS PLACE ════
+   *
+   * · **Not like-for-like rest (L3).** A set after a three-minute breather is not evidence about a
+   *   set after forty-five seconds.
+   * · **The same occurrence.** Set 1 and set 4 are not comparable however equal their rest: the
+   *   accumulated fatigue between them is a larger confound than the rest ever was, and it is not
+   *   noise — it is SIGNED. Loop 1 moves the load as the sets go on, so a set-1/set-4 pair reads
+   *   "less weight AND fewer reps", a POSITIVE slope, which drags the median toward zero, SHRINKS
+   *   perRung, and — since a move is headroom ÷ perRung — makes every correction BIGGER than her own
+   *   number warrants.
+   * · **A different POSITION in the exercise.** Refusing pairs only within one occurrence closed
+   *   half the door: set 1 of Monday against set 4 of Thursday carries the identical confound, and
+   *   across a sixteen-week simulation it was the dominant one — a fitted 1.0 rep/rung where her
+   *   real number was 2.5, so a 12-rep set on a 7 kg dumbbell raised her TWO rungs, she got 6 reps,
+   *   and the occurrence stopped clearing. Loop 1's overshoot was quietly cancelling Loop 2's
+   *   progression, over and over.
+   *
+   * When that leaves too few pairs, F-12 is not met and B-5's cautious step stands — the failure
+   * direction that cannot hurt her.
+   */
+  const medSlopeRaw = theilSenSlope(
+    pts.map((p) => ({ ...p, x: p.load, y: p.reps })),
+    MIN_PAIRS_FOR_SLOPE,
+    (a, b) =>
+      Math.abs(b.rest - a.rest) <= REST_BAND_WIDTH_S &&
+      a.occurrence !== b.occurrence &&
+      a.position === b.position,
+  );
+  if (medSlopeRaw == null) return null;
 
-  const medSlope = median(slopes); // d(reps)/d(kg), typically negative
+  const medSlope = medSlopeRaw; // d(reps)/d(kg), typically negative
   const priceAt = atLoad ?? Math.max(...pts.map((p) => p.load));
   const rungKg = nextRung(priceAt, meta.equipment, meta.observedLoads) - priceAt;
   const perRung = -medSlope * (rungKg > 0 ? rungKg : 1);
@@ -95,12 +112,60 @@ export function repsPerRung(
 }
 
 /**
- * How many rungs a move of `headroomReps` (reps above/below the band edge) is worth. With a fitted
- * reps-per-rung, size the move to her number; without one, B-5 — a single cautious rung. Always ≥ 1.
+ * ════ B-5, DERIVED · WHAT ONE RUNG IS WORTH BEFORE SHE HAS A SLOPE ════
+ *
+ * Reps-per-rung at `load`, implied by the e1RM model the app already displays, when F-12 is not yet
+ * met. One rep of headroom at the band edge `edgeReps` is worth `loadForReps(epley(load, edgeReps+1),
+ * edgeReps) − load` kilograms — the model evaluated twice, with no algebra copied out of `loadMath`
+ * and no constant invented. Divide the real rung by that and the answer is in the same units the
+ * fitted statistic speaks in, so `rungsForHeadroom` needs to know nothing about which one it has.
+ *
+ * ⚠️ IT IS INDEPENDENT OF THE REPS SHE ACTUALLY DID — deliberately. The price of a rep is a property
+ * of the load and the band, so the SAME slope sizes a 1-rep miss and a 20-rep overshoot; the miss's
+ * magnitude enters through the headroom, exactly where the fitted path puts it.
+ *
+ * ⚠️ AND IT IS NOT FED TO `rungOutOfReach`. S-28 is a claim that a measured FACT of hers forbids the
+ * step, and the register is explicit that it stays silent until F-12 is met. A modelled slope is not
+ * that fact. This sizes a move; it never cancels one.
+ *
+ * Returns null when the model cannot price the step (no load, no rung) — there B-5's flat rung stands.
  */
-export function rungsForHeadroom(headroomReps: number, perRung: number | null): number {
-  if (perRung == null || perRung <= 0) return BOOTSTRAP_RUNGS_PER_MOVE;
-  return Math.max(1, Math.floor(Math.abs(headroomReps) / perRung));
+export function bootstrapPerRung(load: number | null, edgeReps: number, meta: ExerciseMeta): number | null {
+  if (load == null || !(load > 0) || !Number.isFinite(edgeReps)) return null;
+  const rungKg = nextRung(load, meta.equipment, meta.observedLoads) - load;
+  if (!(rungKg > 0)) return null;
+  const kgPerRep = loadForReps(epley(load, edgeReps + 1), edgeReps) - load;
+  if (!(kgPerRep > 0)) return null;
+  return rungKg / kgPerRep;
+}
+
+/**
+ * How many rungs a move of `headroomReps` (reps above/below the band edge) is worth. Her fitted
+ * reps-per-rung first (F-13); else the modelled bootstrap (B-5, from `bootstrapPerRung`); else the
+ * one cautious rung. Always ≥ 1.
+ *
+ * ⛔ THE ROUNDING IS ASYMMETRIC, BECAUSE THE TWO ERRORS ARE NOT THE SAME SIZE.
+ *
+ * Both directions used to round DOWN, which reads as caution and is only caution going up. Guessing
+ * a raise too small costs one under-stimulating set. Guessing a DROP too small leaves her under a
+ * weight that already beat her, for the rest of an exercise she has two corrections to escape — the
+ * set is lost either way, and this one can hurt her. So a raise keeps `floor` (never prescribe iron
+ * the evidence has not paid for) and a drop takes `ceil` (when the model is between two rungs, take
+ * the lighter one).
+ */
+export function rungsForHeadroom(
+  headroomReps: number,
+  perRung: number | null,
+  direction: 'up' | 'down' = 'up',
+  /** B-5's modelled slope, used only when hers is not yet fitted. */
+  fallbackPerRung: number | null = null,
+): number {
+  const slope = perRung != null && perRung > 0 ? perRung : fallbackPerRung;
+  if (slope == null || slope <= 0) return BOOTSTRAP_RUNGS_PER_MOVE;
+  // F-16 — past the end of the load–rep continuum the extra reps are not evidence about iron.
+  const headroom = Math.min(Math.abs(headroomReps), EPLEY_VALID_REPS);
+  const exact = headroom / slope;
+  return Math.max(1, direction === 'down' ? Math.ceil(exact) : Math.floor(exact));
 }
 
 /**

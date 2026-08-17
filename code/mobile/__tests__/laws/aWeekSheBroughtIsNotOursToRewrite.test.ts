@@ -189,12 +189,20 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
      * `generateProgram`, so no assembly pass can run. Asserted by the shape of the code around each
      * gate — the `return` must come first, or the guard is decoration.
      */
-    const gates = [...STORE.matchAll(/if \(!engineMayRebuild\(state\.program\)\) return;/g)];
-    expect(gates.length).toBe(3); // reportPain · updateProfileInfo · answerEaseCheck
+    // ⚠️ `return;` OR `return false;` — `saveLibrary` reports the outcome to its caller so the
+    // screen can say what actually happened, and a returned value is still a return BEFORE any
+    // assembly runs, which is the whole of what this law checks.
+    const gates = [...STORE.matchAll(/if \(!engineMayRebuild\(state\.program\)\) return(?: false)?;/g)];
+    // ⚠️ 3 → 4 on 2026-08-16: `saveLibrary` (her picks and refusals in the exercise library) is the
+    // fourth thing she can do that reshapes which lifts a week is made of, so it rebuilds — and it
+    // asks the same question first. The count is named rather than loosened on purpose: the way this
+    // rule dies is a FIFTH trigger written by someone who never read this file.
+    expect(gates.length).toBe(4); // reportPain · updateProfileInfo · answerEaseCheck · saveLibrary
     for (const g of gates) {
       const after = STORE.slice(g.index!, g.index! + 400);
       // The very next statement is the build — nothing may sit between the guard and what it guards.
-      expect(after).toMatch(/return;\s*(\/\/[^\n]*\n\s*)*const rebuilt = await model\.generateProgram/);
+      // `return;` or `return false;` — the value is for the CALLER's message; the return is the guard.
+      expect(after).toMatch(/return(?: false)?;\s*(\/\/[^\n]*\n\s*)*(\/\*[\s\S]*?\*\/\s*)*const rebuilt = await model\.generateProgram/);
     }
   });
 

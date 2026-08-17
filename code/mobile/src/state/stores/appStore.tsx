@@ -193,6 +193,12 @@ interface AppApi extends AppState {
   /** Undo an engine ROTATION and pin the lift back (S-71, asked out loud). No-op for anything that
    *  is not a live rotation — a graduation is not resistible, and her own swap is not ours to undo. */
   undoEngineSwap: (anchorExerciseId: string) => Promise<void>;
+  /**
+   * What she DECLARED in the exercise library: the lifts she picked per muscle, and the ones she
+   * refused. Saved together and the week rebuilt on the same road a body-map edit travels — both
+   * are her reshaping which work the engine may deal her, so both must land the same way.
+   */
+  saveLibrary: (chosenByMuscle: Record<string, string[]>, refusedIds: string[]) => Promise<boolean>;
   /** Reconcile calibration/mode to the backend's completed-session count (source of truth). */
   syncCalibration: () => Promise<void>;
   /** Drain offline-completed sessions to the backend (reconcile on reconnect, §6.4). */
@@ -1031,10 +1037,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
         });
-        if (rebuilt) {
-          await db.saveProgram(rebuilt);
-          dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
-        }
+        if (!rebuilt) return false;
+        await db.saveProgram(rebuilt);
+        dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        return true;
       },
 
       async adoptImportedProgram(program) {
@@ -1085,10 +1091,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
         });
-        if (rebuilt) {
-          await db.saveProgram(rebuilt);
-          dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
-        }
+        if (!rebuilt) return false;
+        await db.saveProgram(rebuilt);
+        dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        return true;
       },
 
       async updateProfileInfo(fields) {
@@ -1220,6 +1226,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * wants a different exercise she can say so, which is a better door than a double tap that
          * had to infer what she meant.
          */
+      },
+
+      /**
+       * ════ HER PICKS AND HER REFUSALS, AND THE WEEK THAT COMES BACK ════
+       *
+       * ⛔ FOUNDER, 2026-08-16: *"תרגילים אהובים או שנואים או ספרייה של תרגילים"*.
+       *
+       * `programAssembly` has honoured both since the same day — her picks take the leading seats for
+       * a muscle and the engine fills what the volume still affords behind them; a refusal is a GATE
+       * no score may overrule. What did not exist was any way for her to say either, which is a
+       * feature that is finished everywhere except where she can reach it.
+       *
+       * ⚠️ IT REBUILDS ON THE BODY MAP'S ROAD, DELIBERATELY. A pick is not a preference the engine
+       * consults later — it changes which lifts her week is made of, exactly as switching a muscle on
+       * does, so it must produce the same thing: a new week, now, that she can look at. `refreshProgram`
+       * would have been the smaller call and the wrong one; it does not regenerate.
+       *
+       * ⚠️ AND HER LOADS SURVIVE IT (S-29). v5 keys every decision to the EXERCISE, never to a slot, so
+       * a lift still in the week after the reshape keeps the weight it earned.
+       */
+      async saveLibrary(chosenByMuscle, refusedIds) {
+        if (!state.profile) return false;
+        const prefs = await db.loadPreferences();
+        await db.savePreferences({ ...prefs, chosenByMuscle, refusedIds });
+        void track('library_saved', {
+          chosen: Object.values(chosenByMuscle).reduce((n, ids) => n + ids.length, 0),
+          refused: refusedIds.length,
+        });
+        // ⛔ A week she brought is not ours to rewrite — the same guard every rebuild passes. Her
+        // declarations are saved above regardless; what she is told about the WEEK is the caller's job.
+        if (!engineMayRebuild(state.program)) return false;
+        const rebuilt = await model.generateProgram(programProfile(state.profile)).catch((e) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
+        if (!rebuilt) return false;
+        await db.saveProgram(rebuilt);
+        dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        return true;
       },
 
       async reorderExercise(dayId, fromIndex, toIndex) {

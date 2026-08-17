@@ -149,7 +149,12 @@ export interface LiftMatch {
   /** The catalogue id, or null when nothing matched confidently enough to be an answer. */
   id: string | null;
   /** How it was found — surfaced in the review so she can see WHY we chose a lift. */
-  how: 'exact' | 'synonym' | 'contained' | 'unmatched';
+  /**
+   * How the id was arrived at, and it is surfaced so she can see WHY a lift was placed.
+   * `accepted` = the local matcher could not place it, the model named one of ours, and SHE tapped
+   * to accept — the only value here that involved a decision rather than a lookup.
+   */
+  how: 'exact' | 'synonym' | 'contained' | 'unmatched' | 'accepted';
 }
 
 /**
@@ -236,6 +241,42 @@ export function matchWeek(week: ImportedWeek): MatchedWeek {
  * carried — a session cannot run "some" sets — so it falls back to F-1's floor and is reported.
  */
 export const SETS_WHEN_UNSTATED = SETS_MIN;
+
+/**
+ * ════ SHE ACCEPTED A SUGGESTION — PUT THE LIFT BACK WHERE IT CAME FROM ════
+ *
+ * ⛔ THE SUGGESTIONS WERE COMPUTED AND THROWN AWAY. `runImport` asks the model about the names the
+ * local matcher could not place, verifies every id it answers against the catalogue, writes a
+ * sentence in her language explaining each one — and nothing rendered any of it. The call was paid
+ * for on every import with a leftover and its result was discarded; `importPrompt` even says *"she
+ * taps to accept it"*, and that tap did not exist.
+ *
+ * ⚠️ IT RETURNS A MATCH, NOT A PROGRAMME, AND THAT IS THE WHOLE POINT. `MatchedWeek` still knows
+ * which SESSION the unplaced lift belonged to, in what order, with what set count — so accepting
+ * puts it back exactly where she wrote it, rather than appending it somewhere plausible. Re-running
+ * `toProgram` over the repaired match is what rebuilds her week.
+ *
+ * ⚠️ AND IT IS BY NAME, because that is the only identity an unmatched lift has. Every lift she
+ * wrote under that name is repaired at once — a sheet that lists "Pec Fly" on two days meant the
+ * same movement both times.
+ *
+ * Pure. Returns the same reference when nothing matched the name, so an accept that changes nothing
+ * cannot quietly rebuild her week.
+ */
+export function applySuggestion(matched: MatchedWeek, name: string, exerciseId: string): MatchedWeek {
+  if (!exerciseById(exerciseId)) return matched; // never place a lift the catalogue does not carry
+  let changed = false;
+  const sessions = matched.sessions.map((s) => ({
+    ...s,
+    lifts: s.lifts.map((l) => {
+      if (l.match.id || l.name !== name) return l;
+      changed = true;
+      return { ...l, match: { id: exerciseId, how: 'accepted' as const } };
+    }),
+  }));
+  if (!changed) return matched;
+  return { ...matched, sessions, unmatched: matched.unmatched.filter((n) => n !== name) };
+}
 
 export function toProgram(matched: MatchedWeek, id = `imported-${Date.now()}`): Program {
   const days: ProgramDay[] = matched.sessions.map((s, i) => {

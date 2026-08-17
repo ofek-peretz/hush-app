@@ -10,7 +10,7 @@
 
 import type { Band, ExerciseMeta } from './types';
 import { moveRungs, snapDown } from './grid';
-import { rungsForHeadroom, rungOutOfReach } from './repsPerRung';
+import { rungsForHeadroom, rungOutOfReach, bootstrapPerRung } from './repsPerRung';
 
 const MAX_CORRECTIONS = 2; // S-13
 
@@ -63,8 +63,9 @@ export function correctInSession(inp: Loop1Input): Loop1Result {
     if (rungOutOfReach(currentLoad, band, perRung, meta, repsJustDone)) {
       return none;
     }
-    // S-11 / S-14: above Thi → the load is too light; raise it (as many rungs as the overshoot is worth).
-    const n = rungsForHeadroom(repsJustDone - band.hi, perRung);
+    // S-11 / S-14: above Thi → the load is too light; raise it (as many rungs as the overshoot is
+    // worth — her fitted slope if she has one, else B-5's modelled price of a rep at THIS load).
+    const n = rungsForHeadroom(repsJustDone - band.hi, perRung, 'up', bootstrapPerRung(currentLoad, band.hi, meta));
     let raised = snapDown(moveRungs(currentLoad, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     // L11 — the rail is the one hard stop, and it binds here exactly as it binds Loop 2 (S-11/S-14).
     // Never below the load she is on: the rail only ever cancels a raise, it never causes a drop.
@@ -72,8 +73,11 @@ export function correctInSession(inp: Loop1Input): Loop1Result {
     return { nextLoad: raised, corrected: raised !== currentLoad, direction: 'up' };
   }
   if (repsJustDone < band.lo) {
-    // S-12 / S-15: below Tlo → drop, so the remaining sets can meet the contract.
-    const n = rungsForHeadroom(band.lo - repsJustDone, perRung);
+    // S-12 / S-15: below Tlo → drop, so the remaining sets can meet the contract. `'down'` is not
+    // decoration: a drop that lands short leaves her under the weight that just beat her, with at
+    // most one correction left to escape it, so the rounding goes the other way (see the note on
+    // `rungsForHeadroom`).
+    const n = rungsForHeadroom(band.lo - repsJustDone, perRung, 'down', bootstrapPerRung(currentLoad, band.lo, meta));
     const dropped = snapDown(moveRungs(currentLoad, -n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     return { nextLoad: dropped, corrected: dropped !== currentLoad, direction: 'down' };
   }

@@ -159,6 +159,21 @@ export interface WatchPlanStep {
   /** Between-sets rest (s) for THIS exercise (tier-based, S2). A stale watch build
    *  ignores it and falls back to the plan-level restInterS. */
   restInterS?: number;
+  /**
+   * ⛔ IS THAT REST ACTUALLY HERS? (S-17) — the field the wrist's "your pace" line was guessing at.
+   *
+   * The standalone watch lit that badge off `cur.restInterS != nil`, which is true of her learned
+   * median AND of a rest the COACH wrote. So a number she had never produced was labelled with her
+   * name, on the surface she looks at most during a set. The live mirror has carried an honest
+   * `restIsLearned` for months; only the phone-less path was guessing, and the note on
+   * `buildCoachWatchPlan` said so and left it — *"a schema bump plus a matching Swift decode that
+   * cannot be exercised from here"*.
+   *
+   * ⚠️ IT IS NOT A SCHEMA BUMP, FOR THE SAME REASON `lastReps` WAS NOT. Optional in both directions:
+   * an older watch ignores a key it has never heard of, and a newer watch reading an older plan
+   * decodes `nil` — which draws exactly what it drew before. The Swift half is `WirePlanStep`.
+   */
+  restIsLearned?: boolean;
 }
 
 export interface WatchPlanWorkout {

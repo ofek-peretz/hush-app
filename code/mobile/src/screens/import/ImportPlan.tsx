@@ -27,6 +27,7 @@ import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { color, font, space } from '@/design/tokens';
 import { runImport, type ImportResult } from '@/domain/runImport';
+import { applySuggestion, toProgram, reviewFindings } from '@/domain/importedPlan';
 import { startImport, settledImport, clearImport } from '@/domain/pendingImport';
 import { balanceAuthoredWeek, type BalanceChange } from '@/data/api/fixtureModel';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -133,6 +134,32 @@ export function ImportPlan({
       return;
     }
     setResult(out);
+  };
+
+  /**
+   * ⛔ SHE ACCEPTED A SUGGESTION. Repair the MATCH and rebuild from it — never append a slot to the
+   * programme, because the match still knows which session she wrote the lift in, in what order and
+   * with what set count, and the programme no longer does.
+   *
+   * ⚠️ THE FINDINGS ARE RECOMPUTED TOO. "I couldn't find X" has to stop being on screen the moment X
+   * is in her week, or the report contradicts the programme underneath it.
+   */
+  const accept = (name: string, exerciseId: string) => {
+    setResult((prev) => {
+      if (!prev?.ok) return prev;
+      const matched = applySuggestion(prev.matched, name, exerciseId);
+      if (matched === prev.matched) return prev; // nothing carried that name — say nothing, do nothing
+      const program = toProgram(matched);
+      return {
+        ...prev,
+        matched,
+        program,
+        findings: reviewFindings(matched, program),
+        suggestions: prev.suggestions.filter((sg) => sg.name !== name),
+        sessionCount: program.days.length,
+        liftCount: program.days.reduce((n, d) => n + d.slots.length, 0),
+      };
+    });
   };
 
   const photograph = async () => {
@@ -260,6 +287,8 @@ export function ImportPlan({
            * one adjustment is not the same as handing the week over.
            */
           onBalance={() => void balance()}
+          suggestions={result.suggestions}
+          onAccept={accept}
           busy={busy}
         />
         {failed ? <Text style={styles.failed}>{failed}</Text> : null}

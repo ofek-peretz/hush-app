@@ -29,7 +29,7 @@ import { db } from '@/data/local/db';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChanges, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
-import { REST_INTER_S, restInterSecondsFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
+import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
 import { buildWatchPlanSnapshot, buildCoachWatchPlan } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
@@ -37,6 +37,7 @@ import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/
 import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
 import { sessionKcal } from '@/domain/energy';
 import { isTrainingGated, freeSessionsRemaining } from '@/domain/entitlement';
+import { billing } from '@/platform/billing';
 import { comebackAfterGap } from '@/domain/comeback';
 import { trainingDays, WEEK_ORDER } from '@/domain/trainingDays';
 import { daysAfterStarting } from '@/domain/weekBoard';
@@ -210,7 +211,7 @@ export function Home({ navigation, route }: Props) {
               if (lp) here[s.exerciseId] = lp;
             }
         setPlacements(here);
-        const notice = weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek }, app.profile?.workoutMinutes);
+        const notice = weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
         setEngineNotice(notice ? t(notice.key, notice.params) : null);
         const since = weekOpenMs ?? 0;
         setDoneCoachIds(
@@ -458,6 +459,14 @@ export function Home({ navigation, route }: Props) {
             .filter((w) => !doneCoachIds.includes(w.id))
             .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),
           nowMs: Date.now(),
+          /*
+           * ⛔ THE COMMENT ABOVE WAS FALSE UNTIL 2026-08-16: this shipped `REST_INTER_S` — a flat 90
+           * — and `restInterSecondsFor` was imported on line 32 and never called. `refreshLearnedRests`
+           * warmed the map two lines up and nothing read it. Per-step now, so the wrist runs the same
+           * two tiers the phone runs (S-48: one authority, one answer); the plan-level number stays
+           * as the fallback a stale installed watch build needs.
+           */
+          restInterSFor: (exerciseId: string) => (restIsLearnedFor(exerciseId) ? restInterSecondsFor(exerciseId) : null),
           restInterS: REST_INTER_S,
           restTransitionS: restTransitionSeconds(),
         }),
@@ -851,6 +860,25 @@ export function Home({ navigation, route }: Props) {
     };
   }, [isFocused]);
 
+  /**
+   * The store's label for the plan she was on, for the lapsed screen's Resume button.
+   *
+   * ⚠️ ASKED ONLY WHEN SHE IS ACTUALLY LAPSED. A store round-trip on every Home mount would be a
+   * network call on the app's most-opened screen to fill a field almost nobody sees; `lapsed` is the
+   * one state that reads it. Annual first, because that is what the paywall selects by default and
+   * therefore what most returning athletes were paying.
+   */
+  const [resumePrice, setResumePrice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lapsed) return;
+    let active = true;
+    void billing.getProducts().then((list) => {
+      if (!active || list.length === 0) return;
+      setResumePrice((list.find((p) => p.period === 'annual') ?? list[0]).priceLabel);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [lapsed]);
+
   const wristOffer: WristOffer | null =
     wristOffered == null
       ? null // still finding out — a screen that flashes in and out is worse than one that waits
@@ -866,7 +894,20 @@ export function Home({ navigation, route }: Props) {
       <LapsedView
         dayName={todayName || null}
         endedOn={app.entitlement.expiresAt ? new Date(app.entitlement.expiresAt).toLocaleDateString() : ''}
-        priceLabel={null}
+        /*
+         * ⛔ THE PRICE, WHICH THIS SCREEN PROMISED TO PRINT AND WAS HANDED `null` (2026-08-16).
+         *
+         * `Lapsed.tsx`'s own header: *"The resume button prints the SAME price she was paying, from
+         * the live store product — never a discount to bait a return, and never a higher one to
+         * punish the gap."* That is a promise about the one screen an athlete reads while deciding
+         * whether we treated her fairly, and the caller pinned it to `null` — so the button always
+         * said the bare "Resume" and `lapsed.resumeAt` had never rendered on any device.
+         *
+         * ⚠️ NULL IS STILL A REAL STATE and the fallback stays: the store can be slow or silent, and
+         * an empty price in that sentence would be worse than not making it. What is gone is null as
+         * the ONLY state.
+         */
+        priceLabel={resumePrice}
         onResume={() => navigation.navigate('Paywall', { source: 'profile' })}
         kept={[
           ...(last
@@ -921,7 +962,6 @@ export function Home({ navigation, route }: Props) {
       dayName={todayName || null}
       dayId={todayId}
       // The coach names its own sessions and does not state muscles — see the chips above.
-      muscles={''}
       trainedThisWeek={trainedThisWeek}
       startError={startError}
       weekNumber={weekNumber}
@@ -937,14 +977,10 @@ export function Home({ navigation, route }: Props) {
          built around a 5 km run came out as "~6 min" on the first screen she opens. The flag has
          been computed since the week was written and read by nobody. */
       planTimeUnknown={todayCoach?.hasUncountedWork ?? false}
-      /*
-       * `overBudget` was the GENERATOR saying a day could not be cut to fit her minutes after every
-       * legal trim. Nothing composes a day now, so nothing can report that — and the coach is told
-       * her budget in the sheet, which makes it its own to honour rather than ours to flag.
-       */
-      overBudget={false}
-      /* ⚠️ NO `?? 60`. Nothing asks her for a budget any more, so a fallback here would be the app
-         inventing one — and this prop feeds a notice that names it out loud. Absent stays absent. */
+      /* ⛔ `overBudget` / `budgetMinutes` ARE GONE FROM THIS SCREEN (2026-08-16). One was a literal
+         `false` and the other an always-undefined budget F-15 deleted; together they fed a note that
+         could not render and would have said "in 0 minutes" if it had. `weekNotice` owns this
+         sentence now — see `notice={engineNotice}` below and the block in `HomeView`. */
       /*
        * ⛔ THE REST WINDOW SHE IS OWED AN ANSWER ABOUT (founder 2026-08-11). The body map carries it
        * too, but a question that only lives there is one she must go looking for — and the rule is
@@ -952,7 +988,6 @@ export function Home({ navigation, route }: Props) {
        */
       easeChecks={(app.easeChecks?.() ?? []).map((e) => e.muscle)}
       onEaseAnswer={(muscle, a) => void app.answerEaseCheck?.(muscle, a)}
-      budgetMinutes={app.profile?.workoutMinutes}
       dayDone={!!todayId && doneCoachIds.includes(todayId)}
       units={app.profile?.units ?? 'kg'}
       // A CHANGED ROW OPENS ITS CASE (v7 2.1b); an unchanged one opens the form clip. The rule is

@@ -23,7 +23,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ItemResult, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, exerciseDisplayName, muscleOf, type Exercise } from '@/data/exercises';
-import { swapCandidates, isSwapMoment } from '@/domain/swapPool';
+import { swapChoices, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
@@ -50,7 +50,7 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
 import { observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
-import { refreshLearnedRests, restTransitionSeconds, REST_UNSTATED_S } from '@/domain/restPrescription';
+import { refreshLearnedRests, restTransitionSeconds, restInterSecondsFor, restIsLearnedFor, REST_UNSTATED_S } from '@/domain/restPrescription';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
 import { sessionKcal } from '@/domain/energy';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
@@ -69,7 +69,7 @@ import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { bandOf, currentBlockSets } from '@/domain/setRow';
 
-export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restTransitionSeconds } from '@/domain/restPrescription';
+export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
 
 
 export interface Step {
@@ -598,9 +598,35 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
  * Absent means the coach did not say (`restS` is optional), and then S-17 stands: her own median on
  * that lift. Zero means the coach said no rest, which is a real instruction — it is how a superset
  * and a circuit are written — and the machine skips the rest screen entirely (§1.14).
+ *
+ * ⛔⛔ AND S-17 DID NOT STAND — IT RETURNED A FLAT 90 (founder 2026-08-16):
+ *
+ *   > *"אני רוצה שהמנוע ידע את זמני המנוחה של המתאמן עבור כל תרגיל בנפרד."*
+ *
+ * The absent branch read `?? REST_UNSTATED_S`. Three separate places in this codebase state the
+ * opposite — the comment directly above, `Step.restAfterS`'s own doc (*"Absent = the old
+ * per-exercise rest rules stand"*), and `enginePlan`'s header, which deliberately leaves `restS`
+ * absent *"so her own median runs the timer"* — and the register ratifies it at S-17: *"The rest
+ * timer is her own median now (phone, watch mirror, and the standalone watch plan, from one
+ * registry)."* One line disagreed with all four, and it was the only one that ran.
+ *
+ * ⚠️ THE CONSEQUENCE WAS NOT A MISSING FEATURE, IT WAS A FALSE CLAIM. On an engine-composed week
+ * NOTHING writes `restAfterS`, so every rest on every lift was 90 s — while the end-of-rest beat
+ * showed her "NEXT TIME 0:52" with 1:30 struck through, and the wrist printed "your pace". The app
+ * measured her, told her it had learned, and then argued with her anyway.
+ *
+ * ── WHY THIS DOES NOT REOPEN WHAT 2026-08-02 CLOSED ──────────────────────────────────────────────
+ * That ruling — *"make it the dumb constant"* — was made when the AI coach composed programmes, and
+ * its stated fear is precise: *"an athlete who rushes her rests teaches the app to prescribe short
+ * rests, quietly, against a coach that never agreed to it and is never told."* The coach's number
+ * still wins here, absolutely, zero included. Her median only ever fills a silence — and on the
+ * engine's own week there is no coach to overrule, which is the case that ruling never covered.
  */
 export function restAfterStep(step: Step): number {
-  return step.restAfterS ?? REST_UNSTATED_S;
+  if (step.restAfterS != null) return step.restAfterS; // the coach said so; 0 is "straight on"
+  // S-17 · the two kinds of rest, split by a fact the step already carries. The walk to the next
+  // station is her pooled pace; the rest between sets of a lift is that lift's own number.
+  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId);
 }
 
 /**
@@ -700,11 +726,23 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
     // WHEN the verb is offered is a law, not a local opinion — `isSwapMoment` owns it, and the
     // phone's stage asks the same function. This used to be a bare `=== 0` here and a different
     // hard-coded rule on the stage, which is exactly how the two surfaces came to disagree.
+    /*
+     * ⛔ THE WRIST OFFERS TRUE SYNONYMS ONLY (2026-08-16). This used to slice the raw ranked list to
+     * two, which can hand her a DIFFERENT MOVEMENT — `swapChoices` measures that 49 of 111 lifts
+     * have no third synonym, and for a cable kickback the next-best thing is a hip thrust.
+     *
+     * The phone may offer one of those, because the phone has a line under each row to say what it
+     * is ("trains it a different way" — `SwapSheet`). A 40 mm screen has no such line: it shows a
+     * name and nothing else, so an unlabelled non-synonym there IS the lie the sheet exists to
+     * prevent. Where the wrist cannot explain, it does not offer, and she reaches for the phone —
+     * which has the honest menu. Both surfaces still ask the SAME function, which is the law that
+     * stopped them drifting in the first place.
+     */
     const swapOptions =
       ex && isSwapMoment(st.exerciseSetIndex)
-        ? swapCandidates(ex.id, { sessionExerciseIds })
-            .slice(0, 2)
-            .map((e) => ({ id: e.id, name: e.name }))
+        ? swapChoices(ex.id, { sessionExerciseIds }, 2)
+            .filter((c) => c.sameMovement)
+            .map((c) => ({ id: c.exercise.id, name: c.exercise.name }))
         : [];
     // The wrist draws a weight and a rep band (WT2). A step with no rep prescription has neither,
     // and publishing zeros would put "0 kg x 0" on her wrist — so it is not mirrored as a set.
@@ -995,11 +1033,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        * minutes on the phone and her ninety-second median on the wrist, with the watch's GO haptic
        * firing against a rest the phone had not finished.
        *
-       * `restIsLearned` is false for the same reason — it drives the wrist's "your pace" line (WT5),
-       * and the number is no longer hers. It is the coach's, or the constant.
+       * `restIsLearned` drives the wrist's "your pace" line (WT5), so it must say exactly when the
+       * number on the clock IS hers. It was pinned to `false` while the timer ran the constant —
+       * correct then, a lie now that `restAfterStep` consults her median. It is asked the same way
+       * the timer is: the coach's number is not her pace however good it is, and a lift she has not
+       * yet rested through three times is still on the bootstrap.
        */
       restInterS: plan[machine.setIndex] ? restAfterStep(plan[machine.setIndex]) : REST_UNSTATED_S,
-      restIsLearned: false,
+      restIsLearned:
+        plan[machine.setIndex] != null &&
+        plan[machine.setIndex].restAfterS == null &&
+        !plan[machine.setIndex].lastSetOfExercise &&
+        restIsLearnedFor(plan[machine.setIndex].exerciseId),
       restTransitionS: plan[machine.setIndex] ? restAfterStep(plan[machine.setIndex]) : REST_UNSTATED_S,
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,

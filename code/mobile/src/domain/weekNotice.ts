@@ -29,7 +29,7 @@
  */
 
 import { weekFindings, unavoidable, type WeekInputs } from '@/domain/weekQuality';
-import { SESSION_MIN } from '@/engine/v5/constants';
+import { SESSION_MIN, SESSION_MAX } from '@/engine/v5/constants';
 import type { Program } from '@/data/local/models';
 
 export interface WeekNotice {
@@ -40,12 +40,21 @@ export interface WeekNotice {
 /**
  * The one thing the engine could not do this week, or null when it managed everything.
  *
- * @param budgetMin her declared minutes, for the sentence about a day that ran past them.
+ * ⛔ THE `budgetMin` PARAMETER IS GONE (2026-08-16), AND IT WAS CARRYING A WRONG NUMBER.
+ *
+ * It meant "her declared minutes", and F-15 ended declared minutes — the session is 45-60 for
+ * everyone. Every caller passed `profile.workoutMinutes`, which nothing sets, so the value was
+ * always `undefined` and the sentence fell through to `SESSION_MIN`. That is the FLOOR: a day the
+ * engine caps at sixty would have told her it "won't fit in 45 minutes".
+ *
+ * Unreachable today — `overBudget` is stamped zero times across 520 generated days, every
+ * single-muscle body map included — which is exactly why it survived. A parameter that is always
+ * undefined feeding a constant that is the wrong end of the range is the shape a real defect hides
+ * in, and the fix is to name the ceiling the engine actually enforces.
  */
 export function weekNotice(
   program: Program | null | undefined,
   inputs: WeekInputs = {},
-  budgetMin?: number,
 ): WeekNotice | null {
   if (!program) return null;
   const days = program.days.filter((d) => !d.isRest && d.slots.length > 0);
@@ -57,7 +66,7 @@ export function weekNotice(
    *     time mid-session — so it leads even though it is the rarest.
    */
   const over = days.find((d) => d.overBudget);
-  if (over) return { key: 'weekNotice.over', params: { day: over.name, budget: budgetMin ?? SESSION_MIN } };
+  if (over) return { key: 'weekNotice.over', params: { day: over.name, budget: SESSION_MAX } };
 
   /*
    * 2 · A MUSCLE THAT CANNOT REACH THE DOSE outranks a short session, because it is about whether

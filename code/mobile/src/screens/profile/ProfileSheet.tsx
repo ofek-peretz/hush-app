@@ -228,6 +228,27 @@ export function ProfileSheet({ navigation }: Props) {
         </Pressable>
 
         {/*
+          ⛔ THE LIFTS, DIRECTLY UNDER THE BODY THEY BELONG TO (founder 2026-08-16).
+
+          The map answers *which muscles, and how much*; this answers *with what*. They are the same
+          question one level apart, which is why the door sits here rather than among the settings
+          rows at the foot of the page — and why the screen behind it wears the map's own three
+          rungs. It is deliberately a plain row and not a second accent block: moss is spent once
+          per screen and the programme door above already owns it here.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('library.title')}
+          onPress={() => navigation.navigate('ExerciseLibrary')}
+          style={({ pressed }) => [styles.mapBlock, pressed && styles.mapBlockPressed]}
+        >
+          <View style={styles.mapWords}>
+            <Text style={styles.frontTitle}>{t('library.title')}</Text>
+            <Text style={styles.frontSub}>{t('library.sub')}</Text>
+          </View>
+        </Pressable>
+
+        {/*
           ════════════════════════════════════════════════════════════════════════════════════════
           ⛔ ONE DOOR FOR THE PROGRAMME SHE BRINGS AND THE ONE SHE SENDS (founder, 2026-08-12)
 

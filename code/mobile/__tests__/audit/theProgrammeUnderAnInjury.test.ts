@@ -23,7 +23,16 @@ import { exerciseById, muscleOf } from '@/data/exercises';
 import { FORBIDDEN_PATTERNS, allPatternsFor, patternsAt, easeFor, effectiveBodyMap, type PainSeverity } from '@/domain/painReport';
 import type { Profile, Program } from '@/data/local/models';
 
-const NOW = Date.UTC(2026, 7, 11);
+/*
+ * ⛔ THE REPORT IS MADE *NOW*, NOT ON A FROZEN DATE — and the frozen date is how a real defect was
+ * found (2026-08-16). This read `Date.UTC(2026, 7, 11)` while `programAssembly.pickExercises` judged
+ * the windows against `Date.now()` four frames deep, so the audit passed on the day it was written
+ * and started failing the moment real time walked past the three-day TWINGE window: twinge red, the
+ * seven-day pain case and the fourteen-day sharp case still green, and both due to break within the
+ * fortnight. The clock now enters the assembler as an argument (see `assembleV5DayLists`), and this
+ * asks what it always meant to ask — *she reported it recently*.
+ */
+const NOW = Date.now();
 
 /** An athlete who reported `muscle` at `severity`, exactly as `reportPain` would leave her. */
 const hurt = (muscle: string, severity: PainSeverity): Profile => {

@@ -66,13 +66,24 @@ describe('S-17 · her median rest becomes the prescription — inter and transit
   afterEach(() => refreshLearnedRests([])); // never leak learned state into the tier tests above
 
   it('a first-set rest is the TRANSITION — it never drags the lift\'s inter median up', () => {
-    // Set 0 arrives after the 130 s walk+setup; sets 1..3 after her real ~60 s rests. The old single
-    // pool put 130 into the bench median; now the inter median is HER between-sets number alone.
+    /*
+     * Set 0 arrives after the ~130 s walk+setup; sets 1..3 after her real ~60 s rests. The old
+     * single pool put 130 into the bench median; now the inter median is HER between-sets number
+     * alone.
+     *
+     * ⚠️ THREE LIFTS, NOT ONE, SINCE F-17 (2026-08-16). The transition is POOLED, so one walk is one
+     * sample — and one sample is not a median (see `theRestIsTheCoachsOrHerOwn`). The subject of
+     * this test is the SPLIT, and giving the pooled side enough evidence to speak is what lets the
+     * split actually be asserted on both sides of it.
+     */
     refreshLearnedRests([
-      sess([log('bb_bench_press', 0, 130), log('bb_bench_press', 1, 58), log('bb_bench_press', 2, 60), log('bb_bench_press', 3, 62)]),
+      sess([
+        log('bb_bench_press', 0, 128), log('bb_bench_press', 1, 58), log('bb_bench_press', 2, 60), log('bb_bench_press', 3, 62),
+        log('lat_pulldown', 0, 130), log('leg_press', 0, 132),
+      ]),
     ]);
-    expect(restInterSecondsFor('bb_bench_press')).toBe(60);
-    expect(restTransitionSeconds()).toBe(130); // …and the walk became the transition prescription
+    expect(restInterSecondsFor('bb_bench_press')).toBe(60); // the walk is nowhere in it
+    expect(restTransitionSeconds()).toBe(130); // …and the walks became the transition prescription
   });
 
   it('the transition is POOLED across lifts — the walk is a fact about her gym, not the lift', () => {

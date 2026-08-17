@@ -393,10 +393,11 @@ final class LocalWorkoutEngine {
       restEndsAt: nil,
       restRemainingS: nil,
       restTotalS: nil,
-      // WT5 — the plan snapshot already carries HER rest per step (the phone measured it, S-17), so
-      // the wrist really is running her pace here. It says so only when the step names one; the
-      // plan-level fallback is the tier bootstrap and the claim would be false.
-      restIsLearned: cur.restInterS != nil,
+      // WT5 — the phone now SAYS whether this step's rest is hers, rather than the wrist inferring
+      // it. This used to read `cur.restInterS != nil`, which is true of her learned median AND of a
+      // rest the coach wrote for the block: precisely the case where "your pace" is a lie. A plan
+      // from an older phone decodes nil here and the line stays down, which is the honest default.
+      restIsLearned: cur.restIsLearned == true,
       nextExerciseName: nil,
       nextExerciseGroup: nil,
       nextTargetWeight: nil,

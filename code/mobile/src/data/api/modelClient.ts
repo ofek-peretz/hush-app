@@ -81,6 +81,13 @@ export interface ModelClient {
   sessionTargets(args: {
     programDayId: string;
     completedSessions: number;
+    /**
+     * The instant the prescription is FOR. Omitted in the app (it is now); supplied by simulations,
+     * which run a clock of their own. It is read for exactly one thing — how long she has been away
+     * (B-9, `engine/v5/detraining`) — and a harness that could not set it would be told its virtual
+     * athlete had detrained for however long ago its fixtures are dated.
+     */
+    nowMs?: number;
   }): Promise<SetTarget[]>;
 
   /** Post actuals for a finished (or early-finished) session. */

@@ -261,6 +261,15 @@ struct WirePlanStep: Codable, Equatable {
   /// Between-sets rest (s) for this exercise (tier-based, S2). Optional on the wire —
   /// absent (older phone build) falls back to the plan-level restInterS.
   var restInterS: Int?
+  /// ⛔ IS `restInterS` HERS, OR THE COACH'S? (S-17) — the fact behind the "your pace" line.
+  ///
+  /// The wrist used to infer it from `restInterS != nil`, which is true of her learned median AND
+  /// of a rest the coach wrote — so a number she had never produced was labelled with her name, on
+  /// the surface she looks at most during a set. The phone sets this on her branch only.
+  ///
+  /// Optional, and NOT a schema bump (as `lastReps` was not): an older phone omits it and this
+  /// decodes `nil`, which draws exactly what it drew before.
+  var restIsLearned: Bool?
 }
 
 struct WirePlanWorkout: Codable, Equatable {

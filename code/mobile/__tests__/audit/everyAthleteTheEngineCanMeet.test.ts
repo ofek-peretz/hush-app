@@ -236,25 +236,68 @@ it('the large groups are not out-trained by the small ones', () => {
    * Measured over the 1,455-programme sweep, isolating one change at a time:
    *
    *     flat shares (every muscle the same target) ......... 2375 inversions
-   *     MUSCLE_VOLUME_SHARE ............................... 743   ← where this sits
-   *     …plus a share-scaled day-one set count ............ 557, but it broke the 45-minute floor
+   *     MUSCLE_VOLUME_SHARE ...............................  743
+   *     …plus a share-scaled day-one set count ............  557, but it broke the 45-minute floor
+   *     `enforceTimeCap` giving up sets by the DONOR RULE ..  113   ← where this sits
    *
-   * The last 743 are one known cause: `enforceTimeCap` drops slots by POSITION — trailing first —
-   * so the muscle it takes from is whichever sits late in `CANONICAL_MUSCLE_ORDER`, not whichever
-   * can best spare the work. `trimV5ToBudget` already knows the right rule (`chooseDonor`: never an
-   * emphasis muscle, never one at its floor, otherwise the one with the most sets). Until the cap
-   * gives up sets the same way, a bigger target for the back just means a harder cut to the back —
-   * which is exactly why scaling set counts made it WORSE, not better.
+   * ⚠️ THE CEILING WAS 743 AND THE REAL NUMBER WAS 113 (found 2026-08-16). The cause the note used
+   * to name — *"the cap drops slots by POSITION, so the muscle it takes from is whichever sits late
+   * in `CANONICAL_MUSCLE_ORDER`"* — was FIXED on 2026-08-09, when `enforceTimeCap` started ordering
+   * its candidates by how far each muscle exceeds its share of the day (`chooseDonor`'s rule, as an
+   * order rather than a veto). Nobody re-measured, so the ceiling sat six and a half times above the
+   * truth for a week.
+   *
+   * That is worse than a number being wrong: a ratchet with that much slack is a rubber stamp. A
+   * change could have made this six times worse and still passed, which is precisely the thing the
+   * paragraph below forbids.
    *
    * The number may only ever go DOWN. Raising it to make a change pass is how a ratchet becomes a
-   * rubber stamp; if a change needs a higher number, the change is wrong.
+   * rubber stamp; if a change needs a higher number, the change is wrong — and leaving it slack
+   * after a fix is the same failure, quieter.
+   *
+   * ── ⛔⛔ 113 → 146, AND THIS IS THE RULE ABOVE BEING BROKEN ON PURPOSE, ONCE ─────────────────────
+   * 2026-08-16: the clock learned that a one-sided set is performed twice (`CHARGE_BOTH_SIDES`), and
+   * this went 113 → 146. By the paragraph above, that verdict is *the change is wrong*. It was held
+   * off for a turn on exactly that reading. Then it was measured, and the reading does not survive:
+   *
+   *   · An inversion is a RELATIVE rank between two muscles. The honest clock makes the week 2.8%
+   *     smaller (4327 → 4205 sets over 50 athletes), so ranks re-shuffle at the margin with no
+   *     muscle losing its dose. The ABSOLUTE harm metric does not move at all — muscles under MEV
+   *     is 62 of 450 in BOTH arms, and the debt on them grows by 5 sets across all 450.
+   *   · What the old number bought was 74 days of 200 running over the promised hour, unmarked, by
+   *     up to 6.8 minutes — a better-ranked week she did not have the time to finish.
+   *   · And it is not a quarrel about B-4's 45 s. Re-priced at every plausible second-side cost, the
+   *     only value at which no day runs over is ZERO, because `enforceTimeCap` packs 123 of the 200
+   *     days within thirty seconds of the ceiling. The old pricing needed her second leg to be free.
+   *
+   * ⚠️ AND THE GUARD THAT MATTERS DID NOT MOVE. *"a muscle below the effective dose is one that
+   * physically could not reach it"*, two tests down, is ABSOLUTE where this one is relative, and it
+   * asserts ZERO rather than a ceiling: no muscle anywhere in the sweep is short of its dose with
+   * room to spare. It was green through this change without an edit. That is the test that would
+   * catch a muscle being starved, and it is the reason this one could be re-based rather than
+   * obeyed. A future change may not raise this without the same kind of table.
    */
-  const CEILING = 743;
+  const CEILING = 146;
+  // eslint-disable-next-line no-console
+  console.log(`ACTUAL INVERSIONS = ${inversions.length} (ceiling ${CEILING})`);
   expect({ sample: inversions.slice(0, 6), withinRatchet: inversions.length <= CEILING }).toEqual({
     sample: inversions.slice(0, 6),
     withinRatchet: true,
   });
   expect(inversions.length).toBeLessThanOrEqual(CEILING);
+
+  /*
+   * ⛔ AND THE RATCHET MUST NOT GO SLACK. A ceiling far above the truth is not a safe ceiling — it is
+   * a rubber stamp, and this file had one for a week: 743 against a real 113, because the defect the
+   * note described was fixed and nobody re-measured. A change could have made the engine six times
+   * worse and still passed.
+   *
+   * So the ratchet now catches its own rot: improve this number by more than a quarter and the test
+   * fails until the ceiling is brought down to meet it. Tightening a ratchet is the cheapest edit in
+   * the repo; leaving it slack costs the next person everything it was built to protect.
+   */
+  expect({ ratchetIsSlack: inversions.length < CEILING * 0.75, actual: inversions.length, ceiling: CEILING })
+    .toEqual({ ratchetIsSlack: false, actual: inversions.length, ceiling: CEILING });
 });
 
 /*
@@ -379,12 +422,29 @@ it('every emphasis mark moves the muscle it is placed on', () => {
    * ⚠️ AND IT CAUGHT ONE THE SAME DAY, WHICH IS WHY IT EXISTS. Requiring a muscle to be over its
    * share before the cap may take its isolation fixed three double-mark cases and pushed this to
    * 205. It was reverted; the note sits on `enforceTimeCap`'s isolation pass.
+   *
+   * ⚠️ RE-MEASURED 2026-08-16: 123, not 147. Same lesson as the inversion ratchet above — a ceiling
+   * left slack after the engine improved is a ratchet that has stopped ratcheting.
+   *
+   * ⛔⛔ 123 → 145 THE SAME DAY, WHEN THE CLOCK LEARNED A ONE-SIDED SET IS PERFORMED TWICE. Read the
+   * long note on the inversion ratchet above; the argument is the same one and the table is in
+   * `domain/restPrescription`. The short of it: a mark goes inert when the day it lands on has no
+   * room for the extra work, and honest pricing means fewer days have room — 74 of 200 days were
+   * over the promised hour, unmarked, and are not any more. The paragraph above names the real fix
+   * and it is still the real fix: a marked muscle should claim an extra EXERCISE at assembly, where
+   * the clock is not yet the binding constraint. Twenty-two marks moved from "the cap ate it" to
+   * "the hour was already full", which is the same defect, now told the truth about its cause.
    */
-  const CEILING = 147;
+  const CEILING = 145;
+  // eslint-disable-next-line no-console
+  console.log(`ACTUAL INERT MARKS = ${inert.length} (ceiling ${CEILING})`);
   expect({ sample: inert.slice(0, 6), withinRatchet: inert.length <= CEILING }).toEqual({
     sample: inert.slice(0, 6),
     withinRatchet: true,
   });
+  // The same anti-rot guard as the inversion ratchet above — see the note there.
+  expect({ ratchetIsSlack: inert.length < CEILING * 0.75, actual: inert.length, ceiling: CEILING })
+    .toEqual({ ratchetIsSlack: false, actual: inert.length, ceiling: CEILING });
   expect(inert.length).toBeLessThanOrEqual(CEILING);
 });
 

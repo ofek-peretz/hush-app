@@ -19,6 +19,19 @@ export function epley(load: number, reps: number): number {
   return load * (1 + reps / 30);
 }
 
+/**
+ * Epley READ THE OTHER WAY — the load at which an e1RM is worth exactly `reps` reps.
+ *
+ * The inverse belongs beside the model, not inside whichever caller needs it: the moment a second
+ * file writes `/(1 + reps / 30)` there are two copies of the same 30 free to disagree, which is the
+ * defect this engine's audit keeps finding. `engine/v5/repsPerRung` uses the pair to price ONE rep of
+ * headroom in kilograms (B-5), so the bootstrap move and the e1RM the athlete is shown come from one
+ * model, evaluated twice.
+ */
+export function loadForReps(e1rm: number, reps: number): number {
+  return e1rm / (1 + reps / 30);
+}
+
 /** B-6 — the starting loadable increment per equipment class. Re-exported from its one declaration
  *  in the v5 ledger (`engine/v5/constants`), never redeclared here. */
 export const LOAD_INCREMENT = STARTING_INCREMENT;

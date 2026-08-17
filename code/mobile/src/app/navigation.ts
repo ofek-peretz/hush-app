@@ -304,6 +304,12 @@ export type MainParamList = {
    * in You → Body map."* The app was promising a screen that did not exist.
    */
   BodyMapEdit: undefined;
+  /*
+   * ⛔ THE LIFTS SHE WANTS, AND THE ONES SHE NEVER WANTS (founder 2026-08-16). `programAssembly` has
+   * read her picks and her refusals since the same day; until this route there was no way for her to
+   * make either, which is a feature finished everywhere except where she could reach it.
+   */
+  ExerciseLibrary: undefined;
   /** The programme she already has — photographed or typed. See `screens/import`. */
   ImportPlan: undefined;
   SharePlan: undefined;

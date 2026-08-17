@@ -138,10 +138,27 @@ const K = {
   recoverySealed: 'hush.recovery.sealed', // 3.5 · screens/home/HomeView
 } as const;
 
-/** Athlete-OWNED program customizations, persisted so weekly regeneration honors them.
- *  Keyed by MUSCLE (swaps are muscle-scoped, so the muscle is the durable identity across
- *  regenerations). **There is no PIN** — nothing here is declared; every entry is LEARNED from her
- *  in-workout swaps at K=2 (register Rev 7 §B / S-69 / S-71). */
+/**
+ * Athlete-OWNED program customizations, persisted so weekly regeneration honors them. Keyed by
+ * MUSCLE (swaps are muscle-scoped, so the muscle is the durable identity across regenerations).
+ *
+ * ⛔ THIS USED TO SAY "THERE IS NO PIN — nothing here is declared; every entry is LEARNED from her
+ * in-workout swaps at K=2". That was true, and the founder reversed it on 2026-08-16:
+ *
+ *   > *"או שבמקום זה פשוט אוסיף לאפליקציה את ספריית תרגילים שהמתאמן יכול להכנס לכל תרגיל ותרגיל
+ *   > ולהוסיף אותו לתוכנית האימון."*
+ *
+ * So there are now TWO kinds of entry here and they must not be confused:
+ *   · **LEARNED** (`leaveItsByMuscle`, `substitutes`, `swapPending`, `engineRotated`) — inferred
+ *     from what she did, at K=2, and reversible by doing the opposite twice.
+ *   · **DECLARED** (`chosenByMuscle`, `refusedIds`) — she said so, in the library, once. A
+ *     declaration is not evidence and is never inferred; it is also never overridden by inference.
+ *
+ * ⚠️ WHY DECLARED BEATS LEARNED HERE: a learned signal is ambiguous (a swap can mean "I dislike
+ * this" or "the rack was taken"), and it takes two occurrences to say anything at all. A tap in the
+ * library is unambiguous and immediate. The learned machinery is not replaced — it still explains
+ * lifts she has never opened the library for, which is most of them.
+ */
 export interface OwnedPreferences {
   /** S-71 — her learned LEAVE-ITS: MuscleGroup -> the lift the engine must stop rotating away.
    *  EARNED, never declared: the engine rotated a stalled lift out and she swapped back to it twice
@@ -163,6 +180,24 @@ export interface OwnedPreferences {
   // ("been off a while — want it back?") is asked once per muscle, at the Saturday mirror, and never
   // again (L4). Additive/optional: absent means never asked.
   askedBackMuscles?: string[];
+  /**
+   * DECLARED — the lifts she picked for a muscle in the exercise library, in her order. They take
+   * the leading seats for that muscle; the engine fills whatever the volume still affords behind
+   * them by its own diversity rules, so a pick shapes the programme without replacing it.
+   *
+   * ⚠️ NOT a set count and not a promise: how many of her picks actually appear is decided by the
+   * muscle's volume and the clock, exactly as it is for the engine's own choices.
+   */
+  chosenByMuscle?: Record<string, string[]>;
+  /**
+   * DECLARED — lifts she has refused. A GATE, like the pain ban: no score may overrule it.
+   *
+   * ⚠️ IT MAY NEVER EMPTY A MUSCLE SHE LEFT ON. Refusing every lift of a muscle is a contradiction
+   * (she asked for it to be trained and refused everything that trains it), and the honest reading
+   * of the two is that she meant to switch the MUSCLE off — which the body map already does, and
+   * says so on screen. The assembler ignores the refusals rather than hand her an empty muscle.
+   */
+  refusedIds?: string[];
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
   // (The v4 Lock System `lockedSlots` and the 3-week periodic-refresh `rotations`/`rotationUsed`/
@@ -232,10 +267,21 @@ export interface EngineV5State {
      *  VOLUME change (S-32/S-34/S-37 — Loop 3 grew or trimmed a muscle's weekly sets). `exerciseId`
      *  holds the FROM lift (or the muscle name, for 'volume'); the mirror narrates each with its copy.
      *  Absent on the ordinary load-change entries. */
-    kind?: 'graduate' | 'swap' | 'volume' | 'rung';
+    kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain';
     toExercise?: string;
     /** For kind 'volume' — the muscle whose weekly set target moved (setsFrom → setsTo). */
     muscle?: string;
+    /**
+     * ⛔ THE OCCURRENCE'S WORST SET, so the letter can only claim what happened.
+     *
+     * Without it the mirror had to describe every raise the same way, and the copy it chose was
+     * *"reached the TOP of its range with room to spare"* — while S-22 raises the moment every set
+     * meets **Tlo**, the BOTTOM. Measured: three sets of 8 in an 8-10 band raised 60 → 62.5 kg and
+     * she was told she had room to spare at the top. It is the most-shown sentence in the product.
+     *
+     * Absent on older entries and on changes where reps are not the reason (volume, structural).
+     */
+    worstReps?: number;
   }[];
   /** The closed-week-end (ms) the athlete last marked seen — so a newly closed week reads unseen. */
   seenWeekEnd?: number;
@@ -250,6 +296,25 @@ export interface EngineV5State {
   /** Per-muscle count of CONSECUTIVE unfinished occurrences (S-34 — a second one in a row cuts a set).
    *  Reset to 0 the moment she completes the muscle's sets again. */
   unfinishedByMuscle?: Record<string, number>;
+  /**
+   * B-9 — the `startedAt` (ms) of the last session BEFORE the gap that detraining has already been
+   * applied for. The whole idempotency of the decay rests on this one field.
+   *
+   * ⛔ WITHOUT IT THE DECAY COMPOUNDS TO THE FLOOR. Detraining runs where the prescription is read,
+   * which happens on every open — so re-applying 0.9 each time would walk every load to 70% in a
+   * handful of app launches while she sat on the bus. A gap is identified by the session it FOLLOWS,
+   * that session never changes, and so the decay for it is taken exactly once.
+   */
+  detrainedAfter?: number;
+  /**
+   * B-9 — the fraction of her pre-gap loads that has ALREADY been taken off for `detrainedAfter`.
+   *
+   * Without it the gap was paid once at whatever length it happened to be the first time she opened
+   * the app: a peek on day 11 stamped the gap as answered, and a return on day 200 was handed full
+   * pre-gap loads. The stamp records WHAT WAS APPLIED so a growing gap can be topped up, and so a
+   * re-read at the same moment is still a no-op.
+   */
+  detrainedRetained?: number;
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */

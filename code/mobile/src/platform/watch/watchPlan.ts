@@ -195,6 +195,28 @@ export function buildCoachWatchPlan(inp: {
   restTransitionS: number;
   /** Her saved sessions — the standalone set row's ghosts. See `WatchPlanInputs.history`. */
   history?: Session[];
+  /**
+   * S-17 — her learned between-sets rest for a lift, asked the same way the phone asks it
+   * (`restInterSecondsFor`). Absent → the snapshot-level fallback, exactly as before.
+   *
+   * ⛔ THE WRIST WAS RUNNING A FLAT 90 AND CALLING IT HER PACE. This builder had no way to be told
+   * her rest at all — only its uncalled twin `buildWatchPlanSnapshot` did — so a step carried
+   * `restInterS` only when the COACH had written one. The watch then lit "your pace" off
+   * `cur.restInterS != nil` (`LocalWorkoutEngine.swift`), i.e. precisely when the number was the
+   * coach's and never when it was hers.
+   *
+   * ⛔ AND THE BADGE IS EXACT NOW (2026-08-16). This note used to end *"still imprecise, and
+   * deliberately left so… a schema bump plus a matching Swift decode that cannot be exercised from
+   * here"*, leaving one wrong direction standing: a rest the COACH wrote still read as her pace.
+   *
+   * It turned out not to need a schema bump at all — `restIsLearned` rides as an OPTIONAL key, the
+   * same way `lastReps` did, so an older watch ignores it and a newer watch reading an older plan
+   * decodes `nil` and draws what it always drew. What could not be exercised from here is the Swift
+   * decode, and that is answered by `theWristSaysYourPaceOnlyWhenItIsHers`, which reads both sides
+   * as text and holds them to each other — the same instrument `watchCopyPack` already uses to keep
+   * a Swift constant honest without compiling Swift.
+   */
+  restInterSFor?: (exerciseId: string) => number | null;
 }): WatchPlanSnapshot | null {
   const workouts: WatchPlanWorkout[] = [];
   const lastOf = lastTimeLookup(inp.history);
@@ -223,8 +245,20 @@ export function buildCoachWatchPlan(inp: {
             targetReps: item.reps[0],
             // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.
             targetRepsHi: item.reps[1],
-            // The coach's own rest for this block, which is the number the phone would run too.
-            ...(block.restS != null ? { restInterS: block.restS } : {}),
+            /*
+             * The coach's own rest for this block, else HER learned rest on this lift — the same two
+             * tiers, in the same order, that `restAfterStep` runs on the phone (S-17/S-48).
+             *
+             * ⛔ AND THE WRIST IS NOW TOLD WHICH OF THE TWO IT GOT. `restIsLearned` is set on the
+             * second branch ONLY: `Home` passes `restInterSFor` as "her median, or null if she has
+             * not earned one yet", so reaching that branch at all is the proof. The first branch is
+             * a number the COACH wrote, and it must never wear her name.
+             */
+            ...(block.restS != null
+              ? { restInterS: block.restS }
+              : inp.restInterSFor?.(item.ex) != null
+                ? { restInterS: inp.restInterSFor(item.ex) as number, restIsLearned: true }
+                : {}),
             ...(setup
               ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
               : {}),

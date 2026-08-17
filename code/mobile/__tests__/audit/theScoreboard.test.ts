@@ -235,8 +235,23 @@ describe('⛔ the scoreboard', () => {
   });
 });
 
-/* ⚠️ MEASURED 2026-08-12 against the engine as it stands, over the 270 weeks above. */
-const SHARE_INVERSIONS = 92;
+/*
+ * ⚠️ MEASURED 2026-08-12 against the engine as it stands, over the 270 weeks above.
+ *
+ * ⛔ RE-MEASURED 2026-08-16, when the clock learned that a one-sided set is performed twice
+ * (`CHARGE_BOTH_SIDES` in `domain/restPrescription`, where the full table sits). The honest hour
+ * moved two of these, in OPPOSITE directions, and both are recorded rather than only the convenient
+ * one:
+ *
+ *     share inversions ............ 92 → 85    BETTER, so the ceiling is tightened to meet it
+ *     unavoidable under-dose ..... 156 → 159   WORSE, and it is the two-day week's arithmetic
+ *
+ * The three extra under-dosed muscles are all on two-day weeks — the assertion below already proves
+ * that, and it still holds — where two sessions cannot carry nine muscles to MEV whatever the clock
+ * says. They were not being dosed before; they were being PRICED as dosed, in sessions that ran past
+ * the hour she was promised. Naming three more of them is the scoreboard doing its job.
+ */
+const SHARE_INVERSIONS = 85;
 const OVER_CEILING = 0;
-const UNAVOIDABLE_UNDER_DOSE = 156;
+const UNAVOIDABLE_UNDER_DOSE = 159;
 const UNDER_DOSE = 2;

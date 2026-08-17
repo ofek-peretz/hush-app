@@ -30,7 +30,7 @@
 
 // 
 
-import { REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN } from './restPrescription';
+import { REST_TRANSITION_S, perSetSeconds } from './restPrescription';
 import { exerciseDisplayName, exerciseById } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPlan';
@@ -159,8 +159,17 @@ function timeOf(session: PlannedSession, enginePriced = false): { minutes: numbe
     const rest = block.restS ?? DEFAULT_REST_S;
     for (const item of block.items) {
       if (item.kind === 'reps') {
+        /*
+         * ⛔ ONE ANSWER, NOT TWO — and this line is why the law exists twice over. `perSetSeconds`
+         * is the engine's own arithmetic, so a change to what a set costs cannot reach the cap and
+         * miss the screen. It did exactly that when the engine learned a one-sided set is performed
+         * twice: `enforceTimeCap` charged for both legs, this did not, and Today disagreed with the
+         * engine on eighteen sessions.
+         *
+         * The non-bootstrap branch keeps the coach's own stated rest, which is charged below.
+         */
         seconds += bootstrap
-          ? (isCompound(item.ex) ? COMPOUND_SET_MIN : ISOLATION_SET_MIN) * 60 * block.rounds
+          ? perSetSeconds(item.ex, { compound: isCompound(item.ex), restS: null, execS: null }) * block.rounds
           : EXEC_S * block.rounds;
       } else if (item.kind === 'time') seconds += item.seconds * block.rounds;
       // `distance` needs a pace we do not have, and `open` has no number by definition.

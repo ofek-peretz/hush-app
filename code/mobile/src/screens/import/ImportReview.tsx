@@ -35,6 +35,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { color, font, space } from '@/design/tokens';
 import { exerciseById } from '@/data/exercises';
 import type { Finding } from '@/domain/importedPlan';
+import type { ImportSuggestion } from '@/domain/importPrompt';
 
 export interface ImportReviewProps {
   /** What she called it, if her sheet said. */
@@ -43,6 +44,18 @@ export interface ImportReviewProps {
   sessionCount: number;
   liftCount: number;
   findings: Finding[];
+  /**
+   * ⛔ WHAT THE MODEL SAID ABOUT THE NAMES WE COULD NOT PLACE — computed on every import with a
+   * leftover, verified against the catalogue, and until 2026-08-16 rendered by nobody. The call was
+   * paid for and the answer discarded; `importPrompt` even says *"she taps to accept it"*, and the
+   * tap did not exist.
+   *
+   * ⚠️ SHE DECIDES, ALWAYS. A verified id proves the lift EXISTS; it does not prove it is the one
+   * she meant. Nothing here is applied on her behalf.
+   */
+  suggestions?: ImportSuggestion[];
+  /** She accepted one: put that lift back in the session she wrote it in. */
+  onAccept?: (name: string, exerciseId: string) => void;
   /** She keeps her week exactly as written. The engine will only ever manage the loads. */
   onKeep: () => void;
   /** She asks us — once, having read the report — to rebuild it as a Hush week. */
@@ -80,6 +93,9 @@ function sentenceFor(f: Finding, t: (k: string, v?: Record<string, unknown>) => 
 export function ImportReview(props: ImportReviewProps) {
   const { t } = useCopy();
   const { findings } = props;
+  // Only the ones that name a lift we actually carry — a suggestion with neither is a "no idea",
+  // and the finding above already told her we could not place it.
+  const offers = (props.suggestions ?? []).filter((s) => s.id ?? s.alternative);
 
   return (
     <View style={styles.root}>
@@ -107,6 +123,39 @@ export function ImportReview(props: ImportReviewProps) {
             ))}
           </View>
         )}
+
+        {offers.length > 0 ? (
+          <View style={styles.list}>
+            <Text style={styles.lead}>{t('import.suggestLead', { n: offers.length })}</Text>
+            {offers.map((s) => {
+              const id = (s.id ?? s.alternative) as string;
+              const named = exerciseById(id)?.name ?? id;
+              return (
+                <View key={s.name} style={styles.suggest}>
+                  {/*
+                    The two cases read differently on purpose. `id` means THIS IS OURS under another
+                    name — nothing about her week changes except that we can now run it. `alternative`
+                    means we do not carry hers and this is the nearest thing, which is a substitution
+                    she is agreeing to, not a lookup.
+                  */}
+                  <Text style={styles.line}>
+                    {s.id
+                      ? t('import.suggestSame', { name: s.name, ours: named })
+                      : t('import.suggestAlt', { name: s.name, ours: named })}
+                  </Text>
+                  {s.why ? <Text style={styles.why}>{s.why}</Text> : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    label={t('import.suggestAccept', { name: named })}
+                    onPress={() => props.onAccept?.(s.name, id)}
+                    disabled={props.busy}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -138,6 +187,8 @@ export function ImportReview(props: ImportReviewProps) {
 }
 
 const styles = StyleSheet.create({
+  suggest: { gap: space.xs, paddingVertical: space.sm },
+  why: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'left' },
   root: { flex: 1, backgroundColor: color.bg },
   body: { paddingHorizontal: space.gutter, paddingTop: 20, paddingBottom: 32 },
   /* The serif is the coach's voice — this screen is one person telling her what they read. */

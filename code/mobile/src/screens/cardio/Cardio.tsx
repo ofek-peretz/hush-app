@@ -416,10 +416,33 @@ export function CardioLiveView(props: {
      * the same class of lie as a pace on a table. Indoors the only failure worth a sentence is
      * having no motion source at all, which is what `unavailable` means there.
      */
+    /*
+     * ⛔ AND "NOTHING YET" IS NOT THE SAME AS "NOTHING AT ALL" (founder 2026-08-16, on a treadmill
+     * session that never moved). Indoors there were only two outcomes on screen — `unavailable`, or
+     * silence — and silence was drawn over a **confident 0 m**, which is the state the athlete is in
+     * for the first minutes of EVERY indoor run and cannot tell apart from a broken one:
+     *
+     *   · Core Motion counts GAIT, not vibration, and it needs the phone ON HER (see
+     *     `platform/health`) — a phone on the treadmill console reads zero forever, correctly;
+     *   · and even walking, iOS flushes distance to HealthKit in BATCHED segments minutes apart,
+     *     against a five-second poll, with `ingestStride` spending the first reading as a cursor.
+     *
+     * So the first metre is legitimately minutes away, and until it lands the only honest line is
+     * the one that says what the measurement needs. It clears itself the moment distance is
+     * credited, so a working run shows it briefly and a broken one shows it until she fixes it.
+     *
+     * ⚠️ THERE IS NO `denied` BRANCH HERE ON PURPOSE. A refused HealthKit READ returns an empty
+     * array rather than an error — the API will not say it was refused — so the only two states this
+     * mode can honestly tell apart are "no source at all" (`unavailable`: Android, no HealthKit) and
+     * "a source that has not answered yet". A denial lands in the second, which is why the line it
+     * gets names the thing she can actually check.
+     */
     props.indoor
       ? gps === 'unavailable'
         ? t('cardio.motionOff')
-        : ''
+        : distanceKm > 0
+          ? ''
+          : t('cardio.motionWaiting')
       : gps === 'acquiring'
       ? t('cardio.gpsAcquiring')
       : gps === 'denied' || gps === 'unavailable'

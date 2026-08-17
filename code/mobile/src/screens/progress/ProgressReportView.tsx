@@ -38,10 +38,11 @@ interface Props {
    * the gallery, and the silhouettes were the half that should never return — the outline of a
    * thing she has not earned is a nudge, on the one surface that states only what was measured.
    *
-   * The prop is kept and ignored so the two call sites still typecheck while the quarterly report
-   * is untouched; nothing reads it.
+   * ⛔ AND THE PROP IS GONE TOO (2026-08-16). It was kept "so the two call sites still typecheck",
+   * which is how a deleted feature leaves a handle for someone to grab: the caller went on passing
+   * `milestones={null}` to a component that had nothing to do with milestones. A feature is out when
+   * its interface is out.
    */
-  milestones?: unknown;
   /** Opens the full session log. History is no longer a tab (v7) — this is its one door,
    *  at the foot of the all-time report. Omitted in the quarterly window. */
   onHistory?: () => void;

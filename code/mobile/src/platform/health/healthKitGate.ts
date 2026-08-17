@@ -145,6 +145,29 @@ export const healthKitGate: HealthGate = {
    * carries distance she covered walking to the gym; HealthKit returns the whole sample, so the
    * overlap is prorated by time rather than counted or dropped whole. Neither is exact — a sample is
    * not uniform — but it is bounded, and the alternatives are wrong by a whole segment.
+   *
+   * ⛔⛔ THE QUERY ITSELF WAS MALFORMED, AND IT TOOK THE WHOLE TREADMILL WITH IT (founder 2026-08-16:
+   * *"in indoor cardio I shook the phone a lot and there is no movement on the screen"*).
+   *
+   * Two defects in one call, and the correct form of BOTH was already written thirty lines below in
+   * `recentWorkouts`:
+   *
+   *   1. **`limit` was missing, and it is REQUIRED.** `GenericQueryOptions` declares it
+   *      `readonly limit: number` — not optional — and the Nitro bridge decodes it as a
+   *      non-optional `double` via `JSIConverter<double>::fromJSI`, which is `arg.asNumber()` and
+   *      THROWS on `undefined`. On a real device this call rejected, the `catch` below returned
+   *      `null`, and the screen sat on "Motion tracking is off" and 0 m for the entire run.
+   *      `0` is the library's documented "every sample" sentinel (`getQueryLimit`), which is what a
+   *      summed cumulative read needs — a capped read would silently drop segments.
+   *   2. **The dates were at the wrong depth.** They belong under `filter.date`; the native side
+   *      reads `options?.filter?.date?.startDate` and nothing else, so a flat `{ startDate, endDate }`
+   *      was not a narrow predicate — it was NO predicate.
+   *
+   * ⚠️ NEITHER COULD BE CAUGHT WHERE IT WAS LOOKED FOR. This file carries `@ts-nocheck`, so the
+   * missing required field and the unknown filter shape both compiled clean; and `jest.setup.js`
+   * mocks the module without defining `queryQuantitySamples` at all while
+   * `isHealthDataAvailableAsync` returns false — so the line above short-circuits and this call has
+   * never once executed under test. `theTreadmillIsMeasuredToo` asserts on the file's TEXT.
    */
   async distanceSince(sinceMs: number, untilMs?: number): Promise<number | null> {
     try {
@@ -153,9 +176,10 @@ export const healthKitGate: HealthGate = {
       const to = new Date(untilMs ?? Date.now());
       if (!(to.getTime() > from.getTime())) return 0;
       const samples = await queryQuantitySamples(DISTANCE, {
+        limit: 0, // every sample in the window — the sum needs all of them, not the newest few
         unit: 'km',
         ascending: true,
-        filter: { startDate: from, endDate: to },
+        filter: { date: { startDate: from, endDate: to } },
       });
       let km = 0;
       for (const x of samples) {

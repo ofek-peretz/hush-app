@@ -12,6 +12,13 @@
  *
  * `ActiveSet` obeyed it. This drives the REST screen, which is where the swap the founder used
  * actually lives (`onSwap` there is `startQuickSwap('next')`), and holds it to the same rule.
+ *
+ * ── ⚠️ THE ROUTE CHANGED 2026-08-16; THE LAW DID NOT ────────────────────────────────────────────
+ * Swap no longer confirms on the first tap. It opens a menu of up to three options (`SwapSheet`,
+ * founder's own request), and the notice appears when she PICKS one. So these cases now walk
+ * tap → pick, and everything they assert about the footer under a live notice is unchanged. The
+ * choice is looked up from `swapChoices` rather than hard-coded, so the test presses the row the
+ * athlete would actually see rather than a name that could quietly stop being offered.
  */
 // @ts-nocheck
 
@@ -26,6 +33,7 @@ import { SessionContext } from '@/state/stores/sessionStore';
 import { ToastProvider } from '@/components/ds';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { initI18n, tg } from '@/i18n';
+import { swapChoices } from '@/domain/swapPool';
 
 jest.mock('@react-navigation/native', () => ({ useFocusEffect: () => {} }));
 
@@ -141,6 +149,25 @@ function press(r: ReactTestRenderer, label: string): void {
 const has = (r: ReactTestRenderer, label: string) =>
   r.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function').length > 0;
 
+/**
+ * Tap Swap and choose the first option — the whole gesture, as she performs it.
+ *
+ * The row's label is the exercise NAME, and which names appear is `swapChoices`'s answer, so it is
+ * asked rather than assumed: a hard-coded name would keep passing after the pool stopped offering it.
+ */
+async function swapAndPick(r: ReactTestRenderer): Promise<void> {
+  press(r, tg('workout.swapAction'));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  const choices = swapChoices('db_shoulder_press', { sessionExerciseIds: restSession.sessionExerciseIds });
+  expect(choices.length).toBeGreaterThan(0); // the menu is real, or this test proves nothing
+  press(r, choices[0].exercise.name);
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 /** The footer that holds "Start …" and "+15 sec", found by the control inside it. */
 function footerOf(r: ReactTestRenderer) {
   const plus = r.root.find(
@@ -164,10 +191,7 @@ describe('the swap notice owns the rest screen’s footer', () => {
     const r = draw();
 
     // The swap the founder used: the rest screen's own Swap, which targets the NEXT lift.
-    press(r, tg('workout.swapAction'));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await swapAndPick(r);
 
     const footer = footerOf(r);
     expect(footer).toBeTruthy();
@@ -194,16 +218,9 @@ describe('the swap notice owns the rest screen’s footer', () => {
      */
     const r = draw();
 
-    press(r, tg('workout.swapAction'));
-    await act(async () => {
-      await Promise.resolve();
-    });
-
+    await swapAndPick(r);
     // Not the toast's action — the screen's own Swap, still reachable behind the notice.
-    press(r, tg('workout.swapAction'));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await swapAndPick(r);
 
     const footer = footerOf(r);
     expect(footer).toBeTruthy();

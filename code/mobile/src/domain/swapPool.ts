@@ -216,6 +216,108 @@ export function swapCandidates(currentId: string, ctx: SwapContext): Exercise[] 
   return [...pinned, ...scored.map((s) => s.e).filter((e) => !pinnedSet.has(e.id))];
 }
 
+/**
+ * ════ WHAT SHE IS OFFERED WHEN SHE TAPS SWAP — AT MOST THREE, AND NEVER PADDED ════
+ *
+ * ⛔ FOUNDER, 2026-08-16: *"שלחיצת swap לא ישר מעביר לתרגיל דומה אלא מציג 3 אופציות לבחירה"* — and,
+ * in the same breath, the bar that matters: *"רק תוודא שאכן החלופות הגיוניות ושזה לא יציע סתם
+ * אופציות."*
+ *
+ * ⚠️ A FIXED THREE WOULD HAVE BEEN PADDING, AND IT IS MEASURABLE. Across the 111 generatable lifts:
+ *
+ *     3 or more TRUE synonyms (same movement pattern) ....... 62 lifts
+ *     exactly two ........................................... 25
+ *     exactly one ........................................... 18
+ *     none at all ...........................................  6   (leg extension, ab wheel, …)
+ *
+ * So "always show three" would fill 49 of 111 menus with a DIFFERENT MOVEMENT — and this module's
+ * own header is explicit that *"a swap is a SYNONYM, not a variation"*. The worst case measured: the
+ * third option for a cable kickback was a HIP THRUST, a full 170 points away — a different pattern
+ * and a different tier. Nobody asking for another kickback wants that offered as a peer.
+ *
+ * So the menu is capped at three but never stretched to three. `sameMovement` marks each one, and
+ * the caller must show the difference: a true synonym is "the cable is busy, do the dumbbell
+ * version"; anything else is "there is no other kickback — this trains the muscle a different way",
+ * which is a real answer when the station is taken and a lie if it is presented as the same lift.
+ *
+ * ⚠️ THE LAST RUNG IS KEPT ON PURPOSE. Six lifts have no synonym at all, and offering her nothing
+ * when the rack is occupied is worse than offering her something honestly labelled (S-20).
+ */
+export interface SwapChoice {
+  exercise: Exercise;
+  /** True when it trains the same movement pattern — a substitute rather than a replacement. */
+  sameMovement: boolean;
+}
+
+/** How many the menu shows at most. Three is the founder's number; the cap is not the target. */
+export const SWAP_CHOICES = 3;
+
+export function swapChoices(currentId: string, ctx: SwapContext, limit: number = SWAP_CHOICES): SwapChoice[] {
+  const current = exerciseById(catalogIdFromEngine(currentId));
+  if (!current) return [];
+  const ranked = swapCandidates(currentId, ctx);
+
+  /*
+   * ⛔ HER OWN STANDING CHOICES LEAD, WHATEVER PATTERN THEY CARRY (2026-08-16, caught in review).
+   *
+   * `swapCandidates` deliberately puts three things at the head of the list: the blueprint ORIGINAL a
+   * learned adoption replaced (S-70), her standing SUBSTITUTE (S-69) and her BACKUP. The first build
+   * of this function then re-partitioned the whole list by exact `pattern` — and any pinned lift
+   * whose pattern differed fell out of the menu entirely.
+   *
+   * That silently broke S-70's promise that a wrong adoption is cheap to reverse: *"the original is
+   * offered FIRST ever after, so swap back twice and it is restored."* On the phone it was not
+   * offered at all. `admissible` gates on `patternFamily`, which is far wider than `pattern`, so a
+   * cross-pattern standing choice is perfectly legal — it just is not a SYNONYM, and the row says so.
+   */
+  const pinnedCount = pinnedLeadCount(ranked, current, ctx);
+  const pinned = ranked.slice(0, pinnedCount);
+  const rest = ranked.slice(pinnedCount);
+
+  const out: SwapChoice[] = pinned
+    .slice(0, limit)
+    .map((e) => ({ exercise: e, sameMovement: e.pattern === current.pattern }));
+
+  const synonyms = rest.filter((e) => e.pattern === current.pattern);
+  const others = rest.filter((e) => e.pattern !== current.pattern);
+  for (const e of synonyms) {
+    if (out.length >= limit) break;
+    out.push({ exercise: e, sameMovement: true });
+  }
+  /*
+   * ⚠️ AND A DIFFERENT MOVEMENT ONLY WHEN HER OWN CANNOT FILL THE MENU AT ALL — never to round it up
+   * to three. `swapPool`'s measurement: 49 of 111 lifts have no third true synonym, and the third
+   * option for a cable kickback is a hip thrust, 170 points away.
+   */
+  if (out.length === 0) {
+    for (const e of others) {
+      if (out.length >= 1) break;
+      out.push({ exercise: e, sameMovement: false });
+    }
+  }
+  return out;
+}
+
+/**
+ * How many of `ranked`'s leading entries are HER standing choices rather than the fidelity score's.
+ *
+ * `swapCandidates` builds them in one place and prepends them; this reads the same three sources so
+ * the two cannot disagree about which rows are hers.
+ */
+function pinnedLeadCount(ranked: readonly Exercise[], current: Exercise, ctx: SwapContext): number {
+  const subs = ctx.prefs?.substitutes ?? {};
+  const anchorId = Object.keys(subs).find((k) => subs[k] === current.id);
+  const ids = new Set(
+    [anchorId, subs[current.id], ctx.prefs?.backups?.[current.id]]
+      .filter((id): id is string => !!id)
+      .map((id) => catalogIdFromEngine(id)),
+  );
+  if (ids.size === 0) return 0;
+  let n = 0;
+  while (n < ranked.length && ids.has(ranked[n].id)) n += 1;
+  return n;
+}
+
 /** The one best substitute, or undefined when the athlete's muscle offers no admissible peer. */
 export function bestSwap(currentId: string, ctx: SwapContext): Exercise | undefined {
   return swapCandidates(currentId, ctx)[0];

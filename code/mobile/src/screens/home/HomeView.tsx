@@ -134,7 +134,9 @@ export interface HomeViewProps {
   /** The QUEUED workout's id. The chips key off this, never off the name: two workouts in a week
    *  can be called the same thing, and a chip that matched by name would light the wrong one. */
   dayId?: string | null;
-  muscles: string; // "Chest · Shoulders · Triceps"
+  /* ⛔ `muscles` REMOVED (2026-08-16). It was declared here and never read in this file: the coach
+     names its own sessions and does not state muscle groups, so `Home` fed it `''` to satisfy a
+     field with no consumer. `HomeWorkoutOption.muscles` above is a different, live one. */
   trainedThisWeek: number;
   startError: boolean;
   weekNumber: number; // training-week counter ("Week N"), from memberSince
@@ -149,15 +151,9 @@ export interface HomeViewProps {
    * that is wrong by a factor of six.
    */
   planTimeUnknown?: boolean;
-  /** S-3 — the engine could not fit this day inside her declared minutes even after every legal cut
-   *  (every trained muscle is down to its last lift). Set on ProgramDay by generateProgram. When
-   *  true, Hush SAYS so under the plan rather than starving a muscle in silence. */
-  overBudget?: boolean;
   /** Muscles whose rest window has run out and are still waiting on her answer (S-32b's sibling). */
   easeChecks?: string[];
   onEaseAnswer?: (muscle: string, answer: 'recovered' | 'tender' | 'hurts') => void;
-  /** Her declared time budget in minutes (profile.workoutMinutes) — the number the S-3 line names. */
-  budgetMinutes?: number;
   /** Open one lift's form clip — a tap on the lift's row. */
   onForm: (exerciseId: string) => void;
   /** The selected workout is already trained this week: it can be READ, never started again
@@ -558,16 +554,26 @@ export function HomeView(props: HomeViewProps) {
                    Every card answers for itself now. See `WeekColumn.shapeOf`. */
               >
 
-              {/* S-3 · the day genuinely cannot fit her minutes. The engine has already cut everything
-                  it legally can (a muscle's last lift is protected), so it says so plainly and offers
-                  the two levers she owns — more minutes, or a muscle off — rather than starve one in
-                  silence. A quiet note, not an alarm: it is a fact about her budget, not an error. */}
-              {props.overBudget && props.plan?.length ? (
-                <Text style={styles.overBudgetNote}>
-                  {t('home.overBudget', { n: props.budgetMinutes ?? 0 })}
-                </Text>
-              ) : null}
+              {/*
+                ⛔ THE S-3 NOTE WAS HERE AND IS GONE (2026-08-16), FOR TWO REASONS AND A MEASUREMENT.
 
+                · It was PERMANENTLY OFF. `Home` passed `overBudget={false}` — a literal, with a note
+                  saying the generator no longer composes the day this screen draws. A branch that
+                  cannot render is not a feature waiting to be switched on; it is a claim the file
+                  makes about itself that is not true.
+                · It named a budget that no longer exists. The sentence is *"won't fit in {{n}}
+                  minutes. Add time…"* and F-15 made the session 45-60 for everyone — nothing asks her
+                  for minutes and nothing can add them, so `budgetMinutes` was always undefined and
+                  the line would have printed "in 0 minutes" if it ever had rendered.
+                · And the state itself does not occur: swept over 520 generated days including every
+                  single-muscle body map, `overBudget` was stamped ZERO times. `enforceTimeCap` always
+                  lands the day inside the hour.
+
+                ⚠️ THE ENGINE FLAG STAYS. S-3 is ratified, several audits use `overBudget` as their
+                one legal exemption, and `PreWorkoutScreen` reads it per day — so the fact keeps its
+                home. What is deleted is a SECOND surface for it on this screen, which `weekNotice`
+                (above, `props.notice`) already owns and states in one sentence with its remedy.
+              */}
               </WeekColumn>
 
               {/*
@@ -827,7 +833,6 @@ const styles = StyleSheet.create({
   // The face only — the COLOUR is `directionTone(lift.changed)` at the call site, so this row can
   // never hold an opinion about direction that the rest of the app does not share.
   // S-3 — a quiet note, not an alarm. Sans (it carries words), secondary ink, sits under the plan.
-  overBudgetNote: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 20, color: color.textSecondary, textAlign: 'left', marginTop: 10 },
   doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 4 },
   doneText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
 

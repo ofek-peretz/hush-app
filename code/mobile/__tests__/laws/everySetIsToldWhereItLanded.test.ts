@@ -163,6 +163,63 @@ describe('⛔ the band reaches the beat', () => {
 });
 
 /**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AND IT HAS TO STAY ON SCREEN LONG ENOUGH TO BE READ — the third time this law was half-built.
+ *
+ * FOUNDER, 2026-08-16:
+ *
+ *   > *"the Logged screen does not appear after a set when the trainee lands in range."*
+ *
+ * ── THE SAME SHAPE AS "ONE LADDER", ONE SCREEN LATER ────────────────────────────────────────────
+ * Two conditions in this one file decide the beat: `beatSpeaks` decides whether it is DRAWN, and a
+ * `setTimeout` three hundred lines away decides how long it is drawn FOR. `beatSpeaks` has three
+ * qualifying cases; the timer had one — the last set of a lift. So the in-band landing, restored on
+ * 2026-08-04 and covering MOST SETS, rendered and was torn down on the next tick. Under one frame.
+ *
+ * ── WHY IT LOOKED FIXED ─────────────────────────────────────────────────────────────────────────
+ * Every test above passed, because `bandPlacement` is pure and was never the bug — twice over now.
+ * And the two cases a founder would naturally reach for, a raise and a drop, BOTH worked: an
+ * out-of-band set produces a correction, which returns early into its own 2.2 s hold and never
+ * touches this timer. Only the quiet middle was silent. The wrist gated on all three and held
+ * unconditionally, so the same set logged on the WATCH showed the beat and on the PHONE did not.
+ *
+ * **A condition that decides whether to draw, and a second condition that decides how long, are one
+ * decision. They may not be written twice.**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ the beat is held as long as it is spoken', () => {
+  const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+  it('the dwell asks about the band, exactly as the render guard does', () => {
+    // The release timer: `}, <condition> ? CONFIRM_DWELL_MS : 0);`
+    const dwell = src.match(/\}\s*,\s*([^;]*?)\?\s*CONFIRM_DWELL_MS\s*:\s*0\s*\)/);
+    expect(dwell).not.toBeNull();
+    /*
+     * ⚠️ THE ASSERTION IS ON THE BAND TERM, NOT ON THE WHOLE EXPRESSION. `beatCorrection` genuinely
+     * cannot appear here — it is not known until `completeSet` resolves, and it opens its own hold
+     * when it arrives. The last-set term and the band term are the two that ARE knowable at the
+     * moment the timer is armed, and both must be present or a beat is drawn that nobody can read.
+     */
+    expect(dwell![1]).toMatch(/bandPlacement\s*\(\s*confirm\s*\)/);
+    expect(dwell![1]).toMatch(/confirm\.n\s*>=\s*confirm\.m/);
+  });
+
+  it('…and so does the wrist, which is where the divergence was visible', () => {
+    // The watch path was already right; it is asserted so the two surfaces cannot drift apart again.
+    const watch = src.slice(src.indexOf('setWatchBeat(beat)') - 400, src.indexOf('setWatchBeat(beat)'));
+    expect(watch).toMatch(/bandPlacement\s*\(\s*beat\s*\)/);
+  });
+
+  it('an ordinary in-band set really is a case the guard admits', () => {
+    // Guards against the assertions above passing while `bandPlacement` returns null for the shape
+    // the store actually produces on a middle set.
+    expect(bandPlacement({ weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] })).not.toBeNull();
+  });
+});
+
+/**
  * ⛔ THE LIFT-DONE BEAT ALWAYS HAS A SUBJECT (founder 2026-08-05: *"the exercise-finished screen
  * shows a black screen with only dots at the top"*).
  *

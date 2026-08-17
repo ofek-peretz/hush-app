@@ -268,6 +268,16 @@ export function pickExercises(
   leaveIt?: string,
   substitutes: Record<string, string> = {},
   profile?: LoadProfile,
+  /**
+   * The instant the pain windows are judged against (S-44). PASSED, never read from the clock —
+   * see `assembleV5DayLists`, which is the one place in this module allowed to know the time.
+   */
+  nowMs: number = Date.now(),
+  /**
+   * What she DECLARED in the exercise library (`OwnedPreferences.chosenByMuscle` / `refusedIds`),
+   * scoped to this muscle. Absent → the engine chooses alone, exactly as before.
+   */
+  library?: { chosen?: readonly string[]; refused?: readonly string[] },
 ): string[] {
   /*
    * ⛔ A MOVEMENT SHE HAS REPORTED IS NOT OFFERED (founder 2026-08-11, `FORBIDDEN_PATTERNS`).
@@ -282,7 +292,7 @@ export function pickExercises(
    * for this muscle uses a movement she reported, the honest answer is that it rests this week.
    * Handing it back would be the app overruling her report to keep the shape tidy.
    */
-  const banned = forbiddenFor(muscle, profile?.painEases, Date.now());
+  const banned = forbiddenFor(muscle, profile?.painEases, nowMs);
   const all = exercisesForMuscle(muscle as MuscleGroup)
     .filter((e) => !isSwapOnly(e.id))
     .filter((e) => !banned.has(e.pattern));
@@ -302,17 +312,54 @@ export function pickExercises(
   // loadable compound; behind that seat it stands exactly where the catalogue puts it. This is not a
   // ranking of exercises — a pull-up is not a lesser lift — it is a statement about which lift the
   // correction loops can actually act on.
+  /*
+   * ⛔ WHAT SHE REFUSED IN THE LIBRARY IS A GATE, NOT A PREFERENCE — no diversity score may overrule
+   * it, exactly as no score may overrule the pain ban above.
+   *
+   * ⚠️ EXCEPT THAT IT MAY NEVER EMPTY A MUSCLE SHE LEFT ON. Refusing every lift of a muscle says two
+   * contradictory things at once — train this, and none of the things that train it — and the honest
+   * reading is that she meant to switch the MUSCLE off, which the body map already does and says so
+   * on screen. Handing her an empty muscle instead would be the engine acting on a contradiction.
+   */
+  const refused = new Set(library?.refused ?? []);
+  const keptAfterRefusals = refused.size > 0 ? pool.filter((e) => !refused.has(e.id)) : pool;
+  const usable = keptAfterRefusals.length > 0 ? keptAfterRefusals : pool;
+
   const rank = (e: Exercise) => (e.tier === 'compound' ? 0 : 2) + (e.bodyweight ? 1 : 0);
-  const compoundFirst = [...pool].sort((a, b) => rank(a) - rank(b));
-  const anchor = (leaveIt ? pool.find((e) => e.id === leaveIt) : undefined) ?? compoundFirst[0];
+  const compoundFirst = [...usable].sort((a, b) => rank(a) - rank(b));
+  const anchor = (leaveIt ? usable.find((e) => e.id === leaveIt) : undefined) ?? compoundFirst[0];
 
   // Each FURTHER slot maximises STIMULUS DIVERSITY against what is already chosen — a different
   // movement pattern first (the point), a different equipment family second (a byproduct, not chased
   // for its own sake), and the ISOLATION contrast to the compound anchor last: a compound + a
   // stretch/isolation beats two overlapping compounds fighting the same failure point (S-77, founder
   // 2026-07-25). Greedy + deterministic — ties fall to catalog order via the strict `>`.
-  const chosen = [anchor];
-  const remaining = pool.filter((e) => e.id !== anchor.id);
+  /*
+   * ⛔ HER PICKS LEAD, IN HER ORDER (founder 2026-08-16 — the exercise library).
+   *
+   * A declaration is not a vote among the engine's candidates; it is the answer. So the lifts she
+   * chose take the leading seats and the diversity loop below fills whatever the volume still
+   * affords BEHIND them — scoring against her picks, so what it adds complements rather than repeats
+   * what she asked for.
+   *
+   * ⚠️ IT DOES NOT BUY VOLUME. `wanted` is still decided by the muscle's weekly target and the
+   * clock, so picking five chest lifts does not make room for five: the ones that fit, fit. Anything
+   * else would let a tap in the library overrule S-64, and the hour is the hour.
+   *
+   * ⚠️ AND A PICK SHE HAS SINCE REFUSED, OR THAT PAIN HAS BANNED, IS NOT IN `pool` AND SO CANNOT
+   * LEAD — the gates run first, deliberately.
+   */
+  const picks = (library?.chosen ?? [])
+    .map((id) => usable.find((e) => e.id === id))
+    .filter((e): e is Exercise => !!e)
+    // ⛔ CAPPED AT `wanted`, and this is the line that makes "it does not buy volume" true rather
+    // than merely stated. Without it, picking five chest lifts seated five: `chosen` began longer
+    // than the muscle's allowance and the loop below — which only ever ADDS while `chosen.length <
+    // wanted` — never had a chance to object. Measured: 7 chest lifts where the target affords 5.
+    .slice(0, Math.max(1, wanted));
+  const seen = new Set<string>();
+  const chosen = (picks.length > 0 ? picks : [anchor]).filter((e) => !seen.has(e.id) && seen.add(e.id));
+  const remaining = usable.filter((e) => !seen.has(e.id));
   while (chosen.length < wanted && remaining.length > 0) {
     const patterns = new Set(chosen.map((e) => e.pattern));
     const equips = new Set(chosen.map((e) => e.equipment));
@@ -440,20 +487,43 @@ export function assembleV5DayLists(
   volumeByMuscle: Record<string, number> = {},
   /** Her sex + bodyweight — read ONLY to ask whether a lift's floor is loadable for her (S-55b). */
   profile?: LoadProfile,
+  /**
+   * ⛔ THE INSTANT THE PAIN WINDOWS ARE JUDGED AGAINST — PASSED IN, AND THIS IS THE ONLY LINE IN
+   * THIS MODULE THAT MAY KNOW THE TIME.
+   *
+   * `pickExercises` used to call `Date.now()` itself, four frames deep, in a file whose header says
+   * **PURE** and whose determinism the register requires (I-24). Two things followed. The claim was
+   * false: the same inputs built a different programme once an ease expired. And it was a TIME BOMB
+   * in the test suite — `theProgrammeUnderAnInjury` pins its report to a fixed date, so the audit
+   * passed on the day it was written and began failing the moment real time walked past the
+   * three-day twinge window. That is exactly how it was found: the twinge case red, the seven-day
+   * pain case and the fourteen-day sharp case still green, and both of those due to break next.
+   *
+   * A programme SHOULD change when a window closes — that part was never wrong. Reading the clock
+   * from inside the decision, where no caller and no test can reach it, is what was.
+   */
+  nowMs: number = Date.now(),
+  /** What she DECLARED in the exercise library — see `OwnedPreferences.chosenByMuscle`. */
+  library?: { chosenByMuscle?: Record<string, string[]>; refusedIds?: string[] },
 ): DayList[] {
   // `days` is passed so the weekly pot follows her frequency (B-2, 2026-08-08). Without it every
   // frequency drew the same 10 sets a muscle and the extra days were empty calories.
   const targets = weeklyTargets(map, CANONICAL_MUSCLE_ORDER, days); // off muscles absent (S-2)
   delete targets['Core']; // supplemental — never its own structural day
   /*
-   * The same week WITHOUT her marks — the muscle's natural claim, used to bound how far a mark may
-   * carry its exercise COUNT. Her `off` stances are kept, because those are not marks and they
-   * genuinely change what the week is for. See the count bound in the selection loop below.
+   * ⛔ `plainMap` / `plainTargets` DELETED 2026-08-16 — a second weekly-target pass nothing read.
+   *
+   * It computed the same week WITHOUT her emphasis marks, and its comment said it was *"used to bound
+   * how far a mark may carry its exercise COUNT — see the count bound in the selection loop below."*
+   * There is no such bound in the selection loop and there never was. The dead variable was the small
+   * half of it; the comment was the dangerous half, because it described a guarantee the assembler
+   * does not make, and the next person to ask "what stops a mark running away with the week?" would
+   * have read this and stopped looking.
+   *
+   * What actually bounds a mark is `emphasisRefusal` (F-4's budget and the region rule, refused at the
+   * point she places it) and `startingWeeklySets`, which clamps every target to `WEEKLY_SETS_CEILING`.
+   * Both are tested. Neither needed this.
    */
-  const plainMap = Object.fromEntries(
-    Object.entries(map ?? {}).filter(([, v]) => v !== 'emphasis'),
-  ) as BodyMap;
-  const plainTargets = weeklyTargets(plainMap, CANONICAL_MUSCLE_ORDER, days);
   const trainable = Object.keys(targets);
   if (trainable.length === 0 || days <= 0) return []; // S-3
 
@@ -481,9 +551,18 @@ export function assembleV5DayLists(
       if (learned != null) {
         // Cap the exercise count at her actual pool so the target lands on real lifts, not a phantom
         // one (which would steal sets and make realized volume non-monotonic as the target grows).
-        const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes).length;
+        /*
+         * ⛔ `profile` WAS MISSING HERE AND PRESENT ON EVERY OTHER CALL. `pickExercises` uses it for
+         * the pain ban and the loadability filter (S-55b), so this counted a pool the real pick
+         * would then refuse — `distributeMuscleSets` returned MORE buckets than `picked` has ids and
+         * the tail was dropped by `i < dist.length` below. The sets did not move to another lift;
+         * they vanished. A muscle with a learned target of 20 and two of four patterns banned could
+         * be delivered 10.
+         */
+        const forMuscle = { chosen: library?.chosenByMuscle?.[m], refused: library?.refusedIds };
+        const poolSize = pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes, profile, nowMs, forMuscle).length;
         const dist = distributeMuscleSets(learned, poolSize);
-        const picked = pickExercises(m, dist.length, leaveItsByMuscle[m], substitutes, profile);
+        const picked = pickExercises(m, dist.length, leaveItsByMuscle[m], substitutes, profile, nowMs, forMuscle);
         picked.forEach((id, i) => { if (i < dist.length) setCounts[id] = dist[i]; });
         picks.push(...picked);
       } else {
@@ -525,13 +604,13 @@ export function assembleV5DayLists(
          */
         const regionOfM = regionDays.filter((r) => r === 'full' || r === regionOf(m)).length || 1;
         const distinctPatterns = new Set(
-          pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes, profile)
+          pickExercises(m, Number.MAX_SAFE_INTEGER, leaveItsByMuscle[m], substitutes, profile, nowMs, { chosen: library?.chosenByMuscle?.[m], refused: library?.refusedIds })
             .map((id) => exerciseById(id)?.pattern)
             .filter(Boolean),
         ).size || 1;
         const room = Math.max(marked ? 2 : 1, regionOfM * distinctPatterns);
         const want = Math.min(room, Math.max(exerciseCountFor(targets[m]), marked ? 2 : 1));
-        picks.push(...pickExercises(m, want, leaveItsByMuscle[m], substitutes, profile));
+        picks.push(...pickExercises(m, want, leaveItsByMuscle[m], substitutes, profile, nowMs, { chosen: library?.chosenByMuscle?.[m], refused: library?.refusedIds }));
       }
     }
 
@@ -776,29 +855,54 @@ export function assembleV5DayLists(
    * ⚠️ AND IT LEVELS TO WITHIN ONE. Exact equality is impossible when the lift count is not divisible
    * by the day count, and chasing it would move lifts for ever; the guard bounds the passes anyway.
    */
+  /*
+   * ⛔⛔ AND IT IS LEVELLED PER REGION — ALL OF THEM, NOT JUST THE ONE DAY 0 HAPPENS TO BE IN.
+   *
+   * A lift may only move between days that train the same region, so the search has to be scoped to
+   * a region. It was scoped by `regionDays[fullest]` with `fullest` seeded to **0** — and since
+   * `fullest` can only ever move to a day of its own region, `regionDays[fullest]` stayed
+   * `regionDays[0]` for the whole loop. On a split week `assignRegionDays` interleaves upper-first,
+   * so **the lower body was structurally invisible to this pass and was never levelled.**
+   *
+   * It was invisible in review too, because the founder's measurement that justified the pass (above)
+   * was a THREE-DAY FULL-BODY week — one region, where seeding at 0 is correct by accident.
+   *
+   * ⚠️ AND THE HONEST MEASUREMENT IS THAT NOTHING CHANGES TODAY. Swept over 330 assembled weeks —
+   * every legal one- and two-mark map plus three `off` maps, 2–6 days, both sexes — the count of
+   * regions shipping a lift-count spread above one is **0 before this fix and 0 after it**. The
+   * dealer's own "emptiest legal day" rule already levels both regions unaided; this pass is the
+   * safety net for the case the dealer cannot reach (the comment above records the one the founder
+   * measured), and half of that net was missing. It is a latent defect made whole, not a bug with a
+   * victim — recorded that way so nobody re-derives a saving that was never there.
+   *
+   * ⚠️ `emptiest` HAD THE SAME SEED AND IT MATTERED ONLY ONCE THE FIRST BUG WAS FIXED. Starting it at
+   * 0 was harmless while `fullest` was pinned to region-0 (day 0 is a legal candidate there), and
+   * would have pushed a lift into the WRONG REGION the moment the region filter started working.
+   * Both indices are seeded from the region's own days now, which is the only correct baseline.
+   */
   const totalDealt = dayExercises.reduce((n, d) => n + d.length, 0);
-  for (let guard = 0; guard < totalDealt + dayExercises.length; guard++) {
-    let fullest = 0;
-    let emptiest = 0;
-    for (let i = 0; i < dayExercises.length; i++) {
-      if (regionDays[i] !== regionDays[fullest]) continue;
-      if (dayExercises[i].length > dayExercises[fullest].length) fullest = i;
-    }
-    for (let i = 0; i < dayExercises.length; i++) {
-      if (regionDays[i] !== regionDays[fullest]) continue;
-      if (dayExercises[i].length < dayExercises[emptiest].length) emptiest = i;
-    }
-    if (dayExercises[fullest].length - dayExercises[emptiest].length <= 1) break;
-    const movable = dayExercises[fullest].find((id) => {
-      const ex = exerciseById(id);
-      return ex && !dayExercises[emptiest].some((other) => {
-        const o = exerciseById(other);
-        return o && o.muscle === ex.muscle && o.pattern === ex.pattern;
+  for (const region of new Set(regionDays)) {
+    const inRegion = dayExercises.map((_, i) => i).filter((i) => regionDays[i] === region);
+    if (inRegion.length < 2) continue; // nowhere to move a lift TO
+    for (let guard = 0; guard < totalDealt + inRegion.length; guard++) {
+      let fullest = inRegion[0];
+      let emptiest = inRegion[0];
+      for (const i of inRegion) {
+        if (dayExercises[i].length > dayExercises[fullest].length) fullest = i;
+        if (dayExercises[i].length < dayExercises[emptiest].length) emptiest = i;
+      }
+      if (dayExercises[fullest].length - dayExercises[emptiest].length <= 1) break;
+      const movable = dayExercises[fullest].find((id) => {
+        const ex = exerciseById(id);
+        return ex && !dayExercises[emptiest].some((other) => {
+          const o = exerciseById(other);
+          return o && o.muscle === ex.muscle && o.pattern === ex.pattern;
+        });
       });
-    });
-    if (!movable) break;
-    dayExercises[fullest].splice(dayExercises[fullest].indexOf(movable), 1);
-    dayExercises[emptiest].push(movable);
+      if (!movable) break;
+      dayExercises[fullest].splice(dayExercises[fullest].indexOf(movable), 1);
+      dayExercises[emptiest].push(movable);
+    }
   }
 
   // Hole guard: no workout may be EMPTY (a very sparse map at a high frequency — few muscles, many

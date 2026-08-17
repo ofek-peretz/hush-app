@@ -96,7 +96,6 @@ export function Progress({ navigation, route }: Props) {
       entries={entries}
       loaded={sessions != null}
       units={units}
-      milestones={null}
     />
   );
 }

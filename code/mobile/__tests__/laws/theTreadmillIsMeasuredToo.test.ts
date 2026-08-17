@@ -228,12 +228,126 @@ describe('⛔ and the wire reaches the screen', () => {
   });
 });
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ AND THE WIRE HAS TO BE PLUGGED IN THE WAY THE SOCKET IS SHAPED (founder 2026-08-16):
+ *
+ *   > *"בקרדיו בפנים ניערתי את הפלאפון המון ואין תנועה במסך."*
+ *
+ * (The shaking could never have worked — Core Motion counts GAIT, not vibration, and the phone must
+ * be on her. But under that there was a real defect, and it took the whole mode.)
+ *
+ * `distanceSince` called `queryQuantitySamples` with **no `limit`** — a REQUIRED field the Nitro
+ * bridge decodes as a non-optional `double`, so it threw on device — and with the dates **flat**
+ * instead of under `filter.date`, where the Swift side is the only place that reads them. The
+ * correct form of both was already written in `recentWorkouts`, thirty lines below, in the same file.
+ *
+ * ── WHY EVERY EXISTING LAW WATCHED IT HAPPEN ────────────────────────────────────────────────────
+ * The tests below this one assert on the file's TEXT: that `async distanceSince(` exists, that the
+ * scope holds the type. All true, all passing, none of them ever CALLED it — because `jest.setup.js`
+ * mocks the healthkit module without defining `queryQuantitySamples` at all, and makes
+ * `isHealthDataAvailableAsync` resolve false so the function returns at its first line. And the file
+ * carries `@ts-nocheck`, so the compiler could not object either.
+ *
+ * **A law that reads a function's name proves the function is named.** This one runs it, against a
+ * double that enforces the library's contract — the only place the defect was ever visible.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ the indoor query is shaped the way the library reads it', () => {
+  const quantityCalls: any[] = [];
+
+  beforeEach(() => {
+    quantityCalls.length = 0;
+    jest.resetModules();
+    jest.doMock('@kingstinct/react-native-healthkit', () => ({
+      isHealthDataAvailableAsync: async () => true,
+      isHealthDataAvailable: () => true,
+      requestAuthorization: async () => true,
+      getRequestStatusForAuthorization: async () => 2,
+      getMostRecentQuantitySample: async () => undefined,
+      AuthorizationRequestStatus: { unknown: 0, shouldRequest: 1, unnecessary: 2 },
+      queryWorkoutSamples: async () => [],
+      queryQuantitySamples: async (_type: string, options: any) => {
+        quantityCalls.push(options);
+        /*
+         * ⚠️ THE DOUBLE ENFORCES THE CONTRACT, IT DOES NOT ASSUME IT. Both rules are read off the
+         * installed package, not invented here:
+         *   · `GenericQueryOptions.limit` is `readonly limit: number` — NOT optional — and the
+         *     generated bridge decodes it via `JSIConverter<double>::fromJSI`, i.e. `asNumber()`,
+         *     which throws on `undefined`. So: missing `limit` ⇒ throw, exactly as on device.
+         *   · `FilterForSamplesBase` puts the window under `date`, and `QuantityTypeModule.swift`
+         *     reads `options?.filter?.date?.startDate`. A flat `{ startDate }` is not a narrow
+         *     predicate, it is NO predicate — so the double ignores it, exactly as the device does.
+         */
+        if (typeof options?.limit !== 'number') throw new TypeError('limit is required');
+        const from = options?.filter?.date?.startDate ?? null;
+        const to = options?.filter?.date?.endDate ?? null;
+        const all = [
+          // Inside the window: 1.0 km, then 0.5 km.
+          { quantity: 1.0, startDate: new Date(1_000), endDate: new Date(2_000) },
+          { quantity: 0.5, startDate: new Date(2_000), endDate: new Date(3_000) },
+          // Before it — the walk to the gym. Only an unfiltered read returns this.
+          { quantity: 9.0, startDate: new Date(-100_000), endDate: new Date(-99_000) },
+        ];
+        if (!from || !to) return all;
+        return all.filter((s) => s.startDate >= from && s.endDate <= to);
+      },
+    }));
+  });
+
+  afterEach(() => {
+    jest.dontMock('@kingstinct/react-native-healthkit');
+    jest.resetModules();
+  });
+
+  const gate = () => require('@/platform/health/healthKitGate').healthKitGate;
+
+  it('it passes a limit — without one the call throws and the whole mode reads as "motion off"', async () => {
+    // The regression itself: before the fix this resolved to null, and null is what draws
+    // `cardio.motionOff` over a 0 m stage for the entire run.
+    await expect(gate().distanceSince(1_000, 3_000)).resolves.not.toBeNull();
+    expect(typeof quantityCalls[0].limit).toBe('number');
+  });
+
+  it('…and the limit is the "every sample" sentinel, because the answer is a SUM', async () => {
+    // A capped read would silently drop segments off a long run — the one read on this gate that
+    // must not take "the newest few". The library's sentinel is any non-positive number.
+    await gate().distanceSince(1_000, 3_000);
+    expect(quantityCalls[0].limit).toBeLessThanOrEqual(0);
+  });
+
+  it('it narrows by date where the native side actually looks', async () => {
+    await gate().distanceSince(1_000, 3_000);
+    expect(quantityCalls[0].filter?.date?.startDate).toBeInstanceOf(Date);
+    expect(quantityCalls[0].filter?.date?.endDate).toBeInstanceOf(Date);
+  });
+
+  it('⚠️ and the window really excludes her walk to the gym', async () => {
+    // The end-to-end consequence of the mis-nesting: an unfiltered predicate returns the 9 km
+    // sample too, and the treadmill stage opens at 10.5 km.
+    await expect(gate().distanceSince(1_000, 3_000)).resolves.toBeCloseTo(1.5, 3);
+  });
+});
+
 describe('the wire it rides on', () => {
   it('⛔ the read scope already held the distance type — this is a wire, not a model', () => {
     const gate = read('src/platform/health/healthKitGate.ts');
     expect(gate).toContain("const DISTANCE = 'HKQuantityTypeIdentifierDistanceWalkingRunning';");
     expect(gate).toContain('toRead: [HEART_RATE, ACTIVE_ENERGY, DISTANCE, WORKOUT]');
     expect(gate).toContain('async distanceSince(');
+  });
+
+  it('⛔ the indoor mode asks for its OWN source, rather than relying on a skippable onboarding step', () => {
+    /*
+     * `requestPermission` lived only in `ConnectHealth` (skippable) and `ProfileSheet`. An athlete
+     * who tapped past onboarding reached the treadmill with HealthKit unauthorized — and a denied
+     * READ returns an empty array, not an error, so the stage drew a confident 0 m with no message.
+     * The outdoor half of the same hook has always asked for location where it needs it.
+     */
+    const tracker = read('src/platform/cardio/cardioTracker.ts');
+    const indoor = tracker.slice(tracker.indexOf('if (!active || !indoor) return;'), tracker.indexOf('if (!active || indoor) return;'));
+    expect(indoor).toMatch(/health\.permissionState\(\)/);
+    expect(indoor).toMatch(/health\.requestPermission\(\)/);
   });
 
   it('⚠️ every gate implements it, and the stub returns null rather than a confident zero', () => {

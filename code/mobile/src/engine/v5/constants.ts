@@ -346,10 +346,116 @@ export const BAR_KG = 20;
 export const ATTEMPTS_TO_CLEAR_SEED = 1;
 
 /**
- * B-5 â€” before F-12 like-for-like pairs exist, an in-session or between-session load move steps by
- * exactly ONE rung. Not a guessed slope â€” a cautious single step, tested by the next set (L2). Once
- * the slope is fitted from her data, moves size themselves to her measured reps-per-rung.
+ * B-5 — the move of last resort: ONE rung, when nothing at all prices the step (a load of zero, an
+ * equipment class with no rung). Not a guessed slope — a cautious single step, tested by the next
+ * set (L2).
+ *
+ * ⛔ IT USED TO BE THE WHOLE OF B-5, AND THAT IS WHAT THE FOUNDER CAUGHT (2026-08-16):
+ *
+ *   > *"אני יודע שאם מתאמן ביצע למשל 20 חזרות או 12 אנחנו מעלים לו אותו דבר."*
+ *
+ * He is right, and it was measurable in one line. On an 8-10 band at 10 kg, before her slope is
+ * fitted:
+ *
+ *     did 12 reps → 11 kg          did 7 reps → 9 kg
+ *     did 20 reps → 11 kg          did 3 reps → 9 kg
+ *                                  did 1 rep  → 9 kg
+ *
+ * A flat rung is only "cautious" in ONE direction. Being one rung light after a 20-rep set is not
+ * caution, it is a wasted exercise; being one rung heavy after a 1-rep set leaves her under a weight
+ * she cannot move, with `MAX_CORRECTIONS = 2` to escape it.
+ *
+ * ⚠️ SO THE BOOTSTRAP IS NOW DERIVED, NOT DECLARED. `repsPerRung.bootstrapPerRung` prices one rep of
+ * headroom from the SAME e1RM model the app already displays (`loadMath.epley` / `loadForReps`) —
+ * no new number, and it scales itself per equipment because it is a proportion of her load. This
+ * constant survives only as the floor under a case the model cannot price at all.
  */
 export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
 
+/**
+ * F-16 — where the load–rep continuum ends, for the purpose of reading headroom.
+ *
+ * Epley's RATIO between two rep counts holds well across roughly 3–20 reps (a 20-rep set is ~60% of
+ * 1RM, a 10-rep set ~75%, and the model lands on both). Past twenty, reps stop pricing the load at
+ * all — the set is limited by endurance, not by the weight — so a headroom read beyond this edge is
+ * not evidence about iron, and a mis-keyed rep count is indistinguishable from a real one.
+ *
+ * ⚠️ It is a bound on the READING, never a guard against a bad number: L11 (the rail) is what stops
+ * an implausible set from moving a load it has no business moving, and where the rail is inactive
+ * the register is explicit that the athlete's own eyes are the guard (S-49). This only refuses to
+ * treat rep 21 and rep 60 as different facts.
+ */
+export const EPLEY_VALID_REPS = 20;
 
+/**
+ * F-17 — the evidence gate under her learned REST (S-17), in samples.
+ *
+ * The rest median is the one measured statistic that had NO gate: `learnedRestS` returned a median
+ * of whatever it was given, down to a single sample. That is not a median, it is a sample wearing
+ * one — and it decides a timer. One rest cut short (a phone call, a queue for the rack, a
+ * mis-tapped skip) would have become her standing prescription on that lift.
+ *
+ * ⚠️ THREE IS DERIVED, NOT PICKED. A median is chosen over a mean precisely because one bad value
+ * must not move it, and that property does not exist below three: at n=1 the outlier IS the median,
+ * at n=2 it is half of it. Three is the smallest sample where the estimator does the job it was
+ * chosen for. It is the F-12 family — an evidence gate, never a number that sets a load.
+ *
+ * ⚠️ AND IT IS CHEAP TO CLEAR: one occurrence of a three-set lift yields two inter-set rests, so a
+ * lift she has trained twice is already speaking for itself.
+ */
+export const MIN_REST_SAMPLES = 3;
+
+/**
+ * F-18 — the evidence gate under a PER-SET load (`engine/v5/perSetShape`), in SAMPLES.
+ *
+ * The shape has one degree of freedom — the fraction of her capacity a set costs — and every
+ * (occurrence, position) pair is one sample of it, so a four-set occurrence contributes three. Six
+ * is two ordinary occurrences of an ordinary lift: enough for a median to be a median (F-17's
+ * argument, one rung further in), and cheap enough that a lift starts being shaped in its second
+ * week rather than its second month.
+ *
+ * ⚠️ IT COUNTS SAMPLES, NOT OCCURRENCES, AND THAT IS THE WHOLE LESSON OF THE FOURTH ATTEMPT. Fitting
+ * one e1RM per POSITION gave the shape four free parameters, each with a single sample per session;
+ * reps carry about ±0.8 of ordinary noise and a factor is a RATIO of two such estimates, so the
+ * fitted ramp reached 19% where her true decay was 6%. Pooling into one rate is what makes the
+ * estimate stand up, and this constant counts what the pool actually holds.
+ *
+ * ⚠️ IT IS NOT THE ONLY GUARD: every position is capped at one rung above Loop 2's settled
+ * prescription (which has already been through L11), no position may be fitted heavier than the one
+ * before it, and the ramp's MEAN is `base`, so a wrong shape redistributes the exercise without
+ * changing how much work it is.
+ */
+export const MIN_PER_SET_SAMPLES = 6;
+
+
+
+
+/**
+ * ════ B-9 · WHAT SHE KEPT WHILE SHE WAS AWAY ════
+ *
+ * ⛔ FOUNDER'S LIST, 2026-08-16. Measured before either number was chosen, on an athlete given eight
+ * ordinary weeks and then a gap:
+ *
+ *     away  90 days   incline barbell press   asked 30 kg  →  she gets 0 reps
+ *                     machine row             asked 32.5   →  she gets 0 reps
+ *     away 180 days   dumbbell curl           asked  9 kg  →  she gets 3 reps
+ *
+ * Loop 1 has two corrections to rescue that (S-13) and cannot: it moves by RUNGS from where it
+ * starts, so it cannot walk back thirty percent inside one session.
+ *
+ * ⚠️ A BOOTSTRAP, AND THE ONE THE LEDGER'S OWN TEST FITS BEST. Detraining is the single thing about
+ * her the engine genuinely cannot measure — there is no data during a gap, by definition — and Part 6
+ * has exactly one category for a number like that: *"theory-laden by nature and acceptable ONLY
+ * because a fact of hers replaces them fast (L2)"*. This one is replaced by her very FIRST SET BACK,
+ * which is faster than any other B-constant in the ledger.
+ *
+ * ⚠️ AND IT IS THE SAFE END OF THE EVIDENCE, NOT ITS MIDPOINT. The literature spreads either side of
+ * ten percent a month; the errors are not symmetric. Too light costs her one under-loaded session,
+ * which Loop 1 raises from inside. Too heavy costs her the comeback — the one session in her whole
+ * history where the app most has to be right.
+ *
+ * The floor is what stops a long absence prescribing nothing: strength does not decay to zero, and a
+ * two-year gap is a beginner again, which is B-1's job and not this one's.
+ */
+export const DETRAIN_RETAINED_PER_MONTH = 0.9;
+export const DETRAIN_FLOOR = 0.7;

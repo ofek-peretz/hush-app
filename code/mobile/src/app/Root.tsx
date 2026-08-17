@@ -48,6 +48,7 @@ import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { ImportPlan } from '@/screens/import/ImportPlan';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
@@ -200,6 +201,7 @@ function MainNavigator() {
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
       <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} />
+      <MainStack.Screen name="ExerciseLibrary" component={ExerciseLibrary} />
       <MainStack.Screen name="ImportPlan" component={ImportPlan} />
       <MainStack.Screen name="History" component={History} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />

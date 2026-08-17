@@ -36,7 +36,8 @@ import { useSession, type CompleteResult, type LiveCorrection } from '@/state/st
 import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { isOutdoorMovement, isTrackedMovement } from '@/data/movements';
 import { TimeStage, DistanceStage, OpenStage, clockOf, distanceOf } from '@/screens/session/ItemStage';
-import { inWorkoutLadder } from '@/domain/replacement';
+import { swapChoices, type SwapChoice } from '@/domain/swapPool';
+import { SwapSheet } from '@/components/SwapSheet';
 import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
@@ -67,7 +68,7 @@ type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
  * SWAP."* He is right on both counts and the second is the sharper one: a lift she wants gone is a
  * lift she wants REPLACED, and swapping keeps the volume the week was balanced around.
  */
-type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points';
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'swap';
 export type Confirm = {
   weight: number | null;
   reps: number;
@@ -407,8 +408,18 @@ export function SessionFlow({ navigation, route }: Props) {
    * sheet, and it stays until the athlete answers it (or the wrist resumes, which closes it too).
    */
   useEffect(() => {
-    if (session.paused) setOverlay((o) => (o === 'endConfirm' ? o : 'pause'));
-    else setOverlay((o) => (o === 'pause' || o === 'endConfirm' ? 'none' : o));
+    /*
+     * ⚠️ AND A PAUSE CLEARS THE SWAP MENU WITH IT (2026-08-16, caught in review). This effect knew
+     * two overlays; the swap sheet is a third, and pausing mid-menu tore it off the screen while
+     * leaving `swapMenu` and `quickSwapRef` populated — so the verb had done nothing and left state
+     * behind for the next Undo to act on. A paused session has no swap to make; the sheet closes
+     * cleanly and she taps Swap again when she is training.
+     */
+    if (session.paused) {
+      setSwapMenu(null);
+      swapMenuRef.current = null;
+      setOverlay((o) => (o === 'endConfirm' ? o : 'pause'));
+    } else setOverlay((o) => (o === 'pause' || o === 'endConfirm' ? 'none' : o));
   }, [session.paused]);
 
   function openPause() {
@@ -569,8 +580,27 @@ export function SessionFlow({ navigation, route }: Props) {
        * so an ordinary set does not wait 1.4 s to reach its rest — it just reaches it. The last set
        * of a lift still holds, because `ExerciseDone` is drawn immediately; a CORRECTION is not
        * known until `completeSet` resolves, and it opens its own hold when it arrives.
+       *
+       * ⛔⛔ THIS CONDITION MUST STAY EQUAL TO `beatSpeaks` (founder, 2026-08-16): *"the Logged screen
+       * does not appear after a set when the trainee lands in range."*
+       *
+       * `beatSpeaks` has THREE qualifying cases; this timer only ever had the second. So the in-band
+       * landing — the case the founder restored on 2026-08-04, and the one that covers MOST SETS —
+       * passed the render guard, drew, and was torn down by `setConfirm(null)` on the very next tick.
+       * Net visible time: under one frame. It reads exactly like the C.13 deletion it was meant to
+       * undo, which is why it survived a review of the line above.
+       *
+       * ⚠️ WHAT MADE IT LOOK FINE is that the out-of-band case never comes through here: a correction
+       * opens its own 2.2 s hold at the branch above and returns. So the two directions the founder
+       * would naturally test — a raise and a drop — both worked, and only the quiet middle did not.
+       * The wrist path (`watchBeat`, below) already gated on all three and held unconditionally, so
+       * the same set logged on the WATCH showed the beat while the same set tapped on the PHONE
+       * showed nothing. That divergence is the repro.
+       *
+       * `beatCorrection` is deliberately NOT read here — it cannot be known before `completeSet`
+       * resolves, and it owns its own hold when it arrives.
        */
-    }, confirm.n >= confirm.m && confirm.m > 1 ? CONFIRM_DWELL_MS : 0);
+    }, (confirm.n >= confirm.m && confirm.m > 1) || bandPlacement(confirm) != null ? CONFIRM_DWELL_MS : 0);
     return () => {
       clearTimeout(id);
       if (holdId) clearTimeout(holdId);
@@ -625,14 +655,46 @@ export function SessionFlow({ navigation, route }: Props) {
     }, PACE_BEAT_MS);
   }
 
-  // ── One-tap swap (S4, approved 2026-07-06) ──
-  // The athlete taps Swap; HUSH decides — their saved substitute, then their backup, then the
-  // catalog's different-equipment default, then similar-effect candidates. No list, no mid-
-  // workout comparison. The toast carries "Try another" (walks the ladder) and "Undo". Kept
-  // behind a per-render-re-bound ref so the toast's delayed actions always drive the LIVE
-  // session, never a stale closure's plan.
-  const quickSwapRef = useRef<{ target: 'current' | 'next'; originalId: string; ladder: string[]; idx: number } | null>(null);
-  const swapActionsRef = useRef({ tryAnother: () => {}, undo: () => {} });
+  /*
+   * ════ SHE TAPS SWAP AND IS SHOWN HER OPTIONS (founder, 2026-08-16) ════
+   *
+   * ⛔ THIS REPLACES THE ONE-TAP LADDER (S4, 2026-07-06), AND THE OLD RULE WAS NOT SILLY. It said
+   * *the athlete never evaluates a list mid-workout* — Hush picks, the toast offers "Another
+   * option". That is the right instinct about a LOAD, where she has no information the engine
+   * lacks. It is the wrong instinct about a busy station, because there she is the one standing in
+   * the gym looking at which machines are free. Handing her one answer at a time meant tapping
+   * "Another option" until it named the machine she could see, which is a list with its labels
+   * hidden and an extra tap per row.
+   *
+   * ⚠️ THE MENU IS ONE TO THREE ROWS AND NEVER PADDED — `swapChoices` owns that, and the reason is
+   * measured in `domain/swapPool`: 49 of 111 lifts have no third true synonym.
+   *
+   * ⚠️ UNDO SURVIVES. It is the one part of the ladder that answers a question the menu cannot:
+   * "that was the wrong pick." The toast keeps it, behind a per-render-re-bound ref so a delayed
+   * press always drives the LIVE session rather than a stale closure's plan.
+   */
+  /**
+   * ⛔ THE MENU REMEMBERS WHICH LIFT IT WAS OPENED ON — three review findings, one cause.
+   *
+   * The first build kept only `{ target, originalId }` and read the live session at pick time, and a
+   * menu is a window during which the session moves underneath it:
+   *
+   *   · **The crossing expires while she reads.** The transition rest ends on its own timer, so a
+   *     menu opened on the way to lift 4 applied to lift 5 — with `replaceBlock` sent under the
+   *     wrong `blockId`. Now the pick is refused unless the lift it was built for is still the one
+   *     in that slot.
+   *   · **Two taps in one frame both landed.** `setSwapMenu(null)` is batched, so the rows are still
+   *     mounted for that tick: two rows (or a double-tap) meant two swaps and two toasts. The ref is
+   *     now cleared FIRST and synchronously, which is the only guard that holds inside one frame.
+   *   · **`quickSwapRef` outlived the sheet.** It was written on OPEN, and closing without picking
+   *     left it — so a second Swap within the toast's six seconds clobbered `originalId`, and Undo
+   *     "restored" the lift she was already on while the real original became unreachable. Undo now
+   *     owns its own record, written at the moment of a pick and at no other time.
+   */
+  const swapMenuRef = useRef<{ target: 'current' | 'next'; originalId: string } | null>(null);
+  const undoRef = useRef<{ target: 'current' | 'next'; originalId: string } | null>(null);
+  const [swapMenu, setSwapMenu] = useState<{ name: string; choices: SwapChoice[] } | null>(null);
+  const swapActionsRef = useRef({ undo: () => {} });
 
   function applySwapTo(target: 'current' | 'next', id: string) {
     if (target === 'current') {
@@ -646,28 +708,41 @@ export function SessionFlow({ navigation, route }: Props) {
     }
   }
 
-  function presentSwapChoice(id: string) {
-    const st = quickSwapRef.current;
-    if (!st) return;
+  const closeSwapMenu = () => {
+    swapMenuRef.current = null;
+    setSwapMenu(null);
+    setOverlay('none');
+  };
+
+  /** She picked a row. Close the menu, make the swap, and leave one way back. */
+  function pickSwap(id: string) {
+    const st = swapMenuRef.current;
+    if (!st) return; // already spent — a second tap in the same frame finds nothing
+    swapMenuRef.current = null; // …because THIS runs before any state update is flushed
+    /*
+     * ⛔ AND THE LIFT MUST STILL BE THE ONE SHE OPENED THE MENU ON. A transition rest can expire
+     * while the sheet is up, moving the session on; applying then would replace the WRONG lift.
+     */
+    const liveId = st.target === 'current' ? session.currentExerciseId : session.nextExerciseId;
+    setSwapMenu(null);
+    setOverlay('none');
+    if (liveId !== st.originalId) {
+      notify(t('swap.moved'));
+      return;
+    }
+    undoRef.current = st;
     haptics.confirm();
     applySwapTo(st.target, id);
     notify(t('swap.swappedTo', { name: exerciseDisplayName(id) }), [
-      { label: t('swap.tryAnother'), onPress: () => swapActionsRef.current.tryAnother() },
       { label: t('swap.undo'), onPress: () => swapActionsRef.current.undo() },
     ]);
   }
 
   swapActionsRef.current = {
-    tryAnother: () => {
-      const st = quickSwapRef.current;
-      if (!st || st.ladder.length === 0) return;
-      st.idx = (st.idx + 1) % st.ladder.length;
-      presentSwapChoice(st.ladder[st.idx]);
-    },
     undo: () => {
-      const st = quickSwapRef.current;
+      const st = undoRef.current;
       if (!st) return;
-      quickSwapRef.current = null;
+      undoRef.current = null;
       haptics.confirm();
       applySwapTo(st.target, st.originalId);
       notify(t('swap.restored', { name: exerciseDisplayName(st.originalId) }));
@@ -686,10 +761,17 @@ export function SessionFlow({ navigation, route }: Props) {
     // The whole session goes in — the pool excludes it (and normalises the id space, so an engine
     // id like 'back_squat' still matches the catalog's 'bb_back_squat'). Same function the WATCH
     // now calls, so the two surfaces can never disagree about what a legal swap is.
-    const ladder = inWorkoutLadder(exId, { sessionExerciseIds: session.sessionExerciseIds, prefs });
-    if (!ladder.length) return;
-    quickSwapRef.current = { target, originalId: exId, ladder, idx: 0 };
-    presentSwapChoice(ladder[0]);
+    const choices = swapChoices(exId, { sessionExerciseIds: session.sessionExerciseIds, prefs });
+    // ⛔ SIX LIFTS IN THE CATALOGUE HAVE NO ADMISSIBLE PEER AT ALL. Opening an empty sheet would be
+    // worse than the verb doing nothing; she is told instead, because a door that opens on nothing
+    // is the thing this pass exists to remove.
+    if (choices.length === 0) {
+      notify(t('swap.none'));
+      return;
+    }
+    swapMenuRef.current = { target, originalId: exId };
+    setSwapMenu({ name: exerciseDisplayName(exId), choices });
+    setOverlay('swap');
   }
 
   /**
@@ -913,6 +995,16 @@ export function SessionFlow({ navigation, route }: Props) {
 
       {overlay === 'reasoning' ? (
         <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
+      ) : null}
+
+      {/* ⛔ HER OPTIONS FOR A BUSY STATION — one to three, never padded. See `SwapSheet`. */}
+      {overlay === 'swap' && swapMenu ? (
+        <SwapSheet
+          currentName={swapMenu.name}
+          choices={swapMenu.choices}
+          onPick={pickSwap}
+          onClose={closeSwapMenu}
+        />
       ) : null}
 
       {/* 2.0 · FIRST WORKOUT — THE FIRST FOUR. Shown once, before set 1 of workout 1: the promise

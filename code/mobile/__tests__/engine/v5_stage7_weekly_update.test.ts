@@ -28,6 +28,14 @@ const ROLL2 = new Date('2026-07-20T10:00:00Z').getTime();
 describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
   beforeEach(async () => { await resetV5(); });
 
+  it('⛔ …and a workout at the TOP of the band earns the stronger sentence', async () => {
+    const history: Session[] = [session(WEEK1, [set(60, 10), set(60, 10), set(60, 10)])];
+    await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
+    await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
+    const update = await getWeeklyUpdateV5(ROLL2);
+    expect(update!.explanations[0].observation.key).toBe('explain.progressLoad.observation');
+  });
+
   it('a full-clear workout → a "load up" change in the closed-week mirror, unseen then seen', async () => {
     const history: Session[] = [session(WEEK1, [set(60, 8), set(60, 8), set(60, 8)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
@@ -39,7 +47,16 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     expect(update).not.toBeNull();
     expect(update!.seen).toBe(false);
     expect(update!.explanations.length).toBe(1);
-    expect(update!.explanations[0].observation.key).toBe('explain.progressLoad.observation');
+    /*
+     * ⛔ THE MODEST SENTENCE, BECAUSE SHE DID 8/8/8 IN AN 8-10 BAND — the BOTTOM of it.
+     *
+     * This line used to assert `progressLoad.observation`, whose copy reads *"reached the TOP of its
+     * range with room to spare"*, and the fixture above has never had a set above `Tlo`. S-22 raises
+     * the moment every set MEETS `Tlo`, so that sentence was shown on every ordinary progression in
+     * the product while being false for most of them. The letter now says what happened — she met
+     * the target on every set — and keeps the stronger claim for when `worstReps` earns it.
+     */
+    expect(update!.explanations[0].observation.key).toBe('explain.progressLoad.observationMet');
 
     const view = await getWeeklyPlanV5(program, ROLL2);
     expect(view!.changedCount).toBe(1);

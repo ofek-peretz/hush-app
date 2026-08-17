@@ -197,9 +197,43 @@ export function useCardioTracker(
     let alive = true;
     const startedAt = Date.now();
     let sawAny = false;
+    /*
+     * ⛔ AND THE MODE HAS TO ASK FOR ITS OWN SOURCE (founder 2026-08-16).
+     *
+     * `requestPermission` was called in exactly two places, `ConnectHealth` and `ProfileSheet` —
+     * NEITHER on the cardio path. `ConnectHealth` is a skippable onboarding step, so an athlete who
+     * tapped past it arrived here with HealthKit never authorized. A denied READ in HealthKit
+     * returns an EMPTY ARRAY rather than an error, by design, so the poll below reads `0`, latches
+     * `sawAny`, and the stage draws a confident **0 m for the whole run with no message at all** —
+     * the worst of the three outcomes, because it looks like it is working.
+     *
+     * The outdoor half of this hook has always asked for location the moment it needs it (below).
+     * Indoors asks for its source the same way, and for the same reason: a permission requested
+     * where the athlete can see what it is for is the one she grants.
+     *
+     * ⚠️ ONLY WHEN UNDETERMINED. Re-prompting on every run is how a grant gets revoked, and iOS
+     * shows the sheet once regardless. `unavailable` is Android, the simulator, or a device with no
+     * HealthKit — there is no source to ask for, and the mode stands down instead of polling
+     * something that will never answer.
+     */
+    let ready: Promise<void> | null = null;
+    const ensureSource = () => {
+      ready ??= (async () => {
+        const state = await health.permissionState();
+        if (state === 'unavailable') {
+          if (alive) {
+            setGps('unavailable');
+            setSample(snapshot());
+          }
+          return;
+        }
+        if (state === 'unknown') await health.requestPermission();
+      })().catch(() => undefined);
+      return ready;
+    };
     const read = () => {
-      void health
-        .distanceSince(startedAt)
+      void ensureSource()
+        .then(() => health.distanceSince(startedAt))
         .then((km) => {
           if (!alive) return;
           if (km == null) {

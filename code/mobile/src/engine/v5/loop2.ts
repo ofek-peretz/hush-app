@@ -12,8 +12,9 @@
 import type { Band, ExerciseMeta, ExerciseState, Loop2Result, SetPerf, SessionRecord } from './types';
 import { median, percentileNearestRank } from './stats';
 import { snapDown, moveRungs, nextRung, prevRung, loadFloor } from './grid';
-import { repsPerRung, rungsForHeadroom, rungOutOfReach } from './repsPerRung';
-import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED } from './constants';
+import { repsPerRung, rungsForHeadroom, rungOutOfReach, bootstrapPerRung } from './repsPerRung';
+import { epley, loadForReps } from '@/engine/loadMath';
+import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VALID_REPS } from './constants';
 
 const EPS = 1e-6;
 
@@ -47,18 +48,48 @@ function isRepeatedStall(history: SessionRecord[], currentLoad: number | null, b
 
 // ── The rail (L11) ─────────────────────────────────────────────────────────
 /**
- * The heaviest load she has COMPLETED at ≥ Tlo reps in her settled history (the sessions before this
- * one, inside the recency window). null when there is no such record → the rail is inactive, and
- * deliberately nothing replaces it there (L11, Rev 8): the guard is Loop 1 correcting from the very
- * first set, plus the athlete's own eyes on a visible number (S-49). Never reads the current
- * session, so a fat-finger cannot lift its own ceiling.
+ * The heaviest load she has DEMONSTRATED she can complete at Tlo reps, across her settled history
+ * (the sessions before this one, inside the recency window). null when there is no such record → the
+ * rail is inactive, and deliberately nothing replaces it there (L11, Rev 8): the guard is Loop 1
+ * correcting from the very first set, plus the athlete's own eyes on a visible number (S-49). Never
+ * reads the current session, so a fat-finger cannot lift its own ceiling.
+ *
+ * ⛔⛔ "DEMONSTRATED AT Tlo", NOT "THE NUMBER ON THE BAR" (founder 2026-08-16, measured).
+ *
+ * It used to take the raw `s.load` of any set that reached Tlo, and that reads a set of 20 reps at
+ * 40 kg as a 40 kg athlete. It is not: 20 reps at 40 kg is a demonstration that she can do EIGHT
+ * reps at about 52.5 kg, by the same e1RM model the app already shows her. The rail then capped her
+ * at 42.5 kg — one rung above a number that understated her by ten — and because `applyRail` is the
+ * binding constraint on S-22's raise, `rungsForHeadroom` was dead code on that path and the load
+ * moved exactly one rung per occurrence however far ahead of it she was.
+ *
+ * `thePrescriptionIsAccurate` measured the consequence over ten weeks: sets landing ABOVE her band
+ * climbed 14.5% → 31.6% while sets below it HALVED. The engine was not getting worse at her; it was
+ * falling behind her, and this was the brake.
+ *
+ * ⚠️ IT IS A NO-OP EXACTLY WHERE THE OLD RAIL WAS RIGHT. For a set performed AT Tlo the conversion
+ * is the identity — `loadForReps(epley(L, Tlo), Tlo) === L` — so a lift she is meeting on contract
+ * has the same ceiling it always had. It moves only for sets she beat the contract on, which is the
+ * one case the raw reading could not see.
+ *
+ * ⚠️ AND IT KEEPS L11's ACTUAL PURPOSE. The register's fear is a single implausible rep count moving
+ * iron. Three things still stand between that and a load: F-16 clamps the reps this conversion will
+ * read (a mis-keyed 40 is priced as 20, the end of the load–rep continuum); the settled-history-only
+ * rule means this session cannot lift its own ceiling; and the SIZE of the raise is still governed
+ * by `worstReps` — the occurrence's WORST set — so one high mis-key among several sets does not move
+ * the move at all. This raises a ceiling; it never prescribes a load.
  */
 function railRecord(history: SessionRecord[], band: Band): number | null {
   let best: number | null = null;
   for (const rec of history.slice(0, RECENCY_WINDOW_SESSIONS)) {
     for (const s of rec.sets) {
-      if (s.isApproach || s.load == null) continue;
-      if (s.reps >= band.lo && (best == null || s.load > best)) best = s.load;
+      if (s.isApproach || s.load == null || s.load <= 0) continue;
+      if (s.reps < band.lo) continue;
+      // What that set proves she can lift AT Tlo. F-16: past the end of the load–rep continuum the
+      // extra reps are not evidence about iron, so they are read at the edge.
+      const reps = Math.min(s.reps, EPLEY_VALID_REPS);
+      const atTlo = loadForReps(epley(s.load, reps), band.lo);
+      if (best == null || atTlo > best) best = atTlo;
     }
   }
   return best;
@@ -222,7 +253,22 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
       return { decision: 'rung_out_of_reach', load: anchor, band, sets: state.sets };
     }
 
-    const n = rungsForHeadroom(worstReps - band.lo, perRung);
+    // Her fitted slope if she has one, else B-5's modelled price of a rep AT THE ANCHOR — the load
+    // the raise actually starts from. L11 still has the last word below.
+    /*
+     * ⚠️ AND `worstReps` IS THE RIGHT READING — MEASURED, NOT ASSUMED (2026-08-16). Two alternatives
+     * were run over the same three athletes and ten weeks, changing only which set prices the move:
+     *
+     *     worst set (this)   in band 58.3%     set 1  40.4%
+     *     median set         in band 55.2%     set 1  35.1%
+     *     FIRST set          in band 54.6%     set 1  34.0%
+     *
+     * Sizing from the fresh set is the obvious idea — set 1 is the position that misses most — and it
+     * makes set 1 WORSE. The mechanism is the safety gate above: a bigger raise more often leaves a
+     * set short of Tlo, `allMet` goes false, and the lift takes a hold or a back-off. Pricing from the
+     * most fatigued set is conservative, and conservative is what keeps the load climbing at all.
+     */
+    const n = rungsForHeadroom(worstReps - band.lo, perRung, 'up', bootstrapPerRung(anchor, band.lo, meta));
     let load = snapDown(moveRungs(anchor, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     load = applyRail(load, state.history, band, meta, anchor); // L11 (base = max(settled, anchor))
     return { decision: 'progress', load, band, sets: state.sets };

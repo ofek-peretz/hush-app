@@ -73,7 +73,6 @@ function homeProps(over: Partial<HomeViewProps> = {}): HomeViewProps {
     resting: false,
     dayName: 'Upper A',
     dayId: 'd0',
-    muscles: '',
     trainedThisWeek: 0,
     startError: false,
     weekNumber: 1,

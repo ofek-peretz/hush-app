@@ -24,6 +24,7 @@ import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
+import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { ImportPlan } from '@/screens/import/ImportPlan';
 import { ImportReview } from '@/screens/import/ImportReview';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
@@ -1015,7 +1016,6 @@ const weekDoneView = (
     resting
     name="Erez"
     dayName={null}
-    muscles=""
     trainedThisWeek={4}
     startError={false}
     weekNumber={6}
@@ -1127,7 +1127,6 @@ function TodayDriven() {
       dayName={name}
       dayId={chosen}
       programTitle="Upper / Lower · 4 days a week · leading with Chest"
-      muscles=""
       trainedThisWeek={2}
       startError={false}
       weekNumber={11}
@@ -1190,7 +1189,6 @@ const todayView = (
        the two places she looks first. Mid-week is also simply the truest state to review Today in. */
     dayName="Upper B"
     dayId="d2"
-    muscles="Chest · Shoulders · Triceps"
     trainedThisWeek={2}
     startError={false}
     weekNumber={11}
@@ -2345,6 +2343,7 @@ export const GALLERY: GalleryEntry[] = [
    * the missing module for as long as that was true.
    */
   { id: '4.1', label: 'Body map — hers to change', status: 'live', note: 'the map after onboarding: a muscle off or led with, its rep band, and a rest window that has run out', render: () => mount(BodyMapEdit) },
+  { id: '4.1b', label: 'Exercise library — the lifts she wants', status: 'live', note: 'her picks take the leading seats for a muscle and a refusal is a gate; refusing the LAST lift of a muscle is refused, with a sentence', render: () => mount(ExerciseLibrary) },
   { id: '4.2', label: 'Bring your own programme', status: 'live', note: 'photograph a coach’s sheet or type it out — the door for the coach track', render: () => mount(ImportPlan) },
   { id: '4.2a', label: 'What we found in it', status: 'live', note: 'the report she reads before she chooses — nothing here is fixed, only named', render: () => mount(ImportReview, { sessionCount: 3, liftCount: 12, findings: [{ kind: 'unmatched_lift', subject: 'Zercher Squat' }, { kind: 'session_over_hour', subject: 'Push', value: 74 }, { kind: 'sets_above_ceiling', subject: 'bb_back_squat', value: 6 }], onKeep: () => {}, onBalance: () => {} }) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },

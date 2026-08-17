@@ -29,6 +29,7 @@ import {
   isRunnable,
   type ImportedWeek,
   type Finding,
+  type MatchedWeek,
 } from '@/domain/importedPlan';
 import {
   importReadRequest,
@@ -61,8 +62,17 @@ export interface ImportOutcome {
   ok: true;
   program: Program;
   findings: Finding[];
-  /** What the model suggested for the names we could not place. Rendered, never applied. */
+  /**
+   * What the model suggested for the names we could not place. **Rendered and acceptable** — she
+   * taps, `applySuggestion` repairs the match, and `toProgram` rebuilds her week. Never applied on
+   * her behalf: a verified id is proof the lift EXISTS, not proof it is the one she meant.
+   */
   suggestions: ImportSuggestion[];
+  /**
+   * The matched week the programme was built from — carried so an accepted suggestion can put the
+   * lift back in the SESSION she wrote it in, rather than appended somewhere plausible.
+   */
+  matched: MatchedWeek;
   sessionCount: number;
   liftCount: number;
   title?: string;
@@ -135,6 +145,7 @@ export async function runImport(
     program,
     findings: reviewFindings(matched, program),
     suggestions: [],
+    matched,
     sessionCount: program.days.length,
     liftCount: program.days.reduce((n, d) => n + d.slots.length, 0),
     ...(matched.title ? { title: matched.title } : {}),

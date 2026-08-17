@@ -22,6 +22,7 @@ import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
 import { repsPerRung } from './repsPerRung';
 import { snapDown, nextRung } from './grid';
+import { retainedAfterGap, daysSinceLastSession, lastSessionStartMs } from './detraining';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
 import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
@@ -148,21 +149,85 @@ const asStates = (s: EngineV5State) => s.exercises as Record<string, ExerciseSta
 
 /** Ensure per-exercise state exists for every engine-managed exercise. Idempotent; preserves state.
  *  A band change updates each exercise's band (T is hers; no conversion, S-43). */
-export async function ensureExercisesV5(exerciseIds: string[], band: BandSource, history: Session[], seedFor: SeedFor): Promise<EngineV5State> {
+export async function ensureExercisesV5(
+  exerciseIds: string[],
+  band: BandSource,
+  history: Session[],
+  seedFor: SeedFor,
+  /**
+   * May an UNPERFORMED lift's seed be re-read? False while she is inside a detraining gap, where
+   * `applyDetrainingV5` owns that load — see the note on the branch below. Defaults true, which is
+   * every caller that knows nothing about gaps.
+   */
+  reseedUnperformed = true,
+): Promise<EngineV5State> {
   const state = await load();
   const ex = asStates(state);
   for (const id of exerciseIds) {
     const b = resolveBand(band, id); // per-muscle T resolves to this exercise's band
     if (!ex[id]) ex[id] = initExercise(id, b, history, seedFor);
-    else if (ex[id].band.lo !== b.lo || ex[id].band.hi !== b.hi) {
-      // S-43 (change T — now per muscle): recompute the load from her history at the NEW Tlo — "the
-      // load at which she performed ≥ the new T." If she has no history at the new band, keep the
-      // current load and set 1 finds it (no conversion formula). Bodyweight has no load to recompute.
-      // Only exercises whose muscle's band changed are touched — the rest keep their state.
+    /*
+     * ⛔ A SEED SHE HAS NOT TESTED YET IS RE-READ, NOT FROZEN (2026-08-16).
+     *
+     * ⚠️ MEASURED, AND THIS IS WHERE THE COLD START ACTUALLY LOSES. State is created for EVERY lift
+     * in the programme on the first call, before she has trained once — so a lift she will not meet
+     * until Thursday had its load fixed on Monday, from an empty history. Over three athletes and
+     * ten weeks, 21 of one athlete's 25 model-seeded cold starts were in week one, missing her band
+     * by 6.4 reps, and nothing she did on Monday could reach them.
+     *
+     * So an UNPERFORMED lift's seed is refreshed each time the engine is ensured. By Thursday her
+     * Monday and Tuesday sets exist, `personalScale` has three lifts of evidence, and the seed she
+     * meets is the one her own week produced.
+     *
+     * ⛔ NOTHING WITH EVIDENCE IS TOUCHED, and the guard is the point: `history.length === 0` is the
+     * engine's own record of never having decided about this lift, and `bestDemonstratedLoad`
+     * returning null is her never having performed it. A lift she has trained keeps every decision
+     * Loop 2 made about it (S-29) — this can only ever move a number that was a guess.
+     */
+    else {
+      /*
+       * ⛔ THESE TWO ARE INDEPENDENT, AND CHAINING THEM AS `else if` LOST HER BAND (caught in review).
+       *
+       * The seed re-read below and the S-43 band recompute both fire on an existing entry, and the
+       * first version chained them — so for an UNPERFORMED weighted lift the band branch could never
+       * run. Measured: a new athlete moves her Chest band 8-10 → 12-15, the cold seed is unchanged
+       * (it is rep-target independent until `personalScale` has three lifts), nothing is written, and
+       * every chest lift she has not yet performed keeps prescribing 8-10 for ever — while her
+       * profile and every other surface say 12-15.
+       *
+       * The band goes first, because it is a fact she declared and the seed is a guess about her.
+       */
       const meta = metaWithGrid(id, history);
-      const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, b, history);
-      const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
-      ex[id] = { ...ex[id], band: b, load };
+      if (ex[id].band.lo !== b.lo || ex[id].band.hi !== b.hi) {
+        // S-43 (change T — now per muscle): recompute the load from her history at the NEW Tlo — "the
+        // load at which she performed ≥ the new T." If she has no history at the new band, keep the
+        // current load and set 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+        const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, b, history);
+        const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
+        ex[id] = { ...ex[id], band: b, load };
+      }
+      /*
+       * ⛔ A SEED SHE HAS NOT TESTED YET IS RE-READ, NOT FROZEN (2026-08-16).
+       *
+       * ⚠️ MEASURED, AND THIS IS WHERE THE COLD START ACTUALLY LOSES. State is created for EVERY lift
+       * in the programme on the first call, before she has trained once — so a lift she will not meet
+       * until Thursday had its load fixed on Monday, from an empty history. Over three athletes and
+       * ten weeks, 21 of one athlete's 25 model-seeded cold starts were in week one, missing her band
+       * by 6.4 reps, and nothing she did on Monday could reach them.
+       *
+       * ⛔ NOTHING WITH EVIDENCE IS TOUCHED: `history.length === 0` is the engine's own record of
+       * never having decided about this lift, and `bestDemonstratedLoad` returning null is her never
+       * having performed it. A lift she has trained keeps every decision Loop 2 made about it (S-29).
+       *
+       * ⛔ AND IT NEVER UNDOES A DETRAINING DECAY. The seed it re-reads is already scaled by the gap
+       * she is inside (`foldEngine` wraps `seedFor`), because otherwise these two features fought:
+       * detraining wrote a decayed load, the next read restored the undecayed seed, and the decay was
+       * gone by the time she saw a screen. That was measured, in review, on the very first build.
+       */
+      if (reseedUnperformed && ex[id].history.length === 0 && !meta.bodyweight && bestDemonstratedLoad(id, b, history) == null) {
+        const fresh = seedFor(id);
+        if (fresh != null && ex[id].load !== fresh) ex[id] = { ...ex[id], load: fresh };
+      }
     }
   }
   await save(state);
@@ -201,9 +266,16 @@ export async function advanceV5(
    * prescription only when unknown (a single-day muscle, or tests that omit it).
    */
   weeklyByMuscle: Record<string, number> = {},
+  /**
+   * ⚠️ LAST ON PURPOSE. See `ensureExercisesV5` — false inside a detraining gap, so the seed re-read
+   * does not undo the decay. It was first written as the FIFTH parameter and every existing caller's
+   * `nowMs` landed on it: eleven suites went red at once, which is the cheapest possible reminder
+   * that a positional signature is a contract with every call site at once.
+   */
+  reseedUnperformed: boolean = true,
 ): Promise<Record<string, 'graduate' | 'rotate'>> {
   void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
-  const state = await ensureExercisesV5(exerciseIds, band, history, seedFor);
+  const state = await ensureExercisesV5(exerciseIds, band, history, seedFor, reseedUnperformed);
   const ex = asStates(state);
   const managed = new Set(exerciseIds);
 
@@ -258,7 +330,10 @@ export async function advanceV5(
       // delta direction (explainChange), never the decision label. hold/ambiguous say nothing
       // (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.
       if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
-        log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at });
+        // The worst set of the occurrence — the number S-22 and S-24 actually read, and the one the
+        // letter needs so it can say "the top of its range" only when she was there.
+        const worstReps = sets.length > 0 ? Math.min(...sets.map((x) => x.reps)) : undefined;
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, ...(worstReps != null ? { worstReps } : {}) });
       }
       // S-28 · the ONE hold the engine must narrate. Every other hold says nothing (R7/S-16) because
       // nothing happened; this one is a decision — she cleared every set and the load still did not
@@ -344,6 +419,125 @@ export async function currentV5Targets(history: Session[], nowMs: number = Date.
 }
 
 /**
+ * ════ SHE STOPPED, AND THE ENGINE BRINGS HER LOADS DOWN TO MEET HER ════
+ *
+ * ⛔ FOUNDER'S LIST, 2026-08-16. Measured on an athlete given eight ordinary weeks and then a gap,
+ * against a conservative body model (~10% of strength a month away, levelling at 70% of peak):
+ *
+ *     away  90 days   incline barbell press   asked 30 kg  →  she gets 0 reps
+ *                     machine row             asked 32.5   →  she gets 0 reps
+ *     away 180 days   dumbbell curl           asked  9 kg  →  she gets 3 reps
+ *
+ * Four lifts of four, two of them a weight she cannot move once — on the first session of a comeback,
+ * the single session in her history where being right matters most. Loop 1 has two corrections to
+ * rescue it (S-13) and cannot: it corrects by RUNGS from where it starts, and cannot walk back thirty
+ * percent in two moves. F-8's seed exemption — *"what catches a stale seed is Loop 1, from set 1"* —
+ * is reasonable and measurably false at this magnitude.
+ *
+ * ── ⛔ WHY IT LIVES HERE AND NOT IN THE TWO PLACES IT WAS TRIED ─────────────────────────────────
+ * Both earlier placements were reverted by laws that are right, and the reason is the same one:
+ *
+ *   · Inside `currentV5Targets` — S-9/S-29/S-43 say the façade reports the load the engine DECIDED.
+ *     Decaying on read made the façade disagree with its own stored state.
+ *   · Inside `fixtureModel.sessionTargets` — `everyScreenShowsTheEngineNumber` says *"every load on
+ *     the stage is the engine state, not a seed or a last-logged weight"*. A filter there showed her
+ *     a number no decision produced: the exact defect class this file spent the day removing.
+ *
+ * ⚠️ SO IT IS A DECISION, NOT A FILTER. It WRITES `ExerciseState.load` and LOGS the change, which is
+ * what makes every one of those laws true rather than bypassed — the number on the stage is a number
+ * the engine chose, and the Saturday mirror can say it out loud (S-45/R7).
+ *
+ * ⚠️ AND IT SNAPS TO HER GRID. An ideal 0.9× is not a weight that exists; `snapDown` lands it on a
+ * rung she has actually performed (F-2), and DOWN, so normalisation can never raise an implied load.
+ *
+ * ⚠️ IT NEVER TOUCHES BODYWEIGHT. There is no load axis to lower, and the honest answer to a
+ * detrained push-up is fewer reps, which her own first set supplies.
+ *
+ * Idempotent per gap via `detrainedAfter` — see the field. Returns how many lifts moved.
+ */
+export async function applyDetrainingV5(
+  history: Session[],
+  nowMs: number = Date.now(),
+): Promise<number> {
+  const state = await load();
+  const starts = history.map((s) => Date.parse(s.startedAt));
+  const lastSession = lastSessionStartMs(starts);
+  if (lastSession <= 0) return 0; // never trained — a beginning, not a return (B-1 owns that load)
+
+  const target = retainedAfterGap(daysSinceLastSession(starts, nowMs));
+  /*
+   * ⛔⛔ THE GAP IS TOPPED UP AS IT GROWS. IT USED TO BE PAID ONCE, AT WHATEVER LENGTH IT HAPPENED TO
+   * BE THE FIRST TIME SHE OPENED THE APP — a review caught it, and it defeated the whole feature.
+   *
+   * The first version stamped `detrainedAfter = lastSession`, the gap's IDENTITY, which never changes
+   * while she stays away. Measured: she peeks on day 11 (a 0.35% decay, one rung), vanishes, and
+   * returns on day 200 — and the guard says "already paid", so she is handed her FULL pre-gap loads
+   * on the comeback session, the single session this module exists for. My own idempotency test
+   * re-read at the same instant, so it could never see a growing gap.
+   *
+   * So the stamp now carries WHAT WAS APPLIED, not just which gap it belonged to. Each call asks for
+   * the fraction the current gap deserves and applies only the difference. Re-reading at the same
+   * moment is still a no-op (target === applied), which is the property that matters.
+   */
+  const applied = state.detrainedAfter === lastSession ? (state.detrainedRetained ?? 1) : 1;
+  if (!(target < applied - 1e-9)) {
+    // Nothing further owed. Stamp the gap so a later call knows where it stands, but only when this
+    // gap is genuinely being tracked — inside the grace window there is nothing to record.
+    if (target < 1 && state.detrainedAfter !== lastSession) {
+      state.detrainedAfter = lastSession;
+      state.detrainedRetained = target;
+      await save(state);
+    }
+    return 0;
+  }
+  const step = target / applied; // the fraction still owed since the last time this ran
+
+  const ex = asStates(state);
+  const log = state.changeLog ?? [];
+  let moved = 0;
+  for (const id of Object.keys(ex)) {
+    const st = ex[id];
+    if (st.load == null || !Number.isFinite(st.load) || st.load <= 0) continue; // bodyweight / unusable
+    const meta = metaWithGrid(id, history);
+    if (meta.bodyweight) continue;
+    const next = decayRung(st.load, st.load * step, meta.equipment, meta.observedLoads);
+    if (!(next < st.load - 1e-6)) continue; // already at the floor, or the move is under a rung
+    log.push({
+      exerciseId: id, decision: 'detrain', loadFrom: st.load, loadTo: next,
+      setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi],
+      at: nowMs, kind: 'detrain',
+    });
+    ex[id] = { ...st, load: next };
+    moved += 1;
+  }
+  // ⚠️ STAMPED WHETHER OR NOT ANYTHING MOVED. A gap where every load was already on its floor is a
+  // gap that has been answered, and leaving the stamp off would re-ask it on every single open.
+  state.detrainedAfter = lastSession;
+  state.detrainedRetained = target;
+  if (moved > 0) state.changeLog = log.slice(-CHANGELOG_KEEP);
+  await save(state);
+  return moved;
+}
+
+/**
+ * The rung a decayed load lands on — NEAREST, never above where she started.
+ *
+ * ⛔ `snapDown` WAS WRONG HERE, AND A REVIEW MEASURED IT: an eleven-day break asks for 0.35% off a
+ * 60 kg bench (59.79 kg ideal), and always-down turned that into **55** on a {50, 55, 60} grid — a
+ * five-kilo cut for a week and a half away. Always-down is the right rule for NORMALISING a load she
+ * performed (it may never imply she lifted more than she did); a decay is a decision the engine is
+ * making, and rounding it away from the truth by a whole rung is not caution, it is a different
+ * number. Nearest keeps the ceiling — the result can never exceed the load she came in on — while
+ * letting a decay smaller than half a rung round to no change at all, which is the honest answer.
+ */
+function decayRung(from: number, ideal: number, equipment: ExerciseMeta['equipment'], observed?: number[]): number {
+  const down = snapDown(ideal, equipment, observed);
+  const up = nextRung(down, equipment, observed);
+  const nearest = up <= from + 1e-9 && Math.abs(up - ideal) < Math.abs(down - ideal) ? up : down;
+  return Math.min(nearest, from);
+}
+
+/**
  * Record a STRUCTURAL change for the Saturday mirror (S-45): the exercise itself changed identity — a
  * bodyweight graduation (S-52), a stall rotation (S-25.3), or a learned in-workout swap adopted as
  * standing (S-69). These write `prefs.substitutes`, not the load changeLog, so without this the mirror
@@ -417,7 +611,12 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /** A v5 change → the same {observation, conclusion, action, text} i18n lines the Weekly Update
  *  screen renders, reusing the existing `explain.*` copy (no new keys). Only the change decisions
  *  are surfaced; hold/ambiguous are not "changes" (R7). */
-function explainChange(c: ChangeEntry): Explanation {
+/**
+ * ⚠️ EXPORTED FOR THE LAW THAT READS IT. This is the engine SPEAKING — the sentence the athlete is
+ * actually shown — and a claim in it that the decision does not support is the defect class this
+ * codebase keeps finding. It is pinned by `theLetterSaysWhatHappened` rather than eyeballed.
+ */
+export function explainChange(c: ChangeEntry): Explanation {
   const ex = exerciseDisplayName(c.exerciseId);
   // A VOLUME change (S-45 / S-32 / S-34): Loop 3 grew or trimmed a muscle's weekly sets. Muscle-keyed,
   // narrated by direction ("I added a set to your chest work" / "I trimmed a set").
@@ -444,11 +643,40 @@ function explainChange(c: ChangeEntry): Explanation {
       text: L('rungOutOfReach.text', { ex }),
     };
   }
+  /*
+   * ⛔ SHE WAS AWAY, AND THE MIRROR SAID THE WRONG THING ABOUT IT (B-9, caught in review 2026-08-16).
+   *
+   * A `detrain` entry has no `toExercise` and is neither `volume` nor `rung`, so it fell through to
+   * the ordinary down-move copy — *"matched to demonstrated capability"* — which describes reading a
+   * performance. There was no performance; that is the entire point of a layoff. It is the one load
+   * change in the engine that comes from her ABSENCE, and it says so.
+   */
+  if (c.kind === 'detrain') {
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L('detrain.observation', { ex }),
+      conclusion: L('detrain.conclusion'),
+      action: L('detrain.action', { ex }),
+      text: L('detrain.text', { ex }),
+    };
+  }
   // A STRUCTURAL change (S-45): the lift changed identity. A graduation says "you outgrew X → Y"; a
   // rotation / adopted learned-swap says "that slot missed the mark → Y". Reuses the existing copy.
   if (c.kind && c.toExercise) {
     const to = exerciseDisplayName(c.toExercise);
     if (c.kind === 'graduate') {
+      /*
+       * ⛔ THE OBSERVATION HAD TO COVER BOTH TRIGGERS, AND IT ONLY COVERED ONE. S-52 graduates a
+       * bodyweight lift on EITHER "every set at Thi" (too easy — she really did outgrow it) OR a rep
+       * STALL below Thi (she cannot add reps, and there is no load to add). The copy said *"has sat
+       * at the top of its range for weeks"*, which is false for the second and is the harder case to
+       * be wrong about: telling someone who plateaued that she outgrew it.
+       *
+       * ⚠️ THE RICHER SPLIT IS WORTH DOING and needs the TRIGGER carried from `decideBodyweight`
+       * through `wantsChange` and `recordStructuralChangeV5`, which is four layers for one sentence.
+       * Until then the observation states what is true of both: she has taken the reps as far as
+       * they go, and the next step is the movement.
+       */
       return {
         slotId: c.exerciseId, pattern: '' as never,
         observation: L('graduate.observation', { from: ex }),
@@ -479,14 +707,26 @@ function explainChange(c: ChangeEntry): Explanation {
       text: load != null ? L('reprice.text', { ex, load }) : L('reprice.textBw', { ex }),
     };
   }
-  // progress (load up)
+  /*
+   * progress (load up)
+   *
+   * ⛔ THE CLAIM MUST MATCH THE REASON. This said *"reached the TOP of its range with room to
+   * spare"* for EVERY raise — and S-22 raises the moment every set meets `Tlo`, which is the
+   * BOTTOM. Measured: three sets of 8 in an 8-10 band raised 60 → 62.5 kg while the letter told her
+   * she had room to spare at the top. It is the sentence this product shows most often.
+   *
+   * Now it says the strong thing only when `worstReps` says she was there, and otherwise says the
+   * thing that is always true of a raise: she met the target on every set. An older entry with no
+   * reps recorded falls back to the modest sentence — never to the flattering one.
+   */
   const delta = c.loadFrom != null && c.loadTo != null ? round1(c.loadTo - c.loadFrom) : 0;
+  const atTop = c.worstReps != null && c.worstReps >= c.bandFrom[1];
   return {
     slotId: c.exerciseId, pattern: '' as never,
-    observation: L('progressLoad.observation', { ex }),
+    observation: L(atTop ? 'progressLoad.observation' : 'progressLoad.observationMet', { ex }),
     conclusion: L('progressLoad.conclusion'),
     action: L('progressLoad.action', { delta }),
-    text: L('progressLoad.text', { ex, delta }),
+    text: L(atTop ? 'progressLoad.text' : 'progressLoad.textMet', { ex, delta }),
   };
 }
 
@@ -642,7 +882,14 @@ export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now
   // (getWeeklyUpdateV5, proven in stage 7) while the letter the athlete actually reads — and Home's
   // briefing, and the rotation-UNDO that keys off `swapped` — could never show one. "Built but
   // unconnected", the exact Part-7 failure, one seam further out.
-  const loadByEx = new Map(changes.filter((c) => c.kind == null).map((c) => [c.exerciseId, c]));
+  /*
+   * ⚠️ `detrain` RIDES WITH THE PLAIN LOAD MOVES (caught in review 2026-08-16). It IS a plain load
+   * move — one lift, one weight, down — it simply has a different cause, and `explainChange` tells
+   * that cause. Left out, the Saturday LETTER narrated a layoff and the weekly PLAN showed the lift
+   * with no change against it: the two surfaces disagreeing about the same fact, which is precisely
+   * what `thePillAndTheLetterCountTheSameThing` exists to stop.
+   */
+  const loadByEx = new Map(changes.filter((c) => c.kind == null || c.kind === 'detrain').map((c) => [c.exerciseId, c]));
   const rungByEx = new Map(changes.filter((c) => c.kind === 'rung').map((c) => [c.exerciseId, c]));
   // A structural change attaches to the lift that ARRIVED (`toExercise`) — the one she can see.
   const structByTo = new Map(

@@ -11,14 +11,14 @@
 
 // 
 
-import { inWorkoutLadder } from '@/domain/replacement';
+import { swapLadder } from '@/domain/swapPool';
 import { retargetPlanForSwap, type Step } from '@/state/stores/sessionStore';
 import { exerciseById, muscleOf } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 
 /** The ladder with nothing in the session — the plain catalog answer. */
-const ladderOf = (id: string, prefs?: Parameters<typeof inWorkoutLadder>[1]['prefs']) =>
-  inWorkoutLadder(id, { sessionExerciseIds: [], prefs });
+const ladderOf = (id: string, prefs?: Parameters<typeof swapLadder>[1]['prefs']) =>
+  swapLadder(id, { sessionExerciseIds: [], prefs });
 
 describe('the swap ladder', () => {
   it("leads with the athlete's own standing choices, then fidelity", () => {
@@ -50,7 +50,7 @@ describe('the swap ladder', () => {
   });
 
   it('a preference never resurrects a lift already done today', () => {
-    const ladder = inWorkoutLadder('bb_bench_press', {
+    const ladder = swapLadder('bb_bench_press', {
       sessionExerciseIds: ['bb_bench_press', 'db_bench_press'],
       prefs: { substitutes: { bb_bench_press: 'db_bench_press' } },
     });

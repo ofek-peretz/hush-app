@@ -28,13 +28,29 @@ export function percentileNearestRank(xs: number[], p: number): number {
  * Theil–Sen slope (F-13) — the median of the slopes of all point pairs at distinct x. Robust to the
  * odd mis-keyed set. Returns null when there are too few usable pairs to fit (the caller then uses
  * the cautious single-rung bootstrap, B-5).
+ *
+ * ⛔ `admissible` IS WHAT LETS THIS BE THE ONLY COPY. F-13 declares ONE named algorithm — *"'a robust
+ * fit' is an algorithm FAMILY; this is the single algorithm chosen, and nothing else may be
+ * substituted"* — and there were two: this one, with no production caller at all, and a second
+ * hand-rolled inside `repsPerRung`, which is the one that actually moved iron. The reason for the
+ * split was real: L3 refuses a PAIR unless the two sets are like-for-like (similar rest, different
+ * occurrences, the same position in the exercise), and a fit that only sees `{x, y}` cannot ask.
+ *
+ * So the predicate is the parameter. The estimator stays one function, the filter stays the
+ * caller's, and neither can drift from the other by being rewritten in two places.
  */
-export function theilSenSlope(points: { x: number; y: number }[], minPairs: number): number | null {
+export function theilSenSlope<T extends { x: number; y: number }>(
+  points: readonly T[],
+  minPairs: number,
+  /** Is this PAIR comparable? Absent → every pair at distinct x, which is the plain estimator. */
+  admissible?: (a: T, b: T) => boolean,
+): number | null {
   const slopes: number[] = [];
   for (let i = 0; i < points.length; i++) {
     for (let j = i + 1; j < points.length; j++) {
       const dx = points[j].x - points[i].x;
-      if (Math.abs(dx) < 1e-9) continue; // same load — no slope
+      if (Math.abs(dx) < 1e-9) continue; // same x — no slope
+      if (admissible && !admissible(points[i], points[j])) continue;
       slopes.push((points[j].y - points[i].y) / dx);
     }
   }

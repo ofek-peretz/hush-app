@@ -87,7 +87,6 @@
     "planMinutes": "~{{min}} min",
     "planShape_one": "1 lift · ~{{min}} min",
     "planShape_other": "{{lifts}} lifts · ~{{min}} min",
-    "overBudget": "This one won't fit in {{n}} minutes. Add time, or turn a muscle off.",
     "trialLeft_one": "1 workout left in your trial",
     "trialLeft_other": "{{count}} workouts left in your trial",
     "undoSwap": "Keep {{lift}}",
@@ -168,6 +167,7 @@
     "kmMomentLabel": "Kilometre {{km}} · Split",
     "kmMomentQuickest": "Your quickest this run",
     "motionOff": "Motion tracking is off — keep the phone on you",
+    "motionWaiting": "Counting your steps — keep the phone on you",
     "outside": "Outside",
     "treadmill": "Treadmill",
     "outsideNote": "Distance and pace from GPS.",
@@ -400,10 +400,6 @@
     "editBand": "your band · {{lo}}–{{hi}}",
     "editSave": "Save set",
     "bw": "BW",
-    "effortAsk": "How did that go?",
-    "effortHadMore": "I had more",
-    "effortAboutRight": "About right",
-    "effortNothingLeft": "Nothing left",
     "itemStart": "Start",
     "itemStop": "Stop",
     "itemDone": "Done",
@@ -486,7 +482,7 @@
     "short": "This one comes to about {{min}} min. What you left switched on doesn’t hold a longer session — turn a muscle back on, or ask for fewer minutes."
   },
   "weekNotice": {
-    "over": "{{day}} runs past the {{budget}} minutes you asked for. Every muscle in it is down to its last exercise, so there was nothing left to cut.",
+    "over": "{{day}} runs past {{budget}} minutes. Every muscle in it is down to its last exercise, so there was nothing left to cut.",
     "thinOne": "Two days a week can’t quite feed everything you left on — your {{muscle}} sits under {{floor}} sets. A third day, or a muscle off, would fix it.",
     "thinMany": "Two days a week can’t feed everything you left on — {{count}} muscles sit under {{floor}} sets. A third day, or a muscle or two off, would fix it.",
     "shortOne": "{{day}} comes in under {{floor}} minutes. What you left switched on doesn’t hold a longer session.",
@@ -508,10 +504,6 @@
   },
   "rest": {
     "ready": "Ready"
-  },
-  "transition": {
-    "chooseAnother": "Tap to choose another",
-    "switchedTo": "Switched to {{exercise}}."
   },
   "pause": {
     "resume": "Resume Workout",
@@ -717,13 +709,16 @@
     "samePattern": "{{pattern}} · same pattern",
     "current": "{{equipment}} · current",
     "close": "Close",
-    "body": "The same movement, a different station. Your progression comes with you.",
+    "body": "Every option here trains the same muscle. Pick the station that is free.",
     "currentSub": "Current selection",
     "currentBadge": "Current",
     "swappedTo": "Swapped to {{name}}",
-    "tryAnother": "Another option",
     "undo": "Undo",
-    "restored": "Back to {{name}}"
+    "restored": "Back to {{name}}",
+    "sameMovement": "{{equipment}} · the same movement",
+    "differentWay": "Trains it a different way",
+    "none": "No other lift trains this the same way. This one stays.",
+    "moved": "You moved on — that lift is behind you now."
   },
   "equipment": {
     "barbell": "Barbell",
@@ -907,11 +902,6 @@
     "signOut": "Sign Out",
     "deleteConfirm": "Delete your account and all data?",
     "signOutConfirm": "Sign out?"
-  },
-  "gated": {
-    "takeTheWeights": "Take the weights",
-    "keepDeciding": "Keep deciding",
-    "switchOff": "Switch off"
   },
   "language": {
     "title": "Language",
@@ -1101,11 +1091,13 @@
       "conclusion": "It is ready for more weight.",
       "conclusionVariation": "Holding the top consistently earns the harder variation.",
       "action": "I added {{delta}} kg.",
-      "actionVariation": "I kept the target at the top of the range."
+      "actionVariation": "I kept the target at the top of the range.",
+      "observationMet": "{{ex}} met its target on every set.",
+      "textMet": "{{ex}} met its target on every set, so I added {{delta}} kg."
     },
     "graduate": {
-      "text": "You outgrew {{from}}, so I moved you up to {{ex}}.",
-      "observation": "{{from}} has sat at the top of its range for weeks.",
+      "text": "You have taken {{from}} as far as its reps allow, so I moved you up to {{ex}}.",
+      "observation": "You have taken {{from}} as far as its reps allow.",
       "conclusion": "You outgrew it — the harder variation is the next step.",
       "action": "I moved you up to {{ex}}."
     },
@@ -1282,23 +1274,6 @@
     "adopt": "Make it mine",
     "decline": "Not now"
   },
-  "coach": {
-    "placeholder": "Write a message",
-    "send": "Send",
-    "thinking": "Thinking",
-    "notSent": "Not sent",
-    "title": "Coach",
-    "chipHurts": "My knee hurts",
-    "chipDays": "I can only train three days",
-    "chipSwap": "I want to change a lift",
-    "openReturning": "What do you want to ask me?",
-    "inviteNamed": "{{name}} — tell me what you want, and I’ll build it.",
-    "invite": "Tell me what you want, and I’ll build it.",
-    "attach": "Add a photo",
-    "attachRemove": "Remove",
-    "accept": "This is my program",
-    "noMessagesLeft": "No messages left this month"
-  },
   "weekday": {
     "sun": "Sun",
     "mon": "Mon",
@@ -1354,6 +1329,33 @@
       "reading": "Reading your programme…",
       "matching": "Checking a couple of exercises…"
     },
-    "photographSub": "Any photo of the sheet works — a page, a whiteboard, a screenshot."
+    "photographSub": "Any photo of the sheet works — a page, a whiteboard, a screenshot.",
+    "suggestLead": "I asked about {{n}} I couldn't place:",
+    "suggestSame": "\"{{name}}\" — I think that's our {{ours}}.",
+    "suggestAlt": "I don't carry \"{{name}}\". The closest I have is {{ours}}.",
+    "suggestAccept": "Use {{name}}"
+  },
+  "library": {
+    "title": "Your exercises",
+    "sub": "Pick the lifts you want first. Refuse the ones you never want to see.",
+    "save": "Save",
+    "saved": "Saved — your week is rebuilt",
+    "countPicked": "{{n}} picked",
+    "countRefused": "{{n}} refused",
+    "lastLift": "This is the last lift left for {{muscle}}. Refuse it and there is nothing to train it with — switch the muscle off on your body map instead.",
+    "note": "A pick takes the first seat for that muscle. How many of them fit is decided by the muscle's volume and your hour, the same as it is for mine.",
+    "stance": {
+      "refused": "Never",
+      "none": "—",
+      "picked": "Pick"
+    },
+    "savedNoRebuild": "Saved. Your coach writes your week, so it stays as it is.",
+    "saveFailed": "That did not save. Tap Save again."
+  },
+  "detrain": {
+    "observation": "You were away from {{ex}} for a while.",
+    "conclusion": "Strength fades when training stops — less than most people fear, but it fades.",
+    "action": "I brought {{ex}} down so your first session back is one you finish.",
+    "text": "You were away from {{ex}} for a while, so I brought the weight down. Your first session back is one you finish, not one that finishes you."
   }
 }
