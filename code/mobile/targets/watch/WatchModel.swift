@@ -175,6 +175,11 @@ final class WatchModel: ObservableObject {
   // is the same situation wearing a different provenance. What decides whether a local session may
   // be discarded is that nothing has been logged into it, not how it began. The flag is kept
   // because it records where the session came from, which is worth having in hand.
+  //
+  // ⚠️ AND NOTHING READS IT TODAY. Stated plainly so it is not mistaken for load-bearing: it is
+  // written in two places and read in none. Kept rather than deleted because provenance is the
+  // first thing anyone will want when a handover or a fallback misbehaves on a device — but if it
+  // is still unread the next time this file is opened, delete it.
   private var beginFallback: DispatchWorkItem?
   private var fallbackStarted = false
   /// The paywall gate as last published by the phone. A gated athlete must not be able to
