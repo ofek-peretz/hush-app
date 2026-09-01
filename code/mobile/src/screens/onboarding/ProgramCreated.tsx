@@ -76,6 +76,8 @@ import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import type { Program, Profile } from '@/data/local/models';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
+import { track } from '@/platform/telemetry';
+import { FUNNEL_EVENTS } from '@/platform/events';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { billing, PRODUCT_IDS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
@@ -92,6 +94,11 @@ export function ProgramCreated({ route, navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const { inputs, coachMissed, coachAsk } = route.params;
+  /* ⛔ FUNNEL (2026-09-01, audit lever 3): the payoff screen, finally counted — the gap between
+     `funnel_reveal_seen` and this is the pricing sentence's own drop-off. */
+  useEffect(() => {
+    void track(FUNNEL_EVENTS.readyReached);
+  }, []);
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
   /*
    * The profile the CTA is about to write, in memory. `generateProgram` is pure and reads only these

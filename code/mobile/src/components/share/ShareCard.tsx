@@ -154,7 +154,17 @@ export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card
         <Text style={[styles.footDate, { fontSize: px(10) }]}>
           {card.kind === 'week' ? rangeOf(card.startMs, card.endMs) : dateOf(card.dateMs)}
         </Text>
-        <Legend size={px(10)} tone="faint">{t('share.builtOnFacts')}</Legend>
+        {/*
+          THE WAY BACK (audit lever 2). This poster is the product's only artifact that travels —
+          and until today a stranger who saw it on a story had literally no way to find the app:
+          a wordmark, a moss dot, and no destination. Strava puts a findable name on every export
+          for exactly this reason. One faint line, same register as the fact beside it — a signpost,
+          not an ad. (A real domain on the card is the founder's upgrade; "App Store" works today.)
+        */}
+        <View style={styles.footRight}>
+          <Legend size={px(10)} tone="faint">{t('share.builtOnFacts')}</Legend>
+          <Legend size={px(10)} tone="faint">{t('share.findLine')}</Legend>
+        </View>
       </View>
     </View>
   );
@@ -443,6 +453,8 @@ const styles = StyleSheet.create({
 
 
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // The two faint legends stack on the trailing edge, both reading toward the same corner.
+  footRight: { alignItems: 'flex-end', gap: 2 },
   // The date carries a MONTH NAME (a word) — so it is sans, never mono (the law). Letter-spaced to
   // read as an engraved footer mark rather than body copy.
   /* ⚠️ NO TRACKING. This is a DATE, and a Hebrew locale spells its months in Hebrew — so the one

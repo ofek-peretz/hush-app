@@ -300,6 +300,40 @@ export default {
     }
 
     /*
+     * ════ /plan — THE SHARED WEEK'S LANDING (2026-09-01, audit lever 2) ════
+     *
+     * The plan link used to be `hush://plan?p=…` — inert for anyone without the app, which is
+     * every recipient worth acquiring. The pair invite solved this exact problem with a landing
+     * page months of work ago; the plan simply never got the same treatment. Same pattern: the
+     * page says what arrived, opens the app when it exists, and points at the store when it does
+     * not. The token stays opaque — nothing about her week is readable here or logged.
+     */
+    if (req.method === 'GET' && path === '/plan') {
+      const token = (url.searchParams.get('p') ?? '').slice(0, 4096).replace(/[^A-Za-z0-9\-_=%.]/g, '');
+      const body = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta property="og:title" content="A training week, shared with you">
+<meta property="og:description" content="Someone built you a week in Hush — a strength coach that measures instead of guessing.">
+<title>A training week, shared with you</title>
+<style>
+ body{margin:0;background:#131210;color:#f1eee5;font:400 17px/1.5 -apple-system,system-ui,sans-serif;
+      display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+ main{max-width:22rem;width:100%}
+ h1{font:400 28px/1.2 Georgia,serif;margin:0 0 8px}
+ p{color:#a8a290;margin:0 0 28px}
+ a{display:block;text-align:center;text-decoration:none;border-radius:19px;padding:18px;margin-bottom:12px}
+ .primary{background:#f1eee5;color:#131210;font-weight:600}
+ .ghost{color:#a8a290}
+</style></head><body><main>
+ <h1>A training week, shared with you</h1>
+ <p>Open it in Hush and it becomes yours — loads and all, adjusted to you from the first set.</p>
+ ${token ? `<a class="primary" href="hush://plan?p=${token}">Open in the app</a>` : ''}
+ <a class="ghost" href="${APP_STORE_URL}">Get the app</a>
+</main></body></html>`;
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    }
+
+    /*
      * ════ / — A FRONT DOOR INSTEAD OF A 404 (2026-09-01, the audit's finding 09) ═════════════════
      *
      * The origin existed, served the pair page, and answered its own root with an error. This is

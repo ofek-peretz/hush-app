@@ -41,6 +41,8 @@ const STEP_OWNERS: Record<string, string> = {
      a dark one is a lie in it. */
   yourWeekReached: 'screens/plan/PlanBuilder.tsx',
   buildReached: 'screens/onboarding/BuildingProgramme.tsx',
+  /* THE LAST MILE (2026-09-01, audit lever 3): the payoff screen, counted at last. */
+  readyReached: 'screens/onboarding/ProgramCreated.tsx',
 };
 
 describe('every funnel step is emitted by its screen', () => {
@@ -51,6 +53,16 @@ describe('every funnel step is emitted by its screen', () => {
     // …inside a mount-only effect. A step per re-render inflates every stage above the one
     // before it — the graph would argue nothing.
     expect(screen).toContain(`void track(FUNNEL_EVENTS.${step}); }, [])`);
+  });
+
+  it('⛔ revealSeen fires on the reveal latch — once, because `revealed` never goes back down', () => {
+    /*
+     * It CANNOT be mount-only: the reveal is the thing the athlete waits 0–23 seconds for, and the
+     * step exists to measure exactly that stretch. `revealed` latches true and never resets, so the
+     * guarded effect fires exactly once per journey — the same once the mount rule buys elsewhere.
+     */
+    const screen = read('screens/onboarding/BuildingProgramme.tsx').replace(/\s+/g, ' ');
+    expect(screen).toContain('if (revealed) void track(FUNNEL_EVENTS.revealSeen); }, [revealed])');
   });
 
   it('⛔ the fork reports WHICH door — the two doors are two different products to fix', () => {
@@ -73,7 +85,8 @@ describe('every funnel step is emitted by its screen', () => {
   it('⛔ every event in the taxonomy has an owner here — no step may be added dark', () => {
     // A new FUNNEL_EVENTS entry with no screen firing it counts nobody, which reads as
     // "everyone got here". Adding a step means adding its emitter AND its row above.
-    const owned = new Set([...Object.keys(STEP_OWNERS), 'doorChosen', 'weekDoorChosen']);
+    // `revealSeen` rides the `revealed` latch, not a mount (its own test below) — owned, not dark.
+    const owned = new Set([...Object.keys(STEP_OWNERS), 'doorChosen', 'weekDoorChosen', 'revealSeen']);
     expect(Object.keys(FUNNEL_EVENTS).sort()).toEqual([...owned].sort());
   });
 });

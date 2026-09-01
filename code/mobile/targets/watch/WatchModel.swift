@@ -72,6 +72,10 @@ enum WatchScreen: Equatable {
 
 final class WatchModel: ObservableObject {
   @Published private(set) var screen: WatchScreen = .idle
+  /// The wire's own testimony (build-59 silence, 2026-08-26): activation state · frames ingested.
+  /// Drawn ONLY on the idle screen — the one screen whose whole meaning is "nothing has arrived".
+  @Published private(set) var wireDiag: String = ""
+  func diagChanged() { wireDiag = manager.diagLine }
   /// Lay the interface right-to-left, as the phone reported it.
   ///
   /// Published rather than read straight off `WatchCopyStore` at render time: SwiftUI has no way to
@@ -182,6 +186,8 @@ final class WatchModel: ObservableObject {
   // is still unread the next time this file is opened, delete it.
   private var beginFallback: DispatchWorkItem?
   private var fallbackStarted = false
+  /// W2 — the last time a running local session was offered to a lobby-publishing phone.
+  private var lastLocalOfferAt = Date.distantPast
   /// The paywall gate as last published by the phone. A gated athlete must not be able to
   /// start a workout from the wrist — not through the phone (it would only open the
   /// paywall, leaving Begin dead) and not standalone (which would bypass the purchase).
@@ -218,6 +224,7 @@ final class WatchModel: ObservableObject {
     rtl = WatchCopyStore.isRTL
     manager.model = self
     manager.activate()
+    diagChanged() // the idle screen testifies from the first frame ("wc:… · rx:0")
     workoutRuntime.requestAuthorization()
     // A recovered still-live RUN/WALK re-enters the cardio presentation (founder batch
     // 2026-07-10): without this, cardioGait is lost across a relaunch and the next
@@ -408,6 +415,23 @@ final class WatchModel: ObservableObject {
     // after dismissal) but must not drive side effects mid-local-activity (a phone
     // frame must never abandon() the runtime out from under a live recording).
     if localEngine != nil || cardioGait != nil {
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // ⛔ W2 · A PHONE PUBLISHING ITS LOBBY DOES NOT KNOW ABOUT THIS WORKOUT (audit 2026-08-23).
+      //
+      // The handover offer used to fire only on a REACHABILITY TRANSITION (`setReachable(true)`).
+      // But the founder's headline case — Begin on the wrist, the phone app dead, the fallback
+      // starts locally — often plays out with reachability TRUE the whole time (a nearby, unlocked
+      // iPhone is "reachable" even with the app killed; the OS wakes it). Then she opens the phone,
+      // Home mounts, the lobby is published… and no transition ever fires, so the offer never
+      // leaves: the phone shows Today and offers to start the very workout she is inside. A lobby
+      // envelope arriving here IS the proof of the exact gap — the phone's JS is alive, listening,
+      // and believes no session exists — so it is answered with the offer, throttled (the lobby is
+      // republished on every Home focus) and idempotent (the phone answers `duplicate` freely).
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      if localEngine != nil, envelope.mirror == nil, Date().timeIntervalSince(lastLocalOfferAt) > 5 {
+        lastLocalOfferAt = Date()
+        offerLocalSession()
+      }
       recompute()
       return
     }
@@ -538,7 +562,7 @@ final class WatchModel: ObservableObject {
       workoutName: queued.name,
       muscles: queued.muscles,
       lifts: lifts,
-      durationLabel: "~\(lifts * 8) min",
+      durationLabel: "\(lifts * 8) min", // no "~" — founder struck the hedge (2026-08-23)
       resting: false,
       // The last gate the phone published (in this process). Unknown after a relaunch →
       // false, which preserves the standalone contract: an offline athlete who already
@@ -740,37 +764,52 @@ final class WatchModel: ObservableObject {
     let confirm = (weight: weight, reps: reps, index: m.setNumber ?? 1, total: m.setsInExercise ?? 1)
     if let engine = localEngine {
       engine.completeSet(weight: weight, reps: reps)
-    } else {
-      let edited = editDraft != nil
-      let delivered = sendIntent(
-        type: "complete_set",
-        expectedIndex: m.globalIndex,
-        actualReps: edited ? reps : nil,
-        actualWeight: edited ? weight : nil
-      )
-      /*
-       * ⛔ NO CONFIRMATION FOR A SET THAT WENT NOWHERE.
-       *
-       * Under phone authority this watch logs nothing itself — it proposes, and the phone decides
-       * and records. When the proposal cannot be delivered there is no set anywhere, and the code
-       * below used to run regardless: `setConfirm` drawn, the confirm beat played. She feels the
-       * haptic and moves to the next set believing it is saved.
-       *
-       * ⚠️ THE DRAFT IS KEPT, deliberately. Clearing it would throw away the weight and reps she
-       * just dialled in, and she will have to send exactly those again when the phone is back.
-       */
-      guard delivered else {
-        intentDidNotLeave()
+      editDraft = nil
+      // The LAST local set completes the workout synchronously — the completion
+      // experience then supersedes the per-set confirmation (same rule as apply()).
+      guard localMirror?.phase != "complete" else { return }
+      setConfirm = confirm
+      recompute()
+      scheduleSetConfirmClear()
+      return
+    }
+    /*
+     * ⛔ NO CONFIRMATION FOR A SET THAT WENT NOWHERE — and "went somewhere" now means ANSWERED
+     * (W3, audit 2026-08-23). `sendIntent`'s true only ever proved the OS took the message; a
+     * jettisoned phone app is woken by the very tap it then drops in its boot window, so the
+     * wrist confirmed sets logged nowhere. The reply carries the phone's own claim that its React
+     * layer is up and listening; anything less shows the honest Reconnecting viewer instead.
+     *
+     * ⚠️ THE DRAFT IS KEPT on failure, deliberately. Clearing it would throw away the weight and
+     * reps she just dialled in, and she will have to send exactly those again.
+     */
+    let edited = editDraft != nil
+    let intent = WireIntent(
+      v: WATCH_PROTOCOL_VERSION,
+      type: "complete_set",
+      intentId: UUID().uuidString,
+      issuedAt: ISO8601DateFormatter().string(from: Date()),
+      expectedGlobalIndex: m.globalIndex,
+      actualReps: edited ? reps : nil,
+      actualWeight: edited ? weight : nil,
+      workoutId: nil,
+      exerciseId: nil,
+      seconds: nil,
+      severity: nil,
+      area: nil
+    )
+    guard let json = WatchWire.encodeIntent(intent) else { return }
+    manager.sendExpectingReply(intentJSON: json) { [weak self] heard in
+      guard let self else { return }
+      guard heard else {
+        self.intentDidNotLeave()
         return
       }
+      self.editDraft = nil
+      self.setConfirm = confirm
+      self.recompute()
+      self.scheduleSetConfirmClear()
     }
-    editDraft = nil
-    // The LAST local set completes the workout synchronously — the completion
-    // experience then supersedes the per-set confirmation (same rule as apply()).
-    guard localMirror?.phase != "complete" else { return }
-    setConfirm = confirm
-    recompute()
-    scheduleSetConfirmClear()
   }
 
   /* ⛔ EVERY PROPOSAL SAYS SO WHEN IT DOES NOT LEAVE — see `completeSet()` and

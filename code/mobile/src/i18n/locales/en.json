@@ -671,7 +671,8 @@
     "cardioEyebrow": "Cardio",
     "cardioLongest": "Longest yet",
     "sessionMinutes": "min trained",
-    "together": "Together with {{names}}"
+    "together": "Together with {{names}}",
+    "findLine": "on the App Store"
   },
   "load": {
     "perSide": "{{plates}} / side",

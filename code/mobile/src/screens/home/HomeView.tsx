@@ -351,6 +351,8 @@ export interface HomeViewProps {
      `declareSwap` from the pre-workout card, which is reversible by naming the original again. The
      whole argument is at the deletion note in `appStore`. */
   onWeeklyUpdate: () => void;
+  /** The Saturday letter holds changes she has not opened — a moss dot on the pill (audit QW). */
+  letterUnseen?: boolean;
   /** Workouts left in the free trial — one quiet line under the act; absent once the trial is over
    *  or the athlete is a member. */
   trialLeft?: number | null;
@@ -842,6 +844,9 @@ export function HomeView(props: HomeViewProps) {
                           <Legend size={17} track={0.08} weight="semibold" tone="accent">
                             {t('home.briefChangesShort', { count: todayChanges })}
                           </Legend>
+                          {/* Unread: the letter behind this pill has news she has not opened. The
+                              dot clears the moment she walks in (seen is re-read on focus). */}
+                          {props.letterUnseen ? <View style={styles.unreadDot} /> : null}
                         </Pressable>
                       ) : null}
                       {props.dayDone ? <Icon name="check" size={17} color={color.up} strokeWidth={2.6} /> : null}
@@ -1476,10 +1481,15 @@ const styles = StyleSheet.create({
   todayPressed: { backgroundColor: color.surface2 },
   todayHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
   spacer: { flex: 1 },
+  // The letter's unread mark — moss, six points, sitting on the pill's trailing side.
+  unreadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.up, marginStart: 6 },
   pill: {
     paddingVertical: 6,
     paddingHorizontal: 13,
     borderRadius: radius.full,
+    // Row, so the unread dot (when the letter holds unopened news) sits beside the label.
+    flexDirection: 'row',
+    alignItems: 'center',
     // The handoff's veil for exactly this chip — heavier than the app's default moss wash.
     backgroundColor: 'rgba(169,196,159,0.18)',
   },

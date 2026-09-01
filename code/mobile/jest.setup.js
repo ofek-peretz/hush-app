@@ -91,3 +91,4 @@ jest.mock('expo-secure-store', () => {
     deleteItemAsync: async (k) => void store.delete(k),
   };
 });
+

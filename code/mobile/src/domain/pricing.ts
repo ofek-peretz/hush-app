@@ -90,8 +90,24 @@ export function monthlyEquivalentLabel(annualPriceLabel: string): string | null 
   if (amount == null) return null;
 
   const digits = annualPriceLabel.replace(/[^\d.,]/g, '');
-  // Whichever separator appears LAST is the decimal one — the same rule the parser runs on.
-  const decimal = digits.lastIndexOf(',') > digits.lastIndexOf('.') ? ',' : '.';
+  const lastDot = digits.lastIndexOf('.');
+  const lastComma = digits.lastIndexOf(',');
+  const decimalAt = Math.max(lastDot, lastComma);
+  /*
+   * ⚠️ THE PARSER'S OWN GROUPING RULE, RE-ASKED (2026-09-01, audit finding 5/QW). A label whose
+   * only separator is a thousands mark — `¥8,900`, `₩59,000` — used to fall through the
+   * "whichever separator appears last is the decimal" shortcut and come out as `¥741,67`: a
+   * comma that reads as thousands in that storefront, plus two invented decimals for a currency
+   * that has none. We cannot know the currency's precision from a label; what we CAN know is
+   * that we cannot restate this one honestly — and the rule of this module already says what to
+   * do then: null. The annual price still shows; only the per-month restatement stays silent.
+   */
+  if (decimalAt !== -1) {
+    const tail = digits.slice(decimalAt + 1);
+    const onlySeparator = lastDot === -1 || lastComma === -1;
+    if (onlySeparator && tail.length === 3) return null; // grouping, not a decimal
+  }
+  const decimal = decimalAt === -1 ? '.' : lastComma > lastDot ? ',' : '.';
   const perMonth = (amount / 12).toFixed(2).replace('.', decimal);
 
   // Swap the numeral in place, so the symbol keeps its side and its spacing.

@@ -328,7 +328,9 @@ export function Root() {
   useEffect(() => onReloadRequested(() => setReloadKey((k) => k + 1)), []);
 
   /**
-   * §11.5 — A SHARED PLAN ARRIVES AS A LINK. `hush://plan?p=<token>`.
+   * §11.5 — A SHARED PLAN ARRIVES AS A LINK — `hush://plan?p=<token>` from the landing page's
+   * own button and from older builds, `https://…/plan?p=<token>` when universal links reach us
+   * (the match below reads the path + param, so both forms already land here).
    *
    * Both doors are covered: a cold start (the app was opened BY the link) and a warm one (it was
    * already running). The token is handed to the screen unread — `decodePlan` is the only thing

@@ -32,5 +32,26 @@ jobs:
       - name: Type-check (tsc, no emit)
         run: npx tsc --noEmit
 
+      # ⛔ THE REPO'S OWN CHECKERS, WHICH CI DID NOT RUN UNTIL 2026-08-26. Both are real gates — the
+      # voice laws and the Hebrew completeness on one side, the RTL/physical-edge rules on the other
+      # — and neither was wired to anything, so the RTL one was found holding two violations that had
+      # aged a full session. `everyLintTheRepoShipsIsRun` holds the same pair locally.
+      - name: Copy laws (voice, Hebrew completeness, plurals)
+        run: npm run lint:copy
+
+      - name: RTL / physical-edge lint
+        run: npm run lint:rtl
+
+      # ⛔ ADDED 2026-08-31, after the founder's crash: *"בעת יציאה ממסך האימון בתחילת האימון
+      # האפליקציה קורסת."* A guard placed one line above a `useState` changed the hook count on the
+      # frame a session ends, and React THROWS on that. There is no eslint in this repo to hold the
+      # rule, so the repo holds it the way it holds its other two.
+      - name: Hook-order lint (a hook below a conditional return crashes the app)
+        run: npm run lint:hooks
+
+      # ⛔ `--maxWorkers=4` IS PART OF THE VERDICT, not an optimisation (2026-09-01). A bare
+      # `npx jest` on a starved runner fakes stage-suite timeouts — the heavy law suites need the
+      # four workers to finish inside their own budgets, and a red that means "the runner was slow"
+      # teaches everyone to ignore red.
       - name: Test (full Jest suite)
-        run: npx jest --ci
+        run: npx jest --ci --maxWorkers=4

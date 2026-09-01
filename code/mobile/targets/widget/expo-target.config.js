@@ -8,4 +8,10 @@ module.exports = {
   bundleIdentifier: '.widget',
   deploymentTarget: '16.2',
   frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
+  /*
+   * The Today widget reads the snapshot the app writes through `group.com.hushfitness.app`.
+   * Declarations restored 2026-08-24 (parked for build 58 only) — the founder creates the App
+   * Group + iCloud container on the Apple Developer App IDs before the next build signs.
+   */
+  entitlements: { 'com.apple.security.application-groups': ['group.com.hushfitness.app'] },
 };

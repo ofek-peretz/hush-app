@@ -65,6 +65,30 @@ export function trainingReminderDays(
   return out;
 }
 
+/**
+ * ════ THE HOUR IS HERS TOO (2026-09-01, audit lever 4) ════
+ *
+ * The reminder fired at a hardcoded 17:30 for everyone — while the same feature already refused
+ * to guess her DAYS and read them from her own history instead. Same argument, other axis: the
+ * app measures when she actually starts training (each session carries `startedAt`), so the
+ * reminder lands at HER median hour, rounded to the quarter, a mirror rather than an opinion.
+ * Under four sessions in the window there is no habit to mirror yet — 17:30 stands in, exactly
+ * as the learned-days rule quietly waits for a pattern. Pure; exported for the test.
+ */
+export function reminderClock(history: Session[], nowMs: number): { hour: number; minute: number } {
+  const WINDOW_MS = 8 * 7 * 24 * 60 * 60 * 1000;
+  const minutes = history
+    .filter((h) => h.trained !== false)
+    .map((h) => new Date(h.startedAt))
+    .filter((d) => Number.isFinite(d.getTime()) && nowMs - d.getTime() <= WINDOW_MS)
+    .map((d) => d.getHours() * 60 + d.getMinutes())
+    .sort((a, b) => a - b);
+  if (minutes.length < 4) return { hour: 17, minute: 30 };
+  const median = minutes[Math.floor(minutes.length / 2)];
+  const snapped = Math.round(median / 15) * 15;
+  return { hour: Math.floor(snapped / 60) % 24, minute: snapped % 60 };
+}
+
 /** Read the switch, the week and her habit, and make the OS schedule match. Never throws. */
 export async function syncTrainingRemindersFromPlan(): Promise<void> {
   try {
@@ -94,6 +118,7 @@ export async function syncTrainingRemindersFromPlan(): Promise<void> {
         habit ? new Set([...habit] as string[]) : null,
         tg('notifications.trainingWeekName'),
       ),
+      reminderClock(history, Date.now()),
     );
   } catch {
     /* best-effort — the boot resync self-heals */

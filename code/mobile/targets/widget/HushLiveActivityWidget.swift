@@ -362,7 +362,11 @@ struct HushCardioLiveActivity: Widget {
         DynamicIslandExpandedRegion(.bottom) {
           HStack(spacing: 14) {
             CardioStat(value: String(format: "%.2f", s.distanceKm), unit: "km")
-            CardioStat(value: fmtPace(s.paceSec), unit: "/km")
+            // ⛔ NO LIVE PACE (founder 2026-08-23): the per-kilometre figure exists only once the
+            // kilometre does — the last closed split, in its own slot, wearing its own kilometre.
+            if let km = s.lastSplitKm, let sec = s.lastSplitPaceSec {
+              CardioStat(value: fmtPace(sec), unit: "km \(km)")
+            }
             CardioStat(value: "\(s.calories)", unit: "kcal")
             // hr == 0 means no heart-rate source — hidden, never shown as "0 bpm".
             if s.hr > 0 {
@@ -532,7 +536,8 @@ private struct CardioLockView: View {
       Rectangle().fill(HX.ink0.opacity(0.10)).frame(height: 1)
 
       HStack(spacing: 0) {
-        CardioLockStat(value: fmtPace(state.paceSec), label: "/km")
+        // ⛔ NO LIVE PACE (founder 2026-08-23) — the split tag in the header row is the card's
+        // only per-kilometre figure, and it is the time a FINISHED kilometre took.
         CardioLockStat(value: "\(state.calories)", label: "kcal")
         // hr == 0 means no heart-rate source — the column is dropped, never shown as "0 bpm".
         // Same law as the in-app row (C.19): no instrument, no readout.

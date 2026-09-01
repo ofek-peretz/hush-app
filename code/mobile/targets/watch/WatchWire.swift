@@ -124,10 +124,16 @@ struct WireMirror: Codable, Equatable {
   var setLabel: String
   var setNumber: Int?
   var setsInExercise: Int?
+  /// The current step is a WARM-UP bridge (2026-08-24): `setNumber`/`setsInExercise` count the
+  /// ramp, and the header prints the warm-up word instead of SET. Optional both ways — an older
+  /// phone never sends it, an older watch never asks.
+  var isWarmup: Bool?
   /// The set that is COMING. Present on every rest frame; nil on an active set / the last set.
   var nextSetLabel: String?
   var nextSetNumber: Int?
   var nextSetsInExercise: Int?
+  /// …and whether THAT step is a warm-up bridge (rest frames).
+  var nextIsWarmup: Bool?
   var globalIndex: Int
   var totalSets: Int
   var targetWeight: Double?
@@ -425,6 +431,49 @@ enum WatchWire {
   static func decodeEnvelope(_ json: String) -> WireEnvelope? {
     guard let data = json.data(using: .utf8) else { return nil }
     return try? JSONDecoder().decode(WireEnvelope.self, from: data)
+  }
+
+  /**
+   ⛔ WHY IT FAILED, NOT MERELY THAT IT DID (founder 2026-08-30, photographing `wc:badframe · rx:0`).
+
+   `decodeEnvelope` is `try?`, so every reason a frame can die — a key the phone stopped sending, a
+   float arriving where `Int` is declared, a null meeting a non-optional — arrives on the wrist as
+   the same four letters. `JSONDecoder` knows exactly which field and why, and that answer was being
+   discarded one character before it could be read.
+
+   It matters more here than almost anywhere in the product: this failure happens on a device that
+   cannot be attached to a debugger, in a pair of processes that cannot be reproduced on a
+   developer's machine, and it takes the WHOLE envelope with it — one bad leaf and the mirror, the
+   lobby, the plan and the copy pack vanish together. A screenshot of the wrist is the only
+   instrument there is, so the wrist has to be able to say something worth photographing.
+
+   Returns a short path like `lobby.muscles` or `authoritySeq`, sized for a 12-point mono line.
+   */
+  static func decodeFailureReason(_ json: String) -> String {
+    guard let data = json.data(using: .utf8) else { return "utf8" }
+    do {
+      _ = try JSONDecoder().decode(WireEnvelope.self, from: data)
+      return "none"
+    } catch DecodingError.keyNotFound(let key, let ctx) {
+      return "miss:" + path(ctx.codingPath + [key])
+    } catch DecodingError.typeMismatch(_, let ctx) {
+      return "type:" + path(ctx.codingPath)
+    } catch DecodingError.valueNotFound(_, let ctx) {
+      return "null:" + path(ctx.codingPath)
+    } catch DecodingError.dataCorrupted(let ctx) {
+      return ctx.codingPath.isEmpty ? "json" : "bad:" + path(ctx.codingPath)
+    } catch {
+      return "err"
+    }
+  }
+
+  /// `lobby.workouts[2].name` — array indices kept, because "one of the workouts" is not an answer.
+  private static func path(_ keys: [CodingKey]) -> String {
+    let parts: [String] = keys.map { key in
+      if let i = key.intValue { return "[\(i)]" }
+      return key.stringValue
+    }
+    return parts.joined(separator: ".").replacingOccurrences(of: ".[", with: "[")
   }
 
   static func encodeIntent(_ intent: WireIntent) -> String? {

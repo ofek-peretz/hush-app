@@ -33,7 +33,6 @@ import { RECORD_VERSION, type AthleteRecord } from '@/domain/record';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { currentWeekOpen } from '@/domain/weekCadence';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
-import type { CoachQuotaState } from '@/domain/coachQuota';
 
 /**
  * How much of the conversation is kept.
@@ -126,9 +125,9 @@ const K = {
   /* When she last opened the Saturday letter, as epoch ms. The changes pill wears an unseen dot
    * until a decision newer than this exists — one comparison, no second flag to fall out of step. */
   coachLetterSeen: 'hush.coach.letter.seen',
-  /* The chat allowance for the current window — see `domain/coachQuota`. A business guard, never a
-   * security control: anyone who unpacks the app bypasses it, and the Worker's rate limit is what
-   * stands in the way of abuse. */
+  /* RETIRED 2026-09-01 (audit finding 1): the quota moved SERVER-SIDE, where enforcement is real
+     (`server/worker.ts`, quota:c:<sub>). The key stays in K so `clearAll` still wipes installs
+     that wrote it; the accessors and `domain/coachQuota` are gone. */
   coachQuota: 'hush.coach.quota',
   /* The last post-session attempt and how it went. The app must be able to SAY that an update is
    * waiting; the one thing worse than it not arriving is not knowing that it did not. */
@@ -661,8 +660,6 @@ export const db = {
   loadCoachLetterSeen: () => getJSON<number>(K.coachLetterSeen),
   saveCoachLetterSeen: (atMs: number) => setJSON(K.coachLetterSeen, atMs),
 
-  loadCoachQuota: () => getJSON<CoachQuotaState>(K.coachQuota),
-  saveCoachQuota: (q: CoachQuotaState) => setJSON(K.coachQuota, q),
 
   loadCoachUpdate: () => getJSON<CoachUpdate>(K.coachUpdate),
   saveCoachUpdate: (u: CoachUpdate) => setJSON(K.coachUpdate, u),

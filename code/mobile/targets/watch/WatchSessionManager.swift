@@ -12,12 +12,31 @@ import WatchConnectivity
 final class WatchSessionManager: NSObject, WCSessionDelegate {
   weak var model: WatchModel?
 
+  /*
+   * ════ THE WRIST'S OWN TESTIMONY (founder's build-59 silence, 2026-08-26) ════
+   *
+   * Every layer of this pipe could fail without a word: activation completes WITH AN ERROR that
+   * the delegate used to ignore, or completes clean and no envelope ever arrives. From the
+   * outside those are one symptom — the idle screen forever — and they took a day of guessing
+   * apart. Three facts close that: the activation state, the error it completed with (if any),
+   * and how many envelopes have actually been ingested. The idle screen prints them in one quiet
+   * line, so the failing layer is named by a glance at the wrist itself.
+   */
+  private(set) var activationDiag: String = "wc:…"
+  private(set) var framesIngested: Int = 0
+
   func activate() {
-    guard WCSession.isSupported() else { return }
+    guard WCSession.isSupported() else {
+      activationDiag = "wc:unsupported"
+      return
+    }
     let session = WCSession.default
     session.delegate = self
     session.activate()
   }
+
+  /// One quiet line for the idle screen: activation · frames seen (· error).
+  var diagLine: String { "\(activationDiag) · rx:\(framesIngested)" }
 
   var isReachable: Bool {
     WCSession.isSupported() ? WCSession.default.isReachable : false
@@ -72,6 +91,41 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
     return true
   }
 
+  /**
+   * ⛔ W3 · A SET IS CONFIRMED BY AN ANSWER, NOT BY AN ADDRESS (watch audit 2026-08-23).
+   *
+   * `send` returns true when the OS ACCEPTED the message — which proves the iPhone is in range,
+   * not that the app heard. A jettisoned phone app is woken by the very tap that then dies in its
+   * boot window, so the wrist played the confirm haptic for a set logged nowhere. This variant
+   * asks for a reply: the phone answers `listening: true` only when its React layer is up and
+   * subscribed, and the completion runs on the main queue with that verdict.
+   *
+   * ⚠️ THE SKEW FALLBACK IS LOAD-BEARING. A phone one build behind has no reply-handler delegate
+   * method, and iOS then fails the delivery outright (`errorHandler`) — which would have turned
+   * every wrist set completion against an older phone into a dead tap. On error, the intent is
+   * re-sent once on the plain fire-and-forget channel and reported as delivered exactly as the old
+   * code did: a skewed pair keeps yesterday's behaviour, never less.
+   */
+  func sendExpectingReply(intentJSON json: String, completion: @escaping (Bool) -> Void) {
+    guard WCSession.isSupported() else { completion(false); return }
+    let session = WCSession.default
+    guard session.isReachable else { completion(false); return }
+    session.sendMessage(
+      ["intent": json],
+      replyHandler: { reply in
+        let heard = (reply["listening"] as? Bool) ?? true
+        DispatchQueue.main.async { completion(heard) }
+      },
+      errorHandler: { _ in
+        DispatchQueue.main.async {
+          guard session.isReachable else { completion(false); return }
+          session.sendMessage(["intent": json], replyHandler: nil, errorHandler: nil)
+          completion(true) // the pre-reply contract: accepted by the OS, as it always was
+        }
+      }
+    )
+  }
+
   /// Transfer a watch-local session record to the phone — the DURABLE channel
   /// (transferUserInfo survives both apps terminating and delivers whenever the
   /// pair next syncs). Unlike intents, records MUST be queued: they are facts
@@ -102,9 +156,54 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
   }
 
   private func ingest(_ payload: [String: Any]) {
-    guard let json = payload["envelope"] as? String,
-          let envelope = WatchWire.decodeEnvelope(json) else { return }
-    DispatchQueue.main.async { [weak self] in self?.model?.apply(envelope) }
+    /*
+     * ⛔ TWO DIFFERENT FAILURES WORE ONE NAME (founder 2026-08-30, photographing `wc:badframe · rx:0`).
+     *
+     * A payload with no `envelope` string at all and a payload whose JSON will not decode are not
+     * the same event — the first says the phone (or a stale stored context) sent us something that
+     * is not ours, the second says the two declarations of one shape have drifted. They are
+     * diagnosed in opposite directions and they were reported identically.
+     *
+     * ⚠️ AND THE REASON WAS ONE CHARACTER AWAY THE WHOLE TIME: `decodeEnvelope` is `try?`, so
+     * `JSONDecoder`'s account of exactly which field died was being discarded at the point of
+     * failure. This is a device that cannot be attached to a debugger, in a pair of processes no
+     * developer machine can reproduce, and one bad leaf takes the mirror, the lobby, the plan and
+     * the copy pack with it. A photograph of the wrist is the only instrument there is.
+     */
+    guard let json = payload["envelope"] as? String else {
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        // Not our frame at all: no `envelope` key, or it is not a string. The keys we DID get are
+        // the answer — a stale context from an older build looks completely different here.
+        self.activationDiag = "wc:nokey:" + payload.keys.sorted().prefix(2).joined(separator: ",")
+        self.model?.diagChanged()
+      }
+      return
+    }
+    guard let envelope = WatchWire.decodeEnvelope(json) else {
+      let why = WatchWire.decodeFailureReason(json)
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.activationDiag = "wc:badframe:" + why
+        self.model?.diagChanged()
+      }
+      return
+    }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.framesIngested += 1
+      /*
+       * ⚠️ AND A GOOD FRAME CLEARS THE COMPLAINT. `activationDiag` was set on failure and never
+       * reset, so one bad frame — a single stale context adopted at activation — pinned "badframe"
+       * on the screen for the rest of the app's life, over a pipe that had since started working.
+       * A diagnosis that cannot go back to healthy is a diagnosis nobody can act on.
+       */
+      if self.activationDiag.hasPrefix("wc:badframe") || self.activationDiag.hasPrefix("wc:nokey") {
+        self.activationDiag = "wc:on"
+      }
+      self.model?.diagChanged()
+      self.model?.apply(envelope)
+    }
   }
 
   private func pushReachability() {
@@ -119,6 +218,20 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
     activationDidCompleteWith activationState: WCSessionActivationState,
     error: Error?
   ) {
+    // The error was IGNORED here since the file was written — an activation that completes broken
+    // looked identical to one that completed clean (build-59 silence). Named now, on the wrist.
+    let state: String
+    switch activationState {
+    case .activated: state = "on"
+    case .inactive: state = "inactive"
+    case .notActivated: state = "off"
+    @unknown default: state = "unknown"
+    }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.activationDiag = error == nil ? "wc:\(state)" : "wc:\(state)!\((error! as NSError).code)"
+      self.model?.diagChanged()
+    }
     // Adopt any context that arrived while inactive, then publish reachability.
     if !session.receivedApplicationContext.isEmpty { ingest(session.receivedApplicationContext) }
     pushReachability()

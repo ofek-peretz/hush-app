@@ -165,6 +165,8 @@ enum WatchCopy {
   // WT4 up-next card legend words (uppercased at the call site).
   static var liftWord: String { L("liftWord", "LIFT") }
   static var setWord: String { L("setWord", "SET") }
+  /// The warm-up ramp's label (2026-08-24) — used wherever a bridge step would otherwise say SET.
+  static var warmupWord: String { L("warmupWord", "WARM-UP") }
   static var startNextSet: String { L("startNextSet", "Start next set") }
   static var skipRest: String { L("skipRest", "Skip rest") }
   static var startNextLift: String { L("startNextLift", "Start next lift") }

@@ -49,6 +49,7 @@ import { updateHomeWidget } from '@/platform/homeWidget';
 import { syncTrainingRemindersFromPlan } from '@/platform/trainingReminders';
 import { armGapCatch } from '@/platform/gapCatch';
 import { armTrialLast } from '@/platform/trialCatch';
+import { armCirclePublish } from '@/platform/circlePublish';
 import { readRecord as readAthleteRecord, restoreVerdict } from '@/domain/record';
 import { NO_ENTITLEMENT, entitlementNow, type Entitlement } from '@/domain/entitlement';
 
@@ -621,6 +622,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       void armTrialLast();
       // The analytics opt-out latch loads before any flush can ship (audit finding 4).
       void refreshTelemetryOptOut();
+      // The circle hears about the week at boot too — not only on a Together visit (audit lever 5).
+      void armCirclePublish();
       // …and sweep any note a PREVIOUS build scheduled and this one no longer sends. Deleting the
       // code that schedules a repeating push does not cancel the push — it lives in iOS's queue.
       void notifier.cancelRetiredNotes();
@@ -916,6 +919,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         void armGapCatch();
         // …and the trial note re-derives: this session may be the one that left exactly one.
         void armTrialLast();
+        // …and the circle hears about THIS session — a passive member stops reading as zero
+        // to her friends (audit lever 5; publish-on-visit-only was the silent failure).
+        void armCirclePublish();
         return { unlockedPortrait: unlocked };
       },
 

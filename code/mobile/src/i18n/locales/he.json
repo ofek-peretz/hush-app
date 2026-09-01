@@ -772,7 +772,8 @@
     "cardioEyebrow": "קרדיו",
     "cardioLongest": "המרחק הארוך שלך",
     "sessionMinutes": "דק׳ אימון",
-    "together": "יחד עם {{names}}"
+    "together": "יחד עם {{names}}",
+    "findLine": "ב-App Store"
   },
   "load": {
     "perSide": "{{plates}} בכל צד",

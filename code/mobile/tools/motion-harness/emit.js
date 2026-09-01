@@ -8,13 +8,14 @@
  *   • frames.json     — the per-frame primitive lists (also inlined into the two htmls)
  *   • validation.txt  — PASS / violations, human-readable
  *
- * Usage: node tools/motion-harness/emit.js <outDir> [exerciseId]
+ * Usage: node tools/motion-harness/emit.js <outDir> [exerciseId] [male|female]
  */
 const fs = require('fs');
 const path = require('path');
 
 const OUT = process.argv[2];
 const EX = process.argv[3] || 'bb_bench_press';
+const FIG = process.argv[4] === 'female' ? 'female' : 'male';
 if (!OUT) { console.error('usage: node emit.js <outDir> [exerciseId]'); process.exit(2); }
 
 const BUILD = path.resolve(__dirname, '../../.motion-build');
@@ -45,12 +46,12 @@ const { packPrim, BROWSER_DRAW_JS } = require('./prims');
 const frames = [];
 for (let i = 0; i < NF; i++) {
   const rom = romAt((i / NF) * loop, tempo);
-  frames.push(buildFrame(rig, rom).map(packPrim));
+  frames.push(buildFrame(rig, rom, FIG).map(packPrim));
 }
 fs.writeFileSync(path.join(OUT, 'frames.json'), JSON.stringify(frames));
 
 // filmstrip roms (positions, not time) — Top → Chest
-const strip = [0, 0.25, 0.5, 0.75, 1].map((rom) => buildFrame(rig, rom).map(packPrim));
+const strip = [0, 0.25, 0.5, 0.75, 1].map((rom) => buildFrame(rig, rom, FIG).map(packPrim));
 const stripLabels = ['Lockout', '', 'Mid-descent', '', 'Chest contact'];
 
 const meta = {

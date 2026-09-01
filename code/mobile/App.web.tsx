@@ -35,6 +35,7 @@ import { GALLERY, DEFAULT_SCREEN, type GalleryEntry } from '@/screens/dev/galler
 // The REAL app, booted here so the browser is a place to USE Hush and not only to look at it.
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
+import { PairProvider } from '@/state/stores/pairStore';
 import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
 
@@ -173,9 +174,14 @@ export default function App() {
             <Boundary>
               <AppProvider>
                 <SessionProvider>
-                  <ToastProvider>
-                    <Root />
-                  </ToastProvider>
+                  {/* The same nesting the device build uses — the pair spectates the session, so it
+                      sits inside it. Without this the web build's Home draws no "train together"
+                      door and §11.2 is unreachable from the real-app path. */}
+                  <PairProvider>
+                    <ToastProvider>
+                      <Root />
+                    </ToastProvider>
+                  </PairProvider>
                 </SessionProvider>
               </AppProvider>
             </Boundary>

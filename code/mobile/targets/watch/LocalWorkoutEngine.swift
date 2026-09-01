@@ -532,6 +532,11 @@ final class LocalWorkoutEngine {
     m.nextTargetWeight = next?.targetWeight
     m.nextTargetReps = next?.targetReps
     m.nextSetsInExercise = next?.totalSetsInExercise
+    // The warm-up ramp is deliberately NOT in the standalone plan (watchPlan.ts header, 2026-08-24)
+    // — every step this engine runs is a working set, and the mirror says so explicitly so the
+    // parity contract with the phone's projector holds.
+    m.isWarmup = false
+    m.nextIsWarmup = false
     // THE SET THAT IS COMING (parity with the phone's projector, 2026-07-12). The presented step
     // during a rest is the one just FINISHED — so a rest screen that renders `setLabel` counts the
     // set behind the athlete. This engine had the `next` step in its hand and never published its

@@ -12,13 +12,14 @@
 
 // 
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '@/components/ds';
 import { ShareCard } from '@/components/share/ShareCard';
 import { share } from '@/platform/share';
+import { track } from '@/platform/telemetry';
 import { useCopy } from '@/i18n/useCopy';
 import { color, stage, font, textScale, space, radius, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -29,6 +30,12 @@ export function ShareCardModal({ navigation, route }: Props) {
   const { t } = useCopy();
   const card = route.params.card;
   const cardRef = useRef<View>(null);
+  // The share funnel's first half (audit lever 2): the modal opening IS the intent. Once per mount.
+  useEffect(() => {
+    void track('share_opened', { kind: card.kind });
+    // card.kind is fixed for the modal's life; re-tracking on a card change is not a thing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -40,6 +47,10 @@ export function ShareCardModal({ navigation, route }: Props) {
     setBusy(true);
     setNote(null);
     const res = await share.captureAndShare(cardRef, `hush-${card.kind}.png`, t('share.sheetTitle'));
+    // The funnel's second half — the result used to be thrown away, so the one growth surface the
+    // product has was entirely unmeasured. 'shared' here means the OS sheet resolved, the closest
+    // honest proxy iOS offers for "it left the phone".
+    void track('share_completed', { kind: card.kind, result: res });
     setBusy(false);
     if (res !== 'shared') setNote(t('share.unavailable'));
   }

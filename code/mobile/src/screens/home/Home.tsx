@@ -30,6 +30,7 @@ import { nextUp } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
+import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
@@ -792,6 +793,28 @@ export function Home({ navigation, route }: Props) {
   const [weekMuscles, setWeekMuscles] = useState<string[]>([]);
   /** The closest milestone, formatted for the paper card. */
   const [nextMark, setNextMark] = useState<{ figure: string; title: string; progress: number } | null>(null);
+  /*
+   * ════ THE LETTER'S UNREAD DOT (2026-09-01, audit quick win) ════
+   *
+   * `markWeeklyUpdateSeen` has been written on every letter open since 2026-08-26 and read for
+   * UI by NOTHING — so an athlete who missed the Saturday note simply never learned a letter
+   * existed. (The 2026-08-26 deletion of `briefUnseen` was about a DEAD source — coachLog, which
+   * nothing wrote; this reads the v5 engine's own `seen`, which is live.) Re-read on focus, so
+   * walking back from the letter clears it without ceremony.
+   */
+  const [letterUnseen, setLetterUnseen] = useState(false);
+  useEffect(() => {
+    if (!isFocused) return;
+    let cancelled = false;
+    void getWeeklyUpdate()
+      .then((u) => {
+        if (!cancelled) setLetterUnseen(u != null && !u.seen && u.explanations.length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused]);
   useEffect(() => {
     /*
      * ⛔ NO LONGER GATED ON `resting` (founder, device QA 2026-08-23: the empty half). These are
@@ -1208,6 +1231,7 @@ export function Home({ navigation, route }: Props) {
        * the one job the deterministic engine genuinely cannot do. See `theAiHasOneJob`.
        */
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
+      letterUnseen={letterUnseen}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
       weekLive={!resting && weekEnergy ? { ...weekEnergy, loadsUp, muscles: weekMuscles } : null}
       nextMark={!resting ? nextMark : null}

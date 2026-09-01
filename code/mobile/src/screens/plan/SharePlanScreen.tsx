@@ -20,13 +20,27 @@ import type { CoachPlan } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
 import { encodePlan, sharedPlan } from '@/domain/planShare';
 import { shareText } from '@/platform/share';
+import { identityBaseUrl } from '@/platform/circleClient';
 import { track } from '@/platform/telemetry';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'SharePlan'>;
 
-/** The link a plan travels in. `hush://plan?p=<token>` — one opaque token, nothing readable. */
-export const planLink = (token: string) => `hush://plan?p=${encodeURIComponent(token)}`;
+/**
+ * The link a plan travels in — an https landing page, no longer a bare `hush://` (audit lever 2).
+ *
+ * A custom scheme is inert for anyone without the app: it renders as dead text in WhatsApp, and
+ * the one recipient worth acquiring — the friend who does NOT have Hush yet — could do nothing
+ * with it. The worker's `/plan` page (same pattern the pair invite has had since 2026-08-31)
+ * opens the app when it exists and points at the store when it does not. The token stays opaque
+ * either way. Falls back to the scheme link only in a build with no identity worker configured.
+ */
+export const planLink = (token: string) => {
+  const base = identityBaseUrl();
+  return base
+    ? `${base.replace(/\/$/, '')}/plan?p=${encodeURIComponent(token)}`
+    : `hush://plan?p=${encodeURIComponent(token)}`;
+};
 
 export function SharePlanScreen({ navigation }: Props) {
   const { t } = useCopy();

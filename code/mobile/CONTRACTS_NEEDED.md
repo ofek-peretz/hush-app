@@ -1,3 +1,26 @@
+# Backend contracts the client needs — ⛔ OBSOLETE (superseded 2026-08-25)
+
+> **DO NOT BUILD FROM THIS FILE.** Everything below describes the v4 architecture: a Python
+> backend at `implementation/api` that the client would enrol against and then read its programme
+> from. **That backend is not in this repository, and Hush no longer works that way.**
+>
+> The rebuild put the engine ON THE DEVICE — `src/engine/v5` decides every load, band and session,
+> and `fixtureModel` is the local data layer it reads. The only servers Hush talks to are two
+> Cloudflare Workers, neither of which is described here: `server/identity.ts` (Sign in with Apple
+> verification + the circle) and the coach worker. Their contracts live with their code.
+>
+> **The client path this file specifies cannot execute.** `selectModel()` returns the HTTP client
+> only when `EXPO_PUBLIC_API_BASE_URL` is set, and it is set in no build — so `HttpModelClient`,
+> `enroll.ts` and the telemetry POST are unreachable in every shipped binary. That dead path is
+> recorded as a cleanup decision for the founder rather than deleted unilaterally; see the session
+> notes. Nothing should be wired to it without that decision being made first.
+>
+> Kept, not deleted, for one reason: it is the clearest surviving statement of what the v4 model
+> layer was expected to answer, and the `ModelClient` interface it shaped is still the interface
+> `fixtureModel` implements today. Read it as history.
+
+---
+
 # Backend contracts the client needs (exact specs)
 
 The client is wired against the **real** backend (`implementation/api`). These are

@@ -80,7 +80,7 @@ describe('the consent is the feature', () => {
     const seam = read('src/platform/trainingReminders.ts');
     expect(seam).toContain('await notifier.syncTrainingReminders(null)');
     const notif = read('src/platform/notifications.ts');
-    const at = notif.indexOf('async syncTrainingReminders(days)');
+    const at = notif.indexOf('async syncTrainingReminders(days, clock)');
     expect(at).toBeGreaterThan(-1);
     const body = notif.slice(at, at + 2200);
     // The sweep runs BEFORE the empty-set early return — opting out cancels, always.
@@ -89,7 +89,7 @@ describe('the consent is the feature', () => {
 
   it('the background sync never prompts — it reads permission, it does not ask for it', () => {
     const notif = read('src/platform/notifications.ts');
-    const at = notif.indexOf('async syncTrainingReminders(days)');
+    const at = notif.indexOf('async syncTrainingReminders(days, clock)');
     const body = notif.slice(at, at + 2200);
     expect(body).toContain('hasNotificationPermission()');
     expect(body).not.toContain('ensureNotificationPermission');
@@ -108,10 +108,50 @@ describe('the consent is the feature', () => {
 describe('the note states a fact', () => {
   it('stable per-weekday ids, a WEEKLY trigger, the copy baked at schedule time', () => {
     const notif = read('src/platform/notifications.ts');
-    const at = notif.indexOf('async syncTrainingReminders(days)');
+    const at = notif.indexOf('async syncTrainingReminders(days, clock)');
     const body = notif.slice(at, at + 2200);
     expect(body).toContain('`hush.training.${d.weekday}`');
     expect(body).toContain('SchedulableTriggerInputTypes.WEEKLY');
     expect(body).toContain("tg('notifications.trainingTitle', { name: d.name })");
+  });
+});
+
+/*
+ * ════ THE HOUR IS HERS TOO (2026-09-01, audit lever 4) ════
+ * The days were already learned from her history; the hour was a hardcoded 17:30 for everyone.
+ * `reminderClock` mirrors her median start time (≥4 sessions in 8 weeks, snapped to the quarter);
+ * until there is a habit to mirror, 17:30 stands in — the same quiet-wait rule the days follow.
+ */
+describe('the hour is hers too', () => {
+  const { reminderClock } = require('../../src/platform/trainingReminders');
+  const at = (daysAgo: number, hour: number, minute = 0) => {
+    const d = new Date(NOW - daysAgo * 24 * 60 * 60 * 1000);
+    d.setHours(hour, minute, 0, 0);
+    return { startedAt: d.toISOString(), trained: true };
+  };
+  const NOW = Date.now();
+
+  it('under four sessions there is no habit — 17:30 stands in', () => {
+    expect(reminderClock([at(2, 6), at(4, 6)], NOW)).toEqual({ hour: 17, minute: 30 });
+  });
+
+  it('a morning athlete is reminded in the morning, at her own median', () => {
+    const history = [at(2, 6, 10), at(4, 6, 20), at(7, 6, 0), at(9, 6, 40), at(11, 7, 0)];
+    const clock = reminderClock(history, NOW);
+    expect(clock.hour).toBe(6);
+    expect([15, 30]).toContain(clock.minute);
+  });
+
+  it('sessions older than the eight-week window do not vote', () => {
+    const history = [at(70, 22), at(72, 22), at(75, 22), at(2, 6), at(4, 6, 30), at(6, 7), at(8, 6, 15)];
+    expect(reminderClock(history, NOW).hour).toBeLessThan(12);
+  });
+
+  it('the schedule carries the learned clock, defaulting only when none is handed over', () => {
+    const notif = read('src/platform/notifications.ts');
+    const at2 = notif.indexOf('async syncTrainingReminders(days, clock)');
+    const body = notif.slice(at2, at2 + 2400);
+    expect(body).toContain('clock?.hour ?? 17');
+    expect(body).toContain('clock?.minute ?? 30');
   });
 });

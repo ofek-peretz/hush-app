@@ -73,3 +73,27 @@ describe('the gate arithmetic', () => {
     expect(freeSessionsRemaining(FREE_SESSION_LIMIT + 5)).toBe(0);
   });
 });
+
+/*
+ * ════ THE PRICE RESTATEMENT (2026-09-01, audit QW) ════
+ * `¥8,900 / 12` used to render `¥741,67` — a thousands comma wearing a decimal's hat, plus two
+ * invented decimals for a currency that has none. The rule now matches the module's own creed:
+ * a price we cannot restate honestly is one we do not restate at all.
+ */
+describe('monthlyEquivalentLabel', () => {
+  const { monthlyEquivalentLabel } = require('@/domain/pricing');
+
+  it('a decimal price restates in its own convention', () => {
+    expect(monthlyEquivalentLabel('$59.99')).toBe('$5.00');
+    expect(monthlyEquivalentLabel('59,99 €')).toBe('5,00 €');
+  });
+
+  it('an integer price with no separator restates plainly', () => {
+    expect(monthlyEquivalentLabel('₪419')).toBe('₪34.92');
+  });
+
+  it('⚠️ a grouping-only label refuses rather than lying', () => {
+    expect(monthlyEquivalentLabel('¥8,900')).toBeNull();
+    expect(monthlyEquivalentLabel('₩59,000')).toBeNull();
+  });
+});

@@ -5,6 +5,16 @@ These iOS-native surfaces are **wired in JS and configured**, but require a
 or on Windows. Each has a clean swap point in the app; dropping in the native
 module is the only remaining step.
 
+## ✅ SHIPPED AND RUNNING (updated 2026-08-25)
+
+**Nothing here is pending.** All four surfaces compiled and went to TestFlight in builds 58/59 with
+their capabilities provisioned (see `IOS_CAPABILITIES_PENDING.md`, itself now closed). The section
+below is the original hand-off note and is kept for the swap points it documents — read the dates
+in it as history, not as a status. The test count it quotes (218) predates the rebuild; the suite
+is over 3,400 today.
+
+---
+
 ## NATIVE IMPLEMENTATION COMPLETE (2026-06-16) — compile-pending only
 
 All four surfaces now have their native code in the repo behind the existing swap

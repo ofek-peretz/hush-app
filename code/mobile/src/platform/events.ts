@@ -161,6 +161,17 @@ export const FUNNEL_EVENTS = {
    */
   weekDoorChosen: 'funnel_week_door_chosen',
   buildReached: 'funnel_build_reached',
+  /*
+   * ════ THE LAST MILE (2026-09-01, audit lever 3) ════
+   * The funnel used to END at `buildReached` — so the drop across the reveal wait (5.5–23 s), the
+   * AI-fallback apology (a measured 7-of-16), and the pricing screen was invisible: the most
+   * decision-dense stretch of the whole intake, unmeasured. Two more steps close it; the first
+   * session itself is already `session_started`.
+   */
+  /** The built week is ON SCREEN — the reveal finished, whatever wrote the week. */
+  revealSeen: 'funnel_reveal_seen',
+  /** ProgramCreated reached: the promise + price are in front of her, one tap from Home. */
+  readyReached: 'funnel_ready_reached',
 } as const;
 
 /**

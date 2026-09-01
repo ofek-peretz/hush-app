@@ -1031,6 +1031,30 @@ struct WatchRootView: View {
       VStack(spacing: 8) {
         Image(systemName: "dumbbell.fill").font(.title).foregroundStyle(Palette.ink2)
         Text(WatchCopy.idleWaiting).font(.system(size: 12)).foregroundStyle(Palette.ink2)
+        /*
+         * The wire's testimony (build-59 silence), and it names the FAULT now rather than the
+         * category (founder 2026-08-30, photographing `wc:badframe · rx:0` — four letters that
+         * could mean any of three unrelated things):
+         *
+         *   wc:on · rx:0        the pipe is open and the phone has sent nothing
+         *   wc:on!<code>        activation completed broken; the code is the NSError's
+         *   wc:nokey:<keys>     something arrived that is not ours — no `envelope` string. The
+         *                       keys it DID carry follow, which is how a stale application context
+         *                       from an older build announces itself
+         *   wc:badframe:<why>   it is ours and it will not decode. `<why>` is the decoder's own
+         *                       account: `miss:lobby.muscles` (the phone stopped sending a field
+         *                       Swift requires), `type:plan.workouts[0].steps[3].targetReps` (a
+         *                       float where Int is declared), `null:…`, `json`
+         *
+         * ⚠️ AND IT CLEARS. A good frame puts this back to `wc:on` — a complaint that cannot go
+         * back to healthy is one nobody can act on, and one stale context used to pin it for the
+         * life of the app over a pipe that had since started working.
+         *
+         * One line, only on the one screen that means "nothing has arrived".
+         */
+        if !model.wireDiag.isEmpty {
+          Text(model.wireDiag).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2.opacity(0.6))
+        }
       }
     case let .start(lobby):
       StartScreen(lobby: lobby, onBegin: model.begin, onSelect: model.selectWorkout, onCardio: model.startCardio)
@@ -1482,10 +1506,13 @@ struct ActiveSetScreen: View {
   }
 
   /// "CHEST · 2/4" without the muscle — the muscle now rides the name below it.
+  /// A warm-up bridge announces itself instead of the muscle ("WARM-UP · 1/2"), so a half-weight
+  /// bar can never read as a broken prescription on the wrist.
   private var setPosition: String {
-    let group = (mirror.exerciseGroup ?? "").uppercased()
     let n = mirror.setNumber ?? 1
     let m = mirror.setsInExercise ?? 1
+    if mirror.isWarmup == true { return "\(WatchCopy.warmupWord.uppercased()) · \(n)/\(m)" }
+    let group = (mirror.exerciseGroup ?? "").uppercased()
     return group.isEmpty ? "SET \(n)/\(m)" : "\(group) · \(n)/\(m)"
   }
 
@@ -2011,7 +2038,7 @@ struct InterRestScreen: View {
   /// UP NEXT: the set that is coming, its lift, and its load — at a size that reads at a glance.
   private var upNextCard: some View {
     VStack(alignment: .leading, spacing: 3) {
-      Text("\(WatchCopy.upNext.uppercased()) · \(WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.setsInExercise ?? 1)")
+      Text("\(WatchCopy.upNext.uppercased()) · \(mirror.nextIsWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.nextIsWarmup == true ? (mirror.nextSetsInExercise ?? 1) : (mirror.setsInExercise ?? 1))")
         .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.8)

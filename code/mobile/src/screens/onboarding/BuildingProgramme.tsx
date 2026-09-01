@@ -166,6 +166,17 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * failure it actually is, which already has a retry button on it.
    */
   const { inputs, authored, coachAsk } = (route.params ?? {}) as typeof route.params;
+  /*
+   * ════ HER OWN WEEK IS NOT "BUILT" AT HER (2026-09-01, audit lever 3) ════
+   *
+   * On the `authored` path the week is already sealed on disk — she just finished TYPING it — and
+   * this screen still ran the full build ceremony: 1.5 s of dark body, the fill, 2.6 s of reveal,
+   * ~5.5 s of theatre framing her own typing as our computation. The laws survive whole (the fill
+   * still renders its beat — the 2026-08-05 zero-frame bug stays dead — and the name still holds
+   * long enough to read); only the durations stop pretending. A short seal, not a fake build.
+   */
+  const openingMs = authored ? 500 : OPENING_MS;
+  const revealMs = authored ? 1400 : REVEAL_MS;
 
   /**
    * ⛔ ASK THE MODEL, AND NEVER LET IT BE THE REASON SHE HAS NO WEEK.
@@ -250,7 +261,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
   useEffect(() => {
     // The dark body owns the first beat; then the muscles begin arriving whether or not the coach
     // has answered, because the muscles are ours to know.
-    const id = setTimeout(() => setShownMuscles(1), OPENING_MS);
+    const id = setTimeout(() => setShownMuscles(1), openingMs);
     return () => clearTimeout(id);
   }, []);
 
@@ -327,10 +338,10 @@ export function BuildingProgramme({ navigation, route }: Props) {
         if (builtAtMs.current != null && Date.now() - builtAtMs.current >= fillHold(built.muscles)) setRevealed(true);
         return;
       }
-      if (elapsed < OPENING_MS) return;
+      if (elapsed < openingMs) return;
       const n = Math.min(
         PLACEHOLDER_MUSCLES.length,
-        1 + Math.floor((elapsed - OPENING_MS) / beatFor(PLACEHOLDER_LIFTS)),
+        1 + Math.floor((elapsed - openingMs) / beatFor(PLACEHOLDER_LIFTS)),
       );
       setShownMuscles((cur) => Math.max(cur, n));
     });
@@ -402,6 +413,12 @@ export function BuildingProgramme({ navigation, route }: Props) {
     };
   }, [waitingForImport, navigation, inputs]);
 
+  /* ⛔ FUNNEL (2026-09-01, audit lever 3): the reveal was the funnel's blind stretch — the wait,
+     the fallback, the apology all happened after `buildReached` and before anything else fired. */
+  useEffect(() => {
+    if (revealed) void track(FUNNEL_EVENTS.revealSeen);
+  }, [revealed]);
+
   useEffect(() => {
     if (!revealed || waitingForImport) return;
     // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
@@ -412,7 +429,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
         inputs: authoredDays.current ? { ...inputs, daysPerWeek: authoredDays.current } : inputs,
         ...(coachMissed.current ? { coachMissed: true, ...(coachAsk ? { coachAsk } : {}) } : {}),
       }),
-      REVEAL_MS,
+      revealMs,
     );
     return () => clearTimeout(id);
   }, [revealed, waitingForImport, navigation, inputs, coachAsk]);

@@ -9,9 +9,11 @@
  *   · the programme, travelling — send yours to a friend, bring the one a friend (or a coach)
  *     sent, the moss door that used to sit in You;
  *   · the workouts she trained WITH someone — the together record;
- *   · and THE CIRCLE (the shared group — week letters and cards between friends) gets built INTO
- *     this screen when its CloudKit cycle lands. Its home exists before it does, so it will not be
- *     "pushed somewhere" the way this screen exists to end.
+ *   · and THE CIRCLE (the shared group — week letters and cards between friends), LIVE since
+ *     2026-08-24 on the identity worker (the CloudKit plan became `server/hush-identity`). This
+ *     screen reads and publishes it; since 2026-09-01 the week also publishes itself at boot and
+ *     after every session (`platform/circlePublish`), so a member who never opens this screen
+ *     still counts for her friends.
  *
  * You, after this move, is what it says: her identity, her body, her settings, her membership,
  * her record. Nothing here reports training — Progress owns that; this screen is about the people

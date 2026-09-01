@@ -170,7 +170,8 @@ export interface Notifier {
    * `days` is the full desired set; the sync is idempotent (cancel-then-schedule on stable ids),
    * so callers pass the truth and never diff. Empty/null = opted out → everything cancelled.
    */
-  syncTrainingReminders(days: { weekday: number; name: string }[] | null): Promise<void>;
+  /** `clock` is her own learned start time (trainingReminders.reminderClock); absent → 17:30. */
+  syncTrainingReminders(days: { weekday: number; name: string }[] | null, clock?: { hour: number; minute: number }): Promise<void>;
   /**
    * A workout the WRIST ran alone just reconciled into her record (2026-08-23). Delivered NOW —
    * the save is a fact that already happened, exactly like a kilometre. The caller suppresses it
@@ -364,7 +365,7 @@ export const notifierExpo: Notifier = {
     }
   },
 
-  async syncTrainingReminders(days) {
+  async syncTrainingReminders(days, clock) {
     try {
       // Idempotent: sweep the seven stable ids, then schedule the truth. A day that moved off the
       // board (the week reshuffled) is swept by construction — no diffing, no drift.
@@ -389,8 +390,10 @@ export const notifierExpo: Notifier = {
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
             weekday: d.weekday,
-            hour: 17,
-            minute: 30,
+            // Her own median start time when four sessions have taught it; 17:30 until then
+            // (audit lever 4 — the days were already hers, the hour was everyone's).
+            hour: clock?.hour ?? 17,
+            minute: clock?.minute ?? 30,
           },
         });
       }

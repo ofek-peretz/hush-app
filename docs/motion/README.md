@@ -49,6 +49,41 @@ press; stack rides the 3D stroke 1:1). The committed `bench_press_benchmark.gif`
 567/567 (symmetry now asserted as mirror geometry).
 
 
+**The full-catalog eye pass (2026-08-25, founder mandate: "take every aspect to the edge"):** all
+118 rigs × both athletes × 3 phases reviewed frame-by-frame, and three findings fixed the same day:
+· **sumo_deadlift restaged FRONT-VIEW** — the frontal directive extended down: a sumo's identity
+  (wide stance, toes out, knees wide, grip inside the knees) is lower-body symmetry, invisible from
+  the side; face-on it IS the silhouette, the pull is fully in-plane, and the knees-outside-the-grip
+  fact is now a FormSpec predicate, not a caption.
+· **smith_calf_raise grew its machine** — it drew a floating plate, no rails, no grip; now the
+  Smith's reserved gate (both uprights, crossbar riding the bar) with the bar on the traps at the
+  back squat's own carry and grip.
+· **leg_press_calf_raise moved onto the SLED** (`legPress.ts`) — it wore the standing machine's
+  trap-pad signature on the wrong exercise; now it is the leg press station with legs long and
+  pinned, the whole rep a foot pivoting about the ankle, the plate riding the ball of the foot.
+· **machine_triceps_ext became a LEVER** (`pushdown.ts`) — it drew the cable members' own
+  pulley-and-rope with a grip glyph swapped in, a twin inside the family; now its pivot pin sits
+  on the elbow's axis (as the real machines are labeled) and the rigid arm rides the forearm 1:1
+  to the fixed grips — the drawn machine sweeps the exact arc the FormSpec validates.
+All four validate; the deep pass (every rig × both athletes × 3 phases, judged panel-by-panel on
+technique · identity · range · camera · body-and-equipment) found every other rig sound.
+
+**The second athlete (2026-08-25):** the system now has TWO Duotone Athletes on ONE skeleton.
+Every segment length in `anthro.ts` is shared — same poses, same FormSpecs, same machines, so every
+guarantee above is hers verbatim — and the difference is skin-only by construction: her own side
+and frontal trunk profiles (waist cut, full glutes, no lat flare; the frontal shoulder station may
+not drop below ~15.8 because the shoulder JOINTS sit at ±15.5 and a narrower line strands the arm
+outside the trunk), slimmer tapered limbs (`LIMB_W_F`), a 5.4 neck, and the gym bun — a
+silhouette-level word, rigid to the skull, drawn under the head ink with its own knockout seam so
+it survives lying, hanging, and hinged poses. `skinFigure`/`buildFrame` take `sex: FigureSex`
+defaulting to `'male'`, and `__tests__/motion/figures.test.ts` holds three laws: the default is
+him byte-identical; she performs every rig in the registry with finite geometry; her frame differs
+from his while the skeleton is exactly shared. In the app, `FormMedia` picks the athlete from
+`profile.sex` — the same rule MiniBody follows on Home. Committed snapshots: the four
+`*_female_demo.gif` / `bench_press_female_benchmark.gif` beside the originals; the side-by-side
+review page is `tools/motion-harness/figures.js`, and `hero.js`/`emit.js` accept a trailing
+`male|female` argument.
+
 The exercise demonstration system. A 2D skeletal figure, defined in code, performs each movement
 from a `FormSpec` (the canonical definition of the exercise), rendered live in the app. No video
 files, no external tools, no hosting — pure TypeScript + `react-native-svg`, validated by CI.

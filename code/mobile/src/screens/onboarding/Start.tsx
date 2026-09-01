@@ -85,9 +85,11 @@ export function Start({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      {/* Step 1 of 4 — the journey's rail starts where the journey does (see `styles.rail`). */}
+      {/* Step 1 of 5 — the journey's rail starts where the journey does (see `styles.rail`).
+          Five is the count of railed steps she actually walks (fork, you, health, the doors, the
+          ask) — it was four, drawn twice at the end, which read as a stall (audit lever 3). */}
       <View style={styles.rail}>
-        {[0, 1, 2, 3].map((i) => (
+        {[0, 1, 2, 3, 4].map((i) => (
           <View key={i} style={[styles.railSeg, i < 1 && styles.railSegOn]} />
         ))}
       </View>

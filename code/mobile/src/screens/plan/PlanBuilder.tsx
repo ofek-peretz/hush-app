@@ -156,7 +156,9 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
     return (
       <OnboardingScaffold
         onBack={onBack}
-        progress={{ index: 4, total: 4 }}
+        /* 5/5 — the rail ADVANCES here (audit lever 3): it used to redraw 4/4 on the step right
+           before the payoff, which read as a stall at the exact moment she was closest to done. */
+        progress={{ index: 5, total: 5 }}
         keyboard
         legend={t('ob.weekLegend')}
         title={t('ob.askTitle')}
@@ -643,7 +645,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       return (
         <OnboardingScaffold
           onBack={props.onExit}
-          progress={{ index: 4, total: 4 }}
+          progress={{ index: 4, total: 5 }}
           /* The legend names the thing, the title asks the one question about it: HER WEEK — who
              writes it? A title that tried to carry both would be a sentence, and this step is a
              question with three answers standing under it. */
