@@ -34,6 +34,8 @@ import {
 import type { Billing, PurchaseResult } from './billing';
 import type * as ExpoIap from 'expo-iap';
 import type { ProductSubscription, Purchase } from 'expo-iap';
+import { track } from '@/platform/telemetry';
+import { BILLING_EVENTS } from '@/platform/events';
 
 type Iap = typeof ExpoIap;
 
@@ -221,6 +223,15 @@ export const billingStoreKit: Billing = {
               } catch {
                 /* unfinished transactions are re-delivered on next launch */
               }
+              /*
+               * The device↔subscription bridge (audit finding 2, decided): one event, once, at the
+               * moment the transaction exists. `originalTransactionIdentifierIOS` is what App Store
+               * Server Notifications key on; falling back to `transactionId` still joins (Apple
+               * reports both on notifications). Fire-and-forget — never between her and the unlock.
+               */
+              const pIds = purchase as Purchase & { originalTransactionIdentifierIOS?: string | null };
+              const otid = pIds.originalTransactionIdentifierIOS ?? pIds.transactionId ?? null;
+              if (otid) void track(BILLING_EVENTS.purchaseTransaction, { productId: purchase.productId, originalTransactionId: String(otid).slice(0, 64) });
               settle({ status: 'purchased', entitlement: await entitlementAfterPurchase(iap, purchase) });
             } else {
               // Ask to Buy / deferred — the approval will arrive via the persistent listener.

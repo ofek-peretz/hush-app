@@ -246,6 +246,16 @@ export const BILLING_EVENTS = {
   /** ⚠️ A production iOS build resolved NO StoreKit module (audit finding 5) — the fail-closed
    *  guard is live and nobody can buy anything. Must never fire on a healthy fleet; alert on any. */
   storeUnavailable: 'billing_store_unavailable',
+  /**
+   * ════ THE JOIN THE DATASET WAS MISSING (2026-09-01, audit finding 2 — decided) ════
+   * App events key on `device_id`; Apple's server notifications key on `originalTransactionId`.
+   * Without a bridge, churn and behaviour were two datasets about the same person that could never
+   * meet. This event is the bridge: fired once at purchase, carrying the transaction id as a
+   * property — so PostHog can join a device's journey to its subscription's lifecycle without the
+   * envelope ever carrying an athlete identity. The id is pseudonymous, subscription-scoped, and
+   * covered by the published privacy label (User ID, linked, app functionality).
+   */
+  purchaseTransaction: 'purchase_transaction',
 } as const;
 
 export type HealthEvent = (typeof HEALTH_EVENTS)[keyof typeof HEALTH_EVENTS];
