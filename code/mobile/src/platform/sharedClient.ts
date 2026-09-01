@@ -116,10 +116,10 @@ export async function pairSignedIn(): Promise<boolean> {
  *
  * ⛔ AND IT IS AN `https` LINK EVEN THOUGH THE ENTITLEMENT IS NOT IN THE BINARY YET (2026-08-31).
  *
- * `associatedDomains` was added to `app.json` and had to come back out: the App Store provisioning
- * profile does not carry the Associated Domains capability, and EAS cannot add it without Apple
- * Developer credentials — which is a portal action, not a code change. Build 64 therefore has no
- * entitlement, and Apple does not consult the association file for it.
+ * ✔ RESOLVED 2026-09-01: the Associated Domains capability was enabled on the App ID in the Apple
+ * Developer portal (under the founder's grant), and `associatedDomains` is back in `app.json`.
+ * Builds already in the field still lack the entitlement — the paragraph below describes THEM;
+ * from the next build on, this link opens the app directly.
  *
  * ⚠️ THE LINK STAYS `https` ANYWAY, AND THAT IS THE BETTER TRADE. Without the entitlement it opens
  * the worker's landing page in a browser, which offers "open in the app" (a `hush://` button that

@@ -256,7 +256,7 @@ export default {
       return new Response(
         JSON.stringify({
           applinks: {
-            details: [{ appIDs: [`${APPLE_TEAM_ID}.${BUNDLE_ID}`], components: [{ '/': '/pair*' }] }],
+            details: [{ appIDs: [`${APPLE_TEAM_ID}.${BUNDLE_ID}`], components: [{ '/': '/pair*' }, { '/': '/plan*' }] }],
           },
         }),
         // ⚠️ `application/json`, and Apple is strict about it. The file has no extension by design.

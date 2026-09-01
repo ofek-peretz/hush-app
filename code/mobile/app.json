@@ -99,7 +99,10 @@
             ]
           }
         ]
-      }
+      },
+      "associatedDomains": [
+        "applinks:hush-identity.hush-app.workers.dev"
+      ]
     },
     "android": {
       "package": "com.hushfitness.app",

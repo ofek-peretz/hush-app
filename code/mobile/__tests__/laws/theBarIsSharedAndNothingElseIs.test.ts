@@ -351,21 +351,19 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
     const worker = readRepo('server/hush-identity/src/index.ts');
     // 1 · the association file Apple's CDN fetches, scoped to /pair and nothing else on this origin
     expect(worker).toContain("path === '/.well-known/apple-app-site-association'");
-    expect(worker).toContain("components: [{ '/': '/pair*' }]");
+    expect(worker).toContain("components: [{ '/': '/pair*' }, { '/': '/plan*' }]");
     expect(worker).toContain('T6ZRTBRT2U');
     /*
-     * 2 · ⛔ THE ENTITLEMENT IS THE ONE PIECE THAT IS NOT HERE, AND THE LAW SAYS SO RATHER THAN
-     * PRETENDING. `associatedDomains` was added to `app.json` and taken back out on 2026-08-31: the
-     * App Store provisioning profile does not carry the Associated Domains capability, and EAS
-     * cannot add it without Apple Developer credentials. Build 64 shipped without it.
-     *
-     * ⚠️ SO THE LAW HOLDS THE *TRADE*, NOT THE ASPIRATION. Until the capability is enabled the link
-     * lands on the worker's page, which is strictly better than the scheme link it replaced (it can
-     * offer the App Store; a scheme cannot). This assertion fails the day somebody adds the
-     * entitlement back WITHOUT the capability — which is exactly the failure that cost two builds.
+     * 2 · ⛔ THE ENTITLEMENT IS BACK, AND THE CAPABILITY CAME FIRST (2026-09-01). The old form of
+     * this clause held the ABSENCE of `associatedDomains` — the App Store profile did not carry
+     * the Associated Domains capability, and an entitlement without it cost two builds. On
+     * 2026-09-01 the capability was enabled on the App ID in the Apple Developer portal (verified
+     * by re-opening the identifier), so the trade the law held is over: the entitlement is present,
+     * names exactly the identity worker's origin, and the AASA now covers BOTH public doors —
+     * the pair invite and the shared plan.
      */
     const app = JSON.parse(read('app.json'));
-    expect(app.expo.ios.associatedDomains).toBeUndefined();
+    expect(app.expo.ios.associatedDomains).toEqual(['applinks:hush-identity.hush-app.workers.dev']);
     // 3 · a page for the browser that opens it anyway, with a way to actually get the app
     expect(worker).toContain("path === '/pair'");
     expect(worker).toContain('APP_STORE_URL');
