@@ -37,6 +37,7 @@ export async function armGapCatch(nowMs: number = Date.now()): Promise<void> {
     const units = profile.units ?? 'kg';
     await notifier.syncGapCatch({
       fireAtMs: plan.fireAtMs,
+      laterFireAtMs: plan.laterFireAtMs,
       fact: plan.fact
         ? {
             name: exerciseDisplayName(plan.fact.exerciseId),

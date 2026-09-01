@@ -12,7 +12,8 @@
     "test:mutation": "stryker run",
     "lint:copy": "node scripts/lint-copy.cjs",
     "lint:rtl": "node scripts/lint-rtl.cjs",
-    "lint:hooks": "node scripts/lint-hooks.cjs"
+    "lint:hooks": "node scripts/lint-hooks.cjs",
+    "test:server": "node --test ../../server/tests/identity.test.ts ../../server/tests/coach.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/assistant": "^0.4.1",

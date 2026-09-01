@@ -42,10 +42,22 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Day six — see the header. Exported so the copy's {{days}} and the trigger can never drift. */
 export const GAP_CATCH_DAYS = 6;
+/**
+ * ════ AND ONE MORE, AT THREE WEEKS — THEN SILENCE FOREVER (2026-09-01, audit retention #7) ════
+ *
+ * Day six caught the slipped rhythm; after it, the product went quiet for good — day 14, 30, 60,
+ * nothing. One follow-up at 21 days (past the comeback threshold, so the engine's detraining ease
+ * is a fact by then, not a forecast) states that the loads return ADJUSTED, which answers the one
+ * fear that keeps a lapsed athlete out: walking back into weights that no longer fit. Two notes
+ * per silence, total, ever — the third note is the one that makes the first two nagging.
+ */
+export const LATER_CATCH_DAYS = 21;
 
 export interface GapCatch {
   /** When the note should fire (ms) — always `last training + 6 days`. */
   fireAtMs: number;
+  /** The three-week follow-up (`last training + 21 days`), or null once it too is behind `nowMs`. */
+  laterFireAtMs: number | null;
   /** The standing fact to print, or null when the last training carried no loaded working set. */
   fact: { exerciseId: string; loadKg: number } | null;
 }
@@ -89,7 +101,10 @@ export function gapCatchPlan(
   if (lastTrainingMs <= 0) return null;
 
   const fireAtMs = lastTrainingMs + GAP_CATCH_DAYS * DAY_MS;
-  if (fireAtMs <= nowMs) return null;
+  const laterAtMs = lastTrainingMs + LATER_CATCH_DAYS * DAY_MS;
+  // Nothing left to arm only when BOTH notes are behind now — a boot at day eight still owes the
+  // three-week note; a boot past day 21 owes nothing, and the comeback surface owns her return.
+  if (laterAtMs <= nowMs) return null;
 
   // Her heaviest completed working set of that session — the same exclusions every engine read
   // keeps: approach sets never speak (S-60), zero-rep rows were not performed.
@@ -99,5 +114,5 @@ export function gapCatchPlan(
     if (log.isApproach || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
     if (!fact || log.actualWeight > fact.loadKg) fact = { exerciseId: log.exerciseId, loadKg: log.actualWeight };
   }
-  return { fireAtMs, fact };
+  return { fireAtMs, laterFireAtMs: laterAtMs, fact };
 }

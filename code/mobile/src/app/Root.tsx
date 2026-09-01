@@ -135,11 +135,15 @@ function OnboardingNavigator() {
         fullScreenGestureEnabled: true,
       }}
     >
-      <OnboardingStack.Screen name="Authentication" component={Authentication} />
-      {/* ⛔ THE FORK (founder 2026-08-12) — see `Start`. It sits between the front door and the
-          intake because what she answers here decides what the intake is for, and because the
-          import's read needs the whole of onboarding to finish underneath it. */}
+      {/* ⛔ THE FORK IS THE FRONT DOOR NOW (2026-09-01, audit lever 3 — the wall moved behind the
+          aha). It keeps its old argument whole: what she answers here decides what the intake is
+          for, and the import's read needs the whole of onboarding to finish underneath it. What
+          changed is only what stood in front of it — nothing does. */}
       <OnboardingStack.Screen name="Start" component={Start} />
+      {/* THE CLOSER — sign-in + consent, reached from the Ready screen's save-CTA and from
+          nowhere else. Registered here because a route must exist on the stack that pushes it;
+          its position in this list carries no meaning (only the first child is the initial). */}
+      <OnboardingStack.Screen name="Authentication" component={Authentication} />
       {/* ⛔ TWO WHEELS LIVE ON THIS STEP NOW, so its full-screen back-drag is off (founder
           2026-07-13): a horizontal gesture over a horizontal rule is the rule losing. The step
           keeps a hand-held way back across its FOOTER, the one band with no wheel in it

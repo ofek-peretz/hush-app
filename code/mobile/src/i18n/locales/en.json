@@ -194,6 +194,7 @@
     "signinTagline": "You train.\nI carry the rest.",
     "signinAffirm": "Every weight, from a set you lifted.",
     "signinTrialFact": "Your first {{n}} sessions — free, no card.",
+    "signinSaveFact": "Your programme is built. An account keeps it yours — on this phone and the next.",
     "namePlaceholder": "Your name",
     "nameLegend": "Name",
     "healthLegend": "Optional",
@@ -1222,7 +1223,8 @@
     "gapTitleNoFact": "Your programme is where you left it.",
     "gapBody": "{{days}} days since your last workout. Nothing moved without you.",
     "trialLastTitle": "One workout left in your trial.",
-    "trialLastBody": "Your history, records and export stay yours either way. The decision waits on Home."
+    "trialLastBody": "Your history, records and export stay yours either way. The decision waits on Home.",
+    "gapLaterBody": "21 days since your last workout. When you come back, the loads come back with you — adjusted, never reset."
   },
   "watch": {
     "editResult": "Edit result",
@@ -1998,7 +2000,7 @@
     "termsTitle": "Terms of use",
     "termsBody": "hush is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional. You receive a personal licence to use the app; its content, code and figures are hush's property. Use that breaks the law or harms the service can close the account.",
     "privacyTitle": "Your privacy",
-    "privacyBody": "Your workouts, loads and body map are stored on your device. An encrypted backup lives in iCloud under your Apple ID, so a new phone picks up where you stopped. When you ask the coach to build or review a week, the training data needed for it is processed for us by Google (Gemini) and is not used to train its models. Product usage is measured with PostHog under a random install identifier, never your name; crash reports reach Sentry without personal details. If you join a circle, your first name and weekly workout counts are kept on Cloudflare servers until you leave or delete the account. Nothing is ever sold or used for advertising. Deleting the account, in the You tab, erases what our servers hold and what the device holds; the iCloud backup is yours to remove. Data is processed in the EU and US. Requests and questions: privacy@hushfitness.app.",
+    "privacyBody": "Your workouts, loads and body map are stored on your device. An encrypted backup lives in iCloud under your Apple ID, so a new phone picks up where you stopped. When you ask the coach to build or review a week, the training data needed for it is processed for us by Google (Gemini) and is not used to train its models. Product usage is measured with PostHog under a random install identifier, never your name; crash reports reach Sentry without personal details. If you join a circle, your first name and weekly workout counts are kept on Cloudflare servers until you leave or delete the account. Nothing is ever sold or used for advertising. Deleting the account, in the You tab, erases what our servers hold and what the device holds; the iCloud backup is yours to remove. Data is processed in the EU and US. Requests and questions: ofek34458@gmail.com.",
     "healthTitle": "Health data",
     "healthBody": "Connecting Apple Health is your call alone. Heart rate, calories and distance are read to show them beside your training, and a finished workout is written back to Health. Health data never leaves the device.",
     "billingTitle": "Subscription & billing",

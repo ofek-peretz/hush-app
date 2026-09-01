@@ -66,6 +66,7 @@ const NOT_STORAGE = new Set([
   'hush.cardio.location',
   'hush.gap_catch', // the day-six note's identifier (2026-09-01) — an iOS notification id, like the rest
   'hush.trial_last', // the trial's last-workout note (2026-09-01, audit 3) — an iOS notification id
+  'hush.gap_catch_later', // the three-week follow-up (2026-09-01) — the silence's LAST note, ever
 ]);
 
 /** The `K` map in db.ts, read as source — the one place the wipe list is written. */

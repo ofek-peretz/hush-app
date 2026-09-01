@@ -9,7 +9,7 @@
 
 //
 
-import { gapCatchPlan, GAP_CATCH_DAYS } from '@/domain/gapCatch';
+import { gapCatchPlan, GAP_CATCH_DAYS, LATER_CATCH_DAYS } from '@/domain/gapCatch';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-08-01T10:00:00Z');
@@ -61,11 +61,28 @@ describe('gapCatchPlan', () => {
     expect(plan.fact).toBeNull();
   });
 
+  it('past day six the LATER note still stands; past day 21 the silence owns itself', () => {
+    /*
+     * Re-grounded 2026-09-01 (audit retention #7): a boot at day eight used to schedule NOTHING —
+     * the day-six note was stale, so the whole plan returned null, and the silence went unmarked
+     * forever. The three-week follow-up is still owed at day eight; only past day 21 is there
+     * nothing left to arm.
+     */
+    const h = [session(T0, [set('bb_bench_press', 60, 8)])];
+    const mid = gapCatchPlan(h, T0 + 8 * DAY);
+    expect(mid).not.toBeNull();
+    expect(mid!.fireAtMs).toBe(T0 + GAP_CATCH_DAYS * DAY); // stale — the notifier skips it
+    expect(mid!.laterFireAtMs).toBe(T0 + LATER_CATCH_DAYS * DAY);
+    expect(gapCatchPlan(h, T0 + (LATER_CATCH_DAYS + 1) * DAY)).toBeNull();
+  });
+
   it('a fire-at already in the past schedules nothing — the comeback surface owns her return', () => {
     const h = [session(T0, [set('bb_bench_press', 70, 8)])];
-    expect(gapCatchPlan(h, T0 + (GAP_CATCH_DAYS + 1) * DAY)).toBeNull();
+    // Day seven: the six-day note is stale (the notifier's own >60s guard skips it) but the plan
+    // still stands for the three-week follow-up — see the test above.
+    expect(gapCatchPlan(h, T0 + (GAP_CATCH_DAYS + 1) * DAY)!.laterFireAtMs).toBe(T0 + LATER_CATCH_DAYS * DAY);
     // …and exactly at the boundary it is also silent (<=, not <): a note "due now" is a note late.
-    expect(gapCatchPlan(h, T0 + GAP_CATCH_DAYS * DAY)).toBeNull();
+    expect(gapCatchPlan(h, T0 + GAP_CATCH_DAYS * DAY)!.laterFireAtMs).toBe(T0 + LATER_CATCH_DAYS * DAY);
   });
 
   /*

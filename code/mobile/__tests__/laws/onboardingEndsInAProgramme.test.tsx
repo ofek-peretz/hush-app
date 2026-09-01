@@ -72,7 +72,7 @@ describe('the last step builds, it does not chat', () => {
      * which is the beat this clause is actually about.
      */
     expect(builder).toContain("navigation.replace('BuildingProgramme', {");
-    expect(builder).toContain('inputs: { ...inputs, daysPerWeek },');
+    expect(builder).toContain('inputs: { ...inputs, daysPerWeek, ...(minutes ? { workoutMinutes: minutes } : {}) },');
     expect(builder).toContain('authored: true,');
   });
 

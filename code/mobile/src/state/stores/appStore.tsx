@@ -34,7 +34,7 @@ import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
-import { circleExchange, circleSignOut, deleteIdentity } from '@/platform/circleClient';
+import { circleExchange, circleSignedIn, circleSignOut, deleteIdentity } from '@/platform/circleClient';
 import { setGender, resetGender } from '@/i18n/gender';
 import { resetWristOffered } from '@/platform/watch/watchPresence';
 import { billing, onEntitlementArrived, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
@@ -173,6 +173,9 @@ interface AppApi extends AppState {
    *  create a profile — the athlete proceeds through Consent → onboarding, which
    *  ends in completeOnboarding. Throws if sign-in is cancelled/fails. */
   signIn: (provider: AuthProvider) => Promise<void>;
+  /** Has an account been established — this run, or (after a relaunch) in the Keychain. The
+   *  Ready screen's save-CTA reads this to decide whether the closer (Authentication) is owed. */
+  isSignedIn: () => Promise<boolean>;
   /** Record affirmative consent (OD-3/BB-33). Since 2026-07-12 the Consent SCREEN is gone and
    *  consent is recorded at sign-in — continuing with a provider IS the agreement, and the line
    *  under the buttons says so. Best-effort against the backend; the server record is idempotent. */
@@ -429,6 +432,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Name captured from Apple at sign-in (returned only on first authorization) —
   // applied to the profile at completeOnboarding. No PII is persisted before that.
   const pendingNameRef = useRef<string | null>(null);
+  // Sign-in happened THIS RUN (the wall moved behind the aha, 2026-09-01) — `isSignedIn` reads
+  // this first and falls back to the Keychain session for a relaunch mid-onboarding.
+  const signedInRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -739,6 +745,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Capture the provider name (Apple returns it on first sign-in only) for the
         // profile created later at completeOnboarding.
         if (result.name) pendingNameRef.current = result.name;
+        signedInRef.current = true;
         // The circle's session (2026-08-24): trade the fresh Apple token for the identity worker's
         // own, fire-and-forget — the front door never waits on a network, and a build with no
         // EXPO_PUBLIC_CIRCLE_URL makes this a no-op by construction (platform/circleClient).
@@ -747,6 +754,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         void circleExchange(result.identityToken);
         void track('signed_in', { provider });
         // No profile yet → Root keeps the onboarding stack (Name → … → Program Created).
+      },
+
+      async isSignedIn() {
+        if (signedInRef.current) return true;
+        // A relaunch mid-onboarding: the circle session in the Keychain is the durable trace of a
+        // completed sign-in (written by the exchange at that moment, cleared by sign-out/delete).
+        return circleSignedIn();
       },
 
       async acceptConsent() {
@@ -869,7 +883,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
         setGender(profile.sex);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
-        void track('onboarding_completed', { goal: inputs.goal, experience: inputs.experience, daysPerWeek: inputs.daysPerWeek, healthConnected: inputs.healthConnected });
+        // `experience` shipped here as a permanent undefined — its question left the intake long
+        // ago (audit P5). The event now carries only what is actually asked; `workoutMinutes` is
+        // answered again since 2026-09-01 and worth counting.
+        void track('onboarding_completed', { goal: inputs.goal, daysPerWeek: inputs.daysPerWeek, workoutMinutes: inputs.workoutMinutes, healthConnected: inputs.healthConnected });
         // THE WEEKLY RECEIPT IS THE ONLY RECURRING PUSH (founder 2026-07-29). A quarterly-report
         // note used to be armed here too; it was not on the founder's list of what may ever fire,
         // and the screen that announced it no longer promises it. The twelve-week window is still

@@ -45,10 +45,10 @@ export interface Env {
   PAIR_ROOM: DurableObjectNamespace;
   /**
    * THE RESEARCH SINK'S FORWARD ADDRESS (2026-09-01) — where `/events` batches go, e.g. PostHog's
-   * `/batch` endpoint. Both optional ON PURPOSE: a deploy without them keeps `/events` answering
-   * 204 and dropping the batch, so an app that ships events is never broken by a worker that has
-   * nowhere to put them. The analytics key lives HERE, in Cloudflare's secret store, and never in
-   * the app bundle — the exact reason the coach worker exists.
+   * `/batch` endpoint. Both optional at DEPLOY time — but an unarmed sink answers 503 and the
+   * app keeps its outbox (reversed 2026-09-01: the old 204 made clients DELETE every event while
+   * the pipeline looked green). The analytics key lives HERE, in Cloudflare's secret store, and
+   * never in the app bundle — the exact reason the coach worker exists.
    *   npx wrangler secret put EVENTS_URL   (e.g. https://eu.i.posthog.com/batch)
    *   npx wrangler secret put EVENTS_KEY   (the PostHog project api_key)
    */
@@ -384,7 +384,7 @@ h1{font:400 30px/1.25 Georgia,serif;margin:0 0 8px}h2{font:600 15px/1.4 -apple-s
 p{color:#a8a290;margin:0 0 12px}.stamp{color:#6d675a;font-size:13px;margin-top:36px}</style></head><body><main>
 <div class="mark">hush</div><h1>${title}</h1>
 ${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
-<p class="stamp">Hush · com.hushfitness.app · privacy@hushfitness.app · Last updated 2026-09-01</p>
+<p class="stamp">Hush · com.hushfitness.app · ofek34458@gmail.com · Last updated 2026-09-01</p>
 </main></body></html>`;
       const body =
         path === '/privacy'

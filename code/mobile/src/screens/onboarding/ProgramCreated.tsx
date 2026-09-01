@@ -239,11 +239,28 @@ export function ProgramCreated({ route, navigation }: Props) {
 
 
 
+  /*
+   * ════ THE WALL MOVED BEHIND THE AHA (2026-09-01, audit lever 3 — decided) ════
+   *
+   * The CTA used to write the profile directly; sign-in had already happened at the front door,
+   * before she saw anything. The intake is anonymous end-to-end now, so this press is where the
+   * account becomes OWED: no account yet → the closer (Authentication) is pushed, armed here;
+   * when she signs and it hands her back, the focus listener below finishes the enrolment on its
+   * own — the one tap she gave this button is the only tap the finish costs.
+   */
+  const armedRef = useRef(false);
+
   async function onDone() {
     if (busy) return;
     setBusy(true);
     setFailed(false);
     try {
+      if (!(await app.isSignedIn())) {
+        armedRef.current = true;
+        setBusy(false);
+        navigation.navigate('Authentication');
+        return;
+      }
       // Builds the program and writes the profile → Root swaps to Home.
       await app.completeOnboarding(inputs);
     } catch {
@@ -254,6 +271,20 @@ export function ProgramCreated({ route, navigation }: Props) {
       setFailed(true);
     }
   }
+
+  // The return leg: she signed in at the closer and was handed back. Armed + an account = finish,
+  // exactly once (`armedRef` clears first, so a failed write falls back to the pressable CTA).
+  useEffect(() => {
+    return navigation.addListener('focus', () => {
+      void (async () => {
+        if (!armedRef.current || busy) return;
+        if (!(await app.isSignedIn())) return; // she cancelled the sheet — the CTA still stands
+        armedRef.current = false;
+        await onDone();
+      })();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, busy]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>

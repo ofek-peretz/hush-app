@@ -61,7 +61,9 @@ import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, font, motion, ramp, rampLine, stage } from '@/design/tokens';
+import { color, font, motion, radius, ramp, rampLine, stage, textScale } from '@/design/tokens';
+import { setLocale, currentLocale, type Locale } from '@/i18n';
+import { reloadApp } from '@/app/reload';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Start'>;
@@ -71,7 +73,22 @@ const EASE = Easing.bezier(...motion.easeStandard);
 
 export function Start({ navigation }: Props) {
   const { t } = useCopy();
-  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. Past sign-in, standing at the fork. */
+  /*
+   * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12) — and the front door is THIS screen now
+   * (2026-09-01, the wall moved behind the aha). Same control, same argument, same remount-on-
+   * direction-change; it moved here with the job rather than staying on a screen she meets last.
+   */
+  const locale = currentLocale();
+  async function pickLocale(next: string) {
+    if (next === locale) return;
+    try {
+      await setLocale(next as Locale);
+    } catch {
+      return; // the language did not switch; a reload would remount in the OLD language
+    }
+    reloadApp();
+  }
+  /* ⛔ FUNNEL (2026-08-23; re-grounded 2026-09-01): one event per step REACHED. This IS the front door now — startReached means the app opened into the intake, and sign-in happens at the closer. */
   React.useEffect(() => {
     void track(FUNNEL_EVENTS.startReached);
   }, []);
@@ -88,6 +105,17 @@ export function Start({ navigation }: Props) {
       {/* Step 1 of 5 — the journey's rail starts where the journey does (see `styles.rail`).
           Five is the count of railed steps she actually walks (fork, you, health, the doors, the
           ask) — it was four, drawn twice at the end, which read as a stall (audit lever 3). */}
+      <View style={styles.topBar}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={locale === 'he' ? 'English' : 'עברית'}
+          hitSlop={16}
+          onPress={() => void pickLocale(locale === 'he' ? 'en' : 'he')}
+          style={({ pressed }) => [styles.langSwap, pressed && styles.langSwapPressed]}
+        >
+          <Text style={styles.langSwapText}>{locale === 'he' ? 'English' : 'עברית'}</Text>
+        </Pressable>
+      </View>
       <View style={styles.rail}>
         {[0, 1, 2, 3, 4].map((i) => (
           <View key={i} style={[styles.railSeg, i < 1 && styles.railSegOn]} />
@@ -340,7 +368,24 @@ const styles = StyleSheet.create({
   /* The intake's own rail (OnboardingScaffold.seg, verbatim geometry) — the fork is STEP ONE of
      the journey, and until now the first two screens floated outside it (design review 2026-09-01:
      the rail appeared mid-journey and counted something she couldn't see). */
-  rail: { flexDirection: 'row', gap: 6, paddingHorizontal: 26, paddingTop: 20 },
+  topBar: { paddingHorizontal: 26, paddingTop: 14, alignItems: 'flex-start' },
+  /* The language offer — the exact capsule Authentication wore when it was the front door. */
+  langSwap: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: color.fillSubtle,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.14)',
+  },
+  langSwapPressed: { backgroundColor: color.fillSubtleStrong },
+  langSwapText: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale.sm,
+    color: color.textPrimary,
+    textAlign: 'left',
+  },
+  rail: { flexDirection: 'row', gap: 6, paddingHorizontal: 26, paddingTop: 12 },
   railSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)' },
   railSegOn: { backgroundColor: color.textPrimary },
   /* The question, then the two doors — with the air between them that says they are alternatives

@@ -237,7 +237,7 @@ describe('onboarding asks for every one of them', () => {
        over the sheet when the AI screen was designed. What this clause guards is unchanged: the one
        door that cannot derive a frequency is the one that asks for it. */
     expect(builderSrc).toContain('function AskTheCoach');
-    expect(builderSrc).toContain("inputs: { ...inputs, daysPerWeek },");
+    expect(builderSrc).toContain("inputs: { ...inputs, daysPerWeek, ...(minutes ? { workoutMinutes: minutes } : {}) },");
     // the doors that CAN derive it do, from the sealed week rather than from an earlier answer
     expect(builderSrc).toContain("daysPerWeek: sealed.days.filter((day) => !day.isRest).length");
     /*
@@ -268,10 +268,18 @@ describe('onboarding asks for every one of them', () => {
        registered is a screen a deep link can still reach. */
     expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
     expect(read('src/app/Root.tsx')).not.toContain('YourGoal');
-    /* ⛔ THE FRONT DOOR OPENS ONTO THE FORK NOW (founder 2026-08-12), and the fork opens onto the
-       intake — so the chain is asserted in both halves rather than pinned to the old first step. */
-    expect(read('src/screens/onboarding/Authentication.tsx')).toContain("navigation.navigate('Start')");
+    /* ⛔ THE FORK IS THE FRONT DOOR AND SIGN-IN IS THE CLOSER (2026-09-01, audit lever 3 —
+       decided under the founder's grant). The chain the law protects is unchanged — no route to
+       the programme drops one of her numbers — but the account now stands AFTER the aha: the fork
+       opens the intake, the Ready screen's CTA pushes Authentication when no account exists, and
+       success hands her back for the focus listener to finish. Both halves asserted. */
+    const root = read('src/app/Root.tsx');
+    expect(root.indexOf('<OnboardingStack.Screen name="Start"')).toBeLessThan(
+      root.indexOf('<OnboardingStack.Screen name="Authentication"'),
+    );
     expect(read('src/screens/onboarding/Start.tsx')).toContain("navigation.navigate('AboutYou')");
+    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain("navigation.navigate('Authentication')");
+    expect(read('src/screens/onboarding/Authentication.tsx')).toContain('navigation.goBack()');
   });
 
   it('and the LAST step puts it into the inputs the profile is built from', () => {

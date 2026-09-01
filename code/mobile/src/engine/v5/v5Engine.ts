@@ -462,6 +462,34 @@ export async function advanceV5(
       if (out.wantsChange) wantsChange[id] = out.wantsChange;
       else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
       if (out.decision === 'progress') advancedThisOcc.add(id); // a lift of this muscle rose (S-32)
+      /*
+       * ════ WAS THE ROTATION RIGHT? — MEASURED, AT LAST (2026-09-01, audit lever 7) ════
+       *
+       * `stall_rotate` fired and the outcome was never scored: nothing anywhere said whether the
+       * lift rotated IN went on to progress or hit the same wall. This is the measurement half —
+       * one event per adoption, at the first decisive verdict the newcomer earns:
+       *
+       *   engine_rotation_paid    its first 'progress'  → the swap bought motion
+       *   engine_rotation_failed  it stalls into a rotation of its own → the wall was never the lift
+       *
+       * `outcomeAt` (additive, optional — the persisted shape's own convention) marks the entry so
+       * each adoption reports exactly once. Modelling on top of this (choosing rotation TARGETS by
+       * measured outcomes) is a later, deliberate step; a model built before the measurement exists
+       * would be exactly the guessing this engine refuses.
+       */
+      if (out.decision === 'progress' || out.wantsChange === 'rotate') {
+        const adoption = (state.changeLog ?? [])
+          .filter((c) => c.toExercise === id && (c.kind === 'swap' || c.kind === 'graduate') && !c.outcomeAt)
+          .sort((a, b) => b.at - a.at)[0];
+        if (adoption) {
+          adoption.outcomeAt = at;
+          void track(out.decision === 'progress' ? 'engine_rotation_paid' : 'engine_rotation_failed', {
+            exercise: id,
+            kind: adoption.kind,
+            days: Math.round((at - adoption.at) / 86400000),
+          });
+        }
+      }
       // Record a change only when the load actually MOVED; the mirror copy is chosen by the real
       // delta direction (explainChange), never the decision label. hold/ambiguous say nothing
       // (R7/S-16). Graduation/rotation are RETURNED and enacted by the integration layer.

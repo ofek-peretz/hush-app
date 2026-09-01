@@ -1,8 +1,9 @@
-# Hush — CI gate (mobile).
+# Hush — CI gate (mobile + the Cloudflare workers).
 #
 # The product is the React Native / Expo app in code/mobile (the live v4 engine runs there).
-# The dormant Python Bayesian backend was decommissioned (see V4_CLEANUP_PROPOSAL.md), so CI now
-# gates the mobile app: type-check + the full Jest suite (engine invariants, sims, flows, laws).
+# The dormant Python Bayesian backend was decommissioned (see V4_CLEANUP_PROPOSAL.md). CI gates
+# the mobile app (type-check + the full Jest suite) AND, since 2026-09-01, the two live workers
+# in server/ — which shipped for months with zero coverage until the audit's finding 6.
 name: hush-ci
 
 on:
@@ -55,3 +56,19 @@ jobs:
       # teaches everyone to ignore red.
       - name: Test (full Jest suite)
         run: npx jest --ci --maxWorkers=4
+
+  server:
+    # ════ THE WORKERS, DRIVEN FOR REAL (2026-09-01, audit finding 6) ════
+    # Both workers are import-free TypeScript; Node 24 strips types natively, so the tests call the
+    # actual `fetch` handlers with an in-memory KV — no build step, no framework, no mocks of our
+    # own code. The first run of this harness caught a live bug (a '0' kill-switch ceiling falling
+    # through `|| 2000` to an unkillable 2000), which is the whole argument for its existence.
+    name: workers (identity + coach)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Worker tests (node:test, native TS)
+        run: node --test server/tests/identity.test.ts server/tests/coach.test.ts

@@ -350,6 +350,10 @@ export interface EngineV5State {
     /** kind 'ease' — the run that earned it, rounded km (null = qualified by duration alone). */
     runKm?: number | null;
     toExercise?: string;
+    /** Rotation scoring (2026-09-01, audit lever 7): stamped when the rotated-IN lift earns its
+     *  first decisive verdict (progress = paid, a stall of its own = failed), so each adoption
+     *  reports to telemetry exactly once. Additive, optional — the shape's own convention. */
+    outcomeAt?: number;
     /** For kind 'volume' — the muscle whose weekly set target moved (setsFrom → setsTo). */
     muscle?: string;
     /**

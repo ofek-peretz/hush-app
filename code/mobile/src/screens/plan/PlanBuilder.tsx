@@ -109,11 +109,20 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
   /** Inside the intake it wears the step chrome; from the Program tab it is a screen of its own. */
   intake: boolean;
   onBack: () => void;
-  onAsk: (days: number, ask: string) => void;
+  onAsk: (days: number, ask: string, minutes: number) => void;
 }) {
   const { t } = useCopy();
   const [days, setDays] = useState(opensOn);
   const [ask, setAsk] = useState('');
+  /*
+   * ════ THE QUESTION THE PRODUCT STOPPED ASKING (2026-09-01, audit lever 3 — decided) ════
+   * `workoutMinutes` was silently defaulted to 60 at ProgramCreated after its screen was deleted —
+   * the exact category of default the intake's own law calls a lie (`daysPerWeek: 0` means "nobody
+   * asked her"). The wheel opens ON 60, which is a visible default she confirms by not turning it
+   * — a different thing from a number invented behind her back. The engine's time budget (S-64)
+   * reads this until her measured session times replace it.
+   */
+  const [minutes, setMinutes] = useState(60);
 
   const body = (
     <View style={styles.askRows}>
@@ -128,6 +137,19 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
           size="lg"
           ends="chevron"
           label={t('ob.daysPerWeek')}
+        />
+      </View>
+      <View style={styles.askCol}>
+        <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.sessionLength')}</Legend>
+        <WheelPicker
+          value={minutes}
+          onChange={setMinutes}
+          step={15}
+          min={30}
+          max={90}
+          size="lg"
+          ends="chevron"
+          label={t('ob.minutesLabel')}
         />
       </View>
       {/*
@@ -150,7 +172,7 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
     </View>
   );
 
-  const act = <Button variant="primary" size="lg" block label={t('ob.weekEngine')} onPress={() => onAsk(days, ask)} />;
+  const act = <Button variant="primary" size="lg" block label={t('ob.weekEngine')} onPress={() => onAsk(days, ask, minutes)} />;
 
   if (intake) {
     return (
@@ -471,7 +493,7 @@ export interface PlanBuilderViewProps {
   /** Intake only: she wants the week assembled for her — the third door, and the ordinary path. */
   /** ⚠️ CARRIES THE FREQUENCY IT JUST ASKED FOR — see `AskTheCoach`. It is the one door with nobody
    *  to derive the number from, so it is the one door that asks. */
-  onLetHushBuild?: (daysPerWeek: number, ask: string) => void;
+  onLetHushBuild?: (daysPerWeek: number, ask: string, minutes?: number) => void;
   /** True while no draft exists yet and the saved week is the ENGINE's — the two-door opening. */
   offerDoors: boolean;
   savedIsAuthored: boolean;
@@ -545,9 +567,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
         opensOn={DAYS_OPENS_ON}
         intake={!!props.intake}
         onBack={() => setAsking(false)}
-        onAsk={(days, ask) => {
+        onAsk={(days, ask, minutes) => {
           setAsking(false);
-          props.onLetHushBuild?.(days, ask);
+          props.onLetHushBuild?.(days, ask, minutes);
         }}
       />
     );
@@ -1170,7 +1192,7 @@ export function PlanBuilder({ navigation, route }: Props) {
   /** Whoever can answer for her: the relay inside the intake, the stored profile outside it. */
   const canBuildForHer = !!(inputs || app.profile);
   const letTheModelBuild = useCallback(
-    (daysPerWeek: number, ask: string) => {
+    (daysPerWeek: number, ask: string, minutes?: number) => {
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════
        * ⛔ THE WAIT BELONGS TO `BuildingProgramme`, NOT TO THIS BUTTON (founder 2026-08-29).
@@ -1198,7 +1220,8 @@ export function PlanBuilder({ navigation, route }: Props) {
 
       if (intake && inputs) {
         navigation.replace('BuildingProgramme', {
-          inputs: { ...inputs, daysPerWeek },
+          // Her session length rides the relay too now — answered, not defaulted (see AskTheCoach).
+          inputs: { ...inputs, daysPerWeek, ...(minutes ? { workoutMinutes: minutes } : {}) },
           /* ⚠️ ALWAYS PASSED, EVEN EMPTY — its PRESENCE is what says the model writes this week.
              She may press straight through without a line, and that is still the coach path. */
           coachAsk: ask.trim(),

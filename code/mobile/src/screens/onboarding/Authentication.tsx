@@ -1,7 +1,11 @@
 /**
- * Authentication (§4.1) — the front door. The "hush·" wordmark centred with the
- * product line, then Continue with Apple and Continue with Google, and the legal line.
- * Sells nothing.
+ * Authentication (§4.1) — THE CLOSER since 2026-09-01 (audit lever 3, decided under the founder's
+ * grant). It was the front door, and the audit's charge stood: an account wall before any value is
+ * the one pattern Duolongo/Whoop-class onboarding refuses, and the entire intake was device-local
+ * anyway — nothing needed an account until the moment there was a programme to KEEP. So the walk
+ * is now anonymous end-to-end, and this screen stands between the Ready screen and Home: the
+ * wordmark, the promise, "your programme is built — an account keeps it", the two providers, the
+ * legal line. Sells nothing, still; but now it closes instead of gatekeeping.
  *
  * MERGED WITH CONSENT (founder 2026-07-12). There was a whole screen between the front
  * door and the first real question whose only job was to say "terms and privacy". That is
@@ -136,9 +140,17 @@ export function Authentication({ navigation }: Props) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       await app.signIn(provider);
-      // Continuing IS the agreement (see header) — recorded before the first question.
+      // Continuing IS the agreement (see header) — recorded before anything is written.
       void app.acceptConsent();
-      navigation.navigate('Start');
+      /*
+       * ════ THE WALL MOVED BEHIND THE AHA (2026-09-01, audit lever 3 — decided) ════
+       * This screen is the CLOSER now, reached from the Ready screen's save-CTA. Success hands
+       * her back to the programme she just watched being built; ProgramCreated notices the
+       * account on focus and finishes the enrolment itself. The fallback hop survives for the
+       * one path that can still land here without a parent (a stale deep link).
+       */
+      if (navigation.canGoBack()) navigation.goBack();
+      else navigation.navigate('Start');
     } catch (e) {
       /*
        * ⛔ A CANCELLED SIGN-IN IS SILENT, AND THAT IS THE RULE THIS BRANCH EXISTS FOR. She pressed
@@ -242,11 +254,16 @@ export function Authentication({ navigation }: Props) {
             to that wall is "what will this cost me". One measured fact answers it: the fourteen
             free sessions, from the same constant the trial actually runs on. No extra screen, no
             demo mode — the door itself carries the reason to walk through it. */}
+        {/* THE REASON SHE IS HERE (2026-09-01): the programme is already built and on screen one
+            step back — the account is what keeps it hers. Stated as a fact, like everything. */}
         <Arrive order={4}>
+          <Text style={styles.trialFact}>{t('ob.signinSaveFact')}</Text>
+        </Arrive>
+        <Arrive order={5}>
           <Text style={styles.trialFact}>{t('ob.signinTrialFact', { n: FREE_SESSION_LIMIT })}</Text>
         </Arrive>
       </View>
-      <Arrive order={5} style={styles.actions}>
+      <Arrive order={6} style={styles.actions}>
         {failed ? (
           <Text style={styles.error}>
             {t(failed === 'network' ? 'ob.signinFailedNetwork' : failed === 'apple' ? 'ob.signinFailedProvider' : 'ob.signinFailedGoogle')}

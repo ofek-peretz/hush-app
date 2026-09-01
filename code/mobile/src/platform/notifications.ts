@@ -188,7 +188,7 @@ export interface Notifier {
    * `fact` carries display-ready strings (the exercise's English name by product law, the load
    * already converted and unit-labelled by the caller) so this layer stays a mover of strings.
    */
-  syncGapCatch(arg: { fireAtMs: number; fact: { name: string; loadLabel: string } | null } | null): Promise<void>;
+  syncGapCatch(arg: { fireAtMs: number; laterFireAtMs?: number | null; fact: { name: string; loadLabel: string } | null } | null): Promise<void>;
   /**
    * ════ THE LAST-WORKOUT NOTE (2026-09-01, audit finding 3 / lever 1) ════
    *
@@ -208,6 +208,7 @@ export interface Notifier {
 /** Stable identifiers so re-scheduling is idempotent and cancel is targeted. */
 const WEEKLY_ID = 'hush.weekly_program_ready';
 const GAP_CATCH_ID = 'hush.gap_catch';
+const GAP_LATER_ID = 'hush.gap_catch_later';
 const TRIAL_LAST_ID = 'hush.trial_last';
 /** Ids this build no longer schedules — swept on boot (see `cancelRetiredNotes`). */
 const RETIRED_IDS = ['hush.quarterly_report'] as const;
@@ -458,27 +459,46 @@ export const notifierExpo: Notifier = {
 
   async syncGapCatch(arg) {
     try {
-      // Idempotent: one stable id — training again replaces the note six days further out.
+      // Idempotent: stable ids — training again replaces both notes further out.
       await Notifications.cancelScheduledNotificationAsync(GAP_CATCH_ID).catch(() => {});
+      await Notifications.cancelScheduledNotificationAsync(GAP_LATER_ID).catch(() => {});
       if (!arg) {
         void track(NOTIFICATION_EVENTS.canceled, { kind: 'gap_catch' });
         return;
       }
       if (!(await hasNotificationPermission())) return; // never a prompt from a background sync
+      const title = arg.fact
+        ? tg('notifications.gapTitle', { name: arg.fact.name, load: arg.fact.loadLabel })
+        : tg('notifications.gapTitleNoFact');
       const seconds = Math.floor((arg.fireAtMs - Date.now()) / 1000);
-      if (seconds <= 60) return; // already due/past — the comeback surface owns her return
-      await Notifications.scheduleNotificationAsync({
-        identifier: GAP_CATCH_ID,
-        content: {
-          title: arg.fact
-            ? tg('notifications.gapTitle', { name: arg.fact.name, load: arg.fact.loadLabel })
-            : tg('notifications.gapTitleNoFact'),
-          body: tg('notifications.gapBody', { days: GAP_CATCH_DAYS }),
-          data: buildPayload('gap_catch'),
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
-      });
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'gap_catch', seconds });
+      // The day-six note: skipped when already due/past — she is mid-gap and the comeback surface
+      // owns her return — while the three-week follow-up below may still be owed.
+      if (seconds > 60) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: GAP_CATCH_ID,
+          content: {
+            title,
+            body: tg('notifications.gapBody', { days: GAP_CATCH_DAYS }),
+            data: buildPayload('gap_catch'),
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
+        });
+        void track(NOTIFICATION_EVENTS.scheduled, { kind: 'gap_catch', seconds });
+      }
+      // The three-week follow-up — the LAST note a silence ever gets (domain/gapCatch).
+      const laterSeconds = arg.laterFireAtMs != null ? Math.floor((arg.laterFireAtMs - Date.now()) / 1000) : 0;
+      if (laterSeconds > 60) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: GAP_LATER_ID,
+          content: {
+            title,
+            body: tg('notifications.gapLaterBody'),
+            data: buildPayload('gap_catch'),
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: laterSeconds },
+        });
+        void track(NOTIFICATION_EVENTS.scheduled, { kind: 'gap_catch_later', seconds: laterSeconds });
+      }
     } catch {
       /* scheduling is best-effort — a missed catch costs a catch */
     }

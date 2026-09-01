@@ -539,13 +539,22 @@ export default {
         await env.HUSH_KV!.put(key, String(n + 1), { expirationTtl: 172_800 }).catch(() => {});
         return true;
       };
-      const globalCeiling = Number(env.DAILY_GLOBAL_CALLS ?? '') || 2000;
+      /*
+       * ⚠️ NOT `Number(x) || default` — zero is falsy, and the first test ever written against this
+       * worker proved the kill switch could not be set to KILL: an explicit '0' fell through to
+       * 2000 and the call went upstream. An operator who writes 0 means 0.
+       */
+      const ceiling = (raw: string | undefined, fallback: number) => {
+        const n = Number(raw);
+        return raw != null && raw !== '' && Number.isFinite(n) && n >= 0 ? n : fallback;
+      };
+      const globalCeiling = ceiling(env.DAILY_GLOBAL_CALLS, 2000);
       if (!(await spend(`quota:g:${day}`, globalCeiling))) {
         // 503, not 429: the day's budget being gone is our weather, not her behaviour.
         return json({ error: 'budget' }, 503);
       }
       if (sub) {
-        const accountCeiling = Number(env.DAILY_ACCOUNT_CALLS ?? '') || 40;
+        const accountCeiling = ceiling(env.DAILY_ACCOUNT_CALLS, 40);
         if (!(await spend(`quota:c:${sub}:${day}`, accountCeiling))) {
           return json({ error: 'rate_limited' }, 429);
         }
